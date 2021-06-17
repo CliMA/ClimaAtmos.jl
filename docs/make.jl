@@ -11,5 +11,5 @@ makedocs(
     modules = [Aleph]
 )
 
-deploydocs(repo = "github.com/CliMA/Aleph.jl.git")
+deploydocs(repo = "github.com/CliMA/Aleph.jl.git", devbranch = "main")
 
