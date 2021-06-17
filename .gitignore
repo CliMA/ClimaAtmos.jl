@@ -25,3 +25,4 @@ Manifest.toml
 
 # ignore vscode artifacts
 *.vscode*
+*.DS*
