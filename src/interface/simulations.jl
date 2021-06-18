@@ -1,23 +1,34 @@
 abstract type AbstractSimulation end
 
-Base.@kwdef struct Simulation{𝒜,ℬ,𝒞,𝒟,ℰ,ℱ} <: AbstractSimulation
+Base.@kwdef struct Simulation{𝒜,ℬ,𝒞,𝒟,ℰ,ℱ,𝒢} <: AbstractSimulation
     backend::𝒜
     model::ℬ
     timestepper::𝒞
     callbacks::𝒟
     rhs::ℰ
-    state::ℱ
+    grid::ℱ 
+    state::𝒢
 end
 
 function Simulation(
     backend::AbstractBackend, 
     model::ModelSetup, 
-    timestepper, 
-    callbacks
+    timestepper,
+    callbacks,
 )
-    rhs, state = instantiate_simulation_state(model, backend)
+    grid = create_grid(model, backend)
+    rhs = create_rhs(model, backend)
+    state = initialize_state(model, backend)
 
-    return Simulation(backend, model, timestepper, callbacks, rhs, state)
+    return Simulation(
+        backend, 
+        model, 
+        timestepper, 
+        callbacks, 
+        rhs, 
+        grid, 
+        state
+    )
 end
 
 function initialize!(simulation::Simulation; overwrite = false)
@@ -29,11 +40,9 @@ function initialize!(simulation::Simulation; overwrite = false)
             callbacks = simulation.callbacks,
         )
     end
-
-    return nothing
 end
 
-function evolve!(simulation::Simulation{ClimateMachineBackend})
+function evolve!(simulation::Simulation{DiscontinuousGalerkinBackend})
     method        = simulation.timestepper.method
     start         = simulation.timestepper.start
     finish        = simulation.timestepper.finish

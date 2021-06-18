@@ -4,15 +4,6 @@ import Base: getindex, ndims, length, *
 import LinearAlgebra: ×
 
 abstract type AbstractDomain end
-abstract type AbstractDiscretizedDomain end
-
-"""
-    DiscretizedDomain
-"""
-struct DiscretizedDomain{𝒜, ℬ} <: AbstractDiscretizedDomain
-    domain::𝒜
-    resolution::ℬ
-end
 
 """
     IntervalDomain
