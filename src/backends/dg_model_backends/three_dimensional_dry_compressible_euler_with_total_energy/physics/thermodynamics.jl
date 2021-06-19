@@ -1,10 +1,3 @@
-abstract type AbstractEquationOfState end
-abstract type AbstractIdealGas <: AbstractEquationOfState end
-
-struct BarotropicFluid <: AbstractEquationOfState end
-struct DryIdealGas <: AbstractIdealGas end
-struct MoistIdealGas <: AbstractIdealGas end
-
 @inline function calc_pressure(::BarotropicFluid, state, aux, params)
     ρ  = state.ρ
     cₛ = params.cₛ

@@ -1,5 +1,3 @@
-import ClimateMachine.Mesh.Grids: DiscontinuousSpectralElementGrid
-
 function create_dg_grid(
     domain::ProductDomain;
     elements,

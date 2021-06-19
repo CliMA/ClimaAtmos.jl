@@ -1,16 +1,6 @@
-abstract type AbstractBoundaryCondition end
-
-struct FreeSlip <: AbstractBoundaryCondition end
-
-Base.@kwdef struct BulkFormulaTemperature{𝒯,𝒰,𝒱} <: AbstractBoundaryCondition 
-  drag_coef_temperature::𝒯
-  drag_coef_moisture::𝒰
-  surface_temperature::𝒱
-end
-
 function numerical_boundary_flux_first_order!(
     numerical_flux::NumericalFluxFirstOrder,
-    ::FreeSlip,
+    ::DefaultBC,
     balance_law::ThreeDimensionalDryCompressibleEulerWithTotalEnergy,
     fluxᵀn::Vars{S},
     n̂::SVector,
