@@ -1,6 +1,6 @@
-function create_callback(::Info, simulation::Simulation{DiscontinuousGalerkinBackend}, odesolver)
+function create_callback(::Info, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     Q = simulation.state
-    timeend = simulation.time.finish
+    timeend = simulation.timestepper.finish
     mpicomm = MPI.COMM_WORLD
 
     starttime = Ref(now())
@@ -35,7 +35,7 @@ function create_callback(::Info, simulation::Simulation{DiscontinuousGalerkinBac
     return cbinfo
 end
 
-function create_callback(::CFL, simulation::Simulation{DiscontinuousGalerkinBackend}, odesolver)
+function create_callback(::CFL, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     Q = simulation.state
     # timeend = simulation.time.finish
     # mpicomm = MPI.COMM_WORLD
@@ -71,7 +71,7 @@ function create_callback(::CFL, simulation::Simulation{DiscontinuousGalerkinBack
     return cbcfl
 end
 
-function create_callback(callback::StateCheck, simulation::Simulation{DiscontinuousGalerkinBackend} _...)
+function create_callback(callback::StateCheck, simulation::Simulation{<:DiscontinuousGalerkinBackend}, _...)
     sim_length = simulation.time.finish - simulation.time.start
     timestep = simulation.timestepper.timestep
     nChecks = callback.number_of_checks
@@ -86,7 +86,7 @@ function create_callback(callback::StateCheck, simulation::Simulation{Discontinu
     return cbcs_dg
 end
 
-function create_callback(output::JLD2State, simulation::Simulation{DiscontinuousGalerkinBackend}, odesolver)
+function create_callback(output::JLD2State, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     # Initialize output
     output.overwrite &&
         isfile(output.filepath) &&
@@ -123,7 +123,7 @@ function create_callback(output::JLD2State, simulation::Simulation{Discontinuous
     return jldcallback
 end
 
-function create_callback(output::VTKState, simulation::Simulation{DiscontinuousGalerkinBackend}, odesolver)
+function create_callback(output::VTKState, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     # Initialize output
     output.overwrite &&
         isfile(output.filepath) &&
@@ -180,7 +180,7 @@ function create_callback(output::VTKState, simulation::Simulation{DiscontinuousG
     return cbvtk
 end
 
-function create_callback(filter::PositivityPreservingCallback, simulation::Simulation{DiscontinuousGalerkinBackend}, odesolver)
+function create_callback(filter::PositivityPreservingCallback, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     Q = simulation.state
     grid = simulation.grid.numerical
     tmar_filter = EveryXSimulationSteps(1) do
@@ -190,7 +190,7 @@ function create_callback(filter::PositivityPreservingCallback, simulation::Simul
 end
 
 # helper function 
-
+#=
 function update_ref_state!(
     model::DryAtmosModel,
     state::Vars,
@@ -209,7 +209,7 @@ function update_ref_state!(
     aux.ref_state.p = calc_pressure(eos, state, aux, parameters)
 end
 
-function create_callback(update_ref::ReferenceStateUpdate, simulation::Simulation{DiscontinuousGalerkinBackend}, odesolver)
+function create_callback(update_ref::ReferenceStateUpdate, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     Q = simulation.state
     grid = simulation.grid.numerical
     step =  update_ref.recompute
@@ -229,3 +229,4 @@ function create_callback(update_ref::ReferenceStateUpdate, simulation::Simulatio
     end
     return relinearize
 end
+=#

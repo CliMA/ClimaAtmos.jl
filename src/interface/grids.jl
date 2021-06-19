@@ -6,7 +6,7 @@ abstract type AbstractGrid end
 """
 Base.@kwdef struct DiscretizedDomain{𝒜, ℬ} <: AbstractDiscretizedDomain
     domain::𝒜
-    grid::ℬ
+    discretization::ℬ
 end
 
 """

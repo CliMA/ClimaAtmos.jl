@@ -450,3 +450,15 @@ function wavespeed(
     u_norm = abs(dot(n⁻, u))
     return u_norm + calc_sound_speed(eos, state, aux, parameters)
 end
+
+function create_numerical_flux(surface_flux)
+    if surface_flux == :lmars
+        return LMARSNumericalFlux()
+    elseif surface_flux == :roe
+        return RoeNumericalFlux()
+    elseif surface_flux == :refanov 
+        return RefanovFlux()
+    else
+        return nothing
+    end
+end

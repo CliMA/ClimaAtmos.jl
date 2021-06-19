@@ -4,15 +4,15 @@ abstract type AbstractCompressibility end
 abstract type AbstractEquationSet end
 abstract type AbstractModel end
 
-struct TotalEnergy <: AbstractThermodynamicVariable
+struct TotalEnergy <: AbstractThermodynamicVariable end
 # examples:
 # struct InternalEnergy <: AbstractThermodynamicVariable
 # struct PotentialTemperature <: AbstractThermodynamicVariable
 
-struct DryIdealGas <: AbstractEquationOfState
-struct MoistIdealGas <: AbstractEquationOfState
+struct DryIdealGas <: AbstractEquationOfState end
+struct MoistIdealGas <: AbstractEquationOfState end
 
-struct Compressible <: AbstractCompressibility
+struct Compressible <: AbstractCompressibility end
 # examples:
 # struct Anelastic <: AbstractCompressibility
 # struct Hydrostatic <: AbstractCompressibility
@@ -20,21 +20,21 @@ struct Compressible <: AbstractCompressibility
 """
     ThreeDimensionalEuler <: AbstractEquationSet
 """
-Base.@kwdef struct ThreeDimensionalEuler{𝒜,ℬ,𝒞} <: AbstractEquationSet
+Base.@kwdef struct ThreeDimensionalEuler{𝒜,ℬ,𝒞,𝒟} <: AbstractEquationSet
     thermodynamic_variable::𝒜
     equation_of_state::ℬ
-    compressibility::𝒞
+    pressure_convention::𝒞
+    physics::𝒟
 end
 
 """
     ModelSetup <: AbstractModel
 """
-Base.@kwdef struct ModelSetup{𝒜,ℬ,𝒞,𝒟,ℰ} <: AbstractModel
+Base.@kwdef struct ModelSetup{𝒜,ℬ,𝒞,𝒟} <: AbstractModel
     equations::𝒜 # 3D navier stokes, 2D navier stokes
-    physics::ℬ # sources, parameterizations, diffusion
-    boundary_conditions::𝒞 # no flux / free slip
-    initial_conditions::𝒟 # initialize with zero, one, etc.
-    parameters::ℰ
+    boundary_conditions::ℬ # no flux / free slip
+    initial_conditions::𝒞 # initialize with zero, one, etc.
+    parameters::𝒟
 end
 
 # TODO!: Default atmospheric configuration

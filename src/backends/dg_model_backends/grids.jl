@@ -1,16 +1,15 @@
 import ClimateMachine.Mesh.Grids: DiscontinuousSpectralElementGrid
 
-function DiscontinuousSpectralElementGrid(
+function create_dg_grid(
     domain::ProductDomain;
     elements,
-    polynomialorder,
-    grid_stretching,
+    polynomial_order,
+    grid_stretching = nothing,
     FT = Float64,
     mpicomm = MPI.COMM_WORLD,
     array = ClimateMachine.array_type(),
     topology = StackedBrickTopology,
 )
-
     if elements === nothing
         error_message = "Please specify the number of elements as a tuple whose size is commensurate with the domain,"
         error_message *= " e.g., a 3 dimensional domain would need a specification like elements = (10,10,10)."
@@ -20,7 +19,7 @@ function DiscontinuousSpectralElementGrid(
         return nothing
     end
 
-    if polynomialorder === nothing
+    if polynomial_order === nothing
         error_message = "Please specify the polynomial order as a tuple whose size is commensurate with the domain,"
         error_message *= "e.g., a 3 dimensional domain would need a specification like polynomialorder = (3,3,3)."
         error_message *= " or polynomialorder = (vertical = 8, horizontal = 5)"
@@ -46,8 +45,8 @@ function DiscontinuousSpectralElementGrid(
         return nothing
     end
 
-    polynomialorder = convention(polynomialorder, Val(dimension))
-    if ndims(domain) != length(polynomialorder)
+    polynomial_order = convention(polynomial_order, Val(dimension))
+    if ndims(domain) != length(polynomial_order)
         @error("Incorrectly specified polynomialorders for the dimension of the domain")
         return nothing
     end
@@ -75,42 +74,44 @@ function DiscontinuousSpectralElementGrid(
         topl,
         FloatType = FT,
         DeviceArray = array,
-        polynomialorder = polynomialorder,
+        polynomialorder = polynomial_order,
     )
 
     return grid
 end
 
-function DiscretizedDomain(
-    domain::ProductDomain;
-    elements = nothing,
-    polynomial_order = nothing,
-    overintegration_order = nothing,
-    grid_stretching = nothing,
-    FT = Float64,
-    mpicomm = MPI.COMM_WORLD,
-    array = ClimateMachine.array_type(),
-    topology = StackedBrickTopology,
-)
-
-    grid = DiscontinuousSpectralElementGrid(
-        domain,
-        elements = elements,
-        polynomialorder = polynomial_order .+ overintegration_order,
-        grid_stretching = grid_stretching,
-        FT = FT,
-        mpicomm = mpicomm,
-        array = array,
-        topology = topology,
-    )
-    return DiscretizedDomain(
-        domain,
-        (; elements, polynomial_order, overintegration_order),
-        grid,
-    )
+"""
+    Conventions for polynomial order and overintegration order 
+"""
+function convention(
+    a::NamedTuple{(:vertical, :horizontal), T},
+    ::Val{3},
+) where {T}
+    return (a.horizontal, a.horizontal, a.vertical)
 end
 
-# utils
+function convention(a::Number, ::Val{3})
+    return (a, a, a)
+end
+
+function convention(
+    a::NamedTuple{(:vertical, :horizontal), T},
+    ::Val{2},
+) where {T}
+    return (a.horizontal, a.vertical)
+end
+
+function convention(a::Number, ::Val{2})
+    return (a, a)
+end
+
+function convention(a::Tuple, b)
+    return a
+end
+
+"""
+    Brick builder
+"""
 function brick_builder(domain::ProductDomain, ::Nothing, elements; FT = Float64)
     dimension = ndims(domain)
 
@@ -156,33 +157,4 @@ function brick_builder(domain::ProductDomain, grid_stretching::SingleExponential
 
     brickrange = Tuple(tuple_ranges)
     return brickrange
-end
-
-"""
-    Conventions for polynomial order and overintegration order 
-"""
-function convention(
-    a::NamedTuple{(:vertical, :horizontal), T},
-    ::Val{3},
-) where {T}
-    return (a.horizontal, a.horizontal, a.vertical)
-end
-
-function convention(a::Number, ::Val{3})
-    return (a, a, a)
-end
-
-function convention(
-    a::NamedTuple{(:vertical, :horizontal), T},
-    ::Val{2},
-) where {T}
-    return (a.horizontal, a.vertical)
-end
-
-function convention(a::Number, ::Val{2})
-    return (a, a)
-end
-
-function convention(a::Tuple, b)
-    return a
 end

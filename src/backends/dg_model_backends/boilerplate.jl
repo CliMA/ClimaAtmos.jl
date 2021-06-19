@@ -34,9 +34,14 @@ import ClimateMachine.ODESolvers: update_backward_Euler_solver!
 import ClimateMachine.DGMethods: update_auxiliary_state!
 
 # interface includes
-dirs = ["dg_model_backend/three_dimensional_dry_compressible_euler_with_total_energy/"]
+include("grids.jl")
+include("balance_laws.jl")
+include("callbacks.jl")
+dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/"]
 for dir in dirs
     include(dir * "balance_law_interface.jl")
     include(dir * "boundary_conditions_interface.jl")
     include(dir * "numerical_fluxes_interface.jl")
 end
+
+ClimateMachine.init()

@@ -5,43 +5,52 @@ Base.@kwdef struct DiscontinuousGalerkinBackend{𝒜,ℬ} <: AbstractBackend
     numerics::ℬ
 end
 
-function instantiate_simulation_state(model::ModelSetup, backend::DiscontinuousGalerkinBackend)
-    # translate the backend and model into the corresponding
-    # concrete grid and model for this backend
-    backend_grid = create_backend_grid(backend)
-    backend_model = create_backend_model(model, backend)(
-        physics = model.physics,
-        boundary_conditions = model.boundary_conditions,
-        initial_conditions = model.initial_conditions,
-        numerics = backend.numerics,
+function create_grid(backend::DiscontinuousGalerkinBackend)
+    domain = backend.grid.domain
+    grid = backend.grid
+    elements = get_elements(domain, grid)
+    polynomial_order = get_polynomial_order(domain, grid)
+
+    return create_dg_grid(
+        domain, 
+        elements = elements,
+        polynomial_order = polynomial_order,
     )
-    
-    # initialize the right-hand side
+end
+
+function create_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBackend; grid = nothing)
+    balance_law = create_balance_law(model)
+    if grid === nothing
+        grid = create_grid(backend)
+    end
+    numerical_flux = create_numerical_flux(backend.numerics.flux)
+
+    # TODO!: Change to hybrid model (final DG version with all components)
     rhs = ESDGModel(
         balance_law, 
-        backend.grid,
-        backend.numerics.flux,
-        CentralNumericalFluxSecondOrder(),
-        CentralNumericalFluxGradient(),
-    ) 
+        grid,
+        surface_numerical_flux_first_order = numerical_flux,
+        volume_numerical_flux_first_order = KGVolumeFlux(),
+    )
 
-    # initialize the state vector
+    return rhs
+end
+
+function create_init_state(model::ModelSetup, backend::DiscontinuousGalerkinBackend; rhs = nothing)
+    if rhs === nothing
+        rhs = create_rhs(model, backend)
+    end
     FT = eltype(rhs.grid.vgeo)
     state_init = init_ode_state(rhs, FT(0); init_on_cpu = true)
 
-    return rhs, state_init
+    return state_init
 end
 
-function create_backend_grid(::AbstractModel, ::AbstractBackend)
-    error("The backend does not support this model or equation set.")
+# utils
+function get_elements(::ProductDomain, grid)
+    return grid.discretization.elements
 end
 
-function create_backend_model(::AbstractModel, ::AbstractBackend)
-    error("The backend does not support this model or equation set.")
-end
-
-function create_backend_model(model::ModelSetup{𝒜}, backend::AbstractBackend) where 
-    {𝒜 <: ThreeDimensionalNavierStokes{TotalEnergy, DryIdealGas, Compressible}}
-
-    return DryCompressibleThreeDimensionalNavierStokesEquationsWithTotalEnergy
+function get_polynomial_order(::ProductDomain, grid)
+    return grid.discretization.polynomial_order
 end

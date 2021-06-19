@@ -4,6 +4,24 @@
 # backend = DiscontinuousGalerkinBackend
 # boilerplate(backend)
 
+using StaticArrays
+include("../src/interface/domains.jl")
+include("../src/interface/grids.jl")
+include("../src/interface/models.jl")
+include("../src/interface/physics.jl")
+include("../src/interface/boundary_conditions.jl")
+include("../src/interface/callbacks.jl")
+include("../src/backends/backends.jl")
+include("../src/interface/simulations.jl")
+include("../src/interface/callbacks.jl")
+include("../src/backends/dg_model_backends/boilerplate.jl")
+include("../src/interface/timestepping.jl")
+
+# to be removed
+using CLIMAParameters#: AbstractEarthParameterSet
+struct PlanetParameterSet <: AbstractEarthParameterSet end
+get_planet_parameter(p::Symbol) = getproperty(CLIMAParameters.Planet, p)(PlanetParameterSet())
+
 parameters = (
     R_d  = get_planet_parameter(:R_d),
     pₒ   = get_planet_parameter(:MSLP),
@@ -30,8 +48,7 @@ y_domain = IntervalDomain(min = 0, max = parameters.ymax, periodic = true)
 z_domain = IntervalDomain(min = 0, max = parameters.zmax, periodic = false)
 grid = DiscretizedDomain(
     domain = x_domain × y_domain × z_domain,
-    horizontal = SpectralElementGrid(elements = (10,1), polynomials = (3,3),),
-    vertical = SpectralElementGrid(elements = (10,), polynomials = (4,),),
+    discretization = SpectralElementGrid(elements = (10,1,10), polynomial_order = (4,4,4),),
 )
 
 # set up inital condition
@@ -48,15 +65,18 @@ e_kin(p,x,y,z) = 0.0
 ρu₀(p,x,y,z)   = @SVector [0.0, 0.0, 0.0]
 ρe₀(p,x,y,z)   = ρ₀(p,x,y,z) * (e_kin(p,x,y,z) + e_int(p,x,y,z) + e_pot(p,x,y,z))
 
-# set up model  
+# set up model
 model = ModelSetup(
     equations = ThreeDimensionalEuler(
         thermodynamic_variable = TotalEnergy(),
         equation_of_state = DryIdealGas(),
-        compressibility = Compressible(),
-    ),
-    physics = (
-        gravity = Gravity(),
+        pressure_convention = Compressible(),
+        physics = (
+            orientation = FlatOrientation(),
+            gravity = ShallowGravity(),
+            ref_state = NoReferenceState(),
+            parameters = parameters,
+        )
     ),
     boundary_conditions = (
         ρ  = (top = NoFlux(), bottom = NoFlux(),),
@@ -74,7 +94,7 @@ simulation = Simulation(
     backend = DiscontinuousGalerkinBackend(
         grid = grid,
         numerics = (
-            flux = LMARSNumericalFlux(),
+            flux = :lmars,
         ),
     ),
     model = model,
@@ -82,7 +102,7 @@ simulation = Simulation(
         method = SSPRK22Heuns, 
         start = 0.0, 
         finish = 4000.0,
-        timestep = CFLCriteria(speed = 330.0),
+        timestep = 10.0,
     ),
     callbacks = (
         Info(),
