@@ -16,8 +16,8 @@ struct Compressible <: AbstractCompressibility end
 
 # coriolis force
 struct DeepShellCoriolis <: AbstractPhysics end
-struct ThinShellCoriolis <: AbstractCoriolis end
-struct BetaPlaneCoriolis <: AbstractCoriolis end
+struct ThinShellCoriolis <: AbstractPhysics end
+struct BetaPlaneCoriolis <: AbstractPhysics end
 
 # gravity
 struct DeepGravity <: AbstractPhysics end

@@ -26,3 +26,7 @@ Manifest.toml
 # ignore vscode artifacts
 *.vscode*
 *.DS*
+
+# ignore simulation outputs
+*.vtu*
+*.nc*
