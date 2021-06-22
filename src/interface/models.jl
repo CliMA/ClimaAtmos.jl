@@ -1,21 +1,5 @@
-abstract type AbstractThermodynamicVariable end
-abstract type AbstractEquationOfState end
-abstract type AbstractCompressibility end
 abstract type AbstractEquationSet end
 abstract type AbstractModel end
-
-struct TotalEnergy <: AbstractThermodynamicVariable end
-# examples:
-# struct InternalEnergy <: AbstractThermodynamicVariable
-# struct PotentialTemperature <: AbstractThermodynamicVariable
-
-struct DryIdealGas <: AbstractEquationOfState end
-struct MoistIdealGas <: AbstractEquationOfState end
-
-struct Compressible <: AbstractCompressibility end
-# examples:
-# struct Anelastic <: AbstractCompressibility
-# struct Hydrostatic <: AbstractCompressibility
 
 """
     ThreeDimensionalEuler <: AbstractEquationSet

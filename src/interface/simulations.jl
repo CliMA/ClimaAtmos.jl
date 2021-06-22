@@ -60,25 +60,21 @@ function evolve!(simulation::Simulation{<:DiscontinuousGalerkinBackend})
 
     cb_vector = create_callbacks(simulation, ode_solver)
 
-    # # Perform evolution of simulations
-    # if isempty(cbvector)
-    #     solve!(
-    #         state, 
-    #         odesolver; 
-    #         timeend = finish, 
-    #         adjustfinalstep = false,
-    #     )
-    # else
-    #     solve!(
-    #         state,
-    #         odesolver;
-    #         timeend = finish,
-    #         callbacks = cbvector,
-    #         adjustfinalstep = false,
-    #     )
-    # end
+    # Perform evolution of simulations
+    if isempty(cb_vector)
+        solve!(
+            state, 
+            ode_solver; 
+            timeend = finish, 
+            adjustfinalstep = false,
+        )
+    else
+        solve!(
+            state,
+            ode_solver;
+            timeend = finish,
+            callbacks = cb_vector,
+            adjustfinalstep = false,
+        )
+    end
 end
-
-# TODO!: Awaits implementation
-# function evolve!(simulation::Simulation{ClimateMachineCoreBackend})
-# end

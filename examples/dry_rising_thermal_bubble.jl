@@ -6,15 +6,14 @@
 
 using StaticArrays
 include("../src/interface/domains.jl")
-include("../src/interface/grids.jl")
 include("../src/interface/models.jl")
 include("../src/interface/physics.jl")
 include("../src/interface/boundary_conditions.jl")
-include("../src/interface/callbacks.jl")
 include("../src/backends/backends.jl")
 include("../src/interface/simulations.jl")
 include("../src/interface/callbacks.jl")
 include("../src/backends/dg_model_backends/boilerplate.jl")
+include("../src/interface/grids.jl")
 include("../src/interface/timestepping.jl")
 
 # to be removed
@@ -36,7 +35,7 @@ parameters = (
     zc   = 2000,
     rc   = 2000,
     xmax = 10000,
-    ymax = 500,
+    ymax = 5000,
     zmax = 10000,
     θₐ   = 2.0,
     cₛ   = 340,
@@ -71,18 +70,26 @@ model = ModelSetup(
         thermodynamic_variable = TotalEnergy(),
         equation_of_state = DryIdealGas(),
         pressure_convention = Compressible(),
-        physics = (
+        physics = Physics(
             orientation = FlatOrientation(),
-            gravity = ShallowGravity(),
-            ref_state = NoReferenceState(),
-            parameters = parameters,
+            ref_state   = NoReferenceState(),
+            parameters  = parameters,
+            eos         = DryIdealGas(),
+            lhs         = (
+                NonlinearAdvection{(:ρ, :ρu, :ρe)}(),
+                PressureDivergence(),
+            ),
+            sources     = (
+                FluctuationGravity(),
+            ),
         )
     ),
-    boundary_conditions = (
-        ρ  = (top = NoFlux(), bottom = NoFlux(),),
-        ρu = (top = FreeSlip(), bottom = FreeSlip(),),
-        ρe = (top = NoFlux(), bottom = NoFlux(),),
-    ),
+    boundary_conditions = (0,0,1,1,DefaultBC(),DefaultBC()),
+    # boundary_conditions = (
+    #     ρ  = (top = NoFlux(), bottom = NoFlux(),),
+    #     ρu = (top = FreeSlip(), bottom = FreeSlip(),),
+    #     ρe = (top = NoFlux(), bottom = NoFlux(),),
+    # ),
     initial_conditions = (
         ρ = ρ₀, ρu = ρu₀, ρe = ρe₀,
     ),
@@ -102,13 +109,17 @@ simulation = Simulation(
         method = SSPRK22Heuns, 
         start = 0.0, 
         finish = 4000.0,
-        timestep = 10.0,
+        timestep = 0.063,
     ),
     callbacks = (
         Info(),
+        VTKState(iteration = Int(floor(100.0/0.063)), filepath = "./out/"),
+        CFL(), 
     ),
 )
 
 # run the simulation
 initialize!(simulation)
 evolve!(simulation)
+
+nothing

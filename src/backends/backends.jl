@@ -46,11 +46,30 @@ function create_init_state(model::ModelSetup, backend::DiscontinuousGalerkinBack
     return state_init
 end
 
+function create_boundary_conditions(model::ModelSetup, backend::DiscontinuousGalerkinBackend)
+    boundary_conditions = model.boundary_conditions
+    
+    
+    nothing
+end
+
 # utils
 function get_elements(::ProductDomain, grid)
     return grid.discretization.elements
 end
 
+function get_elements(::SphericalShell, grid)
+    horizontal_elements = grid.discretization.horizontal.elements
+    vertical_elements = grid.discretization.vertical.elements
+    return (vertical = vertical_elements, horizontal = horizontal_elements)
+end
+
 function get_polynomial_order(::ProductDomain, grid)
     return grid.discretization.polynomial_order
+end
+
+function get_polynomial_order(::SphericalShell, grid)
+    horizontal_poly_order = grid.discretization.horizontal.polynomial_order
+    vertical_poly_order = grid.discretization.vertical.polynomial_order
+    return (vertical = vertical_poly_order, horizontal = horizontal_poly_order)
 end
