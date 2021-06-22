@@ -73,14 +73,14 @@ using ClimateMachine.VariableTemplates: flattenednames
 include("grids.jl")
 include("balance_laws.jl")
 include("callbacks.jl")
+
+# TODO! Remove this.
 dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/"]
 for dir in dirs
     include(dir * "balance_law_interface.jl")
     include(dir * "boundary_conditions_interface.jl")
     include(dir * "numerical_fluxes_interface.jl")
 end
-
-# TODO! Remove this.
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/physics.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/advection.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/coriolis.jl")
@@ -88,5 +88,18 @@ include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/pr
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/gravity.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/thermodynamics.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/temperature_profiles.jl")
+
+# dirs = ["barotropic_fluid/"]
+# for dir in dirs
+#     include(dir * "balance_law_interface.jl")
+#     include(dir * "boundary_conditions_interface.jl")
+#     include(dir * "numerical_fluxes_interface.jl")
+# end
+
+# TODO! Remove this.
+# include("./barotropic_fluid/physics/physics.jl")
+# include("./barotropic_fluid/physics/advection.jl")
+# include("./barotropic_fluid/physics/coriolis.jl")
+# include("./barotropic_fluid/physics/thermodynamics.jl")
 
 ClimateMachine.init()

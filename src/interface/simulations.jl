@@ -78,7 +78,3 @@ function evolve!(simulation::Simulation{<:DiscontinuousGalerkinBackend})
         )
     end
 end
-
-# TODO!: Awaits implementation
-# function evolve!(simulation::Simulation{ClimateMachineCoreBackend})
-# end

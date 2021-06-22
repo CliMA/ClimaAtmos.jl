@@ -179,11 +179,6 @@ function source!(
 end
 
 """
-    Boundary conditions with defaults
-"""
-
-
-"""
     Utils
 """
 function altitude(balance_law::ThreeDimensionalDryCompressibleEulerWithTotalEnergy, ::SphericalOrientation, geom)
