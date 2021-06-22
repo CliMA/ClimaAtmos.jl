@@ -30,3 +30,4 @@ Manifest.toml
 # ignore simulation outputs
 *.vtu*
 *.nc*
+*.mp4*

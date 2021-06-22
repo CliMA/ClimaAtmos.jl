@@ -1,15 +1,15 @@
-using LinearAlgebra
-using UnPack, StaticArrays, IntervalSets
-
-import ClimateMachineCore: Fields, Domains, Meshes, Topologies, Spaces
+using ClimateMachineCore.Geometry, LinearAlgebra, UnPack
+import ClimateMachineCore: Fields, Domains, Topologies, Meshes, Spaces
 import ClimateMachineCore: slab
 import ClimateMachineCore.Operators
-using ClimateMachineCore.Geometry
-import ClimateMachineCore.Geometry: Abstract2DPoint
+import ClimateMachineCore.Geometry
+using LinearAlgebra, IntervalSets
+using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 
 using ClimateMachineCore.RecursiveApply
+using ClimateMachineCore.RecursiveApply: rdiv, rmap
 
-const parameters = (
+parameters = (
     ϵ = 0.1,  # perturbation size for initial condition
     l = 0.5, # Gaussian width
     k = 0.5, # Sinusoidal wavenumber
@@ -18,12 +18,26 @@ const parameters = (
     g = 10,
 )
 
+numflux_name = get(ARGS, 1, "rusanov")
+boundary_name = get(ARGS, 2, "")
+
 domain = Domains.RectangleDomain(
     -2π..2π,
     -2π..2π,
     x1periodic = true,
-    x2periodic = true,
+    x2periodic = boundary_name != "noslip",
 )
+
+n1, n2 = 16, 16
+Nq = 4
+Nqh = 7
+mesh = Meshes.EquispacedRectangleMesh(domain, n1, n2)
+grid_topology = Topologies.GridTopology(mesh)
+quad = Spaces.Quadratures.GLL{Nq}()
+space = Spaces.SpectralElementSpace2D(grid_topology, quad)
+
+Iquad = Spaces.Quadratures.GLL{Nqh}()
+Ispace = Spaces.SpectralElementSpace2D(grid_topology, Iquad)
 
 function init_state(x, p)
     @unpack x1, x2 = x
@@ -40,6 +54,7 @@ function init_state(x, p)
     u₁′ += p.k * gaussian * cos(p.k * x1) * sin(p.k * x2)
     u₂′ = -p.k * gaussian * sin(p.k * x1) * cos(p.k * x2)
 
+
     u = Cartesian12Vector(U₁ + p.ϵ * u₁′, p.ϵ * u₂′)
     # set initial tracer
     θ = sin(p.k * x2)
@@ -47,17 +62,32 @@ function init_state(x, p)
     return (ρ = ρ, ρu = ρ * u, ρθ = ρ * θ)
 end
 
+y0 = init_state.(Fields.coordinate_field(space), Ref(parameters))
+
 function flux(state, p)
     @unpack ρ, ρu, ρθ = state
     u = ρu ./ ρ
     return (ρ = ρu, ρu = ((ρu ⊗ u) + (p.g * ρ^2 / 2) * I), ρθ = ρθ .* u)
 end
 
+function energy(state, p)
+    @unpack ρ, ρu = state
+    u = ρu ./ ρ
+    return ρ * (u.u1^2 + u.u2^2) / 2 + p.g * ρ^2 / 2
+end
+
+function total_energy(y, parameters)
+    sum(state -> energy(state, parameters), y)
+end
+
+# numerical fluxes
+wavespeed(y, parameters) = sqrt(parameters.g)
+
 roe_average(ρ⁻, ρ⁺, var⁻, var⁺) =
     (sqrt(ρ⁻) * var⁻ + sqrt(ρ⁺) * var⁺) / (sqrt(ρ⁻) + sqrt(ρ⁺))
 
 function roeflux(n, (y⁻, parameters⁻), (y⁺, parameters⁺))
-    Favg = RecursiveApply.rdiv(flux(y⁻, parameters⁻) ⊞ flux(y⁺, parameters⁺), 2)
+    Favg = rdiv(flux(y⁻, parameters⁻) ⊞ flux(y⁺, parameters⁺), 2)
 
     λ = sqrt(parameters⁻.g)
 
@@ -112,18 +142,80 @@ function roeflux(n, (y⁻, parameters⁻), (y⁺, parameters⁺))
     fluxᵀn_ρθ = ((w1 + w2) * θ + w5) * 0.5
 
     Δf = (ρ = -fluxᵀn_ρ, ρu = -fluxᵀn_ρu, ρθ = -fluxᵀn_ρθ)
-    RecursiveApply.rmap(f -> f' * n, Favg) ⊞ Δf
+    rmap(f -> f' * n, Favg) ⊞ Δf
 end
 
-function volume!(dydt, y, (parameters,), t)
+
+numflux = roeflux
+
+function rhs!(dydt, y, (parameters, numflux), t)
+
+    # ϕ' K' W J K dydt =  -ϕ' K' I' [DH' WH JH flux.(I K y)]
+    #  =>   K dydt = - K inv(K' WJ K) K' I' [DH' WH JH flux.(I K y)]
+
+    # where:
+    #  ϕ = test function
+    #  K = DSS scatter (i.e. duplicates points at element boundaries)
+    #  K y = stored input vector (with duplicated values)
+    #  I = interpolation to higher-order space
+    #  D = derivative operator
+    #  H = suffix for higher-order space operations
+    #  W = Quadrature weights
+    #  J = Jacobian determinant of the transformation `ξ` to `x`
+    #
+    Nh = Topologies.nlocalelems(y)
+
     F = flux.(y, Ref(parameters))
-    # TODO: get this to work
-    #   F = Base.Broadcast.broadcasted(flux, y, Ref(parameters))
-    Operators.slab_weak_divergence!(dydt, F)
+    dydt .= Operators.slab_weak_divergence(F)
+
+    Operators.add_numerical_flux_internal!(numflux, dydt, y, parameters)
+
+    Operators.add_numerical_flux_boundary!(
+        dydt,
+        y,
+        parameters,
+    ) do normal, (y⁻, parameters)
+        y⁺ = (ρ = y⁻.ρ, ρu = y⁻.ρu .- dot(y⁻.ρu, normal) .* normal, ρθ = y⁻.ρθ)
+        numflux(normal, (y⁻, parameters), (y⁺, parameters))
+    end
+
+    # 6. Solve for final result
+    dydt_data = Fields.field_values(dydt)
+    dydt_data .= rdiv.(dydt_data, space.local_geometry.WJ)
+
+    M = Spaces.Quadratures.cutoff_filter_matrix(
+        Float64,
+        space.quadrature_style,
+        3,
+    )
+    Operators.tensor_product!(dydt_data, M)
+
     return dydt
 end
 
-function add_face!(dydt, y, (parameters,), t)
-    Operators.add_numerical_flux_internal!(roeflux, dydt, y, parameters)
-    return dydt
+dydt = Fields.Field(similar(Fields.field_values(y0)), space)
+rhs!(dydt, y0, (parameters, numflux), 0.0);
+
+# Solve the ODE operator
+prob = ODEProblem(rhs!, y0, (0.0, 200.0), (parameters, numflux))
+sol = solve(
+    prob,
+    SSPRK33(),
+    dt = 0.02,
+    saveat = 1.0,
+    progress = true,
+    progress_message = (dt, u, p, t) -> t,
+)
+
+ENV["GKSwstype"] = "nul"
+import Plots
+Plots.GRBackend()
+
+dirname = "dg_$(numflux_name)"
+path = joinpath(@__DIR__, "output", dirname)
+mkpath(path)
+
+anim = Plots.@animate for u in sol.u
+    Plots.plot(u.ρθ, clim = (-1, 1))
 end
+Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
