@@ -8,7 +8,7 @@ Base.@kwdef struct ThreeDimensionalEuler{𝒜,ℬ,𝒞,𝒟} <: AbstractEquation
     thermodynamic_variable::𝒜
     equation_of_state::ℬ
     pressure_convention::𝒞
-    physics::𝒟
+    sources::𝒟
 end
 
 """
@@ -27,10 +27,11 @@ end
 #         thermodynamic_variable = TotalEnergy(),
 #         equation_of_state = DryIdealGas(),
 #         compressibility = Compressible(),
-#     ),
-#     physics = (
-#         gravity = Gravity(),
-#         coriolis = Coriolis(),
+#         sources = (
+#             Gravity(),
+#             Coriolis(),
+#             Radiation(),
+#         )
 #     ),
 #     boundary_conditions = (
 #         ρ  = (top = NoFlux(), bottom = NoFlux(),),

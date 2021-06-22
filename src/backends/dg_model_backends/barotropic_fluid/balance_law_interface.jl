@@ -36,8 +36,7 @@ function init_state_prognostic!(
     x = aux.x
     y = aux.y
     z = aux.z
-
-    parameters = balance_law.physics.parameters
+    parameters = balance_law.parameters
     ic = balance_law.initial_conditions
 
     # TODO!: Set to 0 by default or assign IC
@@ -62,7 +61,7 @@ function nodal_init_state_auxiliary!(
 end
 
 """
-    LHS computations
+    Main model computations
 """
 @inline function flux_first_order!(
     balance_law::ThreeDimensionalCompressibleEulerWithBarotropicFluid,
@@ -72,17 +71,25 @@ end
     t::Real,
     direction,
 )
-    lhs = balance_law.physics.lhs
-    physics = balance_law.physics
+    # base model equaations
+    ρ  = state.ρ
+    ρu = state.ρu
+    ρθ = state.ρθ
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
     
-    ntuple(Val(length(lhs))) do s
-        Base.@_inline_meta
-        calc_component!(flux, lhs[s], state, aux, physics)
-    end
+    u = ρu / ρ
+    p = calc_pressure(eos, state, aux, parameters)
+
+    flux.ρ  += ρu
+    flux.ρu += ρu ⊗ u + p * I
+    flux.ρθ += ρθ * u
+    
+    nothing
 end
 
 """
-    RHS computations
+    Source computations
 """
 function source!(
     balance_law::ThreeDimensionalCompressibleEulerWithBarotropicFluid, 
@@ -91,22 +98,10 @@ function source!(
     state_auxiliary, 
     _...
 )
-    sources = balance_law.physics.sources
-    physics = balance_law.physics
+    sources = balance_law.sources
 
     ntuple(Val(length(sources))) do s
         Base.@_inline_meta
-        calc_component!(source, sources[s], state_prognostic, state_auxiliary, physics)
+        calc_source!(source, balance_law, sources[s], state_prognostic, state_auxiliary)
     end
-end
-
-"""
-    Utils
-"""
-function altitude(balance_law::ThreeDimensionalCompressibleEulerWithBarotropicFluid, ::SphericalOrientation, geom)
-    return norm(geom.coord) - balance_law.physics.parameters.a
-end
-
-function altitude(::ThreeDimensionalCompressibleEulerWithBarotropicFluid, ::FlatOrientation, geom)
-    @inbounds geom.coord[3]
 end

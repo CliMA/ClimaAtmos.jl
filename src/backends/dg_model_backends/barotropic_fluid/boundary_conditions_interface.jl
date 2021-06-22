@@ -48,7 +48,3 @@ function boundary_conditions(
 ) 
     return balance_law.boundary_conditions
 end
-
-function boundary_state!(_...)
-    nothing
-end

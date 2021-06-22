@@ -1,4 +1,3 @@
-struct RefanovFlux <: NumericalFluxFirstOrder end 
 struct CentralVolumeFlux <: NumericalFluxFirstOrder end
 struct KGVolumeFlux <: NumericalFluxFirstOrder end
 
@@ -41,8 +40,8 @@ function numerical_volume_conservative_flux_first_order!(
     state_2::Vars,
     aux_2::Vars,
 )
-    eos = balance_law.physics.eos
-    parameters = balance_law.physics.parameters
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
 
     ρ_1 = state_1.ρ
     ρu_1 = state_1.ρu
@@ -78,7 +77,7 @@ end
 
 function numerical_flux_first_order!(
     ::RoeNumericalFlux,
-    model::ThreeDimensionalCompressibleEulerWithBarotropicFluid,
+    balance_law::ThreeDimensionalCompressibleEulerWithBarotropicFluid,
     fluxᵀn::Vars{S},
     n⁻::SVector,
     state⁻::Vars{S},
@@ -90,7 +89,7 @@ function numerical_flux_first_order!(
 ) where {S, A}
     numerical_flux_first_order!(
         CentralNumericalFluxFirstOrder(),
-        model,
+        balance_law,
         fluxᵀn,
         n⁻,
         state⁻,
@@ -100,8 +99,8 @@ function numerical_flux_first_order!(
         t,
         direction,
     )
-    eos = model.physics.eos
-    parameters = model.physics.parameters 
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters 
 
     # - states
     ρ⁻ = state⁻.ρ
@@ -180,8 +179,8 @@ function numerical_flux_first_order!(
     direction,
 ) where {S, A}
     FT = eltype(fluxᵀn)
-    eos = balance_law.physics.eos
-    parameters = balance_law.physics.parameters
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
 
     ρ⁻ = state_prognostic⁻.ρ
     ρu⁻ = state_prognostic⁻.ρu
@@ -225,33 +224,3 @@ end
 # utils
 roe_average(ρ⁻, ρ⁺, var⁻, var⁺) =
     (sqrt(ρ⁻) * var⁻ + sqrt(ρ⁺) * var⁺) / (sqrt(ρ⁻) + sqrt(ρ⁺))
-
-function wavespeed(
-    balance_law::ThreeDimensionalCompressibleEulerWithBarotropicFluid,
-    n⁻,
-    state::Vars,
-    aux::Vars,
-    t::Real,
-    direction,
-)
-    eos = balance_law.physics.eos
-    parameters = balance_law.physics.parameters
-    ρ = state.ρ
-    ρu = state.ρu
-
-    u = ρu / ρ
-    u_norm = abs(dot(n⁻, u))
-    return u_norm + calc_sound_speed(eos, state, aux, parameters)
-end
-
-function create_numerical_flux(surface_flux)
-    if surface_flux == :lmars
-        return LMARSNumericalFlux()
-    elseif surface_flux == :roe
-        return RoeNumericalFlux()
-    elseif surface_flux == :refanov 
-        return RefanovFlux()
-    else
-        return nothing
-    end
-end
