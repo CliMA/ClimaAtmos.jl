@@ -8,7 +8,7 @@ using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 
 using ClimateMachineCore.RecursiveApply
 using ClimateMachineCore.RecursiveApply: rdiv, rmap
-
+##
 parameters = (
     ϵ = 0.1,  # perturbation size for initial condition
     l = 0.5, # Gaussian width
@@ -219,3 +219,38 @@ anim = Plots.@animate for u in sol.u
     Plots.plot(u.ρθ, clim = (-1, 1))
 end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
+
+##
+include("../src/interface/domains.jl")
+include("../src/interface/grids.jl")
+Ωˣ = IntervalDomain(min = -2π, max = 2π, periodic = true)
+Ωʸ = IntervalDomain(min = -2π, max = 2π, periodic = true)
+discretized_domain = DiscretizedDomain(
+    domain = Ωˣ × Ωʸ,
+    discretization = (
+	    horizontal = SpectralElementGrid(elements = 8, polynomial_order = 3), 
+	),
+)
+
+
+function create_grid(backend::CoreBackend, discretized_domain::DiscretizedDomain)
+
+    domain = Domains.RectangleDomain(
+        discretized_domain.domain[1].min..discretized_domain.domain[1].max,
+        discretized_domain.domain[2].min..discretized_domain.domain[2].max,
+        x1periodic = discretized_domain.domain[1].periodic,
+        x2periodic = discretized_domain.domain[2].periodic,
+    )
+
+    n1 = discretized_domain.discretization.horizontal.elements
+    n2 = discretized_domain.discretization.horizontal.elements
+    Nq = discretized_domain.discretization.horizontal.polynomial_order + 1
+
+    mesh = Meshes.EquispacedRectangleMesh(domain, n1, n2)
+    grid_topology = Topologies.GridTopology(mesh)
+    quadrature = Spaces.Quadratures.GLL{Nq}()
+    space = Spaces.SpectralElementSpace2D(grid_topology, quadrature)
+    return space 
+end
+
+space = create_grid(CoreBackend(nothing,nothing), discretized_domain)
