@@ -83,6 +83,7 @@ end
 # TODO! Remove this.
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/physics.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/advection.jl")
+include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/coriolis.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/pressure_force.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/gravity.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/thermodynamics.jl")

@@ -1,9 +1,3 @@
-abstract type AbstractCoriolis <: AbstractTerm end
-
-struct DeepShellCoriolis <: AbstractCoriolis end
-struct ThinShellCoriolis <: AbstractCoriolis end
-struct BetaPlaneCoriolis <: AbstractCoriolis end
-
 @inline calc_component!(source, ::Nothing, state, _...) = nothing
 @inline calc_component!(source, ::AbstractTerm, _...) = nothing
 
