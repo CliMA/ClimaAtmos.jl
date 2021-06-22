@@ -3,19 +3,18 @@ include("../src/interface/domains.jl")
 include("../src/interface/models.jl")
 include("../src/interface/physics.jl")
 include("../src/interface/boundary_conditions.jl")
-include("../src/interface/grids.jl")
 include("../src/backends/backends.jl")
 include("../src/backends/dg_model_backends/backend_hook.jl")
 include("../src/interface/simulations.jl")
 include("../src/interface/callbacks.jl")
 include("../src/backends/dg_model_backends/boilerplate.jl")
+include("../src/interface/grids.jl")
 include("../src/interface/timestepping.jl")
 include("../src/utils/sphere_utils.jl")
 
-# set up backend
-backend = DiscontinuousGalerkinBackend(numerics = (flux = :lmars,),)
-
-# set up parameters
+########
+# Set up parameters
+########
 parameters = (
     g  = 0.0,
     ρₒ = 1.0,  # reference density
@@ -30,20 +29,22 @@ parameters = (
     Ω  = 1e-3,
 )
 
-# set up grid
-discretized_domain = DiscretizedDomain(
-    domain = SphericalShell(
-        radius = 1.0,
-        height = 0.2,
-    ),
+# Set up grid
+domain = SphericalShell(
+    radius = 1.0,
+    height = 0.2,
+)
+grid = DiscretizedDomain(
+    domain = domain,
     discretization = (
 	    horizontal = SpectralElementGrid(elements = 8, polynomial_order = 3), 
 	    vertical = SpectralElementGrid(elements = 1, polynomial_order = 1)
 	),
 )
-grid = create_grid(backend, discretized_domain)
 
-# set up inital condition
+########
+# Set up inital condition
+########
 uᵐ(p, λ, ϕ, r) =  p.ℓᵐ * sech(p.ℓᵐ * ϕ)^2 
 vᵐ(p, λ, ϕ, r) =  0.0
 hᵐ(p, λ, ϕ, r) =  0.0
@@ -70,13 +71,21 @@ hᵖ(p, λ, ϕ, r) =  0.0
 
 # set up model
 model = ModelSetup(
-    equations = ThreeDimensionalEuler(
+    equations = TwoDimensionalEuler(
         thermodynamic_variable = Density(),
         equation_of_state = BarotropicFluid(),
         pressure_convention = Compressible(),
-        sources = (
-           Coriolis(),
-        ),
+        physics = Physics(
+            orientation = SphericalOrientation(),
+            parameters  = parameters,
+            eos         = BarotropicFluid(),
+            lhs         = (
+                NonlinearAdvection{(:ρ, :ρu, :ρθ)}(),
+            ),
+            sources     = (
+                DeepShellCoriolis(),
+            ),
+        )
     ),
     boundary_conditions = (DefaultBC(), DefaultBC()),
     initial_conditions = (
@@ -87,8 +96,12 @@ model = ModelSetup(
 
 # set up simulation
 simulation = Simulation(
-    backend = backend,
-    grid = grid,
+    backend = CoreBackend(
+        grid = grid,
+        numerics = (
+            flux = :roe,
+        ),
+    ),
     model = model,
     timestepper = (
         method = SSPRK22Heuns, 

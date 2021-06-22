@@ -4,6 +4,11 @@ Base.@kwdef struct DiscontinuousGalerkinBackend{𝒜} <: AbstractBackend
     numerics::𝒜
 end
 
+Base.@kwdef struct CoreBackend{𝒜,ℬ} <: AbstractBackend
+    grid::𝒜
+    numerics::ℬ
+end
+
 function create_grid(::DiscontinuousGalerkinBackend, discretized_domain)
     elements = get_elements(discretized_domain)
     polynomial_order = get_polynomial_order(discretized_domain)
