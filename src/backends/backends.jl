@@ -46,6 +46,13 @@ function create_init_state(model::ModelSetup, backend::DiscontinuousGalerkinBack
     return state_init
 end
 
+function create_boundary_conditions(model::ModelSetup, backend::DiscontinuousGalerkinBackend)
+    boundary_conditions = model.boundary_conditions
+    
+    
+    nothing
+end
+
 # utils
 function get_elements(::ProductDomain, grid)
     return grid.discretization.elements
