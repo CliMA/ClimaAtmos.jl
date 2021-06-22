@@ -23,6 +23,7 @@ end
     ρ   = state.ρ
     ρu  = state.ρu
     ρe  = state.ρe
+    ρq  = state.ρq
     eos = physics.eos
     parameters = physics.parameters
 
@@ -32,6 +33,7 @@ end
     flux.ρ  += ρu
     flux.ρu += ρu ⊗ u
     flux.ρe += (ρe + p) * u
+    flux.ρq += ρq * u
 
     nothing
 end
@@ -53,6 +55,7 @@ end
     ρ   = state.ρ
     ρu  = state.ρu
     ρe  = state.ρe
+    ρq  = state.ρq
 
     # thermodynamics
     eos = physics.eos
@@ -63,14 +66,17 @@ end
     ρᵣ  = aux.ref_state.ρ
     ρuᵣ = aux.ref_state.ρu
     ρeᵣ = aux.ref_state.ρe
+    ρqᵣ = aux.ref_state.ρq
     pᵣ  = aux.ref_state.p
 
     # derived states
     u = ρu / ρᵣ - ρ * ρuᵣ / (ρᵣ^2)
+    q = ρq / ρᵣ - ρ * ρqᵣ / (ρᵣ^2)
     e = ρe / ρᵣ - ρ * ρeᵣ / (ρᵣ^2)
 
     # derived reference states
     uᵣ = ρuᵣ / ρᵣ
+    qᵣ = ρqᵣ / ρᵣ
     eᵣ = ρeᵣ / ρᵣ
 
     # can be simplified, but written this way to look like the VeryLinearKGVolumeFlux
@@ -80,6 +86,7 @@ end
     flux.ρu  += (ρ .* uᵣ) .* uᵣ' 
     flux.ρe  += (ρᵣ * eᵣ + pᵣ) * u
     flux.ρe  += (ρᵣ * e + ρ * eᵣ + p) * uᵣ
+    flux.ρq  += ρᵣ * qᵣ * u + (ρᵣ * q + ρ * qᵣ) * uᵣ
 
     nothing
 end

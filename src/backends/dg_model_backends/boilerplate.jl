@@ -75,7 +75,9 @@ include("balance_laws.jl")
 include("callbacks.jl")
 
 # TODO! Remove this.
-dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/","barotropic_fluid/"]
+dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/",
+    "three_dimensional_moist_compressible_euler_with_total_energy/",
+    "barotropic_fluid/"]
 for dir in dirs
     include(dir * "balance_law_interface.jl")
     include(dir * "boundary_conditions_interface.jl")
@@ -88,6 +90,15 @@ include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/pr
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/gravity.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/thermodynamics.jl")
 include("./three_dimensional_dry_compressible_euler_with_total_energy/physics/temperature_profiles.jl")
+
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/physics.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/advection.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/coriolis.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/pressure_force.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/gravity.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/thermodynamics.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/temperature_profiles.jl")
+include("./three_dimensional_moist_compressible_euler_with_total_energy/physics/microphysics.jl")
 
 # TODO! Remove this.
 include("./barotropic_fluid/physics/physics.jl")
