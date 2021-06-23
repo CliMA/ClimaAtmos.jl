@@ -8,19 +8,23 @@ include("../src/interface/domains.jl")
 include("../src/interface/models.jl")
 include("../src/interface/physics.jl")
 include("../src/interface/boundary_conditions.jl")
+include("../src/interface/grids.jl")
 include("../src/backends/backends.jl")
+include("../src/backends/dg_model_backends/backend_hook.jl")
 include("../src/interface/simulations.jl")
 include("../src/interface/callbacks.jl")
 include("../src/backends/dg_model_backends/boilerplate.jl")
 include("../src/interface/grids.jl")
 include("../src/interface/timestepping.jl")
 include("../src/utils/sphere_utils.jl")
-include("../src/utils/operations.jl")
 
 # to be removed
 using CLIMAParameters#: AbstractEarthParameterSet
 struct PlanetParameterSet <: AbstractEarthParameterSet end
 get_planet_parameter(p::Symbol) = getproperty(CLIMAParameters.Planet, p)(PlanetParameterSet())
+
+# set up backend
+backend = DiscontinuousGalerkinBackend(numerics = (flux = :lmars,),)
 
 # Set up parameters
 parameters = (
@@ -70,7 +74,7 @@ domain = SphericalShell(
     radius = parameters.a,
     height = parameters.H,
 )
-grid = DiscretizedDomain(
+discretized_domain = DiscretizedDomain(
     domain = domain,
     discretization = (
 	    horizontal = SpectralElementGrid(elements = 32, polynomial_order = 2), 
@@ -155,21 +159,12 @@ model = ModelSetup(
         thermodynamic_variable = TotalEnergy(),
         equation_of_state = MoistIdealGas(),
         pressure_convention = Compressible(),
-        physics = Physics(
-            orientation = SphericalOrientation(),
-            ref_state   = NoReferenceState(),
-            parameters  = parameters,
-            eos         = MoistIdealGas(),
-            lhs         = (
-                NonlinearAdvection{(:ρ, :ρu, :ρe)}(),
-                PressureDivergence(),
-            ),
-            sources     = (
-		        DeepShellCoriolis(),
-                FluctuationGravity(),
-                ZeroMomentMicrophysics(),
-            ),
-        )
+        sources = (
+            coriolis     = DeepShellCoriolis(),
+            gravity      = Gravity(),
+            microphysics = ZeroMomentMicrophysics(),
+        ),
+        ref_state = NoReferenceState(),
     ),
     boundary_conditions = (DefaultBC(), DefaultBC()),
     # boundary_conditions = (
@@ -185,12 +180,8 @@ model = ModelSetup(
 
 # set up simulation
 simulation = Simulation(
-    backend = DiscontinuousGalerkinBackend(
-        grid = grid,
-        numerics = (
-            flux = :lmars,
-        ),
-    ),
+    backend = backend,
+    discretized_domain = discretized_domain,
     model = model,
     timestepper = (
         method = SSPRK22Heuns, 
@@ -200,7 +191,7 @@ simulation = Simulation(
     ),
     callbacks = (
         Info(),
-        VTKState(iteration = Int(3600), filepath = "./out/"),
+        VTKState(iteration = Int(1), filepath = "./out/"),
         CFL(), 
     ),
 )

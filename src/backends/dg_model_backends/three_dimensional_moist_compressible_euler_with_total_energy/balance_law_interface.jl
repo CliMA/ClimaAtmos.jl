@@ -1,20 +1,19 @@
-struct DryReferenceState{TP}
-    temperature_profile::TP
-end
-
 """
     Declaration of state variables
 
     vars_state returns a NamedTuple of data types.
 """
-function vars_state(m::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy, st::Auxiliary, FT)
+function vars_state(
+    balance_law::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy, 
+    st::Auxiliary, 
+    FT
+)
     @vars begin
         x::FT
         y::FT
         z::FT
         Φ::FT
-        ∇Φ::SVector{3, FT} # TODO: only needed for the linear balance_law
-        ref_state::vars_state(m, m.physics.ref_state, st, FT)
+        ref_state::vars_state(balance_law, balance_law.ref_state, st, FT)
     end
 end
 
@@ -49,7 +48,7 @@ function init_state_prognostic!(
     y = aux.y
     z = aux.z
 
-    parameters = balance_law.physics.parameters
+    parameters = balance_law.parameters
     ic = balance_law.initial_conditions
 
     # TODO!: Set to 0 by default or assign IC
@@ -69,8 +68,8 @@ function nodal_init_state_auxiliary!(
     tmp,
     geom,
 )
-    init_state_auxiliary!(balance_law, balance_law.physics.orientation, state_auxiliary, geom)
-    init_state_auxiliary!(balance_law, balance_law.physics.ref_state, state_auxiliary, geom)
+    init_state_auxiliary!(balance_law, balance_law.orientation, state_auxiliary, geom)
+    init_state_auxiliary!(balance_law, balance_law.ref_state, state_auxiliary, geom)
 end
 
 function init_state_auxiliary!(
@@ -79,14 +78,13 @@ function init_state_auxiliary!(
     state_auxiliary,
     geom,
 )
-    g = balance_law.physics.parameters.g
+    g = balance_law.parameters.g
 
     r = norm(geom.coord)
     state_auxiliary.x = geom.coord[1]
     state_auxiliary.y = geom.coord[2]
     state_auxiliary.z = geom.coord[3]
     state_auxiliary.Φ = g * r
-    state_auxiliary.∇Φ = g * geom.coord / r
 end
 
 function init_state_auxiliary!(
@@ -95,16 +93,13 @@ function init_state_auxiliary!(
     state_auxiliary,
     geom,
 )
-    g = balance_law.physics.parameters.g
-
-    FT = eltype(state_auxiliary)
+    g = balance_law.parameters.g
 
     r = geom.coord[3]
     state_auxiliary.x = geom.coord[1]
     state_auxiliary.y = geom.coord[2]
     state_auxiliary.z = geom.coord[3]
     state_auxiliary.Φ = g * r
-    state_auxiliary.∇Φ = SVector{3, FT}(0, 0, g)
 end
 
 function init_state_auxiliary!(
@@ -120,16 +115,16 @@ function init_state_auxiliary!(
     state_auxiliary,
     geom,
 )
-    orientation = balance_law.physics.orientation
-    R_d         = balance_law.physics.parameters.R_d
-    γ           = balance_law.physics.parameters.γ
-    Φ           = state_auxiliary.Φ
-
     FT = eltype(state_auxiliary)
+
+    orientation = balance_law.orientation
+    R_d         = balance_law.parameters.R_d
+    γ           = balance_law.parameters.γ
+    Φ           = state_auxiliary.Φ
 
     # Calculation of a dry reference state
     z = altitude(balance_law, orientation, geom)
-    T, p = ref_state.temperature_profile(balance_law.physics.parameters, z)
+    T, p = ref_state.temperature_profile(balance_law.parameters, z)
     ρ  = p / R_d / T
     ρu = SVector{3, FT}(0, 0, 0)
     ρe = p / (γ - 1) + dot(ρu, ρu) / 2ρ + ρ * Φ
@@ -143,7 +138,7 @@ function init_state_auxiliary!(
 end
 
 """
-    LHS computations
+    Main model computations
 """
 @inline function flux_first_order!(
     balance_law::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy,
@@ -152,32 +147,40 @@ end
     aux::Vars,
     t::Real,
     direction,
-)
-    lhs = balance_law.physics.lhs
-    physics = balance_law.physics
+)    
+    ρ   = state.ρ
+    ρu  = state.ρu
+    ρe  = state.ρe
+    ρq  = state.ρq
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
 
-    ntuple(Val(length(lhs))) do s
-        Base.@_inline_meta
-        calc_component!(flux, lhs[s], state, aux, physics)
-    end
+    p = calc_pressure(eos, state, aux, parameters)
+    u = ρu / ρ
+
+    flux.ρ  += ρu
+    flux.ρu += ρu ⊗ u + p * I
+    flux.ρe += (ρe + p) * u
+    flux.ρq += ρq * u
+
+    nothing
 end
 
 """
-    RHS computations
+    Source computations
 """
 function source!(
-    balance_law::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy,
-    source,
-    state_prognostic,
-    state_auxiliary,
+    balance_law::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy, 
+    source, 
+    state_prognostic, 
+    state_auxiliary, 
     _...
 )
-    sources = balance_law.physics.sources
-    physics = balance_law.physics
+    sources = balance_law.sources
 
     ntuple(Val(length(sources))) do s
         Base.@_inline_meta
-        calc_component!(source, sources[s], state_prognostic, state_auxiliary, physics)
+        calc_source!(source, balance_law, sources[s], state_prognostic, state_auxiliary)
     end
 end
 
@@ -185,7 +188,7 @@ end
     Utils
 """
 function altitude(balance_law::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy, ::SphericalOrientation, geom)
-    return norm(geom.coord) - balance_law.physics.parameters.a
+    return norm(geom.coord) - balance_law.parameters.a
 end
 
 function altitude(::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy, ::FlatOrientation, geom)

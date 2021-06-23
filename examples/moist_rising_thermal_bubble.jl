@@ -9,17 +9,22 @@ include("../src/interface/domains.jl")
 include("../src/interface/models.jl")
 include("../src/interface/physics.jl")
 include("../src/interface/boundary_conditions.jl")
+include("../src/interface/grids.jl")
 include("../src/backends/backends.jl")
+include("../src/backends/dg_model_backends/backend_hook.jl")
 include("../src/interface/simulations.jl")
 include("../src/interface/callbacks.jl")
 include("../src/backends/dg_model_backends/boilerplate.jl")
-include("../src/interface/grids.jl")
 include("../src/interface/timestepping.jl")
+include("../src/utils/sphere_utils.jl")
 
 # to be removed
 using CLIMAParameters#: AbstractEarthParameterSet
 struct PlanetParameterSet <: AbstractEarthParameterSet end
 get_planet_parameter(p::Symbol) = getproperty(CLIMAParameters.Planet, p)(PlanetParameterSet())
+
+# set up backend
+backend = DiscontinuousGalerkinBackend(numerics = (flux = :lmars,),)
 
 parameters = (
     R_d  = get_planet_parameter(:R_d),
@@ -59,7 +64,7 @@ parameters = (
 x_domain = IntervalDomain(min = 0, max = parameters.xmax, periodic = true)
 y_domain = IntervalDomain(min = 0, max = parameters.ymax, periodic = true)
 z_domain = IntervalDomain(min = 0, max = parameters.zmax, periodic = false)
-grid = DiscretizedDomain(
+discretized_domain = DiscretizedDomain(
     domain = x_domain × y_domain × z_domain,
     discretization = SpectralElementGrid(elements = (10,1,10), polynomial_order = (4,4,4),),
 )
@@ -90,20 +95,11 @@ model = ModelSetup(
         thermodynamic_variable = TotalEnergy(),
         equation_of_state = MoistIdealGas(),
         pressure_convention = Compressible(),
-        physics = Physics(
-            orientation = FlatOrientation(),
-            ref_state   = NoReferenceState(),
-            parameters  = parameters,
-            eos         = DryIdealGas(),
-            lhs         = (
-                NonlinearAdvection{(:ρ, :ρu, :ρe)}(),
-                PressureDivergence(),
-            ),
-            sources     = (
-                FluctuationGravity(),
-                # ZeroMomentMicrophysics(),
-            ),
-        )
+        sources = (
+            gravity = Gravity(),
+            # microphysics = ZeroMomentMicrophysics(),
+        ),
+        ref_state = NoReferenceState(),
     ),
     boundary_conditions = (0,0,1,1,DefaultBC(),DefaultBC()),
     # boundary_conditions = (
@@ -119,12 +115,8 @@ model = ModelSetup(
 
 # set up simulation
 simulation = Simulation(
-    backend = DiscontinuousGalerkinBackend(
-        grid = grid,
-        numerics = (
-            flux = :lmars,
-        ),
-    ),
+    backend = backend,
+    discretized_domain = discretized_domain,
     model = model,
     timestepper = (
         method = SSPRK22Heuns, 
@@ -138,6 +130,7 @@ simulation = Simulation(
         CFL(), 
     ),
 )
+
 
 # run the simulation
 initialize!(simulation)

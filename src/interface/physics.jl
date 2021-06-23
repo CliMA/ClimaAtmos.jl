@@ -3,6 +3,8 @@ abstract type AbstractThermodynamicVariable end
 abstract type AbstractCompressibility end
 abstract type AbstractSource end
 
+abstract type AbstractMicrophysics <: AbstractSource end
+
 # thermodynamics
 struct Density <: AbstractThermodynamicVariable end
 struct TotalEnergy <: AbstractThermodynamicVariable end
@@ -19,3 +21,7 @@ struct DeepShellCoriolis <: AbstractSource end
 
 # gravity
 struct Gravity <: AbstractSource end
+
+# microphysics
+
+struct ZeroMomentMicrophysics <: AbstractMicrophysics end

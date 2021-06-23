@@ -54,7 +54,7 @@ function create_balance_law(model::ModelSetup{𝒜}, domain) where
     )
 end
 
-function create_balance_law(model::ModelSetup{𝒜}, _...) where 
+function create_balance_law(model::ModelSetup{𝒜}, domain) where 
     {𝒜 <: ThreeDimensionalEuler{TotalEnergy, MoistIdealGas, Compressible}}
 
     return ThreeDimensionalMoistCompressibleEulerWithTotalEnergy(

@@ -39,7 +39,7 @@ end
 function numerical_boundary_flux_first_order!(
     numerical_flux::NumericalFluxFirstOrder,
     bctype::BulkFormulaTemperature,
-    model::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy,
+    balance_law::ThreeDimensionalMoistCompressibleEulerWithTotalEnergy,
     fluxᵀn::Vars{S},
     n̂::SVector,
     state⁻::Vars{S},
@@ -56,7 +56,7 @@ function numerical_boundary_flux_first_order!(
     numerical_boundary_flux_first_order!(
         numerical_flux,
         bctype::FreeSlip,
-        model,
+        balance_law,
         fluxᵀn,
         n̂,
         state⁻,
@@ -73,9 +73,9 @@ function numerical_boundary_flux_first_order!(
     ρ = state⁻.ρ
     ρu = state⁻.ρu
     ρq = state⁻.ρq
-    eos = model.physics.eos
-    parameters = model.physics.parameters
-    LH_v0 = model.physics.parameters.LH_v0
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
+    LH_v0 = balance_law.parameters.LH_v0
 
     # obtain surface fields from bcs
     ϕ = lat(aux⁻.x, aux⁻.y, aux⁻.z)
