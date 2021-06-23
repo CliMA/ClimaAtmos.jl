@@ -16,7 +16,6 @@ Aleph.jl initial conditions are based on Julia's NamedTuple structures. This all
 
 ## Models
 ModelSetups in ```Aleph.jl``` aim to define a base set of partial differential equations that can be modified with a few bells and whistles. As a consequence an ```Aleph.jl``` ModelSetup requires the specification of an equation set together with boundary conditions.
-ThreeDimensionalNavierStokes means 
 
 ## Diagnostics
 ```Aleph.jl``` provides a few callback structures for monitoring and simulation diagnostics purposes. Examples include the monitoring of CFL numbers and VTK or JLD2 output.
