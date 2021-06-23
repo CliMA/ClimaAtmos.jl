@@ -11,7 +11,7 @@ makedocs(
     pages = [
     "Home" => "index.md",
     "Abstractions" => abstractions,
-    "Contributor Guied" => "contributor_guide.md",
+    "Contributor Guide" => "contributor_guide.md",
     "Function Index" => "function_index.md",
     ],
     modules = [Aleph]
