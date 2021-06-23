@@ -69,7 +69,7 @@ model = ModelSetup(
         thermodynamic_variable = TotalEnergy(),
         equation_of_state = DryIdealGas(),
         pressure_convention = Compressible(),
-        sources = (;),
+        sources = (gravity = Gravity(),),
         ref_state = NoReferenceState(),
     ),
     boundary_conditions = (0, 0, 1, 1, DefaultBC(), DefaultBC()),
