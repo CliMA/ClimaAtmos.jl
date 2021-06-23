@@ -17,6 +17,26 @@ Aleph.jl initial conditions are based on Julia's NamedTuple structures. This all
 ## Models
 ModelSetups in ```Aleph.jl``` aim to define a base set of partial differential equations that can be modified with a few bells and whistles. As a consequence an ```Aleph.jl``` ModelSetup requires the specification of an equation set together with boundary conditions.
 
+For example, a struct may be a placeholder for the following Euler Equations
+
+```math
+    \begin{align}
+    \partial_t \rho + \nabla \cdot (\rho \vec{u})  &= 0 
+    \label{eq:continuity}
+    \\
+    \partial_t (\rho \vec{u}) + \nabla \cdot (\rho \vec{u} \otimes \vec{u} + p I)  &= 0 
+    \label{eq:momentum}
+    \\
+        \partial_t (\rho e) + \nabla \cdot ( \vec{u} [\rho e + p])  &= 0 
+    \label{eq:energy}
+    \\
+    \rho e -  \frac{1}{2} \rho \vec{u} \cdot \vec{u} - \rho \phi  &= p
+    \label{eq:pressure}
+    \end{align}
+```
+
+The continuity is (\ref{eq:continuity}).
+
 ## Diagnostics
 ```Aleph.jl``` provides a few callback structures for monitoring and simulation diagnostics purposes. Examples include the monitoring of CFL numbers and VTK or JLD2 output.
 
