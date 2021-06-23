@@ -1,7 +1,11 @@
 # Aleph.jl
-User interfaces to numerical models
+User interface to numerical models in CliMA
 
-See the [documentation](https://clima.github.io/Aleph.jl/dev/).
+|||
+|---------------------:|:----------------------------------------------|
+| **Docs Build**       | [![docs build][docs-bld-img]][docs-bld-url]   |
 
-[![](https://img.shields.io/badge/docs-red.svg)](https://clima.github.io/Aleph.jl/dev/)
+
+[docs-bld-img]: https://img.shields.io/badge/docs-red.svg
+[docs-bld-url]: https://clima.github.io/Aleph.jl/dev/
 

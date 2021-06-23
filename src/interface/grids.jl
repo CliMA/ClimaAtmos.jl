@@ -10,7 +10,7 @@ Base.@kwdef struct DiscretizedDomain{𝒜, ℬ} <: AbstractDiscretizedDomain
 end
 
 """
-    Grids
+    Gridsxw
 """
 Base.@kwdef struct SpectralElementGrid{𝒜,ℬ,𝒞} <: AbstractGrid 
     elements::𝒜

@@ -1,5 +1,9 @@
 abstract type TemperatureProfile{FT} end
 
+struct DryReferenceState{TP}
+    temperature_profile::TP
+end
+
 struct DecayingTemperatureProfile{FT} <: TemperatureProfile{FT}
     "Virtual temperature at surface (K)"
     T_virt_surf::FT
