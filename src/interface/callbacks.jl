@@ -1,51 +1,43 @@
 abstract type AbstractCallback end
 
-struct Default <: AbstractCallback end
 struct Info <: AbstractCallback end
 struct CFL <: AbstractCallback end
 
-struct StateCheck{T} <: AbstractCallback
-    number_of_checks::T
+Base.@kwdef struct StateCheck{𝒜} <: AbstractCallback
+    number_of_checks::𝒜
 end
 
-Base.@kwdef struct JLD2State{T, V, B} <: AbstractCallback
-    iteration::T
-    filepath::V
-    overwrite::B = true
+Base.@kwdef struct VTKState{𝒜,ℬ,𝒞,𝒟} <: AbstractCallback
+    iteration::𝒜 = 1
+    filepath::ℬ = "."
+    counter::𝒞 = [0]
+    overwrite::𝒟 = true
 end
 
-Base.@kwdef struct VTKState{T, V, C, B} <: AbstractCallback
-    iteration::T = 1
-    filepath::V = "."
-    counter::C = [0]
-    overwrite::B = true
+Base.@kwdef struct JLD2State{𝒜,ℬ,𝒞} <: AbstractCallback
+    iteration::𝒜
+    filepath::ℬ
+    overwrite::𝒞 = true
 end
 
-Base.@kwdef struct PositivityPreservingCallback{ℱ} <: AbstractCallback 
-    filterstates::ℱ = 6:6
+Base.@kwdef struct PositivityPreservingCallback{𝒜} <: AbstractCallback 
+    filterstates::𝒜 = 6:6
 end
 
-Base.@kwdef struct ReferenceStateUpdate{ℱ} <: AbstractCallback 
-    recompute::ℱ = 20
+Base.@kwdef struct ReferenceStateUpdate{𝒜} <: AbstractCallback 
+    recompute::𝒜 = 20
 end
 
-function create_callbacks(simulation::Simulation, odesolver)
+function create_callbacks(simulation::Simulation, ode_solver)
     callbacks = simulation.callbacks
 
     if isempty(callbacks)
         return ()
     else
         cbvector = [
-            create_callback(callback, simulation, odesolver)
+            create_callback(callback, simulation, ode_solver)
             for callback in callbacks
         ]
         return tuple(cbvector...)
     end
-end
-
-function create_callback(::Default, simulation::Simulation, odesolver)
-    cb_info = create_callback(Info(), simulation, odesolver)
-    cb_state_check = create_callback(StateCheck(10), simulation, odesolver)
-
-    return (cb_info, cb_state_check)
 end

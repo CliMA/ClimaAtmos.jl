@@ -1,3 +1,23 @@
+function create_grid(backend::CoreBackend, discretized_domain::DiscretizedDomain)
+
+    domain = Domains.RectangleDomain(
+        discretized_domain.domain[1].min..discretized_domain.domain[1].max,
+        discretized_domain.domain[2].min..discretized_domain.domain[2].max,
+        x1periodic = discretized_domain.domain[1].periodic,
+        x2periodic = discretized_domain.domain[2].periodic,
+    )
+
+    n1 = discretized_domain.discretization.horizontal.elements
+    n2 = discretized_domain.discretization.horizontal.elements
+    Nq = discretized_domain.discretization.horizontal.polynomial_order + 1
+
+    mesh = Meshes.EquispacedRectangleMesh(domain, n1, n2)
+    grid_topology = Topologies.GridTopology(mesh)
+    quadrature = Spaces.Quadratures.GLL{Nq}()
+    space = Spaces.SpectralElementSpace2D(grid_topology, quadrature)
+    return space 
+end
+
 function create_grid(backend::CoreBackend)
 
     domain = Domains.RectangleDomain(
@@ -58,12 +78,10 @@ function create_rhs(model::ModelSetup, backend::CoreBackend; grid = nothing)
         return dydt
     end
 
-    
     return rhs!
 end
 
 function create_init_state(model::ModelSetup, backend::CoreBackend; rhs = nothing, grid = nothing)
-
     if grid==nothing
         space = create_grid(backend)
     end

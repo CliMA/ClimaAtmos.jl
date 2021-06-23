@@ -8,7 +8,8 @@ using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 
 using ClimateMachineCore.RecursiveApply
 using ClimateMachineCore.RecursiveApply: rdiv, rmap
-##
+
+# set up parameters
 parameters = (
     ϵ = 0.1,  # perturbation size for initial condition
     l = 0.5, # Gaussian width
@@ -18,16 +19,13 @@ parameters = (
     g = 10,
 )
 
-numflux_name = get(ARGS, 1, "rusanov")
-boundary_name = get(ARGS, 2, "")
-
+# set up grid
 domain = Domains.RectangleDomain(
     -2π..2π,
     -2π..2π,
     x1periodic = true,
     x2periodic = boundary_name != "noslip",
 )
-
 n1, n2 = 16, 16
 Nq = 4
 Nqh = 7
@@ -36,9 +34,7 @@ grid_topology = Topologies.GridTopology(mesh)
 quad = Spaces.Quadratures.GLL{Nq}()
 space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
-Iquad = Spaces.Quadratures.GLL{Nqh}()
-Ispace = Spaces.SpectralElementSpace2D(grid_topology, Iquad)
-
+# set up initial condition
 function init_state(x, p)
     @unpack x1, x2 = x
     # set initial state
@@ -54,7 +50,6 @@ function init_state(x, p)
     u₁′ += p.k * gaussian * cos(p.k * x1) * sin(p.k * x2)
     u₂′ = -p.k * gaussian * sin(p.k * x1) * cos(p.k * x2)
 
-
     u = Cartesian12Vector(U₁ + p.ϵ * u₁′, p.ϵ * u₂′)
     # set initial tracer
     θ = sin(p.k * x2)
@@ -64,25 +59,21 @@ end
 
 y0 = init_state.(Fields.coordinate_field(space), Ref(parameters))
 
+#=
+# Replace Equations and Numerical Fluxes, 69 - 168 can be moved out
+Model()
+
+rhs = create_rhs(Model, Backend)
+=#
+
+# Equations
 function flux(state, p)
     @unpack ρ, ρu, ρθ = state
     u = ρu ./ ρ
     return (ρ = ρu, ρu = ((ρu ⊗ u) + (p.g * ρ^2 / 2) * I), ρθ = ρθ .* u)
 end
 
-function energy(state, p)
-    @unpack ρ, ρu = state
-    u = ρu ./ ρ
-    return ρ * (u.u1^2 + u.u2^2) / 2 + p.g * ρ^2 / 2
-end
-
-function total_energy(y, parameters)
-    sum(state -> energy(state, parameters), y)
-end
-
 # numerical fluxes
-wavespeed(y, parameters) = sqrt(parameters.g)
-
 roe_average(ρ⁻, ρ⁺, var⁻, var⁺) =
     (sqrt(ρ⁻) * var⁻ + sqrt(ρ⁺) * var⁺) / (sqrt(ρ⁻) + sqrt(ρ⁺))
 
@@ -145,44 +136,24 @@ function roeflux(n, (y⁻, parameters⁻), (y⁺, parameters⁺))
     rmap(f -> f' * n, Favg) ⊞ Δf
 end
 
-
 numflux = roeflux
 
 function rhs!(dydt, y, (parameters, numflux), t)
 
-    # ϕ' K' W J K dydt =  -ϕ' K' I' [DH' WH JH flux.(I K y)]
-    #  =>   K dydt = - K inv(K' WJ K) K' I' [DH' WH JH flux.(I K y)]
-
-    # where:
-    #  ϕ = test function
-    #  K = DSS scatter (i.e. duplicates points at element boundaries)
-    #  K y = stored input vector (with duplicated values)
-    #  I = interpolation to higher-order space
-    #  D = derivative operator
-    #  H = suffix for higher-order space operations
-    #  W = Quadrature weights
-    #  J = Jacobian determinant of the transformation `ξ` to `x`
-    #
     Nh = Topologies.nlocalelems(y)
-
+    
+    # Calculate the Flux
     F = flux.(y, Ref(parameters))
+
+    # DG divergence
     dydt .= Operators.slab_weak_divergence(F)
-
     Operators.add_numerical_flux_internal!(numflux, dydt, y, parameters)
-
-    Operators.add_numerical_flux_boundary!(
-        dydt,
-        y,
-        parameters,
-    ) do normal, (y⁻, parameters)
-        y⁺ = (ρ = y⁻.ρ, ρu = y⁻.ρu .- dot(y⁻.ρu, normal) .* normal, ρθ = y⁻.ρθ)
-        numflux(normal, (y⁻, parameters), (y⁺, parameters))
-    end
 
     # 6. Solve for final result
     dydt_data = Fields.field_values(dydt)
     dydt_data .= rdiv.(dydt_data, space.local_geometry.WJ)
 
+    # Enacts overintegration
     M = Spaces.Quadratures.cutoff_filter_matrix(
         Float64,
         space.quadrature_style,
@@ -207,6 +178,7 @@ sol = solve(
     progress_message = (dt, u, p, t) -> t,
 )
 
+# make video
 ENV["GKSwstype"] = "nul"
 import Plots
 Plots.GRBackend()
@@ -219,38 +191,3 @@ anim = Plots.@animate for u in sol.u
     Plots.plot(u.ρθ, clim = (-1, 1))
 end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
-
-##
-include("../src/interface/domains.jl")
-include("../src/interface/grids.jl")
-Ωˣ = IntervalDomain(min = -2π, max = 2π, periodic = true)
-Ωʸ = IntervalDomain(min = -2π, max = 2π, periodic = true)
-discretized_domain = DiscretizedDomain(
-    domain = Ωˣ × Ωʸ,
-    discretization = (
-	    horizontal = SpectralElementGrid(elements = 8, polynomial_order = 3), 
-	),
-)
-
-
-function create_grid(backend::CoreBackend, discretized_domain::DiscretizedDomain)
-
-    domain = Domains.RectangleDomain(
-        discretized_domain.domain[1].min..discretized_domain.domain[1].max,
-        discretized_domain.domain[2].min..discretized_domain.domain[2].max,
-        x1periodic = discretized_domain.domain[1].periodic,
-        x2periodic = discretized_domain.domain[2].periodic,
-    )
-
-    n1 = discretized_domain.discretization.horizontal.elements
-    n2 = discretized_domain.discretization.horizontal.elements
-    Nq = discretized_domain.discretization.horizontal.polynomial_order + 1
-
-    mesh = Meshes.EquispacedRectangleMesh(domain, n1, n2)
-    grid_topology = Topologies.GridTopology(mesh)
-    quadrature = Spaces.Quadratures.GLL{Nq}()
-    space = Spaces.SpectralElementSpace2D(grid_topology, quadrature)
-    return space 
-end
-
-space = create_grid(CoreBackend(nothing,nothing), discretized_domain)
