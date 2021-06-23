@@ -15,8 +15,7 @@ struct MoistIdealGas <: AbstractEquationOfState end
 struct Compressible <: AbstractCompressibility end
 
 # coriolis force
-struct Coriolis <: AbstractSource end
+struct DeepShellCoriolis <: AbstractSource end
 
 # gravity
-struct DeepGravity <: AbstractSource end
-struct ShallowGravity <: AbstractSource end
+struct Gravity <: AbstractSource end

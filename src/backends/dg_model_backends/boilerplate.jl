@@ -71,12 +71,12 @@ using ClimateMachine.VariableTemplates: flattenednames
 
 # interface includes
 include("grids.jl")
+include("temperature_profiles.jl")
 include("balance_laws.jl")
 include("callbacks.jl")
 
 # TODO! Remove this.
-# dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/", "barotropic_fluid/"]
-dirs = ["barotropic_fluid/"]
+dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/", "barotropic_fluid/"]
 for dir in dirs
     include(dir * "balance_law_interface.jl")
     include(dir * "boundary_conditions_interface.jl")

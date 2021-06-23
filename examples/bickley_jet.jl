@@ -41,7 +41,6 @@ discretized_domain = DiscretizedDomain(
 	    vertical = SpectralElementGrid(elements = 1, polynomial_order = 1)
 	),
 )
-grid = create_grid(backend, discretized_domain)
 
 # set up inital condition
 uᵐ(p, λ, ϕ, r) =  p.ℓᵐ * sech(p.ℓᵐ * ϕ)^2 
@@ -75,8 +74,9 @@ model = ModelSetup(
         equation_of_state = BarotropicFluid(),
         pressure_convention = Compressible(),
         sources = (
-           Coriolis(),
+           DeepShellCoriolis(),
         ),
+        ref_state = NoReferenceState(),
     ),
     boundary_conditions = (DefaultBC(), DefaultBC()),
     initial_conditions = (
@@ -88,7 +88,7 @@ model = ModelSetup(
 # set up simulation
 simulation = Simulation(
     backend = backend,
-    grid = grid,
+    discretized_domain = discretized_domain,
     model = model,
     timestepper = (
         method = SSPRK22Heuns, 

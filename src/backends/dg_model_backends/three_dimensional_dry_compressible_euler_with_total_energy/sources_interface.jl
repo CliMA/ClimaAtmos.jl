@@ -1,8 +1,8 @@
-@inline calc_source!(source, ::ThreeDimensionalCompressibleEulerWithBarotropicFluid, _...) = nothing
+@inline calc_source!(source, ::ThreeDimensionalDryCompressibleEulerWithTotalEnergy, _...) = nothing
 
 @inline function calc_source!(
         source,
-        balance_law::ThreeDimensionalCompressibleEulerWithBarotropicFluid, 
+        balance_law::ThreeDimensionalDryCompressibleEulerWithTotalEnergy, 
         ::DeepShellCoriolis, 
         state, 
         aux

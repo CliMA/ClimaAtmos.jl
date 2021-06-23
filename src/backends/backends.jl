@@ -4,9 +4,8 @@ Base.@kwdef struct DiscontinuousGalerkinBackend{𝒜} <: AbstractBackend
     numerics::𝒜
 end
 
-Base.@kwdef struct CoreBackend{𝒜,ℬ} <: AbstractBackend
-    grid::𝒜
-    numerics::ℬ
+Base.@kwdef struct CoreBackend{𝒜} <: AbstractBackend
+    numerics::𝒜
 end
 
 function create_grid(::DiscontinuousGalerkinBackend, discretized_domain)
@@ -20,8 +19,8 @@ function create_grid(::DiscontinuousGalerkinBackend, discretized_domain)
     )
 end
 
-function create_rhs(model::ModelSetup, grid, backend::DiscontinuousGalerkinBackend)
-    balance_law = create_balance_law(model)
+function create_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
+    balance_law = create_balance_law(model, domain)
     numerical_flux = create_numerical_flux(backend.numerics.flux)
 
     rhs = ESDGModel(
@@ -43,12 +42,6 @@ function create_init_state(model::ModelSetup, backend::DiscontinuousGalerkinBack
 
     return state_init
 end
-
-# function create_boundary_conditions(model::ModelSetup, backend::DiscontinuousGalerkinBackend)
-#     boundary_conditions = model.boundary_conditions
-    
-#     nothing
-# end
 
 # utils
 function get_elements(discretized_domain::DiscretizedDomain{<:ProductDomain})

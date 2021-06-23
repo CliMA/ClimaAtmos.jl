@@ -4,11 +4,12 @@ abstract type AbstractModel end
 """
     ThreeDimensionalEuler <: AbstractEquationSet
 """
-Base.@kwdef struct ThreeDimensionalEuler{𝒜,ℬ,𝒞,𝒟} <: AbstractEquationSet
+Base.@kwdef struct ThreeDimensionalEuler{𝒜,ℬ,𝒞,𝒟,ℰ} <: AbstractEquationSet
     thermodynamic_variable::𝒜
     equation_of_state::ℬ
     pressure_convention::𝒞
     sources::𝒟
+    ref_state::ℰ
 end
 
 """
@@ -32,6 +33,7 @@ end
 #             Coriolis(),
 #             Radiation(),
 #         )
+#         ref_state = DryReferenceState(),
 #     ),
 #     boundary_conditions = (
 #         ρ  = (top = NoFlux(), bottom = NoFlux(),),

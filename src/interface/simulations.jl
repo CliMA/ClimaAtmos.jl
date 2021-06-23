@@ -2,7 +2,7 @@ abstract type AbstractSimulation end
 
 Base.@kwdef struct Simulation{𝒜,ℬ,𝒞,𝒟,ℰ,ℱ,𝒢} <: AbstractSimulation
     backend::𝒜
-    grid::ℬ 
+    discretized_domain::ℬ 
     model::𝒞
     timestepper::𝒟
     callbacks::ℰ
@@ -12,17 +12,18 @@ end
 
 function Simulation(;
     backend::AbstractBackend,
-    grid, 
+    discretized_domain::DiscretizedDomain, 
     model::ModelSetup, 
     timestepper,
     callbacks,
 )
-    rhs = create_rhs(model, grid, backend)
+    grid = create_grid(backend, discretized_domain)
+    rhs = create_rhs(model, backend, domain = discretized_domain.domain, grid = grid)
     state = create_init_state(model, backend, rhs = rhs)
 
     return Simulation(
         backend,
-        grid,
+        discretized_domain,
         model, 
         timestepper, 
         callbacks, 
@@ -35,7 +36,7 @@ function initialize!(simulation::Simulation; overwrite = false)
     if overwrite
         simulation = Simulation(
             backend = simulation.backend,
-            grid = simulation.grid,
+            discretized_domain = simulation.discretized_domain,
             model = simulation.model, 
             timestepper = simulation.timestepper, 
             callbacks = simulation.callbacks,
