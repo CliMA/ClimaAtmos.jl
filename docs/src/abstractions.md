@@ -34,7 +34,7 @@ For example, a struct may be a placeholder for the following Euler Equations
     \label{eq:pressure}
     \end{align}
 ```
-where the continuity equation is (\ref{eq:continuity}), the momentum equation is (\ref{eq:momentum}), the energy equation is (\ref{eq:energy}), and the pressure equation is (\ref{eq:pressure})
+where the continuity equation is (\ref{eq:continuity}), the momentum equation is (\ref{eq:momentum}), the energy equation is (\ref{eq:energy}), and the pressure equation is (\ref{eq:pressure}).
 
 ## Diagnostics
 ```Aleph.jl``` provides a few callback structures for monitoring and simulation diagnostics purposes. Examples include the monitoring of CFL numbers and VTK or JLD2 output.
