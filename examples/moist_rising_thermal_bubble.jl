@@ -15,8 +15,6 @@ include("../src/backends/dg_model_backends/backend_hook.jl")
 include("../src/interface/simulations.jl")
 include("../src/interface/callbacks.jl")
 include("../src/backends/dg_model_backends/boilerplate.jl")
-include("../src/interface/timestepping.jl")
-include("../src/utils/sphere_utils.jl")
 
 # to be removed
 using CLIMAParameters#: AbstractEarthParameterSet
