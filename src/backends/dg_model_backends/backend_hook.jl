@@ -24,6 +24,26 @@ function create_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBackend; do
     return rhs
 end
 
+function create_rhs(::NoSplitting, model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
+    rhs = create_rhs(model, backend, domain = domain, grid = grid)
+    return rhs 
+end
+
+function create_rhs(::IMEXSplitting, model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
+    rhs = []
+    # create explicit model and push to rhs
+    tmp = #Explicit(
+        create_rhs(model, backend, domain = domain, grid = grid)
+    #)
+    push!(rhs, tmp)
+    # # create implicit model and push to rhs
+    # tmp = Implicit(
+    #     # linear model rhs
+    # )
+    # push!(rhs, tmp)
+    return Tuple(rhs)
+end
+
 function create_init_state(model::ModelSetup, backend::DiscontinuousGalerkinBackend; rhs = nothing)
     if rhs === nothing
         rhs = create_rhs(model, backend)
