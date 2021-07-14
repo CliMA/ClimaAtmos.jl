@@ -21,7 +21,26 @@ function numerical_volume_fluctuation_flux_first_order!(
 
         source.ρu -= α * (Φ_1 - Φ_2) * I
     end
-end    
+end
+
+# function numerical_volume_fluctuation_flux_first_order!(
+#     ::NumericalFluxFirstOrder,
+#     balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+#     source::Grad,
+#     state_1::Vars,
+#     aux_1::Vars,
+#     state_2::Vars,
+#     aux_2::Vars,
+# )
+#     if haskey(balance_law.sources, :gravity)
+#         ρ_1, ρ_2 = state_1.ρ, state_2.ρ
+#         Φ_1, Φ_2 = aux_1.Φ, aux_2.Φ
+
+#         α = ave(ρ_1, ρ_2) * 0.5
+
+#         source.ρu -= α * (Φ_1 - Φ_2) * I
+#     end
+# end    
 
 function numerical_volume_conservative_flux_first_order!(
     ::CentralVolumeFlux,
