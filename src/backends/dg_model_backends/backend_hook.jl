@@ -10,7 +10,7 @@ function create_grid(::DiscontinuousGalerkinBackend, discretized_domain)
     )
 end
 
-function create_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
+function create_esdg_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
     balance_law = create_balance_law(model, domain)
     numerical_flux = create_numerical_flux(backend.numerics.flux)
 
@@ -24,8 +24,22 @@ function create_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBackend; do
     return rhs
 end
 
+function create_linear_rhs(model::ModelSetup; domain, grid)
+    balance_law = create_balance_law(model, domain)
+    linear_balance_law = linearize_balance_law(balance_law)
+
+    rhs = VESDGModel(
+        linear_balance_law,
+        grid,
+        surface_numerical_flux_first_order = RefanovFlux(),
+        volume_numerical_flux_first_order = LinearKGVolumeFlux(),
+    )
+
+    return rhs
+end
+
 function create_rhs(::NoSplitting, model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
-    rhs = create_rhs(model, backend, domain = domain, grid = grid)
+    rhs = create_esdg_rhs(model, backend, domain = domain, grid = grid)
     return rhs 
 end
 
@@ -33,19 +47,20 @@ function create_rhs(::IMEXSplitting, model::ModelSetup, backend::DiscontinuousGa
     rhs = []
     # create explicit model and push to rhs
     tmp = #Explicit(
-        create_rhs(model, backend, domain = domain, grid = grid)
+        create_esdg_rhs(model, backend, domain = domain, grid = grid)
     #)
     push!(rhs, tmp)
-    # # create implicit model and push to rhs
-    # tmp = Implicit(
-    #     # linear model rhs
+    # create implicit model and push to rhs
+    tmp = #Implicit(
+        create_linear_rhs(model, domain = domain, grid = grid)
     # )
-    # push!(rhs, tmp)
+    push!(rhs, tmp)
     return Tuple(rhs)
 end
 
 function create_init_state(model::ModelSetup, backend::DiscontinuousGalerkinBackend; rhs = nothing)
     if rhs === nothing
+        # TODO: this looks wrong
         rhs = create_rhs(model, backend)
     end
     FT = eltype(rhs.grid.vgeo)

@@ -17,6 +17,16 @@ Base.@kwdef struct ThreeDimensionalDryCompressibleEulerWithTotalEnergy{𝒜,ℬ,
     parameters::𝒢
 end
 
+Base.@kwdef struct LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy{𝒜,ℬ,𝒞,𝒟,ℰ,ℱ,𝒢} <: BalanceLaw
+    orientation::𝒜
+    equation_of_state::ℬ
+    sources::𝒞 # may not need
+    boundary_conditions::𝒟
+    initial_conditions::ℰ
+    ref_state::ℱ 
+    parameters::𝒢
+end
+
 Base.@kwdef struct ThreeDimensionalMoistCompressibleEulerWithTotalEnergy{𝒜,ℬ,𝒞,𝒟,ℰ,ℱ,𝒢} <: BalanceLaw
     orientation::𝒜
     equation_of_state::ℬ
@@ -65,6 +75,19 @@ function create_balance_law(model::ModelSetup{𝒜}, domain) where
         initial_conditions = model.initial_conditions,
         ref_state = model.equations.ref_state,
         parameters = model.parameters, 
+    )
+end
+
+function linearize_balance_law(balance_law::ThreeDimensionalDryCompressibleEulerWithTotalEnergy) 
+
+    return LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy(
+        orientation = balance_law.orientation,
+        equation_of_state = balance_law.equation_of_state,
+        sources = balance_law.sources,
+        boundary_conditions = balance_law.boundary_conditions,
+        initial_conditions = balance_law.initial_conditions,
+        ref_state = balance_law.ref_state,
+        parameters = balance_law.parameters, 
     )
 end
 

@@ -156,9 +156,9 @@ simulation = Simulation(
     backend = backend,
     discretized_domain = discretized_domain,
     model = model,
-    splitting = NoSplitting(), #IMEXSplitting(ref_state = ref_state), 
+    splitting = IMEXSplitting(), 
     timestepper = (
-        method = SSPRK22Heuns, 
+        method = IMEX(), 
         start = 0.0, 
         finish = 24 * 3600,
         timestep = 1.0,
@@ -171,7 +171,7 @@ simulation = Simulation(
 )
 
 # run the simulation
-initialize!(simulation)
-evolve!(simulation)
+# initialize!(simulation)
+# evolve!(simulation)
 
 nothing
