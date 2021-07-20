@@ -161,17 +161,17 @@ simulation = Simulation(
         method = IMEX(), 
         start = 0.0, 
         finish = 24 * 3600,
-        timestep = 1.0,
+        timestep = 5.0,
     ),
     callbacks = (
         Info(),
-        VTKState(iteration = Int(3600), filepath = "./out/"),
+        VTKState(iteration = Int(floor(24*3600/5.0)), filepath = "./out/"),
         CFL(), 
     ),
 )
 
 # run the simulation
-# initialize!(simulation)
-# evolve!(simulation)
+initialize!(simulation)
+evolve!(simulation)
 
 nothing

@@ -94,14 +94,14 @@ end
 function numerical_boundary_flux_second_order!(
     ::Nothing, 
     a, 
-    ::ThreeDimensionalDryCompressibleEulerWithTotalEnergy, 
+    ::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy,LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy}, 
     _...
 ) 
     return nothing
 end
 
 function boundary_conditions(
-    balance_law::ThreeDimensionalDryCompressibleEulerWithTotalEnergy
+    balance_law::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy, LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy}
 ) 
     return balance_law.boundary_conditions
 end

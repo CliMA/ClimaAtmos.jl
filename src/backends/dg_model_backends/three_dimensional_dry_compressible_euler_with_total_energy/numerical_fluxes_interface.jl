@@ -23,24 +23,24 @@ function numerical_volume_fluctuation_flux_first_order!(
     end
 end
 
-# function numerical_volume_fluctuation_flux_first_order!(
-#     ::NumericalFluxFirstOrder,
-#     balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
-#     source::Grad,
-#     state_1::Vars,
-#     aux_1::Vars,
-#     state_2::Vars,
-#     aux_2::Vars,
-# )
-#     if haskey(balance_law.sources, :gravity)
-#         ρ_1, ρ_2 = state_1.ρ, state_2.ρ
-#         Φ_1, Φ_2 = aux_1.Φ, aux_2.Φ
+function numerical_volume_fluctuation_flux_first_order!(
+    ::NumericalFluxFirstOrder,
+    balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    source::Grad,
+    state_1::Vars,
+    aux_1::Vars,
+    state_2::Vars,
+    aux_2::Vars,
+)
+    # if haskey(balance_law.sources, :gravity)
+    #     ρ_1, ρ_2 = state_1.ρ, state_2.ρ
+    #     Φ_1, Φ_2 = aux_1.Φ, aux_2.Φ
 
-#         α = ave(ρ_1, ρ_2) * 0.5
+    #     α = ave(ρ_1, ρ_2) * 0.5
 
-#         source.ρu -= α * (Φ_1 - Φ_2) * I
-#     end
-# end    
+    #     source.ρu -= α * (Φ_1 - Φ_2) * I
+    # end
+end    
 
 function numerical_volume_conservative_flux_first_order!(
     ::CentralVolumeFlux,
@@ -95,6 +95,58 @@ function numerical_volume_conservative_flux_first_order!(
     F.ρ  = ρ_avg * u_avg
     F.ρu = p_avg * I + ρ_avg * u_avg .* u_avg'
     F.ρe = ρ_avg * u_avg * e_avg + p_avg * u_avg
+end
+
+function numerical_volume_conservative_flux_first_order!(
+    ::LinearKGVolumeFlux,
+    balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    F::Grad,
+    state_1::Vars,
+    aux_1::Vars,
+    state_2::Vars,
+    aux_2::Vars,
+)
+
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
+
+    ρu_1 = state_1.ρu
+    ρuᵣ = ρu_1 * 0
+    p_1 = calc_linear_pressure(eos, state_1, aux_1, parameters)
+
+    # grab reference state
+    ρᵣ_1 = aux_1.ref_state.ρ
+    pᵣ_1 = aux_1.ref_state.p
+    ρeᵣ_1 = aux_1.ref_state.ρe
+
+    # only ρu fluctuates in the non-pressure terms
+    u_1 = ρu_1 / ρᵣ_1 
+    eᵣ_1 = ρeᵣ_1 / ρᵣ_1
+    ρu_2 = state_2.ρu
+
+    ρuᵣ = ρu_2 * 0
+    p_2 = calc_linear_pressure(eos, state_2, aux_2, parameters)
+
+    # grab reference state
+    ρᵣ_2 = aux_2.ref_state.ρ
+    pᵣ_2 = aux_2.ref_state.p
+    ρeᵣ_2 = aux_2.ref_state.ρe
+
+    # only ρu fluctuates in the non-pressure terms
+    u_2 = ρu_2 / ρᵣ_2 
+    eᵣ_2 = ρeᵣ_2 / ρᵣ_2
+
+    # construct averages
+    ρᵣ_avg = ave(ρᵣ_1, ρᵣ_2)
+    eᵣ_avg = ave(eᵣ_1, eᵣ_2)
+    pᵣ_avg = ave(pᵣ_1, pᵣ_2)
+
+    u_avg = ave(u_1, u_2)
+    p_avg = ave(p_1, p_2)
+
+    F.ρ = ρᵣ_avg * u_avg 
+    F.ρu = p_avg * I + ρuᵣ .* ρuᵣ' # the latter term is needed to determine size of I
+    F.ρe = (ρᵣ_avg * eᵣ_avg + pᵣ_avg) * u_avg
 end
 
 function numerical_flux_first_order!(
@@ -245,7 +297,7 @@ end
 
 function numerical_flux_first_order!(
     ::RefanovFlux,
-    model::ThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    balance_law::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy, LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy},
     fluxᵀn::Vars{S},
     normal_vector::SVector,
     state⁻::Vars{S},
@@ -258,7 +310,7 @@ function numerical_flux_first_order!(
 
     numerical_flux_first_order!(
         CentralNumericalFluxFirstOrder(),
-        model,
+        balance_law,
         fluxᵀn,
         normal_vector,
         state⁻,
@@ -268,7 +320,7 @@ function numerical_flux_first_order!(
         t,
         direction,
     )
-    eos = model.equation_of_state
+    eos = balance_law.equation_of_state
     parameters = balance_law.parameters
     
     c⁻ = calc_ref_sound_speed(eos, state⁻, aux⁻, parameters)
@@ -296,7 +348,7 @@ end
 
 function numerical_flux_second_order!(
     ::Nothing, 
-    ::ThreeDimensionalDryCompressibleEulerWithTotalEnergy, 
+    ::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy,LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy}, 
     _...,
 ) 
     return nothing
