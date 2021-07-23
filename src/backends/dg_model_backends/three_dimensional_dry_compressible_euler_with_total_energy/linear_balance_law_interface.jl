@@ -159,23 +159,24 @@ end
     nothing
 end
 
-# """
-#     Source computations
-# """
-# function source!(
-#     balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
-#     source,
-#     state_prognostic,
-#     state_auxiliary,
-#     _...
-# )
-#     sources = balance_law.sources
-
-#     ntuple(Val(length(sources))) do s
-#         Base.@_inline_meta
-#         calc_source!(source, balance_law, sources[s], state_prognostic, state_auxiliary)
-#     end
-# end
+"""
+    Source computations
+"""
+function source!(
+    balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    source,
+    state_prognostic,
+    state_auxiliary,
+    _...
+)
+    sources = balance_law.sources
+    #=
+    ntuple(Val(length(sources))) do s
+        Base.@_inline_meta
+        calc_source!(source, balance_law, sources[s], state_prognostic, state_auxiliary)
+    end
+    =#
+end
 
 """
     Utils

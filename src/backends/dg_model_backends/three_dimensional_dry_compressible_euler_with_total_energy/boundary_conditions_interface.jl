@@ -1,7 +1,7 @@
 function numerical_boundary_flux_first_order!(
     numerical_flux::NumericalFluxFirstOrder,
     ::DefaultBC,
-    balance_law::ThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    balance_law::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy,LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy},
     fluxᵀn::Vars{S},
     n̂::SVector,
     state⁻::Vars{S},

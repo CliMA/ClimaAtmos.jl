@@ -32,14 +32,14 @@ function numerical_volume_fluctuation_flux_first_order!(
     state_2::Vars,
     aux_2::Vars,
 )
-    # if haskey(balance_law.sources, :gravity)
-    #     ρ_1, ρ_2 = state_1.ρ, state_2.ρ
-    #     Φ_1, Φ_2 = aux_1.Φ, aux_2.Φ
+    if haskey(balance_law.sources, :gravity)
+        ρ_1, ρ_2 = state_1.ρ, state_2.ρ
+        Φ_1, Φ_2 = aux_1.Φ, aux_2.Φ
 
-    #     α = ave(ρ_1, ρ_2) * 0.5
+        α = ave(ρ_1, ρ_2) * 0.5
 
-    #     source.ρu -= α * (Φ_1 - Φ_2) * I
-    # end
+        source.ρu -= α * (Φ_1 - Φ_2) * I
+    end
 end    
 
 function numerical_volume_conservative_flux_first_order!(

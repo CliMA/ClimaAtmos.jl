@@ -32,8 +32,9 @@ end
     ρuᵣ = aux.ref_state.ρu
 
     γ  = calc_heat_capacity_ratio(eos, state, params)
+    cv_d = calc_heat_capacity_at_constant_volume(eos, state, params)
 
-    return (γ - 1) * (ρe - dot(ρuᵣ, ρu) / ρᵣ + ρ * dot(ρuᵣ, ρuᵣ) / (2*ρᵣ^2) - ρ * Φ)
+    return (γ - 1) * (ρe - dot(ρuᵣ, ρu) / ρᵣ + ρ * dot(ρuᵣ, ρuᵣ) / (2*ρᵣ^2) - ρ * Φ + ρ * cv_d * T_0)
 end
 
 @inline function calc_sound_speed(eos::DryIdealGas, state, aux, params)

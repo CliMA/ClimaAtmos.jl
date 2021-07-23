@@ -142,7 +142,7 @@ end
     aux::Vars,
     t::Real,
     direction,
-)    
+)
     ρ   = state.ρ
     ρu  = state.ρu
     ρe  = state.ρe
