@@ -25,7 +25,7 @@ end
 
 function numerical_volume_fluctuation_flux_first_order!(
     ::NumericalFluxFirstOrder,
-    balance_law::LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    balance_law::LinearBalanceLaw,
     source::Grad,
     state_1::Vars,
     aux_1::Vars,
@@ -147,6 +147,81 @@ function numerical_volume_conservative_flux_first_order!(
     F.ρ = ρᵣ_avg * u_avg 
     F.ρu = p_avg * I + ρuᵣ .* ρuᵣ' # the latter term is needed to determine size of I
     F.ρe = (ρᵣ_avg * eᵣ_avg + pᵣ_avg) * u_avg
+end
+
+function numerical_volume_conservative_flux_first_order!(
+    ::VeryLinearKGVolumeFlux,
+    balance_law::VeryLinearThreeDimensionalDryCompressibleEulerWithTotalEnergy,
+    F::Grad,
+    state_1::Vars,
+    aux_1::Vars,
+    state_2::Vars,
+    aux_2::Vars,
+)
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
+    
+    ## State 1 Stuff 
+    # unpack the perturbation state
+    ρ_1 = state_1.ρ
+    ρu_1 = state_1.ρu
+    ρe_1 = state_1.ρe
+
+    # grab reference state
+    ρᵣ_1  = aux_1.ref_state.ρ
+    ρuᵣ_1 = aux_1.ref_state.ρu
+    ρeᵣ_1 = aux_1.ref_state.ρe
+    pᵣ_1  = aux_1.ref_state.p
+
+    # calculate pressure perturbation
+    p_1 = calc_very_linear_pressure(eos, state_1, aux_1, parameters)
+
+    # calculate u_1, e_1, and reference states
+    u_1  = ρu_1 / ρᵣ_1 - ρ_1 * ρuᵣ_1 / (ρᵣ_1^2)
+    e_1  = ρe_1 / ρᵣ_1 - ρ_1 * ρeᵣ_1 / (ρᵣ_1^2)
+
+    uᵣ_1 = ρuᵣ_1 / ρᵣ_1
+    eᵣ_1 = ρeᵣ_1 / ρᵣ_1
+
+    ## State 2 Stuff 
+    # unpack the state perubation
+    ρ_2 = state_2.ρ
+    ρu_2 = state_2.ρu
+    ρe_2 = state_2.ρe
+
+    # grab reference state
+    ρᵣ_2  = aux_2.ref_state.ρ
+    ρuᵣ_2 = aux_2.ref_state.ρu
+    ρeᵣ_2 = aux_2.ref_state.ρe
+    pᵣ_2  = aux_2.ref_state.p
+
+    # calculate pressure perturbation
+    p_2 = calc_very_linear_pressure(eos, state_2, aux_2, parameters)
+
+    # calculate u_2, e_2, and reference states
+    u_2  = ρu_2 / ρᵣ_2 - ρ_2 * ρuᵣ_2 / (ρᵣ_2^2)
+    e_2  = ρe_2 / ρᵣ_2 - ρ_2 * ρeᵣ_2 / (ρᵣ_2^2)
+
+    uᵣ_2 = ρuᵣ_2 / ρᵣ_2
+    eᵣ_2 = ρeᵣ_2 / ρᵣ_2
+
+    # construct averages for perturbation variables
+    ρ_avg = ave(ρ_1, ρ_2)
+    u_avg = ave(u_1, u_2)
+    e_avg = ave(e_1, e_2)
+    p_avg = ave(p_1, p_2)
+
+    # construct averages for reference variables
+    ρᵣ_avg = ave(ρᵣ_1, ρᵣ_2)
+    uᵣ_avg = ave(uᵣ_1, uᵣ_2)
+    eᵣ_avg = ave(eᵣ_1, eᵣ_2)
+    pᵣ_avg = ave(pᵣ_1, pᵣ_2)
+
+    F.ρ   = ρᵣ_avg * u_avg + ρ_avg * uᵣ_avg
+    F.ρu  = p_avg * I + ρᵣ_avg .* (uᵣ_avg .* u_avg' + u_avg .* uᵣ_avg') 
+    F.ρu += (ρ_avg .* uᵣ_avg) .* uᵣ_avg' 
+    F.ρe  = (ρᵣ_avg * eᵣ_avg + pᵣ_avg) * u_avg
+    F.ρe += (ρᵣ_avg * e_avg + ρ_avg * eᵣ_avg + p_avg) * uᵣ_avg
 end
 
 function numerical_flux_first_order!(
@@ -297,7 +372,7 @@ end
 
 function numerical_flux_first_order!(
     ::RefanovFlux,
-    balance_law::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy, LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy},
+    balance_law::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy, LinearBalanceLaw},
     fluxᵀn::Vars{S},
     normal_vector::SVector,
     state⁻::Vars{S},
@@ -348,7 +423,7 @@ end
 
 function numerical_flux_second_order!(
     ::Nothing, 
-    ::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy,LinearThreeDimensionalDryCompressibleEulerWithTotalEnergy}, 
+    ::Union{ThreeDimensionalDryCompressibleEulerWithTotalEnergy,LinearBalanceLaw}, 
     _...,
 ) 
     return nothing

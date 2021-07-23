@@ -156,17 +156,17 @@ simulation = Simulation(
     backend = backend,
     discretized_domain = discretized_domain,
     model = model,
-    splitting = IMEXSplitting(), 
+    splitting = IMEXSplitting( linear_model = :verylinear, ), 
     timestepper = (
         method = IMEX(), 
         start = 0.0, 
         finish = 24 * 3600,
-        timestep = 5.0,
+        timestep = 30.0,
     ),
     callbacks = (
         Info(),
-        VTKState(iteration = Int(floor(24*3600/5.0)), filepath = "./out/"),
-        CFL(), 
+        # VTKState(iteration = Int(floor(24*3600/5.0)), filepath = "./out/"),
+        CFL(),
     ),
 )
 

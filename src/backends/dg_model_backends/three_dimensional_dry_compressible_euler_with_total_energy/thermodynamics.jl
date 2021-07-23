@@ -26,6 +26,7 @@ end
     ρu = state.ρu
     ρe = state.ρe
     Φ  = aux.Φ
+    T_0  = params.T_0
 
     # Reference states
     ρᵣ  = aux.ref_state.ρ

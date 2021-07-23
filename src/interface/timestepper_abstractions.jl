@@ -3,7 +3,8 @@ abstract type AbstractSplitting end
 
 struct NoSplitting <: AbstractSplitting end
 
-Base.@kwdef struct IMEXSplitting{𝒜,ℬ} <: AbstractSplitting
+Base.@kwdef struct IMEXSplitting{𝒜,ℬ,𝒞} <: AbstractSplitting
+    linear_model::𝒞 = :linear
     implicit_method::𝒜 = LinearBackwardEulerSolver(ManyColumnLU(); isadjustable = false)
     split_explicit_implicit::ℬ = false
 end

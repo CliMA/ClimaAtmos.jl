@@ -24,15 +24,27 @@ function create_esdg_rhs(model::ModelSetup, backend::DiscontinuousGalerkinBacken
     return rhs
 end
 
-function create_linear_rhs(model::ModelSetup; domain, grid)
+function create_linear_rhs(model::ModelSetup, splitting::IMEXSplitting; domain, grid)
     balance_law = create_balance_law(model, domain)
-    linear_balance_law = linearize_balance_law(balance_law)
+    if splitting.linear_model == :linear
+        linear_balance_law = linearize_balance_law(balance_law)
+        volume_flux = LinearKGVolumeFlux()
+        @info "linear model created"
+    elseif splitting.linear_model == :verylinear
+        linear_balance_law = verylinearize_balance_law(balance_law)
+        volume_flux = VeryLinearKGVolumeFlux()
+        @info "verylinear model created"
+    else
+        @warn "invalid linear model specification for IMEXSplitting, set to :linear"
+        linear_balance_law = linearize_balance_law(balance_law)
+        volume_flux = LinearKGVolumeFlux()
+    end 
 
     rhs = VESDGModel(
         linear_balance_law,
         grid,
         surface_numerical_flux_first_order = RefanovFlux(),
-        volume_numerical_flux_first_order = LinearKGVolumeFlux(),
+        volume_numerical_flux_first_order = volume_flux,
     )
 
     return rhs
@@ -43,7 +55,7 @@ function create_rhs(::NoSplitting, model::ModelSetup, backend::DiscontinuousGale
     return rhs 
 end
 
-function create_rhs(::IMEXSplitting, model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
+function create_rhs(splitting::IMEXSplitting, model::ModelSetup, backend::DiscontinuousGalerkinBackend; domain, grid)
     rhs = []
     # create explicit model and push to rhs
     tmp = #Explicit(
@@ -52,7 +64,7 @@ function create_rhs(::IMEXSplitting, model::ModelSetup, backend::DiscontinuousGa
     push!(rhs, tmp)
     # create implicit model and push to rhs
     tmp = #Implicit(
-        create_linear_rhs(model, domain = domain, grid = grid)
+        create_linear_rhs(model, splitting, domain = domain, grid = grid)
     # )
     push!(rhs, tmp)
     return Tuple(rhs)

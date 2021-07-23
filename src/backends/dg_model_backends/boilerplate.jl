@@ -88,5 +88,6 @@ for dir in dirs
     include(dir * "thermodynamics.jl")
 end
 include("three_dimensional_dry_compressible_euler_with_total_energy/linear_balance_law_interface.jl")
+include("three_dimensional_dry_compressible_euler_with_total_energy/verylinear_balance_law_interface.jl")
 
 ClimateMachine.init()
