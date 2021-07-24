@@ -167,6 +167,7 @@ simulation = Simulation(
         Info(),
         # VTKState(iteration = Int(floor(24*3600/5.0)), filepath = "./out/"),
         CFL(),
+        ReferenceStateUpdate(),
     ),
 )
 

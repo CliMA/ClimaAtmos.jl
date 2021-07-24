@@ -190,30 +190,28 @@ function create_callback(filter::PositivityPreservingCallback, simulation::Simul
 end
 
 # helper function 
-#=
 function update_ref_state!(
-    model::DryAtmosModel,
+    balance_law::BalanceLaw,
     state::Vars,
     aux::Vars,
     t::Real,
 )
-    eos = model.physics.eos
-    parameters = model.physics.parameters
+    eos = balance_law.equation_of_state
+    parameters = balance_law.parameters
     ρ = state.ρ
     ρu = state.ρu
     ρe = state.ρe
+
     aux.ref_state.ρ = ρ
     aux.ref_state.ρu = ρu # @SVector[0.0,0.0,0.0]
     aux.ref_state.ρe = ρe
-
     aux.ref_state.p = calc_pressure(eos, state, aux, parameters)
 end
 
 function create_callback(update_ref::ReferenceStateUpdate, simulation::Simulation{<:DiscontinuousGalerkinBackend}, odesolver)
     Q = simulation.state
-    grid = simulation.grid.numerical
     step =  update_ref.recompute
-    dg = simulation.rhs[2].model
+    dg = simulation.rhs[2]
     balance_law = dg.balance_law
 
     relinearize = EveryXSimulationSteps(step) do       
@@ -229,4 +227,3 @@ function create_callback(update_ref::ReferenceStateUpdate, simulation::Simulatio
     end
     return relinearize
 end
-=#
