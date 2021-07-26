@@ -1,16 +1,23 @@
-using ClimateMachineCore.Geometry, LinearAlgebra, UnPack
-import ClimateMachineCore: Fields, Domains, Topologies, Meshes, Spaces
-import ClimateMachineCore: slab
-import ClimateMachineCore.Operators
-import ClimateMachineCore.Geometry
+push!(LOAD_PATH, joinpath(@__DIR__, "..", ".."))
+
+using ClimaCore.Geometry, LinearAlgebra, UnPack
+import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces
+import ClimaCore: slab
+import ClimaCore.Operators
+import ClimaCore.Geometry
 using LinearAlgebra, IntervalSets
 using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 
-using ClimateMachineCore.RecursiveApply
-using ClimateMachineCore.RecursiveApply: rdiv, rmap
+using ClimaCore.RecursiveApply
+using ClimaCore.RecursiveApply: rdiv, rmap
 
-# set up parameters
-parameters = (
+
+using Logging: global_logger
+using TerminalLoggers: TerminalLogger
+global_logger(TerminalLogger())
+
+
+const parameters = (
     ϵ = 0.1,  # perturbation size for initial condition
     l = 0.5, # Gaussian width
     k = 0.5, # Sinusoidal wavenumber
@@ -19,13 +26,17 @@ parameters = (
     g = 10,
 )
 
-# set up grid
+numflux_name = get(ARGS, 1, "rusanov")
+boundary_name = get(ARGS, 2, "")
+
 domain = Domains.RectangleDomain(
     -2π..2π,
     -2π..2π,
     x1periodic = true,
     x2periodic = boundary_name != "noslip",
+    x2boundary = boundary_name != "noslip" ? nothing : (:south, :north),
 )
+
 n1, n2 = 16, 16
 Nq = 4
 Nqh = 7
@@ -34,7 +45,9 @@ grid_topology = Topologies.GridTopology(mesh)
 quad = Spaces.Quadratures.GLL{Nq}()
 space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
-# set up initial condition
+Iquad = Spaces.Quadratures.GLL{Nqh}()
+Ispace = Spaces.SpectralElementSpace2D(grid_topology, Iquad)
+
 function init_state(x, p)
     @unpack x1, x2 = x
     # set initial state
@@ -50,6 +63,7 @@ function init_state(x, p)
     u₁′ += p.k * gaussian * cos(p.k * x1) * sin(p.k * x2)
     u₂′ = -p.k * gaussian * sin(p.k * x1) * cos(p.k * x2)
 
+
     u = Cartesian12Vector(U₁ + p.ϵ * u₁′, p.ϵ * u₂′)
     # set initial tracer
     θ = sin(p.k * x2)
@@ -59,21 +73,25 @@ end
 
 y0 = init_state.(Fields.coordinate_field(space), Ref(parameters))
 
-#=
-# Replace Equations and Numerical Fluxes, 69 - 168 can be moved out
-Model()
-
-rhs = create_rhs(Model, Backend)
-=#
-
-# Equations
 function flux(state, p)
     @unpack ρ, ρu, ρθ = state
     u = ρu ./ ρ
     return (ρ = ρu, ρu = ((ρu ⊗ u) + (p.g * ρ^2 / 2) * I), ρθ = ρθ .* u)
 end
 
+function energy(state, p)
+    @unpack ρ, ρu = state
+    u = ρu ./ ρ
+    return ρ * (u.u1^2 + u.u2^2) / 2 + p.g * ρ^2 / 2
+end
+
+function total_energy(y, parameters)
+    sum(state -> energy(state, parameters), y)
+end
+
 # numerical fluxes
+wavespeed(y, parameters) = sqrt(parameters.g)
+
 roe_average(ρ⁻, ρ⁺, var⁻, var⁺) =
     (sqrt(ρ⁻) * var⁻ + sqrt(ρ⁺) * var⁺) / (sqrt(ρ⁻) + sqrt(ρ⁺))
 
@@ -136,24 +154,50 @@ function roeflux(n, (y⁻, parameters⁻), (y⁺, parameters⁺))
     rmap(f -> f' * n, Favg) ⊞ Δf
 end
 
-numflux = roeflux
+
+numflux = if numflux_name == "central"
+    Operators.CentralNumericalFlux(flux)
+elseif numflux_name == "rusanov"
+    Operators.RusanovNumericalFlux(flux, wavespeed)
+elseif numflux_name == "roe"
+    roeflux
+end
 
 function rhs!(dydt, y, (parameters, numflux), t)
 
-    Nh = Topologies.nlocalelems(y)
-    
-    # Calculate the Flux
-    F = flux.(y, Ref(parameters))
+    # ϕ' K' W J K dydt =  -ϕ' K' I' [DH' WH JH flux.(I K y)]
+    #  =>   K dydt = - K inv(K' WJ K) K' I' [DH' WH JH flux.(I K y)]
 
-    # DG divergence
+    # where:
+    #  ϕ = test function
+    #  K = DSS scatter (i.e. duplicates points at element boundaries)
+    #  K y = stored input vector (with duplicated values)
+    #  I = interpolation to higher-order space
+    #  D = derivative operator
+    #  H = suffix for higher-order space operations
+    #  W = Quadrature weights
+    #  J = Jacobian determinant of the transformation `ξ` to `x`
+    #
+    Nh = Topologies.nlocalelems(y)
+
+    F = flux.(y, Ref(parameters))
     dydt .= Operators.slab_weak_divergence(F)
+
     Operators.add_numerical_flux_internal!(numflux, dydt, y, parameters)
+
+    Operators.add_numerical_flux_boundary!(
+        dydt,
+        y,
+        parameters,
+    ) do normal, (y⁻, parameters)
+        y⁺ = (ρ = y⁻.ρ, ρu = y⁻.ρu .- dot(y⁻.ρu, normal) .* normal, ρθ = y⁻.ρθ)
+        numflux(normal, (y⁻, parameters), (y⁺, parameters))
+    end
 
     # 6. Solve for final result
     dydt_data = Fields.field_values(dydt)
     dydt_data .= rdiv.(dydt_data, space.local_geometry.WJ)
 
-    # Enacts overintegration
     M = Spaces.Quadratures.cutoff_filter_matrix(
         Float64,
         space.quadrature_style,
@@ -178,12 +222,14 @@ sol = solve(
     progress_message = (dt, u, p, t) -> t,
 )
 
-# make video
 ENV["GKSwstype"] = "nul"
 import Plots
 Plots.GRBackend()
 
 dirname = "dg_$(numflux_name)"
+if boundary_name != ""
+    dirname = "$(dirname)_$(boundary_name)"
+end
 path = joinpath(@__DIR__, "output", dirname)
 mkpath(path)
 
@@ -191,3 +237,17 @@ anim = Plots.@animate for u in sol.u
     Plots.plot(u.ρθ, clim = (-1, 1))
 end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
+
+Es = [total_energy(u, parameters) for u in sol.u]
+Plots.png(Plots.plot(Es), joinpath(path, "energy.png"))
+
+function linkfig(figpath, alt = "")
+    # buildkite-agent upload figpath
+    # link figure in logs if we are running on CI
+    if get(ENV, "BUILDKITE", "") == "true"
+        artifact_url = "artifact://$figpath"
+        print("\033]1338;url='$(artifact_url)';alt='$(alt)'\a\n")
+    end
+end
+
+linkfig("output/$(dirname)/energy.png", "Total Energy")
