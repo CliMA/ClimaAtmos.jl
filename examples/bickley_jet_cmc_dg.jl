@@ -26,7 +26,7 @@ const parameters = (
     g = 10,
 )
 
-numflux_name = get(ARGS, 1, "rusanov")
+numflux_name = get(ARGS, 1, "roe")
 boundary_name = get(ARGS, 2, "")
 
 domain = Domains.RectangleDomain(
@@ -251,3 +251,14 @@ function linkfig(figpath, alt = "")
 end
 
 linkfig("output/$(dirname)/energy.png", "Total Energy")
+
+# interpolate
+n_interp = 4
+L = domain.x1max - domain.x1min
+vec_u = Operators.matrix_interpolate(sol.u[end].ρu.u1./sol.u[end].ρ, n_interp);
+vec_v = Operators.matrix_interpolate(sol.u[end].ρu.u2./sol.u[end].ρ, n_interp);
+trac_ρθ = Operators.matrix_interpolate(sol.u[end].ρθ, n_interp);
+
+# save to JLD2
+using JLD2
+save("./output/dg_roe.jld2", "total_energy", Es, "time", sol.t, "u", vec_u, "v", vec_v, "L", L, "N", n1*n_interp, "tracer", trac_ρθ)

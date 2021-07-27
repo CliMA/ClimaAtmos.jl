@@ -19,7 +19,7 @@ const parameters = (
     ρ₀ = 1.0, # reference density
     c = 2,
     g = 10,
-    D₄ = 1e-4, # hyperdiffusion coefficient
+    D₄ = 1e-3, # hyperdiffusion coefficient
 )
 
 domain = Domains.RectangleDomain(
@@ -37,7 +37,6 @@ quad = Spaces.Quadratures.GLL{Nq}()
 space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
 const J = Fields.Field(space.local_geometry.J, space)
-
 
 function init_state(x, p)
     @unpack x1, x2 = x
@@ -111,7 +110,6 @@ function rhs!(dydt, y, _, t)
     return dydt
 end
 
-
 dydt = similar(y0)
 rhs!(dydt, y0, nothing, 0.0)
 
@@ -120,7 +118,7 @@ prob = ODEProblem(rhs!, y0, (0.0, 200.0))
 sol = solve(
     prob,
     SSPRK33(),
-    dt = 0.02,
+    dt = 0.04,
     saveat = 1.0,
     progress = true,
     progress_message = (dt, u, p, t) -> t,
@@ -140,7 +138,7 @@ end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
 
 Es = [total_energy(u, parameters) for u in sol.u]
-Plots.png(Plots.plot(Es), joinpath(path, "energy.png"))
+Plots.png(Plots.plot(sol.t, Es ./ Es[1] .* 100.0, xlabel="Time (s)", ylabel="Relative total energy (%)"), joinpath(path, "energy.png"))
 
 function linkfig(figpath, alt = "")
     # buildkite-agent upload figpath
@@ -152,3 +150,14 @@ function linkfig(figpath, alt = "")
 end
 
 linkfig("output/$(dirname)/energy.png", "Total Energy")
+
+# # interpolate
+# n_interp = 4
+# L = domain.x1max - domain.x1min
+# vec_u = Operators.matrix_interpolate(sol.u[end].u.u1, n_interp);
+# vec_v = Operators.matrix_interpolate(sol.u[end].u.u2, n_interp);
+# trac_ρθ = Operators.matrix_interpolate(sol.u[end].ρθ, n_interp);
+
+# # save to JLD2
+# using JLD2
+# save("./output/cg_d4_1e-3.jld2", "total_energy", Es, "time", sol.t, "u", vec_u, "v", vec_v, "L", L, "N", n1*n_interp, "tracer", trac_ρθ)
