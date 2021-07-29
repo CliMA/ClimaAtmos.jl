@@ -38,8 +38,6 @@ quad = Spaces.Quadratures.GLL{Nq}()
 space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
 # set initial condition
-const J = Fields.Field(space.local_geometry.J, space)
-
 function init_state(x, p)
     @unpack x1, x2 = x
 
@@ -63,23 +61,14 @@ function init_state(x, p)
 end
 
 # set up model
-function energy(state, p)
-    @unpack ρ, u = state
-    return ρ * (u.u1^2 + u.u2^2) / 2 + p.g * ρ^2 / 2
-end
-
-function total_energy(y, parameters)
-    sum(state -> energy(state, parameters), y)
-end
-
 function rhs!(dydt, y, _, t)
     @unpack D₄, g = parameters
 
-    sdiv = Operators.Divergence()
-    wdiv = Operators.WeakDivergence()
-    grad = Operators.Gradient()
+    grad = Operators.Divergence()
+    wdiv  = Operators.WeakDivergence()
+    grad  = Operators.Gradient()
     wgrad = Operators.WeakGradient()
-    curl = Operators.Curl()
+    curl  = Operators.Curl()
     wcurl = Operators.WeakCurl()
 
     # compute hyperviscosity first
@@ -87,9 +76,7 @@ function rhs!(dydt, y, _, t)
         wgrad(sdiv(y.u)) -
         Cartesian12Vector(wcurl(Geometry.Covariant3Vector(curl(y.u))))
     @. dydt.ρθ = wdiv(grad(y.ρθ))
-
     Spaces.weighted_dss!(dydt)
-
     @. dydt.u =
         -D₄ * (
             wgrad(sdiv(dydt.u)) -
@@ -97,7 +84,8 @@ function rhs!(dydt, y, _, t)
         )
     @. dydt.ρθ = -D₄ * wdiv(grad(dydt.ρθ))
 
-    # add in pieces
+    # Euler components
+    space = axes(y)
     J = Fields.Field(space.local_geometry.J, space)
     @. begin
         dydt.ρ = -wdiv(y.ρ * y.u)
@@ -107,11 +95,13 @@ function rhs!(dydt, y, _, t)
         dydt.ρθ += -wdiv(y.ρθ * y.u)
     end
     Spaces.weighted_dss!(dydt)
+
     return dydt
 end
 
 # set up simulation
-y0 = init_state.(Fields.coordinate_field(space), Ref(parameters))
+x = Fields.coordinate_field(space)
+y0 = init_state.(x, Ref(parameters))
 dydt = similar(y0)
 rhs!(dydt, y0, nothing, 0.0)
 prob = ODEProblem(rhs!, y0, (0.0, 200.0))
@@ -125,31 +115,3 @@ sol = solve(
     progress = true,
     progress_message = (dt, u, p, t) -> t,
 )
-
-# post-processing
-ENV["GKSwstype"] = "nul"
-import Plots
-Plots.GRBackend()
-
-dirname = "cg_invariant_hypervisc"
-path = joinpath(@__DIR__, "output", dirname)
-mkpath(path)
-
-anim = Plots.@animate for u in sol.u
-    Plots.plot(u.ρθ, clim = (-1, 1))
-end
-Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
-
-Es = [total_energy(u, parameters) for u in sol.u]
-Plots.png(Plots.plot(sol.t, Es ./ Es[1] .* 100.0, xlabel="Time (s)", ylabel="Relative total energy (%)"), joinpath(path, "energy.png"))
-
-function linkfig(figpath, alt = "")
-    # buildkite-agent upload figpath
-    # link figure in logs if we are running on CI
-    if get(ENV, "BUILDKITE", "") == "true"
-        artifact_url = "artifact://$figpath"
-        print("\033]1338;url='$(artifact_url)';alt='$(alt)'\a\n")
-    end
-end
-
-linkfig("output/$(dirname)/energy.png", "Total Energy")
