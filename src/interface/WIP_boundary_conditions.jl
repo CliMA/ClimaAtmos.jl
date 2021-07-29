@@ -1,0 +1,3 @@
+abstract type AbstractBoundaryCondition end
+
+struct DefaultBoundaryConditions <: AbstractBoundaryCondition end
