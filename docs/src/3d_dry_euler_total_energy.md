@@ -20,23 +20,23 @@ is a shorthand for the following base set of equations
 ``` 
 
 where the variables are
-1. $\rho$  :  density
-2. $\rho u $ : momentum
-3. $\rho e $ : total energy
-4. $p$  : pressure
+1. $$\rho$$  :  density
+2. $$\rho u $$ : momentum
+3. $$\rho e $$ : total energy
+4. $$p$$  : pressure
 
 Pressure is given by the ideal gas law
 ```math
     \begin{align}
     p = R_d T
-    \label{eq:ideal_gas}
+    \label{eq:ideal_gas_dry_total_energy}
     \end{align}
 ```
 and temperature is diagnosed from the prognostic variables via
 ```math
     \begin{align}
     T  = T_0 +  \frac{\rho e -  \frac{1}{2} \rho \vec{u} \cdot \vec{u} - \rho \phi }{cv_d \rho  }
-    \label{eq:ideal_gas}
+    \label{eq:temperature_to_energy_dry}
     \end{align}
 ```
 Here $T_0$ is a reference temperature.
