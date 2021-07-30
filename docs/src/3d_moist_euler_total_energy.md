@@ -23,11 +23,11 @@ is a shorthand for the following base set of equations
 ``` 
 
 where the variables are
-1. $$\rho$$  :  density
-1. $$\rho u $$ : momentum
+1. $$\rho $$  :  density
+1. $$\rho \vec{u} $$ : momentum
 1. $$\rho e $$ : total energy
 1. $$\rho q $$ : total moisture
-1. $$p$$  : pressure
+1. $$p $$  : pressure
 
 Pressure is given by the ideal gas law
 ```math

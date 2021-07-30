@@ -20,10 +20,10 @@ is a shorthand for the following base set of equations
 ``` 
 
 where the variables are
-1. $$\rho$$  :  density
-1. $$\rho u $$ : momentum
+1. $$\rho $$  :  density
+1. $$\rho \vec{u} $$ : momentum
 1. $$\rho \theta $$ : potential temperature
-1. $$p$$  : pressure
+1. $$p $$  : pressure
 
 Pressure is given by
 ```math

@@ -20,10 +20,10 @@ is a shorthand for the following base set of equations
 ``` 
 
 where the variables are
-1. $$\rho$$  :  density
-2. $$\rho u $$ : momentum
+1. $$ \rho $$  :  density
+2. $$\rho \vec{u} $$ : momentum
 3. $$\rho e $$ : total energy
-4. $$p$$  : pressure
+4. $$p $$  : pressure
 
 Pressure is given by the ideal gas law
 ```math
