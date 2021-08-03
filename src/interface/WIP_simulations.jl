@@ -31,4 +31,3 @@ function Simulation(;
         ode_problem,
     )
 end
-
