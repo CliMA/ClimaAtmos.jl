@@ -16,7 +16,7 @@ include("../src/utils/sphere_utils.jl")
 backend = DiscontinuousGalerkinBackend(numerics = (flux = :lmars,),)
 
 # set up parameters
-parameters = (
+const parameters = (
     g  = 0.0,
     ρₒ = 1.0,  # reference density
     cₛ = 1e-2, # sound speed
