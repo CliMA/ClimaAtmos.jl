@@ -1,20 +1,20 @@
 abstract type AbstractDomain end
 
-struct Rectangle{FT} <: AbstractDomain
-    xlim::Tuple{FT,FT}  
-    ylim::Tuple{FT,FT}
+struct Rectangle <: AbstractDomain
+    xlim::Interval  
+    ylim::Interval
     nelements::Tuple{Int,Int}
-    npolynomial::Tuple{Int,Int}
+    npolynomial::Int
     periodic::Tuple{Bool,Bool}
 end
 
 function Rectangle(; xlim, ylim, nelements, npolynomial, periodic)
-    @assert xlim[1] < xlim[2]
-    @assert ylim[1] < ylim[2]
+    @assert xlim.left < xlim.right
+    @assert ylim.left < ylim.right
     return Rectangle(xlim, ylim, nelements, npolynomial, periodic)
 end
 
-function Torus2D(; xlim, ylim, nelements, npolynomial)
+function PeriodicRectangle(; xlim, ylim, nelements, npolynomial)
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
     periodic = (true, true)
@@ -32,7 +32,7 @@ struct Box{FT} <: AbstractDomain
     ylim::Tuple{FT,FT}
     zlim::Tuple{FT,FT}
     nelements::Tuple{Int,Int,Int}
-    npolynomial::Tuple{Int,Int,Int}
+    npolynomial::Int
     periodic::Tuple{Bool,Bool,Bool}
     staggering::Bool
 end
@@ -44,7 +44,7 @@ function Box(; xlim, ylim, zlim, nelements, npolynomial, periodic, staggering)
     return Box(xlim, ylim, zlim, nelements, npolynomial, periodic, staggering)
 end
 
-function Torus3D(; xlim, ylim, zlim, nelements, npolynomial, staggering)
+function PeriodicBox(; xlim, ylim, zlim, nelements, npolynomial, staggering)
     periodic = (true, true, true)
     return Box(
         xlim = xlim, 

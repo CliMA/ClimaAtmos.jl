@@ -3,9 +3,9 @@ abstract type AbstractModel end
 """
     ModelSetup <: AbstractModel
 """
-struct ModelSetup{A,B,C,D,E} <: AbstractModel
+Base.@kwdef struct ModelSetup{A,B,C,D,E} <: AbstractModel
     domain::A
-    equations::B 
+    equation_set::B 
     boundary_conditions::C 
     initial_conditions::D
     parameters::E

@@ -1,4 +1,3 @@
-# set up boilerplate
 push!(LOAD_PATH, joinpath(@__DIR__, "..", ".."))
 
 using ClimaCore.Geometry, LinearAlgebra, UnPack
@@ -12,6 +11,15 @@ using Logging: global_logger
 using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
 
+# set up boilerplate
+include("../src/backends/WIP_backends.jl")
+include("../src/interface/WIP_domains.jl")
+include("../src/interface/WIP_physics.jl")
+include("../src/interface/WIP_boundary_conditions.jl")
+include("../src/interface/WIP_models.jl")
+include("../src/interface/WIP_timesteppers.jl")
+include("../src/interface/WIP_simulations.jl")
+
 # set up parameters
 const parameters = (
     ϵ = 0.1,   # perturbation size for initial condition
@@ -23,23 +31,16 @@ const parameters = (
     D₄ = 1e-4, # hyperdiffusion coefficient
 )
 
-# set up grid
-n1, n2 = 16, 16
-Nq = 4
-domain = Domains.RectangleDomain(
-    -2π..2π,
-    -2π..2π,
-    x1periodic = true,
-    x2periodic = true,
+# set up domain
+domain = Rectangle(
+    xlim = -2π..2π, 
+    ylim = -2π..2π, 
+    nelements = (16, 16), 
+    npolynomial = 4, 
+    periodic = (true, true)
 )
-mesh = Meshes.EquispacedRectangleMesh(domain, n1, n2)
-grid_topology = Topologies.GridTopology(mesh)
-quad = Spaces.Quadratures.GLL{Nq}()
-space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
-# set initial condition
-const J = Fields.Field(space.local_geometry.J, space)
-
+# set up initial condition
 function init_state(x, p)
     @unpack x1, x2 = x
 
@@ -47,8 +48,6 @@ function init_state(x, p)
     ρ = p.ρ₀
 
     # set initial velocity field
-    # Ψ′ = exp(-(x2 + p.l / 10)^2 / 2p.l^2) * cos(p.k * x1) * cos(p.k * x2)
-    # Vortical velocity fields (u₁′, u₂′) = (-∂²Ψ′, ∂¹Ψ′)
     U₁ = cosh(x2)^(-2)
     gaussian = exp(-(x2 + p.l / 10)^2 / 2p.l^2)
     u₁′ = gaussian * (x2 + p.l / 10) / p.l^2 * cos(p.k * x1) * cos(p.k * x2)
@@ -63,68 +62,34 @@ function init_state(x, p)
 end
 
 # set up model
-function energy(state, p)
-    @unpack ρ, u = state
-    return ρ * (u.u1^2 + u.u2^2) / 2 + p.g * ρ^2 / 2
-end
+model = ModelSetup( 
+    domain = domain, 
+    equation_set = nothing,
+    boundary_conditions = nothing, 
+    initial_conditions = init_state, 
+    parameters = parameters
+)
 
-function total_energy(y, parameters)
-    sum(state -> energy(state, parameters), y)
-end
-
-function rhs!(dydt, y, _, t)
-    @unpack D₄, g = parameters
-
-    sdiv = Operators.Divergence()
-    wdiv = Operators.WeakDivergence()
-    grad = Operators.Gradient()
-    wgrad = Operators.WeakGradient()
-    curl = Operators.Curl()
-    wcurl = Operators.WeakCurl()
-
-    # compute hyperviscosity first
-    @. dydt.u =
-        wgrad(sdiv(y.u)) -
-        Cartesian12Vector(wcurl(Geometry.Covariant3Vector(curl(y.u))))
-    @. dydt.ρθ = wdiv(grad(y.ρθ))
-
-    Spaces.weighted_dss!(dydt)
-
-    @. dydt.u =
-        -D₄ * (
-            wgrad(sdiv(dydt.u)) -
-            Cartesian12Vector(wcurl(Geometry.Covariant3Vector(curl(dydt.u))))
-        )
-    @. dydt.ρθ = -D₄ * wdiv(grad(dydt.ρθ))
-
-    # add in pieces
-    J = Fields.Field(space.local_geometry.J, space)
-    @. begin
-        dydt.ρ = -wdiv(y.ρ * y.u)
-        dydt.u +=
-            -grad(g * y.ρ + norm(y.u)^2 / 2) +
-            Cartesian12Vector(J * (y.u × curl(y.u)))
-        dydt.ρθ += -wdiv(y.ρθ * y.u)
-    end
-    Spaces.weighted_dss!(dydt)
-    return dydt
-end
-
-# set up simulation
-y0 = init_state.(Fields.coordinate_field(space), Ref(parameters))
-dydt = similar(y0)
-rhs!(dydt, y0, nothing, 0.0)
-prob = ODEProblem(rhs!, y0, (0.0, 200.0))
-
-# run simulation
-sol = solve(
-    prob,
-    SSPRK33(),
+# set up timestepper
+timestepper = TimeStepper(
+    method = SSPRK33(),
     dt = 0.04,
+    tspan = (0.0, 10.0),
     saveat = 1.0,
     progress = true,
     progress_message = (dt, u, p, t) -> t,
 )
+
+# set up simulation
+simulation = Simulation(
+    ClimaCoreBackend(),
+    model = model, 
+    timestepper = timestepper,
+    callbacks = nothing,
+)
+
+# run simulation
+evolution = evolve(simulation)
 
 # post-processing
 ENV["GKSwstype"] = "nul"
@@ -135,21 +100,7 @@ dirname = "cg_invariant_hypervisc"
 path = joinpath(@__DIR__, "output", dirname)
 mkpath(path)
 
-anim = Plots.@animate for u in sol.u
+anim = Plots.@animate for u in evolution.u
     Plots.plot(u.ρθ, clim = (-1, 1))
 end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)
-
-Es = [total_energy(u, parameters) for u in sol.u]
-Plots.png(Plots.plot(sol.t, Es ./ Es[1] .* 100.0, xlabel="Time (s)", ylabel="Relative total energy (%)"), joinpath(path, "energy.png"))
-
-function linkfig(figpath, alt = "")
-    # buildkite-agent upload figpath
-    # link figure in logs if we are running on CI
-    if get(ENV, "BUILDKITE", "") == "true"
-        artifact_url = "artifact://$figpath"
-        print("\033]1338;url='$(artifact_url)';alt='$(alt)'\a\n")
-    end
-end
-
-linkfig("output/$(dirname)/energy.png", "Total Energy")
