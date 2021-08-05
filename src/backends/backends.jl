@@ -1,9 +1,7 @@
 abstract type AbstractBackend end
 
-Base.@kwdef struct DiscontinuousGalerkinBackend{𝒜} <: AbstractBackend
-    numerics::𝒜
-end
+struct ClimaCoreBackend <: AbstractBackend end
 
-Base.@kwdef struct CoreBackend{𝒜} <: AbstractBackend
+Base.@kwdef struct DiscontinuousGalerkinBackend{𝒜} <: AbstractBackend
     numerics::𝒜
 end
