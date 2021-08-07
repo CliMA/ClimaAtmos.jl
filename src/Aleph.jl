@@ -47,7 +47,7 @@ end
 # example: definition
 
 """
-function\_documentation\_template(a; informative_keyword = "yes")
+function_documentation_template(a; informative_keyword = "yes")
 
 # Description
 The goal of this function is to provide a template for all functions used
