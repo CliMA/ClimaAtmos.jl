@@ -28,7 +28,7 @@ where the variables are
 Pressure is given by the ideal gas law
 ```math
     \begin{align}
-    p = R_d T
+    p = \rho R_d T
     \label{eq:ideal_gas_dry_total_energy}
     \end{align}
 ```
