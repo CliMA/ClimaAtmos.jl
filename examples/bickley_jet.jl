@@ -78,7 +78,6 @@ model = ModelSetup(
         ),
         ref_state = NoReferenceState(),
     ),
-    domain = discretized_domain,
     boundary_conditions = (DefaultBC(), DefaultBC()),
     initial_conditions = (
         ρ = ρ₀ᶜᵃʳᵗ, ρu = ρu⃗₀ᶜᵃʳᵗ, ρθ = ρθ₀ᶜᵃʳᵗ,
@@ -86,26 +85,26 @@ model = ModelSetup(
     parameters = parameters,
 )
 
-# # set up simulation
-# simulation = Simulation(
-#     backend = backend,
-#     discretized_domain = discretized_domain,
-#     model = model,
-#     timestepper = (
-#         method = SSPRK22Heuns, 
-#         start = 0.0, 
-#         finish = 8*1600.0,
-#         timestep = 1.0,
-#     ),
-#     callbacks = (
-#         Info(),
-#         VTKState(iteration = Int(floor(100.0/1.0)), filepath = "./out/"),
-#         CFL(), 
-#     ),
-# )
+# set up simulation
+simulation = Simulation(
+    backend = backend,
+    discretized_domain = discretized_domain,
+    model = model,
+    timestepper = (
+        method = SSPRK22Heuns, 
+        start = 0.0, 
+        finish = 8*1600.0,
+        timestep = 1.0,
+    ),
+    callbacks = (
+        Info(),
+        VTKState(iteration = Int(floor(100.0/1.0)), filepath = "./out/"),
+        CFL(), 
+    ),
+)
 
-# # run the simulation
-# initialize!(simulation)
-# evolve!(simulation)
+# run the simulation
+initialize!(simulation)
+evolve!(simulation)
 
 nothing

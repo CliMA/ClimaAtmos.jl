@@ -15,9 +15,8 @@ end
 """
     ModelSetup <: AbstractModel
 """
-Base.@kwdef struct ModelSetup{𝒜,ℬ,𝒞,𝒟,ℰ} <: AbstractModel
-    equation_set::𝒜 # 3D navier stokes, 2D navier stokes
-    domain::ℰ # discretized_domain
+Base.@kwdef struct ModelSetup{𝒜,ℬ,𝒞,𝒟} <: AbstractModel
+    equations::𝒜 # 3D navier stokes, 2D navier stokes
     boundary_conditions::ℬ # no flux / free slip
     initial_conditions::𝒞 # initialize with zero, one, etc.
     parameters::𝒟
