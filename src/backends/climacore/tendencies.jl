@@ -5,7 +5,7 @@ const wgrad = Operators.WeakGradient()
 const scurl = Operators.Curl()
 const wcurl = Operators.WeakCurl()
 
-function create_rhs(::ClimaCoreBackend, model::BarotropicFluid, function_space)
+function create_rhs(::ClimaCoreBackend, model::BarotropicFluidModel, function_space)
     function rhs!(dydt, y, _, t)
         @unpack D₄, g = model.parameters
 
@@ -38,5 +38,5 @@ function create_rhs(::ClimaCoreBackend, model::BarotropicFluid, function_space)
         return dydt
     end
 
-    return sum_tendencies!
+    return rhs!
 end

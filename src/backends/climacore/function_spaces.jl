@@ -20,3 +20,17 @@ function create_function_space(::ClimaCoreBackend, domain::Rectangle)
 
     return function_space
 end
+
+function create_function_space(::ClimaCoreBackend, domain::SingleColumn)
+    column = Domains.IntervalDomain(
+        domain.zlim[1], 
+        domain.zlim[2]; 
+        x3boundary = (:bottom, :top)
+    )
+    mesh = Meshes.IntervalMesh(column; nelems = domain.nelems)
+
+    center_space = Spaces.CenterFiniteDifferenceSpace(mesh)
+    face_space = Spaces.FaceFiniteDifferenceSpace(center_space)
+
+    return center_space, face_space
+end

@@ -12,22 +12,24 @@ using TerminalLoggers: TerminalLogger
 global_logger(TerminalLogger())
 
 # set up boilerplate
-include("../src/backends/WIP_backends.jl")
 include("../src/interface/WIP_domains.jl")
-include("../src/interface/WIP_physics.jl")
-include("../src/interface/WIP_boundary_conditions.jl")
 include("../src/interface/WIP_models.jl")
 include("../src/interface/WIP_timesteppers.jl")
+include("../src/backends/backends.jl")
+include("../src/backends/climacore/function_spaces.jl")
+include("../src/backends/climacore/ode_problems.jl")
+include("../src/backends/climacore/tendencies.jl")
+include("../src/interface/WIP_boundary_conditions.jl")
 include("../src/interface/WIP_simulations.jl")
 
 # set up parameters
 const parameters = (
-    ϵ = 0.1,   # perturbation size for initial condition
-    l = 0.5,   # Gaussian width
-    k = 0.5,   # Sinusoidal wavenumber
+    ϵ  = 0.1,   # perturbation size for initial condition
+    l  = 0.5,   # Gaussian width
+    k  = 0.5,   # Sinusoidal wavenumber
     ρ₀ = 1.0,  # reference density
-    c = 2,
-    g = 10,
+    c  = 2,
+    g  = 10,
     D₄ = 1e-4, # hyperdiffusion coefficient
 )
 
@@ -62,9 +64,8 @@ function init_state(x, p)
 end
 
 # set up model
-model = ModelSetup( 
+model = BarotropicFluidModel( 
     domain = domain, 
-    equation_set = nothing,
     boundary_conditions = nothing, 
     initial_conditions = init_state, 
     parameters = parameters

@@ -26,3 +26,13 @@ function PeriodicRectangle(; xlim, ylim, nelements, npolynomial)
         periodic = periodic,
     )
 end
+
+struct SingleColumn <: AbstractDomain
+    xlim::Interval
+    nelements::Int
+end
+
+function SingleColumn(; zlim, nelements)
+    @assert zlim.left < zlim.right
+    return SingleColumn(zlim, nelements)
+end
