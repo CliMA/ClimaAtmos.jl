@@ -15,20 +15,19 @@ function Rectangle(; xlim, ylim, nelements, npolynomial, periodic)
 end
 
 function PeriodicRectangle(; xlim, ylim, nelements, npolynomial)
-    @assert xlim[1] < xlim[2]
-    @assert ylim[1] < ylim[2]
-    periodic = (true, true)
+    @assert xlim.left < xlim.right
+    @assert ylim.left < ylim.right
     return Rectangle(
         xlim = xlim, 
         ylim = ylim, 
         nelements = nelements, 
         npolynomial = npolynomial, 
-        periodic = periodic,
+        periodic = (true, true),
     )
 end
 
 struct SingleColumn <: AbstractDomain
-    xlim::Interval
+    zlim::Interval
     nelements::Int
 end
 

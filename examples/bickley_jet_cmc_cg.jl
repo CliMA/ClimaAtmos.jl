@@ -1,15 +1,15 @@
 push!(LOAD_PATH, joinpath(@__DIR__, "..", ".."))
 
+using LinearAlgebra, IntervalSets
+using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
+using Logging: global_logger
+using TerminalLoggers: TerminalLogger
+global_logger(TerminalLogger())
+
 using ClimaCore.Geometry, LinearAlgebra, UnPack
 import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces
 import ClimaCore.Operators
 import ClimaCore.Geometry
-using LinearAlgebra, IntervalSets
-using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
-
-using Logging: global_logger
-using TerminalLoggers: TerminalLogger
-global_logger(TerminalLogger())
 
 # set up boilerplate
 include("../src/interface/WIP_domains.jl")
@@ -17,6 +17,7 @@ include("../src/interface/WIP_models.jl")
 include("../src/interface/WIP_timesteppers.jl")
 include("../src/backends/backends.jl")
 include("../src/backends/climacore/function_spaces.jl")
+include("../src/backends/climacore/initial_conditions.jl")
 include("../src/backends/climacore/ode_problems.jl")
 include("../src/backends/climacore/tendencies.jl")
 include("../src/interface/WIP_boundary_conditions.jl")
@@ -24,41 +25,40 @@ include("../src/interface/WIP_simulations.jl")
 
 # set up parameters
 const parameters = (
-    ϵ  = 0.1,   # perturbation size for initial condition
-    l  = 0.5,   # Gaussian width
-    k  = 0.5,   # Sinusoidal wavenumber
+    ϵ  = 0.1,  # perturbation size for initial condition
+    l  = 0.5,  # Gaussian width
+    k  = 0.5,  # Sinusoidal wavenumber
     ρ₀ = 1.0,  # reference density
     c  = 2,
-    g  = 10,
+    g  = 10,   # gravitation constant
     D₄ = 1e-4, # hyperdiffusion coefficient
 )
 
 # set up domain
-domain = Rectangle(
+domain = PeriodicRectangle(
     xlim = -2π..2π, 
     ylim = -2π..2π, 
     nelements = (16, 16), 
     npolynomial = 4, 
-    periodic = (true, true)
 )
 
-# set up initial condition
-function init_state(x, p)
-    @unpack x1, x2 = x
-
+# set up initial conditions
+function init_state(x, y, parameters)
+    UnPack.@unpack ρ₀, l, k, ϵ = parameters
+    
     # set initial density field
-    ρ = p.ρ₀
+    ρ = ρ₀
 
     # set initial velocity field
-    U₁ = cosh(x2)^(-2)
-    gaussian = exp(-(x2 + p.l / 10)^2 / 2p.l^2)
-    u₁′ = gaussian * (x2 + p.l / 10) / p.l^2 * cos(p.k * x1) * cos(p.k * x2)
-    u₁′ += p.k * gaussian * cos(p.k * x1) * sin(p.k * x2)
-    u₂′ = -p.k * gaussian * sin(p.k * x1) * cos(p.k * x2)
-    u = Cartesian12Vector(U₁ + p.ϵ * u₁′, p.ϵ * u₂′)
+    U₁ = cosh(y)^(-2)
+    gaussian = exp(-(y + l / 10)^2 / 2l^2)
+    u₁′ = gaussian * (y + l / 10) / l^2 * cos(k * x) * cos(k * y)
+    u₁′ += k * gaussian * cos(k * x) * sin(k * y)
+    u₂′ = -k * gaussian * sin(k * x) * cos(k * y)
+    u = Cartesian12Vector(U₁ + ϵ * u₁′, ϵ * u₂′)
     
     # set initial tracer field
-    θ = sin(p.k * x2)
+    θ = sin(k * y)
 
     return (ρ = ρ, u = u, ρθ = ρ * θ)
 end
@@ -86,11 +86,11 @@ simulation = Simulation(
     ClimaCoreBackend(),
     model = model, 
     timestepper = timestepper,
-    callbacks = nothing,
+    callbacks = (),
 )
 
 # run simulation
-evolution = evolve(simulation)
+sol = evolve(simulation)
 
 # post-processing
 ENV["GKSwstype"] = "nul"
@@ -101,7 +101,7 @@ dirname = "cg_invariant_hypervisc"
 path = joinpath(@__DIR__, "output", dirname)
 mkpath(path)
 
-anim = Plots.@animate for u in evolution.u
+anim = Plots.@animate for u in sol.u
     Plots.plot(u.ρθ, clim = (-1, 1))
 end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)

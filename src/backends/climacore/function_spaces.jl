@@ -23,12 +23,11 @@ end
 
 function create_function_space(::ClimaCoreBackend, domain::SingleColumn)
     column = Domains.IntervalDomain(
-        domain.zlim[1], 
-        domain.zlim[2]; 
+        domain.zlim.left, 
+        domain.zlim.right; 
         x3boundary = (:bottom, :top)
     )
-    mesh = Meshes.IntervalMesh(column; nelems = domain.nelems)
-
+    mesh = Meshes.IntervalMesh(column; nelems = domain.nelements)
     center_space = Spaces.CenterFiniteDifferenceSpace(mesh)
     face_space = Spaces.FaceFiniteDifferenceSpace(center_space)
 
