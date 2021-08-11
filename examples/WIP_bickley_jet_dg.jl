@@ -1,16 +1,25 @@
 using StaticArrays
 include("../src/interface/domains.jl")
-include("../src/interface/models.jl")
+# include("../src/interface/models.jl")
 include("../src/interface/physics.jl")
+include("../src/interface/WIP_physics.jl")
 include("../src/interface/boundary_conditions.jl")
 include("../src/interface/grids.jl")
 include("../src/backends/backends.jl")
 include("../src/interface/timestepper_abstractions.jl")
-include("../src/backends/dg_model_backends/backend_hook.jl")
-include("../src/interface/simulations.jl")
-include("../src/interface/callbacks.jl")
-include("../src/backends/dg_model_backends/boilerplate.jl")
+# include("../src/backends/dg_model_backends/backend_hook.jl")
+# include("../src/interface/simulations.jl")
+# include("../src/interface/callbacks.jl")
+# include("../src/backends/dg_model_backends/boilerplate.jl")
 include("../src/utils/sphere_utils.jl")
+
+include("../src/interface/WIP_models.jl")
+include("../src/interface/WIP_timesteppers.jl")
+include("../src/interface/WIP_simulations.jl")
+include("../src/interface/callbacks.jl")
+
+include("../src/backends/dg_model_backends/WIP_boilerplate.jl")
+include("../src/backends/dg_model_backends/WIP_backend_hook.jl")
 
 # set up backend
 backend = DiscontinuousGalerkinBackend(numerics = (flux = :lmars,),)
@@ -68,15 +77,14 @@ hᵖ(p, λ, ϕ, r) =  0.0
 ρθ₀ᶜᵃʳᵗ(p, x...) = ρθ₀(p, lon(x...), lat(x...), rad(x...))
 
 # set up model
-model = ModelSetup(
-    equations = ThreeDimensionalEuler(
-        thermodynamic_variable = Density(),
+model = BarotropicFluidModel(
+    domain = discretized_domain,
+    physics = ModelPhysics(
         equation_of_state = BarotropicFluid(),
-        pressure_convention = Compressible(),
-        sources = (
-           DeepShellCoriolis(),
-        ),
         ref_state = NoReferenceState(),
+        sources = ( 
+            coriolis = DeepShellCoriolis(), 
+        ),
     ),
     boundary_conditions = (DefaultBC(), DefaultBC()),
     initial_conditions = (
@@ -85,26 +93,70 @@ model = ModelSetup(
     parameters = parameters,
 )
 
+# set up timestepper
+timestepper = TimeStepper(
+    method = SSPRK22Heuns,
+    dt = 1.0,
+    tspan = (0.0, 8*1600.0),
+    splitting = NoSplitting(),
+    saveat = 1.0,
+    progress = true,
+    progress_message = (dt, u, p, t) -> t,
+)
+
 # set up simulation
 simulation = Simulation(
-    backend = backend,
-    discretized_domain = discretized_domain,
+    backend,
     model = model,
-    timestepper = (
-        method = SSPRK22Heuns, 
-        start = 0.0, 
-        finish = 8*1600.0,
-        timestep = 1.0,
-    ),
+    timestepper = timestepper,
     callbacks = (
         Info(),
-        VTKState(iteration = Int(floor(100.0/1.0)), filepath = "./out2/"),
+        VTKState(iteration = Int(floor(100.0/1.0)), filepath = "./out/"),
         CFL(), 
-    ),
+    ), 
 )
 
 # run the simulation
-initialize!(simulation)
-evolve!(simulation)
+evolve(simulation)
+
+
+# model = ModelSetup(
+#     equations = ThreeDimensionalEuler(
+#         thermodynamic_variable = Density(),
+#         equation_of_state = BarotropicFluid(),
+#         pressure_convention = Compressible(),
+#         sources = (
+#            DeepShellCoriolis(),
+#         ),
+#         ref_state = NoReferenceState(),
+#     ),
+#     boundary_conditions = (DefaultBC(), DefaultBC()),
+#     initial_conditions = (
+#         ρ = ρ₀ᶜᵃʳᵗ, ρu = ρu⃗₀ᶜᵃʳᵗ, ρθ = ρθ₀ᶜᵃʳᵗ,
+#     ),
+#     parameters = parameters,
+# )
+
+# # set up simulation
+# simulation = Simulation(
+#     backend = backend,
+#     discretized_domain = discretized_domain,
+#     model = model,
+#     timestepper = (
+#         method = SSPRK22Heuns, 
+#         start = 0.0, 
+#         finish = 8*1600.0,
+#         timestep = 1.0,
+#     ),
+#     callbacks = (
+#         Info(),
+#         VTKState(iteration = Int(floor(100.0/1.0)), filepath = "./out/"),
+#         CFL(), 
+#     ),
+# )
+
+# # run the simulation
+# initialize!(simulation)
+# evolve!(simulation)
 
 nothing

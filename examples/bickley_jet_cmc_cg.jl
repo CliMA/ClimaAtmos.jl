@@ -15,6 +15,7 @@ import ClimaCore.Geometry
 include("../src/interface/WIP_domains.jl")
 include("../src/interface/WIP_models.jl")
 include("../src/interface/WIP_timesteppers.jl")
+include("../src/interface/timestepper_abstractions.jl")
 include("../src/backends/backends.jl")
 include("../src/backends/climacore/function_spaces.jl")
 include("../src/backends/climacore/initial_conditions.jl")
@@ -22,6 +23,7 @@ include("../src/backends/climacore/ode_problems.jl")
 include("../src/backends/climacore/tendencies.jl")
 include("../src/interface/WIP_boundary_conditions.jl")
 include("../src/interface/WIP_simulations.jl")
+include("../src/interface/WIP_physics.jl")
 
 # set up parameters
 const parameters = (
