@@ -3,6 +3,10 @@ using Aleph
 
 
 abstractions = ["abstractions.md"]
+models = ["3d_dry_euler_total_energy.md",
+          "3d_moist_euler_total_energy.md",
+          "barotropic_fluid.md",
+         ]
 
 makedocs(
     sitename = "Aleph",
@@ -11,6 +15,7 @@ makedocs(
     pages = [
     "Home" => "index.md",
     "Abstractions" => abstractions,
+    "Models" => models,
     "Contributor Guide" => "contributor_guide.md",
     "Function Index" => "function_index.md",
     ],

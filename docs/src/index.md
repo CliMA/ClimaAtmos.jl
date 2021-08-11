@@ -7,4 +7,4 @@ A repository for the development of interfaces in the [CLIMA](https://github.com
 ```Aleph``` currently supports two backends
 
 1. [Climate Machine](https://github.com/CliMA/ClimateMachine.jl)
-1. [ClimateMachineCore](https://github.com/CliMA/ClimateMachineCore.jl)
+1. [ClimaCore](https://github.com/CliMA/ClimateCore.jl)

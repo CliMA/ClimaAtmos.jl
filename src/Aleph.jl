@@ -1,6 +1,50 @@
 module Aleph
 
+using Pkg
+
+# convenience functions
+export @boilerplate, add_climate_machine, add_clima_core
+
+# example 
 export function_documentation_template
+
+# convenience functions: definitions
+"""
+macro boilerplate()
+
+# Description 
+A convenience function that includes all the usual packages
+"""
+macro boilerplate()
+    boiler_block = :( 
+        using JLD2; 
+        using Plots;)
+    return boiler_block
+end
+
+"""
+function add_climate_machine()
+
+# Description
+Grabs the particular ClimateMachine branch used in Aleph
+"""
+function add_climate_machine()
+       Pkg.add(url = "https://github.com/CliMA/ClimateMachine.jl.git#tb/refactoring_ans_sphere")
+end
+
+"""
+function add_climate_machine()
+
+# Description
+Grabs the particular ClimaCore branch used in Aleph
+"""
+function add_clima_core()
+       Pkg.add(url = "https://github.com/CliMA/ClimaCore.jl.git")
+       Pkg.add("DiffEqBase")
+end
+
+
+# example: definition
 
 """
 function_documentation_template(a; informative_keyword = "yes")
@@ -24,5 +68,6 @@ function function_documentation_template(a; informative_keyword = "yes")
     println("The informative keyword is ", informative_keyword)
     return pi
 end
+
 
 end # module

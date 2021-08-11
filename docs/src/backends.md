@@ -2,6 +2,6 @@
 
 [website](https://github.com/CliMA/ClimateMachine.jl)
 
-# [Climate Machine Core](@id sec:climate_machine_core)
+# [ClimaCore](@id sec:climate_machine_core)
 
-[website](https://github.com/CliMA/ClimateMachineCore.jl)
+[website](https://github.com/CliMA/ClimaCore.jl)

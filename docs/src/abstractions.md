@@ -30,7 +30,7 @@ For example, a struct may be a placeholder for the following Euler Equations
         \partial_t (\rho e) + \nabla \cdot ( \vec{u} [\rho e + p])  &= 0 
     \label{eq:energy}
     \\
-    \rho e -  \frac{1}{2} \rho \vec{u} \cdot \vec{u} - \rho \phi  &= p
+    (\gamma-1) (\rho e -  \frac{1}{2} \rho \vec{u} \cdot \vec{u} - \rho \phi  ) &= p
     \label{eq:pressure}
     \end{align}
 ```
