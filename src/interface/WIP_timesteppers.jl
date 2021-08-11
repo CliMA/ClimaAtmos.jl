@@ -2,27 +2,27 @@ abstract type AbstractTimestepper end
 abstract type AbstractRate end
 abstract type AbstractSplitting end
 
-Base.@kwdef struct TimeStepper <: AbstractTimestepper
-    method
-    dt
-    tspan
-    splitting = NoSplitting()
-    saveat 
-    progress
-    progress_message
+Base.@kwdef struct TimeStepper{A,B,C,D,E,F,G} <: AbstractTimestepper
+    method::A
+    dt::B
+    tspan::C
+    splitting::D = NoSplitting()
+    saveat::E
+    progress::F
+    progress_message::G
 end
 
 struct NoSplitting <: AbstractSplitting end
 
-Base.@kwdef struct IMEXSplitting{𝒜,ℬ,𝒞} <: AbstractSplitting
-    linear_model::𝒞 = :linear
-    implicit_method::𝒜 = LinearBackwardEulerSolver(ManyColumnLU(); isadjustable = false)
-    split_explicit_implicit::ℬ = false
+Base.@kwdef struct IMEXSplitting{A,B,C} <: AbstractSplitting
+    linear_model::A = :linear
+    implicit_method::B = LinearBackwardEulerSolver(ManyColumnLU(); isadjustable = false)
+    split_explicit_implicit::C = false
 end
 
 # TODO: Add more methods here such as MultiRate, Explicit [can't reuse word]
-Base.@kwdef struct IMEX{ℱ}
-    method::ℱ
+Base.@kwdef struct IMEX{A}
+    method::A
 end
 
 function IMEX()
