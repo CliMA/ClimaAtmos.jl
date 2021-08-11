@@ -1,10 +1,7 @@
-function create_ode_problem(backend::ClimaCoreBackend, model, timestepper)
+function create_ode_problem(backend::ClimaCoreBackend, model::AbstractModel, timestepper::AbstractTimestepper)
     function_space = create_function_space(backend, model.domain)
     rhs! = create_rhs(backend, model, function_space)
-    y0 = model.initial_conditions.(
-        Fields.coordinate_field(function_space), 
-        Ref(model.parameters)
-    )
+    y0 = create_initial_conditions(backend, model, function_space)
 
     return ODEProblem(
         rhs!, 
