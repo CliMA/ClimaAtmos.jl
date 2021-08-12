@@ -26,7 +26,7 @@ include("../src/interface/WIP_simulations.jl")
 include("../src/interface/WIP_physics.jl")
 
 # set up parameters
-const parameters = (
+parameters = (
     ϵ  = 0.1,  # perturbation size for initial condition
     l  = 0.5,  # Gaussian width
     k  = 0.5,  # Sinusoidal wavenumber

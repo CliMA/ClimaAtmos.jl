@@ -30,7 +30,7 @@ include("../src/interface/WIP_boundary_conditions.jl")
 include("../src/interface/WIP_simulations.jl")
 
 # set up parameters
-const parameters = (
+parameters = (
     T_surf = 300.0,
     T_min_ref = 230.0,
     MSLP = 1e5, # mean sea level pressure
