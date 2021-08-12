@@ -1,5 +1,5 @@
 using Documenter
-using Aleph
+using ClimaAtmos
 
 
 abstractions = ["abstractions.md"]
@@ -9,7 +9,7 @@ models = ["3d_dry_euler_total_energy.md",
          ]
 
 makedocs(
-    sitename = "Aleph",
+    sitename = "ClimaAtmos",
     authors = "Andre, Tobi, Jia",
     format = Documenter.HTML(collapselevel = 1, mathengine = MathJax3()),
     pages = [
@@ -19,8 +19,8 @@ makedocs(
     "Contributor Guide" => "contributor_guide.md",
     "Function Index" => "function_index.md",
     ],
-    modules = [Aleph]
+    modules = [ClimaAtmos]
 )
 
-deploydocs(repo = "github.com/CliMA/Aleph.jl.git", devbranch = "main")
+deploydocs(repo = "github.com/CliMA/ClimaAtmos.jl.git", devbranch = "main")
 

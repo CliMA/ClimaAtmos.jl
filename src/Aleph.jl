@@ -1,4 +1,4 @@
-module Aleph
+module ClimaAtmos
 
 using Pkg
 
@@ -26,7 +26,7 @@ end
 function add_climate_machine()
 
 # Description
-Grabs the particular ClimateMachine branch used in Aleph
+Grabs the particular ClimateMachine branch used in ClimaAtmos
 """
 function add_climate_machine()
        Pkg.add(url = "https://github.com/CliMA/ClimateMachine.jl.git#tb/refactoring_ans_sphere")
@@ -36,7 +36,7 @@ end
 function add_climate_machine()
 
 # Description
-Grabs the particular ClimaCore branch used in Aleph
+Grabs the particular ClimaCore branch used in ClimaAtmos
 """
 function add_clima_core()
        Pkg.add(url = "https://github.com/CliMA/ClimaCore.jl.git")
@@ -51,7 +51,7 @@ function_documentation_template(a; informative_keyword = "yes")
 
 # Description
 The goal of this function is to provide a template for all functions used
-in Aleph.jl
+in ClimaAtmos.jl
 
 # Arguments
 - `a` | Type: Any | An example function argument 
