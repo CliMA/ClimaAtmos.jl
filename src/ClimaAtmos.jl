@@ -10,6 +10,9 @@ export function_documentation_template
 
 # include other modules
 include("Utils/Utils.jl")
+include("Interface/Interface.jl")
+include("Backends/Backends.jl")
+
 
 # convenience functions: definitions
 """

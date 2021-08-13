@@ -14,6 +14,8 @@ end
 
 struct NoSplitting <: AbstractSplitting end
 
+#=
+# TODO: Make another module for convenience in interfacing ClimateMachine
 Base.@kwdef struct IMEXSplitting{A,B,C} <: AbstractSplitting
     linear_model::A = :linear
     implicit_method::B = LinearBackwardEulerSolver(ManyColumnLU(); isadjustable = false)
@@ -28,4 +30,4 @@ end
 function IMEX()
     return IMEX(ARK2GiraldoKellyConstantinescu)
 end
-
+=#
