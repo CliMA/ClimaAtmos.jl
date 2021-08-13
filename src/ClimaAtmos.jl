@@ -68,5 +68,4 @@ function function_documentation_template(a; informative_keyword = "yes")
     return pi
 end
 
-
 end # module

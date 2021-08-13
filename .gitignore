@@ -35,3 +35,6 @@ Manifest.toml
 *.nc
 *.mp4
 *.png
+
+# misc
+.DS_Store

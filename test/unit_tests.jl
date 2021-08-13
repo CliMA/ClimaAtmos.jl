@@ -12,13 +12,9 @@ import ClimaAtmos.Interface: DirichletBC, Simulation
 # explicit imports from Backends
 import ClimaAtmos.Backends: create_ode_problem
 
-
 # External Stuff
 using IntervalSets
 using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
-
-# Utils
-ϕ̂(1,1,1)
 
 # Domains
 domain = PeriodicRectangle(

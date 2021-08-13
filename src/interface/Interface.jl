@@ -16,11 +16,10 @@ end
 # include("simulations.jl")
 
 # WIP includes
-include("WIP_domains.jl")
-include("WIP_models.jl")
-include("WIP_timesteppers.jl")
-include("WIP_boundary_conditions.jl")
-include("WIP_simulations.jl")
-include("WIP_physics.jl")
+include("domains.jl")
+include("models.jl")
+include("timesteppers.jl")
+include("boundary_conditions.jl")
+include("simulations.jl")
 
 end # end of module
