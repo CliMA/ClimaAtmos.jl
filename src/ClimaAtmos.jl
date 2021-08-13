@@ -9,9 +9,9 @@ export @boilerplate, add_climate_machine, add_clima_core
 export function_documentation_template
 
 # include other modules
-include("Utils/Utils.jl")
-include("Interface/Interface.jl")
-include("Backends/Backends.jl")
+include("utils/Utils.jl")
+include("interface/Interface.jl")
+include("backends/Backends.jl")
 
 
 # convenience functions: definitions
