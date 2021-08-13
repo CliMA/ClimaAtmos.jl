@@ -1,32 +1,8 @@
-push!(LOAD_PATH, joinpath(@__DIR__, "..", ".."))
-
-using LinearAlgebra, IntervalSets
-using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
-using Logging: global_logger
-using TerminalLoggers: TerminalLogger
-global_logger(TerminalLogger())
-
-using ClimaCore.Geometry, LinearAlgebra, UnPack
-import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces
-import ClimaCore.Operators
-import ClimaCore.Geometry
-
-# set up boilerplate
-include("../src/interface/WIP_domains.jl")
-include("../src/interface/WIP_models.jl")
-include("../src/interface/WIP_timesteppers.jl")
-#include("../src/interface/timestepper_abstractions.jl")
-include("../src/backends/backends.jl")
-include("../src/backends/climacore/function_spaces.jl")
-include("../src/backends/climacore/initial_conditions.jl")
-include("../src/backends/climacore/ode_problems.jl")
-include("../src/backends/climacore/tendencies.jl")
-include("../src/interface/WIP_boundary_conditions.jl")
-include("../src/interface/WIP_simulations.jl")
-include("../src/interface/WIP_physics.jl")
+using ClimaAtmos
+@boilerplate
 
 # set up parameters
-const parameters = (
+parameters = (
     ϵ  = 0.1,  # perturbation size for initial condition
     l  = 0.5,  # Gaussian width
     k  = 0.5,  # Sinusoidal wavenumber

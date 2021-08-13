@@ -1,36 +1,8 @@
-push!(LOAD_PATH, joinpath(@__DIR__, "..", ".."))
-
-using LinearAlgebra, IntervalSets, RecursiveArrayTools
-using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
-using Logging: global_logger
-using TerminalLoggers: TerminalLogger
-global_logger(TerminalLogger())
-
-using ClimaCore.Geometry, LinearAlgebra, UnPack
-import ClimaCore:
-    Fields,
-    Domains,
-    Topologies,
-    Meshes,
-    DataLayouts,
-    Operators,
-    Geometry,
-    Spaces
-
-# set up boilerplate
-include("../src/interface/WIP_domains.jl")
-include("../src/interface/WIP_models.jl")
-include("../src/interface/WIP_timesteppers.jl")
-include("../src/backends/backends.jl")
-include("../src/backends/climacore/function_spaces.jl")
-include("../src/backends/climacore/initial_conditions.jl")
-include("../src/backends/climacore/ode_problems.jl")
-include("../src/backends/climacore/tendencies.jl")
-include("../src/interface/WIP_boundary_conditions.jl")
-include("../src/interface/WIP_simulations.jl")
+using ClimaAtmos
+@boilerplate
 
 # set up parameters
-const parameters = (
+parameters = (
     T_surf = 300.0,
     T_min_ref = 230.0,
     MSLP = 1e5, # mean sea level pressure
@@ -95,7 +67,7 @@ model = HydrostaticModel(
 timestepper = TimeStepper(
     method = SSPRK33(),
     dt = 1e-2,
-    tspan = (0.0, 3600.0),
+    tspan = (0.0, 36.0),
     saveat = 600,
     progress = true,
     progress_message = (dt, u, p, t) -> t,

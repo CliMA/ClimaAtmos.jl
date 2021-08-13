@@ -2,10 +2,10 @@
 This guide is heavily based on the [MetPy contributors guide](https://github.com/Unidata/MetPy/blob/main/CONTRIBUTING.md)
 
 ## Introduction
-First of all, thank you for considering contributing to ```Aleph.jl```! Please use the following as a guideline on how to best contribute to the project.  One core philosophy in ```Aleph.jl``` is to reuse as much of Julia's native infrastructure as possible.
+First of all, thank you for considering contributing to ```ClimaAtmos.jl```! Please use the following as a guideline on how to best contribute to the project.  One core philosophy in ```ClimaAtmos.jl``` is to reuse as much of Julia's native infrastructure as possible.
 
 ## What Can I Do?
-Create an issue or pull request on the main ```Aleph.jl``` repostory. 
+Create an issue or pull request on the main ```ClimaAtmos.jl``` repostory. 
 
 ## Ground Rules
 Be nice.

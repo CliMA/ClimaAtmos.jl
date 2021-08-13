@@ -1,5 +1,5 @@
-# List of functions in Aleph.jl module
+# List of functions in ClimaAtmos.jl module
 
 ```@autodocs
-Modules = [Aleph]
+Modules = [ClimaAtmos]
 ```
