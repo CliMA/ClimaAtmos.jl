@@ -8,6 +8,7 @@ import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel, AbstractBac
 @info "error / warning comes from ClimaCore"
 using UnPack
 using ClimaCore
+using RecursiveArrayTools
 
 using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 

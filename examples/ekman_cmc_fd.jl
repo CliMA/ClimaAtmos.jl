@@ -18,6 +18,7 @@ import ClimaCore:
     Spaces
 
 # set up boilerplate
+#=
 include("../src/interface/WIP_domains.jl")
 include("../src/interface/WIP_models.jl")
 include("../src/interface/WIP_timesteppers.jl")
@@ -28,6 +29,25 @@ include("../src/backends/climacore/ode_problems.jl")
 include("../src/backends/climacore/tendencies.jl")
 include("../src/interface/WIP_boundary_conditions.jl")
 include("../src/interface/WIP_simulations.jl")
+=#
+
+using ClimaAtmos
+using ClimaAtmos.Utils
+using ClimaAtmos.Interface
+using ClimaAtmos.Backends
+
+# explicit imports from Interface
+import ClimaAtmos.Interface: PeriodicRectangle, SingleColumn
+import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel
+import ClimaAtmos.Interface: TimeStepper
+import ClimaAtmos.Interface: DirichletBC, Simulation
+
+# explicit imports from Backends
+import ClimaAtmos.Backends: create_ode_problem, evolve
+
+# External Stuff
+using IntervalSets
+using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 
 # set up parameters
 parameters = (

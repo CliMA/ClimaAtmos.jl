@@ -48,11 +48,3 @@ timestepper = TimeStepper(
 
 # Boundary conditions
 DirichletBC()
-
-# Simulation 
-simulation = Simulation(
-    ClimaCoreBackend(),
-    model = model, 
-    timestepper = timestepper,
-    callbacks = (),
-)
