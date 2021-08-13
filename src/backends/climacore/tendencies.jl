@@ -1,5 +1,3 @@
-using ClimaCore.Spaces: SpectralElementSpace2D, CenterFiniteDifferenceSpace, FaceFiniteDifferenceSpace
-
 function create_rhs(::ClimaCoreBackend, model::BarotropicFluidModel, function_space::SpectralElementSpace2D)
     function rhs!(dydt, y, _, t)
         UnPack.@unpack D₄, g = model.parameters

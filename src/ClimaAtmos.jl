@@ -1,6 +1,6 @@
 module ClimaAtmos
 
-using Pkg
+using Pkg, LinearAlgebra
 
 # convenience functions
 export @boilerplate, add_climate_machine, add_clima_core
