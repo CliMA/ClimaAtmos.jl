@@ -1,4 +1,4 @@
-# Aleph.jl
+# ClimaAtmos.jl
 User interface to numerical models in CliMA
 
 |||
