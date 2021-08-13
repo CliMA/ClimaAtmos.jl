@@ -8,6 +8,9 @@ export @boilerplate, add_climate_machine, add_clima_core
 # example 
 export function_documentation_template
 
+# include other modules
+include("Utils/Utils.jl")
+
 # convenience functions: definitions
 """
 macro boilerplate()
