@@ -19,12 +19,27 @@ include("Backends/Backends.jl")
 macro boilerplate()
 
 # Description 
-A convenience function that includes all the usual packages
+A convenience function that includes all the usual needed for a script
 """
 macro boilerplate()
     boiler_block = :( 
-        using JLD2; 
-        using Plots;)
+        using ClimaAtmos.Utils;
+        using ClimaAtmos.Interface;
+        using ClimaAtmos.Backends;
+        using IntervalSets, UnPack;
+        using OrdinaryDiffEq: SSPRK33;
+
+        # explicit imports from Interface
+        import ClimaAtmos.Interface: PeriodicRectangle, SingleColumn;
+        import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel;
+        import ClimaAtmos.Interface: TimeStepper;
+        import ClimaAtmos.Interface: DirichletBC, Simulation;
+        import ClimaAtmos.Backends: create_ode_problem, evolve;
+
+        # imports from Clima Core
+        using ClimaCore.Geometry;
+        import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces
+        )
     return boiler_block
 end
 
