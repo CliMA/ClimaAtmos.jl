@@ -41,6 +41,73 @@ function create_rhs(::ClimaCoreBackend, model::BarotropicFluidModel, function_sp
     return rhs!
 end
 
+# function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space::Tuple{CenterFiniteDifferenceSpace,FaceFiniteDifferenceSpace})
+#     function rhs!(dY, Y, _, t)
+#         UnPack.@unpack Cd, f, ν, ug, vg, C_p, MSLP, R_d, R_m, C_v, grav = model.parameters
+#         (Yc, Yf) = Y.x
+#         (dYc, dYf) = dY.x
+#         UnPack.@unpack ρ, u, v, ρθ = Yc
+#         UnPack.@unpack w = Yf
+#         dρ = dYc.ρ
+#         du = dYc.u
+#         dv = dYc.v
+#         dρθ = dYc.ρθ
+#         dw = dYf.w
+
+#         # density with no-flux boundary conditions S 4.4.1.
+#         gradc2f = Operators.GradientC2F()
+#         gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+#         If = Operators.InterpolateC2F(;
+#             bottom = Operators.Extrapolate(),
+#             top = Operators.Extrapolate(),
+#         )
+#         @. dρ = gradf2c( -w * If(ρ) )  # Eq. 4.11
+
+#         # potential temperature density with no-flux boundary condition
+#         gradc2f = Operators.GradientC2F()
+#         gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))  # Eq. 4.20, 4.21
+#         @. dρθ = gradf2c( -w * If(ρθ) + ν * gradc2f(ρθ/ρ) )  # Eq. 4.12
+
+#         # advection
+#         u_1 = parent(u)[1]
+#         v_1 = parent(v)[1]
+#         u_wind = sqrt(u_1^2 + v_1^2)
+#         advection = Operators.AdvectionC2C(
+#             bottom = Operators.SetValue(0.0),
+#             top = Operators.SetValue(0.0),
+#         )
+
+#         # u-momentum 
+#         gradc2f = Operators.GradientC2F(top = Operators.SetValue(ug))  # Eq. 4.18
+#         gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(Cd * u_wind * u_1))  # Eq. 4.16
+#         @. du = -advection(w, u) + f * (v - vg) + gradf2c(ν * gradc2f(u))  # Eq. 4.8
+
+#         # v-momentum        
+#         gradc2f = Operators.GradientC2F(top = Operators.SetValue(vg))  # Eq. 4.19
+#         gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(Cd * u_wind * v_1))  # Eq. 4.17
+#         @. dv = -advection(w, v) - f * (u - ug) + gradf2c(ν * gradc2f(v))  # Eq. 4.9
+
+#         # w-momentum
+#         gradc2f = Operators.GradientC2F()
+#         gradf2c = Operators.GradientF2C()
+#         B = Operators.SetBoundaryOperator(
+#             bottom = Operators.SetValue(0.0),
+#             top = Operators.SetValue(0.0),
+#         ) # The boundary operator is used for all prognostics variables on faces.
+#         If = Operators.InterpolateC2F(;
+#             bottom = Operators.Extrapolate(),
+#             top = Operators.Extrapolate(),
+#         )
+#         Π = C_p .* (R_d .* ρθ ./ MSLP).^(R_m ./ C_v)
+#         @. dw = B( -w * If(gradf2c(w)) - If(ρθ / ρ) * gradc2f(Π) - grav + gradc2f(ν * gradf2c(w)) )  # Eq. 4.10
+
+#         return dY
+#     end
+
+#     return rhs!
+# end
+
+# S. 4.4.1
 function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space::Tuple{CenterFiniteDifferenceSpace,FaceFiniteDifferenceSpace})
     function rhs!(dY, Y, _, t)
         UnPack.@unpack Cd, f, ν, ug, vg, C_p, MSLP, R_d, R_m, C_v, grav = model.parameters
@@ -54,63 +121,46 @@ function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space:
         dρθ = dYc.ρθ
         dw = dYf.w
 
-        # S 4.4.1: potential temperature density
-        # Mass conservation
-        If = Operators.InterpolateC2F(;
-            bottom = Operators.Extrapolate(),
-            top = Operators.Extrapolate(),
-        )
-        ∂c = Operators.GradientF2C()
-        @. dρ = -(∂c(w * If(ρ)))  # Eq. 4.11
-
-        # advection
+        # auxiliary calculations
         u_1 = parent(u)[1]
         v_1 = parent(v)[1]
         u_wind = sqrt(u_1^2 + v_1^2)
-        A = Operators.AdvectionC2C(
-            bottom = Operators.SetValue(0.0),
-            top = Operators.SetValue(0.0),
-        )
 
-        # u-momentum
-        bcs_bottom = Operators.SetValue(Cd * u_wind * u_1)  # Eq. 4.16
-        bcs_top = Operators.SetValue(ug)  # Eq. 4.18
-        gradc2f = Operators.GradientC2F(top = bcs_top)
-        gradf2c = Operators.GradientF2C(bottom = bcs_bottom)
+        # density (centers)
+        gradc2f = Operators.GradientC2F()
+        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+
+        If = Operators.InterpolateC2F(bottom = Operators.Extrapolate(), top = Operators.Extrapolate())
+        @. dρ = gradf2c( -w * If(ρ) ) # Eq. 4.11
+
+        # potential temperature (centers)
+        gradc2f = Operators.GradientC2F()
+        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0)) # Eq. 4.20, 4.21
+
+        @. dρθ = gradf2c( -w * If(ρθ) + ν * gradc2f(ρθ/ρ) ) # Eq. 4.12
+
+        # u velocity (centers)
+        gradc2f = Operators.GradientC2F(top = Operators.SetValue(ug)) # Eq. 4.18
+        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(Cd * u_wind * u_1)) # Eq. 4.16
+        
+        A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
         @. du = gradf2c(ν * gradc2f(u)) + f * (v - vg) - A(w, u) # Eq. 4.8
 
-        # v-momentum
-        bcs_bottom = Operators.SetValue(Cd * u_wind * v_1)  # Eq. 4.17
-        bcs_top = Operators.SetValue(vg)  # Eq. 4.19
-        gradc2f = Operators.GradientC2F(top = bcs_top)
-        gradf2c = Operators.GradientF2C(bottom = bcs_bottom)
+        # v velocity (centers)
+        gradc2f = Operators.GradientC2F(top = Operators.SetValue(vg)) # Eq. 4.18
+        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(Cd * u_wind * v_1)) # Eq. 4.16
+
+        A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
         @. dv = gradf2c(ν * gradc2f(v)) - f * (u - ug) - A(w, v) # Eq. 4.9
 
-        # w-momentum
-        B = Operators.SetBoundaryOperator(
-            bottom = Operators.SetValue(0.0),
-            top = Operators.SetValue(0.0),
-        )
-        # gradc2f = Operators.GradientC2F(;bottom =  Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+        # w velocity (faces)
         gradc2f = Operators.GradientC2F()
-        If = Operators.InterpolateC2F(;
-            bottom = Operators.Extrapolate(),
-            top = Operators.Extrapolate(),
-        )
-        gradf2c = Operators.GradientF2C()
-        Π = C_p .* (R_d .* ρθ ./ MSLP).^(R_m ./ C_v)
-        @. dw = B(
-            -(If(ρθ / ρ) * gradc2f(Π)) - grav + gradc2f(ν * gradf2c(w)) -
-            w * If(gradf2c(w)),
-        )   # Eq. 4.10
+        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
 
-
-        # potential temperature density conservation
-        bcs_bottom = Operators.SetValue(0.0)  # Eq. 4.20
-        bcs_top = Operators.SetValue(0.0)  # Eq. 4.21
-        gradc2f = Operators.GradientC2F()
-        gradf2c = Operators.GradientF2C(bottom = bcs_bottom, top = bcs_top)
-        @. dρθ = -(∂c(w * If(ρθ))) + gradf2c(ν * gradc2f(ρθ / ρ))  # Eq. 4.12
+        B = Operators.SetBoundaryOperator(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+        If = Operators.InterpolateC2F(bottom = Operators.Extrapolate(), top = Operators.Extrapolate())
+        Π(ρθ) = C_p .* (R_d .* ρθ ./ MSLP).^(R_m ./ C_v)
+        @. dw = B( -(If(ρθ / ρ) * gradc2f(Π(ρθ))) - grav + gradc2f(ν * gradf2c(w)) - w * If(gradf2c(w))) # Eq. 4.10
 
         return dY
     end
