@@ -1,16 +1,16 @@
 
-function create_grid(::DiscontinuousGalerkinBackend, discretized_domain)
-    elements = get_elements(discretized_domain)
-    polynomial_order = get_polynomial_order(discretized_domain)
+function create_grid(::DiscontinuousGalerkinBackend, domain)
+    elements = get_elements(domain)
+    polynomial_order = get_polynomial_order(domain)
 
     return create_dg_grid(
-        discretized_domain.domain, 
+        domain, 
         elements = elements,
         polynomial_order = polynomial_order,
     )
 end
 
-function create_esdg_rhs(model::AbstractModel, backend::DiscontinuousGalerkinBackend; domain, grid)
+function create_esdg_rhs(model::AbstractModel, backend::DiscontinuousGalerkinBackend; grid)
     balance_law = create_balance_law(model)
     numerical_flux = create_numerical_flux(backend.numerics.flux)
 
@@ -52,11 +52,12 @@ function create_linear_rhs(model::AbstractModel, splitting::IMEXSplitting; domai
 end
 =#
 
-function create_rhs(::NoSplitting, model::AbstractModel, backend::DiscontinuousGalerkinBackend; domain, grid)
-    rhs = create_esdg_rhs(model, backend, domain = domain, grid = grid)
+function create_rhs(::NoSplitting, model::AbstractModel, backend::DiscontinuousGalerkinBackend; grid)
+    rhs = create_esdg_rhs(model, backend, grid = grid)
     return rhs 
 end
 
+#=
 function create_rhs(splitting::IMEXSplitting, model::AbstractModel, backend::DiscontinuousGalerkinBackend; domain, grid)
     rhs = []
     # create explicit model and push to rhs
@@ -71,6 +72,7 @@ function create_rhs(splitting::IMEXSplitting, model::AbstractModel, backend::Dis
     push!(rhs, tmp)
     return Tuple(rhs)
 end
+=#
 
 function create_init_state(model::AbstractModel, backend::DiscontinuousGalerkinBackend; rhs = nothing)
     if rhs === nothing
@@ -84,6 +86,19 @@ function create_init_state(model::AbstractModel, backend::DiscontinuousGalerkinB
 end
 
 # utils
+function get_elements(domain::SphericalShell)
+    horizontal_elements = domain.nelements.horizontal
+    vertical_elements = domain.nelements.vertical
+    return (vertical = vertical_elements, horizontal = horizontal_elements)
+end
+
+function get_polynomial_order(domain::SphericalShell)
+    horizontal_poly_order = domain.npolynomial.horizontal
+    vertical_poly_order = domain.vertical_discretization.vpolynomial
+    return (vertical = vertical_poly_order, horizontal = horizontal_poly_order)
+end
+
+#=
 function get_elements(discretized_domain::DiscretizedDomain{<:ProductDomain})
     return discretized_domain.discretization.elements
 end
@@ -103,3 +118,4 @@ function get_polynomial_order(discretized_domain::DiscretizedDomain{<:SphericalS
     vertical_poly_order = discretized_domain.discretization.vertical.polynomial_order
     return (vertical = vertical_poly_order, horizontal = horizontal_poly_order)
 end
+=#

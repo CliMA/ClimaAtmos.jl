@@ -143,5 +143,5 @@ function create_numerical_flux(surface_flux)
     end
 end
 
-create_orientation(::ProductDomain) = FlatOrientation()
+# create_orientation(::ProductDomain) = FlatOrientation()
 create_orientation(::SphericalShell) = SphericalOrientation()

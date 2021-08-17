@@ -18,6 +18,7 @@ end
 # WIP includes
 include("domains.jl")
 include("models.jl")
+include("physicsl.jl")
 include("timesteppers.jl")
 include("boundary_conditions.jl")
 include("simulations.jl")

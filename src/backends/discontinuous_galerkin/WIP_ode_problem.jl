@@ -6,7 +6,7 @@ end
 
 function create_ode_problem(backend::DiscontinuousGalerkinBackend, model, timestepper)
     grid = create_grid(backend, model.domain)
-    rhs = create_rhs(timestepper.splitting, model, backend, domain = model.domain.domain, grid = grid)
+    rhs = create_rhs(timestepper.splitting, model, backend, grid = grid)
     if rhs isa SpaceDiscretization
         state = create_init_state(model, backend, rhs = rhs)
     elseif rhs isa Tuple 
@@ -38,6 +38,7 @@ function construct_odesolver(::NoSplitting, simulation)
     return ode_solver
 end
 
+#=
 function construct_odesolver(splitting::IMEXSplitting, simulation; t0 = 0, split_explicit_implicit = false)
     method       = simulation.timestepper.method.method
     start        = simulation.timestepper.tspan[1]
@@ -62,3 +63,4 @@ function construct_odesolver(splitting::IMEXSplitting, simulation; t0 = 0, split
 
     return odesolver
 end
+=#

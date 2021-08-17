@@ -30,15 +30,22 @@ macro boilerplate()
         using OrdinaryDiffEq: SSPRK33;
 
         # explicit imports from Interface
-        import ClimaAtmos.Interface: PeriodicRectangle, SingleColumn;
+        import ClimaAtmos.Interface: PeriodicRectangle, SingleColumn, SphericalShell;
+        import ClimaAtmos.Interface: VerticalDiscontinousGalerkin, VerticalFiniteDifference;
         import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel;
-        import ClimaAtmos.Interface: TimeStepper;
-        import ClimaAtmos.Interface: DirichletBC, Simulation;
+        import ClimaAtmos.Interface: ModelPhysics, BarotropicFluid, DeepShellCoriolis;
+        import ClimaAtmos.Interface: TimeStepper, NoSplitting;
+        import ClimaAtmos.Interface: DirichletBC, DefaultBC, Simulation;
         import ClimaAtmos.Backends: create_ode_problem, evolve;
 
         # imports from Clima Core
         using ClimaCore.Geometry;
-        import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces
+        import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces;
+
+        # imports from ClimateMachine
+        using ClimateMachine;
+        using ClimateMachine.ODESolvers;
+        using ClimateMachine.Atmos: NoReferenceState
         )
     return boiler_block
 end

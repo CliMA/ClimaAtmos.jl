@@ -1,7 +1,7 @@
 module Backends
 
-import ..Interface: AbstractModel, AbstractDomain, Rectangle, PeriodicRectangle, ClimaCoreBackend, SingleColumn
-import ClimaAtmos.Interface: TimeStepper, AbstractTimestepper, Simulation
+import ..Interface: AbstractModel, AbstractDomain, Rectangle, PeriodicRectangle, SphericalShell, ClimaCoreBackend, DiscontinuousGalerkinBackend, SingleColumn
+import ClimaAtmos.Interface: TimeStepper, AbstractTimestepper, NoSplitting, Simulation
 
 import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel, AbstractBackend
 
@@ -29,11 +29,44 @@ import ClimaCore:
 
 using ClimaCore.Spaces: SpectralElementSpace2D, CenterFiniteDifferenceSpace, FaceFiniteDifferenceSpace
 import LinearAlgebra: norm, ×
+
+using Dates
+using GaussQuadrature
+using JLD2
+using LinearAlgebra
+using Logging
+using MPI
+using Printf
+using StaticArrays
+using Test
+
+using ClimateMachine
+using ClimateMachine.Atmos: NoReferenceState
+using ClimateMachine.MPIStateArrays
+using ClimateMachine.VariableTemplates
+using ClimateMachine.Mesh.Geometry
+using ClimateMachine.Mesh.Topologies
+using ClimateMachine.Mesh.Grids
+using ClimateMachine.DGMethods
+using ClimateMachine.DGMethods.NumericalFluxes
+using ClimateMachine.BalanceLaws
+using ClimateMachine.ODESolvers
+using ClimateMachine.SystemSolvers
+using ClimateMachine.Orientations
+using ClimateMachine.VTK
+
 # include
 include("climacore/function_spaces.jl")
 include("climacore/initial_conditions.jl")
 include("climacore/ode_problems.jl")
 include("climacore/tendencies.jl")
+
+include("discontinuous_galerkin/WIP_ode_problem.jl")
+include("discontinuous_galerkin/WIP_grids.jl")
+include("discontinuous_galerkin/WIP_balance_laws.jl")
+include("discontinuous_galerkin/WIP_backend_hook.jl")
+
+include("discontinuous_galerkin/barotropic_fluid/numerical_fluxes_interface.jl")
 
 # Simulation for ClimaCore
 function Simulation(
