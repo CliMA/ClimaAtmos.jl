@@ -1,19 +1,18 @@
 using ClimaAtmos
 
-# explicit imports for Backend 
+# imports from Backends 
 import ClimaAtmos.Backends: evolve, ClimaCoreBackend
 
-# explicit imports from Interface
+# imports from Interface
 import ClimaAtmos.Interface: TimeStepper, Simulation
 import ClimaAtmos.Interface: PeriodicRectangle, BarotropicFluidModel
 
-# Imports from Julia Ecosystem
+# Julia Ecosystem
 using IntervalSets, UnPack
 using OrdinaryDiffEq: SSPRK33
 
-# imports from Clima Core
-using ClimaCore.Geometry
-import ClimaCore: Fields, Domains, Topologies, Meshes, Spaces
+# import from Clima Core
+import ClimaCore.Geometry: Cartesian12Vector
 
 # set up parameters
 parameters = (
