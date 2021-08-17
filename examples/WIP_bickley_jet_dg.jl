@@ -6,13 +6,17 @@ ClimateMachine.init()
 
 # set up parameters
 parameters = (
-    ϵ  = 0.1,  # perturbation size for initial condition
-    l  = 0.5,  # Gaussian width
-    k  = 0.5,  # Sinusoidal wavenumber
-    ρ₀ = 1.0,  # reference density
-    c  = 2,
-    g  = 10,   # gravitation constant
-    D₄ = 1e-4, # hyperdiffusion coefficient
+    g  = 0.0,
+    ρₒ = 1.0,  # reference density
+    cₛ = 1e-2, # sound speed
+    ℓᵐ = 10,   # jet thickness, (larger is thinner)
+    ℓ  = 20,   # perturbation thickness, (larger is thinner)
+    m  = 2,    # number of sign changes on equator for perturbation
+    ϕᵖ = π/2 * 0.05, # of centerdness of perturbation
+    ϵ  = 0.3,  # perturbation amplitude
+    vˢ = 5e-4, # velocity scale
+    α  = 2e-4,
+    Ω  = 1e-3,
 )
 
 # set up grid
@@ -77,6 +81,7 @@ timestepper = TimeStepper(
     progress_message = (dt, u, p, t) -> t,
 )
 
+# set up simulation
 simulation = Simulation(
     DiscontinuousGalerkinBackend(numerics = (flux = :lmars,),),
     model = model,
@@ -88,10 +93,7 @@ simulation = Simulation(
     ), 
 )
 
-#=
-# set up simulation
 # run the simulation
 evolve(simulation)
 
 nothing
-=#

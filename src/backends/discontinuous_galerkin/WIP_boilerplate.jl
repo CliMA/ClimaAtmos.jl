@@ -70,14 +70,14 @@ using ClimateMachine.Thermodynamics: soundspeed_air
 using ClimateMachine.VariableTemplates: flattenednames
 
 # interface includes
-include("grids.jl")
+include("WIP_grids.jl")
 include("temperature_profiles.jl")
 include("WIP_ode_problem.jl")
 # include("balance_laws.jl")
 include("WIP_balance_laws.jl")
 # include("callbacks.jl")
-include("WIP_callbacks.jl")
-include("../../utils/operations.jl")
+# include("WIP_callbacks.jl")
+# include("../../utils/operations.jl")
 
 # # TODO! Remove this.
 # dirs = ["three_dimensional_dry_compressible_euler_with_total_energy/", 

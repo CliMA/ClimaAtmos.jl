@@ -32,11 +32,11 @@ macro boilerplate()
         # explicit imports from Interface
         import ClimaAtmos.Interface: PeriodicRectangle, SingleColumn, SphericalShell;
         import ClimaAtmos.Interface: VerticalDiscontinousGalerkin, VerticalFiniteDifference;
-        import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel;
+        import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel, AbstractModel;
         import ClimaAtmos.Interface: ModelPhysics, BarotropicFluid, DeepShellCoriolis;
         import ClimaAtmos.Interface: TimeStepper, NoSplitting;
         import ClimaAtmos.Interface: DirichletBC, DefaultBC, Simulation;
-        import ClimaAtmos.Backends: create_ode_problem, evolve;
+        import ClimaAtmos.Backends: create_ode_problem, evolve, construct_odesolver;
 
         # imports from Clima Core
         using ClimaCore.Geometry;
