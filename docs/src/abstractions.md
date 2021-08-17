@@ -1,7 +1,7 @@
 # Introduction
 ```ClimaAtmos.jl``` supports the following numerics backends 
 1. [ClimateMachine](@ref sec:climate_machine) is a [Discontinuous Galerkin](https://github.com/CliMA/ClimateMachine.jl) backend
-2. [ClimateMachineCore](@ref sec:climate_machine_core) is a [Continuous Galerkin](https://github.com/CliMA/ClimateMachineCore.jl) backend *(still under development)*
+2. [ClimaCore](@ref sec:climate_machine_core) is a [Continuous Galerkin](https://github.com/CliMA/ClimaCore.jl) backend *(still under development)*
 
 The code is structured around a few human-centered abstractions that allow for REPL-driven development of simulations. This allows the user to build progressively more complicated simulation setups.
 
