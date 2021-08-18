@@ -1,5 +1,18 @@
 using ClimaAtmos
-@boilerplate
+
+# imports from Backends 
+import ClimaAtmos.Backends: evolve, ClimaCoreBackend
+
+# imports from Interface
+import ClimaAtmos.Interface: TimeStepper, Simulation
+import ClimaAtmos.Interface: PeriodicRectangle, BarotropicFluidModel
+
+# Julia Ecosystem
+using IntervalSets, UnPack
+using OrdinaryDiffEq: SSPRK33
+
+# import from Clima Core
+import ClimaCore.Geometry: Cartesian12Vector
 
 # set up parameters
 parameters = (

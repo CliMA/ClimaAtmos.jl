@@ -11,9 +11,9 @@ Base.@kwdef struct BarotropicFluidModel{A,B,C,D} <: AbstractModel
 end
 
 """
-    HydrostaticModel <: AbstractModel
+    CompressibleModel <: AbstractModel
 """
-Base.@kwdef struct HydrostaticModel{A,B,C,D} <: AbstractModel
+Base.@kwdef struct CompressibleFluidModel{A,B,C,D} <: AbstractModel
     domain::A
     boundary_conditions::B
     initial_conditions::C

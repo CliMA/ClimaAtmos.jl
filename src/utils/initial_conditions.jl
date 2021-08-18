@@ -207,4 +207,4 @@ function init_cosine_bell_shallow_water(λ, ϕ, parameters)
     return (h = h, u = u,)
 end
 
-end # Module
+end # end of module

@@ -1,5 +1,15 @@
 using ClimaAtmos
-@boilerplate
+
+# imports from Backends 
+import ClimaAtmos.Backends: ClimaCoreBackend, evolve
+
+# imports from Interface
+import ClimaAtmos.Interface: TimeStepper, Simulation
+import ClimaAtmos.Interface: SingleColumn, CompressibleFluidModel
+
+# Julia Ecosystem
+using IntervalSets, UnPack
+using OrdinaryDiffEq: SSPRK33
 
 # set up parameters
 parameters = (
@@ -56,7 +66,7 @@ function init_faces(zf, parameters)
 end
 
 # set up model
-model = HydrostaticModel( 
+model = CompressibleFluidModel( 
     domain = domain, 
     boundary_conditions = nothing, 
     initial_conditions = (centers = init_centers, faces = init_faces), 
@@ -67,7 +77,7 @@ model = HydrostaticModel(
 timestepper = TimeStepper(
     method = SSPRK33(),
     dt = 1e-2,
-    tspan = (0.0, 3600.0),
+    tspan = (0.0, 10*3600.0),
     saveat = 600,
     progress = true,
     progress_message = (dt, u, p, t) -> t,
@@ -87,6 +97,7 @@ sol = evolve(simulation)
 # post-processing
 ENV["GKSwstype"] = "nul"
 import Plots
+import ClimaCore: Fields
 Plots.GRBackend()
 
 dirname = "hydrostatic_ekman"
