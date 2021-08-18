@@ -56,45 +56,57 @@ function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space:
         dw = dYf.w
 
         # auxiliary calculations
-        u_1 = parent(u)[1]
-        v_1 = parent(v)[1]
-        u_wind = sqrt(u_1^2 + v_1^2)
+        center_space = axes(Yc)
+        dz_top = center_space.face_local_geometry.WJ[end]
+        u_top, v_top = parent(u)[end], parent(v)[end]
+        u_btm, v_btm = parent(u)[1], parent(v)[1]
+        u_wind = sqrt(u_btm^2 + v_btm^2)
 
         # density (centers)
-        gradc2f = Operators.GradientC2F()
-        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+        flux_btm = 0.0
+        flux_top = 0.0
+        ∇c = Operators.GradientC2F()
+        ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top))
 
         If = Operators.InterpolateC2F(bottom = Operators.Extrapolate(), top = Operators.Extrapolate())
-        @. dρ = gradf2c( -w * If(ρ) ) # Eq. 4.11
+        @. dρ = ∇f( -w * If(ρ) ) # Eq. 4.11
 
         # potential temperature (centers)
-        gradc2f = Operators.GradientC2F()
-        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0)) # Eq. 4.20, 4.21
+        flux_btm = 0.0
+        flux_top = 0.0
+        ∇c = Operators.GradientC2F()
+        ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top)) # Eq. 4.20, 4.21
 
-        @. dρθ = gradf2c( -w * If(ρθ) + ν * gradc2f(ρθ/ρ) ) # Eq. 4.12
+        @. dρθ = ∇f( -w * If(ρθ) + ν * ∇c(ρθ/ρ) ) # Eq. 4.12
 
-        # u velocity (centers)
-        gradc2f = Operators.GradientC2F(top = Operators.SetValue(ug)) # Eq. 4.18
-        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(Cd * u_wind * u_1)) # Eq. 4.16
+        # u velocity (center
+        flux_btm = Cd * u_wind * u_btm
+        flux_top = ν * (v_top - vg) / dz_top / 2
+        ∇c = Operators.GradientC2F() # Eq. 4.18
+        ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top)) # Eq. 4.16
+
+        A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+        @. du = ∇f(ν * ∇c(u)) + f * (v - vg) - A(w, u) # Eq. 4.8
+
+        # v velocity (center
+        flux_btm = Cd * u_wind * v_btm
+        flux_top = ν * (u_top - ug)/ dz_top / 2
+        ∇c = Operators.GradientC2F() # Eq. 4.18
+        ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top)) # Eq. 4.16
         
         A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
-        @. du = gradf2c(ν * gradc2f(u)) + f * (v - vg) - A(w, u) # Eq. 4.8
-
-        # v velocity (centers)
-        gradc2f = Operators.GradientC2F(top = Operators.SetValue(vg)) # Eq. 4.18
-        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(Cd * u_wind * v_1)) # Eq. 4.16
-
-        A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
-        @. dv = gradf2c(ν * gradc2f(v)) - f * (u - ug) - A(w, v) # Eq. 4.9
+        @. dv = ∇f(ν * ∇c(v)) - f * (u - ug) - A(w, v) # Eq. 4.9
 
         # w velocity (faces)
-        gradc2f = Operators.GradientC2F()
-        gradf2c = Operators.GradientF2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
+        flux_btm = 0.0
+        flux_top = 0.0
+        ∇c = Operators.GradientC2F()
+        ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top))
 
-        B = Operators.SetBoundaryOperator(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
         If = Operators.InterpolateC2F(bottom = Operators.Extrapolate(), top = Operators.Extrapolate())
+        B = Operators.SetBoundaryOperator(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
         Π(ρθ) = C_p .* (R_d .* ρθ ./ MSLP).^(R_m ./ C_v)
-        @. dw = B( -(If(ρθ / ρ) * gradc2f(Π(ρθ))) - grav + gradc2f(ν * gradf2c(w)) - w * If(gradf2c(w))) # Eq. 4.10
+        @. dw = B( -(If(ρθ / ρ) * ∇c(Π(ρθ))) - grav + ∇c(ν * ∇f(w)) - w * If(∇f(w))) # Eq. 4.10
 
         return dY
     end
