@@ -1,5 +1,8 @@
 abstract type AbstractDomain end
 
+"""
+    Rectangle <: AbstractDomain
+"""
 struct Rectangle <: AbstractDomain
     xlim::Interval  
     ylim::Interval
@@ -14,6 +17,9 @@ function Rectangle(; xlim, ylim, nelements, npolynomial, periodic)
     return Rectangle(xlim, ylim, nelements, npolynomial, periodic)
 end
 
+"""
+    PeriodicRectangle <: AbstractDomain
+"""
 function PeriodicRectangle(; xlim, ylim, nelements, npolynomial)
     @assert xlim.left < xlim.right
     @assert ylim.left < ylim.right
@@ -26,6 +32,9 @@ function PeriodicRectangle(; xlim, ylim, nelements, npolynomial)
     )
 end
 
+"""
+    SingleColumn <: AbstractDomain
+"""
 struct SingleColumn <: AbstractDomain
     zlim::Interval
     nelements::Int

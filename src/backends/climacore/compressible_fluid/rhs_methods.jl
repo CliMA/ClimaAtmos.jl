@@ -1,48 +1,8 @@
-function create_rhs(::ClimaCoreBackend, model::BarotropicFluidModel, function_space::SpectralElementSpace2D)
-    function rhs!(dydt, y, _, t)
-        UnPack.@unpack D₄, g = model.parameters
-
-        # operators
-        sdiv = Operators.Divergence()
-        wdiv = Operators.WeakDivergence()
-        sgrad = Operators.Gradient()
-        wgrad = Operators.WeakGradient()
-        scurl = Operators.Curl()
-        wcurl = Operators.WeakCurl()
-
-        # compute hyperviscosity first because it requires a direct stiffness summation
-        @. dydt.u =
-            wgrad(sdiv(y.u)) -
-            Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(y.u))))
-        @. dydt.ρθ = wdiv(sgrad(y.ρθ))
-
-        Spaces.weighted_dss!(dydt)
-        @. dydt.u =
-            -D₄ * (
-                wgrad(sdiv(dydt.u)) -
-                Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(dydt.u))))
-            )
-        @. dydt.ρθ = -D₄ * wdiv(sgrad(dydt.ρθ))
-
-        # add in advection pieces
-        J = Fields.Field(function_space.local_geometry.J, function_space)
-        @. begin
-            dydt.ρ = -wdiv(y.ρ * y.u)
-            dydt.u +=
-                -sgrad(g * y.ρ + norm(y.u)^2 / 2) +
-                Cartesian12Vector(J * (y.u × scurl(y.u)))
-            dydt.ρθ += -wdiv(y.ρθ * y.u)
-        end
-        Spaces.weighted_dss!(dydt)
-
-        return dydt
-    end
-
-    return rhs!
-end
-
 # S. 4.4.1
-function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space::Tuple{CenterFiniteDifferenceSpace,FaceFiniteDifferenceSpace})
+"""
+    create_rhs
+"""
+function create_rhs(::ClimaCoreBackend, model::CompressibleFluidModel, function_space::Tuple{CenterFiniteDifferenceSpace,FaceFiniteDifferenceSpace})
     function rhs!(dY, Y, _, t)
         UnPack.@unpack Cd, f, ν, ug, vg, C_p, MSLP, R_d, R_m, C_v, grav = model.parameters
         (Yc, Yf) = Y.x
@@ -54,13 +14,6 @@ function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space:
         dv = dYc.v
         dρθ = dYc.ρθ
         dw = dYf.w
-
-        # auxiliary calculations
-        center_space = axes(Yc)
-        dz_top = center_space.face_local_geometry.WJ[end]
-        u_top, v_top = parent(u)[end], parent(v)[end]
-        u_btm, v_btm = parent(u)[1], parent(v)[1]
-        u_wind = sqrt(u_btm^2 + v_btm^2)
 
         # density (centers)
         flux_btm = 0.0
@@ -79,18 +32,28 @@ function create_rhs(::ClimaCoreBackend, model::HydrostaticModel, function_space:
 
         @. dρθ = ∇f( -w * If(ρθ) + ν * ∇c(ρθ/ρ) ) # Eq. 4.12
 
-        # u velocity (center
+        # u velocity (centers)
+        center_space = axes(Yc)
+        dz_top = center_space.face_local_geometry.WJ[end]
+        u_top, u_btm = parent(u)[end], parent(u)[1]
+        v_top, v_btm = parent(v)[end], parent(v)[1]
+        u_wind = sqrt(u_btm^2 + v_btm^2)
         flux_btm = Cd * u_wind * u_btm
-        flux_top = ν * (v_top - vg) / dz_top / 2
+        flux_top = ν * (u_top - ug)/ dz_top / 2
         ∇c = Operators.GradientC2F() # Eq. 4.18
         ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top)) # Eq. 4.16
 
         A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
         @. du = ∇f(ν * ∇c(u)) + f * (v - vg) - A(w, u) # Eq. 4.8
 
-        # v velocity (center
+        # v velocity (centers)
+        center_space = axes(Yc)
+        dz_top = center_space.face_local_geometry.WJ[end]
+        u_top, u_btm = parent(u)[end], parent(u)[1]
+        v_top, v_btm = parent(v)[end], parent(v)[1]
+        u_wind = sqrt(u_btm^2 + v_btm^2)
         flux_btm = Cd * u_wind * v_btm
-        flux_top = ν * (u_top - ug)/ dz_top / 2
+        flux_top = ν * (v_top - vg) / dz_top / 2
         ∇c = Operators.GradientC2F() # Eq. 4.18
         ∇f = Operators.GradientF2C(bottom = Operators.SetValue(flux_btm), top = Operators.SetValue(flux_top)) # Eq. 4.16
         

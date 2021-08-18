@@ -1,5 +1,6 @@
-abstract type AbstractBoundaryCondition end
+abstract type AbstractFluxBoundaryCondition end
 
-struct DirichletBC <: AbstractBoundaryCondition end
-struct NeumannBC <: AbstractBoundaryCondition end
-struct FluxBC <: AbstractBoundaryCondition end
+"""
+    FluxBC <: AbstractFluxBoundaryCondition
+"""
+struct FluxBC <: AbstractFluxBoundaryCondition end

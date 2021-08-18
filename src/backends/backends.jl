@@ -2,14 +2,12 @@ module Backends
 
 import ..Interface: AbstractModel, AbstractDomain, Rectangle, PeriodicRectangle, ClimaCoreBackend, SingleColumn
 import ClimaAtmos.Interface: TimeStepper, AbstractTimestepper, Simulation
-
-import ClimaAtmos.Interface: BarotropicFluidModel, HydrostaticModel, AbstractBackend
+import ClimaAtmos.Interface: BarotropicFluidModel, CompressibleFluidModel, AbstractBackend
 
 @info "error / warning comes from ClimaCore"
 using UnPack
 using ClimaCore
 using RecursiveArrayTools
-
 using OrdinaryDiffEq: ODEProblem, solve, SSPRK33
 
 using ClimaCore.Spaces
@@ -29,13 +27,16 @@ import ClimaCore:
 
 using ClimaCore.Spaces: SpectralElementSpace2D, CenterFiniteDifferenceSpace, FaceFiniteDifferenceSpace
 import LinearAlgebra: norm, ×
-# include
-include("climacore/function_spaces.jl")
-include("climacore/initial_conditions.jl")
-include("climacore/ode_problems.jl")
-include("climacore/tendencies.jl")
 
-# Simulation for ClimaCore
+# includes
+include("climacore/backend_methods.jl")
+include("climacore/barotropic_fluid/rhs_methods.jl")
+include("climacore/compressible_fluid/rhs_methods.jl")
+#include("climacore/compressible_fluid/boundary_conditions.jl")
+
+"""
+    Simulation
+"""
 function Simulation(
     backend::AbstractBackend;
     model,
@@ -57,6 +58,9 @@ function Simulation(
     )
 end
 
+"""
+    evolve
+"""
 function evolve(simulation::Simulation{<:ClimaCoreBackend})
     return solve(
         simulation.ode_problem,
