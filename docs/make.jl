@@ -1,16 +1,12 @@
 using Documenter
 using ClimaAtmos
 
-
 abstractions = ["abstractions.md"]
-models = ["3d_dry_euler_total_energy.md",
-          "3d_moist_euler_total_energy.md",
-          "barotropic_fluid.md",
-         ]
+models = ["models.md"]
 
 makedocs(
-    sitename = "ClimaAtmos",
-    authors = "Andre, Tobi, Jia",
+    sitename = "ClimaAtmos.jl",
+    authors = "Andre, Toby, Jia",
     format = Documenter.HTML(collapselevel = 1, mathengine = MathJax3()),
     pages = [
     "Home" => "index.md",

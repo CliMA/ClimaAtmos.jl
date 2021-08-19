@@ -45,4 +45,4 @@ end
 ```
 
 ## Tests
-Unit tests and example scripts that run are welcome. 
+Unit tests and example scripts that run are obligatory. 

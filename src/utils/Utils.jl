@@ -1,5 +1,5 @@
 module Utils
 
-include("initial_conditions.jl")
+include("InitialConditions/InitialConditions.jl")
 
-end # end of module
+end #module

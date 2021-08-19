@@ -1,43 +1,20 @@
 # Introduction
-```ClimaAtmos.jl``` supports the following numerics backends 
-1. [ClimateMachine](@ref sec:climate_machine) is a [Discontinuous Galerkin](https://github.com/CliMA/ClimateMachine.jl) backend
-2. [ClimaCore](@ref sec:climate_machine_core) is a [Continuous Galerkin](https://github.com/CliMA/ClimaCore.jl) backend *(still under development)*
+The ```ClimaAtmos.jl``` code is structured around a few human-centered abstractions that allow for REPL-driven development of simulations. This allows the user to build progressively more complicated simulation setups.
 
-The code is structured around a few human-centered abstractions that allow for REPL-driven development of simulations. This allows the user to build progressively more complicated simulation setups.
+## Domains
+Computational domains in ```ClimaAtmos.jl``` are abstract objects that contain information about the shape and discretization type chosen. 
 
-## Parameter Sets
-```ClimaAtmos.jl``` natively supports parameters sets as Julia NamedTuples, but the plan is to support more sophisticated solution in the future that are useful for data assimilation purposes.
-
-## Grids
-Computational grids in ```ClimaAtmos.jl``` are abstract objects that contain information about the shape and discretization type chosen. 
-
-## Initial Conditions 
-ClimaAtmos.jl initial conditions are based on Julia's NamedTuple structures. This allows for a functional way of setting up and testing initial conditions.
+## Boundary Conditions 
+ClimaAtmos.jl boundary conditions handle different types of boundary conditions.
 
 ## Models
-ModelSetups in ```ClimaAtmos.jl``` aim to define a base set of partial differential equations that can be modified with a few bells and whistles. As a consequence an ```ClimaAtmos.jl``` ModelSetup requires the specification of an equation set together with boundary conditions.
+Models in ```ClimaAtmos.jl``` aim to define a base set of partial differential equations that can be modified with a few bells and whistles. 
 
-For example, a struct may be a placeholder for the following Euler Equations
-
-```math
-    \begin{align}
-    \partial_t \rho + \nabla \cdot (\rho \vec{u})  &= 0 
-    \label{eq:continuity}
-    \\
-    \partial_t (\rho \vec{u}) + \nabla \cdot (\rho \vec{u} \otimes \vec{u} + p I)  &= 0 
-    \label{eq:momentum}
-    \\
-        \partial_t (\rho e) + \nabla \cdot ( \vec{u} [\rho e + p])  &= 0 
-    \label{eq:energy}
-    \\
-    (\gamma-1) (\rho e -  \frac{1}{2} \rho \vec{u} \cdot \vec{u} - \rho \phi  ) &= p
-    \label{eq:pressure}
-    \end{align}
-```
-where the continuity equation is (\ref{eq:continuity}), the momentum equation is (\ref{eq:momentum}), the energy equation is (\ref{eq:energy}), and the pressure equation is (\ref{eq:pressure}).
-
-## Diagnostics
-```ClimaAtmos.jl``` provides a few callback structures for monitoring and simulation diagnostics purposes. Examples include the monitoring of CFL numbers and VTK or JLD2 output.
+## TimeSteppers
+TimeSteppers in ```ClimaAtmos.jl``` serve as a master structure that orchestrates the all things time stepping.
 
 ## Simulations
 Simulations in ```ClimaAtmos.jl``` serve as a master structure that orchestrates the initialization and evolution of model equations.
+
+## Utils
+Utils in ```ClimaAtmos.jl``` have some precooked function that are useful for benchmarking, testing, etc.
