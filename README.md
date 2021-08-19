@@ -1,5 +1,4 @@
 # ClimaAtmos.jl
-User interface to numerical models in CliMA
 
 |||
 |---------------------:|:----------------------------------------------|
@@ -8,4 +7,3 @@ User interface to numerical models in CliMA
 
 [docs-bld-img]: https://img.shields.io/badge/docs-red.svg
 [docs-bld-url]: https://clima.github.io/ClimaAtmos.jl/dev/
-
