@@ -4,7 +4,7 @@ using LinearAlgebra: norm, ×
 using RecursiveArrayTools: ArrayPartition
 using UnPack: @unpack
 
-import ClimaAtmos.BoundaryConditions: NoFluxCondition
+import ClimaAtmos.BoundaryConditions: NoFluxCondition, CustomFluxCondition, DragLawCondition
 import ClimaAtmos.Domains: AbstractHorizontalDomain, AbstractVerticalDomain
 import ClimaAtmos.Domains: make_function_space
 import ClimaCore:
