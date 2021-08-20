@@ -11,7 +11,6 @@ makedocs(
     pages = [
     "Home" => "index.md",
     "Abstractions" => abstractions,
-    "Models" => models,
     "Contributor Guide" => "contributor_guide.md",
     "Function Index" => "function_index.md",
     ],
