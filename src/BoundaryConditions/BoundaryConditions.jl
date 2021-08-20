@@ -12,6 +12,7 @@ include("flux_conditions.jl")
 
 export AbstracBoundaryCondition
 export CustomFluxCondition
+export DragLawCondition
 export NoFluxCondition
 
 end # module

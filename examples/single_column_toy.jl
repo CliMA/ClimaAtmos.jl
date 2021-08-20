@@ -4,7 +4,7 @@ using UnPack: @unpack
 using OrdinaryDiffEq: SSPRK33
 
 # Clima ecosystem
-using ClimaAtmos.BoundaryConditions: NoFluxCondition
+using ClimaAtmos.BoundaryConditions: NoFluxCondition, DragLawCondition
 using ClimaAtmos.Domains: Column
 using ClimaAtmos.Models: SingleColumnModel
 using ClimaAtmos.Timesteppers: Timestepper
@@ -58,9 +58,11 @@ domain = Column(zlim = 0.0..2e2, nelements = 30)
 
 # set up boundary conditions
 boundary_conditions = (
-    ρ  = (top = NoFluxCondition(), bottom = NoFluxCondition(),),
-    ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition(),),
-    w  = (top = NoFluxCondition(), bottom = NoFluxCondition(),),
+    ρ  = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+    u  = (top = nothing, bottom = DragLawCondition()),
+    v  = (top = nothing, bottom = DragLawCondition()),
+    w  = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+    ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
 )
 
 # set up model

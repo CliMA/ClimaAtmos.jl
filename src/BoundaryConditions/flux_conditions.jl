@@ -17,3 +17,8 @@ struct NoFluxCondition <: AbstracBoundaryCondition end
 struct CustomFluxCondition <: AbstracBoundaryCondition 
     compute_flux::Function
 end
+
+"""
+    DragLawCondition <: AbstractFluxBoundaryCondition
+"""
+struct DragLawCondition <: AbstracBoundaryCondition end
