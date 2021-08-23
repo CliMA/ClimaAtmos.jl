@@ -4,7 +4,7 @@
     A boundary condition that implies no transport across the 
     boundary it is attached to.
 """
-struct NoFluxCondition <: AbstracBoundaryCondition end
+struct NoFluxCondition <: AbstractBoundaryCondition end
 
 """
     CustomFluxCondition <: AbstractFluxBoundaryCondition
@@ -14,11 +14,11 @@ struct NoFluxCondition <: AbstracBoundaryCondition end
     custom flux function consistent wth the numerics of the model that 
     invokes this boundary condition.
 """
-struct CustomFluxCondition <: AbstracBoundaryCondition 
+struct CustomFluxCondition <: AbstractBoundaryCondition 
     compute_flux::Function
 end
 
 """
     DragLawCondition <: AbstractFluxBoundaryCondition
 """
-struct DragLawCondition <: AbstracBoundaryCondition end
+struct DragLawCondition <: AbstractBoundaryCondition end

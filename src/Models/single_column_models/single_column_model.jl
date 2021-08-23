@@ -39,15 +39,15 @@ function make_ode_function(model::SingleColumnModel)
         ∇f = Operators.GradientF2C(bottom = flux_bottom, top = flux_top)
 
         If = Operators.InterpolateC2F(bottom = Operators.Extrapolate(), top = Operators.Extrapolate())
-        @. dρ = ∇f( -w * If(ρ) ) # Eq. 4.11
+        @. dρ = ∇f( -w * If(ρ) ) 
 
         # potential temperature (centers)
         flux_bottom = get_boundary_flux(model, bc_ρθ.bottom, ρθ, Y, model.parameters)
         flux_top    = get_boundary_flux(model, bc_ρθ.top, ρθ, Y, model.parameters)
         ∇c = Operators.GradientC2F()
-        ∇f = Operators.GradientF2C(bottom = flux_bottom, top = flux_top) # Eq. 4.20, 4.21
+        ∇f = Operators.GradientF2C(bottom = flux_bottom, top = flux_top)
 
-        @. dρθ = ∇f( -w * If(ρθ) + ν * ∇c(ρθ/ρ) ) # Eq. 4.12
+        @. dρθ = ∇f( -w * If(ρθ) + ν * ∇c(ρθ/ρ) + rad_flux)
 
         # u velocity (centers)
         flux_bottom = get_boundary_flux(model, bc_u.bottom, u, Y, model.parameters)
@@ -56,11 +56,11 @@ function make_ode_function(model::SingleColumnModel)
         dz_top = center_space.face_local_geometry.WJ[end]
         u_top = parent(u)[end]
         flux_top = ν * (u_top - ug)/ dz_top / 2
-        ∇c = Operators.GradientC2F() # Eq. 4.18
-        ∇f = Operators.GradientF2C(bottom = flux_bottom, top = Operators.SetValue(flux_top)) # Eq. 4.16
+        ∇c = Operators.GradientC2F()
+        ∇f = Operators.GradientF2C(bottom = flux_bottom, top = Operators.SetValue(flux_top))
 
         A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
-        @. du = ∇f(ν * ∇c(u)) + f * (v - vg) - A(w, u) # Eq. 4.8
+        @. du = ∇f(ν * ∇c(u)) + f * (v - vg) - A(w, u)
 
         # v velocity (centers)
         flux_bottom = get_boundary_flux(model, bc_v.bottom, v, Y, model.parameters)
@@ -70,10 +70,10 @@ function make_ode_function(model::SingleColumnModel)
         v_top = parent(v)[end]
         flux_top = ν * (v_top - vg) / dz_top / 2
         ∇c = Operators.GradientC2F() # Eq. 4.18
-        ∇f = Operators.GradientF2C(bottom = flux_bottom, top = Operators.SetValue(flux_top)) # Eq. 4.16
+        ∇f = Operators.GradientF2C(bottom = flux_bottom, top = Operators.SetValue(flux_top))
         
         A = Operators.AdvectionC2C(bottom = Operators.SetValue(0.0), top = Operators.SetValue(0.0))
-        @. dv = ∇f(ν * ∇c(v)) - f * (u - ug) - A(w, v) # Eq. 4.9
+        @. dv = ∇f(ν * ∇c(v)) - f * (u - ug) - A(w, v)
 
         # w velocity (faces)
         flux_bottom = get_boundary_flux(model, bc_w.bottom, w, Y, model.parameters)
@@ -109,7 +109,7 @@ end
 """
     get_boundary_flux(model::SingleColumnModel, bc::DragLawCondition, field, Y, parameters)
 """
-@inline function get_boundary_flux(model::SingleColumnModel, bc::DragLawCondition, field, Y, parameters)
+@inline function get_boundary_flux(model::SingleColumnModel, ::DragLawCondition, field, Y, parameters)
     @unpack Cd = model.parameters
     Yc = Y.x[1]
     @unpack u, v = Yc

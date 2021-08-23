@@ -59,8 +59,8 @@ domain = Column(zlim = 0.0..2e2, nelements = 30)
 # set up boundary conditions
 boundary_conditions = (
     ρ  = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-    u  = (top = nothing, bottom = DragLawCondition()),
-    v  = (top = nothing, bottom = DragLawCondition()),
+    u  = (top = nothing, bottom = DragLawCondition(),),
+    v  = (top = nothing, bottom = DragLawCondition(),),
     w  = (top = NoFluxCondition(), bottom = NoFluxCondition()),
     ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
 )
