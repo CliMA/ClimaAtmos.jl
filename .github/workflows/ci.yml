@@ -40,7 +40,7 @@ jobs:
             ${{ runner.os }}-test-
             ${{ runner.os }}-
       - run: |
-          julia --project=@. -e 'using Pkg; Pkg.add(url = """https://github.com/CliMA/ClimaCore.jl.git""")'
+          julia --project=@. -e "using Pkg; Pkg.add(url = 'https://github.com/CliMA/ClimaCore.jl.git')"
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
