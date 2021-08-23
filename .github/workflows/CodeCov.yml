@@ -25,7 +25,7 @@ jobs:
       env:
         JULIA_PROJECT: "@."
       run: |
-        julia --project=@. -e 'using Pkg; Pkg.instantiate()'
+        run: julia --project=@. -e 'using Pkg; Pkg.add(url = "https://github.com/CliMA/ClimaCore.jl.git"); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
         julia --project=@. -e 'using Pkg; Pkg.test(coverage=true)'
 
     - name: Generate coverage file
