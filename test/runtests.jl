@@ -1,4 +1,5 @@
 using Test
+using UnPack: @unpack
 
 using ClimaAtmos
 
@@ -14,6 +15,7 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
     if group == :unit || group == :all
         @testset "Unit tests" begin
             include("test_domains.jl")
+            include("test_simulations.jl")
         end
     end
 
@@ -29,3 +31,5 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
     # end
 
 end
+
+nothing

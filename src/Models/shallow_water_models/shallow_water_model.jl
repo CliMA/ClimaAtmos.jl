@@ -1,7 +1,12 @@
 """
     ShallowWaterModel <: AbstractModel
 """
-Base.@kwdef struct ShallowWaterModel{DT<:AbstractHorizontalDomain,BCT,ICT,PT} <: AbstractModel
+Base.@kwdef struct ShallowWaterModel{
+    DT <: AbstractHorizontalDomain,
+    BCT,
+    ICT,
+    PT,
+} <: AbstractModel
     domain::DT
     boundary_conditions::BCT
     initial_conditions::ICT
@@ -19,8 +24,8 @@ function make_ode_function(model::ShallowWaterModel)
         function_space = axes(Y)
 
         # instantiate operators
-        sdiv  = Operators.Divergence()
-        wdiv  = Operators.WeakDivergence()
+        sdiv = Operators.Divergence()
+        wdiv = Operators.WeakDivergence()
         sgrad = Operators.Gradient()
         wgrad = Operators.WeakGradient()
         scurl = Operators.Curl()

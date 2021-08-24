@@ -3,10 +3,7 @@ module Domains
 using ClimaCore
 using Printf
 
-import ClimaCore:
-    Meshes,
-    Spaces,
-    Topologies
+import ClimaCore: Meshes, Spaces, Topologies
 
 import IntervalSets: Interval
 
@@ -22,7 +19,7 @@ abstract type AbstractHorizontalDomain <: AbstractDomain end
 
 """
     AbstractVerticalDomain
-"""    
+"""
 abstract type AbstractVerticalDomain <: AbstractDomain end
 
 include("domain.jl")

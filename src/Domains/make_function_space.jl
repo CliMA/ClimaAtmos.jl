@@ -3,9 +3,9 @@
 """
 function make_function_space(domain::Column)
     column = ClimaCore.Domains.IntervalDomain(
-        domain.zlim[1], 
-        domain.zlim[2]; 
-        x3boundary = (:bottom, :top)
+        domain.zlim[1],
+        domain.zlim[2];
+        x3boundary = (:bottom, :top),
     )
     mesh = Meshes.IntervalMesh(column; nelems = domain.nelements)
     center_space = Spaces.CenterFiniteDifferenceSpace(mesh)
@@ -25,9 +25,9 @@ function make_function_space(domain::Plane)
         x2periodic = domain.periodic[2],
     )
     mesh = Meshes.EquispacedRectangleMesh(
-        rectangle, 
-        domain.nelements[1], 
-        domain.nelements[2]
+        rectangle,
+        domain.nelements[1],
+        domain.nelements[2],
     )
     grid_topology = Topologies.GridTopology(mesh)
     quad = Spaces.Quadratures.GLL{domain.npolynomial}()
@@ -36,4 +36,4 @@ function make_function_space(domain::Plane)
     return function_space
 end
 
-Interval(I::Tuple{Number,Number}) = Interval(I[1], I[2])
+Interval(I::Tuple{Number, Number}) = Interval(I[1], I[2])

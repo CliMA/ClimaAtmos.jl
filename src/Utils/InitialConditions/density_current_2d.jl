@@ -44,15 +44,15 @@ function init_density_current_2d(x, z, parameters)
 
     # density
     ρ = p_0 * p_exn^(cv_d / R_d) / R_d / θ
-    
+
     # velocity
     u = [0.0, 0.0] # u⃗ = (u, w) 
-    
+
     # total energy
     e_int = cv_d * T # may need to be adjusted depending on thermodynamics package
     e_kin = 0.0
     e_pot = g * z # may need to be adjusted depending on definition of z
     e_tot = e_int + e_kin + e_pot
 
-    return (ρ = ρ, u = u, ρe = ρ * e_tot,)
+    return (ρ = ρ, u = u, ρe = ρ * e_tot)
 end

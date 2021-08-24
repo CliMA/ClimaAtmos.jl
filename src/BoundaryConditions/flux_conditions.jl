@@ -14,7 +14,7 @@ struct NoFluxCondition <: AbstractBoundaryCondition end
     custom flux function consistent wth the numerics of the model that 
     invokes this boundary condition.
 """
-struct CustomFluxCondition <: AbstractBoundaryCondition 
+struct CustomFluxCondition <: AbstractBoundaryCondition
     compute_flux::Function
 end
 
