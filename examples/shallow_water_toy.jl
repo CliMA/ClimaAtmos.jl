@@ -1,5 +1,4 @@
 # Julia ecosystem
-using IntervalSets
 using UnPack: @unpack
 using OrdinaryDiffEq: SSPRK33
 
@@ -42,7 +41,7 @@ function initialize_state(x, y, parameters)
 end
 
 # set up domain
-domain = PeriodicPlane(xlim = -2π..2π, ylim = -2π..2π, nelements = (16,16), npolynomial = 4)
+domain = PeriodicPlane(xlim = (-2π, 2π), ylim = (-2π, 2π), nelements = (16,16), npolynomial = 4)
 
 # set up model
 model = ShallowWaterModel(

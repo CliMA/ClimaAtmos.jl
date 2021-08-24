@@ -1,5 +1,4 @@
 # Julia ecosystem
-using IntervalSets
 using UnPack: @unpack
 using OrdinaryDiffEq: SSPRK33
 
@@ -54,7 +53,7 @@ function initialize_faces(zf, parameters)
 end
 
 # set up domain
-domain = Column(zlim = 0.0..2e2, nelements = 30)
+domain = Column(zlim = (0.0, 2e2), nelements = 30)
 
 # set up boundary conditions
 boundary_conditions = (

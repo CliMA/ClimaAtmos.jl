@@ -1,12 +1,14 @@
 module Domains
 
 using ClimaCore
-using IntervalSets
+using Printf
 
 import ClimaCore:
     Meshes,
     Spaces,
     Topologies
+
+import IntervalSets: Interval
 
 """
     AbstractDomain
