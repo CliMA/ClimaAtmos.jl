@@ -22,7 +22,3 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 DiffEqBase = "6"
-
-[extras]
-Coverage = "a2441757-f6aa-5fb2-8edb-039e3f45d037"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
