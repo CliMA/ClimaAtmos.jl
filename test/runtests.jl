@@ -1,5 +1,3 @@
-using Test
-
 using ClimaAtmos
 
 float_types = (Float32, Float64)
