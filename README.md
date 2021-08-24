@@ -1,15 +1,13 @@
 # ClimaAtmos.jl
 
-|||
-|---------------------:|:----------------------------------------------|
-| **Docs Build**       | [![docs build][docs-bld-img]][docs-bld-url]   |
-| **Documentation**    | [![dev][docs-dev-img]][docs-dev-url]          |
-| **GHA CI**           | [![gha ci][gha-ci-img]][gha-ci-url]           |
-| **Code Coverage**    | [![codecov][codecov-img]][codecov-url]        |
-| **Bors enabled**     | [![bors][bors-img]][bors-url]                 |
+[![docsbuild][docs-bld-img]][docs-bld-url]
+[![dev][docs-dev-img]][docs-dev-url]
+[![ghaci][gha-ci-img]][gha-ci-url]
+[![codecov][codecov-img]][codecov-url]
+[![bors][bors-img]][bors-url]
 
-[docs-bld-img]: https://img.shields.io/badge/docs-red.svg
-[docs-bld-url]: https://clima.github.io/ClimaAtmos.jl/dev/
+[docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
+[docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
 
 [docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
 [docs-dev-url]: https://CliMA.github.io/ClimaAtmos.jl/dev/
@@ -22,3 +20,5 @@
 
 [bors-img]: https://bors.tech/images/badge_small.svg
 [bors-url]: https://app.bors.tech/repositories/35474
+
+Atmosphere components of the CliMA software stack.
