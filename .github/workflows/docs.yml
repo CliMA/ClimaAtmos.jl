@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
+      - trying
+      - staging
     tags: '*'
   pull_request:
 
 jobs:
-  build:
+  docbuild:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -19,5 +21,6 @@ jobs:
         run: julia --project=docs/ -e 'using Pkg; Pkg.add(url = "https://github.com/CliMA/ClimaCore.jl.git"); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # For authentication with SSH deploy key
         run: julia --project=docs/ docs/make.jl
