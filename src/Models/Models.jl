@@ -29,7 +29,6 @@ abstract type AbstractModel end
 include("splitting.jl")
 include("shallow_water_models/shallow_water_model.jl")
 include("single_column_models/single_column_model.jl")
-include("make_initial_conditions.jl")
 
 export AbstractEquationSplitting
 export AbstractModel
@@ -37,8 +36,9 @@ export NoEquationSplitting
 export ShallowWaterModel
 export SingleColumnModel
 
-export state_names
-export make_initial_conditions
+export prognostic_state_names
+export diagnostic_state_names
+export default_initial_conditions
 export make_ode_function
 
 end # module

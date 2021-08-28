@@ -1,33 +1,31 @@
 """
     ShallowWaterModel <: AbstractModel
 """
-Base.@kwdef struct ShallowWaterModel{DT<:AbstractHorizontalDomain,BCT,ICT,PT} <: AbstractModel
+Base.@kwdef struct ShallowWaterModel{DT<:AbstractHorizontalDomain,PT} <: AbstractModel
     domain::DT
-    boundary_conditions::BCT
-    initial_conditions::ICT
     parameters::PT
 end
+prognostic_state_names(::ShallowWaterModel) = (:h, :u, :c)
+diagnostic_state_names(::ShallowWaterModel) = nothing 
 
 """
-    state_names
+    default_initial_conditions(model::ShallowWaterModel)
 """
-function state_names(::ShallowWaterModel)
-    return (
-        (:prognostic, (:h, :u, :c)), 
-        (:diagnostic, ()),
-    )
-end
-
-"""
-    make_initial_conditions(model::ShallowWaterModel{<:AbstractHorizontalDomain})
-"""
-function make_initial_conditions(model::ShallowWaterModel{<:AbstractHorizontalDomain})
+function default_initial_conditions(model::ShallowWaterModel)
     function_space = make_function_space(model.domain)
-
     @unpack x1, x2 = Fields.coordinate_field(function_space)
-    state_init = model.initial_conditions.(x1, x2, Ref(model.parameters))
 
-    return state_init
+    # function that initilizates the model state locally
+    # to zero fields everywhere
+    init_func(_...) = (
+        prognostic = (
+            h = zero(Float64),
+            u = Geometry.Cartesian12Vector(zero(Float64), zero(Float64)),
+            c = zero(Float64),    
+        ),
+    )
+
+    return init_func.(x1, x2)
 end
 
 """
@@ -36,6 +34,8 @@ end
 function make_ode_function(model::ShallowWaterModel)
     function rhs!(dY, Y, _, t)
         @unpack D₄, g = model.parameters
+        Yp = Y.prognostic
+        dYp = dY.prognostic
 
         # function space
         function_space = axes(Y)
@@ -49,26 +49,26 @@ function make_ode_function(model::ShallowWaterModel)
         wcurl = Operators.WeakCurl()
 
         # compute hyperviscosity first because it requires a direct stiffness summation
-        @. dY.u =
-            wgrad(sdiv(Y.u)) -
-            Geometry.Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(Y.u))))
-        Spaces.weighted_dss!(dY)
-        @. dY.u =
+        @. dYp.u =
+            wgrad(sdiv(Yp.u)) -
+            Geometry.Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(Yp.u))))
+        Spaces.weighted_dss!(dYp)
+        @. dYp.u =
             -D₄ * (
-                wgrad(sdiv(dY.u)) -
-                Geometry.Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(dY.u))))
+                wgrad(sdiv(dYp.u)) -
+                Geometry.Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(dYp.u))))
             )
 
         # add in advection terms
         J = Fields.Field(function_space.local_geometry.J, function_space)
         @. begin
-            dY.h = -wdiv(Y.h * Y.u)
-            dY.u +=
-                -sgrad(g * Y.h + norm(Y.u)^2 / 2) +
-                Geometry.Cartesian12Vector(J * (Y.u × scurl(Y.u)))
-            dY.c += -wdiv(Y.c * Y.u)
+            dYp.h = -wdiv(Yp.h * Yp.u)
+            dYp.u +=
+                -sgrad(g * Yp.h + norm(Yp.u)^2 / 2) +
+                Geometry.Cartesian12Vector(J * (Yp.u × scurl(Yp.u)))
+            dYp.c += -wdiv(Yp.c * Yp.u)
         end
-        Spaces.weighted_dss!(dY)
+        Spaces.weighted_dss!(dYp)
 
         return dY
     end

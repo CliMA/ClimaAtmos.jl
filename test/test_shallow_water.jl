@@ -1,5 +1,5 @@
 using ClimaAtmos.Domains: Plane
-using ClimaAtmos.Models: ShallowWaterModel, state_names
+using ClimaAtmos.Models: ShallowWaterModel, prognostic_state_names, diagnostic_state_names
 
 function instantiate_shallow_water_model(FT)
     parameters = (
@@ -21,16 +21,12 @@ function instantiate_shallow_water_model(FT)
     )
     swm = ShallowWaterModel(
         domain = domain,
-        boundary_conditions = nothing,
-        initial_conditions = nothing,
         parameters = parameters,
     )
     check1 = swm.domain == domain
-    check2 = swm.boundary_conditions === nothing
-    check3 = swm.initial_conditions === nothing
-    check4 = swm.parameters == parameters
+    check2 = swm.parameters == parameters
 
-    return check1 && check2 && check3 && check4
+    return check1 && check2
 end
 
 @testset "ShallowWaterModels" begin
@@ -51,16 +47,14 @@ end
             )
             model = ShallowWaterModel(
                 domain = domain,
-                boundary_conditions = nothing,
-                initial_conditions = nothing,
                 parameters = nothing,
             )
 
-            # Test state_names
-            @test state_names(model) == (
-                (:prognostic, (:h, :u, :c)), 
-                (:diagnostic, ()),
-            )
+            # Test prognostic_state_names
+            @test prognostic_state_names(model) == (:h, :u, :c)
+
+            # Test diagnostic_state_names
+            @test diagnostic_state_names(model) === nothing
         end
     end
 end

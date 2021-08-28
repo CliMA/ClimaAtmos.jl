@@ -11,9 +11,9 @@ end
     Simulation(model::AbstractModel, stepper::AbstractTimestepper)
 """
 function Simulation(; model::AbstractModel, stepper::AbstractTimestepper)
-    ode_function   = make_ode_function(model)
-    state_init     = make_initial_conditions(model)
-    ode_problem    = DiffEqBase.ODEProblem(ode_function, state_init, stepper.tspan)
+    ode_function = make_ode_function(model)
+    Y = default_initial_conditions(model)
+    ode_problem = DiffEqBase.ODEProblem(ode_function, Y, stepper.tspan)
 
     return Simulation(model, stepper, ode_problem)
 end

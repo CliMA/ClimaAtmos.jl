@@ -2,7 +2,7 @@ module Simulations
 
 using DiffEqBase
 
-import ClimaAtmos.Models: AbstractModel, make_initial_conditions, make_ode_function
+import ClimaAtmos.Models: AbstractModel, default_initial_conditions, make_ode_function
 import ClimaAtmos.Timesteppers: AbstractTimestepper
 
 """
