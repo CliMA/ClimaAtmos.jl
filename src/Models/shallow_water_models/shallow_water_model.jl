@@ -13,10 +13,11 @@ end
 """
 function state_names(::ShallowWaterModel)
     return (
-        (:prognostic, (:h, :u)), 
+        (:prognostic, (:h, :u, :c)), 
         (:diagnostic, ()),
     )
 end
+
 
 """
     make_ode_function(model::ShallowWaterModel)
@@ -40,23 +41,21 @@ function make_ode_function(model::ShallowWaterModel)
         @. dY.u =
             wgrad(sdiv(Y.u)) -
             Geometry.Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(Y.u))))
-        @. dY.ρθ = wdiv(sgrad(Y.ρθ))
         Spaces.weighted_dss!(dY)
         @. dY.u =
             -D₄ * (
                 wgrad(sdiv(dY.u)) -
                 Geometry.Cartesian12Vector(wcurl(Geometry.Covariant3Vector(scurl(dY.u))))
             )
-        @. dY.ρθ = -D₄ * wdiv(sgrad(dY.ρθ))
 
         # add in advection terms
         J = Fields.Field(function_space.local_geometry.J, function_space)
         @. begin
-            dY.ρ = -wdiv(Y.ρ * Y.u)
+            dY.h = -wdiv(Y.h * Y.u)
             dY.u +=
-                -sgrad(g * Y.ρ + norm(Y.u)^2 / 2) +
+                -sgrad(g * Y.h + norm(Y.u)^2 / 2) +
                 Geometry.Cartesian12Vector(J * (Y.u × scurl(Y.u)))
-            dY.ρθ += -wdiv(Y.ρθ * Y.u)
+            dY.c += -wdiv(Y.c * Y.u)
         end
         Spaces.weighted_dss!(dY)
 

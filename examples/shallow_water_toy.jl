@@ -13,7 +13,7 @@ parameters = (
     ϵ  = 0.1,  # perturbation size for initial condition
     l  = 0.5,  # Gaussian width
     k  = 0.5,  # sinusoidal wavenumber
-    ρ₀ = 1.0,  # reference density
+    h₀ = 1.0,  # reference height
     c  = 2.0,  
     g  = 9.8,  # gravitational constant
     D₄ = 1e-4, # hyperdiffusion coefficient
@@ -21,10 +21,10 @@ parameters = (
 
 # this function initializes the prognostic state
 function initialize_state(x, y, parameters)
-    @unpack ρ₀, l, k, ϵ = parameters
+    @unpack h₀, l, k, ϵ = parameters
     
     # density
-    ρ = ρ₀
+    h = h₀
 
     # velocity
     U₁ = cosh(y)^(-2)
@@ -35,9 +35,9 @@ function initialize_state(x, y, parameters)
     u = Cartesian12Vector(U₁ + ϵ * u₁′, ϵ * u₂′)
     
     # passive tracer
-    θ = sin(k * y)
+    c = sin(k * y)
 
-    return (ρ = ρ, u = u, ρθ = ρ * θ,)
+    return (h = h, u = u, c = c,)
 end
 
 # set up domain
@@ -52,7 +52,8 @@ model = ShallowWaterModel(
 )
 
 # set up time stepper
-stepper = Timestepper(method = SSPRK33(), dt = 0.04, tspan = (0.0,10.0), saveat = 1.0)
+#stepper = Timestepper(method = SSPRK33(), dt = 0.04, tspan = (0.0,10.0), saveat = 1.0)
+stepper = Timestepper(method = SSPRK33(), dt = 0.04, tspan = (0.0, 0.04), saveat = 1.0)
 
 # set up & run simulation
 simulation = Simulation(model = model, stepper = stepper)
@@ -70,6 +71,6 @@ mkpath(path)
 
 # make a video
 anim = Plots.@animate for u in solution.u
-    Plots.plot(u.ρθ, clim = (-1, 1))
+    Plots.plot(u.c, clim = (-1, 1))
 end
 Plots.mp4(anim, joinpath(path, "tracer.mp4"), fps = 10)

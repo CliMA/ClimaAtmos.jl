@@ -58,7 +58,7 @@ end
 
             # Test state_names
             @test state_names(model) == (
-                (:prognostic, (:h, :u)), 
+                (:prognostic, (:h, :u, :c)), 
                 (:diagnostic, ()),
             )
         end
