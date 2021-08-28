@@ -9,6 +9,21 @@ Base.@kwdef struct SingleColumnModel{DT<:AbstractVerticalDomain,BCT,ICT,PT} <: A
 end
 
 """
+    make_initial_conditions(model::SingleColumnModel{<:AbstractVerticalDomain})
+"""
+function make_initial_conditions(model::SingleColumnModel{<:AbstractVerticalDomain})
+    center_space, face_space = make_function_space(model.domain)
+
+    z_centers = Fields.coordinate_field(center_space)
+    z_faces = Fields.coordinate_field(face_space)
+    y_centers = model.initial_conditions.centers.(z_centers, Ref(model.parameters))
+    y_faces = model.initial_conditions.faces.(z_faces, Ref(model.parameters))
+    state_init = ArrayPartition(y_centers, y_faces)
+
+    return state_init
+end
+
+"""
     make_ode_function(model::SingleColumnModel)
 """
 function make_ode_function(model::SingleColumnModel)

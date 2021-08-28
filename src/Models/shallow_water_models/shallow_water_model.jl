@@ -18,6 +18,17 @@ function state_names(::ShallowWaterModel)
     )
 end
 
+"""
+    make_initial_conditions(model::ShallowWaterModel{<:AbstractHorizontalDomain})
+"""
+function make_initial_conditions(model::ShallowWaterModel{<:AbstractHorizontalDomain})
+    function_space = make_function_space(model.domain)
+
+    @unpack x1, x2 = Fields.coordinate_field(function_space)
+    state_init = model.initial_conditions.(x1, x2, Ref(model.parameters))
+
+    return state_init
+end
 
 """
     make_ode_function(model::ShallowWaterModel)
