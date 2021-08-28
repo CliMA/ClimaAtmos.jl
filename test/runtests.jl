@@ -14,6 +14,7 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
     if group == :unit || group == :all
         @testset "Unit tests" begin
             include("test_domains.jl")
+            include("test_shallow_water.jl")
         end
     end
 

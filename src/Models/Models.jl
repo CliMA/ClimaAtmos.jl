@@ -37,6 +37,7 @@ export NoEquationSplitting
 export ShallowWaterModel
 export SingleColumnModel
 
+export state_names
 export make_initial_conditions
 export make_ode_function
 

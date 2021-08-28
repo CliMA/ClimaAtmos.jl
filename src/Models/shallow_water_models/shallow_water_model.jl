@@ -9,6 +9,16 @@ Base.@kwdef struct ShallowWaterModel{DT<:AbstractHorizontalDomain,BCT,ICT,PT} <:
 end
 
 """
+    state_names
+"""
+function state_names(::ShallowWaterModel)
+    return (
+        (:prognostic, (:h, :u)), 
+        (:diagnostic, ()),
+    )
+end
+
+"""
     make_ode_function(model::ShallowWaterModel)
 """
 function make_ode_function(model::ShallowWaterModel)
