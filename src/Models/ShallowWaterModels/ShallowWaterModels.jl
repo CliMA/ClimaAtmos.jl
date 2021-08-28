@@ -14,6 +14,7 @@ using ClimaCore: Fields, Geometry, Operators, Spaces
 # we are extending here the Models interface by providing concrete implementions of models
 import ClimaAtmos: Models
 
+include("sw_tendencies.jl")
 include("shallow_water_model.jl")
 
 export ShallowWaterModel

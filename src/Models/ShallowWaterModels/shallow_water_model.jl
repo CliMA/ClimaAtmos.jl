@@ -69,18 +69,27 @@ function Models.make_ode_function(model::ShallowWaterModel{FT}) where {FT}
         @. dc = -D₄ * wdiv(grad(dc))
 
         # add in advection terms
-        space = axes(h)
-        J = Fields.Field(space.local_geometry.J, space)
+        # space = axes(h)
+        # J = Fields.Field(space.local_geometry.J, space)
+        # @. begin
+        #     dh = -wdiv(h * u)
+        #     du +=
+        #         -grad(g * h + norm(u)^2 / 2) +
+        #         Geometry.Covariant12Vector((J * (u × curl(u))))
+        #     dc += -wdiv(c * u)
+        # end
+        # Spaces.weighted_dss!(dh)
+        # Spaces.weighted_dss!(dc)
+
         @. begin
             dh = -wdiv(h * u)
-            du +=
-                -grad(g * h + norm(u)^2 / 2) +
-                Geometry.Covariant12Vector((J * (u × curl(u))))
             dc += -wdiv(c * u)
         end
         Spaces.weighted_dss!(dh)
-        Spaces.weighted_dss!(du)
         Spaces.weighted_dss!(dc)
+
+        CurlFormAdvection()(dY, Y, Ya, t, Velocity())
+        PressureGradient{FT}(g)(dY, Y, Ya, t, Velocity())
 
         return dY
     end
