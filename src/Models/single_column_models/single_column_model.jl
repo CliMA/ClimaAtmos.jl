@@ -47,7 +47,7 @@ function make_ode_function(model::SingleColumnModel)
         ∇c = Operators.GradientC2F()
         ∇f = Operators.GradientF2C(bottom = flux_bottom, top = flux_top)
 
-        @. dρθ = ∇f( -w * If(ρθ) + ν * ∇c(ρθ/ρ) + rad_flux)
+        @. dρθ = ∇f( -w * If(ρθ) + ν * ∇c(ρθ/ρ))
 
         # u velocity (centers)
         flux_bottom = get_boundary_flux(model, bc_u.bottom, u, Y, model.parameters)
