@@ -1,7 +1,7 @@
 """
     Column{FT} <: AbstractVerticalDomain
 """
-struct Column{FT} <: AbstractVerticalDomain
+struct Column{FT} <: AbstractVerticalDomain{FT}
     zlim::Tuple{FT,FT}
     nelements::Integer
 end
@@ -14,7 +14,7 @@ end
 """
     Plane <: AbstractHorizontalDomain
 """
-struct Plane{FT} <: AbstractHorizontalDomain
+struct Plane{FT} <: AbstractHorizontalDomain{FT}
     xlim::Tuple{FT,FT}
     ylim::Tuple{FT,FT}
     nelements::Tuple{Integer,Integer}

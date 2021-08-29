@@ -36,8 +36,6 @@ export NoEquationSplitting
 export ShallowWaterModel
 export SingleColumnModel
 
-export prognostic_state_names
-export diagnostic_state_names
 export default_initial_conditions
 export make_ode_function
 
