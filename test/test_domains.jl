@@ -10,9 +10,9 @@ end
 
 function instantiate_plane(FT)
     domain = Plane(
-        FT, 
-        xlim = (0.0, 1.0), 
-        ylim = (0.0, 2.0), 
+        FT,
+        xlim = (0.0, 1.0),
+        ylim = (0.0, 2.0),
         nelements = (3, 2),
         npolynomial = 16,
         periodic = (false, false),
@@ -28,9 +28,9 @@ end
 
 function instantiate_periodic_plane(FT)
     domain = PeriodicPlane(
-        FT, 
-        xlim = (0.0, 1.0), 
-        ylim = (0.0, 2.0), 
+        FT,
+        xlim = (0.0, 1.0),
+        ylim = (0.0, 2.0),
         nelements = (3, 2),
         npolynomial = 16,
     )
@@ -57,9 +57,9 @@ end
             @test ndims(I) == 1
 
             ✈ = Plane(
-                FT, 
-                xlim = (0.0, 1.0), 
-                ylim = (0.0, 1.0), 
+                FT,
+                xlim = (0.0, 1.0),
+                ylim = (0.0, 1.0),
                 nelements = (3, 2),
                 npolynomial = 16,
                 periodic = (false, false),
@@ -75,9 +75,9 @@ end
             @test size(I) == 3.0
 
             ✈ = Plane(
-                FT, 
-                xlim = (0.0, 2.0), 
-                ylim = (0.0, 3.0), 
+                FT,
+                xlim = (0.0, 2.0),
+                ylim = (0.0, 3.0),
                 nelements = (3, 2),
                 npolynomial = 16,
                 periodic = (false, false),
@@ -86,18 +86,20 @@ end
 
             # Test show functions
             I = Column(FT, zlim = (0.0, 1.0), nelements = 2)
-            show(I); println()
+            show(I)
+            println()
             @test I isa Column{FT}
 
             ✈ = Plane(
-                FT, 
-                xlim = (0.0, 1.0), 
-                ylim = (0.0, 1.0), 
+                FT,
+                xlim = (0.0, 1.0),
+                ylim = (0.0, 1.0),
                 nelements = (3, 2),
                 npolynomial = 16,
                 periodic = (false, true),
             )
-            show(✈); println()
+            show(✈)
+            println()
             @test ✈ isa Plane{FT}
         end
     end

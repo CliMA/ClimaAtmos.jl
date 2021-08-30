@@ -2,7 +2,7 @@
     Column{FT} <: AbstractVerticalDomain
 """
 struct Column{FT} <: AbstractVerticalDomain
-    zlim::Tuple{FT,FT}
+    zlim::Tuple{FT, FT}
     nelements::Integer
 end
 
@@ -15,14 +15,21 @@ end
     Plane <: AbstractHorizontalDomain
 """
 struct Plane{FT} <: AbstractHorizontalDomain
-    xlim::Tuple{FT,FT}
-    ylim::Tuple{FT,FT}
-    nelements::Tuple{Integer,Integer}
+    xlim::Tuple{FT, FT}
+    ylim::Tuple{FT, FT}
+    nelements::Tuple{Integer, Integer}
     npolynomial::Integer
-    periodic::Tuple{Bool,Bool}
+    periodic::Tuple{Bool, Bool}
 end
 
-function Plane(FT::DataType = Float64; xlim, ylim, nelements, npolynomial, periodic)
+function Plane(
+    FT::DataType = Float64;
+    xlim,
+    ylim,
+    nelements,
+    npolynomial,
+    periodic,
+)
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
     return Plane{FT}(xlim, ylim, nelements, npolynomial, periodic)
@@ -31,16 +38,22 @@ end
 """
     PeriodicPlane
 """
-function PeriodicPlane(FT::DataType = Float64; xlim, ylim, nelements, npolynomial)
+function PeriodicPlane(
+    FT::DataType = Float64;
+    xlim,
+    ylim,
+    nelements,
+    npolynomial,
+)
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
-    
+
     return Plane(
         FT,
-        xlim = xlim, 
+        xlim = xlim,
         ylim = ylim,
-        nelements = nelements, 
-        npolynomial = npolynomial, 
+        nelements = nelements,
+        npolynomial = npolynomial,
         periodic = (true, true),
     )
 end
@@ -51,7 +64,8 @@ Base.ndims(::Plane) = 2
 Base.length(domain::Column) = domain.zlim[2] - domain.zlim[1]
 
 Base.size(domain::Column) = length(domain)
-Base.size(domain::Plane) = (domain.xlim[2] - domain.xlim[1], domain.ylim[2] - domain.ylim[1])
+Base.size(domain::Plane) =
+    (domain.xlim[2] - domain.xlim[1], domain.ylim[2] - domain.ylim[1])
 
 function Base.show(io::IO, domain::Column)
     min = domain.zlim[1]
@@ -72,10 +86,12 @@ function Base.show(io::IO, domain::Plane)
     astring = @sprintf("%0.1f", minx)
     bstring = @sprintf("%0.1f", maxx)
     printstyled(astring, ", ", bstring, color = 7)
-    domain.periodic[1] ? printstyled(io, ")", color = 226) : printstyled(io, "]", color = 226)
+    domain.periodic[1] ? printstyled(io, ")", color = 226) :
+    printstyled(io, "]", color = 226)
     printstyled(io, " × [", color = 226)
     astring = @sprintf("%0.1f", miny)
     bstring = @sprintf("%0.1f", maxy)
     printstyled(astring, ", ", bstring, color = 7)
-    domain.periodic[2] ? printstyled(io, ")", color = 226) : printstyled(io, "]", color = 226)
+    domain.periodic[2] ? printstyled(io, ")", color = 226) :
+    printstyled(io, "]", color = 226)
 end
