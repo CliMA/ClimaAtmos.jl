@@ -9,7 +9,7 @@ include("model_interface.jl")
 
 export AbstractModel
 
-export make_initial_conditions
+export default_initial_conditions
 export make_ode_function
 export get_boundary_flux
 
