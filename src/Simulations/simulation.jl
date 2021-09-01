@@ -39,29 +39,3 @@ step!(sim::AbstractSimulation, args...; kwargs...) =
 
 run!(sim::AbstractSimulation, args...; kwargs...) =
     DiffEqBase.solve!(sim.integrator, args...; kwargs...)
-
-function set!(sim::AbstractSimulation; kwargs...)
-    for (fldname, value) in kwargs
-        if fldname ∈ propertynames(sim.integrator.u.prognostic)
-            ϕ = getproperty(sim.integrator.u.prognostic, fldname)
-        else
-            throw(ArgumentError("name $fldname not found in prognostic state."))
-        end
-        if value isa Function
-            space = axes(sim.integrator.u.prognostic) # function space for prog vars
-            @unpack x1, x2 = coordinates = Fields.coordinate_field(space) # x, y, z
-            ϕ .= value.(x1, x2)
-        else
-            value isa AbstractArray
-            ϕ .= value
-        end
-    end
-    # TODO! make diagnostic variables from prognostic variables
-    # Models.diagnostic_from_prognostic!(
-    #     sim.integrator.u.diagnostic, 
-    #     sim.integrator.u.prognostic,
-    #     sim.model,
-    # )
-
-    return nothing
-end

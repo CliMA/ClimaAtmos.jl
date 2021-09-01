@@ -1,7 +1,7 @@
 """
     make_function_space(domain::Column)
 """
-function make_function_space(domain::Column)
+function make_function_space(domain::Column{FT}) where {FT}
     column = ClimaCore.Domains.IntervalDomain(
         domain.zlim[1],
         domain.zlim[2];
@@ -17,7 +17,7 @@ end
 """
     make_function_space(domain::Plane)
 """
-function make_function_space(domain::Plane)
+function make_function_space(domain::Plane{FT}) where {FT}
     rectangle = ClimaCore.Domains.RectangleDomain(
         Interval(domain.xlim),
         Interval(domain.ylim),
@@ -31,9 +31,9 @@ function make_function_space(domain::Plane)
     )
     grid_topology = Topologies.GridTopology(mesh)
     quad = Spaces.Quadratures.GLL{domain.npolynomial}()
-    function_space = Spaces.SpectralElementSpace2D(grid_topology, quad)
+    space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
-    return function_space
+    return space
 end
 
 Interval(I::Tuple{Number, Number}) = Interval(I[1], I[2])

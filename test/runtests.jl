@@ -1,7 +1,6 @@
+# Julia ecosystem
 using Test
 using UnPack: @unpack
-
-using ClimaAtmos
 
 float_types = (Float32, Float64)
 
@@ -19,17 +18,19 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
         end
     end
 
-    # if group == :regression || group == :all
-    #     @testset "Regression" begin
-    #         include("test_regression.jl")
-    #     end    end
+    if group == :regression || group == :all
+        @info "Regression tests..."
+        @testset "Regression" begin
+            include("test_regression.jl")
+        end
+    end
 
-    # if group == :validation || group == :all
-    #     @testset "Validation" begin
-    #         include("test_validation.jl")
-    #     end
-    # end
-
+    if group == :validation
+        @info "Validation tests..."
+        @testset "Validation" begin
+            include("test_validation.jl")
+        end
+    end
 end
 
 nothing
