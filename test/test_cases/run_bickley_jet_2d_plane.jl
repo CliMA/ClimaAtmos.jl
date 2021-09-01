@@ -52,8 +52,8 @@ function run_bickley_jet_2d_plane(
         u = simulation.integrator.u
 
         # perform regression check
-        current_min = -0.019531432010661924
-        current_max = 0.41271930346029584
+        current_min = -0.08674718288150758
+        current_max = 0.41810635564122384
         @test minimum(parent(u.u)) ≈ current_min atol = 1e-3
         @test maximum(parent(u.u)) ≈ current_max atol = 1e-3
     elseif mode == :validation

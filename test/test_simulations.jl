@@ -6,7 +6,7 @@ using ClimaAtmos
 using ClimaAtmos.Domains: PeriodicPlane
 using ClimaAtmos.ShallowWaterModels: ShallowWaterModel
 using ClimaAtmos.Simulations: Simulation, step!, run!
-using ClimaCore: Geometry
+using ClimaCore: Geometry, Fields
 
 @testset "Simulations" begin
     @info "Testing ClimaAtmos.Simulations..."

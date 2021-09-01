@@ -78,7 +78,7 @@ function run_ekman_column_1d(
         # TODO!: run with callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
         run!(simulation)
-        u_end = simulation.integrator.u
+        u_end = parent(simulation.integrator.u)
 
         # post-processing
         ENV["GKSwstype"] = "nul"
@@ -90,7 +90,11 @@ function run_ekman_column_1d(
 
         # plot final state
         function ekman_plot(u, params; title = "", size = (1024, 600))
-            @unpack ug, vg = params
+            @unpack uvg = params
+            uvg = parent(uvg)
+            ug = uvg[1]
+            vg = uvg[2]
+
             d = sqrt(2.0 * 0.01 / 5e-5)
             z_centers = parent(Fields.coordinate_field(axes(u.x[1])))
 
@@ -107,7 +111,7 @@ function run_ekman_column_1d(
             )
             sub_plt1 = Plots.plot!(
                 sub_plt1,
-                parent(u.x[1].u),
+                parent(u_end.x[1].uv)[:, 1],
                 z_centers,
                 label = "Comp",
             )
@@ -125,7 +129,7 @@ function run_ekman_column_1d(
             )
             sub_plt2 = Plots.plot!(
                 sub_plt2,
-                parent(u.x[1].v),
+                parent(u_end.x[1].uv)[:, 2],
                 z_centers,
                 label = "Comp",
             )
@@ -136,7 +140,7 @@ function run_ekman_column_1d(
                 title = title,
                 layout = (1, 2),
                 size = size,
-            )xw
+            )
         end
         foi = ekman_plot(u_end, params)
         Plots.png(foi, joinpath(path, "ekman_column_1d_FT_$FT"))
