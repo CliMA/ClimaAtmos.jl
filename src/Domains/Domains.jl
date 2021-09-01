@@ -15,12 +15,12 @@ abstract type AbstractDomain end
 """
     AbstractHorizontalDomain
 """
-abstract type AbstractHorizontalDomain <: AbstractDomain end
+abstract type AbstractHorizontalDomain{FT} <: AbstractDomain end
 
 """
     AbstractVerticalDomain
 """
-abstract type AbstractVerticalDomain <: AbstractDomain end
+abstract type AbstractVerticalDomain{FT} <: AbstractDomain end
 
 include("domain.jl")
 include("make_function_space.jl")
