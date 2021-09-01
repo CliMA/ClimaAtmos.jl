@@ -9,7 +9,7 @@ using ClimaAtmos.Domains: PeriodicPlane, Column
 using ClimaAtmos.ShallowWaterModels: ShallowWaterModel
 using ClimaAtmos.SingleColumnModels: SingleColumnModel
 using ClimaAtmos.Simulations: Simulation, step!, run!
-using ClimaCore: Geometry
+using ClimaCore: Geometry, Fields
 
 @testset "Bickley jet 2D plane" begin
     include("test_cases/run_bickley_jet_2d_plane.jl")
