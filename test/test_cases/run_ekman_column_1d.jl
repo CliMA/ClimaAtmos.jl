@@ -50,10 +50,6 @@ function run_ekman_column_1d(
     model = SingleColumnModel(
         domain = domain,
         boundary_conditions = nothing,
-        initial_conditions = (
-            centers = init_ekman_column_1d_c,
-            faces = init_ekman_column_1d_f,
-        ),
         parameters = params,
     )
 
@@ -61,22 +57,28 @@ function run_ekman_column_1d(
     if mode == :unit
         # TODO!: run with input callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
+        set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         step!(simulation)
 
         @test true # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
+        set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         step!(simulation)
-        u = simulation.integrator.u
+        u = simulation.integrator.u.scm
 
         # perform regression check
         current_min = -0.068
         current_max = 0.0
-        @test minimum(parent(u.x[2].w)) ≈ current_min atol = 1e-3
-        @test maximum(parent(u.x[2].w)) ≈ current_max atol = 1e-3
+        @test minimum(parent(u.w)) ≈ current_min atol = 1e-3
+        @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
     elseif mode == :validation
         # TODO!: run with callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
+        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
+        set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         run!(simulation)
         u_end = parent(simulation.integrator.u)
 

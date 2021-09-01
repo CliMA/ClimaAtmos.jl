@@ -1,16 +1,3 @@
-# Julia ecosystem
-using OrdinaryDiffEq: SSPRK33
-using Plots
-
-# Clima ecosystem
-using ClimaAtmos
-using ClimaAtmos.BoundaryConditions: NoFluxCondition, DragLawCondition
-using ClimaAtmos.Domains: PeriodicPlane, Column
-using ClimaAtmos.ShallowWaterModels: ShallowWaterModel
-using ClimaAtmos.SingleColumnModels: SingleColumnModel
-using ClimaAtmos.Simulations: Simulation, step!, run!
-using ClimaCore: Geometry, Fields
-
 @testset "Bickley jet 2D plane" begin
     include("test_cases/run_bickley_jet_2d_plane.jl")
     for FT in float_types

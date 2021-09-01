@@ -1,13 +1,3 @@
-# Julia ecosystem
-using OrdinaryDiffEq: SSPRK33
-
-# Clima ecosystem
-using ClimaAtmos
-using ClimaAtmos.Domains: PeriodicPlane
-using ClimaAtmos.ShallowWaterModels: ShallowWaterModel
-using ClimaAtmos.Simulations: Simulation, step!, run!
-using ClimaCore: Geometry, Fields
-
 @testset "Simulations" begin
     @info "Testing ClimaAtmos.Simulations..."
     for FT in float_types

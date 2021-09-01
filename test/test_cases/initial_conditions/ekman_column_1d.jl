@@ -1,25 +1,29 @@
-function init_ekman_column_1d_c(z, params)
-    @unpack grav, C_p, MSLP, R_d, T_surf, T_min_ref, u0, v0 = params
+function init_ekman_column_1d(params)
+    @unpack grav, C_p, MSLP, R_d, T_surf, T_min_ref, u0, v0, w0 = params
 
-    # auxiliary quantities
-    Γ = grav / C_p
-    T = max(T_surf - Γ * z, T_min_ref)
-    p = MSLP * (T / T_surf)^(grav / (R_d * Γ))
-    if T == T_min_ref
-        z_top = (T_surf - T_min_ref) / Γ
-        H_min = R_d * T_min_ref / grav
-        p *= exp(-(z - z_top) / H_min)
+    # density
+    ρ(local_geometry) = begin
+        z = local_geometry.coordinates
+
+        Γ = grav / C_p
+        T = max(T_surf - Γ * z, T_min_ref)
+        p = MSLP * (T / T_surf)^(grav / (R_d * Γ))
+        if T == T_min_ref
+            z_top = (T_surf - T_min_ref) / Γ
+            H_min = R_d * T_min_ref / grav
+            p *= exp(-(z - z_top) / H_min)
+        end
+        θ = T_surf # potential temperature
+
+        return p / (R_d * θ * (p / MSLP)^(R_d / C_p))
     end
 
-    θ = T_surf # potential temperature
-    ρ = p / (R_d * θ * (p / MSLP)^(R_d / C_p)) # density
-    uv = Geometry.Cartesian12Vector(u0, v0) # velocity
+    # velocity
+    uv(local_geometry) = Geometry.Cartesian12Vector(u0, v0) # u, v components
+    w(local_geometry) = Geometry.Cartesian3Vector(w0) # w component
 
-    return (ρ = ρ, uv = uv, ρθ = ρ * θ)
-end
+    # potential temperature
+    ρθ(local_geometry) = ρ(local_geometry) * T_surf
 
-function init_ekman_column_1d_f(z, params)
-    @unpack w0 = params
-
-    return (; w = Geometry.Cartesian3Vector(w0))
+    return (ρ = ρ, uv = uv, w = w, ρθ = ρθ)
 end

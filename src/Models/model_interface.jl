@@ -1,12 +1,12 @@
 """
     make_initial_conditions
 """
-function make_initial_conditions end
+function default_initial_conditions(model::AbstractModel) end
 
 """
     make_ode_function
 """
-function make_ode_function end
+function make_ode_function(model::AbstractModel) end
 
 """
     get_boundary_flux

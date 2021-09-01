@@ -1,6 +1,17 @@
 # Julia ecosystem
 using Test
 using UnPack: @unpack
+using OrdinaryDiffEq: SSPRK33
+using Plots
+
+# Clima ecosystem
+using ClimaAtmos
+using ClimaAtmos.BoundaryConditions: NoFluxCondition, DragLawCondition
+using ClimaAtmos.Domains: Plane, PeriodicPlane, Column
+using ClimaAtmos.ShallowWaterModels: ShallowWaterModel
+using ClimaAtmos.SingleColumnModels: SingleColumnModel
+using ClimaAtmos.Simulations: Simulation, step!, run!, set!
+using ClimaCore: Geometry, Fields
 
 float_types = (Float32, Float64)
 

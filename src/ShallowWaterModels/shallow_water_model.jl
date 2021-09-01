@@ -1,28 +1,45 @@
 """
     ShallowWaterModel <: AbstractModel
 """
-Base.@kwdef struct ShallowWaterModel{FT, BCT, ICT, PT} <: AbstractModel
+Base.@kwdef struct ShallowWaterModel{FT, PT} <: AbstractModel
     domain::AbstractHorizontalDomain{FT}
-    boundary_conditions::BCT
-    initial_conditions::ICT
     parameters::PT
+    name::Symbol = :swm
+    varnames::Tuple = (:h, :u, :c)
 end
 
-function Models.make_initial_conditions(model::ShallowWaterModel{FT}) where {FT}
+function Models.default_initial_conditions(
+    model::ShallowWaterModel{FT},
+) where {FT}
     space = make_function_space(model.domain)
     local_geometry = Fields.local_geometry_field(space)
-    Y_init = model.initial_conditions.(local_geometry, Ref(model.parameters))
 
-    return Y_init
+    # functions that make zeros for this model
+    zero_scalar(lg) = zero(FT)
+    zero_vector(lg) = Geometry.Covariant12Vector(zero(FT), zero(FT))
+
+    h0 = zero_scalar.(local_geometry)
+    u0 = zero_vector.(local_geometry)
+    c0 = zero_scalar.(local_geometry)
+
+    return Fields.FieldVector(swm = Fields.FieldVector(h = h0, u = u0, c = c0))
 end
 
 function Models.make_ode_function(model::ShallowWaterModel{FT}) where {FT}
-    function rhs!(dY, Y, _, t)
+    function rhs!(dY, Y, Ya, t)
         @unpack D₄, g = model.parameters
 
-        # function space
-        space = axes(Y)
+        # unpack tendencies and state
+        dYm = dY.swm
+        dh = dYm.h
+        du = dYm.u
+        dc = dYm.c
+        Ym = Y.swm
+        h = Ym.h
+        u = Ym.u
+        c = Ym.c
 
+        # operators
         sdiv = Operators.Divergence()
         wdiv = Operators.WeakDivergence()
         grad = Operators.Gradient()
@@ -31,28 +48,36 @@ function Models.make_ode_function(model::ShallowWaterModel{FT}) where {FT}
         wcurl = Operators.WeakCurl()
 
         # compute hyperviscosity first
-        @. dY.u =
-            wgrad(sdiv(Y.u)) -
-            Geometry.Covariant12Vector(wcurl(Geometry.Covariant3Vector(curl(Y.u))))
-        @. dY.ρθ = wdiv(grad(Y.ρθ))
-        Spaces.weighted_dss!(dY)
-        @. dY.u =
+        @. du =
+            wgrad(sdiv(u)) -
+            Geometry.Covariant12Vector(wcurl(Geometry.Covariant3Vector(curl(
+                u,
+            ))))
+        @. dc = wdiv(grad(c))
+        Spaces.weighted_dss!(du)
+        Spaces.weighted_dss!(dc)
+        @. du =
             -D₄ * (
-                wgrad(sdiv(dY.u)) -
-                Geometry.Covariant12Vector(wcurl(Geometry.Covariant3Vector(curl(dY.u))),)
+                wgrad(sdiv(du)) -
+                Geometry.Covariant12Vector(wcurl(Geometry.Covariant3Vector(curl(
+                    du,
+                ))),)
             )
-        @. dY.ρθ = -D₄ * wdiv(grad(dY.ρθ))
+        @. dc = -D₄ * wdiv(grad(dc))
 
         # add in advection terms
+        space = axes(h)
         J = Fields.Field(space.local_geometry.J, space)
         @. begin
-            dY.ρ = -wdiv(Y.ρ * Y.u)
-            dY.u +=
-                -grad(g * Y.ρ + norm(Y.u)^2 / 2) +
-                Geometry.Covariant12Vector((J * (Y.u × curl(Y.u))))
-            dY.ρθ += -wdiv(Y.ρθ * Y.u)
+            dh = -wdiv(h * u)
+            du +=
+                -grad(g * h + norm(u)^2 / 2) +
+                Geometry.Covariant12Vector((J * (u × curl(u))))
+            dc += -wdiv(c * u)
         end
-        Spaces.weighted_dss!(dY)
+        Spaces.weighted_dss!(dh)
+        Spaces.weighted_dss!(du)
+        Spaces.weighted_dss!(dc)
 
         return dY
     end

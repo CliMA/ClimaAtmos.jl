@@ -1,5 +1,3 @@
-using ClimaAtmos.Domains: Plane, PeriodicPlane, Column
-
 function instantiate_column(FT)
     domain = Column(FT, zlim = (0.0, 1.0), nelements = 2)
     check1 = domain.zlim == (0.0, 1.0)
