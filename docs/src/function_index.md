@@ -1,5 +1,15 @@
-# List of functions in ClimaAtmos.jl module
-
+# API
+## Simulations
 ```@autodocs
-Modules = [ClimaAtmos]
+Modules = [ClimaAtmos.Simulations]
 ```
+
+## Models
+```@autodocs
+Modules = [ClimaAtmos.Models]
+```
+## ShallowWaterModels
+```@autodocs
+Modules = [ClimaAtmos.ShallowWaterModels]
+```
+
