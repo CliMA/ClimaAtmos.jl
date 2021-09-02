@@ -8,9 +8,9 @@ using Plots
 using ClimaAtmos
 using ClimaAtmos.BoundaryConditions: NoFluxCondition, DragLawCondition
 using ClimaAtmos.Domains: Plane, PeriodicPlane, Column
-using ClimaAtmos.ShallowWaterModels: ShallowWaterModel
-using ClimaAtmos.SingleColumnModels: SingleColumnModel
-using ClimaAtmos.Simulations: Simulation, step!, run!, set!
+using ClimaAtmos.Models.ShallowWaterModels: ShallowWaterModel
+using ClimaAtmos.Models.SingleColumnModels: SingleColumnModel
+using ClimaAtmos.Simulations: Simulation, set!, step!, run!
 using ClimaCore: Geometry, Fields
 
 float_types = (Float32, Float64)
