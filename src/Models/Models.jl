@@ -6,6 +6,8 @@ module Models
 abstract type AbstractModel end
 
 include("model_interface.jl")
+include("ShallowWaterModels/ShallowWaterModels.jl")
+include("SingleColumnModels/SingleColumnModels.jl")
 
 export AbstractModel
 
