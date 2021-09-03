@@ -18,14 +18,12 @@ function run_ekman_column_1d(
         MSLP = FT(1e5), # mean sea level pressure
         grav = FT(9.8), # gravitational constant
         R_d = FT(287.058), # R dry (gas constant / mol mass dry air)
-        C_p = FT(287.058 * 1.4 / (1.4 - 1)), # heat capacity at constant pressure
-        C_v = FT(287.058 / (1.4 - 1)), # heat capacity at constant volume
-        R_m = FT(87.058), # moist R, assumed to be dry
+        C_p = FT(287.058 * 7 / 2), # heat capacity at constant pressure
+        C_v = FT(287.058 * 5 / 2), # heat capacity at constant volume
+        R_m = FT(287.058), # moist R, assumed to be dry
         f = FT(5e-5), # Coriolis parameters
         ν = FT(0.01),
         Cd = FT(0.01 / (2e2 / 30.0)),
-        ug = FT(1.0),
-        vg = FT(0.0),
         uvg = Geometry.Cartesian12Vector(FT(1.0), FT(0.0)),
         T_surf = FT(300.0),
         T_min_ref = FT(230.0),
@@ -70,7 +68,7 @@ function run_ekman_column_1d(
         u = simulation.integrator.u.scm
 
         # perform regression check
-        current_min = -0.068
+        current_min = -0.0
         current_max = 0.0
         @test minimum(parent(u.w)) ≈ current_min atol = 1e-3
         @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
