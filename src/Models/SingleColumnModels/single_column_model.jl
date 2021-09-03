@@ -65,7 +65,8 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
             top = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
         )
         # TODO!: Undesirable casting to vector required
-        @. dρθ = -∂c(w * If(ρθ) + Geometry.CartesianVector(ν * ∂f(ρθ / ρ)))
+        @. dρθ =
+            -∂c(w * If(ρθ)) + ρ * ∂c(Geometry.CartesianVector(ν * ∂f(ρθ / ρ)))
 
         uv_1 = Operators.getidx(uv, Operators.Interior(), 1)
         u_wind = LinearAlgebra.norm(uv_1)
