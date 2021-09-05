@@ -1,5 +1,15 @@
 """
-    Simulation <: AbstractSimulation
+    struct Simulation <: AbstractSimulation
+        # a ClimaAtmos model
+        model::AbstractModel
+        # a DiffEqBase.jl integrator used for time
+        # stepping the simulation
+        integrator::DiffEqBase.DEIntegrator
+    end
+
+    A simulation wraps an abstract ClimaAtmos model containing 
+    equation specifications and an instance of an integrator used for
+    time integration of the discretized model PDE.
 """
 struct Simulation <: AbstractSimulation
     model::AbstractModel

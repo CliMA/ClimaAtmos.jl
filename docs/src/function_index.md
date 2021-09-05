@@ -7,6 +7,7 @@ Modules = [ClimaAtmos.Simulations]
 ## Models
 ```@autodocs
 Modules = [ClimaAtmos.Models]
+
 ```
 ## ShallowWaterModels
 ```@autodocs
