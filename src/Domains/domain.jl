@@ -70,11 +70,13 @@ Base.size(domain::Plane) =
 function Base.show(io::IO, domain::Column)
     min = domain.zlim[1]
     max = domain.zlim[2]
+    print("Domain set-up:\n\tSingle colume z-range:\t")
     printstyled(io, "[", color = 226)
     astring = @sprintf("%0.1f", min)
     bstring = @sprintf("%0.1f", max)
     printstyled(astring, ", ", bstring, color = 7)
     printstyled(io, "]", color = 226)
+    @printf("\n\tvert elem:\t\t%d\n", domain.nelements)
 end
 
 function Base.show(io::IO, domain::Plane)
@@ -82,6 +84,7 @@ function Base.show(io::IO, domain::Plane)
     maxx = domain.xlim[2]
     miny = domain.ylim[1]
     maxy = domain.ylim[2]
+    print("Domain set-up:\n\tHorizontal plane:\t")
     printstyled(io, "[", color = 226)
     astring = @sprintf("%0.1f", minx)
     bstring = @sprintf("%0.1f", maxx)
@@ -94,4 +97,10 @@ function Base.show(io::IO, domain::Plane)
     printstyled(astring, ", ", bstring, color = 7)
     domain.periodic[2] ? printstyled(io, ")", color = 226) :
     printstyled(io, "]", color = 226)
+    @printf(
+        "\n\thorz elem:\t\t(%d, %d)",
+        domain.nelements[1],
+        domain.nelements[2]
+    )
+    @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
 end

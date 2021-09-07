@@ -45,6 +45,7 @@ function set!(
     submodel_name = nothing;
     kwargs...,
 )
+    show(simulation)
     for (varname, f) in kwargs
         if varname ∉ simulation.model.varnames
             throw(ArgumentError("$varname not in model variables."))
@@ -101,3 +102,19 @@ step!(sim::AbstractSimulation, args...; kwargs...) =
 
 run!(sim::AbstractSimulation, args...; kwargs...) =
     DiffEqBase.solve!(sim.integrator, args...; kwargs...)
+
+function Base.show(io::IO, s::Simulation)
+    println(io, "Simulation set-up:")
+    @printf(io, "\tmodel type:\t%s\n", typeof(s.model).name.name)
+    @printf(io, "\tmodel vars:\t%s\n\n", s.model.varnames)
+    show(io, s.model.domain)
+    println(io, "\nTimestepper set-up:")
+    @printf(io, "\tmethod:\t%s\n", typeof(s.integrator.alg).name.name)
+    @printf(io, "\tdt:\t%f\n", s.integrator.dt)
+    @printf(
+        io,
+        "\ttspan:\t(%f, %f)\n",
+        s.integrator.sol.prob.tspan[1],
+        s.integrator.sol.prob.tspan[2],
+    )
+end
