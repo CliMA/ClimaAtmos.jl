@@ -1,5 +1,13 @@
 """
     struct Simulation <: AbstractSimulation
+        # a ClimaAtmos model
+        model::AbstractModel
+        # a DiffEqBase.jl integrator used for time
+        # stepping the simulation
+        integrator::DiffEqBase.DEIntegrator
+        # user defined callback operations 
+        callbacks::Union{DiffEqBase.CallbackSet, DiffEqBase.DiscreteCallback, Nothing}
+    end
 
 A simulation wraps an abstract ClimaAtmos `model` containing 
 equation specifications and an instance of an `integrator` used for
@@ -8,15 +16,29 @@ time integration of the discretized model PDE.
 struct Simulation <: AbstractSimulation
     model::AbstractModel
     integrator::DiffEqBase.DEIntegrator
+    callbacks::Union{
+        DiffEqBase.CallbackSet,
+        DiffEqBase.DiscreteCallback,
+        Nothing,
+    }
 end
 
 """
-    Simulation(model::AbstractModel, method; Y_init = nothing, dt, tspan)
+    Simulation(model::AbstractModel, method::AbstractTimestepper, 
+               dt, tspan, init_state, callbacks, kwargs...)
 
 Construct a `Simulation` for a `model` with a time stepping `method`,
 initial conditions `Y_init`, time step `Δt` for `tspan` time interval.
 """
-function Simulation(model::AbstractModel, method; Y_init = nothing, dt, tspan)
+function Simulation(
+    model::AbstractModel,
+    method;
+    Y_init = nothing,
+    dt,
+    tspan,
+    callbacks = nothing,
+)
+
     # inital state is either default or set externally 
     Y = Y_init isa Nothing ? default_initial_conditions(model) : Y_init
 
@@ -29,9 +51,10 @@ function Simulation(model::AbstractModel, method; Y_init = nothing, dt, tspan)
     # to set up and an ODE integrator that handles
     # integration in time and callbacks
     ode_problem = DiffEqBase.ODEProblem(ode_function, Y, tspan)
-    integrator = DiffEqBase.init(ode_problem, method, dt = dt)
+    integrator =
+        DiffEqBase.init(ode_problem, method, dt = dt, callback = callbacks)
 
-    return Simulation(model, integrator)
+    return Simulation(model, integrator, callbacks)
 end
 
 """
@@ -92,7 +115,7 @@ function set!(
             tf = simulation.integrator.sol.prob.tspan[2],
             erase_sol = false,
             reset_dt = false,
-            reinit_callbacks = false,
+            reinit_callbacks = true,
             initialize_save = false,
             reinit_cache = false,
         )

@@ -66,7 +66,7 @@ function run_bickley_jet_2d_plane(
         # TODO!: run with callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 80.0))
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
-        set!(simulation, h = h, u = u, c = c)
+        set!(simulation, :swm, h = h, u = u, c = c)
         run!(simulation)
         u_end = simulation.integrator.u.swm
 

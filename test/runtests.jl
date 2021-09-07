@@ -1,7 +1,9 @@
 # Julia ecosystem
 using Test
 using UnPack: @unpack
+using JLD2
 using OrdinaryDiffEq: SSPRK33
+using DiffEqBase
 using Plots
 
 # Clima ecosystem
@@ -11,6 +13,7 @@ using ClimaAtmos.Domains: Plane, PeriodicPlane, Column
 using ClimaAtmos.Models.ShallowWaterModels: ShallowWaterModel
 using ClimaAtmos.Models.SingleColumnModels: SingleColumnModel
 using ClimaAtmos.Simulations: Simulation, set!, step!, run!
+using ClimaAtmos.Callbacks
 using ClimaCore: Geometry, Fields
 
 float_types = (Float32, Float64)
@@ -26,6 +29,7 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
         @testset "Unit tests" begin
             include("test_domains.jl")
             include("test_simulations.jl")
+            include("test_callbacks.jl")
         end
     end
 
