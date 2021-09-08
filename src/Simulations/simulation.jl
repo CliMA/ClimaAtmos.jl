@@ -1,15 +1,9 @@
 """
     struct Simulation <: AbstractSimulation
-        # a ClimaAtmos model
-        model::AbstractModel
-        # a DiffEqBase.jl integrator used for time
-        # stepping the simulation
-        integrator::DiffEqBase.DEIntegrator
-    end
 
-    A simulation wraps an abstract ClimaAtmos model containing 
-    equation specifications and an instance of an integrator used for
-    time integration of the discretized model PDE.
+A simulation wraps an abstract ClimaAtmos `model` containing 
+equation specifications and an instance of an `integrator` used for
+time integration of the discretized model PDE.
 """
 struct Simulation <: AbstractSimulation
     model::AbstractModel
@@ -17,7 +11,10 @@ struct Simulation <: AbstractSimulation
 end
 
 """
-    Simulation(model::AbstractModel, method::AbstractTimestepper; dt, tspan, init_state, kwargs...)
+    Simulation(model::AbstractModel, method; Y_init = nothing, dt, tspan)
+
+Construct a `Simulation` for a `model` with a time stepping `method`,
+initial conditions `Y_init`, time step `Δt` for `tspan` time interval.
 """
 function Simulation(model::AbstractModel, method; Y_init = nothing, dt, tspan)
     # inital state is either default or set externally 
@@ -38,7 +35,14 @@ function Simulation(model::AbstractModel, method; Y_init = nothing, dt, tspan)
 end
 
 """
-    set!
+    set!(
+        simulation::AbstractSimulation,
+        submodel_name = nothing;
+        kwargs...,
+    )
+
+Set the `simulation` state to a new state, either through 
+an array or a function.
 """
 function set!(
     simulation::AbstractSimulation,
@@ -97,11 +101,21 @@ function set!(
     nothing
 end
 
-step!(sim::AbstractSimulation, args...; kwargs...) =
-    DiffEqBase.step!(sim.integrator, args...; kwargs...)
+"""
+    step!(simulation::AbstractSimulation, args...; kwargs...)
 
-run!(sim::AbstractSimulation, args...; kwargs...) =
-    DiffEqBase.solve!(sim.integrator, args...; kwargs...)
+Step forward a `simulation` one time step.
+"""
+step!(simulation::AbstractSimulation, args...; kwargs...) =
+    DiffEqBase.step!(simulation.integrator, args...; kwargs...)
+
+"""
+    run!(simulation::AbstractSimulation, args...; kwargs...)
+
+Run a `simulation` to the end.
+"""
+run!(simulation::AbstractSimulation, args...; kwargs...) =
+    DiffEqBase.solve!(simulation.integrator, args...; kwargs...)
 
 function Base.show(io::IO, s::Simulation)
     println(io, "Simulation set-up:")

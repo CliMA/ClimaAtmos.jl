@@ -29,8 +29,10 @@ export AbstractDomain
 export AbstractHorizontalDomain
 export AbstractVerticalDomain
 export Column
-export PeriodicRectangle
-export Rectangle
+export Plane
+export PeriodicPlane
+export Plane
+#TODO: Future support for Hybrid and Spectral Planes
 
 export make_function_space
 

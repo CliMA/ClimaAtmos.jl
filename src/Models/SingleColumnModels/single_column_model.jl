@@ -1,5 +1,9 @@
 """
     SingleColumnModel <: AbstractModel
+
+Construct a single column model on `domain`
+with `parameters`.
+`boundary_conditions` contains field boundary conditions.
 """
 Base.@kwdef struct SingleColumnModel{FT, BCT, PT} <: AbstractModel
     domain::AbstractVerticalDomain{FT}
