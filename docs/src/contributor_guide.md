@@ -163,6 +163,30 @@ properly. Didn't write new functions? That's fine, but be sure that the document
 the code you touched is still in great shape. It is not uncommon to find some strange wording
 or clarification that you can take care of while you are here.
 
+Here is an example of a docstring:
+
+````julia
+"""
+    Column([FT=Float64]; zlim, nelements)
+    
+Creates a column domain of type `FT`,
+with extents zlim[1] < zlim[2] and `nelements` cells. 
+
+Example:
+Generate a Column{Float64} with extents (0,1) and 10 elements.
+```julia-repl
+julia> using ClimaAtmos.Domains
+julia> z_domain = Column(Float64, 
+                            zlim = (0,1), 
+                            nelements = 10)
+```
+"""
+function Column(FT::DataType = Float64; zlim, nelements)
+    @assert zlim[1] < zlim[2]
+    return Column{FT}(zlim, nelements)
+end
+````
+
 You can preview how the Documentation will look like after merging by building the documentation 
 locally. From the main directory of your local repository call
 

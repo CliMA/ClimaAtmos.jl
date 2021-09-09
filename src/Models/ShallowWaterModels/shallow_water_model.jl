@@ -1,5 +1,8 @@
 """
-    ShallowWaterModel <: AbstractModel
+    struct ShallowWaterModel <: AbstractModel
+
+Construct a shallow water model on `domain`
+with `parameters`.
 """
 Base.@kwdef struct ShallowWaterModel{FT, PT} <: AbstractModel
     domain::AbstractHorizontalDomain{FT}

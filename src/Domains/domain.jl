@@ -1,11 +1,30 @@
 """
-    Column{FT} <: AbstractVerticalDomain
+    struct Column{FT} <: AbstractVerticalDomain
+        
+A column domain with `zlim` (Ordered Tuple) the domain extents,
+and `nelements` (Integer) the number of cells in the domain. 
 """
 struct Column{FT} <: AbstractVerticalDomain{FT}
     zlim::Tuple{FT, FT}
     nelements::Int32
 end
 
+"""
+    Column([FT=Float64]; zlim, nelements)
+
+Creates a column domain of type `FT`,
+with extents zlim[1] < zlim[2] and `nelements` cells. 
+
+Example:
+Generate a Column{Float64} with extents (0,1) and 10 elements.
+
+```julia-repl
+julia> using ClimaAtmos.Domains
+julia> z_domain = Column(Float64, 
+                            zlim = (0,1), 
+                            nelements = 10)
+```
+"""
 function Column(FT::DataType = Float64; zlim, nelements)
     @assert zlim[1] < zlim[2]
     return Column{FT}(zlim, nelements)
@@ -13,6 +32,14 @@ end
 
 """
     Plane <: AbstractHorizontalDomain
+
+A two-dimensional specialisation of an `AbstractHorizontalDomain`. 
+An x-y plane with extents `xlim` (Ordered Tuple) in the x-direction,
+extents `ylim` (Ordered Tuple) in the y-direction, `nelements` cells 
+(Tuple of integers for x, y) directions, order of polynomial for 
+spectral discretisation `npolynomial`, and description of periodicity in
+x, y directions `periodic` (Tuple of Booleans). 
+
 """
 struct Plane{FT} <: AbstractHorizontalDomain{FT}
     xlim::Tuple{FT, FT}
@@ -22,6 +49,30 @@ struct Plane{FT} <: AbstractHorizontalDomain{FT}
     periodic::Tuple{Bool, Bool}
 end
 
+"""
+    Plane([FT=Float64];
+          xlim, 
+          ylim, 
+          nelements,
+          npolynomial,
+          periodic) 
+    
+Creates an xy plane bounded by keyword argument values of `xlim`, `ylim`, 
+with `nelements` elements (which may differ in each direction) 
+of polynomial order `npolynomial`, and periodicity specified by `periodic`
+    
+NOTE: This definition of `Plane` currently supports Spectral Discretizations 
+only. Updates will contain support for spectral-element (`SpectralPlane`) and 
+spectral-element + finite difference (`HybridPlane`) configurations.
+
+Example: 
+Generate a `Plane{Float64}` object with extents [0,π] × [0,π], contains 5 and 10 elements in the x and y directions respectively, 
+with polynomial order 5, and is non-periodic in the y-direction
+```julia-repl
+julia> using ClimaAtmos.Domains
+julia> xy_plane = Plane(Float64, xlim = (0,π), ylim = (0,π) , nelements=(5,10), npolynomial=5, periodic = (true,false))
+```
+"""
 function Plane(
     FT::DataType = Float64;
     xlim,
@@ -36,7 +87,30 @@ function Plane(
 end
 
 """
-    PeriodicPlane
+    PeriodicPlane([FT= Float64];
+        xlim,
+        ylim,
+        nelements,
+        npolynomial)
+    
+Creates an xy plane bounded by keyword argument values of `xlim`, `ylim`, 
+with `nelements` elements (which may differ in each direction) 
+of polynomial order `npolynomial`. Assumes domain is periodic in both x and 
+y directions. Special case of `Plane`.
+    
+NOTE: This definition of `Plane` currently supports Spectral Discretizations 
+only. Updates will contain support for spectral-element (`SpectralPlane`) and 
+spectral-element + finite difference (`HybridPlane`) configurations.
+
+Example: 
+Generate a `Plane{Float64}` object with extents [0,π] × [0,π], contains 5 and 10 elements in the x and y directions respectively, 
+with polynomial order 5, and is doubly-periodic
+```julia-repl
+julia> using ClimaAtmos.Domains
+julia> xy_periodic_plane = PeriodicPlane(Float64, xlim = (0,π), ylim = (0,π) , nelements=(5,10), npolynomial=5)
+# This is the same as 
+julia> xy_periodic_plane_2 = Plane(Float64, xlim = (0,π), ylim = (0,π) , nelements=(5,10), npolynomial=5, periodic=(true,true))
+```
 """
 function PeriodicPlane(
     FT::DataType = Float64;
@@ -58,15 +132,50 @@ function PeriodicPlane(
     )
 end
 
+"""
+    Base.ndims(::Column)
+    
+Query function for `Column` domain (number of dimensions)
+"""
 Base.ndims(::Column) = 1
+
+"""
+    Base.ndims(::Plane)
+    
+Query function for `Plane` domain (number of dimensions)
+"""
 Base.ndims(::Plane) = 2
 
+"""
+    Base.length(domain::Column)
+    
+Query function for `Column` domain (domain length)
+"""
 Base.length(domain::Column) = domain.zlim[2] - domain.zlim[1]
 
+"""
+    Base.length(domain::Column)
+    
+    Query function for `Column` domain (domain length)
+"""
 Base.size(domain::Column) = length(domain)
+
+"""
+    Base.size(domain::Plane)
+    
+Query function for `Plane` domain (returns Tuple of 
+domain lengths in x and y directions respectively)
+"""
 Base.size(domain::Plane) =
     (domain.xlim[2] - domain.xlim[1], domain.ylim[2] - domain.ylim[1])
 
+"""
+    Base.show(io::IO, domain::Column)
+
+Displays `Column` domain information; 
+domain extents for z-direction.
+# Should this also display nelements ? 
+"""
 function Base.show(io::IO, domain::Column)
     min = domain.zlim[1]
     max = domain.zlim[2]
@@ -79,6 +188,13 @@ function Base.show(io::IO, domain::Column)
     @printf("\n\tvert elem:\t\t%d\n", domain.nelements)
 end
 
+"""
+    Base.show(io::IO, domain::Plane)
+
+Displays `Plane` domain information; 
+domain extents for x-y directions.
+# Should this also display nelements and npolynomial? 
+"""
 function Base.show(io::IO, domain::Plane)
     minx = domain.xlim[1]
     maxx = domain.xlim[2]
