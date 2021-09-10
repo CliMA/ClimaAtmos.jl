@@ -4,6 +4,7 @@ using DiffEqBase
 using UnPack: @unpack
 using Printf
 
+using ClimaAtmos.Callbacks
 using ClimaAtmos.Models:
     AbstractModel, default_initial_conditions, make_ode_function
 using ClimaCore: Fields
