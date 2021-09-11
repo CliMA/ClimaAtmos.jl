@@ -58,7 +58,6 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
             bottom = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
             top = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
         )
-
         @. dρ = -∂c(w * If(ρ))
 
         # potential temperature
@@ -74,15 +73,16 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
 
         uv_1 = Operators.getidx(uv, Operators.Interior(), 1)
         u_wind = LinearAlgebra.norm(uv_1)
+
         A = Operators.AdvectionC2C(
             bottom = Operators.SetValue(Geometry.Cartesian12Vector(0.0, 0.0)),
             top = Operators.SetValue(Geometry.Cartesian12Vector(0.0, 0.0)),
         )
 
         # uv
-        bcs_bottom = Operators.SetValue(Geometry.Cartesian3Vector(
-            Cd * u_wind * uv_1,
-        ))
+        bcs_bottom = Operators.SetValue(
+            Geometry.Cartesian3Vector(Cd * u_wind) ⊗ uv_1,
+        )
         bcs_top = Operators.SetValue(uvg)
         ∂c = Operators.DivergenceF2C(bottom = bcs_bottom)
         ∂f = Operators.GradientC2F(top = bcs_top)
