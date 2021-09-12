@@ -13,7 +13,6 @@
 [![ghaci][gha-ci-img]][gha-ci-url]
 [![codecov][codecov-img]][codecov-url]
 [![bors][bors-img]][bors-url]
-[![bors][bors-img]][bors-url]
 [![discussions][discussions-img]][discussions-url]
 [![col-prac][col-prac-img]][col-prac-url]
 
