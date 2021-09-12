@@ -15,7 +15,7 @@
 [![bors][bors-img]][bors-url]
 [![bors][bors-img]][bors-url]
 [![discussions][discussions-img]][discussions-url]
-[![col-prac][col-prac-img][col-prac-url]
+[![col-prac][col-prac-img]][col-prac-url]
 
 [docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
 [docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
