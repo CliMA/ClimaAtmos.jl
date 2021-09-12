@@ -13,6 +13,8 @@
 [![ghaci][gha-ci-img]][gha-ci-url]
 [![codecov][codecov-img]][codecov-url]
 [![bors][bors-img]][bors-url]
+[![discussions][discussions-img]][discussions-url]
+[![col-prac][col-prac-img]][col-prac-url]
 
 [docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
 [docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
@@ -28,6 +30,13 @@
 
 [bors-img]: https://bors.tech/images/badge_small.svg
 [bors-url]: https://app.bors.tech/repositories/35474
+
+[col-prac-img]: https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square
+[col-prac-url]: https://github.com/SciML/ColPrac
+
+[discussions-img]: https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square
+[discussions-url]: https://github.com/CliMA/ClimaAtmos.jl/discussions
+
 
 ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
 
