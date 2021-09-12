@@ -133,49 +133,47 @@ function PeriodicPlane(
 end
 
 """
-    Base.ndims(::Column)
-    
-Query function for `Column` domain (number of dimensions)
+    struct HybridPlane{FT} <: AbstractHybridDomain 
 """
+struct HybridPlane{FT} <: AbstractHybridDomain{FT}
+    xlim::Tuple{FT, FT}
+    zlim::Tuple{FT, FT}
+    nelements::Tuple{Integer, Integer}
+    npolynomial::Integer
+end
+
+"""
+    HybridPlane([FT=Float64]; xlim, zlim, nelements, npolynomial)
+
+Creates an 1D horizontal and 1D vertical hybrid domain with `xlim` the
+horizontal domain extents, `zlim` the vertical domain extents,
+`helement` the number of elements in the horizontal, `velement` the
+number of cells in the vertical, and `npolynomial` the polynomial order
+in the horizontal.
+```
+"""
+function HybridPlane(FT::DataType = Float64; xlim, zlim, nelements, npolynomial)
+    @assert xlim[1] < xlim[2]
+    @assert zlim[1] < zlim[2]
+    return HybridPlane{FT}(xlim, zlim, nelements, npolynomial)
+end
+
 Base.ndims(::Column) = 1
 
-"""
-    Base.ndims(::Plane)
-    
-Query function for `Plane` domain (number of dimensions)
-"""
 Base.ndims(::Plane) = 2
 
-"""
-    Base.length(domain::Column)
-    
-Query function for `Column` domain (domain length)
-"""
+Base.ndims(::HybridPlane) = 2
+
 Base.length(domain::Column) = domain.zlim[2] - domain.zlim[1]
 
-"""
-    Base.length(domain::Column)
-    
-    Query function for `Column` domain (domain length)
-"""
 Base.size(domain::Column) = length(domain)
 
-"""
-    Base.size(domain::Plane)
-    
-Query function for `Plane` domain (returns Tuple of 
-domain lengths in x and y directions respectively)
-"""
 Base.size(domain::Plane) =
     (domain.xlim[2] - domain.xlim[1], domain.ylim[2] - domain.ylim[1])
 
-"""
-    Base.show(io::IO, domain::Column)
+Base.size(domain::HybridPlane) =
+    (domain.xlim[2] - domain.xlim[1], domain.zlim[2] - domain.zlim[1])
 
-Displays `Column` domain information; 
-domain extents for z-direction.
-# Should this also display nelements ? 
-"""
 function Base.show(io::IO, domain::Column)
     min = domain.zlim[1]
     max = domain.zlim[2]
@@ -188,13 +186,6 @@ function Base.show(io::IO, domain::Column)
     @printf("\n\tvert elem:\t\t%d\n", domain.nelements)
 end
 
-"""
-    Base.show(io::IO, domain::Plane)
-
-Displays `Plane` domain information; 
-domain extents for x-y directions.
-# Should this also display nelements and npolynomial? 
-"""
 function Base.show(io::IO, domain::Plane)
     minx = domain.xlim[1]
     maxx = domain.xlim[2]
@@ -215,6 +206,30 @@ function Base.show(io::IO, domain::Plane)
     printstyled(io, "]", color = 226)
     @printf(
         "\n\thorz elem:\t\t(%d, %d)",
+        domain.nelements[1],
+        domain.nelements[2]
+    )
+    @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
+end
+
+function Base.show(io::IO, domain::HybridPlane)
+    minx = domain.xlim[1]
+    maxx = domain.xlim[2]
+    minz = domain.zlim[1]
+    maxz = domain.zlim[2]
+    print("Domain set-up:\n\tHorizontal and vertical hybrid box:\t")
+    printstyled(io, "[", color = 226)
+    astring = @sprintf("%0.1f", minx)
+    bstring = @sprintf("%0.1f", maxx)
+    printstyled(astring, ", ", bstring, color = 7)
+    printstyled(io, ")", color = 226)
+    printstyled(io, " × [", color = 226)
+    astring = @sprintf("%0.1f", minz)
+    bstring = @sprintf("%0.1f", maxz)
+    printstyled(astring, ", ", bstring, color = 7)
+    printstyled(io, "]", color = 226)
+    @printf(
+        "\n\thorz and vert elem:\t\t(%d, %d)",
         domain.nelements[1],
         domain.nelements[2]
     )
