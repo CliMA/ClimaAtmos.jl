@@ -35,5 +35,37 @@ function make_function_space(domain::Plane{FT}) where {FT}
 
     return space
 end
-
 Interval(I::Tuple{Number, Number}) = Interval(I[1], I[2])
+
+"""
+    make_function_space(domain::HybridPlane)
+"""
+function make_function_space(domain::HybridPlane{FT}) where {FT}
+    vertdomain = ClimaCore.Domains.IntervalDomain(
+        FT(domain.zlim[1]),
+        FT(domain.zlim[2]);
+        x3boundary = (:bottom, :top),
+    )
+
+    vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[2])
+    vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
+
+    horzdomain = ClimaCore.Domains.RectangleDomain(
+        domain.xlim[1]..domain.xlim[2],
+        -0..0,
+        x1periodic = true,
+        x2boundary = (:a, :b),
+    )
+    horzmesh =
+        Meshes.EquispacedRectangleMesh(horzdomain, domain.nelements[1], 1)
+    horztopology = Topologies.GridTopology(horzmesh)
+
+    quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
+    horzspace = Spaces.SpectralElementSpace1D(horztopology, quad)
+
+    hv_center_space =
+        Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
+    hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
+
+    return hv_center_space, hv_face_space
+end
