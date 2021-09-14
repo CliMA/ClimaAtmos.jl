@@ -4,9 +4,11 @@ using DiffEqCallbacks
 using UnPack
 using JLD2
 
+using ClimaCore
+
 using ClimaAtmos.Models: AbstractModel
 
-export generate_callback, AbstractCallback, JLD2Output
+export generate_callback, AbstractCallback, JLD2Output, CFLInfo
 
 """
     AbstractCallback

@@ -29,10 +29,11 @@ model = ShallowWaterModel(domain = domain, parameters = params);
 filepath = joinpath(@__DIR__, "output_validation")
 cb_1 = JLD2Output(model, filepath, "TestFilename1", 1);
 cb_2 = JLD2Output(model, filepath, "TestFilename2", 2);
+cb_3 = CFLInfo(model, 1);
 
 # Generate CallbackSet 
 cb_set =
-    DiffEqBase.CallbackSet(generate_callback(cb_1), generate_callback(cb_2))
+DiffEqBase.CallbackSet(generate_callback(cb_1), generate_callback(cb_2), generate_callback(cb_3))
 
 # Type Checks
 @test generate_callback(cb_1) isa DiffEqBase.DiscreteCallback
