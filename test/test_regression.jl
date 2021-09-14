@@ -11,3 +11,10 @@ end
         run_ekman_column_1d(FT, mode = :regression)
     end
 end
+
+@testset "Diagonal advection hybridplane" begin
+    include("test_cases/run_diagonal_advection_hybridplane.jl")
+    for FT in float_types
+        run_diagonal_advection_hybridplane(FT, mode = :regression)
+    end
+end

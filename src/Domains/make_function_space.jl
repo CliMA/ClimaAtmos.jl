@@ -51,8 +51,8 @@ function make_function_space(domain::HybridPlane{FT}) where {FT}
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.RectangleDomain(
-        domain.xlim[1]..domain.xlim[2],
-        -0..0,
+        Interval(domain.xlim),
+        Interval(-0, 0),
         x1periodic = true,
         x2boundary = (:a, :b),
     )
