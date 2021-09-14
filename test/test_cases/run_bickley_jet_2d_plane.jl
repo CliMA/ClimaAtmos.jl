@@ -5,7 +5,7 @@ function run_bickley_jet_2d_plane(
     FT;
     stepper = SSPRK33(),
     nelements = (16, 16),
-    npolynomial = 4,
+    npolynomial = 3,
     dt = 0.04,
     callbacks = (),
     mode = :regression,
