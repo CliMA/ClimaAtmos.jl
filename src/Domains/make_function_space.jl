@@ -30,7 +30,7 @@ function make_function_space(domain::Plane{FT}) where {FT}
         domain.nelements[2],
     )
     grid_topology = Topologies.GridTopology(mesh)
-    quad = Spaces.Quadratures.GLL{domain.npolynomial}()
+    quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     space = Spaces.SpectralElementSpace2D(grid_topology, quad)
 
     return space
