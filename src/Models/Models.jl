@@ -8,6 +8,7 @@ abstract type AbstractModel end
 include("model_interface.jl")
 include("ShallowWaterModels/ShallowWaterModels.jl")
 include("SingleColumnModels/SingleColumnModels.jl")
+include("Nonhydrostatic2DModels/Nonhydrostatic2DModels.jl")
 
 export AbstractModel
 

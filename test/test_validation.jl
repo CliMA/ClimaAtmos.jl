@@ -11,3 +11,10 @@ end
         run_ekman_column_1d(FT, mode = :validation)
     end
 end
+
+@testset "Dry rising bubble 2D" begin
+    include("test_cases/run_dry_rising_bubble_2d.jl")
+    for FT in float_types
+        run_dry_rising_bubble_2d(FT, mode = :validation)
+    end
+end
