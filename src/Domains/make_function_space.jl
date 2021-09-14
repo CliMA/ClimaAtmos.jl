@@ -35,7 +35,6 @@ function make_function_space(domain::Plane{FT}) where {FT}
 
     return space
 end
-Interval(I::Tuple{Number, Number}) = Interval(I[1], I[2])
 
 """
     make_function_space(domain::HybridPlane)
@@ -51,8 +50,8 @@ function make_function_space(domain::HybridPlane{FT}) where {FT}
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.RectangleDomain(
-        domain.xlim[1]..domain.xlim[2],
-        -0..0,
+        Interval(domain.xlim),
+        Interval(-0, 0),
         x1periodic = true,
         x2boundary = (:a, :b),
     )
@@ -69,3 +68,5 @@ function make_function_space(domain::HybridPlane{FT}) where {FT}
 
     return hv_center_space, hv_face_space
 end
+
+Interval(I::Tuple{Number, Number}) = Interval(I[1], I[2])
