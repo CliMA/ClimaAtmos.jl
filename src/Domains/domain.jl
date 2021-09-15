@@ -217,7 +217,7 @@ function Base.show(io::IO, domain::HybridPlane)
     maxx = domain.xlim[2]
     minz = domain.zlim[1]
     maxz = domain.zlim[2]
-    print("Domain set-up:\n\tHorizontal and vertical hybrid box:\t")
+    print("Domain set-up:\n\tHorizontal and vertical hybrid plane:\t")
     printstyled(io, "[", color = 226)
     astring = @sprintf("%0.1f", minx)
     bstring = @sprintf("%0.1f", maxx)
