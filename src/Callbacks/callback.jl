@@ -48,7 +48,7 @@ function (F::CFLInfo)(integrator)
     # Unpack horizontal and vertical velocity components
     uₕ = getproperty(Y.u.:2,1).:1
     uᵥ = getproperty(Y.u.:2,1).:2
-    # Unpack axes  : Assumes Spectral-2D System
+    # Unpack axes  : Assumes Spectral-2D System #TODO Generalise via ClimaCore localgeometry
     x₁ = ClimaCore.Fields.coordinate_field(uₕ).x
     x₂ = ClimaCore.Fields.coordinate_field(uᵥ).y
     # Update integrator timestep
