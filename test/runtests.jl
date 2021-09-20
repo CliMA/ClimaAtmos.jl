@@ -42,7 +42,7 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
         end
     end
 
-    if group == :validation || group == :all
+    if group == :validation
         @info "Validation tests..."
         @testset "Validation" begin
             include("test_validation.jl")
