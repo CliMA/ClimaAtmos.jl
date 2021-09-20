@@ -1,6 +1,7 @@
 module Callbacks
 
 using DiffEqCallbacks
+using OrdinaryDiffEq: set_proposed_dt!
 using UnPack
 using JLD2
 
@@ -8,7 +9,7 @@ using ClimaCore
 
 using ClimaAtmos.Models: AbstractModel
 
-export generate_callback, AbstractCallback, JLD2Output, CFLInfo
+export generate_callback, AbstractCallback, JLD2Output, CFLAdaptive
 
 """
     AbstractCallback

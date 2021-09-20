@@ -38,10 +38,11 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
         @info "Regression tests..."
         @testset "Regression" begin
             include("test_regression.jl")
+            include("test_callbacks.jl")
         end
     end
 
-    if group == :validation
+    if group == :validation || group == :all
         @info "Validation tests..."
         @testset "Validation" begin
             include("test_validation.jl")

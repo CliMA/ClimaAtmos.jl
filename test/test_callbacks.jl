@@ -29,7 +29,7 @@ model = ShallowWaterModel(domain = domain, parameters = params);
 filepath = joinpath(@__DIR__, "output_validation")
 cb_1 = JLD2Output(model, filepath, "TestFilename1", 1);
 cb_2 = JLD2Output(model, filepath, "TestFilename2", 2);
-cb_3 = CFLInfo(model, 1);
+cb_3 = CFLAdaptive(model, 1, 1.0, true);
 
 # Generate CallbackSet 
 cb_set =
@@ -38,14 +38,20 @@ DiffEqBase.CallbackSet(generate_callback(cb_1), generate_callback(cb_2), generat
 # Type Checks
 @test generate_callback(cb_1) isa DiffEqBase.DiscreteCallback
 @test generate_callback(cb_2) isa DiffEqBase.DiscreteCallback
+@test generate_callback(cb_3) isa DiffEqBase.DiscreteCallback
+
+# CFL Callback assigned values
+@test cb_1.model == cb_2.model  == cb_3.model
+@test cb_3.update == true
+@test cb_3.cfl_target == 1.0
 
 # Generate simple simulation data for test
-
+timeend = 3.0
 simulation = Simulation(
     model,
     SSPRK33(),
     dt = 0.01,
-    tspan = (0.0, 0.02),
+    tspan = (0.0, timeend),
     callbacks = cb_set,
 )
 run!(simulation)

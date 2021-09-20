@@ -28,19 +28,33 @@ function generate_callback(F::JLD2Output; kwargs...)
 end
 
 """
-    CFLInfo <: AbstractCallback
+    CFLAdaptive <: AbstractCallback
     Container for CFL information callback.
 """
-struct CFLInfo <: AbstractCallback
+mutable struct CFLAdaptive <: AbstractCallback
     model::AbstractModel
-    interval::Number
+    cfl_current::Real
+    cfl_target::Real
+    update::Bool
 end
 
 """
-    (F::CFLInfo)(integrator)
-
+    get_nodal_distance(space::Space)
+# Move to ClimaCore
 """
-function (F::CFLInfo)(integrator)
+function get_nodal_distance(space)
+    if typeof(space).name.name == :ExtrudedFiniteDifferenceSpace
+        Δh_local = space.horizontal_space.local_geometry.WJ
+        Δv_local = diff(space.vertical_mesh.faces)
+        return (Δh=Δh_local, Δv=Δv_local)
+    elseif typeof(space).name.name == :SpectralElementSpace2D
+        Δh_local = space.local_geometry.WJ
+        return (Δh=Δh_local)
+    else
+        @show ("Method for $(typeof(space).name.name) undefined")
+    end
+end
+function (F::CFLAdaptive)(u,t,integrator)
     # Get model components
     model = F.model
     # Get state variables
@@ -48,20 +62,37 @@ function (F::CFLInfo)(integrator)
     # Unpack horizontal and vertical velocity components
     uₕ = getproperty(Y.u.:2,1).:1
     uᵥ = getproperty(Y.u.:2,1).:2
-    # Unpack axes  : Assumes Spectral-2D System #TODO Generalise via ClimaCore localgeometry
-    x₁ = ClimaCore.Fields.coordinate_field(uₕ).x
-    x₂ = ClimaCore.Fields.coordinate_field(uᵥ).y
-    # Update integrator timestep
-    integrator.dt *= 2 
+    # Get underlying space
+    space = ClimaCore.Fields.axes(uₕ)
+    # Get local nodal distances
+    Δx = get_nodal_distance(space)
+    # Compute local Courant number
+    cfl_local = abs.(ClimaCore.Fields.field_values(uₕ)) ./ Δx .* integrator.dt
+    cfl_domain_max = maximum(cfl_local)
+    F.cfl_current = cfl_domain_max
+    return cfl_domain_max > F.cfl_target
+end
+
+"""
+    (F::CFLAdaptive)(integrator)
+"""
+function (F::CFLAdaptive)(integrator)
+    if F.update == true
+        dt_suggested = F.cfl_target / F.cfl_current * integrator.dt
+        isinf(dt_suggested) ? nothing : integrator.dtcache = dt_suggested #dtcache if adaptive option is false // 
+        @info ("New Δt = $(integrator.dt)")
+    else
+        nothing
+    end
     return nothing
 end
 
 """
-    generate_callback(F::CFLInfo; kwargs...)
+    generate_callback(F::CFLAdaptive; kwargs...)
 
     Creates a PeriodicCallback object that computes the 
     maximum CFL number in the domain. 
 """
-function generate_callback(F::CFLInfo; kwargs...)
-    return PeriodicCallback(F, F.interval; initial_affect = false, kwargs...)
+function generate_callback(F::CFLAdaptive; kwargs...)
+    return DiffEqCallbacks.DiscreteCallback(F, F; kwargs...)
 end

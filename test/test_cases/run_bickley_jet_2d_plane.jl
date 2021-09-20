@@ -6,7 +6,7 @@ function run_bickley_jet_2d_plane(
     stepper = SSPRK33(),
     nelements = (16, 16),
     npolynomial = 4,
-    dt = 0.04,
+    dt = 0.01,
     callbacks = (),
     mode = :regression,
 )
@@ -64,10 +64,14 @@ function run_bickley_jet_2d_plane(
         @test maximum(parent(u.u)) ≈ current_max atol = 1e-3
     elseif mode == :validation
         # TODO!: run with callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 80.0))
+        cb_3 = generate_callback(CFLAdaptive(model, 0.01, 1.0, true));
+        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 10.0), callbacks=cb_3)
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
         set!(simulation, :swm, h = h, u = u, c = c)
-        run!(simulation)
+        test_time = @elapsed begin 
+                run!(simulation)
+        end
+        @info ("Validation simulation complete. Elapsed test time is $(test_time)")
         u_end = simulation.integrator.u.swm
 
         # post-processing
