@@ -1,6 +1,7 @@
 module Simulations
 
 using DiffEqBase
+using JLD2
 using UnPack: @unpack
 using Printf
 
@@ -16,9 +17,16 @@ import DiffEqBase: step!
 """
 abstract type AbstractSimulation end
 
+"""
+    AbstractRestart
+"""
+abstract type AbstractRestart end
+
 include("simulation.jl")
+include("restart.jl")
 
 export Simulation
+export AbstractRestart, Restart
 export step!
 export run!
 export set!

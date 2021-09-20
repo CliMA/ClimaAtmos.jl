@@ -42,6 +42,7 @@ function run_bickley_jet_2d_plane(
         show(simulation)
         println()
         @test simulation isa Simulation
+        @test simulation.restart isa NoRestart
 
         # test set function
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
@@ -57,6 +58,7 @@ function run_bickley_jet_2d_plane(
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
 
+        @test simulation.restart isa NoRestart
         # here we set the initial condition with an array for testing
         space = axes(simulation.integrator.u.swm.c) # get tracer field
         local_geometry = Fields.local_geometry_field(space)
@@ -74,6 +76,7 @@ function run_bickley_jet_2d_plane(
     elseif mode == :validation
         # TODO!: run with callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 80.0))
+        @test simulation.restart isa NoRestart
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
         set!(simulation, :swm, h = h, u = u, c = c)
         run!(simulation)

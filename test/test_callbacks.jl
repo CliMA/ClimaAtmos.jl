@@ -26,9 +26,10 @@ model = ShallowWaterModel(domain = domain, parameters = params);
 # Begin Tests
 
 # Populate Callback Containers
-filepath = joinpath(@__DIR__, "output_validation")
-cb_1 = JLD2Output(model, filepath, "TestFilename1", 1);
-cb_2 = JLD2Output(model, filepath, "TestFilename2", 2);
+temp_filepath = joinpath(@__DIR__, "output_validation/callback_tests")
+mkpath(temp_filepath)
+cb_1 = JLD2Output(model, temp_filepath, "TestFilename1", 0.01);
+cb_2 = JLD2Output(model, temp_filepath, "TestFilename2", 0.02);
 
 # Generate CallbackSet 
 cb_set =
@@ -44,13 +45,30 @@ simulation = Simulation(
     model,
     SSPRK33(),
     dt = 0.01,
-    tspan = (0.0, 0.02),
+    tspan = (0.0, 0.03),
     callbacks = cb_set,
 )
 run!(simulation)
 
-@test isfile(joinpath(cb_1.filedir, cb_1.filename * ".jld2")) == true
-@test isfile(joinpath(cb_2.filedir, cb_2.filename * ".jld2")) == true
+@info "Testing Simulation Restart"
+simulation = Simulation(
+    model,
+    SSPRK33(),
+    dt = 0.01,
+    tspan = (0.0, 0.03),
+    callbacks = cb_set,
+    restart = Restart(
+        restartfile = joinpath(cb_1.filedir, cb_1.filename * "_0.02.jld2"),
+        end_time = 0.05,
+    ),
+)
+set!(simulation, :swm, h = h, u = u, c = c);
+run!(simulation)
+@test simulation.integrator.t == 0.05
 
-rm(joinpath(cb_1.filedir, cb_1.filename * ".jld2"))
-rm(joinpath(cb_2.filedir, cb_2.filename * ".jld2"))
+
+@info "Deleting Test Output Files"
+@test isfile(joinpath(cb_1.filedir, cb_1.filename * "_0.01" * ".jld2")) == true
+@test isfile(joinpath(cb_2.filedir, cb_2.filename * "_0.02" * ".jld2")) == true
+
+rm(temp_filepath, recursive = true)
