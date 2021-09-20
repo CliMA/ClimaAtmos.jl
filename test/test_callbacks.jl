@@ -32,8 +32,11 @@ cb_2 = JLD2Output(model, filepath, "TestFilename2", 2);
 cb_3 = CFLAdaptive(model, 1, 1.0, true);
 
 # Generate CallbackSet 
-cb_set =
-DiffEqBase.CallbackSet(generate_callback(cb_1), generate_callback(cb_2), generate_callback(cb_3))
+cb_set = DiffEqBase.CallbackSet(
+    generate_callback(cb_1),
+    generate_callback(cb_2),
+    generate_callback(cb_3),
+)
 
 # Type Checks
 @test generate_callback(cb_1) isa DiffEqBase.DiscreteCallback
@@ -41,7 +44,7 @@ DiffEqBase.CallbackSet(generate_callback(cb_1), generate_callback(cb_2), generat
 @test generate_callback(cb_3) isa DiffEqBase.DiscreteCallback
 
 # CFL Callback assigned values
-@test cb_1.model == cb_2.model  == cb_3.model
+@test cb_1.model == cb_2.model == cb_3.model
 @test cb_3.update == true
 @test cb_3.cfl_target == 1.0
 

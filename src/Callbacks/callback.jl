@@ -46,22 +46,22 @@ function get_nodal_distance(space)
     if typeof(space).name.name == :ExtrudedFiniteDifferenceSpace
         Δh_local = space.horizontal_space.local_geometry.WJ
         Δv_local = diff(space.vertical_mesh.faces)
-        return (Δh=Δh_local, Δv=Δv_local)
+        return (Δh = Δh_local, Δv = Δv_local)
     elseif typeof(space).name.name == :SpectralElementSpace2D
         Δh_local = space.local_geometry.WJ
-        return (Δh=Δh_local)
+        return (Δh = Δh_local)
     else
         @show ("Method for $(typeof(space).name.name) undefined")
     end
 end
-function (F::CFLAdaptive)(u,t,integrator)
+function (F::CFLAdaptive)(u, t, integrator)
     # Get model components
     model = F.model
     # Get state variables
     Y = getproperty(integrator.u, model.name)
     # Unpack horizontal and vertical velocity components
-    uₕ = getproperty(Y.u.:2,1).:1
-    uᵥ = getproperty(Y.u.:2,1).:2
+    uₕ = getproperty(Y.u.:2, 1).:1
+    uᵥ = getproperty(Y.u.:2, 1).:2
     # Get underlying space
     space = ClimaCore.Fields.axes(uₕ)
     # Get local nodal distances
