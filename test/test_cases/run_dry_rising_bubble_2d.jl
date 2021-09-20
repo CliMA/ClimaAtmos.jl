@@ -71,22 +71,38 @@ function run_dry_rising_bubble_2d(
         step!(simulation)
         u = simulation.integrator.u.nhm
 
-        # TODO!: After validation -> set up regression test
         # perform regression check
-        # current_min = -0.0
-        # current_max = 0.0
-        # @test minimum(parent(u.ρw)) ≈ current_min atol = 1e-3
-        # @test maximum(parent(u.ρw)) ≈ current_max atol = 1e-3
-        @test true
+        current_min = 299.9999997747195
+        current_max = 300.49999999996226
+        @test minimum(parent(u.ρθ ./ u.ρ)) ≈ current_min atol = 1e-3
+        @test maximum(parent(u.ρθ ./ u.ρ)) ≈ current_max atol = 1e-3
     elseif mode == :validation
-        # TODO!: Implement all the plots and analyses
-        # 1. Video
-        # 2. Slices at different x and z
-        # 3. Time series of total energy -> should not increase
+        # for now plot θ for the ending step;
+        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
+        set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
+        run!(simulation)
+        u_end = simulation.integrator.u.nhm
+
+        # post-processing
+        ENV["GKSwstype"] = "nul"
+        Plots.GRBackend()
+
+        # make output directory
+        path = joinpath(@__DIR__, "output_validation")
+        mkpath(path)
+
+        foi = Plots.plot(u_end.ρθ ./ u_end.ρ, clim = (300.0, 300.8))
+        Plots.png(foi, joinpath(path, "dry_rising_bubble_2d_FT_$FT"))
+
         @test true # check is visual
     else
         throw(ArgumentError("$mode incompatible with test case."))
     end
+
+    # TODO!: Implement the rest plots and analyses
+    # 1. sort out saveat kwarg for Simulation
+    # 2. create animation for a rising bubble; timeseries of total energy
 
     nothing
 end
