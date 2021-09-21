@@ -19,6 +19,16 @@ struct CustomFluxCondition <: AbstractBoundaryCondition
 end
 
 """
-    DragLawCondition <: AbstractFluxBoundaryCondition
+    DragLawCondition{C} <: AbstractFluxBoundaryCondition
 """
-struct DragLawCondition <: AbstractBoundaryCondition end
+struct DragLawCondition{C} <: AbstractBoundaryCondition
+    coefficients::C
+end
+
+"""
+    BulkFormulaCondition{C, T}
+"""
+struct BulkFormulaCondition{C, T} <: AbstractBoundaryCondition
+    coefficients::C
+    θ_sfc::T
+end

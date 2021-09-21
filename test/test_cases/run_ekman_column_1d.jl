@@ -23,6 +23,7 @@ function run_ekman_column_1d(
         f = FT(5e-5), # Coriolis parameters
         ν = FT(0.01),
         Cd = FT(0.01 / (2e2 / 30.0)),
+        Ch = FT(0.01 / (2e2 / 30.0)),
         uvg = Geometry.Cartesian12Vector(FT(1.0), FT(0.0)),
         T_surf = FT(300.0),
         T_min_ref = FT(230.0),
@@ -33,17 +34,20 @@ function run_ekman_column_1d(
 
     domain = Column(FT, zlim = (0.0, 2e2), nelements = nelements)
 
-    # boundary_conditions = (
-    #     ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-    #     u = (top = nothing, bottom = DragLawCondition()),
-    #     v = (top = nothing, bottom = DragLawCondition()),
-    #     w = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-    #     ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-    # )
+    coefficients = (Cd = params.Cd, Ch = params.Ch)
+    boundary_conditions = (
+        ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+        uv = (top = nothing, bottom = DragLawCondition(coefficients)),
+        w = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+        ρθ = (
+            top = NoFluxCondition(),
+            bottom = BulkFormulaCondition(coefficients, params.T_surf),
+        ),
+    )
 
     model = SingleColumnModel(
         domain = domain,
-        boundary_conditions = nothing,
+        boundary_conditions = boundary_conditions,
         parameters = params,
     )
 
