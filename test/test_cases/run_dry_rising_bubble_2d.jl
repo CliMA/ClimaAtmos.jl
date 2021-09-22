@@ -47,7 +47,7 @@ function run_dry_rising_bubble_2d(
     # execute differently depending on testing mode
     if mode == :unit
         # TODO!: run with input callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
 
         # test show function
         show(simulation)
@@ -65,7 +65,7 @@ function run_dry_rising_bubble_2d(
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
         @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
         step!(simulation)
@@ -78,7 +78,7 @@ function run_dry_rising_bubble_2d(
         @test maximum(parent(u.ρθ ./ u.ρ)) ≈ current_max atol = 1e-3
     elseif mode == :validation
         # for now plot θ for the ending step;
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 500.0))
         @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
         run!(simulation)

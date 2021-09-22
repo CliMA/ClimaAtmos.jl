@@ -50,13 +50,13 @@ function run_ekman_column_1d(
     # execute differently depending on testing mode
     if mode == :unit
         # TODO!: run with input callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
         set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
 
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
         set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         step!(simulation)
@@ -69,7 +69,7 @@ function run_ekman_column_1d(
         @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
     elseif mode == :validation
         # TODO!: run with callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 3600.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
         set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         run!(simulation)

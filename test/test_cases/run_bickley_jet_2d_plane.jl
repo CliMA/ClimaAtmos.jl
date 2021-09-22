@@ -36,7 +36,7 @@ function run_bickley_jet_2d_plane(
     # execute differently depending on testing mode
     if mode == :unit
         # TODO!: run with input callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
 
         # test show function
         show(simulation)
@@ -54,7 +54,7 @@ function run_bickley_jet_2d_plane(
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
 
         # here we set the initial condition with an array for testing
@@ -73,7 +73,7 @@ function run_bickley_jet_2d_plane(
         @test maximum(parent(u.u)) ≈ current_max atol = 1e-3
     elseif mode == :validation
         # TODO!: run with callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 80.0))
+        simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 80.0))
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
         set!(simulation, :swm, h = h, u = u, c = c)
         run!(simulation)
