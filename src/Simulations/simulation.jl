@@ -1,60 +1,47 @@
-"""
-    struct Simulation <: AbstractSimulation
-        # a ClimaAtmos model
-        model::AbstractModel
-        # a DiffEqBase.jl integrator used for time
-        # stepping the simulation
-        integrator::DiffEqBase.DEIntegrator
-        # user defined callback operations 
-        callbacks::Union{DiffEqBase.CallbackSet, DiffEqBase.DiscreteCallback, Nothing}
-    end
+using OrderedCollections: OrderedDict
 
-A simulation wraps an abstract ClimaAtmos `model` containing 
-equation specifications and an instance of an `integrator` used for
-time integration of the discretized model PDE.
-"""
-struct Simulation <: AbstractSimulation
-    model::AbstractModel
-    integrator::DiffEqBase.DEIntegrator
-    callbacks::Union{
-        DiffEqBase.CallbackSet,
-        DiffEqBase.DiscreteCallback,
-        Nothing,
-    }
-end
+using ClimaSimulations: evaluate_callbacks!, evaluate_output_writers!, @stopwatch, run!
+using ClimaSimulations: prettytime
 
-"""
-    Simulation(model::AbstractModel, method::AbstractTimestepper, 
-               dt, tspan, init_state, callbacks, kwargs...)
+import ClimaSimulations: Simulation, time_step!, initialize_simulation!, stop_time_exceeded
 
-Construct a `Simulation` for a `model` with a time stepping `method`,
-initial conditions `Y_init`, time step `Δt` for `tspan` time interval.
-"""
-function Simulation(
-    model::AbstractModel,
-    method;
-    Y_init = nothing,
-    dt,
+function Simulation(model::AbstractModel, time_stepping_method;
+    Δt,
     tspan,
+    initial_state = nothing,
     callbacks = nothing,
-)
+    stop_criteria = Any[stop_time_exceeded])
 
     # inital state is either default or set externally 
-    Y = Y_init isa Nothing ? default_initial_conditions(model) : Y_init
+    Y = initial_state isa Nothing ? default_initial_conditions(model) : initial_state
+
+    # default_initial_conditions(::Nothing, model) = default_initial_conditions(model)
+    # Y = default_initial_conditions(initial_state, model)
 
     # contains all information about the 
     # pde systems jacobians and right-hand sides
     # to hook into the DiffEqBase.jl interface
     ode_function = make_ode_function(model)
 
+    # Convert numbers to correct floating point type
+    FT = eltype(model.parameters)
+
+    tspan = FT.(tspan)
+    Δt = FT(Δt)
+    stop_time = FT(tspan[2])
+
     # we use the DiffEqBase.jl interface
-    # to set up and an ODE integrator that handles
+    # to set up and an ODE timestepper that handles
     # integration in time and callbacks
     ode_problem = DiffEqBase.ODEProblem(ode_function, Y, tspan)
-    integrator =
-        DiffEqBase.init(ode_problem, method, dt = dt, callback = callbacks)
+    timestepper =
+        DiffEqBase.init(ode_problem, time_stepping_method, dt = Δt, callback = callbacks)
 
-    return Simulation(model, integrator, callbacks)
+    output_writers = OrderedDict{Symbol, Any}()
+    callbacks = OrderedDict{Symbol, Any}()
+
+    return Simulation(model, timestepper, Δt, stop_criteria, Inf, stop_time,
+                      Inf, nothing, output_writers, callbacks, 0.0, false, false)
 end
 
 """
@@ -68,7 +55,7 @@ Set the `simulation` state to a new state, either through
 an array or a function.
 """
 function set!(
-    simulation::AbstractSimulation,
+    simulation::Simulation,
     submodel_name = nothing;
     kwargs...,
 )
@@ -80,9 +67,9 @@ function set!(
         # we need to use the reinit function because we don't 
         # have direct state access using DiffEqBase. For this
         # we need to copy
-        Y = copy(simulation.integrator.u)
+        Y = copy(simulation.timestepper.u)
 
-        # get fields for this submodel from integrator state
+        # get fields for this submodel from timestepper state
         if submodel_name === nothing
             # default behavior if model has no submodels but itself
             submodel_field = getproperty(Y, simulation.model.name)
@@ -108,10 +95,10 @@ function set!(
         # we need to use the reinit function because we don't 
         # have direct state access using DiffEqBase
         DiffEqBase.reinit!(
-            simulation.integrator,
+            simulation.timestepper,
             Y;
-            t0 = simulation.integrator.t,
-            tf = simulation.integrator.sol.prob.tspan[2],
+            t0 = simulation.timestepper.t,
+            tf = simulation.timestepper.sol.prob.tspan[2],
             erase_sol = false,
             reset_dt = false,
             reinit_callbacks = true,
@@ -123,34 +110,79 @@ function set!(
     nothing
 end
 
+const ClimaAtmosSimulation = Simulation{<:AbstractModel}
+
+initialize_simulation!(sim::ClimaAtmosSimulation, pickup=nothing) = sim.initialized = true
+
+function stop_time_exceeded(sim::ClimaAtmosSimulation)
+    current_time = sim.timestepper.t
+    if current_time >= sim.stop_time
+          @info "Simulation is stopping. Model time $(prettytime(current_time)) " *
+                "has hit or exceeded simulation stop time $(prettytime(sim.stop_time))."
+          return true
+    end
+    return false
+end
+
+#=
 """
-    step!(simulation::AbstractSimulation, args...; kwargs...)
+    @stopwatch sim expr
+
+Increment sim.stopwatch with the execution time of expr.
+"""
+macro stopwatch(sim, expr)
+    return esc(quote
+       local time_before = time_ns() * 1e-9
+       local output = $expr
+       local time_after = time_ns() * 1e-9
+       sim.wall_time += time_after - time_before
+       output
+   end)
+end
+=#
+
+"""
+    time_step!(simulation::AbstractSimulation, args...; kwargs...)
 
 Step forward a `simulation` one time step.
 """
-step!(simulation::AbstractSimulation, args...; kwargs...) =
-    DiffEqBase.step!(simulation.integrator, args...; kwargs...)
+function time_step!(sim::ClimaAtmosSimulation, args...; kwargs...)
 
-"""
-    run!(simulation::AbstractSimulation, args...; kwargs...)
+    initialization_step = !(sim.initialized)
 
-Run a `simulation` to the end.
-"""
-run!(simulation::AbstractSimulation, args...; kwargs...) =
-    DiffEqBase.solve!(simulation.integrator, args...; kwargs...)
+    if initialization_step
+        @stopwatch sim initialize_simulation!(sim)
+        start_time = time_ns()
+        @info "Executing first time step..."
+    end
 
-function Base.show(io::IO, s::Simulation)
+    @stopwatch sim DiffEqBase.step!(sim.timestepper, args...; kwargs...)
+    
+    if initialization_step
+        elapsed_first_step_time = prettytime(1e-9 * (time_ns() - start_time))
+        @info "    ... first time step complete ($elapsed_first_step_time)."
+    end
+
+    @stopwatch sim begin
+        evaluate_callbacks!(sim)
+        evaluate_output_writers!(sim)
+    end
+
+    return nothing
+end
+
+function Base.show(io::IO, s::ClimaAtmosSimulation)
     println(io, "Simulation set-up:")
     @printf(io, "\tmodel type:\t%s\n", typeof(s.model).name.name)
     @printf(io, "\tmodel vars:\t%s\n\n", s.model.varnames)
     show(io, s.model.domain)
     println(io, "\nTimestepper set-up:")
-    @printf(io, "\tmethod:\t%s\n", typeof(s.integrator.alg).name.name)
-    @printf(io, "\tdt:\t%f\n", s.integrator.dt)
+    @printf(io, "\tmethod:\t%s\n", typeof(s.timestepper.alg).name.name)
+    @printf(io, "\tdt:\t%f\n", s.timestepper.dt)
     @printf(
         io,
         "\ttspan:\t(%f, %f)\n",
-        s.integrator.sol.prob.tspan[1],
-        s.integrator.sol.prob.tspan[2],
+        s.timestepper.sol.prob.tspan[1],
+        s.timestepper.sol.prob.tspan[2],
     )
 end
