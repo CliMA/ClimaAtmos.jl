@@ -43,7 +43,7 @@ cb_set =
 simulation = Simulation(
     model,
     SSPRK33(),
-    dt = 0.01,
+    Δt = 0.01,
     tspan = (0.0, 0.02),
     callbacks = cb_set,
 )

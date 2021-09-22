@@ -63,12 +63,12 @@ function run_dry_rising_bubble_2d(
         @test_throws ArgumentError set!(simulation, ρ = "quack")
 
         # test successful integration
-        @test step!(simulation) isa Nothing # either error or integration runs
+        @test time_step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
         @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
-        step!(simulation)
+        time_step!(simulation)
         u = simulation.integrator.u.nhm
 
         # perform regression check

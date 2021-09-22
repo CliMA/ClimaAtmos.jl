@@ -52,7 +52,7 @@ function run_bickley_jet_2d_plane(
         @test_throws ArgumentError set!(simulation, h = "quack")
 
         # test successful integration
-        @test step!(simulation) isa Nothing # either error or integration runs
+        @test time_step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, Δt = dt, tspan = (0.0, 1.0))
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
@@ -63,7 +63,7 @@ function run_bickley_jet_2d_plane(
         c_field = c.(local_geometry)
 
         set!(simulation, :swm, h = h, u = u, c = c_field)
-        step!(simulation)
+        time_step!(simulation)
         u = simulation.integrator.u.swm
 
         # perform regression check
