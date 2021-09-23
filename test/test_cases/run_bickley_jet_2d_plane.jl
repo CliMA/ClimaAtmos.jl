@@ -1,11 +1,10 @@
-# includes init_bickley_jet_2d_plane(
 include("initial_conditions/bickley_jet_2d_plane.jl")
 
 function run_bickley_jet_2d_plane(
     FT;
     stepper = SSPRK33(),
     nelements = (16, 16),
-    npolynomial = 4,
+    npolynomial = 3,
     dt = 0.04,
     callbacks = (),
     mode = :regression,
@@ -38,22 +37,32 @@ function run_bickley_jet_2d_plane(
     if mode == :unit
         # TODO!: run with input callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+
+        # test show function
+        show(simulation)
+        println()
+        @test simulation isa Simulation
+
+        # test set function
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
-
         set!(simulation, h = h, u = u, c = c)
-        step!(simulation)
 
-        @test true # either error or integration runs
+        # test error handling
+        @test_throws ArgumentError set!(simulation, quack = c)
+        @test_throws ArgumentError set!(simulation, h = "quack")
+
+        # test successful integration
+        @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @unpack h, u, c = init_bickley_jet_2d_plane(params)
 
         # here we set the initial condition with an array for testing
-        space = axes(simulation.integrator.u.swm.c)
+        space = axes(simulation.integrator.u.swm.c) # get tracer field
         local_geometry = Fields.local_geometry_field(space)
-        c_array = c.(local_geometry)
+        c_field = c.(local_geometry)
 
-        set!(simulation, :swm, h = h, u = u, c = c_array)
+        set!(simulation, :swm, h = h, u = u, c = c_field)
         step!(simulation)
         u = simulation.integrator.u.swm
 

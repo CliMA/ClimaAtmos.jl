@@ -1,4 +1,3 @@
-# includes init_bickley_jet_2d_plane(
 include("initial_conditions/ekman_column_1d.jl")
 
 function run_ekman_column_1d(
@@ -32,10 +31,8 @@ function run_ekman_column_1d(
         w0 = FT(0.0),
     )
 
-    # set up domain
     domain = Column(FT, zlim = (0.0, 2e2), nelements = nelements)
 
-    # set up boundary conditions
     # boundary_conditions = (
     #     ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
     #     u = (top = nothing, bottom = DragLawCondition()),
@@ -44,7 +41,6 @@ function run_ekman_column_1d(
     #     ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
     # )
 
-    # set up model
     model = SingleColumnModel(
         domain = domain,
         boundary_conditions = nothing,
@@ -57,9 +53,8 @@ function run_ekman_column_1d(
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
         set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
-        step!(simulation)
 
-        @test true # either error or integration runs
+        @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)

@@ -72,7 +72,6 @@ function set!(
     submodel_name = nothing;
     kwargs...,
 )
-    show(simulation)
     for (varname, f) in kwargs
         if varname ∉ simulation.model.varnames
             throw(ArgumentError("$varname not in model variables."))
