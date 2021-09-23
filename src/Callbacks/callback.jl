@@ -42,18 +42,24 @@ end
     get_nodal_distance(space::Space)
 # Move to ClimaCore
 """
-function get_nodal_distance(space)
-    if typeof(space).name.name == :ExtrudedFiniteDifferenceSpace
-        Δh_local = space.horizontal_space.local_geometry.WJ
-        Δv_local = diff(space.vertical_mesh.faces)
-        return (Δh = Δh_local, Δv = Δv_local)
-    elseif typeof(space).name.name == :SpectralElementSpace2D
-        Δh_local = space.local_geometry.WJ
-        return (Δh = Δh_local)
-    else
-        @show ("Method for $(typeof(space).name.name) undefined")
-    end
+function get_nodal_distance(space::ClimaCore.Spaces.AbstractSpace)
+    return nothing
 end
+function get_nodal_distance(space::ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace)
+    Δh_local = space.horizontal_space.local_geometry.WJ
+    Δv_local = diff(space.vertical_mesh.faces)
+    # TODO : Currently horizontal directions have npolynomial_x = npolynomial_y
+    return (Δx₁ = Δh_local, Δx₂= Δh_local, Δx₃ = Δv_local)
+end
+function get_nodal_distance(space::ClimaCore.Spaces.SpectralElementSpace1D)
+    Δh_local = space.local_geometry.WJ
+    return (Δx₁ = Δh_local, Δx₂ = Inf, Δx₃ = Inf)
+end
+function get_nodal_distance(space::ClimaCore.Spaces.SpectralElementSpace2D)
+    Δh_local = space.local_geometry.WJ
+    return (Δx₁ = Δh_local, Δx₂ = Δh_local, Δx₃ = Inf)
+end
+
 function (F::CFLAdaptive)(u, t, integrator)
     # Get model components
     model = F.model
@@ -65,7 +71,7 @@ function (F::CFLAdaptive)(u, t, integrator)
     # Get underlying space
     space = ClimaCore.Fields.axes(uₕ)
     # Get local nodal distances
-    Δx = get_nodal_distance(space)
+    Δx, Δy, Δz = get_nodal_distance(space)
     # Compute local Courant number
     cfl_local = abs.(ClimaCore.Fields.field_values(uₕ)) ./ Δx .* integrator.dt
     cfl_domain_max = maximum(cfl_local)
