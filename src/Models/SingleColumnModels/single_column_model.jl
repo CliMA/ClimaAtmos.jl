@@ -51,28 +51,35 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         w = Ym.w
         ρθ = Ym.ρθ
 
+        # gather boundary conditions
+        bc_ρ = model.boundary_conditions.ρ
+        bc_uv = model.boundary_conditions.uv
+        bc_w = model.boundary_conditions.w
+        bc_ρθ = model.boundary_conditions.ρθ
+
         # density
+        flux_bottom = get_boundary_flux(model, bc_ρ.bottom, ρ, Ym, Ya)
+        flux_top = get_boundary_flux(model, bc_ρ.top, ρ, Ym, Ya)
         If = Operators.InterpolateC2F()
         ∂f = Operators.GradientC2F()
         ∂c = Operators.DivergenceF2C(
-            bottom = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
-            top = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
+            bottom = Operators.SetValue(flux_bottom),
+            top = Operators.SetValue(flux_top),
         )
         @. dρ = -∂c(w * If(ρ))
 
         # potential temperature
+        flux_bottom = get_boundary_flux(model, bc_ρθ.bottom, ρθ, Ym, Ya)
+        flux_top = get_boundary_flux(model, bc_ρθ.top, ρθ, Ym, Ya)
         If = Operators.InterpolateC2F()
         ∂f = Operators.GradientC2F()
         ∂c = Operators.DivergenceF2C(
-            bottom = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
-            top = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
+            bottom = Operators.SetValue(flux_bottom),
+            top = Operators.SetValue(flux_top),
         )
         # TODO!: Undesirable casting to vector required
         @. dρθ =
             -∂c(w * If(ρθ)) + ρ * ∂c(Geometry.CartesianVector(ν * ∂f(ρθ / ρ)))
-
-        uv_1 = Operators.getidx(uv, Operators.Interior(), 1)
-        u_wind = LinearAlgebra.norm(uv_1)
 
         A = Operators.AdvectionC2C(
             bottom = Operators.SetValue(Geometry.Cartesian12Vector(0.0, 0.0)),
@@ -80,16 +87,18 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         )
 
         # uv
-        bcs_bottom = Operators.SetValue(
-            Geometry.Cartesian3Vector(Cd * u_wind) ⊗ uv_1,
-        )
-        bcs_top = Operators.SetValue(uvg)
+        flux_bottom = get_boundary_flux(model, bc_uv.bottom, uv, Ym, Ya)
+
+        bcs_bottom = Operators.SetValue(flux_bottom)
+        bcs_top = Operators.SetValue(uvg) # this needs abstraction
         ∂c = Operators.DivergenceF2C(bottom = bcs_bottom)
         ∂f = Operators.GradientC2F(top = bcs_top)
         duv .= (uv .- Ref(uvg)) .× Ref(Geometry.Cartesian3Vector(f))
         @. duv += ∂c(ν * ∂f(uv)) - A(w, uv)
 
         # w
+        flux_bottom = get_boundary_flux(model, bc_w.bottom, w, Ym, Ya)
+        flux_top = get_boundary_flux(model, bc_w.top, w, Ym, Ya)
         If = Operators.InterpolateC2F(
             bottom = Operators.Extrapolate(),
             top = Operators.Extrapolate(),
@@ -99,8 +108,8 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         Af = Operators.AdvectionF2F()
         divf = Operators.DivergenceC2F()
         B = Operators.SetBoundaryOperator(
-            bottom = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
-            top = Operators.SetValue(Geometry.Cartesian3Vector(zero(FT))),
+            bottom = Operators.SetValue(flux_bottom),
+            top = Operators.SetValue(flux_top),
         )
         Φ(z) = grav * z
         Π(ρθ) = C_p * (R_d * ρθ / MSLP)^(R_m / C_v)

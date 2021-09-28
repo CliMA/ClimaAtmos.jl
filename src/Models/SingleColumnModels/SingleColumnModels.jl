@@ -6,7 +6,7 @@ using UnPack: @unpack
 
 # clima ecosystem
 using ClimaAtmos.BoundaryConditions:
-    NoFluxCondition, CustomFluxCondition, DragLawCondition
+    NoFluxCondition, CustomFluxCondition, DragLawCondition, get_boundary_flux
 using ClimaAtmos.Domains: AbstractVerticalDomain, make_function_space
 using ClimaAtmos.Models: AbstractModel, get_boundary_flux
 using ClimaCore: Fields, Geometry, Operators, Spaces

@@ -8,7 +8,8 @@ using Plots
 
 # Clima ecosystem
 using ClimaAtmos
-using ClimaAtmos.BoundaryConditions: NoFluxCondition, DragLawCondition
+using ClimaAtmos.BoundaryConditions:
+    NoFluxCondition, DragLawCondition, BulkFormulaCondition, get_boundary_flux
 using ClimaAtmos.Domains: Plane, PeriodicPlane, Column, HybridPlane
 using ClimaAtmos.Models.ShallowWaterModels: ShallowWaterModel
 using ClimaAtmos.Models.SingleColumnModels: SingleColumnModel
