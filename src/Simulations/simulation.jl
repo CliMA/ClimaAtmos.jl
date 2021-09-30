@@ -7,6 +7,7 @@
         integrator::DiffEqBase.DEIntegrator
         # user defined callback operations 
         callbacks::Union{DiffEqBase.CallbackSet, DiffEqBase.DiscreteCallback, Nothing}
+        restart::AbstractRestart
     end
 
 A simulation wraps an abstract ClimaAtmos `model` containing 
@@ -21,6 +22,7 @@ struct Simulation <: AbstractSimulation
         DiffEqBase.DiscreteCallback,
         Nothing,
     }
+    restart::AbstractRestart
 end
 
 """
@@ -37,6 +39,7 @@ function Simulation(
     dt,
     tspan,
     callbacks = nothing,
+    restart = NoRestart(),
 )
 
     # inital state is either default or set externally 
@@ -54,7 +57,8 @@ function Simulation(
     integrator =
         DiffEqBase.init(ode_problem, method, dt = dt, callback = callbacks)
 
-    return Simulation(model, integrator, callbacks)
+    restart = restart
+    return Simulation(model, integrator, callbacks, restart)
 end
 
 """
@@ -80,7 +84,22 @@ function set!(
         # we need to use the reinit function because we don't 
         # have direct state access using DiffEqBase. For this
         # we need to copy
-        Y = copy(simulation.integrator.u)
+        if simulation.restart isa NoRestart
+            Y = copy(simulation.integrator.u)
+            time_final = simulation.integrator.sol.prob.tspan[2]
+        else
+            filename = simulation.restart.restartfile
+            restart_data = load(filename)
+            @assert "model" in keys(restart_data)
+            if restart_data["model"] == simulation.model
+                new_end_time = simulation.restart.end_time
+                restart_integrator = restart_data["integrator"]
+                Y = copy(restart_integrator.u)
+                time_final = new_end_time
+            else
+                throw(ArgumentError("Restart file needs a compatible model."))
+            end
+        end
 
         # get fields for this submodel from integrator state
         if submodel_name === nothing
@@ -111,7 +130,7 @@ function set!(
             simulation.integrator,
             Y;
             t0 = simulation.integrator.t,
-            tf = simulation.integrator.sol.prob.tspan[2],
+            tf = time_final,
             erase_sol = false,
             reset_dt = false,
             reinit_callbacks = true,

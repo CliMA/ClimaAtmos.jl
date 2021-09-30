@@ -14,7 +14,8 @@ using ClimaAtmos.Domains: Plane, PeriodicPlane, Column, HybridPlane
 using ClimaAtmos.Models.ShallowWaterModels: ShallowWaterModel
 using ClimaAtmos.Models.SingleColumnModels: SingleColumnModel
 using ClimaAtmos.Models.Nonhydrostatic2DModels: Nonhydrostatic2DModel
-using ClimaAtmos.Simulations: Simulation, set!, step!, run!
+using ClimaAtmos.Simulations:
+    Simulation, set!, step!, run!, AbstractRestart, NoRestart, Restart
 using ClimaAtmos.Callbacks
 using ClimaCore: Geometry, Fields
 
