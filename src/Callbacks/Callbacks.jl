@@ -7,7 +7,7 @@ using JLD2
 
 using ClimaCore
 
-using ClimaAtmos.Models: AbstractModel
+using ClimaAtmos.Models: AbstractModel, get_velocities
 
 export generate_callback, AbstractCallback, JLD2Output, CFLAdaptive
 

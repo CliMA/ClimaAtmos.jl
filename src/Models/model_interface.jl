@@ -13,6 +13,13 @@ Construct the ordinary differential equations for `model`.
 function make_ode_function(model::AbstractModel) end
 
 """
+    get_velocities
+
+Get velocity components from model
+"""
+function get_velocities(u,model::AbstractModel) end
+
+"""
     get_boundary_flux
 
 Construct the boundary fluxes.

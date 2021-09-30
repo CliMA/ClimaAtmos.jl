@@ -114,3 +114,9 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
 
     return rhs!
 end
+
+function get_velocities(u, model::SingleColumnModel)
+    u_1 = getproperty(u.scm, :uv)
+    u_2 = getproperty(u.scm, :w)
+    return (u_1, u_2)
+end

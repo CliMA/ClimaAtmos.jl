@@ -85,3 +85,9 @@ function Models.make_ode_function(model::ShallowWaterModel{FT}) where {FT}
         return dY
     end
 end
+
+function Models.get_velocities(Y, model::ShallowWaterModel)
+    u_1 = Y.swm.u.components.data.:1
+    u_2 = Y.swm.u.components.data.:2
+    return (u_1, u_2)
+end

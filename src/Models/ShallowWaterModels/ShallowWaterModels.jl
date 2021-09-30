@@ -14,5 +14,6 @@ import ClimaAtmos: Models
 include("shallow_water_model.jl")
 
 export ShallowWaterModel
+export get_velocities
 
 end # module

@@ -1,3 +1,6 @@
+CCF = ClimaCore.Fields
+CCS = ClimaCore.Spaces
+
 """
     JLD2Output <: AbstractCallback
     Container for JLD2 output callback (writes to disk)
@@ -34,7 +37,7 @@ Container for CFL information callback.
 """
 mutable struct CFLAdaptive <: AbstractCallback
     model::AbstractModel
-    cfl_current::Real
+    interval::Real
     cfl_target::Real
     update::Bool
 end
@@ -49,56 +52,56 @@ to horizontal spacing and Δx₃ corresponds to vertical spacing.
     
 # Move to ClimaCore
 """
-function get_nodal_distance(space::ClimaCore.Spaces.AbstractSpace)
+function get_nodal_distance(space::CCS.AbstractSpace)
     return nothing
 end
-function get_nodal_distance(space::ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace)
+function get_nodal_distance(space::CCS.ExtrudedFiniteDifferenceSpace)
     Δh_local = space.horizontal_space.local_geometry.WJ
     Δv_local = diff(space.vertical_mesh.faces)
     # TODO : Currently horizontal directions have npolynomial_x = npolynomial_y
     return (Δx₁ = Δh_local, Δx₂= Δh_local, Δx₃ = Δv_local)
 end
-function get_nodal_distance(space::ClimaCore.Spaces.SpectralElementSpace1D)
+function get_nodal_distance(space::CCS.SpectralElementSpace1D)
     Δh_local = space.local_geometry.WJ
     return (Δx₁ = Δh_local, Δx₂ = Inf, Δx₃ = Inf)
 end
-function get_nodal_distance(space::ClimaCore.Spaces.SpectralElementSpace2D)
+function get_nodal_distance(space::CCS.SpectralElementSpace2D)
     Δh_local = space.local_geometry.WJ
     return (Δx₁ = Δh_local, Δx₂ = Δh_local, Δx₃ = Inf)
 end
-function get_nodal_distance(space::ClimaCore.Spaces.FiniteDifferenceSpace)
+function get_nodal_distance(space::CCS.FiniteDifferenceSpace)
     Δv_local = diff(space.vertical_mesh.faces)
     return (Δx₁ = Inf, Δx₂ = Inf, Δx₃ = Δv_local)
 end
-
-function (F::CFLAdaptive)(u, t, integrator)
-    # Get model components
-    model = F.model
-    # Get state variables
-    Y = getproperty(integrator.u, model.name)
-    # Unpack horizontal and vertical velocity components
-    uₕ = getproperty(Y.u.:2, 1).:1
-    uᵥ = getproperty(Y.u.:2, 1).:2
-    # Get underlying space
-    space = ClimaCore.Fields.axes(uₕ)
-    # Get local nodal distances
-    Δx, Δy, Δz = get_nodal_distance(space)
-    # Compute local Courant number
-    cfl_local = abs.(ClimaCore.Fields.field_values(uₕ)) ./ Δx .* integrator.dt
-    cfl_domain_max = maximum(cfl_local)
-    F.cfl_current = cfl_domain_max
-    return cfl_domain_max > F.cfl_target
+function get_local_courant(u, Δx, Δt, space::CCS.SpectralElementSpace2D)
+    return @. abs(u) / Δx * Δt
 end
 
 """
     (F::CFLAdaptive)(integrator)
 """
 function (F::CFLAdaptive)(integrator)
+    # Get model components
+    model = F.model
+    # Get state variables
+    # Unpack horizontal and vertical velocity components: Generalise across models
+    velocities = get_velocities(integrator.u, model)
+    space = CCF.axes(velocities[1])
+    if space isa CCS.Spaces.SpectralElementSpace2D
+        Δx, Δy, Δz = get_nodal_distance(space)
+        cfl_local_x = get_local_courant(CCF.field_values(velocities[1]), Δx, integrator.dt, space)
+        cfl_local_y = get_local_courant(CCF.field_values(velocities[2]), Δy, integrator.dt, space)
+        cfl_domain_x = maximum(cfl_local_x)
+        cfl_domain_y = maximum(cfl_local_y)
+        cfl_domain_max = max(cfl_domain_x, cfl_domain_y)
+        cfl_current = cfl_domain_max
+        rtol = abs((cfl_domain_max - F.cfl_target) / F.cfl_target)
+    else
+        @error "$space unsupported for adaptive timestepping."
+    end
     if F.update == true
-        dt_suggested = F.cfl_target / F.cfl_current * integrator.dt
+        dt_suggested = F.cfl_target / cfl_current * integrator.dt
         isinf(dt_suggested) ? nothing : integrator.dtcache = dt_suggested 
-        #dtcache if adaptive option is false // 
-        @info ("New Δt = $(integrator.dt)")
     else
         nothing
     end
@@ -112,5 +115,5 @@ end
     maximum CFL number in the domain. 
 """
 function generate_callback(F::CFLAdaptive; kwargs...)
-    return DiffEqCallbacks.DiscreteCallback(F, F; kwargs...)
+    return DiffEqCallbacks.PeriodicCallback(F, F.interval; kwargs...)
 end

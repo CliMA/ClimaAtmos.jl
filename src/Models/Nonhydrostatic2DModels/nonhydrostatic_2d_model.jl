@@ -140,3 +140,10 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel{FT}) where {FT}
         return dY
     end
 end
+
+function get_velocities(u, model::Nonhydrostatic2DModel)
+    u_1 = getproperty(u.nhm,:ρuh) ./ getproperty(u.nhm, :ρ)
+    u_2 = getproperty(u.nhm,:ρw) ./ getproperty(u.nhm, :ρ)
+    # Interpolation required to get matched spaces between vertical momentum and density
+    return (u_1, u_2)
+end
