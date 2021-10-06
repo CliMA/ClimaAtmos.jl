@@ -3,7 +3,7 @@ module Domains
 using ClimaCore
 using Printf
 
-import ClimaCore: Meshes, Spaces, Topologies
+import ClimaCore: Meshes, Spaces, Topologies, Geometry
 
 import IntervalSets: Interval
 

@@ -3,7 +3,7 @@ function init_ekman_column_1d(params)
 
     # density
     ρ(local_geometry) = begin
-        z = local_geometry.coordinates
+        @unpack z = local_geometry.coordinates
 
         Γ = grav / C_p
         T = max(T_surf - Γ * z, T_min_ref)

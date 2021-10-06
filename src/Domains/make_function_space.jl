@@ -3,9 +3,9 @@
 """
 function make_function_space(domain::Column{FT}) where {FT}
     column = ClimaCore.Domains.IntervalDomain(
-        domain.zlim[1],
-        domain.zlim[2];
-        x3boundary = (:bottom, :top),
+        Geometry.ZPoint{FT}(domain.zlim[1]),
+        Geometry.ZPoint{FT}(domain.zlim[2]);
+        boundary_tags = (:bottom, :top),
     )
     mesh = Meshes.IntervalMesh(column; nelems = domain.nelements)
     center_space = Spaces.CenterFiniteDifferenceSpace(mesh)
@@ -19,8 +19,14 @@ end
 """
 function make_function_space(domain::Plane{FT}) where {FT}
     rectangle = ClimaCore.Domains.RectangleDomain(
-        Interval(domain.xlim),
-        Interval(domain.ylim),
+        Interval(
+            Geometry.XPoint(domain.xlim[1]),
+            Geometry.XPoint(domain.xlim[2]),
+        ),
+        Interval(
+            Geometry.YPoint(domain.ylim[1]),
+            Geometry.YPoint(domain.ylim[2]),
+        ),
         x1periodic = domain.periodic[1],
         x2periodic = domain.periodic[2],
     )
@@ -41,17 +47,20 @@ end
 """
 function make_function_space(domain::HybridPlane{FT}) where {FT}
     vertdomain = ClimaCore.Domains.IntervalDomain(
-        FT(domain.zlim[1]),
-        FT(domain.zlim[2]);
-        x3boundary = (:bottom, :top),
+        Geometry.ZPoint{FT}(domain.zlim[1]),
+        Geometry.ZPoint{FT}(domain.zlim[2]);
+        boundary_tags = (:bottom, :top),
     )
 
     vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[2])
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.RectangleDomain(
-        Interval(domain.xlim),
-        Interval(-0, 0),
+        Interval(
+            Geometry.XPoint(domain.xlim[1]),
+            Geometry.XPoint(domain.xlim[2]),
+        ),
+        Interval(Geometry.YPoint(-0), Geometry.YPoint(0)),
         x1periodic = true,
         x2boundary = (:a, :b),
     )
@@ -68,5 +77,3 @@ function make_function_space(domain::HybridPlane{FT}) where {FT}
 
     return hv_center_space, hv_face_space
 end
-
-Interval(I::Tuple{Number, Number}) = Interval(I[1], I[2])
