@@ -113,7 +113,7 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         )
         Φ(z) = grav * z
         Π(ρθ) = C_p * (R_d * ρθ / MSLP)^(R_m / C_v)
-        zc = Fields.coordinate_field(axes(ρ))
+        zc = Fields.coordinate_field(axes(ρ)).z
         @. dw = B(
             Geometry.CartesianVector(-(If(ρθ / ρ) * ∂f(Π(ρθ))) - ∂f(Φ(zc))) + divf(ν * ∂c(w)) - Af(w, w),
         )
