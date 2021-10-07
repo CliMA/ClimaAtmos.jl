@@ -158,11 +158,33 @@ function HybridPlane(FT::DataType = Float64; xlim, zlim, nelements, npolynomial)
     return HybridPlane{FT}(xlim, zlim, nelements, npolynomial)
 end
 
+"""
+    struct Sphere{FT} <: AbstractHybridDomain 
+"""
+struct Sphere{FT} <: AbstractHorizontalDomain{FT}
+    radius::FT
+    nelements::Integer
+    npolynomial::Integer
+end
+
+"""
+    Sphere <: AbstractHorizontalDomain
+
+Creates a 2D spherical domain with `radius`, `nelement` the number of elements
+of each direction on each cubed sphere face, and `npolynomial` the polynomial
+order
+"""
+function Sphere(FT::DataType = Float64; radius, nelements, npolynomial)
+    return Sphere{FT}(radius, nelements, npolynomial)
+end
+
 Base.ndims(::Column) = 1
 
 Base.ndims(::Plane) = 2
 
 Base.ndims(::HybridPlane) = 2
+
+Base.ndims(::Sphere) = 2
 
 Base.length(domain::Column) = domain.zlim[2] - domain.zlim[1]
 
@@ -177,7 +199,7 @@ Base.size(domain::HybridPlane) =
 function Base.show(io::IO, domain::Column)
     min = domain.zlim[1]
     max = domain.zlim[2]
-    print("Domain set-up:\n\tSingle colume z-range:\t")
+    print("Domain set-up:\n\tSingle column z-range:\t")
     printstyled(io, "[", color = 226)
     astring = @sprintf("%0.1f", min)
     bstring = @sprintf("%0.1f", max)
@@ -233,5 +255,13 @@ function Base.show(io::IO, domain::HybridPlane)
         domain.nelements[1],
         domain.nelements[2]
     )
+    @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
+end
+
+function Base.show(io::IO, domain::Sphere)
+    print("Domain set-up:\n\tSphere R:\t")
+    astring = @sprintf("%0.1f", domain.radius)
+    printstyled(astring, color = 7)
+    @printf("\n\telem:\t\t%d", domain.nelements)
     @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
 end

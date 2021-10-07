@@ -38,6 +38,7 @@ export Plane
 export PeriodicPlane
 export Plane
 export HybridPlane
+export Sphere
 #TODO: Future support for Hybrid and Spectral Planes
 
 export make_function_space
