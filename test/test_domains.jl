@@ -57,6 +57,15 @@ function instantiate_hybrid_plane(FT)
     return check1 && check2 && check3 && check4
 end
 
+function instantiate_sphere(FT)
+    domain = Sphere(FT, radius = 1.0, nelements = 4, npolynomial = 4)
+    check1 = domain.radius == 1.0
+    check2 = domain.nelements == 4
+    check3 = domain.npolynomial == 4
+
+    return check1 && check2 && check3
+end
+
 @testset "Domains" begin
     @info "Testing ClimaAtmos.Domains..."
 
@@ -66,38 +75,9 @@ end
             @test instantiate_plane(FT)
             @test instantiate_periodic_plane(FT)
             @test instantiate_hybrid_plane(FT)
+            @test instantiate_sphere(FT)
 
-            # Test ndims
-            I = Column(FT, zlim = (0.0, 1.0), nelements = 2)
-            @test ndims(I) == 1
-
-            ✈ = Plane(
-                FT,
-                xlim = (0.0, 1.0),
-                ylim = (0.0, 1.0),
-                nelements = (3, 2),
-                npolynomial = 16,
-                periodic = (false, false),
-            )
-            @test ndims(✈) == 2
-
-            HV = HybridPlane(
-                FT,
-                xlim = (0.0, 1.0),
-                zlim = (0.0, 2.0),
-                nelements = (3, 2),
-                npolynomial = 16,
-            )
-            @test ndims(HV) == 2
-
-            # Test length
             I = Column(FT, zlim = (1.0, 2.0), nelements = 2)
-            @test length(I) == 1.0
-
-            # Test size
-            I = Column(FT, zlim = (1.0, 4.0), nelements = 2)
-            @test size(I) == 3.0
-
             ✈ = Plane(
                 FT,
                 xlim = (0.0, 2.0),
@@ -106,8 +86,6 @@ end
                 npolynomial = 16,
                 periodic = (false, false),
             )
-            @test size(✈) == (2.0, 3.0)
-
             HV = HybridPlane(
                 FT,
                 xlim = (0.0, 1.0),
@@ -115,36 +93,36 @@ end
                 nelements = (3, 2),
                 npolynomial = 16,
             )
+            QIU = Sphere(FT, radius = 1.0, nelements = 4, npolynomial = 4)
+
+            # Test ndims
+            @test ndims(I) == 1
+            @test ndims(✈) == 2
+            @test ndims(HV) == 2
+            @test ndims(QIU) == 2
+
+            # Test length
+            @test length(I) == 1.0
+
+            # Test size
+            @test size(I) == 1.0
+            @test size(✈) == (2.0, 3.0)
             @test size(HV) == (1.0, 2.0)
 
             # Test show functions
-            I = Column(FT, zlim = (0.0, 1.0), nelements = 2)
             show(I)
             println()
             @test I isa Column{FT}
-
-            ✈ = Plane(
-                FT,
-                xlim = (0.0, 1.0),
-                ylim = (0.0, 1.0),
-                nelements = (3, 2),
-                npolynomial = 16,
-                periodic = (false, true),
-            )
             show(✈)
             println()
             @test ✈ isa Plane{FT}
-
-            HV = HybridPlane(
-                FT,
-                xlim = (0.0, 1.0),
-                zlim = (0.0, 2.0),
-                nelements = (3, 2),
-                npolynomial = 16,
-            )
             show(HV)
             println()
             @test HV isa HybridPlane{FT}
+            show(QIU)
+            println()
+            @test QIU isa Sphere{FT}
+
         end
     end
 end

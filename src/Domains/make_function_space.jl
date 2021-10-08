@@ -77,3 +77,17 @@ function make_function_space(domain::HybridPlane{FT}) where {FT}
 
     return hv_center_space, hv_face_space
 end
+
+"""
+    make_function_space(domain::Sphere)
+"""
+function make_function_space(domain::Sphere{FT}) where {FT}
+    sphere = ClimaCore.Domains.SphereDomain(domain.radius)
+    mesh =
+        Meshes.Mesh2D(sphere, Meshes.EquiangularSphereWarp(), domain.nelements)
+    grid_topology = Topologies.Grid2DTopology(mesh)
+    quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
+    space = Spaces.SpectralElementSpace2D(grid_topology, quad)
+
+    return space
+end
