@@ -55,18 +55,15 @@ function make_function_space(domain::HybridPlane{FT}) where {FT}
     vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[2])
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
-    horzdomain = ClimaCore.Domains.RectangleDomain(
+    horzdomain = ClimaCore.Domains.IntervalDomain(
         Interval(
             Geometry.XPoint(domain.xlim[1]),
             Geometry.XPoint(domain.xlim[2]),
         ),
-        Interval(Geometry.YPoint(-0), Geometry.YPoint(0)),
-        x1periodic = true,
-        x2boundary = (:a, :b),
+        periodic = true,
     )
-    horzmesh =
-        Meshes.EquispacedRectangleMesh(horzdomain, domain.nelements[1], 1)
-    horztopology = Topologies.GridTopology(horzmesh)
+    horzmesh = Meshes.IntervalMesh(horzdomain, nelems = domain.nelements[1])
+    horztopology = Topologies.IntervalTopology(horzmesh)
 
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace1D(horztopology, quad)
