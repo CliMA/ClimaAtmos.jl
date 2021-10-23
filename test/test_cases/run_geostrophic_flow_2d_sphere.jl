@@ -1,21 +1,21 @@
 include("initial_conditions/geostrophic_flow_2d_sphere.jl")
 
-function run_bickley_jet_2d_plane(
+function run_geostrophic_flow_2d_sphere(
     FT;
     stepper = SSPRK33(),
-    nelements = (16, 16),
+    nelements = 4,
     npolynomial = 3,
-    dt = 0.04,
+    dt = 1800,
     callbacks = (),
     mode = :regression,
 )
     if FT <: Float32
-        @info "Bickley jet 2D plane test does not run for $FT."
+        @info "Geostrophic flow 2D sphere test does not run for $FT."
         return nothing
     end
 
     params = map(FT, (
-        g = 9.8,  # gravitational constant
+        g = 9.80616,  # gravitational constant
         D₄ = 1e-4,  # hyperdiffusion constant
         ϵ = 0.1,  # perturbation size for initial condition
         l = 0.5,  # Gaussian width
