@@ -22,8 +22,8 @@ function Models.default_initial_conditions(
 
     # functions that make zeros for this model
     zero_scalar(lg) = zero(FT)
-    zero_12vector(lg) = Geometry.Cartesian12Vector(zero(FT), zero(FT))
-    zero_3vector(lg) = Geometry.Cartesian3Vector(zero(FT))
+    zero_12vector(lg) = Geometry.UVVector(zero(FT), zero(FT))
+    zero_3vector(lg) = Geometry.WVector(zero(FT))
 
     ρ = zero_scalar.(local_geometry_c)
     uv = zero_12vector.(local_geometry_c)
@@ -78,12 +78,11 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
             top = Operators.SetValue(flux_top),
         )
         # TODO!: Undesirable casting to vector required
-        @. dρθ =
-            -∂c(w * If(ρθ)) + ρ * ∂c(Geometry.CartesianVector(ν * ∂f(ρθ / ρ)))
+        @. dρθ = -∂c(w * If(ρθ)) + ρ * ∂c(Geometry.WVector(ν * ∂f(ρθ / ρ)))
 
         A = Operators.AdvectionC2C(
-            bottom = Operators.SetValue(Geometry.Cartesian12Vector(0.0, 0.0)),
-            top = Operators.SetValue(Geometry.Cartesian12Vector(0.0, 0.0)),
+            bottom = Operators.SetValue(Geometry.UVVector(0.0, 0.0)),
+            top = Operators.SetValue(Geometry.UVVector(0.0, 0.0)),
         )
 
         # uv
@@ -93,7 +92,7 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         bcs_top = Operators.SetValue(uvg) # this needs abstraction
         ∂c = Operators.DivergenceF2C(bottom = bcs_bottom)
         ∂f = Operators.GradientC2F(top = bcs_top)
-        duv .= (uv .- Ref(uvg)) .× Ref(Geometry.Cartesian3Vector(f))
+        duv .= (uv .- Ref(uvg)) .× Ref(Geometry.WVector(f))
         @. duv += ∂c(ν * ∂f(uv)) - A(w, uv)
 
         # w
@@ -115,7 +114,8 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         Π(ρθ) = C_p * (R_d * ρθ / MSLP)^(R_m / C_v)
         zc = Fields.coordinate_field(axes(ρ)).z
         @. dw = B(
-            Geometry.CartesianVector(-(If(ρθ / ρ) * ∂f(Π(ρθ))) - ∂f(Φ(zc))) + divf(ν * ∂c(w)) - Af(w, w),
+            Geometry.WVector(-(If(ρθ / ρ) * ∂f(Π(ρθ))) - ∂f(Φ(zc))) +
+            divf(ν * ∂c(w)) - Af(w, w),
         )
 
         return dY

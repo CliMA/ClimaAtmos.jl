@@ -24,7 +24,7 @@ function run_ekman_column_1d(
         ν = FT(0.01),
         Cd = FT(0.01 / (2e2 / 30.0)),
         Ch = FT(0.01 / (2e2 / 30.0)),
-        uvg = Geometry.Cartesian12Vector(FT(1.0), FT(0.0)),
+        uvg = Geometry.UVVector(FT(1.0), FT(0.0)),
         T_surf = FT(300.0),
         T_min_ref = FT(230.0),
         u0 = FT(1.0),

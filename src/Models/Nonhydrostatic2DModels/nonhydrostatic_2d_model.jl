@@ -22,8 +22,8 @@ function Models.default_initial_conditions(
 
     # functions that make zeros for this model
     zero_scalar(lg) = zero(FT) # .
-    zero_1vector(lg) = Geometry.Cartesian1Vector(zero(FT)) # ---->
-    zero_3vector(lg) = Geometry.Cartesian3Vector(zero(FT)) # (-_-') . ┓( ´∀` )┏ 
+    zero_1vector(lg) = Geometry.UVector(zero(FT)) # ---->
+    zero_3vector(lg) = Geometry.WVector(zero(FT)) # (-_-') . ┓( ´∀` )┏ 
 
     ρ = zero_scalar.(local_geometry_c)
     ρuh = zero_1vector.(local_geometry_c)
@@ -45,7 +45,7 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel{FT}) where {FT}
     # unity tensor for pressure term calculation 
     # in horizontal spectral divergence
     I = Ref(Geometry.Axis2Tensor(
-        (Geometry.Cartesian1Axis(), Geometry.Cartesian1Axis()),
+        (Geometry.UAxis(), Geometry.UAxis()),
         @SMatrix [1.0]
     ),)
 
@@ -60,34 +60,32 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel{FT}) where {FT}
         top = Operators.Extrapolate(),
     )
     vector_interp_c2f = Operators.InterpolateC2F(
-        bottom = Operators.SetValue(Geometry.Cartesian1Vector(0.0)),
-        top = Operators.SetValue(Geometry.Cartesian1Vector(0.0)),
+        bottom = Operators.SetValue(Geometry.UVector(0.0)),
+        top = Operators.SetValue(Geometry.UVector(0.0)),
     )
     tensor_interp_f2c = Operators.InterpolateF2C()
 
     # gradients
     scalar_grad_c2f = Operators.GradientC2F()
     B = Operators.SetBoundaryOperator(
-        bottom = Operators.SetValue(Geometry.Cartesian3Vector(0.0)),
-        top = Operators.SetValue(Geometry.Cartesian3Vector(0.0)),
+        bottom = Operators.SetValue(Geometry.WVector(0.0)),
+        top = Operators.SetValue(Geometry.WVector(0.0)),
     )
 
     # divergences
     vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.Cartesian3Vector(0.0)),
-        top = Operators.SetValue(Geometry.Cartesian3Vector(0.0)),
+        bottom = Operators.SetValue(Geometry.WVector(0.0)),
+        top = Operators.SetValue(Geometry.WVector(0.0)),
     )
     tensor_vdiv_c2f = Operators.DivergenceC2F(
-        bottom = Operators.SetDivergence(Geometry.Cartesian3Vector(0.0)),
-        top = Operators.SetDivergence(Geometry.Cartesian3Vector(0.0)),
+        bottom = Operators.SetDivergence(Geometry.WVector(0.0)),
+        top = Operators.SetDivergence(Geometry.WVector(0.0)),
     )
     tensor_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(
-            Geometry.Cartesian3Vector(0.0) ⊗ Geometry.Cartesian1Vector(0.0),
+            Geometry.WVector(0.0) ⊗ Geometry.UVector(0.0),
         ),
-        top = Operators.SetValue(
-            Geometry.Cartesian3Vector(0.0) ⊗ Geometry.Cartesian1Vector(0.0),
-        ),
+        top = Operators.SetValue(Geometry.WVector(0.0) ⊗ Geometry.UVector(0.0)),
     )
 
     function rhs!(dY, Y, Ya, t)
@@ -121,7 +119,7 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel{FT}) where {FT}
         @. dρw = -hdiv(uh_f ⊗ ρw)
         @. dρw += B(
             Geometry.transform(
-                Geometry.Cartesian3Axis(),
+                Geometry.WAxis(),
                 -(scalar_grad_c2f(pressure(ρθ))) +
                 scalar_interp_c2f(ρ) * Geometry.Covariant3Vector(-g), # TODO!: Not generally a Covariant3Vector
             ) - tensor_vdiv_c2f(tensor_interp_f2c(

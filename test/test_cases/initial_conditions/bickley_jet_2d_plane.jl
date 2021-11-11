@@ -17,7 +17,7 @@ function init_bickley_jet_2d_plane(params)
         u₁′ += k * gaussian * cos(k * x) * sin(k * y)
         u₂′ = -k * gaussian * sin(k * x) * cos(k * y)
         u = Geometry.Covariant12Vector(
-            Geometry.Cartesian12Vector(U₁ + ϵ * u₁′, ϵ * u₂′),
+            Geometry.UVVector(U₁ + ϵ * u₁′, ϵ * u₂′),
             local_geometry,
         )
 

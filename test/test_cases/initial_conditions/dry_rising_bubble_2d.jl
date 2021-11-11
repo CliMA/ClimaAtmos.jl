@@ -87,10 +87,10 @@ function init_dry_rising_bubble_2d(
     ρe_tot(local_geometry) = ρ(local_geometry) * e_tot(local_geometry)
 
     # horizontal momentum vector
-    ρuh(local_geometry) = Geometry.Cartesian1Vector(0.0)
+    ρuh(local_geometry) = Geometry.UVector(0.0)
 
     # vertical momentum vector
-    ρw(local_geometry) = Geometry.Cartesian3Vector(0.0)
+    ρw(local_geometry) = Geometry.WVector(0.0)
 
     if thermovar == :ρθ
         return (ρ = ρ, ρθ = ρθ, ρuh = ρuh, ρw = ρw)
