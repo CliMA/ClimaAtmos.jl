@@ -6,7 +6,7 @@ Construct zero boundary fluxes for a scalar or 2-element vector(x,y)
 """
 function get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Ym, Ya)
     FT = eltype(Ym)
-    flux = Geometry.Cartesian3Vector(FT(0))
+    flux = Geometry.WVector(FT(0))
 end
 
 # Momentum-specific
@@ -23,7 +23,7 @@ function get_boundary_flux(model, bc::DragLawCondition, uv, Ym, Ya)
     uv_1 = first_interior(Ym.uv)
     u_wind = LinearAlgebra.norm(uv_1)
 
-    flux = Geometry.Cartesian3Vector(coefficients.Cd * u_wind) ⊗ uv_1
+    flux = Geometry.WVector(coefficients.Cd * u_wind) ⊗ uv_1
 end
 
 
@@ -50,9 +50,8 @@ function get_boundary_flux(
     uv_1 = first_interior(Ym.uv)
     u_wind = LinearAlgebra.norm(uv_1)
 
-    flux = Geometry.Cartesian3Vector(
-        coefficients.Ch * u_wind * ρ_1 * (ρθ_1 / ρ_1 - θ_sfc),
-    )
+    flux =
+        Geometry.WVector(coefficients.Ch * u_wind * ρ_1 * (ρθ_1 / ρ_1 - θ_sfc))
 end
 
 # helpers

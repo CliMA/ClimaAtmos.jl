@@ -19,8 +19,8 @@ function init_ekman_column_1d(params)
     end
 
     # velocity
-    uv(local_geometry) = Geometry.Cartesian12Vector(u0, v0) # u, v components
-    w(local_geometry) = Geometry.Cartesian3Vector(w0) # w component
+    uv(local_geometry) = Geometry.UVVector(u0, v0) # u, v components
+    w(local_geometry) = Geometry.WVector(w0) # w component
 
     # potential temperature
     ρθ(local_geometry) = ρ(local_geometry) * T_surf
