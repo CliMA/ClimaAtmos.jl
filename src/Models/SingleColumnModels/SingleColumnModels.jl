@@ -16,7 +16,6 @@ using ClimaCore.Geometry: ⊗
 import ClimaAtmos: Models
 
 include("single_column_model.jl")
-include("one_dimensional_diffusion_model.jl")
 
 export SingleColumnModel
 export OneDimensionalDiffusionModel

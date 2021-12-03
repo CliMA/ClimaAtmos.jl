@@ -1,6 +1,6 @@
 using OrderedCollections: OrderedDict
 
-using ClimaSimulations: evaluate_callbacks!, evaluate_output_writers!, @stopwatch, run!
+using ClimaSimulations:run!
 using ClimaSimulations: prettytime
 
 import ClimaSimulations: Simulation, time_step!, initialize_simulation!, stop_time_exceeded
@@ -40,7 +40,7 @@ function Simulation(model::AbstractModel, time_stepping_method;
     output_writers = OrderedDict{Symbol, Any}()
     callbacks = OrderedDict{Symbol, Any}()
 
-    return Simulation(model, timestepper, Δt, stop_criteria, Inf, stop_time,
+    return Simulation(model, timestepper, Δt, Inf, stop_time,
                       Inf, nothing, output_writers, callbacks, 0.0, false, false)
 end
 
@@ -124,7 +124,6 @@ function stop_time_exceeded(sim::ClimaAtmosSimulation)
     return false
 end
 
-#=
 """
     @stopwatch sim expr
 
@@ -135,11 +134,10 @@ macro stopwatch(sim, expr)
        local time_before = time_ns() * 1e-9
        local output = $expr
        local time_after = time_ns() * 1e-9
-       sim.wall_time += time_after - time_before
+       sim.run_wall_time += time_after - time_before
        output
    end)
 end
-=#
 
 """
     time_step!(simulation::AbstractSimulation, args...; kwargs...)
@@ -161,11 +159,6 @@ function time_step!(sim::ClimaAtmosSimulation, args...; kwargs...)
     if initialization_step
         elapsed_first_step_time = prettytime(1e-9 * (time_ns() - start_time))
         @info "    ... first time step complete ($elapsed_first_step_time)."
-    end
-
-    @stopwatch sim begin
-        evaluate_callbacks!(sim)
-        evaluate_output_writers!(sim)
     end
 
     return nothing
