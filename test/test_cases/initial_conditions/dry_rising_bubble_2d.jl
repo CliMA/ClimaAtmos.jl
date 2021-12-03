@@ -17,32 +17,16 @@
 
     # TODO!: Replace expression with Thermodynamics.jl expressions.
 """
-function init_dry_rising_bubble_2d(
-    FT::DataType = Float64,
-    params = nothing,
-    thermovar = :ρθ,
-)
-    if params isa Nothing
-        x_c = FT(0.0)
-        z_c = FT(350.0)
-        r_c = FT(250.0)
-        θ_b = FT(300.0)
-        θ_c = FT(0.5)
-        p_0 = FT(1e5)
-        cp_d = FT(1004.0)
-        cv_d = FT(717.5)
-        R_d = FT(287.0)
-        g = FT(9.80616)
-    else
-        @unpack x_c, z_c, r_c, θ_b, θ_c, p_0, cp_d, cv_d, R_d, g = params
-    end
+function init_dry_rising_bubble_2d(params, thermovar = :ρθ)
+    FT = eltype(params)
+    @unpack x_c, z_c, r_c, θ_b, θ_c, p_0, cp_d, cv_d, R_d, g = params
 
     # auxiliary quantities
     # potential temperature perturbation
     θ_p(local_geometry) = begin
         @unpack x, z = local_geometry.coordinates
         r = sqrt((x - x_c)^2 + (z - z_c)^2)
-        return r < r_c ? FT(0.5) * θ_c * (1 + cospi(r / r_c)) : FT(0)
+        return r < r_c ? FT(0.5) * θ_c * (FT(1) + cospi(r / r_c)) : FT(0)
     end
 
     # potential temperature    
@@ -51,7 +35,7 @@ function init_dry_rising_bubble_2d(
     # exner function
     π_exn(local_geometry) = begin
         @unpack z = local_geometry.coordinates
-        return 1 - g * z / cp_d / θ(local_geometry)
+        return FT(1) - g * z / cp_d / θ(local_geometry)
     end
 
     # temperature
@@ -64,7 +48,7 @@ function init_dry_rising_bubble_2d(
     e_int(local_geometry) = cv_d * T(local_geometry)
 
     # kintetic energy
-    e_kin(local_geometry) = 0.0
+    e_kin(local_geometry) = FT(0)
 
     # potential energy
     e_pot(local_geometry) = begin
@@ -87,10 +71,10 @@ function init_dry_rising_bubble_2d(
     ρe_tot(local_geometry) = ρ(local_geometry) * e_tot(local_geometry)
 
     # horizontal momentum vector
-    ρuh(local_geometry) = Geometry.UVector(0.0)
+    ρuh(local_geometry) = Geometry.UVector(FT(0))
 
     # vertical momentum vector
-    ρw(local_geometry) = Geometry.WVector(0.0)
+    ρw(local_geometry) = Geometry.WVector(FT(0))
 
     if thermovar == :ρθ
         return (ρ = ρ, ρθ = ρθ, ρuh = ρuh, ρw = ρw)

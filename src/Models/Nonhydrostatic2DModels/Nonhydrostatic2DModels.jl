@@ -1,20 +1,13 @@
 module Nonhydrostatic2DModels
 
-using LinearAlgebra: norm, ×
 using StaticArrays
-using UnPack: @unpack
-
-# clima ecosystem
-using ClimaAtmos.Domains: AbstractHybridDomain, make_function_space
-using ClimaAtmos.Models: AbstractModel
-using ClimaCore: Fields, Geometry, Operators, Spaces
+using UnPack
+using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
-
-# we are extending here the Models interface by providing concrete implementions of models
-import ClimaAtmos: Models
-
-include("nonhydrostatic_2d_model.jl")
+using ...Domains, ...Models
 
 export Nonhydrostatic2DModel
+
+include("nonhydrostatic_2d_model.jl")
 
 end # module

@@ -1,26 +1,30 @@
 module BoundaryConditions
 
-using ClimaCore: Geometry, Fields, Operators, Spaces
+using LinearAlgebra: norm
+using ClimaCore: Geometry, Fields, Operators
 using ClimaCore.Geometry: ⊗
-using LinearAlgebra
-using LinearAlgebra: norm, ×
+
+export get_boundary_flux,
+    AbstractBoundaryCondition,
+    CustomFluxCondition,
+    NoFluxCondition,
+    DragLawCondition,
+    BulkFormulaCondition
 
 """
-    AbstractFluxBoundaryCondition
-    
-    Abstract supertype for boundary conditions that imply fluxes
-    at the boundaries they are attached to.
+    get_boundary_flux(model, bc, var, Ym, Ya)
+
+Get the flux of variable `var` across the boundary of `model` using boundary
+condition `bc`.
+"""
+function get_boundary_flux end
+
+"""
+Supertype for all boundary conditions.
 """
 abstract type AbstractBoundaryCondition end
 
 include("flux_conditions.jl")
 include("flux_calculations.jl")
-
-export AbstractBoundaryCondition
-export CustomFluxCondition
-export DragLawCondition
-export NoFluxCondition
-export BulkFormulaCondition
-export get_boundary_flux
 
 end # module

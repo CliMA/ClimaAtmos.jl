@@ -1,12 +1,14 @@
 """
-    JLD2Output <: AbstractCallback
-    Container for JLD2 output callback (writes to disk)
+    JLD2Output{M, I} <: AbstractCallback
+
+Specifies that a `DiffEqCallbacks.PeriodicCallback` should be constructed that
+extracts the model state from the integrator and stores it in a `.jld2` file. 
 """
-struct JLD2Output <: AbstractCallback
-    model::AbstractModel
+struct JLD2Output{M <: AbstractModel, I <: Number} <: AbstractCallback
+    model::M
     filedir::String
     filename::String
-    interval::Number
+    interval::I
 end
 
 function (F::JLD2Output)(integrator)
@@ -18,12 +20,6 @@ function (F::JLD2Output)(integrator)
     return nothing
 end
 
-"""
-    generate_callback(F::JLD2Output; kwargs...)
-
-    Creates a PeriodicCallback object that extracts solution
-    variables from the integrator and stores them in a jld2 file. 
-"""
 function generate_callback(F::JLD2Output; kwargs...)
     return PeriodicCallback(F, F.interval; initial_affect = true, kwargs...)
 end

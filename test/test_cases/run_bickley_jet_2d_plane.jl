@@ -1,19 +1,14 @@
 include("initial_conditions/bickley_jet_2d_plane.jl")
 
 function run_bickley_jet_2d_plane(
-    FT;
+    ::Type{FT};
     stepper = SSPRK33(),
     nelements = (16, 16),
     npolynomial = 3,
     dt = 0.04,
     callbacks = (),
     mode = :regression,
-)
-    if FT <: Float32
-        @info "Bickley jet 2D plane test does not run for $FT."
-        return nothing
-    end
-
+) where {FT}
     params = map(FT, (
         g = 9.8,  # gravitational constant
         D₄ = 1e-4,  # hyperdiffusion constant
@@ -23,7 +18,7 @@ function run_bickley_jet_2d_plane(
         h₀ = 1.0,  # reference density
     ))
 
-    domain = PeriodicPlane(
+    domain = Plane(
         FT,
         xlim = (-2π, 2π),
         ylim = (-2π, 2π),
@@ -37,10 +32,6 @@ function run_bickley_jet_2d_plane(
     if mode == :unit
         # TODO!: run with input callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-
-        # test show function
-        show(simulation)
-        println()
         @test simulation isa Simulation
         @test simulation.restart isa NoRestart
 

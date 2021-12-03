@@ -1,25 +1,30 @@
 # API
-## Domain Interface
+## Domains
 ```@autodocs
 Modules = [ClimaAtmos.Domains]
 ```
 
-## Model Interface
+## Boundary Conditions
+```@autodocs
+Modules = [ClimaAtmos.BoundaryConditions]
+```
+
+## Models Interface
 ```@autodocs
 Modules = [ClimaAtmos.Models]
 ```
 
-## Shallow Water Models
+## Models
 ```@autodocs
-Modules = [ClimaAtmos.Models.ShallowWaterModels]
+Modules = (m = ClimaAtmos.Models; filter(x -> x isa Module && x != m, map(name -> getproperty(m, name), names(m; all = true)))) # all submodules of ClimaAtmos.Models
 ```
 
-## Single Column Models
+## Callbacks
 ```@autodocs
-Modules = [ClimaAtmos.Models.SingleColumnModels]
+Modules = [ClimaAtmos.Callbacks]
 ```
 
-## Simulation Interface
+## Simulations
 ```@autodocs
 Modules = [ClimaAtmos.Simulations]
 ```

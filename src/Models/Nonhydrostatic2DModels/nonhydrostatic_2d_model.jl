@@ -1,29 +1,29 @@
 """
-    struct Nonhydrostatic2DModel <: AbstractModel
+    Nonhydrostatic2DModel <: AbstractModel
 
-Construct a two-dimensional non-hydrostatic model on `domain`
-with `parameters` and `boundary_conditions` that contain field boundary conditions.
-Typically, this is used for simulating the Euler equations.
+A two-dimensional non-hydrostatic model, which is typically used for simulating
+the Euler equations. Required fields are `domain`, `boundary_conditions`, and
+`parameters`.
 """
-Base.@kwdef struct Nonhydrostatic2DModel{FT, BCT, PT} <: AbstractModel
-    domain::AbstractHybridDomain{FT}
-    boundary_conditions::BCT
-    parameters::PT
+Base.@kwdef struct Nonhydrostatic2DModel{D <: AbstractHybridDomain, BC, P} <:
+                   AbstractModel
+    domain::D
+    boundary_conditions::BC
+    parameters::P
     name::Symbol = :nhm
     varnames::Tuple = (:ρ, :ρuh, :ρw, :ρθ) # ρuh is the horizontal momentum
 end
 
-function Models.default_initial_conditions(
-    model::Nonhydrostatic2DModel{FT},
-) where {FT}
+function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
     space_c, space_f = make_function_space(model.domain)
     local_geometry_c = Fields.local_geometry_field(space_c)
     local_geometry_f = Fields.local_geometry_field(space_f)
 
     # functions that make zeros for this model
-    zero_scalar(lg) = zero(FT) # .
-    zero_1vector(lg) = Geometry.UVector(zero(FT)) # ---->
-    zero_3vector(lg) = Geometry.WVector(zero(FT)) # (-_-') . ┓( ´∀` )┏ 
+    zero_val = zero(Spaces.undertype(space_c))
+    zero_scalar(lg) = zero_val # .
+    zero_1vector(lg) = Geometry.UVector(zero_val) # ---->
+    zero_3vector(lg) = Geometry.WVector(zero_val) # (-_-') . ┓( ´∀` )┏ 
 
     ρ = zero_scalar.(local_geometry_c)
     ρuh = zero_1vector.(local_geometry_c)
@@ -35,18 +35,20 @@ function Models.default_initial_conditions(
     )
 end
 
-function Models.make_ode_function(model::Nonhydrostatic2DModel{FT}) where {FT}
+function Models.make_ode_function(model::Nonhydrostatic2DModel)
+    FT = eltype(model.parameters)
     @unpack p_0, R_d, cp_d, cv_d, g = model.parameters
     γ = cp_d / cv_d
 
     # TODO!: Replace with Thermodynamics.jl
-    pressure(ρθ) = ρθ >= 0 ? p_0 * (R_d * ρθ / p_0)^γ : NaN
+    pressure(ρθ::FT) where {FT} =
+        ρθ >= FT(0) ? p_0 * (R_d * ρθ / p_0)^γ : FT(NaN)
 
     # unity tensor for pressure term calculation 
     # in horizontal spectral divergence
     I = Ref(Geometry.Axis2Tensor(
         (Geometry.UAxis(), Geometry.UAxis()),
-        @SMatrix [1.0]
+        @SMatrix [FT(1)]
     ),)
 
     # operators
@@ -60,32 +62,34 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel{FT}) where {FT}
         top = Operators.Extrapolate(),
     )
     vector_interp_c2f = Operators.InterpolateC2F(
-        bottom = Operators.SetValue(Geometry.UVector(0.0)),
-        top = Operators.SetValue(Geometry.UVector(0.0)),
+        bottom = Operators.SetValue(Geometry.UVector(FT(0))),
+        top = Operators.SetValue(Geometry.UVector(FT(0))),
     )
     tensor_interp_f2c = Operators.InterpolateF2C()
 
     # gradients
     scalar_grad_c2f = Operators.GradientC2F()
     B = Operators.SetBoundaryOperator(
-        bottom = Operators.SetValue(Geometry.WVector(0.0)),
-        top = Operators.SetValue(Geometry.WVector(0.0)),
+        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
+        top = Operators.SetValue(Geometry.WVector(FT(0))),
     )
 
     # divergences
     vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.WVector(0.0)),
-        top = Operators.SetValue(Geometry.WVector(0.0)),
+        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
+        top = Operators.SetValue(Geometry.WVector(FT(0))),
     )
     tensor_vdiv_c2f = Operators.DivergenceC2F(
-        bottom = Operators.SetDivergence(Geometry.WVector(0.0)),
-        top = Operators.SetDivergence(Geometry.WVector(0.0)),
+        bottom = Operators.SetDivergence(Geometry.WVector(FT(0))),
+        top = Operators.SetDivergence(Geometry.WVector(FT(0))),
     )
     tensor_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(
-            Geometry.WVector(0.0) ⊗ Geometry.UVector(0.0),
+            Geometry.WVector(FT(0)) ⊗ Geometry.UVector(FT(0)),
         ),
-        top = Operators.SetValue(Geometry.WVector(0.0) ⊗ Geometry.UVector(0.0)),
+        top = Operators.SetValue(
+            Geometry.WVector(FT(0)) ⊗ Geometry.UVector(FT(0)),
+        ),
     )
 
     function rhs!(dY, Y, Ya, t)

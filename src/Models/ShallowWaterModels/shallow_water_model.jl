@@ -1,25 +1,24 @@
 """
-    struct ShallowWaterModel <: AbstractModel
+    ShallowWaterModel <: AbstractModel
 
-Construct a shallow water model on `domain`
-with `parameters`.
+A shallow water model. Required fields are `domain` and `parameters`.
 """
-Base.@kwdef struct ShallowWaterModel{FT, PT} <: AbstractModel
-    domain::AbstractHorizontalDomain{FT}
-    parameters::PT
+Base.@kwdef struct ShallowWaterModel{D <: AbstractHorizontalDomain, P} <:
+                   AbstractModel
+    domain::D
+    parameters::P
     name::Symbol = :swm
     varnames::Tuple = (:h, :u, :c)
 end
 
-function Models.default_initial_conditions(
-    model::ShallowWaterModel{FT},
-) where {FT}
+function Models.default_initial_conditions(model::ShallowWaterModel)
     space = make_function_space(model.domain)
     local_geometry = Fields.local_geometry_field(space)
 
     # functions that make zeros for this model
-    zero_scalar(lg) = zero(FT)
-    zero_vector(lg) = Geometry.Covariant12Vector(zero(FT), zero(FT))
+    zero_val = zero(Spaces.undertype(space))
+    zero_scalar(lg) = zero_val
+    zero_vector(lg) = Geometry.Covariant12Vector(zero_val, zero_val)
 
     h0 = zero_scalar.(local_geometry)
     u0 = zero_vector.(local_geometry)
@@ -28,7 +27,7 @@ function Models.default_initial_conditions(
     return Fields.FieldVector(swm = Fields.FieldVector(h = h0, u = u0, c = c0))
 end
 
-function Models.make_ode_function(model::ShallowWaterModel{FT}) where {FT}
+function Models.make_ode_function(model::ShallowWaterModel)
     function rhs!(dY, Y, Ya, t)
         @unpack D₄, g = model.parameters
 
@@ -71,13 +70,11 @@ function Models.make_ode_function(model::ShallowWaterModel{FT}) where {FT}
         # add in advection terms
         space = axes(h)
         J = Fields.Field(space.local_geometry.J, space)
-        @. begin
-            dh = -wdiv(h * u)
-            du +=
-                -grad(g * h + norm(u)^2 / 2) +
-                Geometry.Covariant12Vector((J * (u × curl(u))))
-            dc += -wdiv(c * u)
-        end
+        @. dh = -wdiv(h * u)
+        @. du +=
+            -grad(g * h + norm(u)^2 / 2) +
+            Geometry.Covariant12Vector((J * (u × curl(u))))
+        @. dc += -wdiv(c * u)
         Spaces.weighted_dss!(dh)
         Spaces.weighted_dss!(du)
         Spaces.weighted_dss!(dc)
