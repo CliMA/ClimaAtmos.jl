@@ -1,267 +1,177 @@
-"""
-    struct Column{FT} <: AbstractVerticalDomain
-        
-A column domain with `zlim` (Ordered Tuple) the domain extents,
-and `nelements` (Integer) the number of cells in the domain. 
-"""
 struct Column{FT} <: AbstractVerticalDomain{FT}
     zlim::Tuple{FT, FT}
-    nelements::Int32
+    nelements::Int
 end
 
 """
-    Column([FT=Float64]; zlim, nelements)
+    Column([FT = Float64]; zlim, nelements)
 
-Creates a column domain of type `FT`,
-with extents zlim[1] < zlim[2] and `nelements` cells. 
+Construct a domain of type `FT` that represents a column along the z-axis with
+limits `zlim` (where `zlim[1] < zlim[2]`) and `nelements` elements. This domain
+is not periodic.
 
-Example:
-Generate a Column{Float64} with extents (0,1) and 10 elements.
-
-```julia-repl
-julia> using ClimaAtmos.Domains
-julia> z_domain = Column(Float64, 
-                            zlim = (0,1), 
-                            nelements = 10)
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Domains)
+julia> Column(zlim = (0, 1), nelements = 10)
+Domain set-up:
+\tz-column:\t[0.0, 1.0]
+\t# of elements:\t10
 ```
 """
-function Column(FT::DataType = Float64; zlim, nelements)
+function Column(::Type{FT} = Float64; zlim, nelements) where {FT}
     @assert zlim[1] < zlim[2]
     return Column{FT}(zlim, nelements)
 end
 
-"""
-    Plane <: AbstractHorizontalDomain
-
-A two-dimensional specialisation of an `AbstractHorizontalDomain`. 
-An x-y plane with extents `xlim` (Ordered Tuple) in the x-direction,
-extents `ylim` (Ordered Tuple) in the y-direction, `nelements` cells 
-(Tuple of integers for x, y) directions, order of polynomial for 
-spectral discretisation `npolynomial`, and description of periodicity in
-x, y directions `periodic` (Tuple of Booleans). 
-
-"""
 struct Plane{FT} <: AbstractHorizontalDomain{FT}
     xlim::Tuple{FT, FT}
     ylim::Tuple{FT, FT}
-    nelements::Tuple{Integer, Integer}
-    npolynomial::Integer
+    nelements::Tuple{Int, Int}
+    npolynomial::Int
     periodic::Tuple{Bool, Bool}
 end
 
 """
-    Plane([FT=Float64];
-          xlim, 
-          ylim, 
-          nelements,
-          npolynomial,
-          periodic) 
-    
-Creates an xy plane bounded by keyword argument values of `xlim`, `ylim`, 
-with `nelements` elements (which may differ in each direction) 
-of polynomial order `npolynomial`, and periodicity specified by `periodic`
-    
-NOTE: This definition of `Plane` currently supports Spectral Discretizations 
-only. Updates will contain support for spectral-element (`SpectralPlane`) and 
-spectral-element + finite difference (`HybridPlane`) configurations.
+    Plane([FT = Float64]; xlim, ylim, nelements, npolynomial, periodic = (true, true))
 
-Example: 
-Generate a `Plane{Float64}` object with extents [0,π] × [0,π], contains 5 and 10 elements in the x and y directions respectively, 
-with polynomial order 5, and is non-periodic in the y-direction
-```julia-repl
-julia> using ClimaAtmos.Domains
-julia> xy_plane = Plane(Float64, xlim = (0,π), ylim = (0,π) , nelements=(5,10), npolynomial=5, periodic = (true,false))
+Construct a domain of type `FT` that represents an xy-plane with limits `xlim`
+and `ylim` (where `xlim[1] < xlim[2]` and `ylim[1] < ylim[2]`), `nelements`
+elements of polynomial order `npolynomial`, and periodicity `periodic`.
+`nelements` and `periodic` must be tuples with two values, with the first value
+corresponding to the x-axis and the second corresponding to the y-axis.
+
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Domains)
+julia> Plane(
+            xlim = (0, π),
+            ylim = (0, π),
+            nelements = (5, 10),
+            npolynomial = 5,
+            periodic = (true, false),
+        )
+Domain set-up:
+\txy-plane:\t[0.0, 3.1) × [0.0, 3.1]
+\t# of elements:\t(5, 10)
+\tpoly order:\t5
 ```
 """
 function Plane(
-    FT::DataType = Float64;
+    ::Type{FT} = Float64;
     xlim,
     ylim,
     nelements,
     npolynomial,
-    periodic,
-)
+    periodic = (true, true),
+) where {FT}
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
     return Plane{FT}(xlim, ylim, nelements, npolynomial, periodic)
 end
 
-"""
-    PeriodicPlane([FT= Float64];
-        xlim,
-        ylim,
-        nelements,
-        npolynomial)
-    
-Creates an xy plane bounded by keyword argument values of `xlim`, `ylim`, 
-with `nelements` elements (which may differ in each direction) 
-of polynomial order `npolynomial`. Assumes domain is periodic in both x and 
-y directions. Special case of `Plane`.
-    
-NOTE: This definition of `Plane` currently supports Spectral Discretizations 
-only. Updates will contain support for spectral-element (`SpectralPlane`) and 
-spectral-element + finite difference (`HybridPlane`) configurations.
-
-Example: 
-Generate a `Plane{Float64}` object with extents [0,π] × [0,π], contains 5 and 10 elements in the x and y directions respectively, 
-with polynomial order 5, and is doubly-periodic
-```julia-repl
-julia> using ClimaAtmos.Domains
-julia> xy_periodic_plane = PeriodicPlane(Float64, xlim = (0,π), ylim = (0,π) , nelements=(5,10), npolynomial=5)
-# This is the same as 
-julia> xy_periodic_plane_2 = Plane(Float64, xlim = (0,π), ylim = (0,π) , nelements=(5,10), npolynomial=5, periodic=(true,true))
-```
-"""
-function PeriodicPlane(
-    FT::DataType = Float64;
-    xlim,
-    ylim,
-    nelements,
-    npolynomial,
-)
-    @assert xlim[1] < xlim[2]
-    @assert ylim[1] < ylim[2]
-
-    return Plane(
-        FT,
-        xlim = xlim,
-        ylim = ylim,
-        nelements = nelements,
-        npolynomial = npolynomial,
-        periodic = (true, true),
-    )
-end
-
-"""
-    struct HybridPlane{FT} <: AbstractHybridDomain 
-"""
 struct HybridPlane{FT} <: AbstractHybridDomain{FT}
     xlim::Tuple{FT, FT}
     zlim::Tuple{FT, FT}
-    nelements::Tuple{Integer, Integer}
-    npolynomial::Integer
+    nelements::Tuple{Int, Int}
+    npolynomial::Int
+    xperiodic::Bool
 end
 
 """
-    HybridPlane([FT=Float64]; xlim, zlim, nelements, npolynomial)
+    HybridPlane([FT = Float64]; xlim, zlim, nelements, npolynomial, xperiodic = true)
 
-Creates an 1D horizontal and 1D vertical hybrid domain with `xlim` the
-horizontal domain extents, `zlim` the vertical domain extents,
-`helement` the number of elements in the horizontal, `velement` the
-number of cells in the vertical, and `npolynomial` the polynomial order
-in the horizontal.
+Construct a domain of type `FT` that represents an xz-plane with limits `xlim`
+and `zlim` (where `xlim[1] < xlim[2]` and `zlim[1] < zlim[2]`), `nelements`
+elements of polynomial order `npolynomial`, and x-axis periodicity `xperiodic`.
+`nelements` must be a tuple with two values, with the first value corresponding
+to the x-axis and the second corresponding to the z-axis. This domain is not
+periodic along the z-axis.
+
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Domains)
+julia> HybridPlane(
+            xlim = (0, π),
+            zlim = (0, 1),
+            nelements = (5, 10),
+            npolynomial = 5,
+            xperiodic = true,
+        )
+Domain set-up:
+\txz-plane:\t[0.0, 3.1) × [0.0, 1.0]
+\t# of elements:\t(5, 10)
+\tpoly order:\t5
 ```
 """
-function HybridPlane(FT::DataType = Float64; xlim, zlim, nelements, npolynomial)
+function HybridPlane(
+    ::Type{FT} = Float64;
+    xlim,
+    zlim,
+    nelements,
+    npolynomial,
+    xperiodic = true,
+) where {FT}
     @assert xlim[1] < xlim[2]
     @assert zlim[1] < zlim[2]
-    return HybridPlane{FT}(xlim, zlim, nelements, npolynomial)
+    return HybridPlane{FT}(xlim, zlim, nelements, npolynomial, xperiodic)
 end
 
-"""
-    struct Sphere{FT} <: AbstractHybridDomain 
-"""
 struct Sphere{FT} <: AbstractHorizontalDomain{FT}
     radius::FT
-    nelements::Integer
-    npolynomial::Integer
+    nelements::Int
+    npolynomial::Int
 end
 
 """
-    Sphere <: AbstractHorizontalDomain
+    Sphere([FT = Float64]; radius, nelements, npolynomial)
 
-Creates a 2D spherical domain with `radius`, `nelement` the number of elements
-of each direction on each cubed sphere face, and `npolynomial` the polynomial
-order
+Construct a domain of type `FT` that represents a sphere with radius `radius`
+and `nelements` elements of polynomial order `npolynomial`.
+
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Domains)
+julia> Sphere(radius = 1, nelements = 10, npolynomial = 5)
+Domain set-up:
+\tsphere radius:\t1.0
+\t# of elements:\t10
+\tpoly order:\t5
+```
 """
-function Sphere(FT::DataType = Float64; radius, nelements, npolynomial)
+function Sphere(::Type{FT} = Float64; radius, nelements, npolynomial) where {FT}
     return Sphere{FT}(radius, nelements, npolynomial)
 end
 
-Base.ndims(::Column) = 1
-
-Base.ndims(::Plane) = 2
-
-Base.ndims(::HybridPlane) = 2
-
-Base.ndims(::Sphere) = 2
-
-Base.length(domain::Column) = domain.zlim[2] - domain.zlim[1]
-
-Base.size(domain::Column) = length(domain)
-
-Base.size(domain::Plane) =
-    (domain.xlim[2] - domain.xlim[1], domain.ylim[2] - domain.ylim[1])
-
-Base.size(domain::HybridPlane) =
-    (domain.xlim[2] - domain.xlim[1], domain.zlim[2] - domain.zlim[1])
-
 function Base.show(io::IO, domain::Column)
-    min = domain.zlim[1]
-    max = domain.zlim[2]
-    print("Domain set-up:\n\tSingle column z-range:\t")
+    print(io, "Domain set-up:\n\tz-column:\t")
     printstyled(io, "[", color = 226)
-    astring = @sprintf("%0.1f", min)
-    bstring = @sprintf("%0.1f", max)
-    printstyled(astring, ", ", bstring, color = 7)
+    printstyled(io, @sprintf("%#.2g, %#.2g", domain.zlim...), color = 7)
     printstyled(io, "]", color = 226)
-    @printf("\n\tvert elem:\t\t%d\n", domain.nelements)
+    print(io, "\n\t# of elements:\t", domain.nelements)
 end
 
 function Base.show(io::IO, domain::Plane)
-    minx = domain.xlim[1]
-    maxx = domain.xlim[2]
-    miny = domain.ylim[1]
-    maxy = domain.ylim[2]
-    print("Domain set-up:\n\tHorizontal plane:\t")
+    print(io, "Domain set-up:\n\txy-plane:\t")
     printstyled(io, "[", color = 226)
-    astring = @sprintf("%0.1f", minx)
-    bstring = @sprintf("%0.1f", maxx)
-    printstyled(astring, ", ", bstring, color = 7)
-    domain.periodic[1] ? printstyled(io, ")", color = 226) :
-    printstyled(io, "]", color = 226)
-    printstyled(io, " × [", color = 226)
-    astring = @sprintf("%0.1f", miny)
-    bstring = @sprintf("%0.1f", maxy)
-    printstyled(astring, ", ", bstring, color = 7)
-    domain.periodic[2] ? printstyled(io, ")", color = 226) :
-    printstyled(io, "]", color = 226)
-    @printf(
-        "\n\thorz elem:\t\t(%d, %d)",
-        domain.nelements[1],
-        domain.nelements[2]
-    )
-    @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
+    printstyled(io, @sprintf("%#.2g, %#.2g", domain.xlim...), color = 7)
+    printstyled(io, domain.periodic[1] ? ")" : "]", " × [", color = 226)
+    printstyled(io, @sprintf("%#.2g, %#.2g", domain.ylim...), color = 7)
+    printstyled(io, domain.periodic[2] ? ")" : "]", color = 226)
+    @printf(io, "\n\t# of elements:\t(%d, %d)", domain.nelements...)
+    print(io, "\n\tpoly order:\t", domain.npolynomial)
 end
 
 function Base.show(io::IO, domain::HybridPlane)
-    minx = domain.xlim[1]
-    maxx = domain.xlim[2]
-    minz = domain.zlim[1]
-    maxz = domain.zlim[2]
-    print("Domain set-up:\n\tHorizontal and vertical hybrid plane:\t")
+    print(io, "Domain set-up:\n\txz-plane:\t")
     printstyled(io, "[", color = 226)
-    astring = @sprintf("%0.1f", minx)
-    bstring = @sprintf("%0.1f", maxx)
-    printstyled(astring, ", ", bstring, color = 7)
-    printstyled(io, ")", color = 226)
-    printstyled(io, " × [", color = 226)
-    astring = @sprintf("%0.1f", minz)
-    bstring = @sprintf("%0.1f", maxz)
-    printstyled(astring, ", ", bstring, color = 7)
+    printstyled(io, @sprintf("%#.2g, %#.2g", domain.xlim...), color = 7)
+    printstyled(io, domain.xperiodic ? ")" : "]", " × [", color = 226)
+    printstyled(io, @sprintf("%#.2g, %#.2g", domain.zlim...), color = 7)
     printstyled(io, "]", color = 226)
-    @printf(
-        "\n\thorz and vert elem:\t\t(%d, %d)",
-        domain.nelements[1],
-        domain.nelements[2]
-    )
-    @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
+    @printf(io, "\n\t# of elements:\t(%d, %d)", domain.nelements...)
+    print(io, "\n\tpoly order:\t", domain.npolynomial)
 end
 
 function Base.show(io::IO, domain::Sphere)
-    print("Domain set-up:\n\tSphere R:\t")
-    astring = @sprintf("%0.1f", domain.radius)
-    printstyled(astring, color = 7)
-    @printf("\n\telem:\t\t%d", domain.nelements)
-    @printf("\n\tpoly order:\t\t%d\n", domain.npolynomial)
+    print(io, "Domain set-up:\n\tsphere radius:\t")
+    printstyled(io, @sprintf("%#.2g", domain.radius), color = 7)
+    print(io, "\n\t# of elements:\t", domain.nelements)
+    print(io, "\n\tpoly order:\t", domain.npolynomial)
 end

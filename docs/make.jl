@@ -1,12 +1,18 @@
+if joinpath(@__DIR__, "..") ∉ LOAD_PATH
+    push!(LOAD_PATH, joinpath(@__DIR__, ".."))
+end
 using Documenter
 using ClimaAtmos
 
-models = ["models.md"]
-
 makedocs(
+    modules = [ClimaAtmos],
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
-    format = Documenter.HTML(collapselevel = 1, mathengine = MathJax3()),
+    format = Documenter.HTML(
+        prettyurls = !isempty(get(ENV, "CI", "")),
+        collapselevel = 1,
+        mathengine = MathJax3(),
+    ),
     pages = [
         "Home" => "index.md",
         "Installation instructions" => "installation_instructions.md",
@@ -14,7 +20,6 @@ makedocs(
         "Contributor Guide" => "contributor_guide.md",
         "Function Index" => "function_index.md",
     ],
-    modules = [ClimaAtmos],
 )
 
 deploydocs(repo = "github.com/CliMA/ClimaAtmos.jl.git", devbranch = "main")

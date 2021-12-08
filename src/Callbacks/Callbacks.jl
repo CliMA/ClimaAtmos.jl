@@ -1,20 +1,23 @@
 module Callbacks
 
 using DiffEqCallbacks
-using UnPack
 using JLD2
-
-using ClimaAtmos.Models: AbstractModel
+using UnPack
+using ..Models
 
 export generate_callback, AbstractCallback, JLD2Output
 
 """
-    AbstractCallback
-    Abstract type for callback definitions. 
+    generate_callback(callback; kwargs...)
+
+Convert an `AbstractCallback` to a `SciMLBase.DECallback`.
+"""
+function generate_callback end
+
+"""
+Supertype for all callbacks.
 """
 abstract type AbstractCallback end
-
-function generate_callback(::AbstractCallback) end
 
 include("callback.jl")
 

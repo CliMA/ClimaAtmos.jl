@@ -1,18 +1,13 @@
 include("initial_conditions/ekman_column_1d.jl")
 
 function run_ekman_column_1d(
-    FT;
+    ::Type{FT};
     stepper = SSPRK33(),
     nelements = 30,
     dt = 0.01,
     callbacks = (),
     mode = :regression,
-)
-    if FT <: Float32
-        @info "Ekman column 1D test does not run for $FT."
-        return nothing
-    end
-
+) where {FT}
     params = (
         MSLP = FT(1e5), # mean sea level pressure
         grav = FT(9.8), # gravitational constant

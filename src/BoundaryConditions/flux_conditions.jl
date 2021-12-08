@@ -1,32 +1,37 @@
 """
-    NoFluxCondition <: AbstractFluxBoundaryCondition
+    CustomFluxCondition{F} <: AbstractBoundaryCondition
 
-    A boundary condition that implies no transport across the 
-    boundary it is attached to.
+Computes a user-defined boundary flux. The user is charged with making the
+custom flux function consistent wth the numerics of the model that invokes this
+boundary condition.
+"""
+struct CustomFluxCondition{F <: Function} <: AbstractBoundaryCondition
+    compute_flux::F
+end
+
+"""
+    NoFluxCondition <: AbstractBoundaryCondition
+
+Computes a fixed boundary flux of 0.
 """
 struct NoFluxCondition <: AbstractBoundaryCondition end
 
 """
-    CustomFluxCondition <: AbstractFluxBoundaryCondition
+    DragLawCondition{C} <: AbstractBoundaryCondition
 
-    A boundary condition that applies a user-defined cross-boundary flux
-    at the boundary it is attached to. The user is charged with making the 
-    custom flux function consistent wth the numerics of the model that 
-    invokes this boundary condition.
-"""
-struct CustomFluxCondition <: AbstractBoundaryCondition
-    compute_flux::Function
-end
-
-"""
-    DragLawCondition{C} <: AbstractFluxBoundaryCondition
+Computes the boundary flux using the bulk formula and constant or
+Mohnin-Obukhov-based drag coefficient `Cd`. Specific to momentum density.
 """
 struct DragLawCondition{C} <: AbstractBoundaryCondition
     coefficients::C
 end
 
 """
-    BulkFormulaCondition{C, T}
+    BulkFormulaCondition{C, T} <: AbstractBoundaryCondition
+
+Computes the boundary flux using the bulk formula and constant or
+Mohnin-Obukhov-based heat transfer coefficient `Ch`. Specific to potential
+temperature density.
 """
 struct BulkFormulaCondition{C, T} <: AbstractBoundaryCondition
     coefficients::C

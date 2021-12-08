@@ -1,34 +1,21 @@
 module Simulations
 
-using DiffEqBase
+import DiffEqBase # avoid namespace conflict with step!
+
 using JLD2
-using UnPack: @unpack
 using Printf
-
-using ClimaAtmos.Callbacks
-using ClimaAtmos.Models:
-    AbstractModel, default_initial_conditions, make_ode_function
+using UnPack
 using ClimaCore: Fields
+using ..Models, ..Callbacks
 
-import DiffEqBase: step!
-
-"""
-    AbstractSimulation
-"""
-abstract type AbstractSimulation end
+export step!, run!, set!, Simulation, AbstractRestart, NoRestart, Restart
 
 """
-    AbstractRestart
+Supertype for all restart modes.
 """
 abstract type AbstractRestart end
 
 include("simulation.jl")
 include("restart.jl")
-
-export Simulation
-export AbstractRestart, Restart
-export step!
-export run!
-export set!
 
 end # module

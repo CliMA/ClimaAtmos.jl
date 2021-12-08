@@ -1,23 +1,21 @@
-# Julia ecosystem
 using Test
-using UnPack: @unpack
-using JLD2
-using OrdinaryDiffEq: SSPRK33
-using DiffEqBase
-using Plots
 
-# Clima ecosystem
+using Base.CoreLogging
+using Documenter: doctest
+using JLD2
+using OrdinaryDiffEq: SSPRK33, CallbackSet, DiscreteCallback
+using Plots
+using UnPack
+
+using ClimaCore: Geometry, Spaces, Fields
 using ClimaAtmos
-using ClimaAtmos.BoundaryConditions:
-    NoFluxCondition, DragLawCondition, BulkFormulaCondition, get_boundary_flux
-using ClimaAtmos.Domains: Plane, PeriodicPlane, Column, HybridPlane, Sphere
-using ClimaAtmos.Models.ShallowWaterModels: ShallowWaterModel
-using ClimaAtmos.Models.SingleColumnModels: SingleColumnModel
-using ClimaAtmos.Models.Nonhydrostatic2DModels: Nonhydrostatic2DModel
-using ClimaAtmos.Simulations:
-    Simulation, set!, step!, run!, AbstractRestart, NoRestart, Restart
+using ClimaAtmos.Domains
+using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models.ShallowWaterModels
+using ClimaAtmos.Models.SingleColumnModels
+using ClimaAtmos.Models.Nonhydrostatic2DModels
 using ClimaAtmos.Callbacks
-using ClimaCore: Geometry, Fields
+using ClimaAtmos.Simulations
 
 float_types = (Float32, Float64)
 
@@ -27,26 +25,30 @@ float_types = (Float32, Float64)
 
 group = get(ENV, "TEST_GROUP", :all) |> Symbol
 
+include("test_simulations.jl")
+
 @testset "ClimaAtmos" begin
     if group == :unit || group == :all
         @testset "Unit tests" begin
             include("test_domains.jl")
-            include("test_simulations.jl")
             include("test_callbacks.jl")
+            test_simulations(:unit)
         end
+
+        disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
+        doctest(ClimaAtmos)
+        disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
     end
 
     if group == :regression || group == :all
-        @info "Regression tests..."
-        @testset "Regression" begin
-            include("test_regression.jl")
+        @testset "Regression Tests" begin
+            test_simulations(:regression)
         end
     end
 
     if group == :validation
-        @info "Validation tests..."
-        @testset "Validation" begin
-            include("test_validation.jl")
+        @testset "Validation Tests" begin
+            test_simulations(:validation)
         end
     end
 end

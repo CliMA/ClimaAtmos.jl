@@ -1,36 +1,58 @@
-"""
-    struct Simulation <: AbstractSimulation
-        # a ClimaAtmos model
-        model::AbstractModel
-        # a DiffEqBase.jl integrator used for time
-        # stepping the simulation
-        integrator::DiffEqBase.DEIntegrator
-        # user defined callback operations 
-        callbacks::Union{DiffEqBase.CallbackSet, DiffEqBase.DiscreteCallback, Nothing}
-        restart::AbstractRestart
-    end
-
-A simulation wraps an abstract ClimaAtmos `model` containing 
-equation specifications and an instance of an `integrator` used for
-time integration of the discretized model PDE.
-"""
-struct Simulation <: AbstractSimulation
-    model::AbstractModel
-    integrator::DiffEqBase.DEIntegrator
-    callbacks::Union{
-        DiffEqBase.CallbackSet,
-        DiffEqBase.DiscreteCallback,
-        Nothing,
-    }
-    restart::AbstractRestart
+struct Simulation{
+    M <: AbstractModel,
+    I <: DiffEqBase.DEIntegrator,
+    C <: Union{Nothing, DiffEqBase.DiscreteCallback, DiffEqBase.CallbackSet},
+    R <: AbstractRestart,
+}
+    model::M
+    integrator::I
+    callbacks::C
+    restart::R
 end
 
 """
-    Simulation(model::AbstractModel, method::AbstractTimestepper, 
-               dt, tspan, init_state, callbacks, kwargs...)
+    Simulation(
+        model,
+        method;
+        Y_init = nothing,
+        dt,
+        tspan,
+        callbacks = nothing,
+        restart = NoRestart(),
+    )
 
 Construct a `Simulation` for a `model` with a time stepping `method`,
-initial conditions `Y_init`, time step `Δt` for `tspan` time interval.
+initial conditions `Y_init`, and time step `dt` for a time interval of `tspan`.
+If `Y_init` is not provided, the model's default initial conditions are used.
+
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Simulations)
+julia> using OrdinaryDiffEq: Euler
+
+julia> using ClimaAtmos.Domains, ClimaAtmos.Models.ShallowWaterModels
+
+julia> domain =
+        Plane(xlim = (-2π, 2π), ylim = (-2π, 2π), nelements = (16, 16), npolynomial = 3);
+
+julia> parameters = (g = 9.8, D₄ = 1e-4, ϵ = 0.1, l = 0.5, k = 0.5, h₀ = 1.0);
+
+julia> model = ShallowWaterModel(; domain, parameters);
+
+julia> Simulation(model, Euler(), dt = 0.04, tspan = (0.0, 80.0))
+Simulation set-up:
+\tmodel type:\tShallowWaterModel
+\tmodel vars:\t(:h, :u, :c)
+
+Domain set-up:
+\txy-plane:\t[-6.3, 6.3) × [-6.3, 6.3)
+\t# of elements:\t(16, 16)
+\tpoly order:\t3
+
+Timestepper set-up:
+\tmethod:\tEuler
+\tdt:\t0.040000
+\ttspan:\t(0.000000, 80.000000)
+```
 """
 function Simulation(
     model::AbstractModel,
@@ -62,20 +84,11 @@ function Simulation(
 end
 
 """
-    set!(
-        simulation::AbstractSimulation,
-        submodel_name = nothing;
-        kwargs...,
-    )
+    set!(simulation, submodel_name = nothing; kwargs...)
 
-Set the `simulation` state to a new state, either through 
-an array or a function.
+Set the simulation state to a new state, either through an array or a function.
 """
-function set!(
-    simulation::AbstractSimulation,
-    submodel_name = nothing;
-    kwargs...,
-)
+function set!(simulation::Simulation, submodel_name = nothing; kwargs...)
     for (varname, f) in kwargs
         if varname ∉ simulation.model.varnames
             throw(ArgumentError("$varname not in model variables."))
@@ -141,35 +154,30 @@ function set!(
 
     nothing
 end
+using ClimaCore.DataLayouts: column
 
 """
-    step!(simulation::AbstractSimulation, args...; kwargs...)
+    step!(simulation, args...; kwargs...)
 
-Step forward a `simulation` one time step.
+Advance the simulation by one time step.
 """
-step!(simulation::AbstractSimulation, args...; kwargs...) =
+step!(simulation::Simulation, args...; kwargs...) =
     DiffEqBase.step!(simulation.integrator, args...; kwargs...)
 
 """
-    run!(simulation::AbstractSimulation, args...; kwargs...)
+    run!(simulation, args...; kwargs...)
 
-Run a `simulation` to the end.
+Run the simulation to completion.
 """
-run!(simulation::AbstractSimulation, args...; kwargs...) =
+run!(simulation::Simulation, args...; kwargs...) =
     DiffEqBase.solve!(simulation.integrator, args...; kwargs...)
 
 function Base.show(io::IO, s::Simulation)
-    println(io, "Simulation set-up:")
-    @printf(io, "\tmodel type:\t%s\n", typeof(s.model).name.name)
-    @printf(io, "\tmodel vars:\t%s\n\n", s.model.varnames)
+    print(io, "Simulation set-up:\n\tmodel type:\t", typeof(s.model).name.name)
+    print(io, "\n\tmodel vars:\t", s.model.varnames, "\n\n")
     show(io, s.model.domain)
-    println(io, "\nTimestepper set-up:")
-    @printf(io, "\tmethod:\t%s\n", typeof(s.integrator.alg).name.name)
-    @printf(io, "\tdt:\t%f\n", s.integrator.dt)
-    @printf(
-        io,
-        "\ttspan:\t(%f, %f)\n",
-        s.integrator.sol.prob.tspan[1],
-        s.integrator.sol.prob.tspan[2],
-    )
+    print(io, "\n\nTimestepper set-up:")
+    print(io, "\n\tmethod:\t", typeof(s.integrator.alg).name.name)
+    @printf(io, "\n\tdt:\t%f", s.integrator.dt)
+    @printf(io, "\n\ttspan:\t(%f, %f)", s.integrator.sol.prob.tspan...)
 end

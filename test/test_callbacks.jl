@@ -13,7 +13,7 @@ params = map(FT, (
 ));
 
 @unpack h, u, c = init_bickley_jet_2d_plane(params);
-domain = PeriodicPlane(
+domain = Plane(
     FT,
     xlim = (-2π, 2π),
     ylim = (-2π, 2π),
@@ -22,25 +22,20 @@ domain = PeriodicPlane(
 );
 model = ShallowWaterModel(domain = domain, parameters = params);
 
-@info "Testing ClimaAtmos.Callbacks..."
-# Begin Tests
-
 # Populate Callback Containers
-temp_filepath = joinpath(@__DIR__, "output_validation/callback_tests")
+temp_filepath = joinpath(@__DIR__, "callback_tests")
 mkpath(temp_filepath)
 cb_1 = JLD2Output(model, temp_filepath, "TestFilename1", 0.01);
 cb_2 = JLD2Output(model, temp_filepath, "TestFilename2", 0.02);
 
 # Generate CallbackSet 
-cb_set =
-    DiffEqBase.CallbackSet(generate_callback(cb_1), generate_callback(cb_2))
+cb_set = CallbackSet(generate_callback(cb_1), generate_callback(cb_2))
 
 # Type Checks
-@test generate_callback(cb_1) isa DiffEqBase.DiscreteCallback
-@test generate_callback(cb_2) isa DiffEqBase.DiscreteCallback
+@test generate_callback(cb_1) isa DiscreteCallback
+@test generate_callback(cb_2) isa DiscreteCallback
 
 # Generate simple simulation data for test
-
 simulation = Simulation(
     model,
     SSPRK33(),
@@ -50,7 +45,7 @@ simulation = Simulation(
 )
 run!(simulation)
 
-@info "Testing Simulation Restart"
+# Test simulation restart
 simulation = Simulation(
     model,
     SSPRK33(),
@@ -67,7 +62,7 @@ run!(simulation)
 @test simulation.integrator.t == 0.05
 
 
-@info "Deleting Test Output Files"
+# Delete test output files
 @test isfile(joinpath(cb_1.filedir, cb_1.filename * "_0.01" * ".jld2")) == true
 @test isfile(joinpath(cb_2.filedir, cb_2.filename * "_0.02" * ".jld2")) == true
 

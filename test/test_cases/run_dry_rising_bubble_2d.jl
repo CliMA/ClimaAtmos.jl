@@ -1,19 +1,14 @@
 include("initial_conditions/dry_rising_bubble_2d.jl")
 
 function run_dry_rising_bubble_2d(
-    FT;
+    ::Type{FT};
     stepper = SSPRK33(),
     nelements = (10, 50),
     npolynomial = 4,
     dt = 0.02,
     callbacks = (),
     mode = :regression,
-)
-    if FT <: Float32
-        @info "Dry rising bubble 2D test does not run for $FT."
-        return nothing
-    end
-
+) where {FT}
     params = map(
         FT,
         (
@@ -48,14 +43,10 @@ function run_dry_rising_bubble_2d(
     if mode == :unit
         # TODO!: run with input callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-
-        # test show function
-        show(simulation)
-        println()
         @test simulation isa Simulation
 
         # test set function
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(params)
         set!(simulation, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
 
         # test error handling
@@ -66,7 +57,7 @@ function run_dry_rising_bubble_2d(
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
         step!(simulation)
         u = simulation.integrator.u.nhm
@@ -79,7 +70,7 @@ function run_dry_rising_bubble_2d(
     elseif mode == :validation
         # for now plot θ for the ending step;
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
         run!(simulation)
         u_end = simulation.integrator.u.nhm

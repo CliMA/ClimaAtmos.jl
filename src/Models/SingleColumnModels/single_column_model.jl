@@ -1,29 +1,27 @@
 """
     SingleColumnModel <: AbstractModel
 
-Construct a single column model on `domain`
-with `parameters`.
-`boundary_conditions` contains field boundary conditions.
+A single column model. Required fields are `domain`, `boundary_conditions`, and
+`parameters`.
 """
-Base.@kwdef struct SingleColumnModel{FT, BCT, PT} <: AbstractModel
-    domain::AbstractVerticalDomain{FT}
-    boundary_conditions::BCT
-    parameters::PT
+Base.@kwdef struct SingleColumnModel{D, BC, P} <: AbstractModel
+    domain::D
+    boundary_conditions::BC
+    parameters::P
     name::Symbol = :scm
     varnames::Tuple = (:ρ, :uv, :w, :ρθ)
 end
 
-function Models.default_initial_conditions(
-    model::SingleColumnModel{FT},
-) where {FT}
+function Models.default_initial_conditions(model::SingleColumnModel)
     space_c, space_f = make_function_space(model.domain)
     local_geometry_c = Fields.local_geometry_field(space_c)
     local_geometry_f = Fields.local_geometry_field(space_f)
 
     # functions that make zeros for this model
-    zero_scalar(lg) = zero(FT)
-    zero_12vector(lg) = Geometry.UVVector(zero(FT), zero(FT))
-    zero_3vector(lg) = Geometry.WVector(zero(FT))
+    zero_val = zero(Spaces.undertype(space_c))
+    zero_scalar(lg) = zero_val
+    zero_12vector(lg) = Geometry.UVVector(zero_val, zero_val)
+    zero_3vector(lg) = Geometry.WVector(zero_val)
 
     ρ = zero_scalar.(local_geometry_c)
     uv = zero_12vector.(local_geometry_c)
@@ -35,7 +33,7 @@ function Models.default_initial_conditions(
     )
 end
 
-function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
+function Models.make_ode_function(model::SingleColumnModel)
     rhs!(dY, Y, Ya, t) = begin
         @unpack Cd, f, ν, uvg, C_p, MSLP, R_d, R_m, C_v, grav = model.parameters
 
@@ -80,9 +78,10 @@ function Models.make_ode_function(model::SingleColumnModel{FT}) where {FT}
         # TODO!: Undesirable casting to vector required
         @. dρθ = -∂c(w * If(ρθ)) + ρ * ∂c(Geometry.WVector(ν * ∂f(ρθ / ρ)))
 
+        FT = eltype(Y)
         A = Operators.AdvectionC2C(
-            bottom = Operators.SetValue(Geometry.UVVector(0.0, 0.0)),
-            top = Operators.SetValue(Geometry.UVVector(0.0, 0.0)),
+            bottom = Operators.SetValue(Geometry.UVVector(FT(0), FT(0))),
+            top = Operators.SetValue(Geometry.UVVector(FT(0), FT(0))),
         )
 
         # uv
