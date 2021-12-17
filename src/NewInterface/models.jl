@@ -5,9 +5,9 @@
         D <: NTuple{N₃, Formula} where N₃,
     }
 
-A representation of a "model". Contains a tuple of tendencies for evolving the
-state vector over time, a tuple of formulas for updating the cached values
-required by the tendencies, and a tuple of additional formulas for debugging.
+A representation of a "model". Contains tendencies for evolving the state vector
+over time, formulas for updating the cached values required by the tendencies,
+and additional formulas for debugging.
 """
 struct Model{
     T <: NTuple{N₁, Tendency} where {N₁},
