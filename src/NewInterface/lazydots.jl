@@ -1,8 +1,7 @@
 bcexpr(f, args...) = Expr(:call, :(Base.broadcasted), f, args...)
 
 hasdot(x) = false
-hasdot(x::Symbol) =
-    Base.isoperator(x) && first(string(x)) == '.' && x !== :..
+hasdot(x::Symbol) = Base.isoperator(x) && first(string(x)) == '.' && x !== :..
 
 undot(x::Symbol) = Symbol(string(x)[2:end])
 
@@ -14,9 +13,9 @@ function lazydots(x::Expr)
         bcexpr(lazyargs[1], lazyargs[2].args...)
     elseif head === :call && hasdot(lazyargs[1])
         bcexpr(undot(lazyargs[1]), lazyargs[2:end]...)
-    elseif head === :.&&
+    elseif head === Symbol(".&&") # TODO: Is this the only alternative to :.&&?
         bcexpr(:(Base.andand), lazyargs...)
-    elseif head === :.||
+    elseif head === Symbol(".||")
         bcexpr(:(Base.oror), lazyargs...)
     elseif head === :comparison && any(hasdot, lazyargs[2:2:end])
         if !all(hasdot, lazyargs[2:2:end])

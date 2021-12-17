@@ -2,7 +2,8 @@ struct BoundaryCondition{G, S}
     get_value!::G
     state::S
 end
-(bc::BoundaryCondition)(m, Y, cache, t) = bc.get_value!(bc.state, m, Y, cache, t)
+(bc::BoundaryCondition)(m, Y, cache, t) =
+    bc.get_value!(bc.state, m, Y, cache, t)
 
 # TODO: How to allow Dual numbers???
 

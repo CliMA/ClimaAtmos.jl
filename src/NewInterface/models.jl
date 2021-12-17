@@ -10,9 +10,9 @@ state vector over time, a tuple of formulas for updating the cached values
 required by the tendencies, and a tuple of additional formulas for debugging.
 """
 struct Model{
-    T <: NTuple{N₁, Tendency} where N₁,
-    F <: NTuple{N₂, Formula} where N₂,
-    D <: NTuple{N₃, Formula} where N₃,
+    T <: NTuple{N₁, Tendency} where {N₁},
+    F <: NTuple{N₂, Formula} where {N₂},
+    D <: NTuple{N₃, Formula} where {N₃},
 }
     tendencies::T
     formulas::F
@@ -134,8 +134,8 @@ cycle_vars(var, var′, vars...) =
 formula_function(var, default_function_constructor) =
     default_function_constructor(var)
 formula_function(var, default_function_constructor, formula, formulas...) =
-    var === formula.var ?
-    formula.f : formula_function(var, default_function_constructor, formulas...)
+    var === formula.var ? formula.f :
+    formula_function(var, default_function_constructor, formulas...)
 
 ################################################################################
 
@@ -153,13 +153,13 @@ evaluating the model's formulas for the given values of `Y` and `t`.
 """
 function instantiate(model, Y, consts, t)
     vars = variables(model)
-    cache = (;)
+    cache = NamedTuple()
     for formula in model.formulas
         value = Base.materialize(formula.f(vars, Y, cache, consts, t))
         cache = named_tuple_insert(cache, formula.var, value)
     end
     if length(model.debug_formulas) > 0
-        debug = (;)
+        debug = NamedTuple()
         for formula in model.debug_formulas
             value = Base.materialize(formula.f(vars, Y, cache, consts, t))
             debug = named_tuple_insert(debug, formula.var, value)
@@ -174,7 +174,7 @@ function named_tuple_insert(nt, var, x)
     if length(symbs) == 1
         sub_nt = x
     else
-        sub_nt = symbs[1] in keys(nt) ? getproperty(nt, symbs[1]) : (;)
+        sub_nt = symbs[1] in keys(nt) ? getproperty(nt, symbs[1]) : NamedTuple()
         sub_var = Var(symbs[2:end]...)
         sub_nt = named_tuple_insert(sub_nt, sub_var, x)
     end

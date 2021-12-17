@@ -24,10 +24,9 @@ function (::DefaultFluidFunction{Var{(:c, :P)}})(vars, Y, cache, consts, t)
         ρ = Var(:c, :ρ) ∈ vars ? Y.c.ρ : consts.c.ρ
         if Var(:f, :ρw) ∈ vars
             @. factor *
-                (Y.c.ρe_tot - ρ * consts.c.Φ - Ic(Y.f.ρw^2) / ($T(2) * ρ))
+               (Y.c.ρe_tot - ρ * consts.c.Φ - Ic(Y.f.ρw^2) / ($T(2) * ρ))
         else
-            @. factor *
-                (Y.c.ρe_tot - ρ * (consts.c.Φ + Ic(Y.f.w^2) / $T(2)))
+            @. factor * (Y.c.ρe_tot - ρ * (consts.c.Φ + Ic(Y.f.w^2) / $T(2)))
         end
     end
 end

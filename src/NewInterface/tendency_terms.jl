@@ -1,7 +1,5 @@
-struct VerticalAdvection{
-    V <: Var,
-    M <: AbstractTimesteppingMode,
-} <: AbstractTendencyTerm{M}
+struct VerticalAdvection{V <: Var, M <: AbstractTimesteppingMode} <:
+       AbstractTendencyTerm{M}
     var::V
     mode::M
 end
@@ -60,15 +58,13 @@ function (::VerticalAdvection{Var{(:f, :w)}})(vars, Y, cache, consts, t)
     ∇ᵥf = Operators.GradientC2F()
     Ic = Operators.InterpolateF2C()
     @lazydots @. adjoint(∇ᵥf(Ic(Y.f.w))) *
-        Geometry.transform(Geometry.Contravariant3Axis(), Y.f.w)
+                 Geometry.transform(Geometry.Contravariant3Axis(), Y.f.w)
 end
 
 ###############################################################################
 
-struct PressureGradient{
-    V <: Var,
-    M <: AbstractTimesteppingMode,
-} <: AbstractTendencyTerm
+struct PressureGradient{V <: Var, M <: AbstractTimesteppingMode} <:
+       AbstractTendencyTerm
     var::V
     mode::M
 end
@@ -83,12 +79,11 @@ function (::PressureGradient{Var{(:f, :ρw)}})(vars, Y, cache, consts, t)
     @lazydots @. -Geometry.transform(Geometry.WAxis(), ∇ᵥf(cache.c.P))
 end
 
-cache_reqs(::PressureGradient{Var{(:f, :w)}}, vars) =
-    (Var(:c, :P), Var(:f, :ρ))
+cache_reqs(::PressureGradient{Var{(:f, :w)}}, vars) = (Var(:c, :P), Var(:f, :ρ))
 function (::PressureGradient{Var{(:f, :w)}})(vars, Y, cache, consts, t)
     ∇ᵥf = Operators.GradientC2F()
     @lazydots @. -Geometry.transform(Geometry.WAxis(), ∇ᵥf(cache.c.P)) /
-        cache.f.ρ
+                 cache.f.ρ
 end
 
 ###############################################################################
@@ -102,8 +97,9 @@ Gravity(var; mode = Implicit(DefaultFluidJacobian())) = Gravity(var, mode)
 tendency_type(::Gravity) = Source()
 
 cache_reqs(::Gravity{Var{(:f, :ρw)}}, vars) = (Var(:f, :ρ),)
-(::Gravity{Var{(:f, :ρw)}})(vars, Y, cache, consts, t) =
+function (::Gravity{Var{(:f, :ρw)}})(vars, Y, cache, consts, t)
     @lazydots @. cache.f.ρ * consts.f.∇Φ
+end
 
 cache_reqs(::Gravity{Var{(:f, :w)}}, vars) = ()
 (::Gravity{Var{(:f, :w)}})(vars, Y, cache, consts, t) = consts.f.∇Φ

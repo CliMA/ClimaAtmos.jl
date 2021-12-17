@@ -14,9 +14,8 @@ struct DefaultFluidJacobian <: AbstractJacobianName end
 
 abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
-Base.@kwdef struct Implicit{
-    J <: Union{AbstractJacobianName, Nothing},
-} <: AbstractTimesteppingMode
+Base.@kwdef struct Implicit{J <: Union{AbstractJacobianName, Nothing}} <:
+                   AbstractTimesteppingMode
     jac_name::J = nothing
 end
 
@@ -75,7 +74,7 @@ tendency terms.
 struct Tendency{
     V <: Var,
     B <: AbstractBoundaryConditions,
-    T <: NTuple{N, AbstractTendencyTerm} where N,
+    T <: NTuple{N, AbstractTendencyTerm} where {N},
 }
     var::V
     bcs::B
