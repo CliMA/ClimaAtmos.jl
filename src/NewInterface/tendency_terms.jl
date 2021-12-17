@@ -1,5 +1,4 @@
-struct VerticalAdvection{V <: Var, M <: AbstractTimesteppingMode} <:
-       AbstractTendencyTerm{M}
+struct VerticalAdvection{V <: Var, M} <: AbstractTendencyTerm{M}
     var::V
     mode::M
 end
@@ -63,8 +62,7 @@ end
 
 ###############################################################################
 
-struct PressureGradient{V <: Var, M <: AbstractTimesteppingMode} <:
-       AbstractTendencyTerm
+struct PressureGradient{V <: Var, M} <: AbstractTendencyTerm{M}
     var::V
     mode::M
 end
@@ -88,7 +86,7 @@ end
 
 ###############################################################################
 
-struct Gravity{V <: Var, M <: AbstractTimesteppingMode} <: AbstractTendencyTerm
+struct Gravity{V <: Var, M} <: AbstractTendencyTerm{M}
     var::V
     mode::M
 end
