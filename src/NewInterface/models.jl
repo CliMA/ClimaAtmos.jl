@@ -252,7 +252,7 @@ Convert an instantiated model into an `ODEFunction`.
 function ode_function(instantiated_model)
     return ODEFunction(
         instantiated_model;
-        tgrad = (∂ₜY, Y, cache, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))),
+        tgrad = (∂ₜY, Y, _, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))),
     ) # TODO: Automatically determine when the tgrad optimization is valid.
 end
 # TODO: By default, the output of ode_function() should include a JacVecOperator
