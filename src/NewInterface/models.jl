@@ -81,13 +81,13 @@ _variables(equation, equations...) = (equation.var, _variables(equations...)...)
 # TODO: Instead of generating a list of sorted formulas, consider generating a
 # list of sub-lists, where each sub-list is a component of the dependency graph
 # (and hence can be computed independently of the other sub-lists).
-sorted_cache_formulas(
+function sorted_cache_formulas(
     tendencies,
     ::Type{FunctionConstructor},
     custom_formulas,
     diagnostics_formulas,
-) where {FunctionConstructor} =
-    formulas_for_equations(
+) where {FunctionConstructor}
+    return formulas_for_equations(
         (),
         (),
         Vars(_variables(tendencies...)),
@@ -96,6 +96,7 @@ sorted_cache_formulas(
         tendencies...,
         diagnostics_formulas...,
     )
+end
 
 formulas_for_equations(formulas, _, _, _, _) = formulas
 function formulas_for_equations(
@@ -137,7 +138,7 @@ function formulas_for_reqs(
 ) where {FunctionConstructor}
     formulas = visit_dependency_graph_vertex(
         req_var,
-        formulas, 
+        formulas,
         visited,
         vars,
         FunctionConstructor,
@@ -185,14 +186,15 @@ cycle_vars(var, var′, vars...) =        # no need for a base case
 
 get_formula(var, ::Type{FunctionConstructor}) where {FunctionConstructor} =
     Formula(var, FunctionConstructor(var))
-get_formula(
+function get_formula(
     var,
     ::Type{FunctionConstructor},
     formula,
     formulas...,
-) where {FunctionConstructor} =
+) where {FunctionConstructor}
     var === formula.var ? formula :
     get_formula(var, FunctionConstructor, formulas...)
+end
 
 ################################################################################
 
@@ -290,8 +292,8 @@ function evaluate!(dest, args, tendency::Tendency)
     elseif length(terms) == 1
         tendency_bc = terms[1](args...)
     else
-        tendency_bc =
-            Base.broadcasted(+, map(term -> term(args...), terms)...)
+        # TODO: Is this type stable?
+        tendency_bc = Base.broadcasted(+, map(term -> term(args...), terms)...)
     end
     if bcs isa VerticalBoundaryConditions
         # TODO: Use the dotted version when #325 is merged into ClimaCore.

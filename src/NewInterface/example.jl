@@ -1,5 +1,4 @@
 using Test
-
 using ClimaCore: Fields
 
 include("../Domains/Domains.jl")
