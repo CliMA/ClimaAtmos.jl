@@ -98,5 +98,5 @@ instantiated_model, Y = main()
 ∂ₜY = similar(Y)
 instantiated_model(∂ₜY, Y, nothing, 0.0)
 
-# ODEFunction is not type stable...  (╯°□°)╯︵ bƎɟɟᴉᗡʎɹɐuᴉpɹO
+# The ODEFunction constructor is not type stable...  (╯°□°)╯︵ bƎɟɟᴉᗡʎɹɐuᴉpɹO
 # @inferred ode_function(instantiated_model)

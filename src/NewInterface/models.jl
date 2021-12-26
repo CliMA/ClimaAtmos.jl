@@ -34,17 +34,15 @@ end
         [diagnostics_formulas],
     )
 
-Alternative constructor for a `Model` that does not require users to specify all
-of the model's required formulas and ensure that those formulas are evaluated in
-a valid order.
+Alternative constructor for a `Model` that allows users to avoid specifying all
+of the model's required formulas and ensuring that those formulas are evaluated
+in a valid order.
 
-Accepts the argument `FunctionConstructor`, where `FunctionConstructor(::Var)`
-returns an `AbstractFormulaFunction`, which can be used to automatically
-generate a formula for each cache variable. This allows users to avoid manually
-specifying every formula the model requires. If the automatically generated
-formula for a variable should be overwritten, or if `FunctionConstructor` is not
-defined for that variable, a formula for that variable must be provided in
-`custom_formulas`.
+Accepts a type argument `FunctionConstructor <: AbstractFormulaFunction` and
+automatically generates a formula for each cache variable `var` by calling
+`FunctionConstructor(var)`. If the automatically generated formula for a
+variable should be overwritten, or if `FunctionConstructor` is not defined for a
+variable, a formula for that variable must be provided in `custom_formulas`.
 """
 function Model(
     ::Type{FunctionConstructor};
@@ -89,7 +87,6 @@ function sorted_cache_formulas(
 ) where {FunctionConstructor}
     return formulas_for_equations(
         (),
-        (),
         Vars(_variables(tendencies...)),
         FunctionConstructor,
         custom_formulas,
@@ -98,10 +95,9 @@ function sorted_cache_formulas(
     )
 end
 
-formulas_for_equations(formulas, _, _, _, _) = formulas
+formulas_for_equations(formulas, _, _, _) = formulas
 function formulas_for_equations(
     formulas,
-    visited,
     vars,
     ::Type{FunctionConstructor},
     custom_formulas,
@@ -110,7 +106,7 @@ function formulas_for_equations(
 ) where {FunctionConstructor}
     formulas = formulas_for_reqs(
         formulas,
-        visited,
+        (),
         vars,
         FunctionConstructor,
         custom_formulas,
@@ -118,7 +114,6 @@ function formulas_for_equations(
     )
     return formulas_for_equations(
         formulas,
-        visited,
         vars,
         FunctionConstructor,
         custom_formulas,
