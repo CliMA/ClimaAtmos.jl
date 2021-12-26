@@ -14,7 +14,7 @@ A representation of a "model".
 Contains tendencies for evolving the independent variables over time, formulas
 for updating the cached values required by the tendencies, and additional
 formulas for diagnostics or debugging. Since cached values may depend on other
-cache values, the formulas are stored in the order in which they get evaluated.
+cached values, the formulas are stored in the order in which they get evaluated.
 """
 struct Model{
     T <: NTuple{N₁, Tendency} where {N₁},

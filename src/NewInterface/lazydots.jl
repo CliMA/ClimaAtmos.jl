@@ -13,9 +13,9 @@ function lazydots(x::Expr)
         bcexpr(lazyargs[1], lazyargs[2].args...)
     elseif head === :call && hasdot(lazyargs[1])
         bcexpr(undot(lazyargs[1]), lazyargs[2:end]...)
-    elseif head === Symbol(".&&") # Temporary fix for outdated formatter
+    elseif head === Symbol(".&&") # TODO: temporary fix for outdated formatter
         bcexpr(:(Base.andand), lazyargs...)
-    elseif head === Symbol(".||")
+    elseif head === Symbol(".||") # TODO: temporary fix for outdated formatter
         bcexpr(:(Base.oror), lazyargs...)
     elseif head === :comparison && any(hasdot, lazyargs[2:2:end])
         if !all(hasdot, lazyargs[2:2:end])
@@ -23,7 +23,7 @@ function lazydots(x::Expr)
             s = string(
                 "cannot lazily broadcast `$x`, since a combination of dotted",
                 "and ordinary comparisons ($s_comp) must call `materialize`",
-            )
+            ) # TODO: temporary fix for outdated formatter
             throw(ErrorException(s))
         end
         ith_bcexpr =
