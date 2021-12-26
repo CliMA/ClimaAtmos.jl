@@ -29,26 +29,22 @@ abstract type AbstractTendencyTerm{M <: AbstractTimesteppingMode} end
 """
     tendency_type(tendency_term)
 
-Get the `AbstractTendencyType` of the given tendency term.
-
-This is implemented as a function rather than as type information so that a
-single tendency term struct can have different tendency types depending on which
-variables it is initialized with.
+Get the `AbstractTendencyType` of the specified tendency term.
 """
 function tendency_type(::AbstractTendencyTerm) end
 
 """
     cache_reqs(tendency_term, vars)
 
-Get the cache variables required by the given tendency term, based on the state
-variables.
+Get the cache variables required by the specified tendency term, given the
+mdoel's independent variables.
 """
 function cache_reqs(::AbstractTendencyTerm, vars) end
 
 """
     (::AbstractTendencyTerm)(vars, Y, cache, consts, t)
 
-Compute the value of the given tendency term.
+Compute the value of the specified tendency term.
 
 If the returned value involves dotted operations, it is recommended to use
 `@lazydots` to delay the evaluation of those operations until an optimal time.
@@ -59,7 +55,7 @@ function (::AbstractTendencyTerm)(vars, Y, cache, consts, t) end
     Tendency{
         V <: Var,
         B <: AbstractBoundaryConditions,
-        T <: NTuple{N, AbstractTendencyTerm} where N,
+        T <: NTuple{N, AbstractTendencyTerm} where {N},
     }
 
 A representation of a "tendency" ``
@@ -68,8 +64,12 @@ A representation of a "tendency" ``
     \\bigr|_{\\text{bcs}}
 ``.
 
-Provides the compiler with a map from a variable to its boundary conditions and
-tendency terms.
+Provides the compiler with a way to map a variable to its boundary conditions
+and tendency terms.
+
+If the tendency has boundary conditions, it is recommended to avoid using
+boundary conditions in any of its terms, since only the tendency's boundary
+conditions will be applied.
 """
 struct Tendency{
     V <: Var,
@@ -80,6 +80,18 @@ struct Tendency{
     bcs::B
     terms::T
 end
+
+"""
+    Tendency(var, [bcs], [terms...])
+
+Recommended constructor for a `Tendency`.
+"""
 Tendency(var, bcs::AbstractBoundaryConditions, terms...) =
     Tendency(var, bcs, terms)
 Tendency(var, terms...) = Tendency(var, NoBoundaryConditions(), terms)
+
+cache_reqs(tendency::Tendency, vars) =
+    cache_reqs_for_terms(vars, tendency.terms...)
+cache_reqs_for_terms(vars) = ()
+cache_reqs_for_terms(vars, term, terms...) =
+    (cache_reqs(term, vars)..., cache_reqs_for_terms(vars, terms...)...)

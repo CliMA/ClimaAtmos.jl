@@ -1,9 +1,13 @@
+using ClimaCore: Geometry, Operators
+using ClimaCore.Geometry: ⊗
+
 struct VerticalAdvection{V <: Var, M} <: AbstractTendencyTerm{M}
     var::V
     mode::M
 end
 VerticalAdvection(var; mode = Implicit(DefaultFluidJacobian())) =
-    VerticalAdvection(var, mode) # TODO: Make the default mode depend on var
+    VerticalAdvection(var, mode)
+# TODO: If the default mode depends on var, make `tendency_mode` a function.
 
 tendency_type(::VerticalAdvection) = Flux(VerticalDirection())
 
@@ -21,7 +25,10 @@ end
 cache_reqs(::VerticalAdvection{Var{(:c, :ρθ)}}, vars) = ()
 function (::VerticalAdvection{Var{(:c, :ρθ)}})(vars, Y, cache, consts, t)
     ∇◦ᵥc = Operators.DivergenceF2C()
-    If = Operators.InterpolateC2F()
+    If = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    ) # TODO: Should we do something more clever than simple extrapolation here?
     @lazydots if Var(:f, :ρw) ∈ vars
         ρ = Var(:c, :ρ) ∈ vars ? Y.c.ρ : consts.c.ρ
         @. -∇◦ᵥc(Y.f.ρw * If(Y.c.ρθ / ρ))
@@ -33,7 +40,10 @@ end
 cache_reqs(::VerticalAdvection{Var{(:c, :ρe_tot)}}, vars) = (Var(:c, :P),)
 function (::VerticalAdvection{Var{(:c, :ρe_tot)}})(vars, Y, cache, consts, t)
     ∇◦ᵥc = Operators.DivergenceF2C()
-    If = Operators.InterpolateC2F()
+    If = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    ) # TODO: Should we do something more clever than simple extrapolation here?
     @lazydots if Var(:f, :ρw) ∈ vars
         ρ = Var(:c, :ρ) ∈ vars ? Y.c.ρ : consts.c.ρ
         @. -∇◦ᵥc(Y.f.ρw * If((Y.c.ρe_tot + cache.c.P) / ρ))
@@ -50,7 +60,10 @@ function (::VerticalAdvection{Var{(:f, :ρw)}})(vars, Y, cache, consts, t)
     @lazydots @. -∇◦ᵥf(Ic(Y.f.ρw ⊗ Y.f.ρw) / ρ)
 end
 
-ClimaCore.RecursiveApply.rmul(x::AbstractArray, y::AbstractArray) = x * y
+# TODO: Replace this monkey patch with the curl operator and check that the
+# results are identical.
+using ClimaCore: RecursiveApply
+RecursiveApply.rmul(x::AbstractArray, y::AbstractArray) = x * y
 tendency_type(::VerticalAdvection{Var{(:f, :w)}}, vars) = Source()
 cache_reqs(::VerticalAdvection{Var{(:f, :w)}}, vars) = ()
 function (::VerticalAdvection{Var{(:f, :w)}})(vars, Y, cache, consts, t)

@@ -9,19 +9,21 @@ lazydots(x) = x
 function lazydots(x::Expr)
     head = x.head
     lazyargs = Base.mapany(lazydots, x.args)
-    if head === :.
+    if head === :. && lazyargs[2] isa Expr
         bcexpr(lazyargs[1], lazyargs[2].args...)
     elseif head === :call && hasdot(lazyargs[1])
         bcexpr(undot(lazyargs[1]), lazyargs[2:end]...)
-    elseif head === Symbol(".&&") # TODO: Is this the only alternative to :.&&?
+    elseif head === Symbol(".&&") # Temporary fix for outdated formatter
         bcexpr(:(Base.andand), lazyargs...)
     elseif head === Symbol(".||")
         bcexpr(:(Base.oror), lazyargs...)
     elseif head === :comparison && any(hasdot, lazyargs[2:2:end])
         if !all(hasdot, lazyargs[2:2:end])
             s_comp = join(lazyargs[2:2:end], ", ", " and ")
-            s = "cannot lazily broadcast `$x`, since a combination of dotted \
-                 and ordinary comparisons ($s_comp) must call `materialize`"
+            s = string(
+                "cannot lazily broadcast `$x`, since a combination of dotted",
+                "and ordinary comparisons ($s_comp) must call `materialize`",
+            )
             throw(ErrorException(s))
         end
         ith_bcexpr =
@@ -52,6 +54,16 @@ potential errors before they are encountered when the transformed code is run,
 not all mistakes can be detected at the syntactic level. So, special care must
 be taken when using this macro to ensure that `Base.materialize(@lazydots code)`
 is identical to `code`.
+
+```@repl
+@lazydots @. [1, 2, 3] * [3 2 1] + [1 2 3]
+Base.materialize(ans)
+@lazydots (A = [1, 2 + 3] .+ 1; B = [true, false] .| false; @. ifelse(B, A, 3A))
+Base.materialize(ans)
+@lazydots @. [1, 2] < ([2, 1] + [0 3]) > [0 0] # double computation of 2nd term
+Base.materialize(ans)
+@lazydots @. [1, 2] + ([1 2] + [2 3])' # error due to applying ' to Broadcasted
+```
 """
 macro lazydots(code)
     esc(lazydots(macroexpand(Main, code)))
