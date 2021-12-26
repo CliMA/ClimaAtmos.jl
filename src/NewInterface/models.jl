@@ -252,23 +252,23 @@ Convert an instantiated model into an `ODEFunction`.
 function ode_function(instantiated_model)
     return ODEFunction(
         instantiated_model;
-        tgrad = (∂ₜY, Y, cache, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))), # XXX
-    )
+        tgrad = (∂ₜY, Y, cache, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))),
+    ) # TODO: Automatically determine when the tgrad optimization is valid.
 end
 # TODO: By default, the output of ode_function() should include a JacVecOperator
 # jac_prototype that uses finite differences. This ensures that implicit solvers
 # will work out of the box.
 
-# TODO: Consider parallelizing the formula and tendency loops. All the tendency
-# broadcasts can be materialized in parallel, and, if the dependency graph has
-# multiple components, some groups of variables can be cached in parallel.
+# TODO: Consider parallelizing the equation evaluations. All of the tendencies
+# and diagnostics can be evaluated in parallel, and, if the dependency graph has
+# multiple components, some groups of formulas can be evaluated in parallel.
 function (instantiated_model::InstantiatedModel)(∂ₜY, Y, _, t)
     @unpack model, consts, cache = instantiated_model
     args = (variables(model), Y, cache, consts, t)
     evaluate_equations!(cache, args, model.formulas...)
     evaluate_equations!(∂ₜY, args, model.tendencies...)
     evaluate_equations!(cache.diagnostics, args, model.diagnostics_formulas...)
-    # TODO: Spaces.weighted_dss!(∂ₜY) when necessary
+    # TODO: Run Spaces.weighted_dss! on the components of ∂ₜY when necessary.
     return ∂ₜY
 end
 
@@ -283,7 +283,7 @@ evaluate!(dest, args, formula::Formula) =
 function evaluate!(dest, args, tendency::Tendency)
     @unpack var, bcs, terms = tendency
     if length(terms) == 0
-        tendency_bc = get_var(dest, var) # TODO: Make this more efficient.
+        tendency_bc = Base.broadcasted(zero, get_var(dest, var))
     elseif length(terms) == 1
         tendency_bc = terms[1](args...)
     else
@@ -308,8 +308,8 @@ end
 #=
 Ideas for higher-level interface:
 - Compressible vs. Incompressible (ρ ∈ Y vs. ρ ∈ consts)
-- Conservative vs. Convective (𝐮 vs. ρ𝐮)
-- Hydrostatic vs. Non-hydrostatic (w/ρw ∈ Y vs. w/ρw ∈ cache)
+- Conservative vs. Convective (w vs. ρw and uₕ vs. ρuₕ)
+- Hydrostatic vs. Non-hydrostatic (w ∈ Y or ρw ∈ Y vs. w ∈ cache or ρw ∈ cache)
     - Do we actually want this functionality?
 - Energy variable (ρθ vs. ρe_tot)
     - Do we want any other options?
