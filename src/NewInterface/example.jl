@@ -1,7 +1,9 @@
 using Test
 using ClimaCore: Fields
 
-include("../Domains/Domains.jl")
+if !@isdefined Domains
+    include("../Domains/Domains.jl") # don't define Domains twice
+end
 using ..Domains
 
 include("vars.jl")
@@ -87,16 +89,13 @@ function main()
     Y = Fields.FieldVector{Float64}((c = Yc, f = Yf))
     # TODO: File an issue that FieldVector(c = Yc, f = Yf) is not type-stable.
 
-    instantiated_model = instantiate(model, consts, Y, 0.0)
+    f = ode_function(instantiate(model, consts, Y, 0.0))
 
-    return instantiated_model, Y
+    return f, Y
 end
 
 @inferred main() # test for type stability
 
-instantiated_model, Y = main()
+f, Y = main()
 ∂ₜY = similar(Y)
-instantiated_model(∂ₜY, Y, nothing, 0.0)
-
-# The ODEFunction constructor is not type stable...  (╯°□°)╯︵ bƎɟɟᴉᗡʎɹɐuᴉpɹO
-# @inferred ode_function(instantiated_model)
+f(∂ₜY, Y, nothing, 0.0)

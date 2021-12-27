@@ -9,8 +9,6 @@ VerticalAdvection(var; mode = Implicit(DefaultFluidJacobian())) =
     VerticalAdvection(var, mode)
 # TODO: If the default mode depends on var, make `tendency_mode` a function.
 
-tendency_type(::VerticalAdvection) = Flux(VerticalDirection())
-
 cache_reqs(::VerticalAdvection{Var{(:c, :ρ)}}, vars) =
     Var(:f, :ρw) ∉ vars ? (Var(:f, :ρ),) : ()
 function (::VerticalAdvection{Var{(:c, :ρ)}})(vars, Y, cache, consts, t)
@@ -64,7 +62,6 @@ end
 # results are identical.
 using ClimaCore: RecursiveApply
 RecursiveApply.rmul(x::AbstractArray, y::AbstractArray) = x * y
-tendency_type(::VerticalAdvection{Var{(:f, :w)}}, vars) = Source()
 cache_reqs(::VerticalAdvection{Var{(:f, :w)}}, vars) = ()
 function (::VerticalAdvection{Var{(:f, :w)}})(vars, Y, cache, consts, t)
     ∇ᵥf = Operators.GradientC2F()
@@ -81,8 +78,6 @@ struct PressureGradient{V <: Var, M} <: AbstractTendencyTerm{M}
 end
 PressureGradient(var; mode = Implicit(DefaultFluidJacobian())) =
     PressureGradient(var, mode)
-
-tendency_type(::PressureGradient) = Source()
 
 cache_reqs(::PressureGradient{Var{(:f, :ρw)}}, vars) = (Var(:c, :P),)
 function (::PressureGradient{Var{(:f, :ρw)}})(vars, Y, cache, consts, t)
@@ -104,8 +99,6 @@ struct Gravity{V <: Var, M} <: AbstractTendencyTerm{M}
     mode::M
 end
 Gravity(var; mode = Implicit(DefaultFluidJacobian())) = Gravity(var, mode)
-
-tendency_type(::Gravity) = Source()
 
 cache_reqs(::Gravity{Var{(:f, :ρw)}}, vars) = (Var(:f, :ρ),)
 function (::Gravity{Var{(:f, :ρw)}})(vars, Y, cache, consts, t)

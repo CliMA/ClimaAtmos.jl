@@ -3,12 +3,6 @@ struct HorizontalDirection <: AbstractDirection end
 struct VerticalDirection <: AbstractDirection end
 struct AllDirections <: AbstractDirection end
 
-abstract type AbstractTendencyType end
-struct Source <: AbstractTendencyType end
-struct Flux{D <: AbstractDirection} <: AbstractTendencyType
-    direction::D
-end
-
 abstract type AbstractJacobianName end
 struct DefaultFluidJacobian <: AbstractJacobianName end
 
@@ -25,13 +19,6 @@ end
 Supertype for all tendency terms. All subtypes must contain the field `mode::M`.
 """
 abstract type AbstractTendencyTerm{M <: AbstractTimesteppingMode} end
-
-"""
-    tendency_type(tendency_term)
-
-Get the `AbstractTendencyType` of the specified tendency term.
-"""
-function tendency_type(::AbstractTendencyTerm) end
 
 """
     cache_reqs(tendency_term, vars)

@@ -9,12 +9,16 @@ using OrdinaryDiffEq: ODEFunction
         D <: NTuple{N₃, Formula} where {N₃},
     }
 
-A representation of a "model".
+A representation of a "model", which describes a system of ordinary differential
+equations and provides some useful information for solving that system.
 
 Contains tendencies for evolving the independent variables over time, formulas
-for updating the cached values required by the tendencies, and additional
-formulas for diagnostics or debugging. Since cached values may depend on other
-cached values, the formulas are stored in the order in which they get evaluated.
+for updating the cache variables required by the tendencies, and formulas for
+updating any additional variables meant for diagnostics (and debugging). Since
+some cache variables may depend on other cache variables, the order in which the
+cache formulas are stored must correspond to a valid sequence of evaluations for
+the cache variables. All tendencies and diagnostics formulas are independent of
+each other, so their order is irrelevant.
 """
 struct Model{
     T <: NTuple{N₁, Tendency} where {N₁},
@@ -25,36 +29,48 @@ struct Model{
     formulas::F
     diagnostics_formulas::D
 end
+# TODO: Consider adding diagnostics_tendencies. This will allow users to run
+# their models normally, but also track what the values of certain tendencies
+# would be at each timestep if, say, some tendency terms were disabled or some
+# boundary conditions were modified.
 
 """
     Model(
-        FunctionConstructor;
+        [formula_function_constructor];
         [tendencies],
         [custom_formulas],
         [diagnostics_formulas],
     )
 
 Alternative constructor for a `Model` that allows users to avoid specifying all
-of the model's required formulas and ensuring that those formulas are evaluated
+of the required cache formulas and ensuring that those formulas are evaluated
 in a valid order.
 
-Accepts a type argument `FunctionConstructor <: AbstractFormulaFunction` and
-automatically generates a formula for each cache variable `var` by calling
-`FunctionConstructor(var)`. If the automatically generated formula for a
-variable should be overwritten, or if `FunctionConstructor` is not defined for a
-variable, a formula for that variable must be provided in `custom_formulas`.
+If the argument `formula_function_constructor` is provided, this `Model`
+constructor automatically generates a formula for each cache variable `var` by
+calling `formula_function_constructor(var)`, which must return an
+`AbstractFormulaFunction`. If the automatically generated formula for a
+variable should be overwritten, or if `formula_function_constructor` is not
+defined for a variable, a formula for that variable must be included in
+`custom_formulas`.
+
+If `formula_function_constructor` is not provided, this constructor will verify
+that all required cache formulas are included in `custom_formulas` and determine
+a valid evaluation order for them.
 """
 function Model(
-    ::Type{FunctionConstructor};
+    formula_function_constructor = nothing;
     tendencies = (),
     custom_formulas = (),
     diagnostics_formulas = (),
-) where {FunctionConstructor}
-    formulas = sorted_cache_formulas(
-        tendencies,
-        FunctionConstructor,
+)
+    formulas = sorted_formulas_for_equations(
+        (),
+        _variables(tendencies),
+        formula_function_constructor,
         custom_formulas,
-        diagnostics_formulas,
+        tendencies...,
+        diagnostics_formulas...,
     )
     return Model(tendencies, formulas, diagnostics_formulas)
 end
@@ -64,86 +80,68 @@ end
 
 Get the independent variables of the specified model.
 """
-variables(model) = Vars(_variables(model.tendencies...))
-_variables() = ()
-_variables(equation, equations...) = (equation.var, _variables(equations...)...)
+variables(model) = _variables(model.tendencies)
+_variables(equations) = Vars(map(equation -> equation.var, equations))
 
 ##
-## Formula sorting
+## Formula construction and sorting
 ##
 
 # Run a compile time topological sort of the cache dependency graph with a
 # recursive depth-first search algorithm.
-# TODO: Verify that the type-stability of this function outweighs the fact that
-# it might take a long time to compile.
 # TODO: Instead of generating a list of sorted formulas, consider generating a
-# list of sub-lists, where each sub-list is a component of the dependency graph
-# (and hence can be computed independently of the other sub-lists).
-function sorted_cache_formulas(
-    tendencies,
-    ::Type{FunctionConstructor},
-    custom_formulas,
-    diagnostics_formulas,
-) where {FunctionConstructor}
-    return formulas_for_equations(
-        (),
-        Vars(_variables(tendencies...)),
-        FunctionConstructor,
-        custom_formulas,
-        tendencies...,
-        diagnostics_formulas...,
-    )
-end
+# list of sub-lists, where each sub-list contains a component of the dependency
+# graph (and can therefore be computed independently of the other sub-lists).
 
-formulas_for_equations(formulas, _, _, _) = formulas
-function formulas_for_equations(
+sorted_formulas_for_equations(formulas, _, _, _) = formulas
+function sorted_formulas_for_equations(
     formulas,
     vars,
-    ::Type{FunctionConstructor},
+    formula_function_constructor,
     custom_formulas,
     equation,
     equations...,
-) where {FunctionConstructor}
-    formulas = formulas_for_reqs(
+)
+    formulas = sorted_formulas_for_reqs(
         formulas,
         (),
         vars,
-        FunctionConstructor,
+        formula_function_constructor,
         custom_formulas,
         cache_reqs(equation, vars)...,
     )
-    return formulas_for_equations(
+    return sorted_formulas_for_equations(
         formulas,
         vars,
-        FunctionConstructor,
+        formula_function_constructor,
         custom_formulas,
         equations...,
     )
 end
 
-formulas_for_reqs(formulas, _, _, _, _) = formulas
-function formulas_for_reqs(
+sorted_formulas_for_reqs(formulas, _, _, _, _) = formulas
+function sorted_formulas_for_reqs(
     formulas,
     visited,
     vars,
-    ::Type{FunctionConstructor},
+    formula_function_constructor,
     custom_formulas,
     req_var,
     req_vars...,
-) where {FunctionConstructor}
+)
     formulas = visit_dependency_graph_vertex(
         req_var,
         formulas,
         visited,
         vars,
-        FunctionConstructor,
+        formula_function_constructor,
         custom_formulas,
     )
-    return formulas_for_reqs(
+    return sorted_formulas_for_reqs(
         formulas,
         visited,
         vars,
-        FunctionConstructor,
+        formula_function_constructor,
         custom_formulas,
         req_vars...,
     )
@@ -154,42 +152,41 @@ function visit_dependency_graph_vertex(
     formulas,
     visited,
     vars,
-    ::Type{FunctionConstructor},
+    formula_function_constructor,
     custom_formulas,
-) where {FunctionConstructor}
-    if req_var ∈ Vars(_variables(formulas...))
+)
+    if req_var ∈ _variables(formulas)
         return formulas
     end
     if req_var ∈ Vars(visited)
         s_cycle = join(cycle_vars(req_var, visited...), " -> ")
         throw(ArgumentError("cache dependency cycle detected: $s_cycle"))
     end
-    formula = get_formula(req_var, FunctionConstructor, custom_formulas...)
-    formulas = formulas_for_reqs(
+    formula = get_formula(
+        req_var,
+        formula_function_constructor,
+        custom_formulas...,
+    )
+    req_formulas = sorted_formulas_for_reqs(
         formulas,
         (visited..., req_var),
         vars,
-        FunctionConstructor,
+        formula_function_constructor,
         custom_formulas,
         cache_reqs(formula, vars)...,
     )
-    return (formulas..., formula)
+    return (req_formulas..., formula)
 end
 
-cycle_vars(var, var′, vars...) =        # no need for a base case
+cycle_vars(var, var′, vars...) =   # no need for a base case here
     var === var′ ? (var, vars..., var) : cycle_vars(var, vars...)
 
-get_formula(var, ::Type{FunctionConstructor}) where {FunctionConstructor} =
-    Formula(var, FunctionConstructor(var))
-function get_formula(
-    var,
-    ::Type{FunctionConstructor},
-    formula,
-    formulas...,
-) where {FunctionConstructor}
+get_formula(var, ::Nothing) = throw(ArgumentError("missing formula for $var"))
+get_formula(var, formula_function_constructor) =
+    Formula(var, formula_function_constructor(var))
+get_formula(var, formula_function_constructor, formula, formulas...) =
     var === formula.var ? formula :
-    get_formula(var, FunctionConstructor, formulas...)
-end
+    get_formula(var, formula_function_constructor, formulas...)
 
 ################################################################################
 
@@ -202,15 +199,15 @@ end
 """
     instantiate(model, consts, Y, t)
 
-Assign a collection of constants and a cache to the specified model. Allocate
-the cache by evaluating the model's formulas for the state vector `Y` at time
-`t`.
+Add a collection of constants and a cache to the specified model. Allocate the
+cache by evaluating the model's formulas for the state vector `Y` at time `t`.
 """
 function instantiate(model, consts, Y, t)
-    args = (variables(model), Y, consts, t)
-    cache = cache_for_formulas(NamedTuple(), args, model.formulas...)
+    vars = variables(model)
+    formulas = model.formulas
+    cache = cache_for_formulas(NamedTuple(), vars, Y, consts, t, formulas...)
     if length(model.diagnostics_formulas) > 0
-        args = (variables(model), Y, cache, consts, t)
+        args = (vars, Y, cache, consts, t)
         formulas = model.diagnostics_formulas
         diagnostics = diagnostics_for_formulas(NamedTuple(), args, formulas...)
         cache = (; cache..., diagnostics)
@@ -218,15 +215,14 @@ function instantiate(model, consts, Y, t)
     return InstantiatedModel(model, consts, cache)
 end
 
-cache_for_formulas(cache, args) = cache
-function cache_for_formulas(cache, args, formula, formulas...)
-    vars, Y, consts, t = args
+cache_for_formulas(cache, _, _, _, _) = cache
+function cache_for_formulas(cache, vars, Y, consts, t, formula, formulas...)
     value = Base.materialize(formula.f(vars, Y, cache, consts, t))
     cache = named_tuple_insert(cache, value, formula.var)
-    return cache_for_formulas(cache, args, formulas...)
+    return cache_for_formulas(cache, vars, Y, consts, t, formulas...)
 end
 
-diagnostics_for_formulas(diagnostics, args) = diagnostics
+diagnostics_for_formulas(diagnostics, _) = diagnostics
 function diagnostics_for_formulas(diagnostics, args, formula, formulas...)
     value = Base.materialize(formula.f(args...))
     diagnostics = named_tuple_insert(diagnostics, value, formula.var)
@@ -245,49 +241,60 @@ function named_tuple_insert(nt, x, var)
 end
 
 """
-    ode_function(instantiated_model)
+    ode_function(instantiated_model; [is_autonomous])
 
 Convert an instantiated model into an `ODEFunction`.
+
+By default, the system of ordinary differential equation defined by the model is
+assumed to be autonomous, which allows some ODE solvers to utilize certain
+performance optimizations. If any of the model's tendencies or cache formulas
+are time-dependent, `is_autonomous` must be set to `false`; if this is not done,
+those ODE solvers may generate incorrect solutions.
 """
-function ode_function(instantiated_model)
-    return ODEFunction(
-        instantiated_model;
-        tgrad = (∂ₜY, Y, _, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))),
-    ) # TODO: Automatically determine when the tgrad optimization is valid.
+function ode_function(instantiated_model; is_autonomous = true)
+    kwargs = NamedTuple()
+    if is_autonomous
+        kwargs = (
+            kwargs...,
+            tgrad = (∂ₜY, Y, _, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))),
+        )
+    end
+    return ODEFunction{true}(instantiated_model; kwargs...) # iip isn't inferred
 end
 # TODO: By default, the output of ode_function() should include a JacVecOperator
 # jac_prototype that uses finite differences. This ensures that implicit solvers
 # will work out of the box.
+# TODO: Automatically determine the value of is_autonomous.
 
+# TODO: Use the linearity of certain operators (e.g., ∇◦ᵥf, ∇◦ᵥc, -) to merge
+# certain broadcasts at compile-time and improve performance. For example,
+# instead of evaluating the sum of all the face variable fluxes (whose outermost
+# broadcast functions are - and ∇◦ᵥf), we should evaluate the flux of the sum.
 # TODO: Consider parallelizing the equation evaluations. All of the tendencies
-# and diagnostics can be evaluated in parallel, and, if the dependency graph has
-# multiple components, some groups of formulas can be evaluated in parallel.
+# and diagnostics formulas can be evaluated in parallel, and, if the dependency
+# graph has multiple components, some groups of cache formulas can be evaluated
+# in parallel.
 function (instantiated_model::InstantiatedModel)(∂ₜY, Y, _, t)
     @unpack model, consts, cache = instantiated_model
     args = (variables(model), Y, cache, consts, t)
-    evaluate_equations!(cache, args, model.formulas...)
-    evaluate_equations!(∂ₜY, args, model.tendencies...)
-    evaluate_equations!(cache.diagnostics, args, model.diagnostics_formulas...)
+    evaluate_equations!(cache, args, model.formulas)
+    evaluate_equations!(∂ₜY, args, model.tendencies)
+    evaluate_equations!(cache.diagnostics, args, model.diagnostics_formulas)
     # TODO: Run Spaces.weighted_dss! on the components of ∂ₜY when necessary.
     return ∂ₜY
 end
 
-evaluate_equations!(dest, args) = nothing
-function evaluate_equations!(dest, args, equation, equations...)
-    evaluate!(dest, args, equation)
-    evaluate_equations!(dest, args, equations...)
-end
-
-evaluate!(dest, args, formula::Formula) =
+evaluate_equations!(dest, args, equations) =
+    map(equation -> evaluate_equation!(dest, args, equation), equations)
+evaluate_equation!(dest, args, formula::Formula) =
     Base.materialize!(get_var(dest, formula.var), formula.f(args...))
-function evaluate!(dest, args, tendency::Tendency)
+function evaluate_equation!(dest, args, tendency::Tendency)
     @unpack var, bcs, terms = tendency
     if length(terms) == 0
         tendency_bc = Base.broadcasted(zero, get_var(dest, var))
     elseif length(terms) == 1
         tendency_bc = terms[1](args...)
     else
-        # TODO: Is this type stable?
         tendency_bc = Base.broadcasted(+, map(term -> term(args...), terms)...)
     end
     if bcs isa VerticalBoundaryConditions
