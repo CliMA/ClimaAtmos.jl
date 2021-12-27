@@ -33,6 +33,7 @@ end
 # their models normally, but also track what the values of certain tendencies
 # would be at each timestep if, say, some tendency terms were disabled or some
 # boundary conditions were modified.
+# TODO: Ensure that there are no duplicate variables in any of the Model fields.
 
 """
     Model(
@@ -162,11 +163,8 @@ function visit_dependency_graph_vertex(
         s_cycle = join(cycle_vars(req_var, visited...), " -> ")
         throw(ArgumentError("cache dependency cycle detected: $s_cycle"))
     end
-    formula = get_formula(
-        req_var,
-        formula_function_constructor,
-        custom_formulas...,
-    )
+    formula =
+        get_formula(req_var, formula_function_constructor, custom_formulas...)
     req_formulas = sorted_formulas_for_reqs(
         formulas,
         (visited..., req_var),
@@ -254,10 +252,8 @@ those ODE solvers may generate incorrect solutions.
 function ode_function(instantiated_model; is_autonomous = true)
     kwargs = NamedTuple()
     if is_autonomous
-        kwargs = (
-            kwargs...,
-            tgrad = (∂ₜY, Y, _, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))),
-        )
+        kwargs =
+            (kwargs..., tgrad = (∂ₜY, Y, _, t) -> fill!(∂ₜY, zero(eltype(∂ₜY))))
     end
     return ODEFunction{true}(instantiated_model; kwargs...) # iip isn't inferred
 end
@@ -314,6 +310,7 @@ end
 
 #=
 Ideas for higher-level interface:
+
 - Compressible vs. Incompressible (ρ ∈ Y vs. ρ ∈ consts)
 - Conservative vs. Convective (w vs. ρw and uₕ vs. ρuₕ)
 - Hydrostatic vs. Non-hydrostatic (w ∈ Y or ρw ∈ Y vs. w ∈ cache or ρw ∈ cache)
