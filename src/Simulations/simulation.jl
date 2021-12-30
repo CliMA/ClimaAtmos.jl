@@ -126,7 +126,6 @@ function set!(simulation::Simulation, submodel_name = nothing; kwargs...)
 
     nothing
 end
-using ClimaCore.DataLayouts: column
 
 """
     step!(simulation, args...; kwargs...)

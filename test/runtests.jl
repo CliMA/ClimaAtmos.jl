@@ -13,11 +13,13 @@ using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
 using ClimaAtmos.Models.SingleColumnModels
 using ClimaAtmos.Models.Nonhydrostatic2DModels
+using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Callbacks
 using ClimaAtmos.Simulations
 using CLIMAParameters
 
-float_types = (Float32, Float64)
+#float_types = (Float32, Float64)
+float_types = (Float64,)
 
 #####
 ##### Run tests!
@@ -29,7 +31,7 @@ include("test_cases.jl")
 
 @testset "ClimaAtmos" begin
     if group == :integration || group == :all
-        @testset "Unit tests" begin
+        @testset "Integration tests" begin
             include("test_domains.jl")
             test_cases(:integration)
         end

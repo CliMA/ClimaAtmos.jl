@@ -25,5 +25,43 @@
             Spaces.CenterExtrudedFiniteDifferenceSpace,
             Spaces.FaceExtrudedFiniteDifferenceSpace,
         }
+
+        domain = HybridBox(
+            FT,
+            xlim = (-1, π),
+            ylim = (-1, π),
+            zlim = (-2, 2π),
+            nelements = (2, 2, 3),
+            npolynomial = 4,
+            xperiodic = false,
+            yperiodic = true,
+        )
+        @test domain.xlim == FT.((-1, π))
+        @test domain.ylim == FT.((-1, π))
+        @test domain.zlim == FT.((-2, 2π))
+        @test domain.nelements == (2, 2, 3)
+        @test domain.npolynomial == 4
+        @test domain.xperiodic == false
+        @test domain.yperiodic == true
+        @test make_function_space(domain) isa Tuple{
+            Spaces.CenterExtrudedFiniteDifferenceSpace,
+            Spaces.FaceExtrudedFiniteDifferenceSpace,
+        }
+
+        domain = SphericalShell(
+            FT,
+            radius = 100.0,
+            height = 30.0,
+            nelements = (6, 10),
+            npolynomial = 3,
+        )
+        @test domain.radius == FT.(100)
+        @test domain.height == FT.(30)
+        @test domain.nelements == (6, 10)
+        @test domain.npolynomial == 3
+        @test make_function_space(domain) isa Tuple{
+            Spaces.CenterExtrudedFiniteDifferenceSpace,
+            Spaces.FaceExtrudedFiniteDifferenceSpace,
+        }
     end
 end
