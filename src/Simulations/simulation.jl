@@ -24,34 +24,6 @@ end
 Construct a `Simulation` for a `model` with a time stepping `method`,
 initial conditions `Y_init`, and time step `dt` for a time interval of `tspan`.
 If `Y_init` is not provided, the model's default initial conditions are used.
-
-# Example
-```jldoctest; setup = :(using ClimaAtmos.Simulations)
-julia> using OrdinaryDiffEq: Euler
-
-julia> using ClimaAtmos.Domains, ClimaAtmos.Models.ShallowWaterModels
-
-julia> domain =
-        Plane(xlim = (-2π, 2π), ylim = (-2π, 2π), nelements = (16, 16), npolynomial = 3);
-
-julia> parameters = (g = 9.8, D₄ = 1e-4, ϵ = 0.1, l = 0.5, k = 0.5, h₀ = 1.0);
-
-julia> model = ShallowWaterModel(; domain, parameters);
-
-julia> Simulation(model, Euler(), dt = 0.04, tspan = (0.0, 80.0))
-Simulation set-up:
-\tmodel type:\tShallowWaterModel
-\tmodel vars:\t(:h, :u, :c)
-
-Domain set-up:
-\txy-plane:\t[-6.3, 6.3) × [-6.3, 6.3)
-\t# of elements:\t(16, 16)
-\tpoly order:\t3
-
-Timestepper set-up:
-\tmethod:\tEuler
-\tdt:\t0.040000
-\ttspan:\t(0.000000, 80.000000)
 ```
 """
 function Simulation(
