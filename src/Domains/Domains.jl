@@ -6,14 +6,10 @@ using ClimaCore: ClimaCore, Geometry, Meshes, Topologies, Spaces
 
 export make_function_space,
     AbstractDomain,
-    AbstractHorizontalDomain,
     AbstractVerticalDomain,
     AbstractHybridDomain,
     Column,
-    Plane,
-    HybridPlane,
-    Sphere
-#TODO: Future support for Hybrid and Spectral Planes
+    HybridPlane
 
 """
     make_function_space(domain)
@@ -27,7 +23,6 @@ Supertype for all domains.
 """
 abstract type AbstractDomain end
 
-abstract type AbstractHorizontalDomain{FT} <: AbstractDomain end
 abstract type AbstractVerticalDomain{FT} <: AbstractDomain end
 abstract type AbstractHybridDomain{FT} <: AbstractDomain end
 

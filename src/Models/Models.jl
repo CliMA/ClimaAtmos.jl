@@ -23,7 +23,6 @@ Construct the ordinary differential equations for `model`.
 make_ode_function(model::AbstractModel) =
     error("make_ode_function not implemented for given model type")
 
-include("ShallowWaterModels/ShallowWaterModels.jl")
 include("SingleColumnModels/SingleColumnModels.jl")
 include("Nonhydrostatic2DModels/Nonhydrostatic2DModels.jl")
 
