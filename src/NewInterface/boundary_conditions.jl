@@ -93,9 +93,8 @@ function apply_vertical_boundary_conditions(
         tendency_bc,
         zip(bottom.op_types, bottom.fs)...,
     )
-    boundary_op = Operators.SetBoundaryOperator(
-        top = Operators.SetValue(top.f(args...)),
-    )
+    boundary_op =
+        Operators.SetBoundaryOperator(top = Operators.SetValue(top.f(args...)))
     return broadcasted(boundary_op, tendency_bc)
 end
 
