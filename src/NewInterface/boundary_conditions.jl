@@ -69,7 +69,7 @@ function apply_vert(
     tendency_bc,
     top::ValueBoundaryCondition,
     bottom::ValueBoundaryCondition,
-    args...
+    args...,
 )
     op = Operators.SetBoundaryOperator(
         top = Operators.SetValue(top.f(args...)),
@@ -148,7 +148,7 @@ end
 function replace_op(tendency_bc::Broadcasted, op_type, new_op)
     if tendency_bc.f isa op_type
         return broadcasted(new_op, tendency_bc.args...)
-    elseif tendency_bc.f === +
+    elseif tendency_bc.f isa Addition
         with_op_type, without_op_type = partition(
             x -> x isa Broadcasted && x.f isa op_type,
             tendency_bc.args,

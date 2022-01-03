@@ -28,15 +28,16 @@ const Division = Union{typeof(/), typeof(RecursiveApply.rdiv)}
 factorize_bc(x) = x
 function factorize_bc(bc::Broadcasted)
     args = map(factorize_bc, bc.args)
-    (bc.f isa Addition) && return factorize_sum(expand_sums(args)...)
-    (bc.f isa Subtraction) && return factorize_negation_or_difference(args...)
-    (bc.f isa Multiplication) && return factorize_product(args...)
-    (bc.f isa Division) && return factorize_quotient(args...)
+    bc.f isa Addition && return factorize_sum(expand_sums(args)...)
+    bc.f isa Subtraction && return factorize_negation_or_difference(args...)
+    bc.f isa Multiplication && return factorize_product(args...)
+    bc.f isa Division && return factorize_quotient(args...)
     return broadcasted(bc.f, args...)
 end
 
 expand_sums(args) = Base.afoldl(_expand_sums, (), args...)
-_expand_sums(expanded_args, arg) = arg isa Broadcasted && (arg.f === +) ?
+_expand_sums(expanded_args, arg) =
+    arg isa Broadcasted && arg.f isa Addition ?
     (expanded_args..., arg.args...) : (expanded_args..., arg)
 
 factorize_sum(args...) = _factorize_sum((), args...) # can't use foldl for this
@@ -45,7 +46,7 @@ _factorize_sum(factorized_args) = broadcasted(+, factorized_args...)
 function _factorize_sum(factorized_args, arg, args...)
     if (
         is_linear_1arg_bc(arg) ||
-        (arg isa Broadcasted && (arg.f === -) && length(arg.args) == 1)
+        (arg isa Broadcasted && arg.f isa Subtraction && length(arg.args) == 1)
     )
         same_f, not_same_f = partition(
             x -> x isa Broadcasted && x.f === arg.f && length(x.args) == 1,
@@ -100,9 +101,8 @@ is_linear_1arg_bc(x) =
 # Return a tuple of xs that satisfy condition f and a tuple of xs that don't.
 # (This is like Base.filter_rec(f, xs::Tuple), except that it returns both the
 # "do"s and the "don't"s, rather than just the "do"s.)
-partition(f, xs) =
-    Base.afoldl(
-        ((dos, donts), x) -> f(x) ? ((dos..., x), donts) : (dos, (donts..., x)),
-        ((), ()),
-        xs...,
-    )
+partition(f, xs) = Base.afoldl(
+    ((dos, donts), x) -> f(x) ? ((dos..., x), donts) : (dos, (donts..., x)),
+    ((), ()),
+    xs...,
+)
