@@ -60,25 +60,25 @@ struct VerticalBoundaryConditions{
     bottom::B
 end
 
-(b::NoBoundaryConditions)(tendency_bc, vars, Y, cache, consts, t) = tendency_bc
+(b::NoBoundaryConditions)(tendency_bc, args...) = tendency_bc
 
-(b::VerticalBoundaryConditions)(tendency_bc, vars, Y, cache, consts, t) =
-    apply_vert(tendency_bc, b.top, b.bottom, vars, Y, cache, consts, t)
+(b::VerticalBoundaryConditions)(tendency_bc, args...) =
+    apply_vertical_boundary_conditions(tendency_bc, b.top, b.bottom, args...)
 
-function apply_vert(
+function apply_vertical_boundary_conditions(
     tendency_bc,
     top::ValueBoundaryCondition,
     bottom::ValueBoundaryCondition,
     args...,
 )
-    op = Operators.SetBoundaryOperator(
+    boundary_op = Operators.SetBoundaryOperator(
         top = Operators.SetValue(top.f(args...)),
         bottom = Operators.SetValue(bottom.f(args...)),
     )
-    return broadcasted(op, tendency_bc)
+    return broadcasted(boundary_op, tendency_bc)
 end
 
-function apply_vert(
+function apply_vertical_boundary_conditions(
     tendency_bc,
     top::ValueBoundaryCondition,
     bottom::OperatorValuesBoundaryCondition,
@@ -87,17 +87,19 @@ function apply_vert(
     tendency_bc = Base.afoldl(
         (tendency_bc, (op_type, f)) -> replace_op(
             tendency_bc,
-            op_type,
+            op_type(),
             op_type(bottom = Operators.SetValue(f(args...))),
         ),
         tendency_bc,
         zip(bottom.op_types, bottom.fs)...,
     )
-    op = Operators.SetBoundaryOperator(top = Operators.SetValue(top.f(args...)))
-    return broadcasted(op, tendency_bc)
+    boundary_op = Operators.SetBoundaryOperator(
+        top = Operators.SetValue(top.f(args...)),
+    )
+    return broadcasted(boundary_op, tendency_bc)
 end
 
-function apply_vert(
+function apply_vertical_boundary_conditions(
     tendency_bc,
     top::OperatorValuesBoundaryCondition,
     bottom::ValueBoundaryCondition,
@@ -106,19 +108,19 @@ function apply_vert(
     tendency_bc = Base.afoldl(
         (tendency_bc, (op_type, f)) -> replace_op(
             tendency_bc,
-            op_type,
+            op_type(),
             op_type(top = Operators.SetValue(f(args...))),
         ),
         tendency_bc,
         zip(top.op_types, top.fs)...,
     )
-    op = Operators.SetBoundaryOperator(
+    boundary_op = Operators.SetBoundaryOperator(
         bottom = Operators.SetValue(bottom.f(args...)),
     )
-    return broadcasted(op, tendency_bc)
+    return broadcasted(boundary_op, tendency_bc)
 end
 
-function apply_vert(
+function apply_vertical_boundary_conditions(
     tendency_bc,
     top::OperatorValuesBoundaryCondition,
     bottom::OperatorValuesBoundaryCondition,
@@ -134,7 +136,7 @@ function apply_vert(
     return Base.afoldl(
         (tendency_bc, (op_type, top_f, bottom_f)) -> replace_op(
             tendency_bc,
-            op_type,
+            op_type(),
             op_type(
                 top = Operators.SetValue(top_f(args...)),
                 bottom = Operators.SetValue(bottom_f(args...)),
@@ -145,29 +147,26 @@ function apply_vert(
     )
 end
 
-function replace_op(tendency_bc::Broadcasted, op_type, new_op)
-    if tendency_bc.f isa op_type
+function replace_op(tendency_bc, old_op, new_op)
+    if tendency_bc.f === old_op
         return broadcasted(new_op, tendency_bc.args...)
     elseif tendency_bc.f isa Addition
-        with_op_type, without_op_type = partition(
-            x -> x isa Broadcasted && x.f isa op_type,
+        with_old_op, without_old_op = partition(
+            x -> x isa Broadcasted && x.f === old_op,
             tendency_bc.args,
         )
-        if length(with_op_type) == 1
-            new_op_bc = broadcasted(new_op, with_op_type[1].args...)
-            return broadcasted(+, new_op_bc, without_op_type...)
-        elseif length(with_op_type) > 1
-            s = string(
-                "boundary conditions specified in tendency terms (multiple ",
-                "versions of $op_type detected)",
-            ) # TODO: temporary fix for outdated formatter
-            throw(ArgumentError(s))
+        if length(with_old_op) == 1
+            new_op_bc = broadcasted(new_op, with_old_op[1].args...)
+            return broadcasted(+, new_op_bc, without_old_op...)
+        elseif length(with_old_op) > 1
+            s = "flaw detected in tendency broadcast factorization algorithm"
+            throw(ErrorException(s))
         end
     end
+    op_type = typeof(old_op).name.wrapper
     s = string(
-        "unable to apply OperatorValuesBoundaryCondition with operator type ",
-        "$op_type because no tendency terms were found with $op_type as their ",
-        "final operation",
+        "unable to apply boundary condition for $op_type because there are no ",
+        "tendency terms whose final non-trivial operation is $old_op",
     ) # TODO: temporary fix for outdated formatter
     throw(ArgumentError(s))
 end
