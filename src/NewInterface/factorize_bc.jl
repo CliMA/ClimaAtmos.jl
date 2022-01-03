@@ -36,8 +36,7 @@ function factorize_bc(bc::Broadcasted)
 end
 
 expand_sums(args) = Base.afoldl(_expand_sums, (), args...)
-_expand_sums(expanded_args, arg) =
-    arg isa Broadcasted && arg.f isa Addition ?
+_expand_sums(expanded_args, arg) = arg isa Broadcasted && arg.f isa Addition ?
     (expanded_args..., arg.args...) : (expanded_args..., arg)
 
 factorize_sum(args...) = _factorize_sum((), args...) # can't use foldl for this
