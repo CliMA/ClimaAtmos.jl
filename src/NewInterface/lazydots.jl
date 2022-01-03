@@ -1,4 +1,4 @@
-bcexpr(f, args...) = Expr(:call, :(Base.broadcasted), f, args...)
+bcexpr(fexpr, args...) = Expr(:call, :(Base.broadcasted), fexpr, args...)
 
 hasdot(x) = false
 hasdot(x::Symbol) = Base.isoperator(x) && first(string(x)) == '.' && x !== :..
@@ -49,18 +49,18 @@ might perform some computations multiple times, whereas the original code would
 materialize those computations and then reference the materialized output. The
 transformed code might also throw an error because one of its function calls
 expects a materialized argument rather than a `Broadcasted` object. (The adjoint
-`'` is an example of such a function.) Although this macro catches some
+operator `'` is an example of such a function.) Although this macro catches some
 potential errors before they are encountered when the transformed code is run,
 not all mistakes can be detected at the syntactic level. So, special care must
 be taken when using this macro to ensure that `Base.materialize(@lazydots code)`
 is identical to `code`.
 
 ```@repl
-@lazydots @. [1, 2, 3] * [3 2 1] + [1 2 3]
+@lazydots @. [1, 2, 3] * [3 2 1] + [1 2 3] + 3
 Base.materialize(ans)
-@lazydots (A = [1, 2 + 3] .+ 1; B = [true, false] .| false; @. ifelse(B, A, 3A))
+@lazydots (A = [1, 2] .+ 3; B = [true, false] .|| false; @. ifelse(B, 2A, 3A))
 Base.materialize(ans)
-@lazydots @. [1, 2] < ([2, 1] + [0 3]) > [0 0] # double computation of 2nd term
+@lazydots @. [1, 2] <= [2, 3] - [1 2] > [1 1] # double computation of 2nd term
 Base.materialize(ans)
 @lazydots @. [1, 2] + ([1 2] + [2 3])' # error due to applying ' to Broadcasted
 ```

@@ -30,7 +30,7 @@ A representation of a "formula" ``
     \\text{var} = \\text{f}(vars, Y, cache, consts, t)
 ``.
 
-Provides the compiler with a way to map a variable to its formula function.
+Provides a type-stable mechanism for mapping a variable to its formula function.
 
 If the formula requires some boundary conditions in order to be evaluated, those
 boundary conditions must be handled by the formula function `f`.

@@ -40,7 +40,7 @@ end
 
 cache_reqs(::DefaultFluidFunction{Var{(:c, :ρe_tot)}}, vars) = ()
 function (::DefaultFluidFunction{Var{(:c, :ρe_tot)}})(vars, Y, cache, consts, t)
-    if Var(:c, :ρθ) ∈ vars
+    @lazydots if Var(:c, :ρθ) ∈ vars
         Ic = Operators.InterpolateF2C()
         @unpack γ, R_d, p_0 = consts
         T = typeof(γ)

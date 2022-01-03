@@ -12,7 +12,7 @@ it will be able to infer the type of `get_var(object, var)`.
 ```@repl
 var = Var(:atmos, :f, :ρw)
 symbols(var)
-object = (atmos = (c = (ρ = 1, ρθ = 2, ρu = 3), f = (ρw = 4,)), land = ())
+object = (atmos = (c = (ρ = 1, ρθ = 2, ρuₕ = 3), f = (ρw = 4,)), land = ())
 get_var(object, var)
 ```
 """
@@ -63,12 +63,13 @@ for `in`.
 For any variable `var` and any collection of variables `vars`, the compiler will
 be able to infer whether `var ∈ vars` or `var ∉ vars`. This is achieved by
 checking for physical equality (`===`) rather than generic equality (`==`) when
-comparing `var` to each element of `vars`.
+comparing `var` to each variable in `vars`.
 
 ```@repl
 var = Var(:f, :ρw)
 vars = Vars((Var(:c, :ρ), Var(:c, :ρθ), Var(:f, :ρw)))
 var ∈ vars
+var ∉ vars
 ```
 """
 struct Vars{V <: NTuple{N, Var} where {N}}

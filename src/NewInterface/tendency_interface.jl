@@ -48,11 +48,11 @@ function (::AbstractTendencyTerm)(vars, Y, cache, consts, t) end
 A representation of a "tendency" ``
     ∂ₜ\\text{var} =
     \\sum_{\\text{term} ∈ \\text{terms}}\\text{term}(vars, Y, cache, consts, t)
-    \\bigr|_{\\text{bcs}}
+    \\bigr|_{\\text{boundary_conditions}}
 ``.
 
-Provides the compiler with a way to map a variable to its boundary conditions
-and tendency terms.
+Provides a type-stable mechanism for mapping a variable to its boundary
+conditions and tendency terms.
 
 If the tendency has boundary conditions, it is recommended to avoid using
 boundary conditions in any of its terms, since only the tendency's boundary
@@ -64,17 +64,17 @@ struct Tendency{
     T <: NTuple{N, AbstractTendencyTerm} where {N},
 }
     var::V
-    bcs::B
+    boundary_conditions::B
     terms::T
 end
 
 """
-    Tendency(var, [bcs], [terms...])
+    Tendency(var, [boundary_conditions], [terms...])
 
 Recommended constructor for a `Tendency`.
 """
-Tendency(var, bcs::AbstractBoundaryConditions, terms...) =
-    Tendency(var, bcs, terms)
+Tendency(var, boundary_conditions::AbstractBoundaryConditions, terms...) =
+    Tendency(var, boundary_conditions, terms)
 Tendency(var, terms...) = Tendency(var, NoBoundaryConditions(), terms)
 
 cache_reqs(tendency::Tendency, vars) =

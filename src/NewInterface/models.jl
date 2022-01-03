@@ -10,15 +10,21 @@ using OrdinaryDiffEq: ODEFunction
     }
 
 A representation of a "model", which describes a system of ordinary differential
-equations and provides some useful information for solving that system.
+equations and provides some information for solving that system.
 
 Contains tendencies for evolving the independent variables over time, formulas
-for updating the cache variables required by the tendencies, and formulas for
-updating any additional variables meant for diagnostics (and debugging). Since
-some cache variables may depend on other cache variables, the order in which the
+for updating the cache variables required by the tendency terms, and formulas
+for updating any additional variables meant for diagnostics (and debugging). The
+cache variables and diagnostics variables can be thought of as "dependent"
+variables, since they are computed using the independent variables (and possibly
+some constant values and the simulation time).
+
+Cache variables may depend on other cache variables, so the order in which the
 cache formulas are stored must correspond to a valid sequence of evaluations for
-the cache variables. All tendencies and diagnostics formulas are independent of
-each other, so their order is irrelevant.
+the cache variables (i.e., a cache variable should only be evaluated after all
+of the cache variables on which it depends have been evaluated). All of the
+tendency terms and diagnostics variables are independent of each other, so the
+order of the tendencies and diagnostics formulas is irrelevant.
 """
 struct Model{
     T <: NTuple{N₁, Tendency} where {N₁},
@@ -43,9 +49,9 @@ end
         [diagnostics_formulas],
     )
 
-Alternative constructor for a `Model` that allows users to avoid specifying all
-of the required cache formulas and ensuring that those formulas are evaluated
-in a valid order.
+Alternative constructor for a `Model` that does not require users to specify all
+of the required cache formulas and ensure that those formulas are evaluated in a
+valid order.
 
 If the argument `formula_function_constructor` is provided, this `Model`
 constructor automatically generates a formula for each cache variable `var` by
@@ -262,10 +268,7 @@ end
 # will work out of the box.
 # TODO: Automatically determine the value of is_autonomous.
 
-# TODO: Use the linearity of certain operators (e.g., ∇◦ᵥf, ∇◦ᵥc, -) to merge
-# certain broadcasts at compile-time and improve performance. For example,
-# instead of evaluating the sum of all the face variable fluxes (whose outermost
-# broadcast functions are - and ∇◦ᵥf), we should evaluate the flux of the sum.
+# TODO: Don't materialize a formula if it's only used by a single tendency term.
 # TODO: Consider parallelizing the equation evaluations. All of the tendencies
 # and diagnostics formulas can be evaluated in parallel, and, if the dependency
 # graph has multiple components, some groups of cache formulas can be evaluated
@@ -280,12 +283,14 @@ function (instantiated_model::InstantiatedModel)(∂ₜY, Y, _, t)
     return ∂ₜY
 end
 
+include("factorize_bc.jl")
+
 evaluate_equations!(dest, args, equations) =
-    map(equation -> evaluate_equation!(dest, args, equation), equations)
+    foreach(equation -> evaluate_equation!(dest, args, equation), equations)
 evaluate_equation!(dest, args, formula::Formula) =
     Base.materialize!(get_var(dest, formula.var), formula.f(args...))
 function evaluate_equation!(dest, args, tendency::Tendency)
-    @unpack var, bcs, terms = tendency
+    @unpack var, boundary_conditions, terms = tendency
     if length(terms) == 0
         tendency_bc = Base.broadcasted(zero, get_var(dest, var))
     elseif length(terms) == 1
@@ -293,18 +298,8 @@ function evaluate_equation!(dest, args, tendency::Tendency)
     else
         tendency_bc = Base.broadcasted(+, map(term -> term(args...), terms)...)
     end
-    if bcs isa VerticalBoundaryConditions
-        # TODO: Use the dotted version when #325 is merged into ClimaCore.
-        # B = Operators.SetBoundaryOperator(
-        #     bottom = Operators.SetValue.(bcs.bottom(args...)),
-        #     top = Operators.SetValue.(bcs.top(args...)),
-        # )
-        B = Operators.SetBoundaryOperator(
-            bottom = Operators.SetValue(bcs.bottom(args...)),
-            top = Operators.SetValue(bcs.top(args...)),
-        )
-        tendency_bc = Base.broadcasted(B, tendency_bc)
-    end
+    tendency_bc = factorize_bc(tendency_bc)
+    tendency_bc = boundary_conditions(factorize_bc(tendency_bc), args...)
     Base.materialize!(get_var(dest, var), tendency_bc)
 end
 

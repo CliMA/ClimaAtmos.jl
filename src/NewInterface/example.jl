@@ -1,3 +1,5 @@
+push!(LOAD_PATH, joinpath(@__DIR__, "..", ".."))
+
 using Test
 using ClimaCore: Fields
 
@@ -50,14 +52,20 @@ function init_dry_rising_bubble_2d(coord, ::Var{(:f,)})
 end
 
 function main()
-    zero_bcs(::T) where {T} =
-        VerticalBoundaryConditions(ZeroBoundary(T), ZeroBoundary(T))
+    zero_flux_bcs = VerticalBoundaryConditions(
+        zero_flux_boundary_condition(Geometry.WVector{Float64}),
+        zero_flux_boundary_condition(Geometry.WVector{Float64}),
+    )
+    zero_velocity_bcs = VerticalBoundaryConditions(
+        zero_value_boundary_condition(Geometry.WVector{Float64}),
+        zero_value_boundary_condition(Geometry.WVector{Float64}),
+    )
     tendencies = (
         Tendency(Var(:c, :ρ), VerticalAdvection(Var(:c, :ρ))),
-        Tendency(Var(:c, :ρθ), VerticalAdvection(Var(:c, :ρθ))),
+        Tendency(Var(:c, :ρθ), zero_flux_bcs, VerticalAdvection(Var(:c, :ρθ))),
         Tendency(
             Var(:f, :ρw),
-            zero_bcs(Geometry.WVector(0.0)),
+            zero_velocity_bcs,
             VerticalAdvection(Var(:f, :ρw)),
             PressureGradient(Var(:f, :ρw)),
             Gravity(Var(:f, :ρw)),
@@ -99,3 +107,18 @@ end
 f, Y = main()
 ∂ₜY = similar(Y)
 f(∂ₜY, Y, nothing, 0.0)
+
+# TODO: Use ∇⨉c for Operators.CurlC2F.
+
+# TODO: Make finalizers (post-materialize in-place operations) for formulas and
+# tendencies; e.g., Spaces.weighted_dss!.
+# TODO: Merge cache variables with identical return spaces.
+# TODO: Merge finalizers for merged cache variables and independent variables.
+
+# TODO: Add conservation checks. If tendency_term is used for vars′ ⊂ vars, but
+# there is some non-empty set vars′′ ⊂ vars∖vars′ for which
+# cache_reqs(tendency_term, var, vars) is defined for all var ∈ vars′′, print
+# the warning string(
+#     "model includes $tendency_term of $(join(vars′, ", ", " and ")), but ",
+#     "not of $(join(vars′′, ", ", " and "))"
+# )

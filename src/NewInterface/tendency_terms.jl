@@ -23,10 +23,7 @@ end
 cache_reqs(::VerticalAdvection{Var{(:c, :ρθ)}}, vars) = ()
 function (::VerticalAdvection{Var{(:c, :ρθ)}})(vars, Y, cache, consts, t)
     ∇◦ᵥc = Operators.DivergenceF2C()
-    If = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    ) # TODO: Should we do something more clever than simple extrapolation here?
+    If = Operators.InterpolateC2F()
     @lazydots if Var(:f, :ρw) ∈ vars
         ρ = Var(:c, :ρ) ∈ vars ? Y.c.ρ : consts.c.ρ
         @. -∇◦ᵥc(Y.f.ρw * If(Y.c.ρθ / ρ))
@@ -38,10 +35,7 @@ end
 cache_reqs(::VerticalAdvection{Var{(:c, :ρe_tot)}}, vars) = (Var(:c, :P),)
 function (::VerticalAdvection{Var{(:c, :ρe_tot)}})(vars, Y, cache, consts, t)
     ∇◦ᵥc = Operators.DivergenceF2C()
-    If = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    ) # TODO: Should we do something more clever than simple extrapolation here?
+    If = Operators.InterpolateC2F()
     @lazydots if Var(:f, :ρw) ∈ vars
         ρ = Var(:c, :ρ) ∈ vars ? Y.c.ρ : consts.c.ρ
         @. -∇◦ᵥc(Y.f.ρw * If((Y.c.ρe_tot + cache.c.P) / ρ))
@@ -66,8 +60,7 @@ cache_reqs(::VerticalAdvection{Var{(:f, :w)}}, vars) = ()
 function (::VerticalAdvection{Var{(:f, :w)}})(vars, Y, cache, consts, t)
     ∇ᵥf = Operators.GradientC2F()
     Ic = Operators.InterpolateF2C()
-    @lazydots @. adjoint(∇ᵥf(Ic(Y.f.w))) *
-                 Geometry.transform(Geometry.Contravariant3Axis(), Y.f.w)
+    @lazydots @. adjoint(∇ᵥf(Ic(Y.f.w))) * Geometry.Contravariant3Vector(Y.f.w)
 end
 
 ###############################################################################
@@ -82,14 +75,13 @@ PressureGradient(var; mode = Implicit(DefaultFluidJacobian())) =
 cache_reqs(::PressureGradient{Var{(:f, :ρw)}}, vars) = (Var(:c, :P),)
 function (::PressureGradient{Var{(:f, :ρw)}})(vars, Y, cache, consts, t)
     ∇ᵥf = Operators.GradientC2F()
-    @lazydots @. -Geometry.transform(Geometry.WAxis(), ∇ᵥf(cache.c.P))
+    @lazydots @. -Geometry.WVector(∇ᵥf(cache.c.P))
 end
 
 cache_reqs(::PressureGradient{Var{(:f, :w)}}, vars) = (Var(:c, :P), Var(:f, :ρ))
 function (::PressureGradient{Var{(:f, :w)}})(vars, Y, cache, consts, t)
     ∇ᵥf = Operators.GradientC2F()
-    @lazydots @. -Geometry.transform(Geometry.WAxis(), ∇ᵥf(cache.c.P)) /
-                 cache.f.ρ
+    @lazydots @. -Geometry.WVector(∇ᵥf(cache.c.P)) / cache.f.ρ
 end
 
 ###############################################################################
