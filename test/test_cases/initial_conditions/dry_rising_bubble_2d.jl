@@ -14,12 +14,25 @@
         - cv_d = 717.5 J kg⁻¹ K⁻¹
         - R_d = 287.0 J kg⁻¹ K⁻¹
         - g = 9.80616 m s⁻²
-
-    # TODO!: Replace expression with Thermodynamics.jl expressions.
 """
-function init_dry_rising_bubble_2d(params, thermovar = :ρθ)
-    FT = eltype(params)
-    @unpack x_c, z_c, r_c, θ_b, θ_c, p_0, cp_d, cv_d, R_d, g = params
+function init_dry_rising_bubble_2d(
+    ::Type{FT},
+    params;
+    thermovar = :ρθ,
+) where {FT}
+    # physics parameters
+    p_0::FT = CLIMAParameters.Planet.MSLP(params)
+    cp_d::FT = CLIMAParameters.Planet.cp_d(params)
+    cv_d::FT = CLIMAParameters.Planet.cv_d(params)
+    R_d::FT = CLIMAParameters.Planet.R_d(params)
+    g::FT = CLIMAParameters.Planet.grav(params)
+
+    # initial condition specific parameters
+    x_c::FT = 0.0
+    z_c::FT = 350.0
+    r_c::FT = 250.0
+    θ_b::FT = 300.0
+    θ_c::FT = 0.5
 
     # auxiliary quantities
     # potential temperature perturbation
