@@ -165,6 +165,6 @@ function replace_op(tendency_bc, op, op′)
         "unable to apply boundary condition for $op_type because there are no ",
         "tendency terms whose final non-arithmetic operation is $op",
     ) # TODO: temporary fix for outdated formatter
-    @warn s maxlog=1 # only show this warning on the first tendency evaluation
+    @warn s maxlog = 1 # only show this warning on the first tendency evaluation
     return tendency_bc
 end
