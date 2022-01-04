@@ -1,16 +1,14 @@
 using Base.Broadcast: broadcasted, Broadcasted, BroadcastStyle
 using ClimaCore: RecursiveApply, Operators
 
-# TODO: Add support for multi-argument linear operators, if we come across any.
+# TODO: Add support for multi-argument linear operations, if we come across any.
 
-const LinearOneArgOperator = Union{
+const LinearOneArgOperation = Union{
     Operators.FiniteDifferenceOperator,
     Operators.SpectralElementOperator,
     typeof(adjoint),
     typeof(transpose),
 }
-
-const Scalar = Union{Number, Ref, NTuple{1}}
 
 const Addition = Union{typeof(+), typeof(RecursiveApply.radd)}
 const Subtraction = Union{typeof(-), typeof(RecursiveApply.rsub)}
@@ -18,13 +16,16 @@ const Multiplication = Union{typeof(*), typeof(RecursiveApply.rmul)}
 const Division = Union{typeof(/), typeof(RecursiveApply.rdiv)}
 const MulAddOperation = Union{typeof(muladd), typeof(RecursiveApply.rmuladd)}
 
+const Scalar = Union{Number, Ref, NTuple{1}}
+
 # Speed up the materialization of a Broadcasted object by recursively
 #     - expanding out nested sums,
 #     - factoring out negations from sums, and
 #     - factoring out linear operations from sums, negations, differences,
 #       products with scalar values, and quotients with scalar values.
-# This also allows a single boundary condition to apply to a differential
-# operator that is used by multiple tendency terms.
+# This also allows a single boundary condition to apply to a ClimaCore operator
+# that is used in multiple tendency terms, since that operator will only be
+# evaluated once per tendency evaluation.
 factorize_bc(x) = x
 function factorize_bc(bc::Broadcasted)
     args = map(factorize_bc, bc.args)
@@ -66,7 +67,6 @@ function factorize_negation_or_difference(arg)
         return broadcasted(arg.f, broadcasted(-, arg.args[1]))
     end
     return broadcasted(-, arg)
-    
 end
 function factorize_negation_or_difference(arg1, arg2)
     if is_linear_1arg_bc(arg1) && is_linear_1arg_bc(arg2) && arg1.f === arg2.f
@@ -105,7 +105,7 @@ function factorize_muladd(arg1, arg2, arg3)
 end
 
 is_linear_1arg_bc(x) =
-    x isa Broadcasted && x.f isa LinearOneArgOperator && length(x.args) == 1
+    x isa Broadcasted && x.f isa LinearOneArgOperation && length(x.args) == 1
 
 # Return a tuple of xs that satisfy condition f and a tuple of xs that don't.
 # (This is like Base.filter_rec(f, xs::Tuple), except that it returns both the
