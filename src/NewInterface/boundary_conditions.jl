@@ -87,8 +87,8 @@ function SetOperatorInputsAtBoundary(op_types = (), funcs = (); face_flux)
         func = (vars, Y, cache, consts, t) -> input
     end
     return SetOperatorInputsAtBoundary(
-        (op_types..., Operators.DivergenceF2C,),
-        (funcs..., func,),
+        (op_types..., Operators.DivergenceF2C),
+        (funcs..., func),
     )
 end
 

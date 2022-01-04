@@ -53,12 +53,12 @@ end
 
 function main()
     zero_flux_bcs = VerticalBoundaryConditions(
-        SetOperatorInputsAtBoundary(; face_flux = Geometry.WVector(0.)),
-        SetOperatorInputsAtBoundary(; face_flux = Geometry.WVector(0.)),
+        SetOperatorInputsAtBoundary(; face_flux = Geometry.WVector(0.0)),
+        SetOperatorInputsAtBoundary(; face_flux = Geometry.WVector(0.0)),
     )
     zero_velocity_bcs = VerticalBoundaryConditions(
-        SetValueAtBoundary(; value = Geometry.WVector(0.)),
-        SetValueAtBoundary(; value = Geometry.WVector(0.)),
+        SetValueAtBoundary(; value = Geometry.WVector(0.0)),
+        SetValueAtBoundary(; value = Geometry.WVector(0.0)),
     )
     tendencies = (
         Tendency(Var(:c, :ρ), VerticalAdvection(Var(:c, :ρ))),
