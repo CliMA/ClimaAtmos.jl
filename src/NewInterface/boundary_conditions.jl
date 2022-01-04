@@ -127,8 +127,8 @@ function apply_vertical_boundary_conditions(
 )
     if top.op_types !== bottom.op_types
         s = string(
-            "top and bottom boundary conditions must have matching operator ",
-            "types when each is an OperatorValuesBoundaryCondition",
+            "top and bottom boundary conditions must have the same operator ",
+            "types when they are both \"OperatorValuesBoundaryCondition\"s",
         ) # TODO: temporary fix for outdated formatter
         throw(ArgumentError(s))
     end
@@ -146,26 +146,25 @@ function apply_vertical_boundary_conditions(
     )
 end
 
-function replace_op(tendency_bc, old_op, new_op)
-    if tendency_bc.f === old_op
-        return broadcasted(new_op, tendency_bc.args...)
+function replace_op(tendency_bc, op, op′)
+    if tendency_bc.f === op
+        return broadcasted(op′, tendency_bc.args...)
     elseif tendency_bc.f isa Addition
-        with_old_op, without_old_op = partition(
-            x -> x isa Broadcasted && x.f === old_op,
-            tendency_bc.args,
-        )
-        if length(with_old_op) == 1
-            new_op_bc = broadcasted(new_op, with_old_op[1].args...)
-            return broadcasted(+, new_op_bc, without_old_op...)
-        elseif length(with_old_op) > 1
-            s = "flaw detected in tendency broadcast factorization algorithm"
+        with_op, without_op =
+            partition(x -> x isa Broadcasted && x.f === op, tendency_bc.args)
+        if length(with_op) == 1
+            op_bc = broadcasted(op′, with_op[1].args...)
+            return broadcasted(+, op_bc, without_op...)
+        elseif length(with_op) > 1
+            s = "mistake detected in tendency broadcast factorization algorithm"
             throw(ErrorException(s))
         end
     end
-    op_type = typeof(old_op).name.wrapper
+    op_type = typeof(op).name.wrapper
     s = string(
         "unable to apply boundary condition for $op_type because there are no ",
-        "tendency terms whose final non-trivial operation is $old_op",
+        "tendency terms whose final non-arithmetic operation is $op",
     ) # TODO: temporary fix for outdated formatter
-    throw(ArgumentError(s))
+    @warn s maxlog=1 # only show this warning on the first tendency evaluation
+    return tendency_bc
 end

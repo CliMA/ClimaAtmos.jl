@@ -108,6 +108,26 @@ f, Y = main()
 ∂ₜY = similar(Y)
 f(∂ₜY, Y, nothing, 0.0)
 
+#=
+Ideas for higher-level interface:
+
+- Compressible vs. Incompressible (ρ ∈ Y vs. ρ ∈ consts)
+- Conservative vs. Convective (w vs. ρw and uₕ vs. ρuₕ)
+- Hydrostatic vs. Non-hydrostatic (w ∈ Y or ρw ∈ Y vs. w ∈ cache or ρw ∈ cache)
+    - Do we actually want this functionality?
+- Energy variable (ρθ vs. ρe_tot)
+    - Do we want any other options?
+- Number of horizontal dimensions (0 vs. 1 vs. 2)
+
+struct DryFluidModel{
+    IsCompressible,
+    IsConservative,
+    IsHydrostatic,
+    EnergyVar,
+    NHorzDims,
+}
+=#
+
 # TODO: Use ∇⨉c for Operators.CurlC2F.
 
 # TODO: Make finalizers (post-materialize in-place operations) for formulas and

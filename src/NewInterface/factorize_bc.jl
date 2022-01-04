@@ -10,12 +10,13 @@ const LinearOneArgOperator = Union{
     typeof(transpose),
 }
 
-const ScalarValue = Union{Number, Ref, NTuple{1}}
+const Scalar = Union{Number, Ref, NTuple{1}}
 
 const Addition = Union{typeof(+), typeof(RecursiveApply.radd)}
 const Subtraction = Union{typeof(-), typeof(RecursiveApply.rsub)}
 const Multiplication = Union{typeof(*), typeof(RecursiveApply.rmul)}
 const Division = Union{typeof(/), typeof(RecursiveApply.rdiv)}
+const MulAddOperation = Union{typeof(muladd), typeof(RecursiveApply.rmuladd)}
 
 # Speed up the materialization of a Broadcasted object by recursively
 #     - expanding out nested sums,
@@ -24,7 +25,6 @@ const Division = Union{typeof(/), typeof(RecursiveApply.rdiv)}
 #       products with scalar values, and quotients with scalar values.
 # This also allows a single boundary condition to apply to a differential
 # operator that is used by multiple tendency terms.
-# TODO: Should muladd be factorized as well? Or would that be excessive?
 factorize_bc(x) = x
 function factorize_bc(bc::Broadcasted)
     args = map(factorize_bc, bc.args)
@@ -32,6 +32,7 @@ function factorize_bc(bc::Broadcasted)
     bc.f isa Subtraction && return factorize_negation_or_difference(args...)
     bc.f isa Multiplication && return factorize_product(args...)
     bc.f isa Division && return factorize_quotient(args...)
+    bc.f isa MulAddOperation && return factorize_muladd(args...)
     return broadcasted(bc.f, args...)
 end
 
@@ -56,42 +57,51 @@ function _factorize_sum(factorized_args, arg, args...)
             arg = broadcasted(arg.f, bc)
         end
         return _factorize_sum((factorized_args..., arg), not_same_f...)
-    else
-        return _factorize_sum((factorized_args..., arg), args...)
     end
+    return _factorize_sum((factorized_args..., arg), args...)
 end
 
 function factorize_negation_or_difference(arg)
     if is_linear_1arg_bc(arg)
         return broadcasted(arg.f, broadcasted(-, arg.args[1]))
-    else
-        return broadcasted(-, arg)
     end
+    return broadcasted(-, arg)
+    
 end
 function factorize_negation_or_difference(arg1, arg2)
     if is_linear_1arg_bc(arg1) && is_linear_1arg_bc(arg2) && arg1.f === arg2.f
         return broadcasted(arg1.f, broadcasted(-, arg1.args[1], arg2.args[1]))
-    else
-        return broadcasted(-, arg1, arg2)
     end
+    return broadcasted(-, arg1, arg2)
 end
 
 function factorize_product(args...)
-    scalars, not_scalars = partition(x -> x isa ScalarValue, args)
+    scalars, not_scalars = partition(x -> x isa Scalar, args)
     if length(not_scalars) == 1 && is_linear_1arg_bc(not_scalars[1])
         bc = broadcasted(*, not_scalars[1].args[1], scalars...)
         return broadcasted(not_scalars[1].f, bc)
-    else
-        return broadcasted(*, args...)
     end
+    return broadcasted(*, args...)
 end
 
 function factorize_quotient(arg1, arg2)
-    if is_linear_1arg_bc(arg1) && arg2 isa ScalarValue
+    if is_linear_1arg_bc(arg1) && arg2 isa Scalar
         return broadcasted(arg1[1].f, broadcasted(/, arg1.args[1], arg2))
-    else
-        return broadcasted(/, arg1, arg2)
     end
+    return broadcasted(/, arg1, arg2)
+end
+
+function factorize_muladd(arg1, arg2, arg3)
+    if is_linear_1arg_bc(arg3)
+        if is_linear_1arg_bc(arg1) && arg2 isa Scalar && arg1.f === arg3.f
+            bc = broadcasted(muladd, arg1.args[1], arg2, arg3.args[1])
+            return broadcasted(arg3[1].f, bc)
+        elseif arg1 isa Scalar && is_linear_1arg_bc(arg2) && arg2.f === arg3.f
+            bc = broadcasted(muladd, arg1, arg2.args[1], arg3.args[1])
+            return broadcasted(arg3[1].f, bc)
+        end
+    end
+    return broadcasted(muladd, arg1, arg2, arg3)
 end
 
 is_linear_1arg_bc(x) =

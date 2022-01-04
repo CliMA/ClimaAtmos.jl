@@ -299,26 +299,6 @@ function evaluate_equation!(dest, args, tendency::Tendency)
         tendency_bc = Base.broadcasted(+, map(term -> term(args...), terms)...)
     end
     tendency_bc = factorize_bc(tendency_bc)
-    tendency_bc = boundary_conditions(factorize_bc(tendency_bc), args...)
+    tendency_bc = boundary_conditions(tendency_bc, args...)
     Base.materialize!(get_var(dest, var), tendency_bc)
 end
-
-#=
-Ideas for higher-level interface:
-
-- Compressible vs. Incompressible (ρ ∈ Y vs. ρ ∈ consts)
-- Conservative vs. Convective (w vs. ρw and uₕ vs. ρuₕ)
-- Hydrostatic vs. Non-hydrostatic (w ∈ Y or ρw ∈ Y vs. w ∈ cache or ρw ∈ cache)
-    - Do we actually want this functionality?
-- Energy variable (ρθ vs. ρe_tot)
-    - Do we want any other options?
-- Number of horizontal dimensions (0 vs. 1 vs. 2)
-
-struct DryFluidModel{
-    IsCompressible,
-    IsConservative,
-    IsHydrostatic,
-    EnergyVar,
-    NHorzDims,
-}
-=#
