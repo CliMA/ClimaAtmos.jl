@@ -299,6 +299,7 @@ function evaluate_equation!(dest, args, tendency::Tendency)
         tendency_bc = Base.broadcasted(+, map(term -> term(args...), terms)...)
     end
     tendency_bc = factorize_bc(tendency_bc)
-    tendency_bc = boundary_conditions(tendency_bc, args...)
+    tendency_bc =
+        apply_boundary_conditions(tendency_bc, boundary_conditions, args...)
     Base.materialize!(get_var(dest, var), tendency_bc)
 end

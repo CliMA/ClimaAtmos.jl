@@ -41,7 +41,7 @@ function (::AbstractTendencyTerm)(vars, Y, cache, consts, t) end
 """
     Tendency{
         V <: Var,
-        B <: AbstractBoundaryConditions,
+        B <: AbstractBoundaryConditionSet,
         T <: NTuple{N, AbstractTendencyTerm} where {N},
     }
 
@@ -60,7 +60,7 @@ conditions will be applied.
 """
 struct Tendency{
     V <: Var,
-    B <: AbstractBoundaryConditions,
+    B <: AbstractBoundaryConditionSet,
     T <: NTuple{N, AbstractTendencyTerm} where {N},
 }
     var::V
@@ -73,7 +73,7 @@ end
 
 Recommended constructor for a `Tendency`.
 """
-Tendency(var, boundary_conditions::AbstractBoundaryConditions, terms...) =
+Tendency(var, boundary_conditions::AbstractBoundaryConditionSet, terms...) =
     Tendency(var, boundary_conditions, terms)
 Tendency(var, terms...) = Tendency(var, NoBoundaryConditions(), terms)
 
