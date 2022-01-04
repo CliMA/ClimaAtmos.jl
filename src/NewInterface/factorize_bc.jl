@@ -22,7 +22,8 @@ const Scalar = Union{Number, Ref, NTuple{1}}
 #     - expanding out nested sums,
 #     - factoring out negations from sums, and
 #     - factoring out linear operations from sums, negations, differences,
-#       products with scalar values, and quotients with scalar values.
+#       products with scalars, quotients with a scalar in the denominator, and
+#       "muladd"s with a scalar in one of the first two arguments.
 # This also allows a single boundary condition to apply to a ClimaCore operator
 # that is used in multiple tendency terms, since that operator will only be
 # evaluated once per tendency evaluation.
