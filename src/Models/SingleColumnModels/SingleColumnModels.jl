@@ -2,6 +2,7 @@ module SingleColumnModels
 
 using LinearAlgebra: ×
 using UnPack
+using CLIMAParameters
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ...Domains, ...BoundaryConditions, ...Models
 

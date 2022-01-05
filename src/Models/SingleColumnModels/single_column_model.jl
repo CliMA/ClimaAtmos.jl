@@ -34,8 +34,21 @@ function Models.default_initial_conditions(model::SingleColumnModel)
 end
 
 function Models.make_ode_function(model::SingleColumnModel)
+    FT = eltype(model.domain)
+
     rhs!(dY, Y, Ya, t) = begin
-        @unpack Cd, f, ν, uvg, C_p, MSLP, R_d, R_m, C_v, grav = model.parameters
+        # physics parameters
+        C_p::FT = CLIMAParameters.Planet.cp_d(model.parameters)
+        MSLP::FT = CLIMAParameters.Planet.MSLP(model.parameters)
+        R_d::FT = CLIMAParameters.Planet.R_d(model.parameters)
+        R_m::FT = R_d
+        C_v::FT = CLIMAParameters.Planet.cv_d(model.parameters)
+        grav::FT = CLIMAParameters.Planet.grav(model.parameters)
+
+        # model specific parameters
+        f = model.parameters.f
+        uvg = model.parameters.uvg
+        ν = model.parameters.ν
 
         # unpack tendencies and state
         dYm = dY.scm

@@ -21,12 +21,14 @@ function make_function_space end
 """
 Supertype for all domains.
 """
-abstract type AbstractDomain end
+abstract type AbstractDomain{FT} end
 
-abstract type AbstractVerticalDomain{FT} <: AbstractDomain end
-abstract type AbstractHybridDomain{FT} <: AbstractDomain end
+abstract type AbstractVerticalDomain{FT} <: AbstractDomain{FT} end
+abstract type AbstractHybridDomain{FT} <: AbstractDomain{FT} end
 
 include("domain.jl")
 include("make_function_space.jl")
+
+Base.eltype(::AbstractDomain{FT}) where {FT} = FT
 
 end # module

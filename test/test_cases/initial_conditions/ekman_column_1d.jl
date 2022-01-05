@@ -1,13 +1,24 @@
-function init_ekman_column_1d(params)
-    @unpack grav, C_p, MSLP, R_d, T_surf, T_min_ref, u0, v0, w0 = params
+function init_ekman_column_1d(::Type{FT}, params) where {FT}
+    # physics parameters
+    p_0::FT = CLIMAParameters.Planet.MSLP(params)
+    grav::FT = CLIMAParameters.Planet.grav(params)
+    R_d::FT = CLIMAParameters.Planet.R_d(params)
+    cp_d::FT = CLIMAParameters.Planet.cp_d(params)
+
+    # initial condition specific parameters
+    T_surf = FT(300)
+    T_min_ref = FT(230)
+    u0 = FT(1)
+    v0 = FT(0)
+    w0 = FT(0)
 
     # density
     ρ(local_geometry) = begin
         @unpack z = local_geometry.coordinates
 
-        Γ = grav / C_p
+        Γ = grav / cp_d
         T = max(T_surf - Γ * z, T_min_ref)
-        p = MSLP * (T / T_surf)^(grav / (R_d * Γ))
+        p = p_0 * (T / T_surf)^(grav / (R_d * Γ))
         if T == T_min_ref
             z_top = (T_surf - T_min_ref) / Γ
             H_min = R_d * T_min_ref / grav
@@ -15,7 +26,7 @@ function init_ekman_column_1d(params)
         end
         θ = T_surf # potential temperature
 
-        return p / (R_d * θ * (p / MSLP)^(R_d / C_p))
+        return p / (R_d * θ * (p / p_0)^(R_d / cp_d))
     end
 
     # velocity

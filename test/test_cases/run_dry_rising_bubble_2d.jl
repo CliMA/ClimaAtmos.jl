@@ -1,5 +1,9 @@
 include("initial_conditions/dry_rising_bubble_2d.jl")
 
+# Set up parameters
+using CLIMAParameters
+struct BubbleParameters <: CLIMAParameters.AbstractEarthParameterSet end
+
 function run_dry_rising_bubble_2d(
     ::Type{FT};
     stepper = SSPRK33(),
@@ -9,21 +13,7 @@ function run_dry_rising_bubble_2d(
     callbacks = (),
     mode = :regression,
 ) where {FT}
-    params = map(
-        FT,
-        (
-            x_c = 0.0,
-            z_c = 350.0,
-            r_c = 250.0,
-            θ_b = 300.0,
-            θ_c = 0.5,
-            p_0 = 1e5,
-            cp_d = 1004.0,
-            cv_d = 717.5,
-            R_d = 287.0,
-            g = 9.80616,
-        ),
-    )
+    params = BubbleParameters()
 
     domain = HybridPlane(
         FT,
@@ -40,13 +30,13 @@ function run_dry_rising_bubble_2d(
     )
 
     # execute differently depending on testing mode
-    if mode == :unit
+    if mode == :integration
         # TODO!: run with input callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @test simulation isa Simulation
 
         # test set function
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(params)
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
         set!(simulation, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
 
         # test error handling
@@ -57,7 +47,7 @@ function run_dry_rising_bubble_2d(
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(params)
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
         step!(simulation)
         u = simulation.integrator.u.nhm
@@ -70,7 +60,7 @@ function run_dry_rising_bubble_2d(
     elseif mode == :validation
         # for now plot θ for the ending step;
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(params)
+        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
         set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
         run!(simulation)
         u_end = simulation.integrator.u.nhm

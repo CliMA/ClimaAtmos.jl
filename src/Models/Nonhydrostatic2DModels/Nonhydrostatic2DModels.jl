@@ -2,6 +2,8 @@ module Nonhydrostatic2DModels
 
 using StaticArrays
 using UnPack
+using CLIMAParameters
+using Thermodynamics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models

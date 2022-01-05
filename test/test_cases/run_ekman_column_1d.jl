@@ -1,5 +1,17 @@
 include("initial_conditions/ekman_column_1d.jl")
 
+# Set up parameters
+using CLIMAParameters
+Base.@kwdef struct EkmanParameters{FT} <:
+                   CLIMAParameters.AbstractEarthParameterSet
+    Cd::FT = 0.01 / (2e2 / 30) # drag coefficients
+    Ch::FT = 0.01 / (2e2 / 30)
+    T_surf::FT = 300 # surface temperature
+    f::FT = 5e-5 # Coriolis parameters
+    ν::FT = 0.01 # diffusivity
+    uvg = Geometry.UVVector(FT(1), FT(0)) # geostrophic velocity
+end
+
 function run_ekman_column_1d(
     ::Type{FT};
     stepper = SSPRK33(),
@@ -8,35 +20,18 @@ function run_ekman_column_1d(
     callbacks = (),
     mode = :regression,
 ) where {FT}
-    params = (
-        MSLP = FT(1e5), # mean sea level pressure
-        grav = FT(9.8), # gravitational constant
-        R_d = FT(287.058), # R dry (gas constant / mol mass dry air)
-        C_p = FT(287.058 * 7 / 2), # heat capacity at constant pressure
-        C_v = FT(287.058 * 5 / 2), # heat capacity at constant volume
-        R_m = FT(287.058), # moist R, assumed to be dry
-        f = FT(5e-5), # Coriolis parameters
-        ν = FT(0.01),
-        Cd = FT(0.01 / (2e2 / 30.0)),
-        Ch = FT(0.01 / (2e2 / 30.0)),
-        uvg = Geometry.UVVector(FT(1.0), FT(0.0)),
-        T_surf = FT(300.0),
-        T_min_ref = FT(230.0),
-        u0 = FT(1.0),
-        v0 = FT(0.0),
-        w0 = FT(0.0),
-    )
+    params = EkmanParameters{FT}()
 
     domain = Column(FT, zlim = (0.0, 2e2), nelements = nelements)
 
-    coefficients = (Cd = params.Cd, Ch = params.Ch)
+    bulk_coefficients = (Cd = params.Cd, Ch = params.Ch)
     boundary_conditions = (
         ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-        uv = (top = nothing, bottom = DragLawCondition(coefficients)),
+        uv = (top = nothing, bottom = DragLawCondition(bulk_coefficients)),
         w = (top = NoFluxCondition(), bottom = NoFluxCondition()),
         ρθ = (
             top = NoFluxCondition(),
-            bottom = BulkFormulaCondition(coefficients, params.T_surf),
+            bottom = BulkFormulaCondition(bulk_coefficients, params.T_surf),
         ),
     )
 
@@ -47,16 +42,65 @@ function run_ekman_column_1d(
     )
 
     # execute differently depending on testing mode
-    if mode == :unit
-        # TODO!: run with input callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
-        set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+    if mode == :integration
+        # Populate Callback Containers
+        temp_filepath = joinpath(@__DIR__, "callback_tests")
+        mkpath(temp_filepath)
+        cb_1 = JLD2Output(model, temp_filepath, "TestFilename1", 0.01)
+        cb_2 = JLD2Output(model, temp_filepath, "TestFilename2", 0.02)
 
-        @test step!(simulation) isa Nothing # either error or integration runs
+        # Generate CallbackSet 
+        cb_set = CallbackSet(generate_callback(cb_1), generate_callback(cb_2))
+
+        # Type Checks
+        @test generate_callback(cb_1) isa DiscreteCallback
+        @test generate_callback(cb_2) isa DiscreteCallback
+
+        # Generate simple simulation data for test
+        simulation = Simulation(
+            model,
+            SSPRK33(),
+            dt = 0.01,
+            tspan = (0.0, 0.03),
+            callbacks = cb_set,
+        )
+        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
+        set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+        run!(simulation)
+
+        # Test simulation restart
+        simulation = Simulation(
+            model,
+            SSPRK33(),
+            dt = 0.01,
+            tspan = (0.0, 0.03),
+            callbacks = cb_set,
+            restart = Restart(
+                restartfile = joinpath(
+                    cb_1.filedir,
+                    cb_1.filename * "_0.02.jld2",
+                ),
+                end_time = 0.05,
+            ),
+        )
+        set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+        run!(simulation)
+        @test simulation.integrator.t == 0.05
+
+        # Delete test output files
+        @test isfile(joinpath(
+            cb_1.filedir,
+            cb_1.filename * "_0.01" * ".jld2",
+        )) == true
+        @test isfile(joinpath(
+            cb_2.filedir,
+            cb_2.filename * "_0.02" * ".jld2",
+        )) == true
+
+        rm(temp_filepath, recursive = true)
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
+        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
         set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         step!(simulation)
         u = simulation.integrator.u.scm
@@ -67,9 +111,8 @@ function run_ekman_column_1d(
         @test minimum(parent(u.w)) ≈ current_min atol = 1e-3
         @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
     elseif mode == :validation
-        # TODO!: run with callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
-        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(params)
+        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
         set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
         run!(simulation)
         u_end = simulation.integrator.u.scm
@@ -84,8 +127,7 @@ function run_ekman_column_1d(
 
         # plot final state
         function ekman_plot(Y, params; title = "", size = (1024, 600))
-            @unpack uvg = params
-            uvg = parent(uvg)
+            uvg = parent(params.uvg)
             ug = uvg[1]
             vg = uvg[2]
 

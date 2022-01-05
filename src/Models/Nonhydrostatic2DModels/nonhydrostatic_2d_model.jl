@@ -23,8 +23,7 @@ function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
     zero_val = zero(Spaces.undertype(space_c))
     zero_scalar(lg) = zero_val # .
     zero_1vector(lg) = Geometry.UVector(zero_val) # ---->
-    zero_3vector(lg) = Geometry.WVector(zero_val) # (-_-') . ┓( ´∀` )┏ 
-
+    zero_3vector(lg) = Geometry.WVector(zero_val) # (-_-')P
     ρ = zero_scalar.(local_geometry_c)
     ρuh = zero_1vector.(local_geometry_c)
     ρw = zero_3vector.(local_geometry_f) # faces
@@ -36,13 +35,10 @@ function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
 end
 
 function Models.make_ode_function(model::Nonhydrostatic2DModel)
-    FT = eltype(model.parameters)
-    @unpack p_0, R_d, cp_d, cv_d, g = model.parameters
-    γ = cp_d / cv_d
+    FT = eltype(model.domain)
 
-    # TODO!: Replace with Thermodynamics.jl
-    pressure(ρθ::FT) where {FT} =
-        ρθ >= FT(0) ? p_0 * (R_d * ρθ / p_0)^γ : FT(NaN)
+    # relevant parameters 
+    g::FT = CLIMAParameters.Planet.grav(model.parameters)
 
     # unity tensor for pressure term calculation 
     # in horizontal spectral divergence
@@ -104,6 +100,10 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
         ρw = Ym.ρw
         ρθ = Ym.ρθ
 
+        # calculate relevant thermodynamic quantities
+        ts = @. Thermodynamics.PhaseDry_ρθ(model.parameters, ρ, ρθ / ρ)
+        p = @. Thermodynamics.air_pressure(ts)
+
         # advection, pressure gradients, sources
         # density
         @. dρ = -hdiv(ρuh)
@@ -114,7 +114,7 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
         @. dρθ -= vector_vdiv_f2c(ρw * scalar_interp_c2f(ρθ / ρ))
 
         # horizontal momentum
-        @. dρuh = -hdiv(ρuh ⊗ ρuh / ρ + pressure(ρθ) * I)
+        @. dρuh = -hdiv(ρuh ⊗ ρuh / ρ + p * I)
         @. dρuh -= tensor_vdiv_f2c(ρw ⊗ vector_interp_c2f(ρuh / ρ))
 
         # vertical momentum
@@ -124,7 +124,7 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
         @. dρw += B(
             Geometry.transform(
                 Geometry.WAxis(),
-                -(scalar_grad_c2f(pressure(ρθ))) +
+                -(scalar_grad_c2f(p)) +
                 scalar_interp_c2f(ρ) * Geometry.Covariant3Vector(-g), # TODO!: Not generally a Covariant3Vector
             ) - tensor_vdiv_c2f(tensor_interp_f2c(
                 ρw ⊗ ρw / scalar_interp_c2f(ρ),
