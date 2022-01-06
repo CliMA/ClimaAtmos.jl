@@ -40,6 +40,7 @@ Plots = "1"
 RecursiveArrayTools = "2"
 Revise = "3"
 StaticArrays = "1"
+Thermodynamics = "0.5"
 UnPack = "1"
 
 [extras]
