@@ -25,5 +25,6 @@ make_ode_function(model::AbstractModel) =
 
 include("SingleColumnModels/SingleColumnModels.jl")
 include("Nonhydrostatic2DModels/Nonhydrostatic2DModels.jl")
+include("Nonhydrostatic3DModels/Nonhydrostatic3DModels.jl")
 
 end # module

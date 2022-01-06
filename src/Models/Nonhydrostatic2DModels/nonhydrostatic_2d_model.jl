@@ -23,7 +23,8 @@ function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
     zero_val = zero(Spaces.undertype(space_c))
     zero_scalar(lg) = zero_val # .
     zero_1vector(lg) = Geometry.UVector(zero_val) # ---->
-    zero_3vector(lg) = Geometry.WVector(zero_val) # (-_-')P
+    zero_3vector(lg) = Geometry.WVector(zero_val) # (-_-') . ┓( ´∀` )┏ 
+
     ρ = zero_scalar.(local_geometry_c)
     ρuh = zero_1vector.(local_geometry_c)
     ρw = zero_3vector.(local_geometry_f) # faces

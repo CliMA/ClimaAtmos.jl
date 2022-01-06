@@ -1,10 +1,11 @@
 """
-    init_dry_rising_bubble_2d(params, thermovar = :ρθ)
+    init_dry_rising_bubble_3d(params)
 
-    Dry rising bubble initial condition for 2D box benchmarking.
+    Dry rising bubble initial condition for 3D box benchmarking.
     Reference: https://journals.ametsoc.org/view/journals/mwre/140/4/mwr-d-10-05073.1.xml, Section 5a
     Reference parameter values:
         - x_c = 0 m
+        - y_c = 0 m
         - z_c = 350 m
         - r_c = 250 m
         - θ_b = 300 K
@@ -14,10 +15,12 @@
         - cv_d = 717.5 J kg⁻¹ K⁻¹
         - R_d = 287.0 J kg⁻¹ K⁻¹
         - g = 9.80616 m s⁻²
+
+    # TODO!: Replace expression with Thermodynamics.jl expressions.
 """
-function init_dry_rising_bubble_2d(
+function init_dry_rising_bubble_3d(
     ::Type{FT},
-    params;
+    params,
     thermovar = :ρθ,
 ) where {FT}
     # physics parameters
@@ -28,17 +31,18 @@ function init_dry_rising_bubble_2d(
     g::FT = CLIMAParameters.Planet.grav(params)
 
     # initial condition specific parameters
-    x_c::FT = 0.0
-    z_c::FT = 350.0
-    r_c::FT = 250.0
-    θ_b::FT = 300.0
+    x_c::FT = 0
+    y_c::FT = 0
+    z_c::FT = 350
+    r_c::FT = 250
+    θ_b::FT = 300
     θ_c::FT = 0.5
 
     # auxiliary quantities
     # potential temperature perturbation
     θ_p(local_geometry) = begin
-        @unpack x, z = local_geometry.coordinates
-        r = sqrt((x - x_c)^2 + (z - z_c)^2)
+        @unpack x, y, z = local_geometry.coordinates
+        r = sqrt((x - x_c)^2 + (y - y_c)^2 + (z - z_c)^2)
         return r < r_c ? FT(0.5) * θ_c * (FT(1) + cospi(r / r_c)) : FT(0)
     end
 
@@ -84,15 +88,15 @@ function init_dry_rising_bubble_2d(
     ρe_tot(local_geometry) = ρ(local_geometry) * e_tot(local_geometry)
 
     # horizontal momentum vector
-    ρuh(local_geometry) = Geometry.UVector(FT(0))
+    uh(local_geometry) = Geometry.Covariant12Vector(0.0, 0.0)
 
     # vertical momentum vector
-    ρw(local_geometry) = Geometry.WVector(FT(0))
+    w(local_geometry) = Geometry.Covariant3Vector(0.0)
 
     if thermovar == :ρθ
-        return (ρ = ρ, ρθ = ρθ, ρuh = ρuh, ρw = ρw)
+        return (ρ = ρ, ρθ = ρθ, ρuh = uh, w = w)
     elseif thermovar == :ρe_tot
-        return (ρ = ρ, ρe_tot = ρe_tot, ρuh = ρuh, ρw = ρw)
+        return (ρ = ρ, ρe_tot = ρe_tot, uh = uh, w = w)
     else
         throw(ArgumentError("thermovar $thermovar unknown."))
     end

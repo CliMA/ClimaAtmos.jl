@@ -9,7 +9,9 @@ export make_function_space,
     AbstractVerticalDomain,
     AbstractHybridDomain,
     Column,
-    HybridPlane
+    HybridPlane,
+    HybridBox,
+    SphericalShell
 
 """
     make_function_space(domain)

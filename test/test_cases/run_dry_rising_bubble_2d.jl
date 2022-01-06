@@ -2,7 +2,7 @@ include("initial_conditions/dry_rising_bubble_2d.jl")
 
 # Set up parameters
 using CLIMAParameters
-struct BubbleParameters <: CLIMAParameters.AbstractEarthParameterSet end
+struct Bubble2DParameters <: CLIMAParameters.AbstractEarthParameterSet end
 
 function run_dry_rising_bubble_2d(
     ::Type{FT};
@@ -13,7 +13,7 @@ function run_dry_rising_bubble_2d(
     callbacks = (),
     mode = :regression,
 ) where {FT}
-    params = BubbleParameters()
+    params = Bubble2DParameters()
 
     domain = HybridPlane(
         FT,
