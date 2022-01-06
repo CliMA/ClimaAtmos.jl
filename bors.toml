@@ -1,6 +1,6 @@
 status = [
-  "ci 1.6.0 - ubuntu-latest",
-  "ci 1.6.0 - macOS-latest",
+  "ci 1.7.0 - ubuntu-latest",
+  "ci 1.7.0 - macOS-latest",
   "docbuild",
   "format",
 ]

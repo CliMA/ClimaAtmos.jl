@@ -60,7 +60,7 @@ To use ClimaAtmos, you need to instantiate all dependencies with:
 ```
 $ julia --project
 julia>]
-(v1.6) pkg> instantiate
+(v1.7) pkg> instantiate
 ```
 
 ## Running instructions
