@@ -37,7 +37,8 @@ function run_dry_rising_bubble_2d(
 
         # test set function
         @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
-        set!(simulation, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
 
         # test error handling
         @test_throws ArgumentError set!(simulation, quack = ρ)
@@ -48,22 +49,26 @@ function run_dry_rising_bubble_2d(
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
-        set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
         step!(simulation)
-        u = simulation.integrator.u.nhm
+        u = simulation.integrator.u
 
         # perform regression check
         current_min = 299.9999997747195
         current_max = 300.49999999996226
-        @test minimum(parent(u.ρθ ./ u.ρ)) ≈ current_min atol = 1e-3
-        @test maximum(parent(u.ρθ ./ u.ρ)) ≈ current_max atol = 1e-3
+        @test minimum(parent(u.thermodynamics.ρθ ./ u.base.ρ)) ≈ current_min atol =
+            1e-3
+        @test maximum(parent(u.thermodynamics.ρθ ./ u.base.ρ)) ≈ current_max atol =
+            1e-3
     elseif mode == :validation
         # for now plot θ for the ending step;
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
         @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
-        set!(simulation, :nhm, ρ = ρ, ρuh = ρuh, ρw = ρw, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
-        u_end = simulation.integrator.u.nhm
+        u_end = simulation.integrator.u
 
         # post-processing
         ENV["GKSwstype"] = "nul"
@@ -73,7 +78,10 @@ function run_dry_rising_bubble_2d(
         path = joinpath(@__DIR__, "output_validation")
         mkpath(path)
 
-        foi = Plots.plot(u_end.ρθ ./ u_end.ρ, clim = (300.0, 300.8))
+        foi = Plots.plot(
+            u_end.thermodynamics.ρθ ./ u_end.base.ρ,
+            clim = (300.0, 300.8),
+        )
         Plots.png(foi, joinpath(path, "dry_rising_bubble_2d_FT_$FT"))
 
         @test true # check is visual

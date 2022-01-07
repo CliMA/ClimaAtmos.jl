@@ -35,7 +35,6 @@ function Simulation(
     callbacks = nothing,
     restart = NoRestart(),
 )
-
     # inital state is either default or set externally 
     Y = Y_init isa Nothing ? default_initial_conditions(model) : Y_init
 
@@ -56,17 +55,21 @@ function Simulation(
 end
 
 """
-    set!(simulation, submodel_name = nothing; kwargs...)
+    set!(simulation, subcomponent = :base; kwargs...)
 
-Set the simulation state to a new state, either through an array or a function.
+Set the simulation state to a new state, either through an array or a function. Defaults
+to `:base` component for model.
 """
-function set!(simulation::Simulation, submodel_name = nothing; kwargs...)
+function set!(simulation::Simulation, subcomponent = :base; kwargs...)
     for (varname, f) in kwargs
-        if varname ∉ simulation.model.varnames
-            throw(ArgumentError("$varname not in model variables."))
+        # let's make sure that the variable we are setting is actually in
+        # the model's state vector to give a more informative error message
+        if varname ∉
+           getproperty(state_variable_names(simulation.model), subcomponent)
+            throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
         end
 
-        # we need to use the reinit function because we don't 
+        # for restart we need to use the reinit function because we don't 
         # have direct state access using DiffEqBase. For this
         # we need to copy
         if simulation.restart isa NoRestart
@@ -86,16 +89,13 @@ function set!(simulation::Simulation, submodel_name = nothing; kwargs...)
             end
         end
 
-        # get fields for this submodel from integrator state
-        if submodel_name === nothing
-            # default behavior if model has no submodels but itself
-            submodel_field = getproperty(Y, simulation.model.name)
-        else
-            submodel_field = getproperty(Y, submodel_name)
-        end
-
-        # get pointer to target field 
-        target_field = getproperty(submodel_field, varname)
+        # if we want to set a field in the state vector, we first need to extract
+        # from the state, for this we need `getproperty` to be general.
+        # get fields for this subcomponent from integrator state
+        # Ex.: Y = (:base = base_fieldvector, :thermodynamics = thermo_field_vector,)
+        # Y.thermodynamics = (:ρθ = pottempfield,)
+        subcomponent_name = getproperty(Y, subcomponent)
+        target_field = getproperty(subcomponent_name, varname)
 
         # sometimes we want to set with a function and sometimes with an
         # Field. This supports both behaviors.

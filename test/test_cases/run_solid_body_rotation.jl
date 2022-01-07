@@ -38,16 +38,18 @@ function run_solid_body_rotation(
 
         # test set function
         @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params)
-        set!(simulation, ρ = ρ, uh = uh, w = w, ρe_tot = ρe_tot)
+        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
+        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
 
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params)
-        set!(simulation, ρ = ρ, uh = uh, w = w, ρe_tot = ρe_tot)
+        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
+        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         step!(simulation)
-        u = simulation.integrator.u.nhm
+        u = simulation.integrator.u.base
         uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), u.uh)
         w_phy = Geometry.transform.(Ref(Geometry.WAxis()), u.w)
 
@@ -60,9 +62,10 @@ function run_solid_body_rotation(
     elseif mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600))
         @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params)
-        set!(simulation, ρ = ρ, uh = uh, w = w, ρe_tot = ρe_tot)
+        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
+        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         run!(simulation)
-        u_end = simulation.integrator.u.nhm
+        u_end = simulation.integrator.u.base
 
         uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), u_end.uh)
         w_phy = Geometry.transform.(Ref(Geometry.WAxis()), u_end.w)

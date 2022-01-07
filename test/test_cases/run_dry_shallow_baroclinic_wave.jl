@@ -38,7 +38,8 @@ function run_dry_shallow_baroclinic_wave(
 
         # test set function
         @unpack ρ, uh, w, ρe_tot = init_dry_shallow_baroclinic_wave(FT, params)
-        set!(simulation, ρ = ρ, uh = uh, w = w, ρe_tot = ρe_tot)
+        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
+        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
 
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs

@@ -8,8 +8,12 @@ Base.@kwdef struct SingleColumnModel{D, BC, P} <: AbstractModel
     domain::D
     boundary_conditions::BC
     parameters::P
-    name::Symbol = :scm
-    varnames::Tuple = (:ρ, :uv, :w, :ρθ)
+end
+
+function Models.state_variable_names(::SingleColumnModel)
+    base_vars = (:ρ, :uv, :w, :ρθ)
+    thermo_vars = (:ρθ,)
+    return (base = base_vars, thermodynamics = thermo_vars)
 end
 
 function Models.default_initial_conditions(model::SingleColumnModel)
@@ -23,13 +27,17 @@ function Models.default_initial_conditions(model::SingleColumnModel)
     zero_12vector(lg) = Geometry.UVVector(zero_val, zero_val)
     zero_3vector(lg) = Geometry.WVector(zero_val)
 
+    # base components
     ρ = zero_scalar.(local_geometry_c)
     uv = zero_12vector.(local_geometry_c)
-    w = zero_3vector.(local_geometry_f) # faces
+    w = zero_3vector.(local_geometry_f) # on faces
+
+    # thermodynamics components
     ρθ = zero_scalar.(local_geometry_c)
 
     return Fields.FieldVector(
-        scm = Fields.FieldVector(ρ = ρ, uv = uv, w = w, ρθ = ρθ),
+        base = Fields.FieldVector(ρ = ρ, uv = uv, w = w),
+        thermodynamics = Fields.FieldVector(ρθ = ρθ),
     )
 end
 
@@ -50,17 +58,19 @@ function Models.make_ode_function(model::SingleColumnModel)
         uvg = model.parameters.uvg
         ν = model.parameters.ν
 
-        # unpack tendencies and state
-        dYm = dY.scm
+        # base components
+        dYm = dY.base
         dρ = dYm.ρ
         duv = dYm.uv
         dw = dYm.w
-        dρθ = dYm.ρθ
-        Ym = Y.scm
+        Ym = Y.base
         ρ = Ym.ρ
         uv = Ym.uv
         w = Ym.w
-        ρθ = Ym.ρθ
+
+        # thermodynamics components
+        dρθ = dY.thermodynamics.ρθ
+        ρθ = Y.thermodynamics.ρθ
 
         # gather boundary conditions
         bc_ρ = model.boundary_conditions.ρ
@@ -69,8 +79,8 @@ function Models.make_ode_function(model::SingleColumnModel)
         bc_ρθ = model.boundary_conditions.ρθ
 
         # density
-        flux_bottom = get_boundary_flux(model, bc_ρ.bottom, ρ, Ym, Ya)
-        flux_top = get_boundary_flux(model, bc_ρ.top, ρ, Ym, Ya)
+        flux_bottom = get_boundary_flux(model, bc_ρ.bottom, ρ, Y, Ya)
+        flux_top = get_boundary_flux(model, bc_ρ.top, ρ, Y, Ya)
         If = Operators.InterpolateC2F()
         ∂f = Operators.GradientC2F()
         ∂c = Operators.DivergenceF2C(
@@ -80,8 +90,8 @@ function Models.make_ode_function(model::SingleColumnModel)
         @. dρ = -∂c(w * If(ρ))
 
         # potential temperature
-        flux_bottom = get_boundary_flux(model, bc_ρθ.bottom, ρθ, Ym, Ya)
-        flux_top = get_boundary_flux(model, bc_ρθ.top, ρθ, Ym, Ya)
+        flux_bottom = get_boundary_flux(model, bc_ρθ.bottom, ρθ, Y, Ya)
+        flux_top = get_boundary_flux(model, bc_ρθ.top, ρθ, Y, Ya)
         If = Operators.InterpolateC2F()
         ∂f = Operators.GradientC2F()
         ∂c = Operators.DivergenceF2C(
@@ -98,7 +108,7 @@ function Models.make_ode_function(model::SingleColumnModel)
         )
 
         # uv
-        flux_bottom = get_boundary_flux(model, bc_uv.bottom, uv, Ym, Ya)
+        flux_bottom = get_boundary_flux(model, bc_uv.bottom, uv, Y, Ya)
 
         bcs_bottom = Operators.SetValue(flux_bottom)
         bcs_top = Operators.SetValue(uvg) # this needs abstraction
@@ -108,8 +118,8 @@ function Models.make_ode_function(model::SingleColumnModel)
         @. duv += ∂c(ν * ∂f(uv)) - A(w, uv)
 
         # w
-        flux_bottom = get_boundary_flux(model, bc_w.bottom, w, Ym, Ya)
-        flux_top = get_boundary_flux(model, bc_w.top, w, Ym, Ya)
+        flux_bottom = get_boundary_flux(model, bc_w.bottom, w, Y, Ya)
+        flux_top = get_boundary_flux(model, bc_w.top, w, Y, Ya)
         If = Operators.InterpolateC2F(
             bottom = Operators.Extrapolate(),
             top = Operators.Extrapolate(),

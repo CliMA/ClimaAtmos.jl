@@ -1,14 +1,14 @@
-function get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Ym, Ya)
-    FT = eltype(Ym)
+function get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Y, Ya)
+    FT = eltype(Y)
     flux = Geometry.WVector(FT(0))
 end
 
-function get_boundary_flux(model, bc::DragLawCondition, uv, Ym, Ya)
-    FT = eltype(Ym)
-    coefficients = eltype(bc.coefficients) == FT ? bc.coefficients :
-        bc.coefficients(Ym, Ya)
+function get_boundary_flux(model, bc::DragLawCondition, uv, Y, Ya)
+    FT = eltype(Y)
+    coefficients =
+        eltype(bc.coefficients) == FT ? bc.coefficients : bc.coefficients(Y, Ya)
 
-    uv_1 = first_interior(Ym.uv)
+    uv_1 = first_interior(uv)
     u_wind = norm(uv_1)
 
     flux = Geometry.WVector(coefficients.Cd * u_wind) ⊗ uv_1
@@ -17,22 +17,22 @@ end
 function get_boundary_flux(
     model,
     bc::BulkFormulaCondition,
-    ρθ::Fields.Field,
-    Ym,
+    ρc::Fields.Field,
+    Y,
     Ya,
 )
-    FT = eltype(Ym)
-    coefficients = eltype(bc.coefficients) == FT ? bc.coefficients :
-        bc.coefficients(Ym, Ya)
-    θ_sfc = bc.θ_sfc
+    FT = eltype(Y.base)
+    coefficients =
+        eltype(bc.coefficients) == FT ? bc.coefficients : bc.coefficients(Y, Ya)
+    c_sfc = bc.surface_field
 
-    ρ_1 = first_interior(Ym.ρ)
-    ρθ_1 = first_interior(Ym.ρθ)
-    uv_1 = first_interior(Ym.uv)
+    ρ_1 = first_interior(Y.base.ρ)
+    ρc_1 = first_interior(ρc)
+    uv_1 = first_interior(Y.base.uv)
     u_wind = norm(uv_1)
 
     flux =
-        Geometry.WVector(coefficients.Ch * u_wind * ρ_1 * (ρθ_1 / ρ_1 - θ_sfc))
+        Geometry.WVector(coefficients.Ch * u_wind * ρ_1 * (ρc_1 / ρ_1 - c_sfc))
 end
 
 # Obtain the first interior datapoint of variable `v`

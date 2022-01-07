@@ -42,7 +42,7 @@ function test_cases(mode)
     #     for FT in float_types
     #         run_moist_rising_bubble_3d(FT; mode)
     #     end
-    # # end
+    # end
 
     # Sphere tests (4)
     @testset "Solid-body rotation" begin
