@@ -1,5 +1,5 @@
 """
-    init_solid_body_rotation(params, case = :baroclinic_wave)
+    init_solid_body_rotation(FT, params)
 
     Hydrostatically balanced initial condition for 3D sphere benchmarking.
 """

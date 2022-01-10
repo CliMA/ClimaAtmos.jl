@@ -179,9 +179,9 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
         @. dw -= scalar_vgrad_c2f(E)
 
         # thermodynamic variable
-        @. dρe_tot -= hdiv(uvw * ρe_tot)
-        @. dρe_tot -= vector_vdiv_f2c(w * interp_c2f(ρe_tot))
-        @. dρe_tot -= vector_vdiv_f2c(interp_c2f(uh * ρe_tot))
+        @. dρe_tot -= hdiv(uvw * (ρe_tot + p))
+        @. dρe_tot -= vector_vdiv_f2c(w * interp_c2f(ρe_tot + p))
+        @. dρe_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρe_tot + p)))
 
         if model.flux_corr
             @. dρ += flux_correction_center(w, ρ)
