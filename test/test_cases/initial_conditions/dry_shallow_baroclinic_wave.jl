@@ -1,8 +1,10 @@
 """
-    init_dry_shallow_baroclinic_wave(params, case = :baroclinic_wave)
+    init_dry_shallow_baroclinic_wave(FT, params, isbalanced = true)
 
+    - isbalanced: false is the standard baroclinic set up as in the reference;
+                  true is the same background flow without perturbation.
     Dry shallow atmosphere baroclinic wave initial condition for 3D sphere benchmarking.
-    Reference: https://rmets.onlinelibrary.wiley.com/doi/full/10.1002/qj.2241
+    Reference: https://rmets.onlinelibrary.wiley.com/doi/full/10.1002/qj.2241 
 """
 function init_dry_shallow_baroclinic_wave(
     ::Type{FT},
