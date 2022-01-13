@@ -12,188 +12,160 @@ Base.@kwdef struct Nonhydrostatic3DModel{
     FT,
 } <: AbstractModel
     domain::D
-    boundary_conditions::BC
-    parameters::P
-    name::Symbol = :nhm
-    varnames::Tuple = (:ρ, :uh, :w, :ρe_tot) # ρuh is the horizontal momentum
+    base::AbstractBaseModelStyle = AdvectiveForm()
+    thermodynamics::AbstractThermodynamicsStyle = TotalEnergy()
+    moisture::AbstractMoistureStyle = Dry()
     flux_corr::Bool = true
     hyperdiffusivity::FT
+    boundary_conditions::BC
+    parameters::P
+end
+
+function Models.subcomponents(model::Nonhydrostatic3DModel)
+    # we need a helper function here to extract the possible subcomponents
+    # of a model. This can be used to generically work with models later.
+    (
+        base = model.base,
+        thermodynamics = model.thermodynamics,
+        moisture = model.moisture,
+    )
+end
+
+function Models.state_variable_names(model::Nonhydrostatic3DModel)
+    # we need to extract the active only subcomponents of the model because
+    # later we don't want to carry around empty vectors of moisture in a dry model
+    # so we need to extract information as to what variables are active.
+    subcomponents = keys(Models.subcomponents(model))
+    subcomponent_vars = (
+        Models.state_variable_names(sc) for
+        sc in values(Models.subcomponents(model))
+    )
+
+    # we need to collect the the non-nothing subcomponents, e.g., in case if Dry() moisture
+    # we don't have any variables for moisture.
+    active_subcomponents = (
+        s for
+        (s, vars) in zip(subcomponents, subcomponent_vars) if vars ≢ nothing
+    )
+    active_vars = (
+        vars for
+        (s, vars) in zip(subcomponents, subcomponent_vars) if vars ≢ nothing
+    )
+
+    return (; zip(active_subcomponents, active_vars)...)
 end
 
 function Models.default_initial_conditions(model::Nonhydrostatic3DModel)
+    # we need to provide default initial conditions for the model, because the ode solver
+    # requires inital conditions when getting instantiated, but we also want to support the `set!` function
+    # interface for initialization and re-initialization.
     space_c, space_f = make_function_space(model.domain)
     local_geometry_c = Fields.local_geometry_field(space_c)
     local_geometry_f = Fields.local_geometry_field(space_f)
 
-    # functions that make zeros for this model
+    # functions that make zeros for this model. These will be broadcasted
+    # across the entire domain.    
     zero_val = zero(Spaces.undertype(space_c))
-    zero_scalar(lg) = zero_val # .
-    zero_12vector(lg) = Geometry.Covariant12Vector(zero_val, zero_val) # ---->
-    zero_3vector(lg) = Geometry.Covariant3Vector(zero_val) # (-_-') . ┓( ´∀` )┏ 
+    zero_scalar(lg) = zero_val
+    zero_12vector(lg) = Geometry.Covariant12Vector(zero_val, zero_val)
+    zero_3vector(lg) = Geometry.Covariant3Vector(zero_val)
 
+    # this sets up the default zero initial condition for the different model
+    # components (e.g., base model component, thermodynamics component, etc.)
+    varnames = state_variable_names(model)
+
+    # base model components
     ρ = zero_scalar.(local_geometry_c)
     uh = zero_12vector.(local_geometry_c)
-    w = zero_3vector.(local_geometry_f) # faces
-    ρe_tot = zero_scalar.(local_geometry_c)
+    w = zero_3vector.(local_geometry_f) # on faces
+    base = (ρ = ρ, uh = uh, w = w)
 
-    return Fields.FieldVector(
-        nhm = Fields.FieldVector(ρ = ρ, uh = uh, w = w, ρe_tot = ρe_tot),
-    )
+    # all other components are assumed to be scalars
+    # thermodynamics components
+    thermodynamics_values =
+        (zero_scalar.(local_geometry_c) for name in varnames.thermodynamics)
+    thermodynamics = NamedTuple{varnames.thermodynamics}(thermodynamics_values)
+
+    # moisture components
+    if :moisture ∈ varnames
+        moisture_values =
+            (zero_scalar.(local_geometry_c) for name in varnames.moisture)
+        moisture = NamedTuple{varnames.moisture}(moisture_values)
+    end
+
+    # construct fieldvector to return
+    if :moisture ∈ varnames
+        return Fields.FieldVector(
+            base = base,
+            thermodynamics = thermodynamics,
+            moisture = moisture,
+        )
+    else
+        return Fields.FieldVector(base = base, thermodynamics = thermodynamics)
+    end
 end
 
 function Models.make_ode_function(model::Nonhydrostatic3DModel)
-    FT = eltype(model.domain)
+    FT = eltype(model.domain) # model works on different float types
 
-    # relevant parameters
-    Ω::FT = CLIMAParameters.Planet.Omega(model.parameters)
-    g::FT = CLIMAParameters.Planet.grav(model.parameters)
-    κ₄::FT = model.hyperdiffusivity
+    # shorthands for model components & model styles
+    base_style = model.base
+    thermo_style = model.thermodynamics
+    moisture_style = model.moisture
+    params = model.parameters
+    hyperdiffusivity = model.hyperdiffusivity
+    flux_correction = model.flux_corr
 
-    # gravitational potential
-    Φ(z::FT) where {FT} = g * z
-
-    # operators
-    # spectral horizontal operators
-    hdiv = Operators.Divergence()
-    hwdiv = Operators.Divergence()
-    hgrad = Operators.Gradient()
-    hwgrad = Operators.Gradient()
-    hcurl = Operators.Curl()
-    hwcurl = Operators.Curl()
-
-    # vertical FD operators with BC's
-    # interpolators
-    interp_c2f = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-    interp_f2c = Operators.InterpolateF2C()
-
-    # gradients
-    scalar_vgrad_c2f = Operators.GradientC2F(
-        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    )
-
-    # divergences
-    vector_vdiv_f2c = Operators.DivergenceF2C(
-        top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-        bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-    )
-
-    # curls
-    vector_vcurl_c2f = Operators.CurlC2F(
-        bottom = Operators.SetCurl(Geometry.Contravariant12Vector(
-            FT(0),
-            FT(0),
-        )),
-        top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
-    )
-
-    # flux correction aka upwinding
-    flux_correction_center = Operators.FluxCorrectionC2C(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-
+    # this is the complete explicit right-hand side function
+    # assembled here to be delivered to the time stepper.
     function rhs!(dY, Y, Ya, t)
-        dYm = dY.nhm
-        dρ = dYm.ρ # scalar on centers
-        duh = dYm.uh # Covariant12Vector on centers
-        dw = dYm.w # Covariant3Vector on faces
-        dρe_tot = dYm.ρe_tot # scalar on centers
-        Ym = Y.nhm
-        ρ = Ym.ρ
-        uh = Ym.uh
-        w = Ym.w
-        ρe_tot = Ym.ρe_tot
+        # auxiliary calculation is done here so we don't
+        # redo it all the time and can cache the values
+        Φ = calculate_gravitational_potential(Y, Ya, params, FT)
+        p = calculate_pressure(
+            Y,
+            Ya,
+            base_style,
+            thermo_style,
+            moisture_style,
+            params,
+            FT,
+        )
 
-        # TODO!: Initialize all tendencies to zero for good practice!
-
-        # calculate relevant thermodynamic quantities
-        z = Fields.coordinate_field(axes(ρ)).z
-        uvw = @. Geometry.Covariant123Vector(uh) +
-           Geometry.Covariant123Vector(interp_f2c(w))
-        e_int = @. ρe_tot / ρ - Φ(z) - norm(uvw)^2 / 2
-        ts = Thermodynamics.PhaseDry.(model.parameters, e_int, ρ)
-        p = Thermodynamics.air_pressure.(ts)
-
-        # hyperdiffusion
-        χe = @. dρe_tot = hwdiv(hgrad(ρe_tot / ρ))
-        χuh = @. duh =
-            hwgrad(hdiv(uh)) -
-            Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(
-                uh,
-            ))),)
-        Spaces.weighted_dss!(dρe_tot)
-        Spaces.weighted_dss!(duh)
-        @. dρe_tot = -κ₄ * hwdiv(ρ * hgrad(χe))
-        @. duh =
-            -κ₄ * (
-                hwgrad(hdiv(χuh)) -
-                Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(
-                    χuh,
-                ))),)
-            )
-
-        # density
-        # the vector is split into horizontal and vertical components so that they can be
-        # applied individually
-        uvw = @. Geometry.Covariant123Vector(uh) +
-           Geometry.Covariant123Vector(interp_f2c(w))
-        @. dρ = -hdiv(ρ * uvw) # horizontal divergence
-        @. dρ -= vector_vdiv_f2c(interp_c2f(ρ * uh)) # explicit vertical part
-        @. dρ -= vector_vdiv_f2c(interp_c2f(ρ) * w) # TODO: implicit vertical part
-
-        # horizontal momentum
-        ω³ = @. hcurl(uh) # Contravariant3Vector
-        ω¹² = @. hcurl(w) # Contravariant12Vector
-        @. ω¹² += vector_vcurl_c2f(uh) # Contravariant12Vector
-        u¹² = # TODO!: Will need to be changed with topography
-            @. Geometry.Contravariant12Vector(Geometry.Covariant123Vector(interp_c2f(
-                uh,
-            )),) # Contravariant12Vector in 3D
-        u³ = @. Geometry.Contravariant3Vector(Geometry.Covariant123Vector(w))  # TODO!: Will need to be changed with topography
-        # coriolis
-        if Ω != 0
-            lat = Fields.coordinate_field(axes(ρ)).lat
-            f = @. Geometry.Contravariant3Vector(Geometry.WVector(
-                2 * Ω * sind(lat),
-            ))  # TODO!: Will need to be changed with topography
-        else
-            y = Fields.coordinate_field(axes(ρ)).y
-            f = @. Geometry.Contravariant3Vector(Geometry.WVector(Ω * y))
-        end
-        E = @. (norm(uvw)^2) / 2 + Φ(z)
-
-        @. duh -= interp_f2c(ω¹² × u³)
-        @. duh -=
-            (f + ω³) ×
-            Geometry.Contravariant12Vector(Geometry.Covariant123Vector(uh))
-        @. duh -= hgrad(p) / ρ
-        @. duh -= hgrad(E)
-
-        # vertical momentum
-        @. dw = ω¹² × u¹² # Covariant3Vector on faces
-        @. dw -= scalar_vgrad_c2f(p) / interp_c2f(ρ)
-        @. dw -= scalar_vgrad_c2f(E)
-
-        # thermodynamic variable
-        @. dρe_tot -= hdiv(uvw * (ρe_tot + p))
-        @. dρe_tot -= vector_vdiv_f2c(w * interp_c2f(ρe_tot + p))
-        @. dρe_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρe_tot + p)))
-
-        if model.flux_corr
-            @. dρ += flux_correction_center(w, ρ)
-            @. dρe_tot += flux_correction_center(w, ρe_tot)
-        end
-
-        # discrete stiffness summation for spectral operations
-        Spaces.weighted_dss!(dρ)
-        Spaces.weighted_dss!(duh)
-        Spaces.weighted_dss!(dw)
-        Spaces.weighted_dss!(dρe_tot)
-
-        return dY
+        # base model equations
+        # Ex.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+        rhs_base_model!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            Φ,
+            base_style,
+            params,
+            hyperdiffusivity,
+            flux_correction,
+            FT,
+        )
+        # Ex.: ∂ₜρθ = ...
+        rhs_thermodynamics!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            thermo_style,
+            params,
+            hyperdiffusivity,
+            flux_correction,
+            FT,
+        )
+        # Ex.: ∂ₜρq_tot = ...
+        rhs_moisture!(dY, Y, Ya, t, p, base_style, moisture_style, params, FT)
+        # rhs_tracer!
+        # rhs_edmf!
     end
+
+    return rhs!
 end

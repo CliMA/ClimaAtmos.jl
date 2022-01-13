@@ -41,7 +41,8 @@ function run_dry_rising_bubble_3d(
         # test set function
         @unpack ρ, uh, w, ρe_tot =
             init_dry_rising_bubble_3d(FT, params, :ρe_tot)
-        set!(simulation, ρ = ρ, uh = uh, w = w, ρe_tot = ρe_tot)
+        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
+        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
 
         # test error handling
         @test_throws ArgumentError set!(simulation, quack = ρ)

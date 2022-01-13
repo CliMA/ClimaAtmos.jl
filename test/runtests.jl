@@ -11,6 +11,7 @@ using ClimaCore: Geometry, Spaces, Fields
 using ClimaAtmos
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models
 using ClimaAtmos.Models.SingleColumnModels
 using ClimaAtmos.Models.Nonhydrostatic2DModels
 using ClimaAtmos.Models.Nonhydrostatic3DModels
@@ -33,6 +34,7 @@ include("test_cases.jl")
     if group == :integration || group == :all
         @testset "Integration tests" begin
             include("test_domains.jl")
+            include("test_models.jl")
             test_cases(:integration)
         end
 

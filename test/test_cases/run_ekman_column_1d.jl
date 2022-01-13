@@ -65,7 +65,8 @@ function run_ekman_column_1d(
             callbacks = cb_set,
         )
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
-        set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
 
         # Test simulation restart
@@ -83,7 +84,8 @@ function run_ekman_column_1d(
                 end_time = 0.05,
             ),
         )
-        set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
         @test simulation.integrator.t == 0.05
 
@@ -101,9 +103,10 @@ function run_ekman_column_1d(
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
-        set!(simulation, :scm, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
         step!(simulation)
-        u = simulation.integrator.u.scm
+        u = simulation.integrator.u.base
 
         # perform regression check
         current_min = -0.0
@@ -113,9 +116,10 @@ function run_ekman_column_1d(
     elseif mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
         @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
-        set!(simulation, ρ = ρ, uv = uv, w = w, ρθ = ρθ)
+        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
-        u_end = simulation.integrator.u.scm
+        u_end = simulation.integrator.u.base
 
         # post-processing
         ENV["GKSwstype"] = "nul"
