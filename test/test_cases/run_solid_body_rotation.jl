@@ -37,7 +37,7 @@ function run_solid_body_rotation(
         @test simulation isa Simulation
 
         # test set function
-        @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params)
+        @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params, model)
         set!(simulation, :base, ρ = ρ, uh = uh, w = w)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
 
@@ -61,7 +61,7 @@ function run_solid_body_rotation(
         @test (abs.(w_phy |> parent) |> maximum) ≈ current_w_max rtol = 1e-3
     elseif mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600))
-        @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params)
+        @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params, model)
         set!(simulation, :base, ρ = ρ, uh = uh, w = w)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         run!(simulation)
