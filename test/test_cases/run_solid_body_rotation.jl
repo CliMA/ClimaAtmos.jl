@@ -1,4 +1,4 @@
-include("initial_conditions/solid_body_rotation.jl")
+include("initial_conditions/solid_body_rotation_discrete.jl")
 
 # Set up parameters
 using CLIMAParameters
@@ -45,7 +45,7 @@ function run_solid_body_rotation(
         @test step!(simulation) isa Nothing # either error or integration runs
     elseif mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
-        @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params)
+        @unpack ρ, uh, w, ρe_tot = init_solid_body_rotation(FT, params, model)
         set!(simulation, :base, ρ = ρ, uh = uh, w = w)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         step!(simulation)
