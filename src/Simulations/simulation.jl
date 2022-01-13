@@ -144,8 +144,17 @@ run!(simulation::Simulation, args...; kwargs...) =
     DiffEqBase.solve!(simulation.integrator, args...; kwargs...)
 
 function Base.show(io::IO, s::Simulation)
-    print(io, "Simulation set-up:\n\tmodel type:\t", typeof(s.model).name.name)
-    print(io, "\n\tmodel vars:\t", s.model.varnames, "\n\n")
+    print(
+        io,
+        "Simulation set-up:\n\tmodel type:\t\t",
+        typeof(s.model).name.name,
+    )
+    print(
+        io,
+        "\n\tthermodynamic tar:\t",
+        typeof(s.model.thermodynamics),
+        "\n\n",
+    )
     show(io, s.model.domain)
     print(io, "\n\nTimestepper set-up:")
     print(io, "\n\tmethod:\t", typeof(s.integrator.alg).name.name)
