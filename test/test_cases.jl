@@ -1,77 +1,68 @@
-include("test_cases/run_ekman_column_1d.jl")
-include("test_cases/run_dry_rising_bubble_2d.jl")
-include("test_cases/run_dry_rising_bubble_3d.jl")
-include("test_cases/run_solid_body_rotation.jl")
-include("test_cases/run_balanced_flow.jl")
-include("test_cases/run_dry_shallow_baroclinic_wave.jl")
+include("test_cases/run_1d_ekman_column.jl")
+include("test_cases/run_2d_rising_bubble.jl")
+include("test_cases/run_3d_rising_bubble.jl")
+include("test_cases/run_3d_solid_body_rotation.jl")
+include("test_cases/run_3d_balanced_flow.jl")
+include("test_cases/run_3d_baroclinic_wave.jl")
 
-function test_cases(mode)
-    # Column tests (1)
-    @testset "Ekman column 1D" begin
-        for FT in float_types
-            run_ekman_column_1d(FT; mode)
+function test_cases(test_names, test_mode)
+    # Column tests
+    if :test_1d_ekman_column ∈ test_names
+        @testset "1D Ekman column" begin
+            for FT in float_types
+                run_1d_ekman_column(FT, test_mode = test_mode)
+            end
         end
     end
 
-    # @testset "Radiative-convective equilibirum" begin
-    #     for FT in float_types
-    #         run_radiative_convective_equilibrium(FT; mode)
-    #     end
+    # @testset "1D radiative-convective equilibirum" begin
     # end
 
-    # Box tests (2)
-    @testset "Dry rising bubble 2D" begin
-        for FT in float_types
-            run_dry_rising_bubble_2d(FT; mode)
+    # Box tests
+    if :test_2d_dry_rising_bubble ∈ test_names
+        @testset "2D dry rising bubble" begin
+            for FT in float_types
+                run_2d_rising_bubble(FT, test_mode = test_mode)
+            end
         end
     end
 
-    # @testset "Mountain check" begin
-    #     for FT in float_types
-    #         run_mountain_check(FT; mode)
-    #     end
+    # @testset "2D mountain" begin
     # end
 
-    @testset "Dry rising bubble 3D" begin
-        for FT in float_types
-            run_dry_rising_bubble_3d(FT; mode)
+    if :test_3d_rising_bubble ∈ test_names
+        @testset "3D rising bubble" begin
+            for FT in float_types
+                run_3d_rising_bubble(FT, test_mode = test_mode)
+            end
         end
     end
 
-    # @testset "Moist rising bubble 3D" begin
-    #     for FT in float_types
-    #         run_moist_rising_bubble_3d(FT; mode)
-    #     end
+    # Sphere tests
+    if :test_3d_solid_body_rotation ∈ test_names
+        @testset "3D solid-body rotation" begin
+            for FT in float_types
+                run_3d_solid_body_rotation(FT, test_mode = test_mode)
+            end
+        end
+    end
+
+    if :test_3d_balanced_flow ∈ test_names
+        @testset "3D balanced flow" begin
+            for FT in float_types
+                run_3d_balanced_flow(FT, test_mode = test_mode)
+            end
+        end
+    end
+
+    # @testset "3D boundary conditions" begin
     # end
 
-    # Sphere tests (4)
-    @testset "Solid-body rotation" begin
-        for FT in float_types
-            run_solid_body_rotation(FT; mode)
+    if :test_3d_baroclinic_wave ∈ test_names
+        @testset "3D baroclinic wave" begin
+            for FT in float_types
+                run_3d_baroclinic_wave(FT, test_mode = test_mode)
+            end
         end
     end
-
-    @testset "Balanced flow" begin
-        for FT in float_types
-            run_balanced_flow(FT; mode)
-        end
-    end
-
-    # @testset "Boundary conditions test" begin
-    #     for FT in float_types
-    #         run_incoming_energy_fluxes(FT; mode)
-    #     end
-    # end
-
-    @testset "Dry shallow baroclinic wave" begin
-        for FT in float_types
-            run_dry_shallow_baroclinic_wave(FT; mode)
-        end
-    end
-
-    # @testset "Moist shallow baroclinic wave" begin
-    #     for FT in float_types
-    #         run_moist_shallow_baroclinic_wave(FT; mode)
-    #     end
-    # end
 end

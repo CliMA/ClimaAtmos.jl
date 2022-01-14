@@ -1,7 +1,7 @@
 """
-    init_dry_rising_bubble_2d(params, thermovar = :ρθ)
+    init_2d_rising_bubble(params, thermovar = :ρθ)
 
-    Dry rising bubble initial condition for 2D box benchmarking.
+    Rising bubble initial condition for 2D box benchmarking.
     Reference: https://journals.ametsoc.org/view/journals/mwre/140/4/mwr-d-10-05073.1.xml, Section 5a
     Reference parameter values:
         - x_c = 0 m
@@ -15,11 +15,7 @@
         - R_d = 287.0 J kg⁻¹ K⁻¹
         - g = 9.80616 m s⁻²
 """
-function init_dry_rising_bubble_2d(
-    ::Type{FT},
-    params;
-    thermovar = :ρθ,
-) where {FT}
+function init_2d_rising_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
     cp_d::FT = CLIMAParameters.Planet.cp_d(params)

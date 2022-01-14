@@ -1,10 +1,14 @@
-include("initial_conditions/dry_shallow_baroclinic_wave.jl")
+using CLIMAParameters
+using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
+using ClimaAtmos.Domains
+using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models.Nonhydrostatic3DModels
+using ClimaAtmos.Simulations
 
 # Set up parameters
-using CLIMAParameters
 struct DryBaroclinicWaveParameters <: CLIMAParameters.AbstractEarthParameterSet end
 
-function run_dry_shallow_baroclinic_wave(
+function run_3d_baroclinic_wave(
     ::Type{FT};
     stepper = SSPRK33(),
     nelements = (6, 10),
@@ -12,7 +16,7 @@ function run_dry_shallow_baroclinic_wave(
     case = :default,
     dt = 0.02,
     callbacks = (),
-    mode = :regression,
+    test_mode = :regression,
 ) where {FT}
     params = DryBaroclinicWaveParameters()
 
@@ -32,25 +36,25 @@ function run_dry_shallow_baroclinic_wave(
     )
 
     # execute differently depending on testing mode
-    if mode == :integration
+    if test_mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @test simulation isa Simulation
 
         # test set function
-        @unpack ρ, uh, w, ρe_tot = init_dry_shallow_baroclinic_wave(FT, params)
+        @unpack ρ, uh, w, ρe_tot = init_3d_baroclinic_wave(FT, params)
         set!(simulation, :base, ρ = ρ, uh = uh, w = w)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
 
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs
-    elseif mode == :regression
-        # TODO!: Implement meaningful(!) regression test
-    elseif mode == :validation
+    # TODO!: Implement meaningful(!) regression test
+
+    elseif test_mode == :validation
         # TODO!: Implement the rest plots and analyses
         # 1. sort out saveat kwarg for Simulation
         # 2. create animation for a rising bubble; timeseries of total energy
     else
-        throw(ArgumentError("$mode incompatible with test case."))
+        throw(ArgumentError("$test_mode incompatible with test case."))
     end
 
     nothing

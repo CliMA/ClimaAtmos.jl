@@ -7,17 +7,7 @@ using OrdinaryDiffEq: SSPRK33, CallbackSet, DiscreteCallback
 using Plots
 using UnPack
 
-using ClimaCore: Geometry, Spaces, Fields
 using ClimaAtmos
-using ClimaAtmos.Domains
-using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models
-using ClimaAtmos.Models.SingleColumnModels
-using ClimaAtmos.Models.Nonhydrostatic2DModels
-using ClimaAtmos.Models.Nonhydrostatic3DModels
-using ClimaAtmos.Callbacks
-using ClimaAtmos.Simulations
-using CLIMAParameters
 
 #float_types = (Float32, Float64)
 float_types = (Float64,)
@@ -35,7 +25,6 @@ include("test_cases.jl")
         @testset "Integration tests" begin
             include("test_domains.jl")
             include("test_models.jl")
-            test_cases(:integration)
         end
 
         disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
@@ -45,13 +34,29 @@ include("test_cases.jl")
 
     if group == :regression || group == :all
         @testset "Regression Tests" begin
-            test_cases(:regression)
+            test_names = (
+                :test_1d_ekman_column,
+                :test_2d_rising_bubble,
+                :test_3d_rising_bubble,
+                :test_3d_solid_body_rotation,
+                :test_3d_balanced_flow,
+                :test_3d_baroclinic_wave,
+            )
+            test_cases(test_names, :regression)
         end
     end
 
     if group == :validation
         @testset "Validation Tests" begin
-            test_cases(:validation)
+            test_names = (
+                :test_1d_ekman_column,
+                :test_2d_rising_bubble,
+                :test_3d_rising_bubble,
+                :test_3d_solid_body_rotation,
+                :test_3d_balanced_flow,
+                :test_3d_baroclinic_wave,
+            )
+            test_cases(:validation, :validation)
         end
     end
 end

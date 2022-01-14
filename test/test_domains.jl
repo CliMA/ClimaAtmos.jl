@@ -1,3 +1,6 @@
+using ClimaAtmos.Domains
+using ClimaCore.Spaces
+
 @testset "Domains" begin
     for FT in float_types
         domain = Column(FT, zlim = (-1, π), nelements = 2)
