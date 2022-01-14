@@ -53,7 +53,7 @@ end
     @. dρθ = -κ₄ * hwdiv(ρ * hgrad(χe))
 
     # advection 
-    @. dρθ -= hdiv(uvw * (ρθ))
+    @. dρθ -= hdiv(uvw * (ρθ + p))
     @. dρθ -= vector_vdiv_f2c(w * interp_c2f(ρθ))
     @. dρθ -= vector_vdiv_f2c(interp_c2f(uh * (ρθ)))
 
