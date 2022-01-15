@@ -1,3 +1,6 @@
+using ClimaAtmos.Models
+using ClimaAtmos.Models.Nonhydrostatic2DModels: Nonhydrostatic2DModel
+
 @testset "Models" begin
     for FT in float_types
         # auxiliary structs

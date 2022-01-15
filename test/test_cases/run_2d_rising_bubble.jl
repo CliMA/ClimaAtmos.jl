@@ -1,17 +1,23 @@
-include("initial_conditions/dry_rising_bubble_2d.jl")
+using CLIMAParameters
+using ClimaAtmos.Utils.InitialConditions: init_2d_rising_bubble
+using ClimaAtmos.Domains
+using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models.Nonhydrostatic2DModels
+using ClimaAtmos.Simulations
 
 # Set up parameters
-using CLIMAParameters
 struct Bubble2DParameters <: CLIMAParameters.AbstractEarthParameterSet end
 
-function run_dry_rising_bubble_2d(
+function run_2d_rising_bubble(
     ::Type{FT};
     stepper = SSPRK33(),
     nelements = (10, 50),
     npolynomial = 4,
     dt = 0.02,
     callbacks = (),
-    mode = :regression,
+    test_mode = :regression,
+    thermo_mode = :ρθ,
+    moisture_mode = :dry,
 ) where {FT}
     params = Bubble2DParameters()
 
@@ -30,25 +36,17 @@ function run_dry_rising_bubble_2d(
     )
 
     # execute differently depending on testing mode
-    if mode == :integration
+    if test_mode == :regression
         # TODO!: run with input callbacks = ...
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
         @test simulation isa Simulation
-
-        # test set function
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
-        set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
 
         # test error handling
         @test_throws ArgumentError set!(simulation, quack = ρ)
         @test_throws ArgumentError set!(simulation, ρ = "quack")
 
-        # test successful integration
-        @test step!(simulation) isa Nothing # either error or integration runs
-    elseif mode == :regression
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
+        # test sim
+        @unpack ρ, ρuh, ρw, ρθ = init_2d_rising_bubble(FT, params)
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         step!(simulation)
@@ -61,10 +59,10 @@ function run_dry_rising_bubble_2d(
             1e-3
         @test maximum(parent(u.thermodynamics.ρθ ./ u.base.ρ)) ≈ current_max atol =
             1e-3
-    elseif mode == :validation
+    elseif test_mode == :validation
         # for now plot θ for the ending step;
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_dry_rising_bubble_2d(FT, params)
+        @unpack ρ, ρuh, ρw, ρθ = init_2d_rising_bubble(FT, params)
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
@@ -86,7 +84,7 @@ function run_dry_rising_bubble_2d(
 
         @test true # check is visual
     else
-        throw(ArgumentError("$mode incompatible with test case."))
+        throw(ArgumentError("$test_mode incompatible with test case."))
     end
 
     # TODO!: Implement the rest plots and analyses

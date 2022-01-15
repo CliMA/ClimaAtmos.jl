@@ -1,4 +1,4 @@
-function init_ekman_column_1d(::Type{FT}, params) where {FT}
+function init_1d_ekman_column(::Type{FT}, params) where {FT}
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
     grav::FT = CLIMAParameters.Planet.grav(params)

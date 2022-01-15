@@ -1,17 +1,21 @@
-include("initial_conditions/dry_shallow_baroclinic_wave.jl")
+using CLIMAParameters
+using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
+using ClimaAtmos.Domains
+using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models.Nonhydrostatic3DModels
+using ClimaAtmos.Simulations
 
 # Set up parameters
-using CLIMAParameters
 struct BalancedFlowParameters <: CLIMAParameters.AbstractEarthParameterSet end
 
-function run_balanced_flow(
+function run_3d_balanced_flow(
     ::Type{FT};
     stepper = SSPRK33(),
     nelements = (4, 10),
     npolynomial = 4,
     dt = 5.0,
     callbacks = (),
-    mode = :regression,
+    test_mode = :regression,
 ) where {FT}
     params = BalancedFlowParameters()
 
@@ -32,22 +36,10 @@ function run_balanced_flow(
     )
 
     # execute differently depending on testing mode
-    if mode == :integration
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 2 * dt))
-        @test simulation isa Simulation
-
-        # test set function
-        @unpack ρ, uh, w, ρe_tot =
-            init_dry_shallow_baroclinic_wave(FT, params, isbalanced = true)
-        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
-
-        # test successful integration
-        @test step!(simulation) isa Nothing # either error or integration runs
-    elseif mode == :regression
+    if test_mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uh, w, ρe_tot =
-            init_dry_shallow_baroclinic_wave(FT, params, isbalanced = true)
+            init_3d_baroclinic_wave(FT, params, isbalanced = true)
         set!(simulation, :base, ρ = ρ, uh = uh, w = w)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         step!(simulation)
@@ -67,10 +59,10 @@ function run_balanced_flow(
         @test (abs.(w_phy |> parent) |> maximum) ≈ current_w_max rtol = 1e-2
         @test (ub.ρ |> maximum) ≈ current_ρ_max rtol = 1e-2
         @test (ut.ρe_tot |> maximum) ≈ current_ρe_max rtol = 1e-2
-    elseif mode == :validation
+    elseif test_mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600))
         @unpack ρ, uh, w, ρe_tot =
-            init_dry_shallow_baroclinic_wave(FT, params, isbalanced = true)
+            init_3d_baroclinic_wave(FT, params, isbalanced = true)
         set!(simulation, :base, ρ = ρ, uh = uh, w = w)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         u_init = simulation.integrator.u
@@ -83,7 +75,7 @@ function run_balanced_flow(
             5e-2
         @test u_end.base.uh ≈ u_init.base.uh rtol = 5e-2
     else
-        throw(ArgumentError("$mode incompatible with test case."))
+        throw(ArgumentError("$test_mode incompatible with test case."))
     end
 
     nothing

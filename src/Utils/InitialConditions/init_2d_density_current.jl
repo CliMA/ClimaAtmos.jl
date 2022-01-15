@@ -1,5 +1,5 @@
 """
-    init_density_current_2d(x, z, parameters)
+    init_2d_density_current(x, z, parameters)
 
     Straka density current initial condition for 2D box benchmarking.
     Reference: https://journals.ametsoc.org/view/journals/mwre/140/4/mwr-d-10-05073.1.xml, Section 5b
@@ -11,7 +11,7 @@
         - R_d = 287.0 J kg⁻¹ K⁻¹
         - g = 9.80616 m s⁻²
 """
-function init_density_current_2d(x, z, parameters)
+function init_2d_density_current(x, z, parameters)
     UnPack.@unpack x_c, z_c, r_c, θ_b, θ_c, p_0, cp_d, cv_d, R_d, g = parameters
     @assert x_c = 0.0
     @assert y_c = 0.0

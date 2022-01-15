@@ -1,7 +1,7 @@
 """
-    init_dry_rising_bubble_3d(params)
+    init_3d_rising_bubble(params)
 
-    Dry rising bubble initial condition for 3D box benchmarking.
+    Rising bubble initial condition for 3D box benchmarking.
     Reference: https://journals.ametsoc.org/view/journals/mwre/140/4/mwr-d-10-05073.1.xml, Section 5a
     Reference parameter values:
         - x_c = 0 m
@@ -18,11 +18,7 @@
 
     # TODO!: Replace expression with Thermodynamics.jl expressions.
 """
-function init_dry_rising_bubble_3d(
-    ::Type{FT},
-    params,
-    thermovar = :ρθ,
-) where {FT}
+function init_3d_rising_bubble(::Type{FT}, params, thermovar = :ρθ) where {FT}
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
     cp_d::FT = CLIMAParameters.Planet.cp_d(params)

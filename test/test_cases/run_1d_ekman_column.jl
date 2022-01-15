@@ -1,7 +1,14 @@
-include("initial_conditions/ekman_column_1d.jl")
+using CLIMAParameters
+using ClimaCore: Geometry
+using ClimaAtmos.Utils.InitialConditions: init_1d_ekman_column
+using ClimaAtmos.Domains
+using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models
+using ClimaAtmos.Models.SingleColumnModels
+using ClimaAtmos.Callbacks
+using ClimaAtmos.Simulations
 
 # Set up parameters
-using CLIMAParameters
 Base.@kwdef struct EkmanParameters{FT} <:
                    CLIMAParameters.AbstractEarthParameterSet
     Cd::FT = 0.01 / (2e2 / 30) # drag coefficients
@@ -12,13 +19,13 @@ Base.@kwdef struct EkmanParameters{FT} <:
     uvg = Geometry.UVVector(FT(1), FT(0)) # geostrophic velocity
 end
 
-function run_ekman_column_1d(
+function run_1d_ekman_column(
     ::Type{FT};
     stepper = SSPRK33(),
     nelements = 30,
     dt = 0.01,
     callbacks = (),
-    mode = :regression,
+    test_mode = :regression,
 ) where {FT}
     params = EkmanParameters{FT}()
 
@@ -42,7 +49,7 @@ function run_ekman_column_1d(
     )
 
     # execute differently depending on testing mode
-    if mode == :integration
+    if test_mode == :regression
         # Populate Callback Containers
         temp_filepath = joinpath(@__DIR__, "callback_tests")
         mkpath(temp_filepath)
@@ -64,7 +71,7 @@ function run_ekman_column_1d(
             tspan = (0.0, 0.03),
             callbacks = cb_set,
         )
-        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
+        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
         set!(simulation, :base, ρ = ρ, uv = uv, w = w)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
@@ -98,11 +105,10 @@ function run_ekman_column_1d(
             cb_2.filedir,
             cb_2.filename * "_0.02" * ".jld2",
         )) == true
-
         rm(temp_filepath, recursive = true)
-    elseif mode == :regression
+
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
+        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
         set!(simulation, :base, ρ = ρ, uv = uv, w = w)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         step!(simulation)
@@ -113,9 +119,9 @@ function run_ekman_column_1d(
         current_max = 0.0
         @test minimum(parent(u.w)) ≈ current_min atol = 1e-3
         @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
-    elseif mode == :validation
+    elseif test_mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
-        @unpack ρ, uv, w, ρθ = init_ekman_column_1d(FT, params)
+        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
         set!(simulation, :base, ρ = ρ, uv = uv, w = w)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
@@ -187,7 +193,7 @@ function run_ekman_column_1d(
 
         @test true # check is visual
     else
-        throw(ArgumentError("$mode incompatible with test case."))
+        throw(ArgumentError("$test_mode incompatible with test case."))
     end
 
     nothing

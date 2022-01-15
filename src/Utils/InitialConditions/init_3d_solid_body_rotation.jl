@@ -3,7 +3,7 @@
 
     Hydrostatically balanced initial condition for 3D sphere benchmarking.
 """
-function init_solid_body_rotation(::Type{FT}, params) where {FT}
+function init_3d_solid_body_rotation(::Type{FT}, params) where {FT}
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
     cv_d::FT = CLIMAParameters.Planet.cv_d(params)
