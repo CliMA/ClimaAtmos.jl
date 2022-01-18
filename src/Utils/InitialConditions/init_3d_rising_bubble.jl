@@ -90,7 +90,7 @@ function init_3d_rising_bubble(::Type{FT}, params, thermovar = :ρθ) where {FT}
     w(local_geometry) = Geometry.Covariant3Vector(0.0)
 
     if thermovar == :ρθ
-        return (ρ = ρ, ρθ = ρθ, ρuh = uh, w = w)
+        return (ρ = ρ, ρθ = ρθ, uh = uh, w = w)
     elseif thermovar == :ρe_tot
         return (ρ = ρ, ρe_tot = ρe_tot, uh = uh, w = w)
     else
