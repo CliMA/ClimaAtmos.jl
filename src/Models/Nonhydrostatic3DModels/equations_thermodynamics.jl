@@ -27,7 +27,7 @@ end
 
     # operators /w boundary conditions
     hdiv = Operators.Divergence()
-    hwdiv = Operators.Divergence()
+    hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),

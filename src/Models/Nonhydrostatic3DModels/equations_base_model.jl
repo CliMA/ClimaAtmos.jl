@@ -23,11 +23,11 @@ function rhs_base_model!(
     # operators
     # spectral horizontal operators
     hdiv = Operators.Divergence()
-    hwdiv = Operators.Divergence()
+    hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    hwgrad = Operators.Gradient()
+    hwgrad = Operators.WeakGradient()
     hcurl = Operators.Curl()
-    hwcurl = Operators.Curl()
+    hwcurl = Operators.WeakCurl()
 
     # vertical FD operators with BC's
     # interpolators
