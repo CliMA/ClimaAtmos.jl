@@ -30,6 +30,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 [compat]
 CLIMAParameters = "0.3, 0.4"
 ClimaCore = "0.6"
+ClimaCorePlots = "0.1"
 DiffEqBase = "6"
 DiffEqCallbacks = "2"
 Documenter = "0.27"
