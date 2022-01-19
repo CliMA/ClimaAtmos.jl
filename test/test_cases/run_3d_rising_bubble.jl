@@ -55,7 +55,12 @@ function run_3d_rising_bubble(
                 Simulation(model_pottemp, stepper, dt = dt, tspan = (0.0, 1.0))
             @test simulation isa Simulation
 
-            @unpack ρ, uh, w, ρθ = init_3d_rising_bubble(FT, params, :ρθ)
+            @unpack ρ, uh, w, ρθ = init_3d_rising_bubble(
+                FT,
+                params,
+                thermo_style = model_pottemp.thermodynamics,
+                moist_style = model_pottemp.moisture,
+            )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρθ = ρθ)
             u = simulation.integrator.u
@@ -84,8 +89,12 @@ function run_3d_rising_bubble(
         @testset begin
             "Regression: Total Energy Model"
             simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-            @unpack ρ, uh, w, ρe_tot =
-                init_3d_rising_bubble(FT, params, :ρe_tot)
+            @unpack ρ, uh, w, ρe_tot = init_3d_rising_bubble(
+                FT,
+                params,
+                thermo_style = model.thermodynamics,
+                moist_style = model.moisture,
+            )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
             u = simulation.integrator.u
@@ -121,7 +130,12 @@ function run_3d_rising_bubble(
         @testset "Validation: Potential Temperature Model" begin
             simulation =
                 Simulation(model_pottemp, stepper, dt = dt, tspan = (0.0, 1.0))
-            @unpack ρ, uh, w, ρθ = init_3d_rising_bubble(FT, params, :ρθ)
+            @unpack ρ, uh, w, ρθ = init_3d_rising_bubble(
+                FT,
+                params,
+                thermo_style = model_pottemp.thermodynamics,
+                moist_style = model_pottemp.moisture,
+            )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρθ = ρθ)
             # Initial values. Get domain integrated quantity
@@ -150,8 +164,12 @@ function run_3d_rising_bubble(
         # Total Energy Prognostic
         @testset "Validation: Total Energy Model" begin
             simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-            @unpack ρ, uh, w, ρe_tot =
-                init_3d_rising_bubble(FT, params, :ρe_tot)
+            @unpack ρ, uh, w, ρe_tot = init_3d_rising_bubble(
+                FT,
+                params,
+                thermo_style = model.thermodynamics,
+                moist_style = model.moisture,
+            )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
             # Initial values. Get domain integrated quantity
