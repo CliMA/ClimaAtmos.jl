@@ -29,14 +29,12 @@ If `Y_init` is not provided, the model's default initial conditions are used.
 function Simulation(
     model::AbstractModel,
     method;
-    Y_init = nothing,
     dt,
     tspan,
     callbacks = nothing,
     restart = NoRestart(),
 )
-    # inital state is either default or set externally 
-    Y = Y_init isa Nothing ? default_initial_conditions(model) : Y_init
+    Y = default_initial_conditions(model)
 
     # contains all information about the 
     # pde systems jacobians and right-hand sides
@@ -65,7 +63,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
         # let's make sure that the variable we are setting is actually in
         # the model's state vector to give a more informative error message
         if varname ∉
-           getproperty(state_variable_names(simulation.model), subcomponent)
+           getproperty(Models.variable_names(simulation.model), subcomponent)
             throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
         end
 
@@ -125,6 +123,27 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
     end
 
     nothing
+end
+
+"""
+    get_spaces(simulation::Simulation, subcomponent = :base; args...)
+
+Extract the function space for each field in `args` within model subcomponents `subcomponent`.
+"""
+function get_spaces(simulation::Simulation, subcomponent_name = :base, args...)
+    spaces = []
+    for varname in args
+        if varname ∉
+           getproperty(state_variable_names(simulation.model), subcomponent)
+            throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
+        end
+        subcomponent = getproperty(simulation.integrator.u, subcomponent_name)
+        target_field = getproperty(subcomponent, varname)
+        target_space = axes(target_field)
+        push!(spaces, target_space)
+    end
+
+    return NamedTuple{args}(spaces)
 end
 
 """

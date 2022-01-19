@@ -1,3 +1,5 @@
+float_types = (Float32, Float64)
+
 include("test_cases/run_1d_ekman_column.jl")
 include("test_cases/run_2d_rising_bubble.jl")
 include("test_cases/run_3d_rising_bubble.jl")
@@ -19,7 +21,7 @@ function test_cases(test_names, test_mode)
     # end
 
     # Box tests
-    if :test_2d_dry_rising_bubble ∈ test_names
+    if :test_2d_rising_bubble ∈ test_names
         @testset "2D dry rising bubble" begin
             for FT in float_types
                 run_2d_rising_bubble(FT, test_mode = test_mode)

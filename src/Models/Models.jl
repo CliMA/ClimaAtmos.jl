@@ -1,7 +1,17 @@
 module Models
 
+using ClimaCore: Geometry, Spaces
+
 export AbstractModel,
-    default_initial_conditions, make_ode_function, state_variable_names
+    AbstractSingleColumnModel,
+    AbstractNonhydrostatic2DModel,
+    AbstractNonhydrostatic3DModel,
+    components,
+    variable_names,
+    variable_types,
+    variable_spaces,
+    default_initial_conditions,
+    make_ode_function
 
 export AbstractModelStyle,
     AbstractBaseModelStyle,
@@ -15,15 +25,65 @@ export AbstractModelStyle,
     EquilibriumMoisture,
     NonEquilibriumMoisture
 
+export SingleColumnModel, Nonhydrostatic2DModel, Nonhydrostatic3DModel
+
 """
-Supertype for all models.
+Supertypes for all models.
 """
 abstract type AbstractModel end
+abstract type AbstractSingleColumnModel <: AbstractModel end
+abstract type AbstractNonhydrostatic2DModel <: AbstractModel end
+abstract type AbstractNonhydrostatic3DModel <: AbstractModel end
 
 """
 Supertype for all model styles.
 """
 abstract type AbstractModelStyle end
+
+"""
+    components(model::AbstractModel)
+
+Return the components of `model`, e.g. `base`, `thermodynamics`, `moisture`, etc.
+"""
+components(model::AbstractModel) =
+    error("components not implemented for given model type")
+
+"""
+    variables_names(styles::AbstractModelStyle)
+
+Return the state variable names for `style`.
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Models)
+julia> Models.variable_names(NonEquilibriumMoisture())
+(:ρq_tot, :ρq_liq, :ρq_ice)
+```
+"""
+variable_names(style::AbstractModelStyle) =
+    error("components not implemented for given model style $style")
+
+variable_names(model::AbstractModel) =
+    map(Models.variable_names, Models.components(model))
+
+"""
+    variables_types(style::AbstractModelStyle, model::AbstractModel, FT)
+
+Return the state variable types for `style` and `model` with float type `FT`.
+"""
+variable_types(style::AbstractModelStyle, model::AbstractModel) =
+    error("components not implemented for given model style $style & $model")
+
+"""
+    variables_spaces(style::AbstractModelStyle)
+
+Return the state variables for `style`.
+# Example
+```jldoctest; setup = :(using ClimaAtmos.Models)
+julia> Models.variable_spaces(TotalEnergy())
+(ρe_tot = ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace{ClimaCore.Spaces.CellCenter},)
+```
+"""
+variable_spaces(style::AbstractModelStyle) =
+    error("components not implemented for given model style $style")
 
 """
     default_initial_conditions(model)
@@ -32,35 +92,6 @@ Construct the initial conditions for `model`.
 """
 default_initial_conditions(model::AbstractModel) =
     error("default_initial_conditions not implemented for given model type")
-
-"""
-    subcomponents(model::AbstractModel)
-
-Return the subcomponents of `model`, e.g. `base`, `thermodynamics`, `moisture`, etc.
-"""
-subcomponents(model::AbstractModel) =
-    error("subcomponents not implemented for given model type")
-
-"""
-    state_variable_names(model::AbstractModel)
-
-Construct the state variable names for `model`.
-"""
-state_variable_names(model::AbstractModel) =
-    error("state_variable_names not implemented for given model type")
-
-"""
-    state_variable_names(style::AbstractModelStyle)
-
-Construct the state variable names for `style`.
-# Example
-```jldoctest; setup = :(using ClimaAtmos.Models)
-julia> Models.state_variable_names(EquilibriumMoisture())
-(:ρq_tot,)
-```
-"""
-state_variable_names(style::AbstractModelStyle) =
-    error("state_variable_names not implemented for given model style")
 
 """
     make_ode_function(model)

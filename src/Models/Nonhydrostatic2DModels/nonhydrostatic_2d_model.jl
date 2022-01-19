@@ -5,98 +5,57 @@ A two-dimensional non-hydrostatic model, which is typically used for simulating
 the Euler equations. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct Nonhydrostatic2DModel{D <: AbstractHybridDomain, BC, P} <:
-                   AbstractModel
+Base.@kwdef struct Nonhydrostatic2DModel{D, B, T, M, BC, P} <:
+                   AbstractNonhydrostatic2DModel
     domain::D
-    base::AbstractBaseModelStyle = ConservativeForm()
-    thermodynamics::AbstractThermodynamicsStyle = PotentialTemperature()
-    moisture::AbstractMoistureStyle = Dry()
+    base::B = ConservativeForm()
+    thermodynamics::T = PotentialTemperature()
+    moisture::M = Dry()
     boundary_conditions::BC
     parameters::P
 end
 
-function Models.subcomponents(model::Nonhydrostatic2DModel)
-    # we need a helper function here to extract the possible subcomponents
-    # of a model. This can be used to generically work with models later.
-    (
-        base = model.base,
-        thermodynamics = model.thermodynamics,
-        moisture = model.moisture,
-    )
-end
-
-function Models.state_variable_names(model::Nonhydrostatic2DModel)
-    # we need to extract the active only subcomponents of the model because
-    # later we don't want to carry around empty vectors of moisture in a dry model
-    # so we need to extract information as to what variables are active.
-    subcomponents = keys(Models.subcomponents(model))
-    subcomponent_vars = (
-        Models.state_variable_names(sc) for
-        sc in values(Models.subcomponents(model))
-    )
-
-    # we need to collect the the non-nothing subcomponents, e.g., in case if Dry() moisture
-    # we don't have any variables for moisture.
-    active_subcomponents = (
-        s for
-        (s, vars) in zip(subcomponents, subcomponent_vars) if vars ≢ nothing
-    )
-    active_vars = (
-        vars for
-        (s, vars) in zip(subcomponents, subcomponent_vars) if vars ≢ nothing
-    )
-
-    return (; zip(active_subcomponents, active_vars)...)
-end
+Models.components(model::Nonhydrostatic2DModel) = (
+    base = model.base,
+    thermodynamics = model.thermodynamics,
+    moisture = model.moisture,
+)
 
 function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
     # we need to provide default initial conditions for the model, because the ode solver
     # requires inital conditions when getting instantiated, but we also want to support the `set!` function
     # interface for initialization and re-initialization.
-    space_c, space_f = make_function_space(model.domain)
-    local_geometry_c = Fields.local_geometry_field(space_c)
-    local_geometry_f = Fields.local_geometry_field(space_f)
+    space_center, space_face = Domains.make_function_space(model.domain)
+    local_geometry_center = Fields.local_geometry_field(space_center)
+    local_geometry_face = Fields.local_geometry_field(space_face)
 
-    # functions that make zeros for this model. These will be broadcasted
-    # across the entire domain.
-    zero_val = zero(Spaces.undertype(space_c))
-    zero_scalar(lg) = zero_val
-    zero_12vector(lg) = Geometry.UVector(zero_val)
-    zero_3vector(lg) = Geometry.WVector(zero_val)
-
-    # this sets up the default zero initial condition for the different model
-    # components (e.g., base model component, thermodynamics component, etc.)
-    varnames = state_variable_names(model)
-
-    # base model components
-    ρ = zero_scalar.(local_geometry_c)
-    ρuh = zero_12vector.(local_geometry_c)
-    ρw = zero_3vector.(local_geometry_f) # on faces
-    base = (ρ = ρ, ρuh = ρuh, ρw = ρw)
-
-    # all other components are assumed to be scalars
-    # thermodynamics components
-    thermodynamics_values =
-        (zero_scalar.(local_geometry_c) for name in varnames.thermodynamics)
-    thermodynamics = NamedTuple{varnames.thermodynamics}(thermodynamics_values)
-
-    # moisture components
-    if :moisture ∈ varnames
-        moisture_values =
-            (zero_scalar.(local_geometry_c) for name in varnames.moisture)
-        moisture = NamedTuple{varnames.moisture}(moisture_values)
+    # initialize everything to zeros of the correct types on the correct spaces
+    FT = Spaces.undertype(space_center)
+    zero_inits = map(Models.components(model)) do component
+        variable_names = Models.variable_names(component)
+        if !isnothing(variable_names) # e.g., a Dry() doesn't have moisture variable names
+            variable_types = Models.variable_types(component, model, FT) # variable types are differnent from model to model
+            variable_space_types = Models.variable_spaces(component)
+            zero_inits =
+                map(zip(variable_types, variable_space_types)) do (T, ST)
+                    zero_instance = zero(T) # somehow need this, otherwise eltype inference error
+                    if space_center isa ST
+                        map(_ -> zero_instance, local_geometry_center)
+                    elseif space_face isa ST
+                        map(_ -> zero_instance, local_geometry_face)
+                    end
+                end
+            Fields.FieldVector(; NamedTuple{variable_names}(zero_inits)...)
+        end
     end
 
-    # construct fieldvector to return
-    if :moisture ∈ varnames
-        return Fields.FieldVector(
-            base = base,
-            thermodynamics = thermodynamics,
-            moisture = moisture,
-        )
-    else
-        return Fields.FieldVector(base = base, thermodynamics = thermodynamics)
-    end
+    # filter out the nothing subcomponents (e.g., a Dry() doesn't have moisture variables)
+    zero_inits = NamedTuple(
+        c => zero_inits[c]
+        for c in keys(zero_inits) if !isnothing(zero_inits[c])
+    )
+
+    return Fields.FieldVector(; zero_inits...)
 end
 
 function Models.make_ode_function(model::Nonhydrostatic2DModel)

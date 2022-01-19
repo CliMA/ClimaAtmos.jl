@@ -1,3 +1,9 @@
+using Test
+
+using OrdinaryDiffEq: SSPRK33
+using Plots
+using UnPack
+
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_rising_bubble
 using ClimaAtmos.Domains
@@ -49,8 +55,7 @@ function run_3d_rising_bubble(
         # Compares variables against current reference results. 
         # Compares conservation properties of prognostic variables. 
         # TODO: Upon reasonable time-to-solution increase test time to 700s.
-        @testset begin
-            "Regression: Potential Temperature Model"
+        @testset "Regression: Potential Temperature Model" begin
             simulation =
                 Simulation(model_pottemp, stepper, dt = dt, tspan = (0.0, 1.0))
             @test simulation isa Simulation
@@ -86,8 +91,7 @@ function run_3d_rising_bubble(
             @test abs(Δρ) < 1e-12
             @test abs(Δρθ) < 1e-5
         end
-        @testset begin
-            "Regression: Total Energy Model"
+        @testset "Regression: Total Energy Model" begin
             simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
             @unpack ρ, uh, w, ρe_tot = init_3d_rising_bubble(
                 FT,

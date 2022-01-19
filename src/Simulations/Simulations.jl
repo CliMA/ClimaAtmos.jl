@@ -8,7 +8,8 @@ using UnPack
 using ClimaCore: Fields
 using ..Models, ..Callbacks
 
-export step!, run!, set!, Simulation, AbstractRestart, NoRestart, Restart
+export step!,
+    run!, set!, get_spaces, Simulation, AbstractRestart, NoRestart, Restart
 
 """
 Supertype for all restart modes.

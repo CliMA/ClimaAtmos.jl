@@ -1,3 +1,9 @@
+using Test
+
+using OrdinaryDiffEq: SSPRK33
+using Plots
+using UnPack
+
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_2d_rising_bubble
 using ClimaAtmos.Domains
@@ -42,7 +48,7 @@ function run_2d_rising_bubble(
         @test simulation isa Simulation
 
         # test error handling
-        @test_throws ArgumentError set!(simulation, quack = ρ)
+        @test_throws ArgumentError set!(simulation, quack = 0.0)
         @test_throws ArgumentError set!(simulation, ρ = "quack")
 
         # test sim
