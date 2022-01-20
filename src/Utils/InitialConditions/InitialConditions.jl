@@ -4,6 +4,7 @@ using UnPack
 
 using CLIMAParameters
 using ClimaCore: Geometry, Spaces, Fields
+using ClimaAtmos: Models
 
 include("init_1d_ekman_column.jl")
 include("init_2d_density_current.jl")

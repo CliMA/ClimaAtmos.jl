@@ -15,10 +15,17 @@
         - cv_d = 717.5 J kg⁻¹ K⁻¹
         - R_d = 287.0 J kg⁻¹ K⁻¹
         - g = 9.80616 m s⁻²
+        - q_0 = 1e-3 kg kg⁻¹ 
 
     # TODO!: Replace expression with Thermodynamics.jl expressions.
 """
-function init_3d_rising_bubble(::Type{FT}, params, thermovar = :ρθ) where {FT}
+
+function init_3d_rising_bubble(
+    ::Type{FT},
+    params;
+    thermo_style,
+    moist_style,
+) where {FT}
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
     cp_d::FT = CLIMAParameters.Planet.cp_d(params)
@@ -33,6 +40,7 @@ function init_3d_rising_bubble(::Type{FT}, params, thermovar = :ρθ) where {FT}
     r_c::FT = 250
     θ_b::FT = 300
     θ_c::FT = 0.5
+    q_0::FT = 1e-3
 
     # auxiliary quantities
     # potential temperature perturbation
@@ -73,6 +81,13 @@ function init_3d_rising_bubble(::Type{FT}, params, thermovar = :ρθ) where {FT}
     e_tot(local_geometry) =
         e_int(local_geometry) + e_kin(local_geometry) + e_pot(local_geometry)
 
+    # moisture
+    q_tot(local_geometry) = begin
+        @unpack x, y, z = local_geometry.coordinates
+        r = sqrt((x - x_c)^2 + (y - y_c)^2 + (z - z_c)^2)
+        return r < r_c ? q_0 * (1 - r / rc) : FT(0)
+    end
+
     # prognostic quantities
     # density
     ρ(local_geometry) = p(local_geometry) / R_d / T(local_geometry)
@@ -83,17 +98,30 @@ function init_3d_rising_bubble(::Type{FT}, params, thermovar = :ρθ) where {FT}
     # total energy density
     ρe_tot(local_geometry) = ρ(local_geometry) * e_tot(local_geometry)
 
+    # moisture
+    ρq_tot(local_geometry) = ρ(local_geometry) * q_tot(local_geometry)
+
     # horizontal momentum vector
     uh(local_geometry) = Geometry.Covariant12Vector(0.0, 0.0)
 
     # vertical momentum vector
     w(local_geometry) = Geometry.Covariant3Vector(0.0)
 
-    if thermovar == :ρθ
-        return (ρ = ρ, ρθ = ρθ, uh = uh, w = w)
-    elseif thermovar == :ρe_tot
-        return (ρ = ρ, ρe_tot = ρe_tot, uh = uh, w = w)
+    if thermo_style isa Models.PotentialTemperature
+        ic = (ρ = ρ, ρθ = ρθ, uh = uh, w = w)
+    elseif thermo_style isa Models.TotalEnergy
+        ic = (ρ = ρ, ρe_tot = ρe_tot, uh = uh, w = w)
     else
-        throw(ArgumentError("thermovar $thermovar unknown."))
+        throw(ArgumentError("thermovar $thermodynamics unknown."))
     end
+
+    if moist_style isa Models.Dry
+        return ic
+    elseif moist_style isa Models.EquilibriumMoisture
+        merge(ic, (ρq_tot = ρq_tot,))
+        return ic
+    else
+        throw(ArgumentError("moistmodel $moist unknown."))
+    end
+
 end
