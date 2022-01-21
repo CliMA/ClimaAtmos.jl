@@ -1,3 +1,9 @@
+using Test
+
+using OrdinaryDiffEq: SSPRK33
+using Plots
+using UnPack
+
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_solid_body_rotation
 using ClimaAtmos.Domains
@@ -47,7 +53,11 @@ function run_3d_solid_body_rotation(
         w_phy = Geometry.transform.(Ref(Geometry.WAxis()), u.w)
 
         # perform regression check
-        current_uh_max = 3.834751379171411e-15
+        if FT == Float64
+            current_uh_max = 3.834751379171411e-15
+        elseif FT == Float32
+            current_uh_max = 1.6886055f-6
+        end
         current_w_max = 0.21114581947634953
 
         @test (abs.(uh_phy |> parent) |> maximum) ≈ current_uh_max rtol = 1e-3

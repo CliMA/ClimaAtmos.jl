@@ -2,15 +2,7 @@ using Test
 
 using Base.CoreLogging
 using Documenter: doctest
-using JLD2
-using OrdinaryDiffEq: SSPRK33, CallbackSet, DiscreteCallback
-using Plots
-using UnPack
-
 using ClimaAtmos
-
-#float_types = (Float32, Float64)
-float_types = (Float64,)
 
 #####
 ##### Run tests!
@@ -18,11 +10,9 @@ float_types = (Float64,)
 
 group = get(ENV, "TEST_GROUP", :all) |> Symbol
 
-include("test_cases.jl")
-
 @testset "ClimaAtmos" begin
-    if group == :integration || group == :all
-        @testset "Integration tests" begin
+    if group == :unit || group == :all
+        @testset "Unit tests" begin
             include("test_domains.jl")
             include("test_models.jl")
         end
@@ -34,6 +24,7 @@ include("test_cases.jl")
 
     if group == :regression || group == :all
         @testset "Regression Tests" begin
+            include("test_cases.jl")
             test_names = (
                 :test_1d_ekman_column,
                 :test_2d_rising_bubble,
@@ -48,6 +39,7 @@ include("test_cases.jl")
 
     if group == :validation
         @testset "Validation Tests" begin
+            include("test_cases.jl")
             test_names = (
                 :test_1d_ekman_column,
                 :test_2d_rising_bubble,
@@ -56,7 +48,7 @@ include("test_cases.jl")
                 :test_3d_balanced_flow,
                 :test_3d_baroclinic_wave,
             )
-            test_cases(:validation, :validation)
+            test_cases(test_names, :validation)
         end
     end
 end

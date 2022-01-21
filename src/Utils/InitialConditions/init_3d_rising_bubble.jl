@@ -102,10 +102,10 @@ function init_3d_rising_bubble(
     ρq_tot(local_geometry) = ρ(local_geometry) * q_tot(local_geometry)
 
     # horizontal momentum vector
-    uh(local_geometry) = Geometry.Covariant12Vector(0.0, 0.0)
+    uh(local_geometry) = Geometry.Covariant12Vector(FT(0), FT(0))
 
     # vertical momentum vector
-    w(local_geometry) = Geometry.Covariant3Vector(0.0)
+    w(local_geometry) = Geometry.Covariant3Vector(FT(0))
 
     if thermo_style isa Models.PotentialTemperature
         ic = (ρ = ρ, ρθ = ρθ, uh = uh, w = w)

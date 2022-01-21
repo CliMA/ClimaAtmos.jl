@@ -47,3 +47,41 @@ end
 
     return p
 end
+
+@inline function calculate_pressure(
+    Y,
+    Ya,
+    ::AdvectiveForm,
+    ::TotalEnergy,
+    ::EquilibriumMoisture,
+    params,
+    FT,
+)
+    ρ = Y.base.ρ
+    uh = Y.base.uh
+    w = Y.base.w
+    ρe_tot = Y.thermodynamics.ρe_tot
+    ρq_tot = Y.moisture.ρq_tot
+
+    interp_f2c = Operators.InterpolateF2C()
+
+    z = Fields.coordinate_field(axes(ρ)).z
+    uvw = @. Geometry.Covariant123Vector(uh) +
+       Geometry.Covariant123Vector(interp_f2c(w))
+    Φ = calculate_gravitational_potential(Y, Ya, params, FT)
+
+    e_int = @. ρe_tot / ρ - Φ - norm(uvw)^2 / 2
+    q_tot = @. ρq_tot / ρ
+    thermo_state =
+        Thermodynamics.PhaseEquil_ρeq.(
+            params,
+            ρ,
+            e_int,
+            q_tot,
+            maxiter = 1,
+            temperature_tol = FT(0.1),
+        )
+    p = Thermodynamics.air_pressure.(thermo_state)
+
+    return p
+end

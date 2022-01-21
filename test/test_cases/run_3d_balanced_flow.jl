@@ -1,3 +1,9 @@
+using Test
+
+using OrdinaryDiffEq: SSPRK33
+using Plots
+using UnPack
+
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
 using ClimaAtmos.Domains

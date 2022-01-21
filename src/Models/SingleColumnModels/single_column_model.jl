@@ -4,13 +4,13 @@
 A single column model. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct SingleColumnModel{D, BC, P} <: AbstractModel
+Base.@kwdef struct SingleColumnModel{D, BC, P} <: AbstractSingleColumnModel
     domain::D
     boundary_conditions::BC
     parameters::P
 end
 
-function Models.state_variable_names(::SingleColumnModel)
+function Models.variable_names(::SingleColumnModel)
     base_vars = (:ρ, :uv, :w, :ρθ)
     thermo_vars = (:ρθ,)
     return (base = base_vars, thermodynamics = thermo_vars)

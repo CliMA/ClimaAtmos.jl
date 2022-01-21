@@ -1,17 +1,21 @@
-using ClimaAtmos.Domains
-using ClimaCore.Spaces
+using Test
+
+using ClimaAtmos: Domains
+using ClimaCore: Spaces
+
+float_types = (Float32, Float64)
 
 @testset "Domains" begin
     for FT in float_types
-        domain = Column(FT, zlim = (-1, π), nelements = 2)
+        domain = Domains.Column(FT, zlim = (-1, π), nelements = 2)
         @test domain.zlim == FT.((-1, π))
         @test domain.nelements == 2
-        @test make_function_space(domain) isa Tuple{
+        @test Domains.make_function_space(domain) isa Tuple{
             Spaces.CenterFiniteDifferenceSpace,
             Spaces.FaceFiniteDifferenceSpace,
         }
 
-        domain = HybridPlane(
+        domain = Domains.HybridPlane(
             FT,
             xlim = (-1, π),
             zlim = (-2, 2π),
@@ -24,12 +28,12 @@ using ClimaCore.Spaces
         @test domain.nelements == (2, 3)
         @test domain.npolynomial == 4
         @test domain.xperiodic == false
-        @test make_function_space(domain) isa Tuple{
+        @test Domains.make_function_space(domain) isa Tuple{
             Spaces.CenterExtrudedFiniteDifferenceSpace,
             Spaces.FaceExtrudedFiniteDifferenceSpace,
         }
 
-        domain = HybridBox(
+        domain = Domains.HybridBox(
             FT,
             xlim = (-1, π),
             ylim = (-1, π),
@@ -46,12 +50,12 @@ using ClimaCore.Spaces
         @test domain.npolynomial == 4
         @test domain.xperiodic == false
         @test domain.yperiodic == true
-        @test make_function_space(domain) isa Tuple{
+        @test Domains.make_function_space(domain) isa Tuple{
             Spaces.CenterExtrudedFiniteDifferenceSpace,
             Spaces.FaceExtrudedFiniteDifferenceSpace,
         }
 
-        domain = SphericalShell(
+        domain = Domains.SphericalShell(
             FT,
             radius = 100.0,
             height = 30.0,
@@ -62,7 +66,7 @@ using ClimaCore.Spaces
         @test domain.height == FT.(30)
         @test domain.nelements == (6, 10)
         @test domain.npolynomial == 3
-        @test make_function_space(domain) isa Tuple{
+        @test Domains.make_function_space(domain) isa Tuple{
             Spaces.CenterExtrudedFiniteDifferenceSpace,
             Spaces.FaceExtrudedFiniteDifferenceSpace,
         }
