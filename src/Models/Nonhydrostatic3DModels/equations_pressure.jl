@@ -69,18 +69,11 @@ end
     uvw = @. Geometry.Covariant123Vector(uh) +
        Geometry.Covariant123Vector(interp_f2c(w))
     Φ = calculate_gravitational_potential(Y, Ya, params, FT)
-
     e_int = @. ρe_tot / ρ - Φ - norm(uvw)^2 / 2
     q_tot = @. ρq_tot / ρ
-    thermo_state =
-        Thermodynamics.PhaseEquil_ρeq.(
-            params,
-            ρ,
-            e_int,
-            q_tot,
-            maxiter = 1,
-            temperature_tol = FT(0.1),
-        )
+
+    # saturation adjustment
+    thermo_state = Thermodynamics.PhaseEquil_ρeq.(Ref(params), ρ, e_int, q_tot)
     p = Thermodynamics.air_pressure.(thermo_state)
 
     return p

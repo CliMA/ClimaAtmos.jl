@@ -85,7 +85,7 @@ function init_3d_rising_bubble(
     q_tot(local_geometry) = begin
         @unpack x, y, z = local_geometry.coordinates
         r = sqrt((x - x_c)^2 + (y - y_c)^2 + (z - z_c)^2)
-        return r < r_c ? q_0 * (1 - r / rc) : FT(0)
+        return r < r_c ? q_0 * (1 - r / r_c) : FT(0)
     end
 
     # prognostic quantities
@@ -118,10 +118,10 @@ function init_3d_rising_bubble(
     if moist_style isa Models.Dry
         return ic
     elseif moist_style isa Models.EquilibriumMoisture
-        merge(ic, (ρq_tot = ρq_tot,))
+        ic = merge(ic, (ρq_tot = ρq_tot,))
         return ic
     else
-        throw(ArgumentError("moistmodel $moist unknown."))
+        throw(ArgumentError("moistmodel $moist_style unknown."))
     end
 
 end
