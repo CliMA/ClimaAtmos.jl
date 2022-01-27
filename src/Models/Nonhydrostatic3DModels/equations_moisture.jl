@@ -7,6 +7,7 @@
     ::AbstractBaseModelStyle,
     ::Dry,
     params,
+    hyperdiffusivity,
     FT,
 ) = nothing
 
@@ -55,12 +56,11 @@
        Geometry.Covariant123Vector(interp_f2c(w))
 
     # hyperdiffusion
-    dρq_tot = 0.0 .* dρq_tot
     χq = @. hwdiv(hgrad(ρq_tot / ρ))
     Spaces.weighted_dss!(dρq_tot)
     @. dρq_tot = -κ₄ * hwdiv(ρ * hgrad(χq))
 
-    # advection 
+    # advection
     @. dρq_tot -= hdiv(uvw * (ρq_tot))
     @. dρq_tot -= vector_vdiv_f2c(w * interp_c2f(ρq_tot))
     @. dρq_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρq_tot)))

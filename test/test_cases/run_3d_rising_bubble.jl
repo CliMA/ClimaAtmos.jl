@@ -4,6 +4,7 @@ using OrdinaryDiffEq: SSPRK33
 using Plots
 using UnPack
 
+using ClimaCoreVTK
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_rising_bubble
 using ClimaAtmos.Domains
@@ -40,6 +41,7 @@ function run_3d_rising_bubble(
         domain = domain,
         boundary_conditions = nothing,
         parameters = params,
+        moisture = EquilibriumMoisture(),
         hyperdiffusivity = FT(100),
     )
     model_pottemp = Nonhydrostatic3DModel(
@@ -93,7 +95,7 @@ function run_3d_rising_bubble(
         end
         @testset "Regression: Total Energy Model" begin
             simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-            @unpack ρ, uh, w, ρe_tot = init_3d_rising_bubble(
+            @unpack ρ, uh, w, ρe_tot, ρq_tot = init_3d_rising_bubble(
                 FT,
                 params,
                 thermo_style = model.thermodynamics,
@@ -101,9 +103,11 @@ function run_3d_rising_bubble(
             )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+            set!(simulation, :moisture, ρq_tot = ρq_tot)
             u = simulation.integrator.u
             ∫ρ_0 = sum(u.base.ρ)
             ∫ρe_tot_0 = sum(u.thermodynamics.ρe_tot)
+            ∫ρq_tot_0 = sum(u.moisture.ρq_tot)
 
             step!(simulation)
 
@@ -121,10 +125,19 @@ function run_3d_rising_bubble(
             u = simulation.integrator.u
             ∫ρ_e = sum(u.base.ρ)
             ∫ρe_tot_e = sum(u.thermodynamics.ρe_tot)
+            ∫ρq_tot_e = sum(u.moisture.ρq_tot)
             Δρ = (∫ρ_e - ∫ρ_0) ./ ∫ρ_0 * 100
             Δρe_tot = (∫ρe_tot_e - ∫ρe_tot_0) ./ ∫ρe_tot_0 * 100
-            @test abs(Δρ) < 1e-12
-            @test abs(Δρe_tot) < 1e-5
+            Δρq_tot = (∫ρq_tot_e - ∫ρq_tot_0) ./ ∫ρq_tot_0 * 100
+            if FT == Float32
+                @test abs(Δρ) < 3e-5
+                @test abs(Δρe_tot) < 1e-5
+                @test abs(Δρq_tot) < 1e-3
+            else
+                @test abs(Δρ) < 1e-12
+                @test abs(Δρe_tot) < 1e-5
+                @test abs(Δρq_tot) < 1e-3
+            end
         end
     elseif test_mode == :validation
         # Produces VTK output plots for visual inspection of results
@@ -142,6 +155,7 @@ function run_3d_rising_bubble(
             )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρθ = ρθ)
+
             # Initial values. Get domain integrated quantity
             u_start = simulation.integrator.u
             ∫ρ_0 = sum(u_start.base.ρ)
@@ -154,21 +168,22 @@ function run_3d_rising_bubble(
             ∫ρθ_e = sum(u_end.thermodynamics.ρθ)
             Δρ = (∫ρ_e - ∫ρ_0) ./ ∫ρ_0 * 100
             Δρθ = (∫ρθ_e - ∫ρθ_0) ./ ∫ρθ_0 * 100
+
             θ = u_end.thermodynamics.ρθ ./ u_end.base.ρ
 
             # post-processing
-            ENV["GKSwstype"] = "nul"
-            Plots.GRBackend()
-            # make output directory
-            path = joinpath(@__DIR__, "output_validation")
-            mkpath(path)
-            ClimaCoreVTK.writevtk(joinpath(path, "test"), θ)
+            # ENV["GKSwstype"] = "nul"
+            # Plots.GRBackend()
+            # # make output directory
+            # path = joinpath(@__DIR__, "output_validation")
+            # mkpath(path)
+            # ClimaCoreVTK.writevtk(joinpath(path, "test"), θ)
             @test true # check is visual
         end
         # Total Energy Prognostic
         @testset "Validation: Total Energy Model" begin
             simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-            @unpack ρ, uh, w, ρe_tot = init_3d_rising_bubble(
+            @unpack ρ, uh, w, ρe_tot, ρq_tot = init_3d_rising_bubble(
                 FT,
                 params,
                 thermo_style = model.thermodynamics,
@@ -176,29 +191,37 @@ function run_3d_rising_bubble(
             )
             set!(simulation, :base, ρ = ρ, uh = uh, w = w)
             set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+            set!(simulation, :moisture, ρq_tot = ρq_tot)
+
             # Initial values. Get domain integrated quantity
             u_start = simulation.integrator.u
             ∫ρ_0 = sum(u_start.base.ρ)
             ∫ρetot_0 = sum(u_start.thermodynamics.ρe_tot)
+            ∫ρqtot_0 = sum(u_start.moisture.ρq_tot)
             run!(simulation)
 
             u_end = simulation.integrator.u
             ∫ρ_e = sum(u_end.base.ρ)
             ∫ρetot_e = sum(u_end.thermodynamics.ρe_tot)
-
+            ∫ρqtot_e = sum(u_end.moisture.ρq_tot)
             Δρ = (∫ρ_e - ∫ρ_0) ./ ∫ρ_0 * 100
             Δρetot = (∫ρetot_e - ∫ρetot_0) ./ ∫ρetot_0 * 100
+            Δρqtot = (∫ρqtot_e - ∫ρqtot_0) ./ ∫ρqtot_0 * 100
+            println("Relative error at end of simulation:")
+            println("Δρ = $Δρ %")
+            println("Δρe_tot = $Δρetot %")
+            println("Δρq_tot = $Δρqtot %")
 
             e_tot = u_end.thermodynamics.ρe_tot ./ u_end.base.ρ
 
             # post-processing
-            ENV["GKSwstype"] = "nul"
-            Plots.GRBackend()
-            # make output directory
-            path = joinpath(@__DIR__, "output_validation")
-            mkpath(path)
-            ClimaCoreVTK.writevtk(joinpath(path, "test"), e_tot)
-            #TODO: Additional thermodynamics diagnostic vars
+            # ENV["GKSwstype"] = "nul"
+            # Plots.GRBackend()
+            # # make output directory
+            # path = joinpath(@__DIR__, "output_validation")
+            # mkpath(path)
+            # ClimaCoreVTK.writevtk(joinpath(path, "test"), e_tot)
+            # #TODO: Additional thermodynamics diagnostic vars
             @test true # check is visual
         end
     else

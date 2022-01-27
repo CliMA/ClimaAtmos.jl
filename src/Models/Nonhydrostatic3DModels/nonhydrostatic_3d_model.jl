@@ -120,7 +120,18 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
             FT,
         )
         # Ex.: ∂ₜρq_tot = ...
-        rhs_moisture!(dY, Y, Ya, t, p, base_style, moisture_style, params, FT)
+        rhs_moisture!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            moisture_style,
+            params,
+            hyperdiffusivity,
+            FT,
+        )
         # rhs_tracer!
         # rhs_edmf!
     end
