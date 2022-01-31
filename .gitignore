@@ -36,6 +36,11 @@ Manifest.toml
 *.nc
 *.mp4
 *.png
+!docs/src/assets/*.png
+*.json
+*.in
+*.gz
+
 
 # misc
 .DS_Store
