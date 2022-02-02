@@ -6,7 +6,7 @@ using CLIMAParameters
 using ClimaCore: Geometry, Spaces, Fields
 using ClimaAtmos: Models
 
-include("init_1d_rico.jl")
+include("init_1d_rico_column.jl")
 include("init_1d_ekman_column.jl")
 include("init_2d_rising_bubble.jl")
 include("init_3d_rising_bubble.jl")
