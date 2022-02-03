@@ -24,7 +24,7 @@ steps:
   - label: ":computer: unit tests"
     key: "cpu_unittests"
     command:
-      - "julia --color=yes -e 'using Pkg; Pkg.test()'"
+      - "julia --color=yes --project -e 'using Pkg; Pkg.test()'"
     agents:
       config: cpu
       queue: central
