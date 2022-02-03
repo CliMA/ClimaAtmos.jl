@@ -1,0 +1,31 @@
+env:
+  JULIA_VERSION: "1.7.1"
+  OPENMPI_VERSION: "4.1.1"
+  CUDA_VERSION: "11.2"
+  OPENBLAS_NUM_THREADS: 1
+
+steps:
+  - label: "init :computer:"
+    key: "init_cpu_env"
+    command:
+      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project -e 'using Pkg; Pkg.precompile(;strict=true)'"
+      - "julia --project -e 'using Pkg; Pkg.status()'"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+      slurm_cpus_per_task: 8
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - wait
+
+  - label: ":computer: unit tests"
+    key: "cpu_unittests"
+    command:
+      - "julia --color=yes --project -e 'using Pkg; Pkg.test()'"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
