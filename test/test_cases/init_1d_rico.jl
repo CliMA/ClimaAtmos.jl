@@ -3,7 +3,7 @@ const TC = TurbulenceConvection
 import Thermodynamics
 const TD = Thermodynamics
 
-function initialize_rico(sim::Simulation1d)
+function initialize_rico1(sim)
     TC = TurbulenceConvection
     state = sim.state
     grid = sim.grid
@@ -31,11 +31,12 @@ function initialize_rico(sim::Simulation1d)
     prog_up_f = TC.face_prog_updrafts(state)
 
     @unpack u, v, ρθ, ρq_tot = init_1d_rico_column(FT, grid, state)
-
-    @. prog_gm.θ_liq_ice = ρθ./ρ0_c
-    @. prog_gm.q_tot = ρq_tot./ρ0_c
-    @. prog_gm.u = u
-    @. prog_gm.v = v
+    
+    @. prog_gm.θ_liq_ice .= ρθ
+    @. prog_gm.q_tot .= ρq_tot
+    @. prog_gm.u .= u
+    @. prog_gm.v .= v
+    #=
     # aux init
     @inbounds for k in TC.real_center_indices(grid)
         z = grid.zc[k]
@@ -43,7 +44,7 @@ function initialize_rico(sim::Simulation1d)
         aux_tc.θ_virt[k] = TD.virtual_pottemp(ts)
     end
     zi = 0.6 * TC.get_inversion(grid, state, param_set, 0.2)
-
+    
     @inbounds for k in TC.real_center_indices(grid)
         z = grid.zc[k]
         aux_gm.tke[k] = if z <= zi
@@ -156,6 +157,6 @@ function initialize_rico(sim::Simulation1d)
     # TODO: deprecate
     io(surf, sim.case.surf_params, sim.grid, state, sim.Stats, t)
     close_files(sim.Stats)
-
+    =#
     return
 end

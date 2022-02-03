@@ -1060,7 +1060,6 @@ function Simulation1d(namelist)
     adapt_dt = namelist["time_stepping"]["adapt_dt"]
     cfl_limit = namelist["time_stepping"]["cfl_limit"]
     dt_min = namelist["time_stepping"]["dt_min"]
-
     grid = TC.Grid(FT(namelist["grid"]["dz"]), namelist["grid"]["nz"])
     Stats = skip_io ? nothing : NetCDFIO_Stats(namelist, grid)
     ref_params = reference_params(grid, param_set, namelist)
@@ -1080,6 +1079,7 @@ function Simulation1d(namelist)
     cent_prog_fields() = TC.FieldFromNamedTuple(cspace, cent_prognostic_vars(FT, N_up))
     face_prog_fields() = TC.FieldFromNamedTuple(fspace, face_prognostic_vars(FT, N_up))
     aux_cent_fields = TC.FieldFromNamedTuple(cspace, cent_aux_vars(FT, N_up))
+
     aux_face_fields = TC.FieldFromNamedTuple(fspace, face_aux_vars(FT, N_up))
     diagnostic_cent_fields = TC.FieldFromNamedTuple(cspace, TC.cent_diagnostic_vars_edmf(FT, N_up))
     diagnostic_face_fields = TC.FieldFromNamedTuple(fspace, TC.face_diagnostic_vars_edmf(FT, N_up))
@@ -1234,7 +1234,32 @@ end
 
 function main(namelist)
     sim = Simulation1d(namelist)
-    initialize_rico(sim)
+    surf = get_surface(sim.case.surf_params, sim.grid, sim.state, sim.gm, sim.TS.t, sim.param_set)
+    init_1d_rico_column(sim, surf)
+    FT = eltype(sim.grid)
+    t = FT(0)
+    sim.skip_io && return nothing
+    initialize_io(sim.io_nt.ref_state, sim.Stats)
+    io(sim.io_nt.ref_state, sim.Stats, sim.state) # since the reference prog is static
+
+    initialize_io(sim.io_nt.aux, sim.Stats)
+    initialize_io(sim.io_nt.diagnostics, sim.Stats)
+
+    # TODO: deprecate
+    initialize_io(sim.gm, sim.Stats)
+    initialize_io(sim.edmf, sim.Stats)
+
+    open_files(sim.Stats)
+    write_simulation_time(sim.Stats, t)
+
+    io(sim.io_nt.aux, sim.Stats, sim.state)
+    io(sim.io_nt.diagnostics, sim.Stats, sim.diagnostics)
+
+    # TODO: deprecate
+    io(surf, sim.case.surf_params, sim.grid, sim.state, sim.Stats, t)
+    close_files(sim.Stats)
+
+
     @timev begin
         open_files(sim.Stats)
 
@@ -1426,8 +1451,9 @@ case_name = "Rico"
 println("Running $case_name...")
 namelist = rico_namelist()
 namelist["meta"]["uuid"] = "01"
-ds_tc_filename, return_code = main(namelist)
-
+#ds_tc_filename, return_code = main(namelist)
+main(namelist)
+#=
 include(joinpath(tc_dir, "post_processing", "compute_mse.jl"))
 computed_mse = compute_mse_wrapper(
     case_name,
@@ -1451,3 +1477,4 @@ end
     include(joinpath(tc_dir, "post_processing", "post_run_tests.jl"))
     nothing
 end
+=#
