@@ -44,7 +44,15 @@ function run_2d_rising_bubble(
     # execute differently depending on testing mode
     if test_mode == :regression
         # TODO!: run with input callbacks = ...
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        cb_cfl = CFLAdaptive(model, 0.01, 1.0, false)
+        cb = CallbackSet(generate_callback(cb_cfl))
+        simulation = Simulation(
+            model,
+            stepper,
+            dt = dt,
+            tspan = (0.0, 1.0),
+            callbacks = cb,
+        )
         @test simulation isa Simulation
 
         # test error handling

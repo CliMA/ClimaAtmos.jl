@@ -3,9 +3,10 @@ module Callbacks
 using DiffEqCallbacks
 using JLD2
 using UnPack
+using ClimaCore: ClimaCore, Fields, Spaces
 using ..Models
 
-export generate_callback, AbstractCallback, JLD2Output
+export generate_callback, AbstractCallback, JLD2Output, CFLAdaptive
 
 """
     generate_callback(callback; kwargs...)

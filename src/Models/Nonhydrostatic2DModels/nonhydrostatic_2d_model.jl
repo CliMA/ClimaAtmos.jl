@@ -83,3 +83,13 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
 
     return rhs!
 end
+
+using ClimaCore: ClimaCore
+IF2C = ClimaCore.Operators.InterpolateF2C()
+function Models.get_velocities(Y, model::Nonhydrostatic2DModel)
+    uh = Y.base.ρuh ./ Y.base.ρ
+    w = @. IF2C(Y.base.ρw) / Y.base.ρ
+    # Returns tuple with horizontal and vertical velocities for 2D model
+    # Cell centered variables are returned (interpolated vertical velocity)
+    return (uh, w)
+end

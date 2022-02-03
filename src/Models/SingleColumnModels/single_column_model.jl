@@ -145,3 +145,8 @@ function Models.make_ode_function(model::SingleColumnModel)
 
     return rhs!
 end
+
+function Models.get_velocities(Y, model::SingleColumnModel)
+    w = Y.base.w
+    return w
+end

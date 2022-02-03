@@ -23,7 +23,8 @@ export AbstractModelStyle,
     TotalEnergy,
     Dry,
     EquilibriumMoisture,
-    NonEquilibriumMoisture
+    NonEquilibriumMoisture,
+    get_velocities
 
 export SingleColumnModel, Nonhydrostatic2DModel, Nonhydrostatic3DModel
 
@@ -100,6 +101,14 @@ Construct the ordinary differential equations for `model`.
 """
 make_ode_function(model::AbstractModel) =
     error("make_ode_function not implemented for given model type")
+
+"""
+    get_velocities(Y, model)
+
+Construct the initial conditions for `model`.
+"""
+get_velocities(Y, model::AbstractModel) =
+    error("No method to get velocities implemented for given model type")
 
 # model styles
 include("style_base_model.jl")

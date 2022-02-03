@@ -62,9 +62,14 @@ function run_1d_ekman_column(
         mkpath(temp_filepath)
         cb_1 = JLD2Output(model, temp_filepath, "TestFilename1", 0.01)
         cb_2 = JLD2Output(model, temp_filepath, "TestFilename2", 0.02)
+        cb_3 = CFLAdaptive(model, 0.01, 0.90, true)
 
         # Generate CallbackSet 
-        cb_set = CallbackSet(generate_callback(cb_1), generate_callback(cb_2))
+        cb_set = CallbackSet(
+            generate_callback(cb_1),
+            generate_callback(cb_2),
+            generate_callback(cb_3),
+        )
 
         # Type Checks
         @test generate_callback(cb_1) isa DiscreteCallback
