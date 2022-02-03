@@ -1120,7 +1120,6 @@ function Simulation1d(namelist)
         dt_min,
     )
 end
-include("init_1d_rico.jl")
 
 function condition_io(u, t, integrator)
     UnPack.@unpack TS, Stats = integrator.p
