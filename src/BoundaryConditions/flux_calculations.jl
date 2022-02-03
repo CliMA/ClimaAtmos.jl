@@ -1,8 +1,18 @@
+"""
+    get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Y, Ya)
+
+    Vertical flux assignment for no-flux conditions (i.e. free-slip wall)
+"""
 function get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Y, Ya)
     FT = eltype(Y)
     flux = Geometry.WVector(FT(0))
 end
 
+"""
+    get_boundary_flux(model, bc::DragLawCondition, uv, Y, Ya)
+
+    Vertical momentum fluxes for a bulk-formulation drag law, given momentum exchange coefficients
+"""
 function get_boundary_flux(model, bc::DragLawCondition, uv, Y, Ya)
     FT = eltype(Y)
     coefficients =
@@ -14,6 +24,18 @@ function get_boundary_flux(model, bc::DragLawCondition, uv, Y, Ya)
     flux = Geometry.WVector(coefficients.Cd * u_wind) ⊗ uv_1
 end
 
+"""
+    get_boundary_flux(
+        model,
+        bc::BulkFormulaCondition,
+        ρc::Fields.Field,
+        Y,
+        Ya,
+    )
+
+    Vertical fluxes for arbitrary variables with a bulk-formulation drag law, 
+    given variable exchange coefficients. (e.g. for energy, or tracers)
+"""
 function get_boundary_flux(
     model,
     bc::BulkFormulaCondition,

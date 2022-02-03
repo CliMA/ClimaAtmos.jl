@@ -1,3 +1,19 @@
+"""
+    init_1d_ekman_column(params)
+
+    Ekman layer initial condition for 1D single-column benchmarking.
+    Reference parameter values:
+        - T_surf = 300 K
+        - T_min_ref = 230 K
+        - u0 = 1 ms⁻¹
+        - v0 = 0 ms⁻¹
+        - w0 = 0 ms⁻¹
+        - θ_b = 300 K
+        - p_0 = 1e5 Pa
+        - g = 9.80616 m s⁻²
+        - R_d = 287.0 J kg⁻¹ K⁻¹
+        - cp_d = 1004 J kg⁻¹ K⁻¹
+"""
 function init_1d_ekman_column(::Type{FT}, params) where {FT}
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
