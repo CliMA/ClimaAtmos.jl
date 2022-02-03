@@ -10,11 +10,6 @@ steps:
     command:
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile(;strict=true)'"
-
-      - "julia --project=test -e 'using Pkg; Pkg.develop(path=\".\")'"
-      - "julia --project=test -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=test -e 'using Pkg; Pkg.precompile(;strict=true)'"
-
       - "julia --project -e 'using Pkg; Pkg.status()'"
     agents:
       config: cpu
@@ -29,7 +24,7 @@ steps:
   - label: ":computer: unit tests"
     key: "cpu_unittests"
     command:
-      - "julia --color=yes --check-bounds=yes --project=test test/runtests.jl"
+      - "julia --color=yes -e 'using Pkg; Pkg.test()'"
     agents:
       config: cpu
       queue: central
