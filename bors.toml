@@ -1,5 +1,5 @@
 status = [
-  "climaatmos-ci",
+  "buildkite/climaatmos-ci",
   "ci 1.7.1 - ubuntu-latest",
   "ci 1.7.1 - macOS-latest",
   "docbuild",
