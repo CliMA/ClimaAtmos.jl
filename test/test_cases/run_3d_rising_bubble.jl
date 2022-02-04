@@ -1,3 +1,7 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
+end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
@@ -5,10 +9,12 @@ using Plots
 using UnPack
 
 using ClimaCoreVTK
+using ClimaCore: Geometry
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_rising_bubble
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
@@ -229,4 +235,10 @@ function run_3d_rising_bubble(
     end
 
     nothing
+end
+
+@testset "3D rising bubble" begin
+    for FT in (Float32, Float64)
+        run_3d_rising_bubble(FT)
+    end
 end

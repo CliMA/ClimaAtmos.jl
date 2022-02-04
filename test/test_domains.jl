@@ -1,3 +1,7 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(@__DIR__)))
+end
 using Test
 
 using ClimaAtmos: Domains
