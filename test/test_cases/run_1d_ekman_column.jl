@@ -148,7 +148,7 @@ function run_1d_ekman_column(
         Plots.GRBackend()
 
         # make output directory
-        path = joinpath(@__DIR__, "output_validation")
+        path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
         mkpath(path)
 
         # plot final state
