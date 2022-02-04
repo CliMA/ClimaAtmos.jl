@@ -1,6 +1,10 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
+end
 using Test
 
-using OrdinaryDiffEq: SSPRK33
+using OrdinaryDiffEq: SSPRK33, CallbackSet
 using Plots
 using UnPack
 
@@ -8,7 +12,9 @@ using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_2d_rising_bubble
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models
 using ClimaAtmos.Models.Nonhydrostatic2DModels
+using ClimaAtmos.Callbacks
 using ClimaAtmos.Simulations
 
 # Set up parameters
@@ -106,4 +112,10 @@ function run_2d_rising_bubble(
     # 2. create animation for a rising bubble; timeseries of total energy
 
     nothing
+end
+
+@testset "2D dry rising bubble" begin
+    for FT in (Float32, Float64)
+        run_2d_rising_bubble(FT)
+    end
 end

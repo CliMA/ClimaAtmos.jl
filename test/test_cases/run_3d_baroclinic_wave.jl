@@ -1,3 +1,7 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
+end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
@@ -64,4 +68,10 @@ function run_3d_baroclinic_wave(
     end
 
     nothing
+end
+
+@testset "3D baroclinic wave" begin
+    for FT in (Float32, Float64)
+        run_3d_baroclinic_wave(FT)
+    end
 end

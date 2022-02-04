@@ -1,3 +1,7 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
+end
 using Test
 
 using JLD2
@@ -209,4 +213,10 @@ function run_1d_ekman_column(
     end
 
     nothing
+end
+
+@testset "1D Ekman column" begin
+    for FT in (Float32, Float64)
+        run_1d_ekman_column(FT)
+    end
 end

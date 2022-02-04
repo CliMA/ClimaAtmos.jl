@@ -1,13 +1,19 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
+end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
 using Plots
 using UnPack
 
+using ClimaCore: Geometry
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_solid_body_rotation
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
@@ -81,4 +87,10 @@ function run_3d_solid_body_rotation(
     end
 
     nothing
+end
+
+@testset "3D solid-body rotation" begin
+    for FT in (Float32, Float64)
+        run_3d_solid_body_rotation(FT)
+    end
 end

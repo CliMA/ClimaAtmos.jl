@@ -1,13 +1,19 @@
+if !haskey(ENV, "BUILDKITE")
+    import Pkg
+    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
+end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
 using Plots
 using UnPack
 
+using ClimaCore: Geometry
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
@@ -85,4 +91,10 @@ function run_3d_balanced_flow(
     end
 
     nothing
+end
+
+@testset "3D balanced flow" begin
+    for FT in (Float32, Float64)
+        run_3d_balanced_flow(FT)
+    end
 end

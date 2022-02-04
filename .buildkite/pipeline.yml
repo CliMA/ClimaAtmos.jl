@@ -9,8 +9,14 @@ steps:
     key: "init_cpu_env"
     command:
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project -e 'using Pkg; Pkg.precompile(;strict=true)'"
+      - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
+
+      - "julia --project=test -e 'using Pkg; Pkg.develop(path = \".\")'"
+      - "julia --project=test -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=test -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=test -e 'using Pkg; Pkg.status()'"
+
     agents:
       config: cpu
       queue: central
@@ -21,10 +27,75 @@ steps:
 
   - wait
 
-  - label: ":computer: unit tests"
-    key: "cpu_unittests"
+  - label: ":computer: domains"
+    key: "cpu_domains"
     command:
-      - "julia --color=yes --project -e 'using Pkg; Pkg.test()'"
+      - "julia --color=yes --project=test test/test_domains.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: models"
+    key: "cpu_models"
+    command:
+      - "julia --color=yes --project=test test/test_models.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  # Cases
+
+  - label: ":computer: 1d_ekman_column"
+    key: "cpu_1d_ekman_column"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 2d_rising_bubble"
+    key: "cpu_2d_rising_bubble"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_2d_rising_bubble.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 3d_rising_bubble"
+    key: "cpu_3d_rising_bubble"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_3d_rising_bubble.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 3d_solid_body_rotation"
+    key: "cpu_3d_solid_body_rotation"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_3d_solid_body_rotation.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 3d_balanced_flow"
+    key: "cpu_3d_balanced_flow"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_3d_balanced_flow.jl"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 3d_baroclinic_wave"
+    key: "cpu_3d_baroclinic_wave"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
     agents:
       config: cpu
       queue: central
