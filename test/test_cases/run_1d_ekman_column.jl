@@ -2,221 +2,188 @@ if !haskey(ENV, "BUILDKITE")
     import Pkg
     Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
 end
-using Test
 
-using JLD2
-using OrdinaryDiffEq: SSPRK33, CallbackSet, DiscreteCallback
-using Plots
-using UnPack
+using LinearAlgebra
+import ClimaCore:
+    Fields,
+    Domains,
+    Topologies,
+    Meshes,
+    DataLayouts,
+    Operators,
+    Geometry,
+    Spaces
 
-using CLIMAParameters
-using ClimaCore: Geometry
-using ClimaAtmos.Utils.InitialConditions: init_1d_ekman_column
-using ClimaAtmos.Domains
-using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models
-using ClimaAtmos.Models.SingleColumnModels
-using ClimaAtmos.Callbacks
-using ClimaAtmos.Simulations
+import OrdinaryDiffEq
+const ODE = OrdinaryDiffEq
 
-# Set up parameters
-Base.@kwdef struct EkmanParameters{FT} <:
-                   CLIMAParameters.AbstractEarthParameterSet
-    Cd::FT = 0.01 / (2e2 / 30) # drag coefficients
-    Ch::FT = 0.01 / (2e2 / 30)
-    T_surf::FT = 300 # surface temperature
-    f::FT = 5e-5 # Coriolis parameters
-    ν::FT = 0.01 # diffusivity
-    uvg = Geometry.UVVector(FT(1), FT(0)) # geostrophic velocity
+import Logging
+import TerminalLoggers
+Logging.global_logger(TerminalLoggers.TerminalLogger())
+
+const FT = Float64
+
+# https://github.com/CliMA/CLIMAParameters.jl/blob/master/src/Planet/planet_parameters.jl#L5
+const MSLP = 1e5 # mean sea level pressure
+const grav = 9.8 # gravitational constant
+const R_d = 287.058 # R dry (gas constant / mol mass dry air)
+const γ = 1.4 # heat capacity ratio
+const C_p = R_d * γ / (γ - 1) # heat capacity at constant pressure
+const C_v = R_d / (γ - 1) # heat capacit at constant volume
+const R_m = R_d # moist R, assumed to be dry
+
+const f = 5e-5
+const ν = 0.01
+const L = 2e2
+const nelems = 30
+const Cd = ν / (L / nelems)
+const ug = 1.0
+const vg = 0.0
+const d = sqrt(2 * ν / f)
+domain = Domains.IntervalDomain(
+    Geometry.ZPoint{FT}(0.0),
+    Geometry.ZPoint{FT}(L);
+    boundary_names = (:bottom, :top),
+)
+mesh = Meshes.IntervalMesh(domain; nelems = nelems)
+
+cspace = Spaces.CenterFiniteDifferenceSpace(mesh)
+fspace = Spaces.FaceFiniteDifferenceSpace(cspace)
+
+# https://github.com/CliMA/Thermodynamics.jl/blob/main/src/TemperatureProfiles.jl#L115-L155
+# https://clima.github.io/Thermodynamics.jl/dev/TemperatureProfiles/#DecayingTemperatureProfile
+function adiabatic_temperature_profile(z; T_surf = 300.0, T_min_ref = 230.0)
+    u = FT(ug)
+    v = FT(vg)
+    return (u = u, v = v)
 end
 
-function run_1d_ekman_column(
-    ::Type{FT};
-    stepper = SSPRK33(),
-    nelements = 30,
-    dt = 0.01,
-    callbacks = (),
-    test_mode = :regression,
-) where {FT}
-    params = EkmanParameters{FT}()
+zc = Fields.coordinate_field(cspace)
+Yc = adiabatic_temperature_profile.(zc.z)
+w = Geometry.WVector.(zeros(Float64, fspace))
 
-    domain = Column(FT, zlim = (0.0, 2e2), nelements = nelements)
+Y_init = copy(Yc)
+w_init = copy(w)
 
-    bulk_coefficients = (Cd = params.Cd, Ch = params.Ch)
-    boundary_conditions = (
-        ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-        uv = (top = nothing, bottom = DragLawCondition(bulk_coefficients)),
-        w = (top = NoFluxCondition(), bottom = NoFluxCondition()),
-        ρθ = (
-            top = NoFluxCondition(),
-            bottom = BulkFormulaCondition(bulk_coefficients, params.T_surf),
-        ),
+function tendency!(dY, Y, _, t)
+    Yc = Y.Yc
+    w = Y.w
+
+    dYc = dY.Yc
+    dw = dY.w
+
+    u = Yc.u
+    v = Yc.v
+
+    du = dYc.u
+    dv = dYc.v
+
+    # S 4.4.1: potential temperature density
+    # Mass conservation
+
+    u_1 = parent(u)[1]
+    v_1 = parent(v)[1]
+    u_wind = sqrt(u_1^2 + v_1^2)
+    A = Operators.AdvectionC2C(
+        bottom = Operators.SetValue(0.0),
+        top = Operators.SetValue(0.0),
     )
 
-    model = SingleColumnModel(
-        domain = domain,
-        boundary_conditions = boundary_conditions,
-        parameters = params,
+    # u-momentum
+    bcs_bottom = Operators.SetValue(Geometry.WVector(Cd * u_wind * u_1))  # Eq. 4.16
+    bcs_top = Operators.SetValue(FT(ug))  # Eq. 4.18
+    gradc2f = Operators.GradientC2F(top = bcs_top)
+    divf2c = Operators.DivergenceF2C(bottom = bcs_bottom)
+    @. du = divf2c(ν * gradc2f(u)) + f * (v - vg) - A(w, u)   # Eq. 4.8
+
+    # v-momentum
+    bcs_bottom = Operators.SetValue(Geometry.WVector(Cd * u_wind * v_1))  # Eq. 4.17
+    bcs_top = Operators.SetValue(FT(vg))  # Eq. 4.19
+    gradc2f = Operators.GradientC2F(top = bcs_top)
+    divf2c = Operators.DivergenceF2C(bottom = bcs_bottom)
+    @. dv = divf2c(ν * gradc2f(v)) - f * (u - ug) - A(w, v)   # Eq. 4.9
+    return nothing
+end
+
+
+Y = Fields.FieldVector(Yc = Yc, w = w)
+
+Δt = 2.0
+ndays = 0
+# Solve the ODE operator
+prob = ODE.ODEProblem(tendency!, Y, (0.0, 60 * 60 * 50))
+sol = ODE.solve(
+    prob,
+    ODE.SSPRK33(),
+    dt = Δt,
+    saveat = 600, # save 10 min
+    progress = true,
+    progress_message = (dt, u, p, t) -> t,
+);
+
+ENV["GKSwstype"] = "nul"
+using ClimaCorePlots, Plots
+Plots.GRBackend()
+
+path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
+mkpath(path)
+
+z_centers = parent(Fields.coordinate_field(cspace))
+z_faces = parent(Fields.coordinate_field(fspace))
+
+function ekman_plot(u; title = "", size = (1024, 600))
+    u_ref =
+        ug .-
+        exp.(-z_centers / d) .*
+        (ug * cos.(z_centers / d) + vg * sin.(z_centers / d))
+    sub_plt1 = Plots.plot(
+        u_ref,
+        z_centers,
+        marker = :circle,
+        xlabel = "u",
+        label = "Ref",
     )
+    sub_plt1 = Plots.plot!(sub_plt1, parent(u.Yc.u), z_centers, label = "Comp")
 
-    # execute differently depending on testing mode
-    if test_mode == :regression
-        # Populate Callback Containers
-        temp_filepath = joinpath(@__DIR__, "callback_tests")
-        mkpath(temp_filepath)
-        cb_1 = JLD2Output(model, temp_filepath, "TestFilename1", 0.01)
-        cb_2 = JLD2Output(model, temp_filepath, "TestFilename2", 0.02)
-        cb_3 = CFLAdaptive(model, 0.01, 0.90, true)
+    v_ref =
+        vg .+
+        exp.(-z_centers / d) .*
+        (ug * sin.(z_centers / d) - vg * cos.(z_centers / d))
+    sub_plt2 = Plots.plot(
+        v_ref,
+        z_centers,
+        marker = :circle,
+        xlabel = "v",
+        label = "Ref",
+    )
+    sub_plt2 = Plots.plot!(sub_plt2, parent(u.Yc.v), z_centers, label = "Comp")
 
-        # Generate CallbackSet 
-        cb_set = CallbackSet(
-            generate_callback(cb_1),
-            generate_callback(cb_2),
-            generate_callback(cb_3),
-        )
-
-        # Type Checks
-        @test generate_callback(cb_1) isa DiscreteCallback
-        @test generate_callback(cb_2) isa DiscreteCallback
-
-        # Generate simple simulation data for test
-        simulation = Simulation(
-            model,
-            SSPRK33(),
-            dt = 0.01,
-            tspan = (0.0, 0.03),
-            callbacks = cb_set,
-        )
-        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
-        run!(simulation)
-
-        # Test simulation restart
-        simulation = Simulation(
-            model,
-            SSPRK33(),
-            dt = 0.01,
-            tspan = (0.0, 0.03),
-            callbacks = cb_set,
-            restart = Restart(
-                restartfile = joinpath(
-                    cb_1.filedir,
-                    cb_1.filename * "_0.02.jld2",
-                ),
-                end_time = 0.05,
-            ),
-        )
-        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
-        run!(simulation)
-        @test simulation.integrator.t == 0.05
-
-        # Delete test output files
-        @test isfile(joinpath(
-            cb_1.filedir,
-            cb_1.filename * "_0.01" * ".jld2",
-        )) == true
-        @test isfile(joinpath(
-            cb_2.filedir,
-            cb_2.filename * "_0.02" * ".jld2",
-        )) == true
-        rm(temp_filepath, recursive = true)
-
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
-        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
-        step!(simulation)
-        u = simulation.integrator.u.base
-
-        # perform regression check
-        current_min = -0.0
-        current_max = 0.0
-        @test minimum(parent(u.w)) ≈ current_min atol = 1e-3
-        @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
-    elseif test_mode == :validation
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
-        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uv = uv, w = w)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
-        run!(simulation)
-        u_end = simulation.integrator.u.base
-
-        # post-processing
-        ENV["GKSwstype"] = "nul"
-        Plots.GRBackend()
-
-        # make output directory
-        path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
-        mkpath(path)
-
-        # plot final state
-        function ekman_plot(Y, params; title = "", size = (1024, 600))
-            uvg = parent(params.uvg)
-            ug = uvg[1]
-            vg = uvg[2]
-
-            d = sqrt(2.0 * 0.01 / 5e-5)
-            z_centers = parent(Fields.coordinate_field(axes(Y.ρ)))
-
-            u_ref =
-                ug .-
-                exp.(-z_centers / d) .*
-                (ug * cos.(z_centers / d) + vg * sin.(z_centers / d))
-            sub_plt1 = Plots.plot(
-                u_ref,
-                z_centers,
-                marker = :circle,
-                xlabel = "u",
-                label = "Ref",
-            )
-            sub_plt1 = Plots.plot!(
-                sub_plt1,
-                parent(Y.uv)[:, 1],
-                z_centers,
-                label = "Comp",
-            )
-
-            v_ref =
-                vg .+
-                exp.(-z_centers / d) .*
-                (ug * sin.(z_centers / d) - vg * cos.(z_centers / d))
-            sub_plt2 = Plots.plot(
-                v_ref,
-                z_centers,
-                marker = :circle,
-                xlabel = "v",
-                label = "Ref",
-            )
-            sub_plt2 = Plots.plot!(
-                sub_plt2,
-                parent(Y.uv)[:, 2],
-                z_centers,
-                label = "Comp",
-            )
-
-            return Plots.plot(
-                sub_plt1,
-                sub_plt2,
-                title = title,
-                layout = (1, 2),
-                size = size,
-            )
-        end
-        foi = ekman_plot(u_end, params)
-        Plots.png(foi, joinpath(path, "ekman_column_1d_FT_$FT"))
-
-        @test true # check is visual
-    else
-        throw(ArgumentError("$test_mode incompatible with test case."))
-    end
-
-    nothing
+    return Plots.plot(
+        sub_plt1,
+        sub_plt2,
+        title = title,
+        layout = (1, 2),
+        size = size,
+    )
 end
 
-@testset "1D Ekman column" begin
-    for FT in (Float32, Float64)
-        run_1d_ekman_column(FT)
+anim = Plots.@animate for (i, u) in enumerate(sol.u)
+    ekman_plot(u, title = "Hour $(i)")
+end
+Plots.mp4(anim, joinpath(path, "ekman.mp4"), fps = 10)
+
+Plots.png(ekman_plot(sol[end]), joinpath(path, "ekman_end.png"))
+
+function linkfig(figpath, alt = "")
+    # buildkite-agent upload figpath
+    # link figure in logs if we are running on CI
+    if get(ENV, "BUILDKITE", "") == "true"
+        artifact_url = "artifact://$figpath"
+        print("\033]1338;url='$(artifact_url)';alt='$(alt)'\a\n")
     end
 end
+
+linkfig(
+    relpath(joinpath(path, "ekman_end.png"), joinpath(@__DIR__, "../..")),
+    "Ekman End",
+)
