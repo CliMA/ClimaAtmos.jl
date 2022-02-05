@@ -20,12 +20,12 @@ Models.variable_types(::NonEquilibriumMoisture, ::AbstractModel, FT) =
 
 Models.variable_spaces(::Dry, ::AbstractSingleColumnModel) = Nothing
 Models.variable_spaces(::EquilibriumMoisture, ::AbstractSingleColumnModel) =
-    (ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
+    (ρq_tot = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},)
 Models.variable_spaces(::NonEquilibriumMoisture, ::AbstractSingleColumnModel) =
     (
-        ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
-        ρq_liq = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
-        ρq_ice = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
+        ρq_tot = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},
+        ρq_liq = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},
+        ρq_ice = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},
     )
 
 Models.variable_spaces(

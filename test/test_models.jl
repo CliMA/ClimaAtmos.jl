@@ -102,6 +102,7 @@ float_types = (Float32, Float64)
             domain = domain,
             boundary_conditions = nothing,
             parameters = (),
+            hyperdiffusivity = FT(100),
         )
         for (s, t) in zip(styles, types_nh2d)
             @test Models.variable_types(s, model, FT) == t
@@ -129,6 +130,7 @@ end
             domain = domain,
             boundary_conditions = nothing,
             parameters = (),
+            hyperdiffusivity = FT(100),
         )
         @test model.domain isa Domains.AbstractHybridDomain
         @test model.moisture == Models.Dry()
@@ -143,6 +145,7 @@ end
             vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
+            hyperdiffusivity = FT(100),
         )
         @test model.domain isa Domains.AbstractHybridDomain
         @test model.base == Models.AdvectiveForm()
@@ -157,17 +160,24 @@ end
             moisture = Models.Dry(),
             boundary_conditions = nothing,
             parameters = (),
+            hyperdiffusivity = FT(100),
         )
-        @test keys(Models.components(model)) ==
-              (:base, :thermodynamics, :moisture, :vertical_diffusion)
+        @test keys(Models.components(model)) == (
+            :base,
+            :thermodynamics,
+            :moisture,
+            :precipitation,
+            :vertical_diffusion,
+        )
 
-        # test variable_names 
+        # test variable_names
         model = Nonhydrostatic2DModel(
             domain = domain,
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.NonEquilibriumMoisture(),
             boundary_conditions = nothing,
             parameters = (),
+            hyperdiffusivity = FT(100),
         )
         @test Models.variable_names(model).base ==
               Models.variable_names(model.base)
@@ -181,6 +191,7 @@ end
             domain = domain,
             boundary_conditions = nothing,
             parameters = (),
+            hyperdiffusivity = FT(100),
         )
         Y = Models.default_initial_conditions(model)
         @test Y isa Fields.FieldVector
@@ -250,7 +261,7 @@ end
         @test keys(Models.components(model)) ==
               (:base, :thermodynamics, :moisture, :vertical_diffusion)
 
-        # test variable_names, variable_types, variable_spaces 
+        # test variable_names, variable_types, variable_spaces
         model = Nonhydrostatic3DModel(
             domain = domain,
             thermodynamics = Models.TotalEnergy(),
