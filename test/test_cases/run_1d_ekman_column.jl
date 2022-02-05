@@ -3,16 +3,11 @@ if !haskey(ENV, "BUILDKITE")
     Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
 end
 
+import UnPack
 using LinearAlgebra
 import ClimaCore:
-    Fields,
-    Domains,
-    Topologies,
-    Meshes,
-    DataLayouts,
-    Operators,
-    Geometry,
-    Spaces
+    ClimaCore, Fields, Domains, Meshes, Operators, Geometry, Spaces
+const CC = ClimaCore
 
 import OrdinaryDiffEq
 const ODE = OrdinaryDiffEq
@@ -21,51 +16,27 @@ import Logging
 import TerminalLoggers
 Logging.global_logger(TerminalLoggers.TerminalLogger())
 
-const FT = Float64
-
-# https://github.com/CliMA/CLIMAParameters.jl/blob/master/src/Planet/planet_parameters.jl#L5
-const MSLP = 1e5 # mean sea level pressure
-const grav = 9.8 # gravitational constant
-const R_d = 287.058 # R dry (gas constant / mol mass dry air)
-const γ = 1.4 # heat capacity ratio
-const C_p = R_d * γ / (γ - 1) # heat capacity at constant pressure
-const C_v = R_d / (γ - 1) # heat capacit at constant volume
-const R_m = R_d # moist R, assumed to be dry
-
-const f = 5e-5
-const ν = 0.01
-const L = 2e2
-const nelems = 30
-const Cd = ν / (L / nelems)
-const ug = 1.0
-const vg = 0.0
-const d = sqrt(2 * ν / f)
-domain = Domains.IntervalDomain(
-    Geometry.ZPoint{FT}(0.0),
-    Geometry.ZPoint{FT}(L);
-    boundary_names = (:bottom, :top),
-)
-mesh = Meshes.IntervalMesh(domain; nelems = nelems)
-
-cspace = Spaces.CenterFiniteDifferenceSpace(mesh)
-fspace = Spaces.FaceFiniteDifferenceSpace(cspace)
-
 # https://github.com/CliMA/Thermodynamics.jl/blob/main/src/TemperatureProfiles.jl#L115-L155
 # https://clima.github.io/Thermodynamics.jl/dev/TemperatureProfiles/#DecayingTemperatureProfile
-function adiabatic_temperature_profile(z; T_surf = 300.0, T_min_ref = 230.0)
-    u = FT(ug)
-    v = FT(vg)
+function adiabatic_temperature_profile(
+    z,
+    ug,
+    vg;
+    T_surf = 300.0,
+    T_min_ref = 230.0,
+)
+    u = ug
+    v = vg
     return (u = u, v = v)
 end
 
-zc = Fields.coordinate_field(cspace)
-Yc = adiabatic_temperature_profile.(zc.z)
-w = Geometry.WVector.(zeros(Float64, fspace))
-
-Y_init = copy(Yc)
-w_init = copy(w)
-
-function tendency!(dY, Y, _, t)
+function tendency!(
+    dY::FV,
+    Y::FV,
+    cache,
+    t::Real,
+) where {FV <: CC.Fields.FieldVector}
+    UnPack.@unpack f, ν, Cd, ug, vg, d = cache
     Yc = Y.Yc
     w = Y.w
 
@@ -91,35 +62,66 @@ function tendency!(dY, Y, _, t)
 
     # u-momentum
     bcs_bottom = Operators.SetValue(Geometry.WVector(Cd * u_wind * u_1))  # Eq. 4.16
-    bcs_top = Operators.SetValue(FT(ug))  # Eq. 4.18
+    bcs_top = Operators.SetValue(ug)  # Eq. 4.18
     gradc2f = Operators.GradientC2F(top = bcs_top)
     divf2c = Operators.DivergenceF2C(bottom = bcs_bottom)
     @. du = divf2c(ν * gradc2f(u)) + f * (v - vg) - A(w, u)   # Eq. 4.8
 
     # v-momentum
     bcs_bottom = Operators.SetValue(Geometry.WVector(Cd * u_wind * v_1))  # Eq. 4.17
-    bcs_top = Operators.SetValue(FT(vg))  # Eq. 4.19
+    bcs_top = Operators.SetValue(vg)  # Eq. 4.19
     gradc2f = Operators.GradientC2F(top = bcs_top)
     divf2c = Operators.DivergenceF2C(bottom = bcs_bottom)
     @. dv = divf2c(ν * gradc2f(v)) - f * (u - ug) - A(w, v)   # Eq. 4.9
     return nothing
 end
 
+function ode_integrator(::Type{FT}) where {FT}
 
-Y = Fields.FieldVector(Yc = Yc, w = w)
+    f::FT = 5e-5
+    ν::FT = 0.01
+    L::FT = 2e2
+    nelems = 30
+    Cd::FT = ν / (L / nelems)
+    ug::FT = 1.0
+    vg::FT = 0.0
+    d::FT = sqrt(2 * ν / f)
 
-Δt = 2.0
-ndays = 0
-# Solve the ODE operator
-prob = ODE.ODEProblem(tendency!, Y, (0.0, 60 * 60 * 50))
-sol = ODE.solve(
-    prob,
-    ODE.SSPRK33(),
-    dt = Δt,
-    saveat = 600, # save 10 min
-    progress = true,
-    progress_message = (dt, u, p, t) -> t,
-);
+    domain = Domains.IntervalDomain(
+        Geometry.ZPoint{FT}(0.0),
+        Geometry.ZPoint{FT}(L);
+        boundary_names = (:bottom, :top),
+    )
+    mesh = Meshes.IntervalMesh(domain; nelems = nelems)
+
+    cspace = Spaces.CenterFiniteDifferenceSpace(mesh)
+    fspace = Spaces.FaceFiniteDifferenceSpace(cspace)
+
+    zc = Fields.coordinate_field(cspace)
+    Yc = adiabatic_temperature_profile.(zc.z, Ref(ug), Ref(vg))
+    w = Geometry.WVector.(zeros(Float64, fspace))
+
+    Y = Fields.FieldVector(Yc = Yc, w = w)
+    cache = (; f, ν, Cd, ug, vg, d, cspace, fspace)
+
+    Δt = 2.0
+    ndays = 0
+    # Solve the ODE operator
+    prob = ODE.ODEProblem(tendency!, Y, (0.0, 60 * 60 * 50), cache)
+    integrator = ODE.init(
+        prob,
+        ODE.SSPRK33(),
+        dt = Δt,
+        saveat = 600, # save 10 min
+        progress = true,
+        progress_message = (dt, u, p, t) -> t,
+    )
+    return integrator, cache
+end
+
+integrator, cache = ode_integrator(Float64)
+
+sol = ODE.solve!(integrator)
 
 ENV["GKSwstype"] = "nul"
 using ClimaCorePlots, Plots
@@ -128,10 +130,11 @@ Plots.GRBackend()
 path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
 mkpath(path)
 
-z_centers = parent(Fields.coordinate_field(cspace))
-z_faces = parent(Fields.coordinate_field(fspace))
 
-function ekman_plot(u; title = "", size = (1024, 600))
+function ekman_plot(u, cache; title = "", size = (1024, 600))
+    UnPack.@unpack cspace, fspace, d, ug, vg = cache
+    z_centers = parent(Fields.coordinate_field(cspace))
+    z_faces = parent(Fields.coordinate_field(fspace))
     u_ref =
         ug .-
         exp.(-z_centers / d) .*
@@ -168,11 +171,11 @@ function ekman_plot(u; title = "", size = (1024, 600))
 end
 
 anim = Plots.@animate for (i, u) in enumerate(sol.u)
-    ekman_plot(u, title = "Hour $(i)")
+    ekman_plot(u, cache, title = "Hour $(i)")
 end
 Plots.mp4(anim, joinpath(path, "ekman.mp4"), fps = 10)
 
-Plots.png(ekman_plot(sol[end]), joinpath(path, "ekman_end.png"))
+Plots.png(ekman_plot(sol[end], cache), joinpath(path, "ekman_end.png"))
 
 function linkfig(figpath, alt = "")
     # buildkite-agent upload figpath
