@@ -1,6 +1,7 @@
 module Simulations
 
-import DiffEqBase # avoid namespace conflict with step!
+import OrdinaryDiffEq
+const ODE = OrdinaryDiffEq
 
 using JLD2
 using Printf
