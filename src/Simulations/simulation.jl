@@ -1,9 +1,4 @@
-struct Simulation{
-    M <: AbstractModel,
-    I <: DiffEqBase.DEIntegrator,
-    C <: Union{Nothing, DiffEqBase.DiscreteCallback, DiffEqBase.CallbackSet},
-    R <: AbstractRestart,
-}
+struct Simulation{M <: AbstractModel, I, C, R <: AbstractRestart}
     model::M
     integrator::I
     callbacks::C
@@ -38,15 +33,14 @@ function Simulation(
 
     # contains all information about the 
     # pde systems jacobians and right-hand sides
-    # to hook into the DiffEqBase.jl interface
+    # to hook into the OrdinaryDiffEq.jl interface
     ode_function = make_ode_function(model)
 
-    # we use the DiffEqBase.jl interface
+    # we use the OrdinaryDiffEq.jl interface
     # to set up and an ODE integrator that handles
     # integration in time and callbacks
-    ode_problem = DiffEqBase.ODEProblem(ode_function, Y, tspan)
-    integrator =
-        DiffEqBase.init(ode_problem, method, dt = dt, callback = callbacks)
+    ode_problem = ODE.ODEProblem(ode_function, Y, tspan)
+    integrator = ODE.init(ode_problem, method, dt = dt, callback = callbacks)
 
     restart = restart
     return Simulation(model, integrator, callbacks, restart)
@@ -68,7 +62,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
         end
 
         # for restart we need to use the reinit function because we don't 
-        # have direct state access using DiffEqBase. For this
+        # have direct state access using OrdinaryDiffEq. For this
         # we need to copy
         if simulation.restart isa NoRestart
             Y = copy(simulation.integrator.u)
@@ -108,8 +102,8 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
         end
 
         # we need to use the reinit function because we don't 
-        # have direct state access using DiffEqBase
-        DiffEqBase.reinit!(
+        # have direct state access using OrdinaryDiffEq
+        ODE.reinit!(
             simulation.integrator,
             Y;
             t0 = simulation.integrator.t,
@@ -152,7 +146,7 @@ end
 Advance the simulation by one time step.
 """
 step!(simulation::Simulation, args...; kwargs...) =
-    DiffEqBase.step!(simulation.integrator, args...; kwargs...)
+    ODE.step!(simulation.integrator, args...; kwargs...)
 
 """
     run!(simulation, args...; kwargs...)
@@ -160,7 +154,7 @@ step!(simulation::Simulation, args...; kwargs...) =
 Run the simulation to completion.
 """
 run!(simulation::Simulation, args...; kwargs...) =
-    DiffEqBase.solve!(simulation.integrator, args...; kwargs...)
+    ODE.solve!(simulation.integrator, args...; kwargs...)
 
 function Base.show(io::IO, s::Simulation)
     print(
