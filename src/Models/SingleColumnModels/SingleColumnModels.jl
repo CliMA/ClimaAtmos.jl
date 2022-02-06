@@ -1,10 +1,14 @@
 module SingleColumnModels
 
 using LinearAlgebra: ×
-using UnPack
-using CLIMAParameters
-using ClimaCore: Geometry, Spaces, Fields, Operators
-using ...Domains, ...BoundaryConditions, ...Models
+import UnPack
+import CLIMAParameters
+const CP = CLIMAParameters
+const CPP = CP.Planet
+import ClimaCore
+const CC = ClimaCore
+const CCO = CC.Operators
+import ...Models
 
 export SingleColumnModel
 

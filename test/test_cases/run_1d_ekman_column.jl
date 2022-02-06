@@ -4,10 +4,9 @@ if !haskey(ENV, "BUILDKITE")
 end
 
 import UnPack
-using LinearAlgebra
-import ClimaCore:
-    ClimaCore, Fields, Domains, Meshes, Operators, Geometry, Spaces
+import ClimaCore
 const CC = ClimaCore
+const CCO = CC.Operators
 
 import OrdinaryDiffEq
 const ODE = OrdinaryDiffEq
@@ -30,49 +29,43 @@ function adiabatic_temperature_profile(
     return (u = u, v = v)
 end
 
-function tendency!(
+function ∑tendencies!(
     dY::FV,
     Y::FV,
     cache,
     t::Real,
 ) where {FV <: CC.Fields.FieldVector}
     UnPack.@unpack f, ν, Cd, ug, vg, d = cache
-    Yc = Y.Yc
+    u = Y.Yc.u
+    v = Y.Yc.v
     w = Y.w
 
-    dYc = dY.Yc
+    du = dY.Yc.u
+    dv = dY.Yc.v
     dw = dY.w
-
-    u = Yc.u
-    v = Yc.v
-
-    du = dYc.u
-    dv = dYc.v
 
     # S 4.4.1: potential temperature density
     # Mass conservation
+    wvec = CC.Geometry.WVector
 
     u_1 = parent(u)[1]
     v_1 = parent(v)[1]
     u_wind = sqrt(u_1^2 + v_1^2)
-    A = Operators.AdvectionC2C(
-        bottom = Operators.SetValue(0.0),
-        top = Operators.SetValue(0.0),
-    )
+    A = CCO.AdvectionC2C(bottom = CCO.SetValue(0.0), top = CCO.SetValue(0.0))
 
     # u-momentum
-    bcs_bottom = Operators.SetValue(Geometry.WVector(Cd * u_wind * u_1))  # Eq. 4.16
-    bcs_top = Operators.SetValue(ug)  # Eq. 4.18
-    gradc2f = Operators.GradientC2F(top = bcs_top)
-    divf2c = Operators.DivergenceF2C(bottom = bcs_bottom)
-    @. du = divf2c(ν * gradc2f(u)) + f * (v - vg) - A(w, u)   # Eq. 4.8
+    bcs_bottom = CCO.SetValue(wvec(Cd * u_wind * u_1))  # Eq. 4.16
+    bcs_top = CCO.SetValue(ug)  # Eq. 4.18
+    ugradc2f = CCO.GradientC2F(top = bcs_top)
+    udivf2c = CCO.DivergenceF2C(bottom = bcs_bottom)
+    @. du = udivf2c(ν * ugradc2f(u)) + f * (v - vg) - A(w, u)   # Eq. 4.8
 
     # v-momentum
-    bcs_bottom = Operators.SetValue(Geometry.WVector(Cd * u_wind * v_1))  # Eq. 4.17
-    bcs_top = Operators.SetValue(vg)  # Eq. 4.19
-    gradc2f = Operators.GradientC2F(top = bcs_top)
-    divf2c = Operators.DivergenceF2C(bottom = bcs_bottom)
-    @. dv = divf2c(ν * gradc2f(v)) - f * (u - ug) - A(w, v)   # Eq. 4.9
+    bcs_bottom = CCO.SetValue(wvec(Cd * u_wind * v_1))  # Eq. 4.17
+    bcs_top = CCO.SetValue(vg)  # Eq. 4.19
+    vgradc2f = CCO.GradientC2F(top = bcs_top)
+    vdivf2c = CCO.DivergenceF2C(bottom = bcs_bottom)
+    @. dv = vdivf2c(ν * vgradc2f(v)) - f * (u - ug) - A(w, v)   # Eq. 4.9
     return nothing
 end
 
@@ -87,27 +80,27 @@ function ode_integrator(::Type{FT}) where {FT}
     vg::FT = 0.0
     d::FT = sqrt(2 * ν / f)
 
-    domain = Domains.IntervalDomain(
-        Geometry.ZPoint{FT}(0.0),
-        Geometry.ZPoint{FT}(L);
+    domain = CC.Domains.IntervalDomain(
+        CC.Geometry.ZPoint{FT}(0.0),
+        CC.Geometry.ZPoint{FT}(L);
         boundary_names = (:bottom, :top),
     )
-    mesh = Meshes.IntervalMesh(domain; nelems = nelems)
+    mesh = CC.Meshes.IntervalMesh(domain; nelems = nelems)
 
-    cspace = Spaces.CenterFiniteDifferenceSpace(mesh)
-    fspace = Spaces.FaceFiniteDifferenceSpace(cspace)
+    cspace = CC.Spaces.CenterFiniteDifferenceSpace(mesh)
+    fspace = CC.Spaces.FaceFiniteDifferenceSpace(cspace)
 
-    zc = Fields.coordinate_field(cspace)
+    zc = CC.Fields.coordinate_field(cspace)
     Yc = adiabatic_temperature_profile.(zc.z, Ref(ug), Ref(vg))
-    w = Geometry.WVector.(zeros(Float64, fspace))
+    w = CC.Geometry.WVector.(zeros(Float64, fspace))
 
-    Y = Fields.FieldVector(Yc = Yc, w = w)
-    cache = (; f, ν, Cd, ug, vg, d, cspace, fspace)
+    Y = CC.Fields.FieldVector(Yc = Yc, w = w)
+    cache = (; f, ν, Cd, ug, vg, d)
 
     Δt = 2.0
     ndays = 0
     # Solve the ODE operator
-    prob = ODE.ODEProblem(tendency!, Y, (0.0, 60 * 60 * 50), cache)
+    prob = ODE.ODEProblem(∑tendencies!, Y, (0.0, 60 * 60 * 50), cache)
     integrator = ODE.init(
         prob,
         ODE.SSPRK33(),
@@ -124,7 +117,7 @@ integrator, cache = ode_integrator(Float64)
 sol = ODE.solve!(integrator)
 
 ENV["GKSwstype"] = "nul"
-using ClimaCorePlots, Plots
+import ClimaCorePlots, Plots
 Plots.GRBackend()
 
 path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
@@ -132,9 +125,9 @@ mkpath(path)
 
 
 function ekman_plot(u, cache; title = "", size = (1024, 600))
-    UnPack.@unpack cspace, fspace, d, ug, vg = cache
-    z_centers = parent(Fields.coordinate_field(cspace))
-    z_faces = parent(Fields.coordinate_field(fspace))
+    UnPack.@unpack d, ug, vg = cache
+    cspace = axes(u.Yc.u)
+    z_centers = parent(CC.Fields.coordinate_field(cspace))
     u_ref =
         ug .-
         exp.(-z_centers / d) .*

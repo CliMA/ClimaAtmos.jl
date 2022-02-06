@@ -4,7 +4,8 @@
 A single column model. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct SingleColumnModel{D, BC, P} <: AbstractSingleColumnModel
+Base.@kwdef struct SingleColumnModel{D, BC, P} <:
+                   Models.AbstractSingleColumnModel
     domain::D
     boundary_conditions::BC
     parameters::P
@@ -18,14 +19,14 @@ end
 
 function Models.default_initial_conditions(model::SingleColumnModel)
     space_c, space_f = make_function_space(model.domain)
-    local_geometry_c = Fields.local_geometry_field(space_c)
-    local_geometry_f = Fields.local_geometry_field(space_f)
+    local_geometry_c = CC.Fields.local_geometry_field(space_c)
+    local_geometry_f = CC.Fields.local_geometry_field(space_f)
 
     # functions that make zeros for this model
-    zero_val = zero(Spaces.undertype(space_c))
+    zero_val = zero(CC.Spaces.undertype(space_c))
     zero_scalar(lg) = zero_val
-    zero_12vector(lg) = Geometry.UVVector(zero_val, zero_val)
-    zero_3vector(lg) = Geometry.WVector(zero_val)
+    zero_12vector(lg) = CC.Geometry.UVVector(zero_val, zero_val)
+    zero_3vector(lg) = CC.Geometry.WVector(zero_val)
 
     # base components
     ρ = zero_scalar.(local_geometry_c)
@@ -35,9 +36,9 @@ function Models.default_initial_conditions(model::SingleColumnModel)
     # thermodynamics components
     ρθ = zero_scalar.(local_geometry_c)
 
-    return Fields.FieldVector(
-        base = Fields.FieldVector(ρ = ρ, uv = uv, w = w),
-        thermodynamics = Fields.FieldVector(ρθ = ρθ),
+    return CC.Fields.FieldVector(
+        base = CC.Fields.FieldVector(ρ = ρ, uv = uv, w = w),
+        thermodynamics = CC.Fields.FieldVector(ρθ = ρθ),
     )
 end
 
@@ -71,6 +72,8 @@ function Models.make_ode_function(model::SingleColumnModel)
         # thermodynamics components
         dρθ = dY.thermodynamics.ρθ
         ρθ = Y.thermodynamics.ρθ
+        wvec = CC.Geometry.WVector
+        uvvec = CC.Geometry.UVector
 
         # gather boundary conditions
         bc_ρ = model.boundary_conditions.ρ
@@ -81,63 +84,62 @@ function Models.make_ode_function(model::SingleColumnModel)
         # density
         flux_bottom = get_boundary_flux(model, bc_ρ.bottom, ρ, Y, Ya)
         flux_top = get_boundary_flux(model, bc_ρ.top, ρ, Y, Ya)
-        If = Operators.InterpolateC2F()
-        ∂f = Operators.GradientC2F()
-        ∂c = Operators.DivergenceF2C(
-            bottom = Operators.SetValue(flux_bottom),
-            top = Operators.SetValue(flux_top),
+        If = CCO.InterpolateC2F()
+        ∂f = CCO.GradientC2F()
+        ∂c = CCO.DivergenceF2C(
+            bottom = CCO.SetValue(flux_bottom),
+            top = CCO.SetValue(flux_top),
         )
         @. dρ = -∂c(w * If(ρ))
 
         # potential temperature
         flux_bottom = get_boundary_flux(model, bc_ρθ.bottom, ρθ, Y, Ya)
         flux_top = get_boundary_flux(model, bc_ρθ.top, ρθ, Y, Ya)
-        If = Operators.InterpolateC2F()
-        ∂f = Operators.GradientC2F()
-        ∂c = Operators.DivergenceF2C(
-            bottom = Operators.SetValue(flux_bottom),
-            top = Operators.SetValue(flux_top),
+        If = CCO.InterpolateC2F()
+        ∂f = CCO.GradientC2F()
+        ∂c = CCO.DivergenceF2C(
+            bottom = CCO.SetValue(flux_bottom),
+            top = CCO.SetValue(flux_top),
         )
         # TODO!: Undesirable casting to vector required
-        @. dρθ = -∂c(w * If(ρθ)) + ρ * ∂c(Geometry.WVector(ν * ∂f(ρθ / ρ)))
+        @. dρθ = -∂c(w * If(ρθ)) + ρ * ∂c(wvec(ν * ∂f(ρθ / ρ)))
 
         FT = eltype(Y)
-        A = Operators.AdvectionC2C(
-            bottom = Operators.SetValue(Geometry.UVVector(FT(0), FT(0))),
-            top = Operators.SetValue(Geometry.UVVector(FT(0), FT(0))),
+        A = CCO.AdvectionC2C(
+            bottom = CCO.SetValue(uvvec(FT(0), FT(0))),
+            top = CCO.SetValue(uvvec(FT(0), FT(0))),
         )
 
         # uv
         flux_bottom = get_boundary_flux(model, bc_uv.bottom, uv, Y, Ya)
 
-        bcs_bottom = Operators.SetValue(flux_bottom)
-        bcs_top = Operators.SetValue(uvg) # this needs abstraction
-        ∂c = Operators.DivergenceF2C(bottom = bcs_bottom)
-        ∂f = Operators.GradientC2F(top = bcs_top)
-        duv .= (uv .- Ref(uvg)) .× Ref(Geometry.WVector(f))
+        bcs_bottom = CCO.SetValue(flux_bottom)
+        bcs_top = CCO.SetValue(uvg) # this needs abstraction
+        ∂c = CCO.DivergenceF2C(bottom = bcs_bottom)
+        ∂f = CCO.GradientC2F(top = bcs_top)
+        duv .= (uv .- Ref(uvg)) .× Ref(wvec(f))
         @. duv += ∂c(ν * ∂f(uv)) - A(w, uv)
 
         # w
         flux_bottom = get_boundary_flux(model, bc_w.bottom, w, Y, Ya)
         flux_top = get_boundary_flux(model, bc_w.top, w, Y, Ya)
-        If = Operators.InterpolateC2F(
-            bottom = Operators.Extrapolate(),
-            top = Operators.Extrapolate(),
+        If = CCO.InterpolateC2F(
+            bottom = CCO.Extrapolate(),
+            top = CCO.Extrapolate(),
         )
-        ∂f = Operators.GradientC2F()
-        ∂c = Operators.GradientF2C()
-        Af = Operators.AdvectionF2F()
-        divf = Operators.DivergenceC2F()
-        B = Operators.SetBoundaryOperator(
-            bottom = Operators.SetValue(flux_bottom),
-            top = Operators.SetValue(flux_top),
+        ∂f = CCO.GradientC2F()
+        ∂c = CCO.GradientF2C()
+        Af = CCO.AdvectionF2F()
+        divf = CCO.DivergenceC2F()
+        B = CCO.SetBoundaryOperator(
+            bottom = CCO.SetValue(flux_bottom),
+            top = CCO.SetValue(flux_top),
         )
         Φ(z) = grav * z
         Π(ρθ) = C_p * (R_d * ρθ / MSLP)^(R_m / C_v)
-        zc = Fields.coordinate_field(axes(ρ)).z
+        zc = CC.Fields.coordinate_field(axes(ρ)).z
         @. dw = B(
-            Geometry.WVector(-(If(ρθ / ρ) * ∂f(Π(ρθ))) - ∂f(Φ(zc))) +
-            divf(ν * ∂c(w)) - Af(w, w),
+            wvec(-(If(ρθ / ρ) * ∂f(Π(ρθ))) - ∂f(Φ(zc))) + divf(ν * ∂c(w)) - Af(w, w),
         )
 
         return dY
