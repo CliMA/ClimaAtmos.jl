@@ -56,7 +56,7 @@
        Geometry.Covariant123Vector(interp_f2c(w))
 
     # hyperdiffusion
-    χq = @. hwdiv(hgrad(ρq_tot / ρ))
+    χq = @. dρq_tot = hwdiv(hgrad(ρq_tot / ρ))
     Spaces.weighted_dss!(dρq_tot)
     @. dρq_tot = -κ₄ * hwdiv(ρ * hgrad(χq))
 
