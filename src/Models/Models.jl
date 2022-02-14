@@ -74,14 +74,9 @@ variable_types(style::AbstractModelStyle, model::AbstractModel) =
     error("components not implemented for given model style $style & $model")
 
 """
-    variables_spaces(style::AbstractModelStyle)
+    variables_spaces(style::AbstractModelStyle, model::AbstractModel)
 
 Return the state variables for `style`.
-# Example
-```jldoctest; setup = :(using ClimaAtmos.Models)
-julia> Models.variable_spaces(TotalEnergy())
-(ρe_tot = ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace{ClimaCore.Spaces.CellCenter},)
-```
 """
 variable_spaces(style::AbstractModelStyle) =
     error("components not implemented for given model style $style")

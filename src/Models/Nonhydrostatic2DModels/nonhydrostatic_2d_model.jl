@@ -35,7 +35,7 @@ function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
         variable_names = Models.variable_names(component)
         if !isnothing(variable_names) # e.g., a Dry() doesn't have moisture variable names
             variable_types = Models.variable_types(component, model, FT) # variable types are differnent from model to model
-            variable_space_types = Models.variable_spaces(component)
+            variable_space_types = Models.variable_spaces(component, model)
             zero_inits =
                 map(zip(variable_types, variable_space_types)) do (T, ST)
                     zero_instance = zero(T) # somehow need this, otherwise eltype inference error
@@ -43,6 +43,8 @@ function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
                         map(_ -> zero_instance, local_geometry_center)
                     elseif space_face isa ST
                         map(_ -> zero_instance, local_geometry_face)
+                    else
+                        error("$ST is neither a $space_center nor a $space_face.")
                     end
                 end
             Fields.FieldVector(; NamedTuple{variable_names}(zero_inits)...)

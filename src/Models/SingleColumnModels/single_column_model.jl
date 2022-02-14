@@ -4,151 +4,140 @@
 A single column model. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct SingleColumnModel{D, BC, P} <:
-                   Models.AbstractSingleColumnModel
+Base.@kwdef struct SingleColumnModel{D, B, T, M, F, BC, P} <:
+                   AbstractSingleColumnModel
     domain::D
+    base::B = AdvectiveForm()
+    thermodynamics::T = TotalEnergy()
+    moisture::M = Dry()
+    flux_corr::F = false
     boundary_conditions::BC
     parameters::P
 end
 
-function Models.variable_names(::SingleColumnModel)
-    base_vars = (:ρ, :uv, :w, :ρθ)
-    thermo_vars = (:ρθ,)
-    return (base = base_vars, thermodynamics = thermo_vars)
-end
-
-function Models.default_initial_conditions(model::SingleColumnModel)
-    space_c, space_f = make_function_space(model.domain)
-    local_geometry_c = CC.Fields.local_geometry_field(space_c)
-    local_geometry_f = CC.Fields.local_geometry_field(space_f)
-
-    # functions that make zeros for this model
-    zero_val = zero(CC.Spaces.undertype(space_c))
-    zero_scalar(lg) = zero_val
-    zero_12vector(lg) = CC.Geometry.UVVector(zero_val, zero_val)
-    zero_3vector(lg) = CC.Geometry.WVector(zero_val)
-
-    # base components
-    ρ = zero_scalar.(local_geometry_c)
-    uv = zero_12vector.(local_geometry_c)
-    w = zero_3vector.(local_geometry_f) # on faces
-
-    # thermodynamics components
-    ρθ = zero_scalar.(local_geometry_c)
-
-    return CC.Fields.FieldVector(
-        base = CC.Fields.FieldVector(ρ = ρ, uv = uv, w = w),
-        thermodynamics = CC.Fields.FieldVector(ρθ = ρθ),
+function Models.components(model::SingleColumnModel)
+    (
+        base = model.base,
+        thermodynamics = model.thermodynamics,
+        moisture = model.moisture,
     )
 end
 
+function Models.default_initial_conditions(model::SingleColumnModel)
+    # we need to provide default initial conditions for the model, because the ode solver
+    # requires inital conditions when getting instantiated, but we also want to support the `set!` function
+    # interface for initialization and re-initialization.
+    space_center, space_face = Domains.make_function_space(model.domain)
+    local_geometry_center = Fields.local_geometry_field(space_center)
+    local_geometry_face = Fields.local_geometry_field(space_face)
+
+    # initialize everything to zeros of the correct types on the correct spaces
+    FT = Spaces.undertype(space_center)
+    zero_inits = map(Models.components(model)) do component
+        variable_names = Models.variable_names(component)
+        if !isnothing(variable_names) # e.g., a Dry() doesn't have moisture variable names
+            variable_types = Models.variable_types(component, model, FT)
+            variable_space_types = Models.variable_spaces(component, model)
+            zero_inits =
+                map(zip(variable_types, variable_space_types)) do (T, ST)
+                    zero_instance = zero(T) # somehow need this, otherwise eltype inference error
+                    if space_center isa ST
+                        map(_ -> zero_instance, local_geometry_center)
+                    elseif space_face isa ST
+                        map(_ -> zero_instance, local_geometry_face)
+                    else
+                        error("$ST is neither a $space_center nor a $space_face.")
+                    end
+                end
+            tmp = NamedTuple{variable_names}(zero_inits)
+            Fields.FieldVector(; tmp...)
+        end
+    end
+
+    # filter out the nothing subcomponents (e.g., a Dry() doesn't have moisture variables)
+    zero_inits = NamedTuple(
+        c => zero_inits[c]
+        for c in keys(zero_inits) if !isnothing(zero_inits[c])
+    )
+
+    return Fields.FieldVector(; zero_inits...)
+end
+
 function Models.make_ode_function(model::SingleColumnModel)
-    FT = eltype(model.domain)
+    FT = eltype(model.domain) # model works on different float types
 
-    rhs!(dY, Y, Ya, t) = begin
-        # physics parameters
-        C_p::FT = CLIMAParameters.Planet.cp_d(model.parameters)
-        MSLP::FT = CLIMAParameters.Planet.MSLP(model.parameters)
-        R_d::FT = CLIMAParameters.Planet.R_d(model.parameters)
-        R_m::FT = R_d
-        C_v::FT = CLIMAParameters.Planet.cv_d(model.parameters)
-        grav::FT = CLIMAParameters.Planet.grav(model.parameters)
+    # shorthands for model components & model styles
+    base_style = model.base
+    thermo_style = model.thermodynamics
+    moisture_style = model.moisture
+    params = model.parameters
+    flux_correction = model.flux_corr
 
-        # model specific parameters
-        f = model.parameters.f
-        uvg = model.parameters.uvg
-        ν = model.parameters.ν
+    # for now, boundary conditions are hard coded in rhs functions to get to a running Ekman layer soon
+    # later on we will need to unpack all the flux bc here and pass them to the rhs functions
 
-        # base components
-        dYm = dY.base
-        dρ = dYm.ρ
-        duv = dYm.uv
-        dw = dYm.w
-        Ym = Y.base
-        ρ = Ym.ρ
-        uv = Ym.uv
-        w = Ym.w
-
-        # thermodynamics components
-        dρθ = dY.thermodynamics.ρθ
-        ρθ = Y.thermodynamics.ρθ
-        wvec = CC.Geometry.WVector
-        uvvec = CC.Geometry.UVector
-
-        # gather boundary conditions
-        bc_ρ = model.boundary_conditions.ρ
-        bc_uv = model.boundary_conditions.uv
-        bc_w = model.boundary_conditions.w
-        bc_ρθ = model.boundary_conditions.ρθ
-
-        # density
-        flux_bottom = get_boundary_flux(model, bc_ρ.bottom, ρ, Y, Ya)
-        flux_top = get_boundary_flux(model, bc_ρ.top, ρ, Y, Ya)
-        If = CCO.InterpolateC2F()
-        ∂f = CCO.GradientC2F()
-        ∂c = CCO.DivergenceF2C(
-            bottom = CCO.SetValue(flux_bottom),
-            top = CCO.SetValue(flux_top),
-        )
-        @. dρ = -∂c(w * If(ρ))
-
-        # potential temperature
-        flux_bottom = get_boundary_flux(model, bc_ρθ.bottom, ρθ, Y, Ya)
-        flux_top = get_boundary_flux(model, bc_ρθ.top, ρθ, Y, Ya)
-        If = CCO.InterpolateC2F()
-        ∂f = CCO.GradientC2F()
-        ∂c = CCO.DivergenceF2C(
-            bottom = CCO.SetValue(flux_bottom),
-            top = CCO.SetValue(flux_top),
-        )
-        # TODO!: Undesirable casting to vector required
-        @. dρθ = -∂c(w * If(ρθ)) + ρ * ∂c(wvec(ν * ∂f(ρθ / ρ)))
-
-        FT = eltype(Y)
-        A = CCO.AdvectionC2C(
-            bottom = CCO.SetValue(uvvec(FT(0), FT(0))),
-            top = CCO.SetValue(uvvec(FT(0), FT(0))),
+    # this is the complete explicit right-hand side function
+    # assembled here to be delivered to the time stepper.
+    function rhs!(dY, Y, Ya, t)
+        # auxiliary calculation is done here so we don't
+        # redo it all the time and can cache the values
+        Φ = calculate_gravitational_potential(Y, Ya, params, FT)
+        p = calculate_pressure(
+            Y,
+            Ya,
+            base_style,
+            thermo_style,
+            moisture_style,
+            params,
+            FT,
         )
 
-        # uv
-        flux_bottom = get_boundary_flux(model, bc_uv.bottom, uv, Y, Ya)
-
-        bcs_bottom = CCO.SetValue(flux_bottom)
-        bcs_top = CCO.SetValue(uvg) # this needs abstraction
-        ∂c = CCO.DivergenceF2C(bottom = bcs_bottom)
-        ∂f = CCO.GradientC2F(top = bcs_top)
-        duv .= (uv .- Ref(uvg)) .× Ref(wvec(f))
-        @. duv += ∂c(ν * ∂f(uv)) - A(w, uv)
-
-        # w
-        flux_bottom = get_boundary_flux(model, bc_w.bottom, w, Y, Ya)
-        flux_top = get_boundary_flux(model, bc_w.top, w, Y, Ya)
-        If = CCO.InterpolateC2F(
-            bottom = CCO.Extrapolate(),
-            top = CCO.Extrapolate(),
+        # base model equations
+        # Ex.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+        rhs_base_model!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            Φ,
+            base_style,
+            params,
+            flux_correction,
+            FT,
         )
-        ∂f = CCO.GradientC2F()
-        ∂c = CCO.GradientF2C()
-        Af = CCO.AdvectionF2F()
-        divf = CCO.DivergenceC2F()
-        B = CCO.SetBoundaryOperator(
-            bottom = CCO.SetValue(flux_bottom),
-            top = CCO.SetValue(flux_top),
+        # Ex.: ∂ₜρθ = ...
+        rhs_thermodynamics!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            thermo_style,
+            params,
+            flux_correction,
+            FT,
         )
-        Φ(z) = grav * z
-        Π(ρθ) = C_p * (R_d * ρθ / MSLP)^(R_m / C_v)
-        zc = CC.Fields.coordinate_field(axes(ρ)).z
-        @. dw = B(
-            wvec(-(If(ρθ / ρ) * ∂f(Π(ρθ))) - ∂f(Φ(zc))) + divf(ν * ∂c(w)) - Af(w, w),
-        )
+        # Ex.: ∂ₜρq_tot = ...
+        # rhs_moisture!(
+        #     dY,
+        #     Y,
+        #     Ya,
+        #     t,
+        #     p,
+        #     base_style,
+        #     moisture_style,
+        #     model,
+        #     params,
+        #     flux_correction,
+        #     FT,
+        # )
+        # radiation
 
-        return dY
+        # sgs
+
     end
 
     return rhs!
-end
-
-function Models.get_velocities(Y, model::SingleColumnModel)
-    w = Y.base.w
-    return w
 end

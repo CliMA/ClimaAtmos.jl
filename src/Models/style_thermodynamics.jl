@@ -13,7 +13,15 @@ Models.variable_names(::TotalEnergy) = (:ρe_tot,)
 Models.variable_types(::PotentialTemperature, ::AbstractModel, FT) = (ρθ = FT,)
 Models.variable_types(::TotalEnergy, ::AbstractModel, FT) = (ρe_tot = FT,)
 
-Models.variable_spaces(::PotentialTemperature) =
-    (ρθ = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
-Models.variable_spaces(::TotalEnergy) =
-    (ρe_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
+Models.variable_spaces(::PotentialTemperature, ::AbstractSingleColumnModel) =
+    (ρθ = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},)
+Models.variable_spaces(::TotalEnergy, ::AbstractSingleColumnModel) =
+    (ρe_tot = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},)
+Models.variable_spaces(
+    ::PotentialTemperature,
+    ::Union{AbstractNonhydrostatic2DModel, AbstractNonhydrostatic3DModel},
+) = (ρθ = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
+Models.variable_spaces(
+    ::TotalEnergy,
+    ::Union{AbstractNonhydrostatic2DModel, AbstractNonhydrostatic3DModel},
+) = (ρe_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
