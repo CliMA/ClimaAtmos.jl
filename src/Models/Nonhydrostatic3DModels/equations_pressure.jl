@@ -67,6 +67,7 @@ end
 
     interp_f2c = Operators.InterpolateF2C()
 
+    #TODO - why do we need z here?
     z = Fields.coordinate_field(axes(ρ)).z
     uvw = @. Geometry.Covariant123Vector(uh) +
        Geometry.Covariant123Vector(interp_f2c(w))

@@ -6,6 +6,7 @@
     p,
     ::AbstractBaseModelStyle,
     ::Dry,
+    ::NoPrecipitation,
     params,
     hyperdiffusivity,
     FT,
@@ -68,3 +69,4 @@
     # direct stiffness summation
     Spaces.weighted_dss!(dρq_tot)
 end
+

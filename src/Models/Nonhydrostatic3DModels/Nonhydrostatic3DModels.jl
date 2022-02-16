@@ -5,6 +5,7 @@ using StaticArrays
 using UnPack
 using CLIMAParameters
 using Thermodynamics
+using CloudMicrophysics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models
