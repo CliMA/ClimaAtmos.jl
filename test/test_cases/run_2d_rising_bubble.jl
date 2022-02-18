@@ -5,7 +5,7 @@ end
 using Test
 
 using OrdinaryDiffEq: SSPRK33, CallbackSet
-using Plots
+using ClimaCorePlots, Plots
 using UnPack
 
 using CLIMAParameters

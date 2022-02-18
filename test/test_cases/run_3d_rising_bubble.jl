@@ -5,7 +5,7 @@ end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
-using Plots
+using ClimaCorePlots, Plots
 using UnPack
 
 using ClimaCoreVTK
