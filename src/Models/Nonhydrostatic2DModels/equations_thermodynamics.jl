@@ -9,6 +9,7 @@ end
     t,
     p,
     ::PotentialTemperature,
+    bc_thermo,
     params,
     FT,
 )
@@ -17,11 +18,16 @@ end
     ρw = Y.base.ρw
     ρθ = Y.thermodynamics.ρθ
 
+    # bc
+    bc_ρθ = bc_thermo.ρθ
+    flux_bottom = get_boundary_flux(bc_ρθ.bottom, ρθ, Y, Ya)
+    flux_top = get_boundary_flux(bc_ρθ.top, ρθ, Y, Ya)
+
     # operators /w boundary conditions
     hdiv = Operators.Divergence()
     vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
-        top = Operators.SetValue(Geometry.WVector(FT(0))),
+        bottom = Operators.SetValue(flux_bottom),
+        top = Operators.SetValue(flux_top),
     )
     scalar_interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),

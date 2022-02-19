@@ -6,7 +6,7 @@ using CLIMAParameters
 using Thermodynamics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
-using ...Domains, ...Models
+using ...Domains, ...Models, ...BoundaryConditions
 
 export Nonhydrostatic2DModel
 

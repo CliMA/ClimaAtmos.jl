@@ -66,6 +66,15 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
     moisture_style = model.moisture
     params = model.parameters
 
+    # unpack boundary conditions for components
+    bc_base = model.boundary_conditions.base
+    bc_thermo = model.boundary_conditions.thermodynamics
+    if :moisture in propertynames(model.boundary_conditions)
+        bc_moisture = model.boundary_conditions.moisture
+    else
+        bc_moisture = nothing
+    end
+
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
     function rhs!(dY, Y, Ya, t)
@@ -74,9 +83,9 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
         p = calculate_pressure(Y, Ya, thermo_style, moisture_style, params, FT)
 
         # main model equations
-        rhs_base_model!(dY, Y, Ya, t, p, params, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
-        rhs_thermodynamics!(dY, Y, Ya, t, p, thermo_style, params, FT) # Ex.: ∂ₜρθ = ...
-        rhs_moisture!(dY, Y, Ya, t, p, moisture_style, params, FT) # Ex.: ∂ₜρq_tot = ...
+        rhs_base_model!(dY, Y, Ya, t, p, bc_base, params, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+        rhs_thermodynamics!(dY, Y, Ya, t, p, thermo_style, bc_thermo, params, FT) # Ex.: ∂ₜρθ = ...
+        rhs_moisture!(dY, Y, Ya, t, p, moisture_style, bc_moisture, params, FT) # Ex.: ∂ₜρq_tot = ...
         # rhs_tracer!
         # rhs_edmf!
     end

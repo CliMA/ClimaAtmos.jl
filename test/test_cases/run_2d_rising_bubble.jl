@@ -41,9 +41,20 @@ function run_2d_rising_bubble(
         npolynomial = npolynomial,
     )
 
+    boundary_conditions = (;
+        base = (;
+            ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+            ρuh = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+            ρw = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+        ),
+        thermodynamics = (;
+            ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition(),),
+        ),
+    )
+
     model = Nonhydrostatic2DModel(
         domain = domain,
-        boundary_conditions = nothing,
+        boundary_conditions = boundary_conditions,
         parameters = params,
     )
 
