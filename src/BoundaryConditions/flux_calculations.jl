@@ -35,12 +35,7 @@ end
     Vertical fluxes for arbitrary variables with a bulk-formulation drag law, 
     given variable exchange coefficients. (e.g. for energy, or tracers)
 """
-function get_boundary_flux(
-    bc::BulkFormulaCondition,
-    ρc::Fields.Field,
-    Y,
-    Ya,
-)
+function get_boundary_flux(bc::BulkFormulaCondition, ρc::Fields.Field, Y, Ya)
     FT = eltype(Y.base)
     coefficients =
         eltype(bc.coefficients) == FT ? bc.coefficients : bc.coefficients(Y, Ya)

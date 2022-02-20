@@ -53,7 +53,7 @@ function run_3d_rising_bubble(
             ρe_tot = (top = NoFluxCondition(), bottom = NoFluxCondition()),
         ),
         moisture = (;
-        ρq_tot = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+            ρq_tot = (top = NoFluxCondition(), bottom = NoFluxCondition()),
         ),
     )
     model = Nonhydrostatic3DModel(

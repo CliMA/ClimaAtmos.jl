@@ -48,7 +48,7 @@ function run_2d_rising_bubble(
             ρw = (top = NoFluxCondition(), bottom = NoFluxCondition()),
         ),
         thermodynamics = (;
-            ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition(),),
+            ρθ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
         ),
     )
 

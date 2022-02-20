@@ -84,7 +84,17 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
 
         # main model equations
         rhs_base_model!(dY, Y, Ya, t, p, bc_base, params, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
-        rhs_thermodynamics!(dY, Y, Ya, t, p, thermo_style, bc_thermo, params, FT) # Ex.: ∂ₜρθ = ...
+        rhs_thermodynamics!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            thermo_style,
+            bc_thermo,
+            params,
+            FT,
+        ) # Ex.: ∂ₜρθ = ...
         rhs_moisture!(dY, Y, Ya, t, p, moisture_style, bc_moisture, params, FT) # Ex.: ∂ₜρq_tot = ...
         # rhs_tracer!
         # rhs_edmf!

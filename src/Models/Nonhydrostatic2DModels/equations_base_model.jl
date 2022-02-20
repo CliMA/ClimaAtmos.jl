@@ -60,12 +60,8 @@ end
     flux_top = get_boundary_flux(bc_ρuh.top, ρuh, Y, Ya)
     # TODO: need to double check
     tensor_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(
-            (flux_bottom ⊗ Geometry.UVector(FT(0))),
-        ),
-        top = Operators.SetValue(
-            (flux_top ⊗ Geometry.UVector(FT(0))),
-        ),
+        bottom = Operators.SetValue((flux_bottom ⊗ Geometry.UVector(FT(0))),),
+        top = Operators.SetValue((flux_top ⊗ Geometry.UVector(FT(0))),),
     )
     @. dρuh = -hdiv(ρuh ⊗ ρuh / ρ + p * I)
     @. dρuh -= tensor_vdiv_f2c(ρw ⊗ vector_interp_c2f(ρuh / ρ))
@@ -73,7 +69,7 @@ end
 
     # vertical momentum equation
     flux_bottom = get_boundary_flux(bc_ρw.bottom, ρw, Y, Ya)
-    flux_top    = get_boundary_flux(bc_ρw.top, ρw, Y, Ya)
+    flux_top = get_boundary_flux(bc_ρw.top, ρw, Y, Ya)
     B = Operators.SetBoundaryOperator(
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),

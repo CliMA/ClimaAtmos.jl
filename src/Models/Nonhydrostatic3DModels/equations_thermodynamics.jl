@@ -33,7 +33,7 @@ end
     hdiv = Operators.Divergence()
     hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    
+
     interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
@@ -59,7 +59,7 @@ end
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
-    ) 
+    )
     @. dρθ -= hdiv(uvw * (ρθ))
     @. dρθ -= vector_vdiv_f2c(w * interp_c2f(ρθ))
     @. dρθ -= vector_vdiv_f2c(interp_c2f(uh * (ρθ)))
@@ -104,7 +104,7 @@ end
     hdiv = Operators.Divergence()
     hwdiv = Operators.Divergence()
     hgrad = Operators.Gradient()
-    
+
     interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
