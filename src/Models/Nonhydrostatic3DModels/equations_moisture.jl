@@ -6,8 +6,10 @@
     p,
     ::AbstractBaseModelStyle,
     ::Dry,
+    bc_moisture,
     params,
     hyperdiffusivity,
+    flux_correction,
     FT,
 ) = nothing
 
@@ -19,12 +21,17 @@
     p,
     ::AdvectiveForm,
     ::EquilibriumMoisture,
+    bc_moisture,
     params,
     hyperdiffusivity,
+    flux_correction,
     FT,
 )
     # parameters
     κ₄ = hyperdiffusivity
+
+    # unpack bc
+    bc_ρq_tot = bc_moisture.ρq_tot
 
     # unpack needed variables
     dρq_tot = dY.moisture.ρq_tot
@@ -37,10 +44,7 @@
     hdiv = Operators.Divergence()
     hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
-        top = Operators.SetValue(Geometry.WVector(FT(0))),
-    )
+    
     interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
@@ -61,6 +65,13 @@
     @. dρq_tot = -κ₄ * hwdiv(ρ * hgrad(χq))
 
     # advection
+    flux_top = get_boundary_flux(bc_ρq_tot.top, ρq_tot, Y, Ya)
+    flux_bottom = get_boundary_flux(bc_ρq_tot.bottom, ρq_tot, Y, Ya)
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(flux_bottom),
+        top = Operators.SetValue(flux_top),
+    )
+
     @. dρq_tot -= hdiv(uvw * (ρq_tot))
     @. dρq_tot -= vector_vdiv_f2c(w * interp_c2f(ρq_tot))
     @. dρq_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρq_tot)))

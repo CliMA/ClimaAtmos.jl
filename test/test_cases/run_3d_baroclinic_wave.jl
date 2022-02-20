@@ -38,9 +38,20 @@ function run_3d_baroclinic_wave(
         npolynomial = npolynomial,
     )
 
+    boundary_conditions = (;
+        base = (;
+            ρ = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+            uh = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+            w = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+        ),
+        thermodynamics = (;
+            ρe_tot = (top = NoFluxCondition(), bottom = NoFluxCondition()),
+        ),
+    )
+
     model = Nonhydrostatic3DModel(
         domain = domain,
-        boundary_conditions = nothing,
+        boundary_conditions = boundary_conditions,
         parameters = params,
         hyperdiffusivity = FT(1e16),
     )

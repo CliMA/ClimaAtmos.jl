@@ -10,6 +10,7 @@ function rhs_base_model!(
     p,
     Φ,
     ::AdvectiveForm,
+    bc_base,
     params,
     hyperdiffusivity,
     flux_correction,
@@ -19,6 +20,11 @@ function rhs_base_model!(
     Ω::FT = CLIMAParameters.Planet.Omega(params)
     g::FT = CLIMAParameters.Planet.grav(params)
     κ₄::FT = hyperdiffusivity
+
+    # unpack boundary boundary_conditions
+    bc_ρ = bc_base.ρ
+    bc_uh = bc_base.uh
+    bc_w = bc_base.w
 
     # operators
     # spectral horizontal operators
@@ -36,27 +42,6 @@ function rhs_base_model!(
         top = Operators.Extrapolate(),
     )
     interp_f2c = Operators.InterpolateF2C()
-
-    # gradients
-    scalar_vgrad_c2f = Operators.GradientC2F(
-        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    )
-
-    # divergences
-    vector_vdiv_f2c = Operators.DivergenceF2C(
-        top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-        bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-    )
-
-    # curls
-    vector_vcurl_c2f = Operators.CurlC2F(
-        bottom = Operators.SetCurl(Geometry.Contravariant12Vector(
-            FT(0),
-            FT(0),
-        )),
-        top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
-    )
 
     # flux correction aka upwinding
     flux_correction_center = Operators.FluxCorrectionC2C(
@@ -92,6 +77,12 @@ function rhs_base_model!(
     # density
     # the vector is split into horizontal and vertical components so that they can be
     # applied individually
+    flux_bottom = get_boundary_flux(bc_ρ.bottom, ρ, Y, Ya)
+    flux_top = get_boundary_flux(bc_ρ.top, ρ, Y, Ya)
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        top = Operators.SetValue(flux_top),
+        bottom = Operators.SetValue(flux_bottom),
+    )
     uvw = @. Geometry.Covariant123Vector(uh) +
        Geometry.Covariant123Vector(interp_f2c(w))
     @. dρ = -hdiv(ρ * uvw) # horizontal divergence
@@ -99,6 +90,17 @@ function rhs_base_model!(
     @. dρ -= vector_vdiv_f2c(interp_c2f(ρ) * w) # TODO: implicit vertical part
 
     # horizontal momentum
+    # TODO: hmm, same problem as in the 2d model
+    flux_bottom = get_boundary_flux(bc_uh.bottom, uh, Y, Ya)
+    flux_top = get_boundary_flux(bc_uh.top, uh, Y, Ya)
+    vector_vcurl_c2f = Operators.CurlC2F(
+        bottom = Operators.SetCurl(Geometry.Contravariant12Vector(
+            FT(0),
+            FT(0),
+        )),
+        top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
+    )
+
     ω³ = @. hcurl(uh) # Contravariant3Vector
     ω¹² = @. hcurl(w) # Contravariant12Vector
     @. ω¹² += vector_vcurl_c2f(uh) # Contravariant12Vector
@@ -127,6 +129,13 @@ function rhs_base_model!(
     @. duh -= hgrad(E)
 
     # vertical momentum
+    flux_bottom = get_boundary_flux(bc_w.bottom, w, Y, Ya)
+    flux_top = get_boundary_flux(bc_w.top, w, Y, Ya)
+    # TODO: hack in a flux bc??
+    scalar_vgrad_c2f = Operators.GradientC2F(
+        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+    )
     @. dw = ω¹² × u¹² # Covariant3Vector on faces
     @. dw -= scalar_vgrad_c2f(p) / interp_c2f(ρ)
     @. dw -= scalar_vgrad_c2f(E)

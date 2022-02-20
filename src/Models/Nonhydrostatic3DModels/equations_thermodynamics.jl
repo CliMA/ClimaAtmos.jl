@@ -10,6 +10,7 @@ end
     p,
     ::AdvectiveForm,
     ::PotentialTemperature,
+    bc_thermo,
     params,
     hyperdiffusivity,
     flux_correction,
@@ -17,6 +18,9 @@ end
 )
     # parameters
     κ₄ = hyperdiffusivity
+
+    # unpack bc
+    bc_ρθ = bc_thermo.ρθ
 
     # unpack needed variables
     dρθ = dY.thermodynamics.ρθ
@@ -29,10 +33,7 @@ end
     hdiv = Operators.Divergence()
     hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
-        top = Operators.SetValue(Geometry.WVector(FT(0))),
-    )
+    
     interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
@@ -52,7 +53,13 @@ end
     Spaces.weighted_dss!(dρθ)
     @. dρθ = -κ₄ * hwdiv(ρ * hgrad(χe))
 
-    # advection 
+    # advection
+    flux_bottom = get_boundary_flux(bc_ρθ.bottom, ρθ, Y, Ya)
+    flux_top = get_boundary_flux(bc_ρθ.top, ρθ, Y, Ya)
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(flux_bottom),
+        top = Operators.SetValue(flux_top),
+    ) 
     @. dρθ -= hdiv(uvw * (ρθ))
     @. dρθ -= vector_vdiv_f2c(w * interp_c2f(ρθ))
     @. dρθ -= vector_vdiv_f2c(interp_c2f(uh * (ρθ)))
@@ -74,6 +81,7 @@ end
     p,
     ::AdvectiveForm,
     ::TotalEnergy,
+    bc_thermo,
     params,
     hyperdiffusivity,
     flux_correction,
@@ -81,6 +89,9 @@ end
 )
     # parameters
     κ₄ = hyperdiffusivity
+
+    # unpack bc
+    bc_ρe_tot = bc_thermo.ρe_tot
 
     # unpack needed variables
     dρe_tot = dY.thermodynamics.ρe_tot
@@ -93,10 +104,7 @@ end
     hdiv = Operators.Divergence()
     hwdiv = Operators.Divergence()
     hgrad = Operators.Gradient()
-    vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
-        top = Operators.SetValue(Geometry.WVector(FT(0))),
-    )
+    
     interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
@@ -116,7 +124,13 @@ end
     Spaces.weighted_dss!(dρe_tot)
     @. dρe_tot = -κ₄ * hwdiv(ρ * hgrad(χe))
 
-    # advection 
+    # advection
+    flux_bottom = get_boundary_flux(bc_ρe_tot.bottom, ρe_tot, Y, Ya)
+    flux_top = get_boundary_flux(bc_ρe_tot.top, ρe_tot, Y, Ya)
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(flux_bottom),
+        top = Operators.SetValue(flux_top),
+    )
     @. dρe_tot -= hdiv(uvw * (ρe_tot + p))
     @. dρe_tot -= vector_vdiv_f2c(w * interp_c2f(ρe_tot + p))
     @. dρe_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρe_tot + p)))
