@@ -29,6 +29,7 @@ struct HybridPlane{FT} <: AbstractHybridDomain{FT}
     nelements::Tuple{Int, Int}
     npolynomial::Int
     xperiodic::Bool
+    topography::Union{Function,Nothing}
 end
 
 """
@@ -49,6 +50,7 @@ julia> HybridPlane(
             nelements = (5, 10),
             npolynomial = 5,
             xperiodic = true,
+            topography = nothing,
         )
 Domain set-up:
 \txz-plane:\t[0.0, 3.1) × [0.0, 1.0]
@@ -63,10 +65,11 @@ function HybridPlane(
     nelements,
     npolynomial,
     xperiodic = true,
+    topography = nothing
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert zlim[1] < zlim[2]
-    return HybridPlane{FT}(xlim, zlim, nelements, npolynomial, xperiodic)
+    return HybridPlane{FT}(xlim, zlim, nelements, npolynomial, xperiodic, topography)
 end
 
 struct HybridBox{FT} <: AbstractHybridDomain{FT}

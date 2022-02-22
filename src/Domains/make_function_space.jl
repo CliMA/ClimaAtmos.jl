@@ -16,7 +16,7 @@ function make_function_space(domain::HybridPlane)
         boundary_tags = (:bottom, :top),
     )
     vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[2])
-    vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
+    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.IntervalDomain(
         Geometry.XPoint(domain.xlim[1])..Geometry.XPoint(domain.xlim[2]);
@@ -28,9 +28,15 @@ function make_function_space(domain::HybridPlane)
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace1D(horztopology, quad)
 
-    hv_center_space =
-        Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
-    hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
+    # FIXME: Preparing for changes from ClimaCore.jl #535
+    warping_function = domain.topography
+    surface_warp = warping_function.(Fields.coordinate_field(horzspace))
+    hv_face_space = Spaces.ExtrudedFiniteDifferenceSpace(horzspace, 
+                                                         vert_face_space,
+                                                         Hypsography.LinearAdaption(),
+                                                         surface_warp)
+
+    hv_center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(hv_face_space)
 
     return hv_center_space, hv_face_space
 end
