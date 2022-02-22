@@ -97,8 +97,8 @@ function run_1d_ekman_column(
 
         # plot final state
         function ekman_plot(Y, params; title = "", size = (1024, 600))
-            ug = params.u_g
-            vg = params.v_g
+            ug = parent(params.uh_g)[1]
+            vg = parent(params.uh_g)[2]
 
             d = sqrt(2.0 * 0.01 / 5e-5)
             z_centers = parent(Fields.coordinate_field(axes(Y.ρ)))
