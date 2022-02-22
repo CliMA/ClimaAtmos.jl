@@ -3,6 +3,7 @@ module BoundaryConditions
 using LinearAlgebra: norm
 using ClimaCore: Geometry, Fields, Operators
 using ClimaCore.Geometry: ⊗
+using SurfaceFluxes
 
 export get_boundary_flux,
     AbstractBoundaryCondition,
