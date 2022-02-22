@@ -18,10 +18,28 @@ Models.variable_types(::EquilibriumMoisture, ::AbstractModel, FT) =
 Models.variable_types(::NonEquilibriumMoisture, ::AbstractModel, FT) =
     (ρq_tot = FT, ρq_liq = FT, ρq_ice = FT)
 
-Models.variable_spaces(::Dry) = Nothing
-Models.variable_spaces(::EquilibriumMoisture) =
+Models.variable_spaces(::Dry, ::AbstractSingleColumnModel) = Nothing
+Models.variable_spaces(::EquilibriumMoisture, ::AbstractSingleColumnModel) =
     (ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
-Models.variable_spaces(::NonEquilibriumMoisture) = (
+Models.variable_spaces(::NonEquilibriumMoisture, ::AbstractSingleColumnModel) =
+    (
+        ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
+        ρq_liq = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
+        ρq_ice = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
+    )
+
+Models.variable_spaces(
+    ::Dry,
+    ::Union{AbstractNonhydrostatic2DModel, AbstractNonhydrostatic3DModel},
+) = Nothing
+Models.variable_spaces(
+    ::EquilibriumMoisture,
+    ::Union{AbstractNonhydrostatic2DModel, AbstractNonhydrostatic3DModel},
+) = (ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},)
+Models.variable_spaces(
+    ::NonEquilibriumMoisture,
+    ::Union{AbstractNonhydrostatic2DModel, AbstractNonhydrostatic3DModel},
+) = (
     ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
     ρq_liq = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
     ρq_ice = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},

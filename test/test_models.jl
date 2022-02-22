@@ -108,7 +108,7 @@ float_types = (Float32, Float64)
 
         # test variable_spaces
         for (s, sp) in zip(styles, spaces)
-            @test Models.variable_spaces(s) == sp
+            @test Models.variable_spaces(s, model) == sp
         end
     end
 end
