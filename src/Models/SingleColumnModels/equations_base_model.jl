@@ -7,7 +7,8 @@ function rhs_base_model!(
     Y,
     Ya,
     t,
-    Π, # just for now, incremental tests -> climacore ekman, p,
+    # Π, # just for now, incremental tests -> climacore ekman, p,
+    p,
     Φ,
     ::AdvectiveForm,
     params,
@@ -108,7 +109,7 @@ function rhs_base_model!(
     vadv_f2f = Operators.AdvectionF2F()
     @. dw = wbc(
         Geometry.WVector(
-            -(interp_c2f(ρθ / ρ) * scalar_vgrad_c2f(Π)) - scalar_vgrad_c2f(Φ),
+            -(scalar_vgrad_c2f(p) / interp_c2f(ρ)) - scalar_vgrad_c2f(Φ),
         ) + vdiv_c2f(ν * scalar_vgrad_f22(w)) - vadv_f2f(w, w),
     )
 
