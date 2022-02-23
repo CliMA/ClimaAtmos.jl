@@ -33,6 +33,9 @@ Manifest.toml
 
 # ignore simulation outputs
 *.vtu
+*.in
+*.json
+*.Output.
 *.nc
 *.mp4
 *.png

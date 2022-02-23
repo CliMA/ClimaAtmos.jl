@@ -141,3 +141,14 @@ steps:
       config: cpu
       queue: central
       slurm_ntasks: 1
+
+  - label: ":computer: edmf"
+    key: "cpu_1d_edmf"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_1d_edmf.jl"
+    artifact_paths:
+      - "test/test_cases/run_1d_edmf/*"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
