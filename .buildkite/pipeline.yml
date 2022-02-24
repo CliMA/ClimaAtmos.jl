@@ -47,10 +47,28 @@ steps:
 
   # Cases
 
-  - label: ":computer: 1d_ekman_column"
-    key: "cpu_1d_ekman_column"
+  - label: ":computer: 1d_ekman_column regression (Float32)"
+    key: "cpu_1d_ekman_column_reg_ft32"
     command:
-      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl"
+      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float32 --test_mode regression"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 1d_ekman_column regression (Float64)"
+    key: "cpu_1d_ekman_column_reg_ft64"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode regression"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 1d_ekman_column validation"
+    key: "cpu_1d_ekman_column_val"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode validation"
     artifact_paths:
       - "test/test_cases/run_1d_ekman_column/*"
     agents:

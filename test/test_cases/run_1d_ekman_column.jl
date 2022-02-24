@@ -4,6 +4,7 @@ if !haskey(ENV, "BUILDKITE")
 end
 using Test
 
+import ArgParse
 using JLD2
 using OrdinaryDiffEq: SSPRK33, CallbackSet, DiscreteCallback
 using ClimaCorePlots, Plots
@@ -36,7 +37,7 @@ function run_1d_ekman_column(
     nelements = 30,
     dt = 0.01,
     callbacks = (),
-    test_mode = :regression,
+    test_mode = :validation,
 ) where {FT}
     params = EkmanParameters{FT}()
 
@@ -107,13 +108,6 @@ function run_1d_ekman_column(
         @test minimum(parent(u.uh)) ≈ current_min atol = 1e-3
         @test maximum(parent(u.uh)) ≈ current_max atol = 1e-3
     elseif test_mode == :validation
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
-        @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uv, w = w)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
-        run!(simulation)
-        u_end = simulation.integrator.u.base
-
         simulation = Simulation(
             anelastic_model,
             stepper,
@@ -186,11 +180,6 @@ function run_1d_ekman_column(
                 size = size,
             )
         end
-        foi = ekman_plot(u_end, params)
-        Plots.png(
-            foi,
-            joinpath(path, "ekman_column_1d_FT_$(FT)_model_$(model.base)"),
-        )
 
         foi = ekman_plot(anelastic_u_end, params)
         Plots.png(
@@ -209,8 +198,19 @@ function run_1d_ekman_column(
     nothing
 end
 
-@testset "1D Ekman column" begin
-    for FT in (Float32, Float64)
-        run_1d_ekman_column(FT)
-    end
+s = ArgParse.ArgParseSettings()
+ArgParse.@add_arg_table s begin
+    "--FT"
+    help = "Float type"
+    arg_type = String
+    "--test_mode"
+    help = "Testing mode (regression vs validation)"
+    arg_type = String
+    default = "regression"
 end
+
+parsed_args = ArgParse.parse_args(ARGS, s)
+FT = eval(Symbol(parsed_args["FT"]))
+test_mode = Symbol(parsed_args["test_mode"])
+
+run_1d_ekman_column(FT; test_mode)
