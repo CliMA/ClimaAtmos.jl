@@ -38,3 +38,22 @@ end
     @. dρθ = -vector_vdiv_f2c(w * interp_c2f(ρθ))
 
 end
+
+@inline function rhs_thermodynamics!(
+    dY,
+    Y,
+    Ya,
+    t,
+    p,
+    ::AnelasticAdvectiveForm,
+    ::PotentialTemperature,
+    params,
+    flux_correction,
+    FT,
+)
+    # thermodynamics components
+    dρθ = dY.thermodynamics.ρθ
+
+    dρθ .= FT(0)
+
+end

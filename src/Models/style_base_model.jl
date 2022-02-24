@@ -5,9 +5,11 @@ abstract type AbstractBaseModelStyle <: AbstractModelStyle end
 
 struct AdvectiveForm <: AbstractBaseModelStyle end
 struct ConservativeForm <: AbstractBaseModelStyle end
+struct AnelasticAdvectiveForm <: AbstractBaseModelStyle end
 
 Models.variable_names(::AdvectiveForm) = (:ρ, :uh, :w)
 Models.variable_names(::ConservativeForm) = (:ρ, :ρuh, :ρw)
+Models.variable_names(::AnelasticAdvectiveForm) = (:ρ, :uh)
 
 Models.variable_types(
     ::AdvectiveForm,
@@ -19,6 +21,11 @@ Models.variable_types(
     ::AbstractSingleColumnModel,
     ::Type{FT},
 ) where {FT} = (ρ = FT, ρuh = Geometry.UVVector{FT}, ρw = Geometry.WVector{FT})
+Models.variable_types(
+    ::AnelasticAdvectiveForm,
+    ::AbstractSingleColumnModel,
+    ::Type{FT},
+) where {FT} = (ρ = FT, uh = Geometry.UVVector{FT})
 
 Models.variable_types(
     ::AdvectiveForm,
@@ -79,3 +86,9 @@ Models.variable_spaces(
     ρuh = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
     ρw = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellFace},
 )
+
+Models.variable_spaces(::AnelasticAdvectiveForm, ::AbstractSingleColumnModel) =
+    (
+        ρ = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},
+        uh = Spaces.FiniteDifferenceSpace{Spaces.CellCenter},
+    )
