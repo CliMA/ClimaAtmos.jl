@@ -65,8 +65,18 @@ function run_1d_ekman_column(
         parameters = params,
     )
 
+    anelastic_model = SingleColumnModel(
+        domain = domain,
+        base = AnelasticAdvectiveForm(),
+        thermodynamics = PotentialTemperature(),
+        turbconv = ConstantViscosity(ν = params.ν),
+        boundary_conditions = nothing, #boundary_conditions,
+        parameters = params,
+    )
+
     # execute differently depending on testing mode
     if test_mode == :regression
+        # test compressible model
         # Generate simple simulation data for test
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
@@ -80,6 +90,22 @@ function run_1d_ekman_column(
         current_max = 0.0
         @test minimum(parent(u.w)) ≈ current_min atol = 1e-3
         @test maximum(parent(u.w)) ≈ current_max atol = 1e-3
+
+        # test anelastic model
+        dt = FT(2.0)
+        simulation =
+            Simulation(anelastic_model, stepper, dt = dt, tspan = (0.0, dt))
+        @unpack ρ, uv, ρθ = init_1d_ekman_column(FT, params)
+        set!(simulation, :base, ρ = ρ, uh = uv)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
+        step!(simulation)
+        u = simulation.integrator.u.base
+
+        # perform regression check 
+        current_min = FT(0)
+        current_max = FT(1)
+        @test minimum(parent(u.uh)) ≈ current_min atol = 1e-3
+        @test maximum(parent(u.uh)) ≈ current_max atol = 1e-3
     elseif test_mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600.0))
         @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
@@ -87,6 +113,18 @@ function run_1d_ekman_column(
         set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
         u_end = simulation.integrator.u.base
+
+        simulation = Simulation(
+            anelastic_model,
+            stepper,
+            dt = 2.0,
+            tspan = (0.0, 30 * 3600.0),
+        )
+        @unpack ρ, uv, ρθ = init_1d_ekman_column(FT, params)
+        set!(simulation, :base, ρ = ρ, uh = uv)
+        set!(simulation, :thermodynamics, ρθ = ρθ)
+        run!(simulation)
+        anelastic_u_end = simulation.integrator.u.base
 
         # post-processing
         ENV["GKSwstype"] = "nul"
@@ -149,7 +187,19 @@ function run_1d_ekman_column(
             )
         end
         foi = ekman_plot(u_end, params)
-        Plots.png(foi, joinpath(path, "ekman_column_1d_FT_$FT"))
+        Plots.png(
+            foi,
+            joinpath(path, "ekman_column_1d_FT_$(FT)_model_$(model.base)"),
+        )
+
+        foi = ekman_plot(anelastic_u_end, params)
+        Plots.png(
+            foi,
+            joinpath(
+                path,
+                "ekman_column_1d_FT_$(FT)_model_$(anelastic_model.base)",
+            ),
+        )
 
         @test true # check is visual
     else

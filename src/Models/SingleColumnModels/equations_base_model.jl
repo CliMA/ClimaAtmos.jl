@@ -79,3 +79,35 @@ function rhs_base_model!(
     )
 
 end
+
+function rhs_base_model!(
+    dY,
+    Y,
+    Ya,
+    t,
+    # Π, # just for now, incremental tests -> climacore ekman, p,
+    p,
+    Φ,
+    ::AnelasticAdvectiveForm,
+    params,
+    flux_correction,
+    FT,
+)
+    # base components
+    dρ = dY.base.ρ
+    duh = dY.base.uh
+    uh = Y.base.uh
+
+    # experiment specif parameters
+    # TODO: given lat in params, f = @. Geometry.Contravariant3Vector(Geometry.WVector(2*Ω*params.lat,)) 
+    f = params.f
+    uh_g = params.uh_g
+
+    # density
+    # anelastic
+    dρ .= FT(0)
+
+    # horizontal velocity
+    duh .= (uh .- Ref(uh_g)) .× Ref(Geometry.WVector(f))
+
+end

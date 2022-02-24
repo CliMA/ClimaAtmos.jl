@@ -301,12 +301,14 @@ end
 
         model = SingleColumnModel(
             domain = domain,
+            base = Models.AnelasticAdvectiveForm(),
             thermodynamics = Models.PotentialTemperature(),
             moisture = Models.EquilibriumMoisture(),
             turbconv = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )
+        @test model.base == Models.AnelasticAdvectiveForm()
         @test model.moisture == Models.EquilibriumMoisture()
         @test model.thermodynamics == Models.PotentialTemperature()
         @test model.turbconv == Models.ConstantViscosity()
