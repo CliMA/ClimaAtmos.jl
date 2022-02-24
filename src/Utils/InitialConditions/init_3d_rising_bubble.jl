@@ -95,6 +95,9 @@ function init_3d_rising_bubble(
     # potential temperature density
     ρθ(local_geometry) = ρ(local_geometry) * θ(local_geometry)
 
+    # internal energy density
+    ρe_int(local_geometry) = ρ(local_geometry) * e_int(local_geometry)
+
     # total energy density
     ρe_tot(local_geometry) = ρ(local_geometry) * e_tot(local_geometry)
 
@@ -111,8 +114,10 @@ function init_3d_rising_bubble(
         ic = (ρ = ρ, ρθ = ρθ, uh = uh, w = w)
     elseif thermo_style isa Models.TotalEnergy
         ic = (ρ = ρ, ρe_tot = ρe_tot, uh = uh, w = w)
+    elseif thermo_style isa Models.InternalEnergy
+        ic = (ρ = ρ, ρe_int = ρe_int, uh = uh, w = w)
     else
-        throw(ArgumentError("thermovar $thermodynamics unknown."))
+        throw(ArgumentError("thermovar $thermo_style unknown."))
     end
 
     if moist_style isa Models.Dry

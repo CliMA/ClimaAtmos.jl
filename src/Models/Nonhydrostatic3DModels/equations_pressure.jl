@@ -27,6 +27,24 @@ end
     Y,
     Ya,
     ::AdvectiveForm,
+    ::InternalEnergy,
+    ::Dry,
+    params,
+    FT,
+)
+    ρ = Y.base.ρ
+    ρe_int = Y.thermodynamics.ρe_int
+
+    e_int = @. ρe_int / ρ
+    p = Thermodynamics.air_pressure.(Thermodynamics.PhaseDry.(params, e_int, ρ))
+
+    return p
+end
+
+@inline function calculate_pressure(
+    Y,
+    Ya,
+    ::AdvectiveForm,
     ::TotalEnergy,
     ::Dry,
     params,

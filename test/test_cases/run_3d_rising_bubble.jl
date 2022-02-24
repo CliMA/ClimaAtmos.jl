@@ -50,6 +50,14 @@ function run_3d_rising_bubble(
         moisture = EquilibriumMoisture(),
         hyperdiffusivity = FT(100),
     )
+    model_eint = Nonhydrostatic3DModel(
+        domain = domain,
+        boundary_conditions = nothing,
+        thermodynamics = InternalEnergy(),
+        moisture = Dry(),
+        parameters = params,
+        hyperdiffusivity = FT(100),
+    )
     model_pottemp = Nonhydrostatic3DModel(
         domain = domain,
         boundary_conditions = nothing,
@@ -143,6 +151,48 @@ function run_3d_rising_bubble(
                 @test abs(Δρ) < 1e-12
                 @test abs(Δρe_tot) < 1e-5
                 @test abs(Δρq_tot) < 1e-3
+            end
+        end
+        @testset "Regression: Internal Energy Model" begin
+            simulation =
+                Simulation(model_eint, stepper, dt = dt, tspan = (0.0, 1.0))
+            @unpack ρ, uh, w, ρe_int = init_3d_rising_bubble(
+                FT,
+                params,
+                thermo_style = model_eint.thermodynamics,
+                moist_style = model_eint.moisture,
+            )
+            set!(simulation, :base, ρ = ρ, uh = uh, w = w)
+            set!(simulation, :thermodynamics, ρe_int = ρe_int)
+            u = simulation.integrator.u
+            ∫ρ_0 = sum(u.base.ρ)
+            ∫ρe_int_0 = sum(u.thermodynamics.ρe_int)
+
+            step!(simulation)
+
+            # Current ρe_tot
+            current_min = 226937.6900729421
+            current_max = 251872.3101244288
+
+            u = simulation.integrator.u
+
+            @test minimum(parent(u.thermodynamics.ρe_int)) ≈ current_min atol =
+                1e-1
+            @test maximum(parent(u.thermodynamics.ρe_int)) ≈ current_max atol =
+                1e-1
+
+            # perform regression check
+            u = simulation.integrator.u
+            ∫ρ_e = sum(u.base.ρ)
+            ∫ρe_int_e = sum(u.thermodynamics.ρe_int)
+            Δρ = (∫ρ_e - ∫ρ_0) ./ ∫ρ_0 * 100
+            Δρe_int = (∫ρe_int_e - ∫ρe_int_0) ./ ∫ρe_int_0 * 100
+            if FT == Float32
+                @test abs(Δρ) < 3e-5
+                @test abs(Δρe_int) < 1e-5
+            else
+                @test abs(Δρ) < 1e-12
+                @test abs(Δρe_int) < 1e-5
             end
         end
     elseif test_mode == :validation
