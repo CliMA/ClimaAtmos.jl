@@ -108,7 +108,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
             Y;
             t0 = simulation.integrator.t,
             tf = time_final,
-            erase_sol = false,
+            erase_sol = true,
             reset_dt = false,
             reinit_callbacks = true,
             initialize_save = false,
