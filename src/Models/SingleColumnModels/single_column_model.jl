@@ -4,12 +4,13 @@
 A single column model. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct SingleColumnModel{D, B, T, M, F, BC, P} <:
+Base.@kwdef struct SingleColumnModel{D, B, T, M, SGS, F, BC, P} <:
                    AbstractSingleColumnModel
     domain::D
     base::B = AdvectiveForm()
     thermodynamics::T = TotalEnergy()
     moisture::M = Dry()
+    turbconv::SGS = nothing
     flux_corr::F = false
     boundary_conditions::BC
     parameters::P
@@ -20,6 +21,7 @@ function Models.components(model::SingleColumnModel)
         base = model.base,
         thermodynamics = model.thermodynamics,
         moisture = model.moisture,
+        turbconv = model.turbconv,
     )
 end
 
@@ -70,6 +72,7 @@ function Models.make_ode_function(model::SingleColumnModel)
     base_style = model.base
     thermo_style = model.thermodynamics
     moisture_style = model.moisture
+    turbconv_style = model.turbconv
     params = model.parameters
     flux_correction = model.flux_corr
 
@@ -119,7 +122,7 @@ function Models.make_ode_function(model::SingleColumnModel)
             flux_correction,
             FT,
         )
-        # Ex.: ∂ₜρq_tot = ...
+        # # Ex.: ∂ₜρq_tot = ...
         # rhs_moisture!(
         #     dY,
         #     Y,
@@ -136,6 +139,19 @@ function Models.make_ode_function(model::SingleColumnModel)
         # radiation
 
         # sgs
+        rhs_turbconv!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            thermo_style,
+            moisture_style,
+            turbconv_style,
+            params,
+            FT,
+        )
 
     end
 

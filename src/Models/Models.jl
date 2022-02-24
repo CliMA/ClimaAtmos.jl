@@ -25,6 +25,7 @@ export AbstractModelStyle,
     Dry,
     EquilibriumMoisture,
     NonEquilibriumMoisture,
+    ConstantViscosity,
     get_velocities
 
 export SingleColumnModel, Nonhydrostatic2DModel, Nonhydrostatic3DModel
@@ -110,6 +111,7 @@ get_velocities(Y, model::AbstractModel) =
 include("style_base_model.jl")
 include("style_thermodynamics.jl")
 include("style_moisture.jl")
+include("style_turbconv.jl")
 
 # models
 include("SingleColumnModels/SingleColumnModels.jl")
