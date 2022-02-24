@@ -17,5 +17,6 @@ include("equations_thermodynamics.jl")
 include("equations_moisture.jl")
 include("equations_pressure.jl")
 include("equations_gravitational_potential.jl")
+include("equations_turbconv.jl")
 
 end # module

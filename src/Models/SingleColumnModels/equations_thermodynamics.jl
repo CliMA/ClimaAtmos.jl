@@ -14,11 +14,7 @@ end
     flux_correction,
     FT,
 )
-    # parameters
-    ν = params.ν
-
     # base components
-    ρ = Y.base.ρ
     w = Y.base.w
 
     # thermodynamics components
@@ -34,14 +30,11 @@ end
     flux_bottom = FT(0.0)
     flux_top = FT(0.0)
     interp_c2f = Operators.InterpolateC2F()
-    scalar_vgard_c2f = Operators.GradientC2F()
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(Geometry.WVector(flux_bottom)),
         top = Operators.SetValue(Geometry.WVector(flux_top)),
     )
     # TODO!: Undesirable casting to vector required
-    @. dρθ =
-        -vector_vdiv_f2c(w * interp_c2f(ρθ)) +
-        ρ * vector_vdiv_f2c(ν * scalar_vgard_c2f(ρθ / ρ))
+    @. dρθ = -vector_vdiv_f2c(w * interp_c2f(ρθ))
 
 end
