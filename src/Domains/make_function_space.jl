@@ -3,7 +3,11 @@ function make_function_space(domain::Column)
         Geometry.ZPoint(domain.zlim[1])..Geometry.ZPoint(domain.zlim[2]);
         boundary_tags = (:bottom, :top),
     )
-    mesh = Meshes.IntervalMesh(column; nelems = domain.nelements)
+    mesh = Meshes.IntervalMesh(
+        column,
+        domain.stretching;
+        nelems = domain.nelements,
+    )
     center_space = Spaces.CenterFiniteDifferenceSpace(mesh)
     face_space = Spaces.FaceFiniteDifferenceSpace(center_space)
 
@@ -15,7 +19,11 @@ function make_function_space(domain::HybridPlane)
         Geometry.ZPoint(domain.zlim[1])..Geometry.ZPoint(domain.zlim[2]);
         boundary_tags = (:bottom, :top),
     )
-    vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[2])
+    vertmesh = Meshes.IntervalMesh(
+        vertdomain,
+        domain.stretching;
+        nelems = domain.nelements[2],
+    )
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.IntervalDomain(
@@ -40,7 +48,11 @@ function make_function_space(domain::HybridBox)
         Geometry.ZPoint(domain.zlim[1])..Geometry.ZPoint(domain.zlim[2]);
         boundary_tags = (:bottom, :top),
     )
-    vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[3])
+    vertmesh = Meshes.IntervalMesh(
+        vertdomain,
+        domain.stretching;
+        nelems = domain.nelements[3],
+    )
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.RectangleDomain(
@@ -72,7 +84,11 @@ function make_function_space(domain::SphericalShell{FT}) where {FT}
         boundary_tags = (:bottom, :top),
     )
 
-    vertmesh = Meshes.IntervalMesh(vertdomain, nelems = domain.nelements[2])
+    vertmesh = Meshes.IntervalMesh(
+        vertdomain,
+        domain.stretching;
+        nelems = domain.nelements[2],
+    )
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.SphereDomain(domain.radius)
