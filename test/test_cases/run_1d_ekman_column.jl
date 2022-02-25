@@ -81,8 +81,11 @@ function run_1d_ekman_column(
         # Generate simple simulation data for test
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uv, w, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uv, w = w)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
+        Y = simulation.integrator.u
+        set!(Y.base.ρ, ρ)
+        set!(Y.base.uh, uv)
+        set!(Y.base.w, w)
+        set!(Y.thermodynamics.ρθ, ρθ)
         step!(simulation)
         u = simulation.integrator.u.base
 
@@ -97,8 +100,10 @@ function run_1d_ekman_column(
         simulation =
             Simulation(anelastic_model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uv, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uv)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
+        Y = simulation.integrator.u
+        set!(Y.base.ρ, ρ)
+        set!(Y.base.uh, uv)
+        set!(Y.thermodynamics.ρθ, ρθ)
         step!(simulation)
         u = simulation.integrator.u.base
 
@@ -115,8 +120,10 @@ function run_1d_ekman_column(
             tspan = (0.0, 30 * 3600.0),
         )
         @unpack ρ, uv, ρθ = init_1d_ekman_column(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uv)
-        set!(simulation, :thermodynamics, ρθ = ρθ)
+        Y = simulation.integrator.u
+        set!(Y.base.ρ, ρ)
+        set!(Y.base.uh, uv)
+        set!(Y.thermodynamics.ρθ, ρθ)
         run!(simulation)
         anelastic_u_end = simulation.integrator.u.base
 

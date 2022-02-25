@@ -52,8 +52,11 @@ function run_3d_balanced_flow(
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uh, w, ρe_tot =
             init_3d_baroclinic_wave(FT, params, isbalanced = true)
-        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+        set!(model.base.ρ, ρ)
+        set!(model.base.uh, uh)
+        set!(model.base.w, w)
+        set!(model.thermodynamics.ρe_tot, ρe_tot)
+
         step!(simulation)
 
         ub = simulation.integrator.u.base
@@ -75,8 +78,10 @@ function run_3d_balanced_flow(
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600))
         @unpack ρ, uh, w, ρe_tot =
             init_3d_baroclinic_wave(FT, params, isbalanced = true)
-        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+        set!(model.base.ρ, ρ)
+        set!(model.base.uh, uh)
+        set!(model.base.w, w)
+        set!(model.thermodynamics.ρe_tot, ρe_tot)
         u_init = simulation.integrator.u
 
         run!(simulation)

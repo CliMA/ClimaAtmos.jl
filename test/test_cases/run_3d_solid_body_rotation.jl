@@ -51,8 +51,10 @@ function run_3d_solid_body_rotation(
     if test_mode == :regression
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, dt))
         @unpack ρ, uh, w, ρe_tot = init_3d_solid_body_rotation(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+        set!(model.base.ρ, ρ)
+        set!(model.base.uh, uh)
+        set!(model.base.w, w)
+        set!(model.thermodynamics.ρe_tot, ρe_tot)
         step!(simulation)
         u = simulation.integrator.u.base
         uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), u.uh)
@@ -71,8 +73,10 @@ function run_3d_solid_body_rotation(
     elseif test_mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600))
         @unpack ρ, uh, w, ρe_tot = init_3d_solid_body_rotation(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+        set!(model.base.ρ, ρ)
+        set!(model.base.uh, uh)
+        set!(model.base.w, w)
+        set!(model.thermodynamics.ρe_tot, ρe_tot)
         run!(simulation)
         u_end = simulation.integrator.u.base
 

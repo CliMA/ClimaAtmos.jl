@@ -82,8 +82,10 @@ function run_3d_rising_bubble(
                 thermo_style = model_pottemp.thermodynamics,
                 moist_style = model_pottemp.moisture,
             )
-            set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-            set!(simulation, :thermodynamics, ρθ = ρθ)
+            set!(model.base.ρ, ρ)
+            set!(model.base.uh, uh)
+            set!(model.base.w, w)
+            set!(model.thermodynamics.ρθ, ρθ)
             u = simulation.integrator.u
             ∫ρ_0 = sum(u.base.ρ)
             ∫ρθ_0 = sum(u.thermodynamics.ρθ)
@@ -115,9 +117,11 @@ function run_3d_rising_bubble(
                 thermo_style = model.thermodynamics,
                 moist_style = model.moisture,
             )
-            set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-            set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
-            set!(simulation, :moisture, ρq_tot = ρq_tot)
+            set!(model.base.ρ, ρ)
+            set!(model.base.uh, uh)
+            set!(model.base.w, w)
+            set!(model.thermodynamics.ρe_tot, ρe_tot)
+            set!(model.moisture.ρq_tot, ρq_tot)
             u = simulation.integrator.u
             ∫ρ_0 = sum(u.base.ρ)
             ∫ρe_tot_0 = sum(u.thermodynamics.ρe_tot)
@@ -162,8 +166,10 @@ function run_3d_rising_bubble(
                 thermo_style = model_eint.thermodynamics,
                 moist_style = model_eint.moisture,
             )
-            set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-            set!(simulation, :thermodynamics, ρe_int = ρe_int)
+            set!(model.base.ρ, ρ)
+            set!(model.base.uh, uh)
+            set!(model.base.w, w)
+            set!(model.thermodynamics.ρe_tot, ρe_tot)
             u = simulation.integrator.u
             ∫ρ_0 = sum(u.base.ρ)
             ∫ρe_int_0 = sum(u.thermodynamics.ρe_int)
@@ -209,8 +215,10 @@ function run_3d_rising_bubble(
                 thermo_style = model_pottemp.thermodynamics,
                 moist_style = model_pottemp.moisture,
             )
-            set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-            set!(simulation, :thermodynamics, ρθ = ρθ)
+            set!(model.base.ρ, ρ)
+            set!(model.base.uh, uh)
+            set!(model.base.w, w)
+            set!(model.thermodynamics.ρθ, ρθ)
 
             # Initial values. Get domain integrated quantity
             u_start = simulation.integrator.u
@@ -245,9 +253,11 @@ function run_3d_rising_bubble(
                 thermo_style = model.thermodynamics,
                 moist_style = model.moisture,
             )
-            set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-            set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
-            set!(simulation, :moisture, ρq_tot = ρq_tot)
+            set!(model.base.ρ, ρ)
+            set!(model.base.uh, uh)
+            set!(model.base.w, w)
+            set!(model.thermodynamics.ρe_tot, ρe_tot)
+            set!(model.moisture.ρq_tot, ρq_tot)
 
             # Initial values. Get domain integrated quantity
             u_start = simulation.integrator.u

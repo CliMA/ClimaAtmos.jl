@@ -54,8 +54,10 @@ function run_3d_baroclinic_wave(
 
         # test set function
         @unpack ρ, uh, w, ρe_tot = init_3d_baroclinic_wave(FT, params)
-        set!(simulation, :base, ρ = ρ, uh = uh, w = w)
-        set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
+        set!(model.base.ρ, ρ)
+        set!(model.base.uh, uh)
+        set!(model.base.w, w)
+        set!(model.thermodynamics.ρe_tot, ρe_tot)
 
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs

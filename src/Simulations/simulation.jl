@@ -91,15 +91,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
 
         # sometimes we want to set with a function and sometimes with an
         # Field. This supports both behaviors.
-        if f isa Function
-            space = axes(target_field)
-            local_geometry = Fields.local_geometry_field(space)
-            target_field .= f.(local_geometry)
-        elseif f isa Fields.Field # ClimaCore Field
-            target_field .= f
-        else
-            throw(ArgumentError("$varname not a compatible type."))
-        end
+        set!(target_field, f)
 
         # we need to use the reinit function because we don't 
         # have direct state access using OrdinaryDiffEq
@@ -117,6 +109,17 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
     end
 
     nothing
+end
+
+function set!(target_field::Fields.Field, f::Function)
+    space = axes(target_field)
+    local_geometry = Fields.local_geometry_field(space)
+    target_field .= f.(local_geometry)
+    return nothing
+end
+function set!(target_field::Fields.Field, f::Fields.Field)
+    target_field .= f
+    return nothing
 end
 
 """

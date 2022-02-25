@@ -55,8 +55,11 @@ julia> using UnPack
 julia> using OrdinaryDiffEq: SSPRK33
 julia> simulation = Simulation(model, SSPRK33(), dt = 0.02, tspan = (0.0, 1.0)) # Run for 1.0s in 0.02s intervals
 julia> @unpack ρ, uh, w, ρe_tot = init_3d_baroclinic_wave(FT, params); # Unpack from the standard initial condition function
-julia> set!(simulation, :base, ρ = ρ, uh = uh, w = w); # This depends on your model choice!
-julia> set!(simulation, :thermodynamics, ρe_tot = ρe_tot); # This depends on your model choice!  
+julia> Y = simulation.integrator.u
+julia> set!(Y.base.ρ, ρ) # This depends on your model choice!
+julia> set!(Y.base.uh, uh) # This depends on your model choice!
+julia> set!(Y.base.w, w) # This depends on your model choice!
+julia> set!(Y.thermodynamics.ρe_tot, ρe_tot) # This depends on your model choice!
 ```
 - For details on model properties, see the `Simulations` API documentation. Tracers, EDMF variables will have similar assignments using symbol identifiers. `simulation.integrator.u` now contains the initial state. e.g. `simulation.integrator.base.uh` contains horizontal velocities, and so on. `show(simulation)` to view information on an existing `simulation`. To begin time integration, we either `step!` or `run!` the simulation. 
 
