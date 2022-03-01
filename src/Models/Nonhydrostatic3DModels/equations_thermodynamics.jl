@@ -91,7 +91,7 @@ end
 
     # operators /w boundary conditions
     hdiv = Operators.Divergence()
-    hwdiv = Operators.Divergence()
+    hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),
@@ -155,7 +155,7 @@ end
 
     # operators /w boundary conditions
     hdiv = Operators.Divergence()
-    hwdiv = Operators.Divergence()
+    hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
     scalar_vgrad_c2f = Operators.GradientC2F(
         bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
