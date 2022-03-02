@@ -145,7 +145,7 @@ function run_3d_rising_bubble(
             Δρq_tot = (∫ρq_tot_e - ∫ρq_tot_0) ./ ∫ρq_tot_0 * 100
             if FT == Float32
                 @test abs(Δρ) < 3e-5
-                @test abs(Δρe_tot) < 1e-5
+                @test abs(Δρe_tot) < 1.5e-5
                 @test abs(Δρq_tot) < 1e-3
             else
                 @test abs(Δρ) < 1e-12
@@ -189,7 +189,7 @@ function run_3d_rising_bubble(
             Δρe_int = (∫ρe_int_e - ∫ρe_int_0) ./ ∫ρe_int_0 * 100
             if FT == Float32
                 @test abs(Δρ) < 3e-5
-                @test abs(Δρe_int) < 1e-5
+                @test abs(Δρe_int) < 1.5e-5
             else
                 @test abs(Δρ) < 1e-12
                 @test abs(Δρe_int) < 1e-5
