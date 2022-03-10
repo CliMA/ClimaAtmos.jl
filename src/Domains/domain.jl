@@ -1,10 +1,11 @@
 struct Column{FT} <: AbstractVerticalDomain{FT}
     zlim::Tuple{FT, FT}
     nelements::Int
+    stretching::StretchingRule
 end
 
 """
-    Column([FT = Float64]; zlim, nelements)
+    Column([FT = Float64]; zlim, nelements, stretching)
 
 Construct a domain of type `FT` that represents a column along the z-axis with
 limits `zlim` (where `zlim[1] < zlim[2]`) and `nelements` elements. This domain
@@ -16,11 +17,18 @@ julia> Column(zlim = (0, 1), nelements = 10)
 Domain set-up:
 \tz-column:\t[0.0, 1.0]
 \t# of elements:\t10
+\tVertical stretching rule:\tUniform()
 ```
 """
-function Column(::Type{FT} = Float64; zlim, nelements) where {FT}
+function Column(
+    ::Type{FT} = Float64;
+    zlim,
+    nelements,
+    stretching = Uniform(),
+) where {FT}
     @assert zlim[1] < zlim[2]
-    return Column{FT}(zlim, nelements)
+    @assert stretching isa StretchingRule
+    return Column{FT}(zlim, nelements, stretching)
 end
 
 struct HybridPlane{FT} <: AbstractHybridDomain{FT}
@@ -29,17 +37,19 @@ struct HybridPlane{FT} <: AbstractHybridDomain{FT}
     nelements::Tuple{Int, Int}
     npolynomial::Int
     xperiodic::Bool
+    stretching::StretchingRule
 end
 
 """
-    HybridPlane([FT = Float64]; xlim, zlim, nelements, npolynomial, xperiodic = true)
+  HybridPlane([FT = Float64]; xlim, zlim, nelements, npolynomial, xperiodic = true, stretching)
 
 Construct a domain of type `FT` that represents an xz-plane with limits `xlim`
 and `zlim` (where `xlim[1] < xlim[2]` and `zlim[1] < zlim[2]`), `nelements`
 elements of polynomial order `npolynomial`, and x-axis periodicity `xperiodic`.
 `nelements` must be a tuple with two values, with the first value corresponding
 to the x-axis and the second corresponding to the z-axis. This domain is not
-periodic along the z-axis.
+periodic along the z-axis. If the `stretching` keyword is unspecified, a uniform
+vertical mesh is generated. 
 
 # Example
 ```jldoctest; setup = :(using ClimaAtmos.Domains)
@@ -54,6 +64,7 @@ Domain set-up:
 \txz-plane:\t[0.0, 3.1) × [0.0, 1.0]
 \t# of elements:\t(5, 10)
 \tpoly order:\t5
+\tVertical stretching rule:\tUniform()
 ```
 """
 function HybridPlane(
@@ -63,10 +74,19 @@ function HybridPlane(
     nelements,
     npolynomial,
     xperiodic = true,
+    stretching = Uniform(),
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert zlim[1] < zlim[2]
-    return HybridPlane{FT}(xlim, zlim, nelements, npolynomial, xperiodic)
+    @assert stretching isa StretchingRule
+    return HybridPlane{FT}(
+        xlim,
+        zlim,
+        nelements,
+        npolynomial,
+        xperiodic,
+        stretching,
+    )
 end
 
 struct HybridBox{FT} <: AbstractHybridDomain{FT}
@@ -77,17 +97,19 @@ struct HybridBox{FT} <: AbstractHybridDomain{FT}
     npolynomial::Int
     xperiodic::Bool
     yperiodic::Bool
+    stretching::StretchingRule
 end
 
 """
-    HybridBox([FT = Float64]; xlim, ylim, zlim, nelements, npolynomial, xperiodic = true, yperiodic = true)
+HybridBox([FT = Float64]; xlim, ylim, zlim, nelements, npolynomial, xperiodic = true, yperiodic = true, stretching
 
 Construct a domain of type `FT` that represents an xz-plane with limits `xlim` `ylim`
 and `zlim` (where `xlim[1] < xlim[2]`,`ylim[1] < ylim[2]`, and `zlim[1] < zlim[2]`), `nelements`
 elements of polynomial order `npolynomial`, x-axis periodicity `xperiodic`, and y-axis periodicity `yperiodic`.
 `nelements` must be a tuple with two values, with the first value corresponding
 to the x-axis, the second corresponding to the y-axis, and the third corresponding to the z-axis. 
-This domain is not periodic along the z-axis.
+This domain is not periodic along the z-axis. If `stretching` is unspecified, generates a uniform 
+vertical interval mesh.
 
 # Example
 ```jldoctest; setup = :(using ClimaAtmos.Domains)
@@ -104,6 +126,7 @@ Domain set-up:
 \txyz-box:\t[0.0, 3.1) × [0.0, 3.1) × [0.0, 1.0]
 \t# of elements:\t(5, 5, 10)
 \tpoly order:\t5
+\tVertical stretching rule:\tUniform()
 ```
 """
 function HybridBox(
@@ -115,10 +138,12 @@ function HybridBox(
     npolynomial,
     xperiodic = true,
     yperiodic = true,
+    stretching = Uniform(),
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
     @assert zlim[1] < zlim[2]
+    @assert stretching isa StretchingRule
     return HybridBox{FT}(
         xlim,
         ylim,
@@ -127,6 +152,7 @@ function HybridBox(
         npolynomial,
         xperiodic,
         yperiodic,
+        stretching,
     )
 end
 
@@ -135,13 +161,15 @@ struct SphericalShell{FT} <: AbstractHybridDomain{FT}
     height::FT
     nelements::Tuple{Int, Int}
     npolynomial::Int
+    stretching::StretchingRule
 end
 
 """
-    SphericalShell([FT = Float64]; radius, height, nelements, npolynomial)
+    SphericalShell([FT = Float64]; radius, height, nelements, npolynomial, stretching)
 
 Construct a domain of type `FT` that represents a spherical shell with radius `radius`, height `height`,
-and `nelements` elements of polynomial order `npolynomial`.
+and `nelements` elements of polynomial order `npolynomial`. If `stretching` is unspecified, generates a
+uniform vertical interval mesh.
 
 # Example
 ```jldoctest; setup = :(using ClimaAtmos.Domains)
@@ -151,6 +179,7 @@ Domain set-up:
 \tsphere height:\t1.0
 \t# of elements:\t(6, 10)
 \tpoly order:\t5
+\tVertical stretching rule:\tUniform()
 ```
 """
 function SphericalShell(
@@ -159,10 +188,17 @@ function SphericalShell(
     height,
     nelements,
     npolynomial,
+    stretching = Uniform(),
 ) where {FT}
     @assert 0 < radius
     @assert 0 < height
-    return SphericalShell{FT}(radius, height, nelements, npolynomial)
+    return SphericalShell{FT}(
+        radius,
+        height,
+        nelements,
+        npolynomial,
+        stretching,
+    )
 end
 
 function Base.show(io::IO, domain::Column)
@@ -171,6 +207,7 @@ function Base.show(io::IO, domain::Column)
     printstyled(io, @sprintf("%#.2g, %#.2g", domain.zlim...), color = 7)
     printstyled(io, "]", color = 226)
     print(io, "\n\t# of elements:\t", domain.nelements)
+    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
 end
 
 function Base.show(io::IO, domain::HybridPlane)
@@ -182,6 +219,7 @@ function Base.show(io::IO, domain::HybridPlane)
     printstyled(io, "]", color = 226)
     @printf(io, "\n\t# of elements:\t(%d, %d)", domain.nelements...)
     print(io, "\n\tpoly order:\t", domain.npolynomial)
+    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
 end
 
 function Base.show(io::IO, domain::HybridBox)
@@ -195,6 +233,7 @@ function Base.show(io::IO, domain::HybridBox)
     printstyled(io, "]", color = 226)
     @printf(io, "\n\t# of elements:\t(%d, %d, %d)", domain.nelements...)
     print(io, "\n\tpoly order:\t", domain.npolynomial)
+    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
 end
 
 function Base.show(io::IO, domain::SphericalShell)
@@ -204,4 +243,5 @@ function Base.show(io::IO, domain::SphericalShell)
     printstyled(io, @sprintf("%#.2g", domain.height), color = 7)
     @printf(io, "\n\t# of elements:\t(%d, %d)", domain.nelements...)
     print(io, "\n\tpoly order:\t", domain.npolynomial)
+    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
 end

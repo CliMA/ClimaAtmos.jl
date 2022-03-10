@@ -21,9 +21,8 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 CLIMAParameters = "0.4"
-ClimaCore = "0.7"
 ClimaCorePlots = "0.2"
-ClimaCoreVTK = "0.5"
+ClimaCoreVTK = "0.6"
 DiffEqCallbacks = "2"
 IntervalSets = "0.5"
 JLD2 = "0.4"
@@ -31,3 +30,6 @@ OrdinaryDiffEq = "6"
 StaticArrays = "1"
 Thermodynamics = "0.5"
 UnPack = "1"
+
+[extras]
+CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
