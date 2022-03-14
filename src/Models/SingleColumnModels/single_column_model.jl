@@ -4,13 +4,13 @@
 A single column model. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct SingleColumnModel{D, B, T, M, SGS, F, BC, P} <:
+Base.@kwdef struct SingleColumnModel{D, B, T, M, VD, F, BC, P} <:
                    AbstractSingleColumnModel
     domain::D
     base::B = AdvectiveForm()
     thermodynamics::T = TotalEnergy()
     moisture::M = Dry()
-    turbconv::SGS = nothing
+    vertical_diffusion::VD = NoVerticalDiffusion()
     flux_corr::F = false
     boundary_conditions::BC
     parameters::P
@@ -21,7 +21,7 @@ function Models.components(model::SingleColumnModel)
         base = model.base,
         thermodynamics = model.thermodynamics,
         moisture = model.moisture,
-        turbconv = model.turbconv,
+        vertical_diffusion = model.vertical_diffusion,
     )
 end
 
@@ -72,7 +72,7 @@ function Models.make_ode_function(model::SingleColumnModel)
     base_style = model.base
     thermo_style = model.thermodynamics
     moisture_style = model.moisture
-    turbconv_style = model.turbconv
+    v_diffusion_style = model.vertical_diffusion
     params = model.parameters
     flux_correction = model.flux_corr
 
@@ -109,6 +109,8 @@ function Models.make_ode_function(model::SingleColumnModel)
             flux_correction,
             FT,
         )
+
+        # thermodynamics equation
         # Ex.: ∂ₜρθ = ...
         rhs_thermodynamics!(
             dY,
@@ -122,24 +124,23 @@ function Models.make_ode_function(model::SingleColumnModel)
             flux_correction,
             FT,
         )
-        # # Ex.: ∂ₜρq_tot = ...
-        # rhs_moisture!(
-        #     dY,
-        #     Y,
-        #     Ya,
-        #     t,
-        #     p,
-        #     base_style,
-        #     moisture_style,
-        #     model,
-        #     params,
-        #     flux_correction,
-        #     FT,
-        # )
-        # radiation
 
-        # sgs
-        rhs_turbconv!(
+        # moist and microphysics
+        rhs_moisture!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            moisture_style,
+            params,
+            flux_correction,
+            FT,
+        )
+
+        # vertical diffusion
+        rhs_vertical_diffusion!(
             dY,
             Y,
             Ya,
@@ -148,10 +149,14 @@ function Models.make_ode_function(model::SingleColumnModel)
             base_style,
             thermo_style,
             moisture_style,
-            turbconv_style,
+            v_diffusion_style,
             params,
             FT,
         )
+
+        # radiation
+        # turbulence 
+        # EDMF
 
     end
 

@@ -1,8 +1,8 @@
-@inline function rhs_turbconv!(dY, Y, Ya, t, _...)
+@inline function rhs_vertical_diffusion!(dY, Y, Ya, t, _...)
     error("not implemented for this model configuration.")
 end
 
-@inline function rhs_turbconv!(
+@inline rhs_vertical_diffusion!(
     dY,
     Y,
     Ya,
@@ -11,13 +11,27 @@ end
     ::AdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    turbconv_style::ConstantViscosity,
+    v_diffusion_style::NoVerticalDiffusion,
+    params,
+    FT,
+) = nothing
+
+@inline function rhs_vertical_diffusion!(
+    dY,
+    Y,
+    Ya,
+    t,
+    p,
+    ::AdvectiveForm,
+    ::PotentialTemperature,
+    ::Dry,
+    v_diffusion_style::ConstantViscosity,
     params,
     FT,
 )
 
     # viscosity for ConstantViscosity turbulence scheme
-    ν = turbconv_style.ν
+    ν = v_diffusion_style.ν
 
     # experiment specific parameters
     uh_g = params.uh_g
@@ -89,7 +103,7 @@ end
     @. dρθ += ρ * vector_vdiv_f2c(ν * scalar_vgrad_c2f(ρθ / ρ))
 end
 
-@inline function rhs_turbconv!(
+@inline function rhs_vertical_diffusion!(
     dY,
     Y,
     Ya,
@@ -98,13 +112,13 @@ end
     ::AnelasticAdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    turbconv_style::ConstantViscosity,
+    v_diffusion_style::ConstantViscosity,
     params,
     FT,
 )
 
     # viscosity for ConstantViscosity turbulence scheme
-    ν = turbconv_style.ν
+    ν = v_diffusion_style.ν
 
     # experiment specific parameters
     uh_g = params.uh_g
