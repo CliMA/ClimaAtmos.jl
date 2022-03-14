@@ -217,12 +217,14 @@ end
         @test model.moisture == Models.Dry()
         @test model.thermodynamics == Models.TotalEnergy()
         @test model.hyperdiffusivity == FT(100)
+        @test model.vertical_diffusion == Models.NoVerticalDiffusion()
 
         model = Nonhydrostatic3DModel(
             domain = domain,
             base = Models.AdvectiveForm(),
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.NonEquilibriumMoisture(),
+            vertical_diffusion = Models.ConstantViscosity(),
             hyperdiffusivity = FT(100),
             boundary_conditions = nothing,
             parameters = (),
@@ -231,6 +233,7 @@ end
         @test model.base == Models.AdvectiveForm()
         @test model.moisture == Models.NonEquilibriumMoisture()
         @test model.thermodynamics == Models.TotalEnergy()
+        @test model.vertical_diffusion == Models.ConstantViscosity()
 
         # test components
         model = Nonhydrostatic3DModel(
@@ -242,7 +245,7 @@ end
             parameters = (),
         )
         @test keys(Models.components(model)) ==
-              (:base, :thermodynamics, :moisture)
+              (:base, :thermodynamics, :moisture, :vertical_diffusion)
 
         # test variable_names, variable_types, variable_spaces 
         model = Nonhydrostatic3DModel(
