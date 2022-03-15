@@ -75,7 +75,12 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρθ += vector_vdiv_f2c(ν * ρ * scalar_vgrad_c2f(ρθ / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρθ +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρθ / ρ))
 end
 
 @inline function rhs_vertical_diffusion!(
@@ -136,7 +141,13 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρe_tot += vector_vdiv_f2c(ν * ρ * scalar_vgrad_c2f((ρe_tot+p) / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρe_tot += vector_vdiv_f2c(
+        ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f((ρe_tot + p) / ρ),
+    )
 end
 
 @inline function rhs_vertical_diffusion!(
@@ -175,7 +186,12 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρuh += vector_vdiv_f2c(ν * ρ * scalar_vgrad_c2f(ρuh/ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρuh +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρuh / ρ))
 
     # vertical velocity
     flux_bottom = Geometry.Contravariant3Vector(FT(0))
@@ -187,7 +203,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw/ρ)),)
+    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw / ρ)),)
 
     # thermodynamics
     flux_bottom = Geometry.Contravariant3Vector(FT(0))
@@ -197,7 +213,12 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρθ += vector_vdiv_f2c(ν * ρ * scalar_vgrad_c2f(ρθ / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρθ +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρθ / ρ))
 end
 
 @inline function rhs_vertical_diffusion!(
@@ -236,7 +257,12 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρuh += vector_vdiv_f2c(ν * ρ * scalar_vgrad_c2f(ρuh/ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρuh +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρuh / ρ))
 
     # vertical velocity
     flux_bottom = Geometry.Contravariant3Vector(FT(0))
@@ -248,7 +274,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw/ρ)),)
+    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw / ρ)),)
 
     # thermodynamics: diffusion on enthalpy
     flux_bottom = Geometry.Contravariant3Vector(FT(0))
@@ -258,5 +284,11 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρe_tot += vector_vdiv_f2c(ν * ρ * scalar_vgrad_c2f((ρe_tot+p) / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρe_tot += vector_vdiv_f2c(
+        ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f((ρe_tot + p) / ρ),
+    )
 end

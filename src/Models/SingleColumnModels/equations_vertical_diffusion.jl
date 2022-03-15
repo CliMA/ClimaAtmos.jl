@@ -100,7 +100,12 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρθ += ρ * vector_vdiv_f2c(ν * scalar_vgrad_c2f(ρθ / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρθ +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρθ / ρ))
 end
 
 @inline function rhs_vertical_diffusion!(
@@ -170,5 +175,10 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρθ += ρ * vector_vdiv_f2c(ν * scalar_vgrad_c2f(ρθ / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρθ +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρθ / ρ))
 end
