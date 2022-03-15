@@ -133,12 +133,14 @@ end
         @test model.domain isa Domains.AbstractHybridDomain
         @test model.moisture == Models.Dry()
         @test model.thermodynamics == Models.PotentialTemperature()
+        @test model.vertical_diffusion == Models.NoVerticalDiffusion()
 
         model = Nonhydrostatic2DModel(
             domain = domain,
             base = Models.AdvectiveForm(),
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.NonEquilibriumMoisture(),
+            vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )
@@ -146,6 +148,7 @@ end
         @test model.base == Models.AdvectiveForm()
         @test model.moisture == Models.NonEquilibriumMoisture()
         @test model.thermodynamics == Models.TotalEnergy()
+        @test model.vertical_diffusion == Models.ConstantViscosity()
 
         # test components
         model = Nonhydrostatic2DModel(
@@ -156,7 +159,7 @@ end
             parameters = (),
         )
         @test keys(Models.components(model)) ==
-              (:base, :thermodynamics, :moisture)
+              (:base, :thermodynamics, :moisture, :vertical_diffusion)
 
         # test variable_names 
         model = Nonhydrostatic2DModel(
