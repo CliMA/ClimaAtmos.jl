@@ -66,10 +66,11 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
     FT = eltype(model.domain) # model works on different float types
 
     # shorthands for model components & model styles
+    base_style = model.base
     thermo_style = model.thermodynamics
     moisture_style = model.moisture
     params = model.parameters
-    v_diffusion_style = model.vertical_diffusion
+    vert_diffusion_style = model.vertical_diffusion
 
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
@@ -93,7 +94,7 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
             base_style,
             thermo_style,
             moisture_style,
-            v_diffusion_style,
+            vert_diffusion_style,
             params,
             FT,
         )

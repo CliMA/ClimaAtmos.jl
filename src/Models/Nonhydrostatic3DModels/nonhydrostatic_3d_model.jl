@@ -77,7 +77,7 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
     params = model.parameters
     hyperdiffusivity = model.hyperdiffusivity
     flux_correction = model.flux_corr
-    v_diffusion_style = model.vertical_diffusion
+    vert_diffusion_style = model.vertical_diffusion
 
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
@@ -148,7 +148,7 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
             base_style,
             thermo_style,
             moisture_style,
-            v_diffusion_style,
+            vert_diffusion_style,
             params,
             FT,
         )

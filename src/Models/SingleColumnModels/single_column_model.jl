@@ -72,7 +72,7 @@ function Models.make_ode_function(model::SingleColumnModel)
     base_style = model.base
     thermo_style = model.thermodynamics
     moisture_style = model.moisture
-    v_diffusion_style = model.vertical_diffusion
+    vert_diffusion_style = model.vertical_diffusion
     params = model.parameters
     flux_correction = model.flux_corr
 
@@ -149,7 +149,7 @@ function Models.make_ode_function(model::SingleColumnModel)
             base_style,
             thermo_style,
             moisture_style,
-            v_diffusion_style,
+            vert_diffusion_style,
             params,
             FT,
         )

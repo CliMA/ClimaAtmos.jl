@@ -11,7 +11,7 @@ end
     ::AdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    v_diffusion_style::NoVerticalDiffusion,
+    vert_diffusion_style::NoVerticalDiffusion,
     params,
     FT,
 ) = nothing
@@ -25,13 +25,13 @@ end
     ::AdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    v_diffusion_style::ConstantViscosity,
+    vert_diffusion_style::ConstantViscosity,
     params,
     FT,
 )
 
     # viscosity for ConstantViscosity turbulence scheme
-    ν = v_diffusion_style.ν
+    ν = vert_diffusion_style.ν
 
     # experiment specific parameters
     uh_g = params.uh_g
@@ -112,13 +112,13 @@ end
     ::AnelasticAdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    v_diffusion_style::ConstantViscosity,
+    vert_diffusion_style::ConstantViscosity,
     params,
     FT,
 )
 
     # viscosity for ConstantViscosity turbulence scheme
-    ν = v_diffusion_style.ν
+    ν = vert_diffusion_style.ν
 
     # experiment specific parameters
     uh_g = params.uh_g
