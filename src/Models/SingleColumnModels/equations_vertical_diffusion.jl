@@ -1,8 +1,8 @@
-@inline function rhs_turbconv!(dY, Y, Ya, t, _...)
+@inline function rhs_vertical_diffusion!(dY, Y, Ya, t, _...)
     error("not implemented for this model configuration.")
 end
 
-@inline function rhs_turbconv!(
+@inline rhs_vertical_diffusion!(
     dY,
     Y,
     Ya,
@@ -11,13 +11,27 @@ end
     ::AdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    turbconv_style::ConstantViscosity,
+    vert_diffusion_style::NoVerticalDiffusion,
+    params,
+    FT,
+) = nothing
+
+@inline function rhs_vertical_diffusion!(
+    dY,
+    Y,
+    Ya,
+    t,
+    p,
+    ::AdvectiveForm,
+    ::PotentialTemperature,
+    ::Dry,
+    vert_diffusion_style::ConstantViscosity,
     params,
     FT,
 )
 
     # viscosity for ConstantViscosity turbulence scheme
-    ν = turbconv_style.ν
+    ν = vert_diffusion_style.ν
 
     # experiment specific parameters
     uh_g = params.uh_g
@@ -86,10 +100,15 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρθ += ρ * vector_vdiv_f2c(ν * scalar_vgrad_c2f(ρθ / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρθ +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρθ / ρ))
 end
 
-@inline function rhs_turbconv!(
+@inline function rhs_vertical_diffusion!(
     dY,
     Y,
     Ya,
@@ -98,13 +117,13 @@ end
     ::AnelasticAdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
-    turbconv_style::ConstantViscosity,
+    vert_diffusion_style::ConstantViscosity,
     params,
     FT,
 )
 
     # viscosity for ConstantViscosity turbulence scheme
-    ν = turbconv_style.ν
+    ν = vert_diffusion_style.ν
 
     # experiment specific parameters
     uh_g = params.uh_g
@@ -156,5 +175,10 @@ end
         bottom = Operators.SetValue(flux_bottom),
         top = Operators.SetValue(flux_top),
     )
-    @. dρθ += ρ * vector_vdiv_f2c(ν * scalar_vgrad_c2f(ρθ / ρ))
+    scalar_interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. dρθ +=
+        vector_vdiv_f2c(ν * scalar_interp_c2f(ρ) * scalar_vgrad_c2f(ρθ / ρ))
 end

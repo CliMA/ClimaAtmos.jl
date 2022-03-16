@@ -61,7 +61,7 @@ function run_1d_ekman_column(
     model = SingleColumnModel(
         domain = domain,
         thermodynamics = PotentialTemperature(),
-        turbconv = ConstantViscosity(ν = params.ν),
+        vertical_diffusion = ConstantViscosity(ν = params.ν),
         boundary_conditions = nothing, #boundary_conditions,
         parameters = params,
     )
@@ -70,7 +70,7 @@ function run_1d_ekman_column(
         domain = domain,
         base = AnelasticAdvectiveForm(),
         thermodynamics = PotentialTemperature(),
-        turbconv = ConstantViscosity(ν = params.ν),
+        vertical_diffusion = ConstantViscosity(ν = params.ν),
         boundary_conditions = nothing, #boundary_conditions,
         parameters = params,
     )

@@ -133,12 +133,14 @@ end
         @test model.domain isa Domains.AbstractHybridDomain
         @test model.moisture == Models.Dry()
         @test model.thermodynamics == Models.PotentialTemperature()
+        @test model.vertical_diffusion == Models.NoVerticalDiffusion()
 
         model = Nonhydrostatic2DModel(
             domain = domain,
             base = Models.AdvectiveForm(),
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.NonEquilibriumMoisture(),
+            vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )
@@ -146,6 +148,7 @@ end
         @test model.base == Models.AdvectiveForm()
         @test model.moisture == Models.NonEquilibriumMoisture()
         @test model.thermodynamics == Models.TotalEnergy()
+        @test model.vertical_diffusion == Models.ConstantViscosity()
 
         # test components
         model = Nonhydrostatic2DModel(
@@ -156,7 +159,7 @@ end
             parameters = (),
         )
         @test keys(Models.components(model)) ==
-              (:base, :thermodynamics, :moisture)
+              (:base, :thermodynamics, :moisture, :vertical_diffusion)
 
         # test variable_names 
         model = Nonhydrostatic2DModel(
@@ -217,12 +220,14 @@ end
         @test model.moisture == Models.Dry()
         @test model.thermodynamics == Models.TotalEnergy()
         @test model.hyperdiffusivity == FT(100)
+        @test model.vertical_diffusion == Models.NoVerticalDiffusion()
 
         model = Nonhydrostatic3DModel(
             domain = domain,
             base = Models.AdvectiveForm(),
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.NonEquilibriumMoisture(),
+            vertical_diffusion = Models.ConstantViscosity(),
             hyperdiffusivity = FT(100),
             boundary_conditions = nothing,
             parameters = (),
@@ -231,6 +236,7 @@ end
         @test model.base == Models.AdvectiveForm()
         @test model.moisture == Models.NonEquilibriumMoisture()
         @test model.thermodynamics == Models.TotalEnergy()
+        @test model.vertical_diffusion == Models.ConstantViscosity()
 
         # test components
         model = Nonhydrostatic3DModel(
@@ -242,7 +248,7 @@ end
             parameters = (),
         )
         @test keys(Models.components(model)) ==
-              (:base, :thermodynamics, :moisture)
+              (:base, :thermodynamics, :moisture, :vertical_diffusion)
 
         # test variable_names, variable_types, variable_spaces 
         model = Nonhydrostatic3DModel(
@@ -297,40 +303,40 @@ end
         @test model.base == Models.AdvectiveForm()
         @test model.moisture == Models.Dry()
         @test model.thermodynamics == Models.TotalEnergy()
-        @test model.turbconv isa Nothing
+        @test model.vertical_diffusion == Models.NoVerticalDiffusion()
 
         model = SingleColumnModel(
             domain = domain,
             base = Models.AnelasticAdvectiveForm(),
             thermodynamics = Models.PotentialTemperature(),
             moisture = Models.EquilibriumMoisture(),
-            turbconv = Models.ConstantViscosity(),
+            vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )
         @test model.base == Models.AnelasticAdvectiveForm()
         @test model.moisture == Models.EquilibriumMoisture()
         @test model.thermodynamics == Models.PotentialTemperature()
-        @test model.turbconv == Models.ConstantViscosity()
+        @test model.vertical_diffusion == Models.ConstantViscosity()
 
         # test components
         model = SingleColumnModel(
             domain = domain,
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.Dry(),
-            turbconv = Models.ConstantViscosity(),
+            vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )
         @test keys(Models.components(model)) ==
-              (:base, :thermodynamics, :moisture, :turbconv)
+              (:base, :thermodynamics, :moisture, :vertical_diffusion)
 
         # test variable_names, variable_types, variable_spaces
         model = SingleColumnModel(
             domain = domain,
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.Dry(),
-            turbconv = Models.ConstantViscosity(),
+            vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )
@@ -340,15 +346,15 @@ end
               Models.variable_names(model.thermodynamics)
         @test Models.variable_names(model).moisture ==
               Models.variable_names(model.moisture)
-        @test Models.variable_names(model).turbconv ==
-              Models.variable_names(model.turbconv)
+        @test Models.variable_names(model).vertical_diffusion ==
+              Models.variable_names(model.vertical_diffusion)
 
         # test default_initial_conditions
         model = SingleColumnModel(
             domain = domain,
             thermodynamics = Models.TotalEnergy(),
             moisture = Models.Dry(),
-            turbconv = Models.ConstantViscosity(),
+            vertical_diffusion = Models.ConstantViscosity(),
             boundary_conditions = nothing,
             parameters = (),
         )

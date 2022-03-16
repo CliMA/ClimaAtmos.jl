@@ -5,12 +5,13 @@ A three-dimensional non-hydrostatic model, which is typically used for simulatin
 the Euler equations. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, F, BC, P, FT} <:
+Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT} <:
                    AbstractNonhydrostatic3DModel
     domain::D
     base::B = AdvectiveForm()
     thermodynamics::T = TotalEnergy()
     moisture::M = Dry()
+    vertical_diffusion::VD = NoVerticalDiffusion()
     flux_corr::F = true
     hyperdiffusivity::FT
     boundary_conditions::BC
@@ -22,6 +23,7 @@ function Models.components(model::Nonhydrostatic3DModel)
         base = model.base,
         thermodynamics = model.thermodynamics,
         moisture = model.moisture,
+        vertical_diffusion = model.vertical_diffusion,
     )
 end
 
@@ -75,6 +77,7 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
     params = model.parameters
     hyperdiffusivity = model.hyperdiffusivity
     flux_correction = model.flux_corr
+    vert_diffusion_style = model.vertical_diffusion
 
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
@@ -134,6 +137,22 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
             hyperdiffusivity,
             FT,
         )
+
+        # vertical diffusion
+        rhs_vertical_diffusion!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            thermo_style,
+            moisture_style,
+            vert_diffusion_style,
+            params,
+            FT,
+        )
+
         # rhs_tracer!
         # rhs_edmf!
     end
