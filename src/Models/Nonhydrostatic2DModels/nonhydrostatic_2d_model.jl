@@ -5,13 +5,15 @@ A two-dimensional non-hydrostatic model, which is typically used for simulating
 the Euler equations. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct Nonhydrostatic2DModel{D, B, T, M, VD, BC, P} <:
+Base.@kwdef struct Nonhydrostatic2DModel{D, B, T, M, PR, VD, FT, BC, P} <:
                    AbstractNonhydrostatic2DModel
     domain::D
     base::B = ConservativeForm()
     thermodynamics::T = PotentialTemperature()
     moisture::M = Dry()
+    precipitation::PR = NoPrecipitation()
     vertical_diffusion::VD = NoVerticalDiffusion()
+    hyperdiffusivity::FT
     boundary_conditions::BC
     parameters::P
 end
@@ -20,6 +22,7 @@ Models.components(model::Nonhydrostatic2DModel) = (
     base = model.base,
     thermodynamics = model.thermodynamics,
     moisture = model.moisture,
+    precipitation = model.precipitation,
     vertical_diffusion = model.vertical_diffusion,
 )
 
@@ -69,20 +72,70 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
     base_style = model.base
     thermo_style = model.thermodynamics
     moisture_style = model.moisture
+    precip_style = model.precipitation
     params = model.parameters
     vert_diffusion_style = model.vertical_diffusion
+    hyperdiffusivity = model.hyperdiffusivity
 
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
     function rhs!(dY, Y, Ya, t)
         # auxiliary calculation is done here so we don't
         # redo it all the time and can cache the values
-        p = calculate_pressure(Y, Ya, thermo_style, moisture_style, params, FT)
+
+        # TODO compute ts, K, etc and dump them into params
+        # this will be later reused by microphysics
+        # ts = Thermodynamics.PhaseEquil_ρeq(
+        #     params,
+        #     ρ,
+        #     e_int,
+        #     ρq_tot / ρ
+        # )
+        # q = PhasePartition(ts)
+
+        Φ = calculate_gravitational_potential(Y, Ya, params, FT)
+        K = calculate_kinetic_energy(Y, Ya, params, FT)
+        p = calculate_pressure(
+            Y,
+            Ya,
+            thermo_style,
+            moisture_style,
+            params,
+            Φ,
+            K,
+            FT,
+        )
 
         # main model equations
-        rhs_base_model!(dY, Y, Ya, t, p, params, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
-        rhs_thermodynamics!(dY, Y, Ya, t, p, thermo_style, params, FT) # Ex.: ∂ₜρθ = ...
-        rhs_moisture!(dY, Y, Ya, t, p, moisture_style, params, FT) # Ex.: ∂ₜρq_tot = ...
+        rhs_base_model!(dY, Y, Ya, t, p, params, hyperdiffusivity, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+        rhs_thermodynamics!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            base_style,
+            thermo_style,
+            params,
+            hyperdiffusivity,
+            FT,
+        )
+
+        rhs_moisture!(
+            dY,
+            Y,
+            Ya,
+            t,
+            p,
+            Φ,
+            K,
+            base_style,
+            moisture_style,
+            precip_style,
+            params,
+            hyperdiffusivity,
+            FT,
+        ) # Ex.: ∂ₜρq_tot = ...
 
         # vertical diffusion
         rhs_vertical_diffusion!(

@@ -9,7 +9,7 @@ using ClimaCorePlots, Plots
 using UnPack
 
 using CLIMAParameters
-using ClimaAtmos.Utils.InitialConditions: init_2d_rising_bubble
+using ClimaAtmos.Utils.InitialConditions: init_2d_dry_bubble
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
 using ClimaAtmos.Models
@@ -20,7 +20,7 @@ using ClimaAtmos.Simulations
 # Set up parameters
 struct Bubble2DParameters <: CLIMAParameters.AbstractEarthParameterSet end
 
-function run_2d_rising_bubble(
+function run_2d_dry_bubble(
     ::Type{FT};
     stepper = SSPRK33(),
     nelements = (10, 50),
@@ -45,6 +45,7 @@ function run_2d_rising_bubble(
         domain = domain,
         boundary_conditions = nothing,
         parameters = params,
+        hyperdiffusivity = FT(0),
     )
 
     # execute differently depending on testing mode
@@ -66,7 +67,7 @@ function run_2d_rising_bubble(
         @test_throws ArgumentError set!(simulation, ρ = "quack")
 
         # test sim
-        @unpack ρ, ρuh, ρw, ρθ = init_2d_rising_bubble(FT, params)
+        @unpack ρ, ρuh, ρw, ρθ = init_2d_dry_bubble(FT, params)
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         step!(simulation)
@@ -82,7 +83,7 @@ function run_2d_rising_bubble(
     elseif test_mode == :validation
         # for now plot θ for the ending step;
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))
-        @unpack ρ, ρuh, ρw, ρθ = init_2d_rising_bubble(FT, params)
+        @unpack ρ, ρuh, ρw, ρθ = init_2d_dry_bubble(FT, params)
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
@@ -116,6 +117,6 @@ end
 
 @testset "2D dry rising bubble" begin
     for FT in (Float32, Float64)
-        run_2d_rising_bubble(FT)
+        run_2d_dry_bubble(FT)
     end
 end

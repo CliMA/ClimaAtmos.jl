@@ -2,9 +2,10 @@
     error("not implemented for this model configuration.")
 end
 
-@inline function rhs_base_model!(dY, Y, Ya, t, p, params, FT)
+@inline function rhs_base_model!(dY, Y, Ya, t, p, params, hyperdiffusivity, FT)
     # relevant parameters 
     g::FT = CLIMAParameters.Planet.grav(params)
+    κ₄::FT = hyperdiffusivity
 
     # unity tensor for pressure term calculation 
     # in horizontal spectral divergence
@@ -16,6 +17,8 @@ end
     # operators
     # spectral horizontal operators
     hdiv = Operators.Divergence()
+    hwdiv = Operators.WeakDivergence()
+    hgrad = Operators.Gradient()
 
     # vertical FD operators with BC's
     # interpolators
@@ -69,8 +72,13 @@ end
     @. dρ -= vector_vdiv_f2c(ρw)
     Spaces.weighted_dss!(dρ)
 
+    # hyperdiffusion
+    @. dρuh = hwdiv(hgrad(ρuh / ρ))
+    Spaces.weighted_dss!(dρuh)
+    @. dρuh = -κ₄ * hwdiv(ρ * hgrad(dρuh))
+
     # horizontal momentum equation
-    @. dρuh = -hdiv(ρuh ⊗ ρuh / ρ + p * I)
+    @. dρuh -= hdiv(ρuh ⊗ ρuh / ρ + p * I)
     @. dρuh -= tensor_vdiv_f2c(ρw ⊗ vector_interp_c2f(ρuh / ρ))
     Spaces.weighted_dss!(dρuh)
 

@@ -76,12 +76,23 @@ steps:
       queue: central
       slurm_ntasks: 1
 
-  - label: ":computer: 2d_rising_bubble"
-    key: "cpu_2d_rising_bubble"
+  - label: ":computer: 2d_dry_bubble"
+    key: "cpu_2d_dry_bubble"
     command:
-      - "julia --color=yes --project=test test/test_cases/run_2d_rising_bubble.jl"
+      - "julia --color=yes --project=test test/test_cases/run_2d_dry_bubble.jl"
     artifact_paths:
-      - "test/test_cases/run_2d_rising_bubble/*"
+      - "test/test_cases/run_2d_dry_bubble/*"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
+  - label: ":computer: 2d_moist_bubble"
+    key: "cpu_2d_moist_bubble"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_2d_moist_bubble.jl"
+    artifact_paths:
+      - "test/test_cases/run_2d_moist_bubble/*"
     agents:
       config: cpu
       queue: central

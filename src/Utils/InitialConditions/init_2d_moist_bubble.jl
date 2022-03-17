@@ -1,34 +1,33 @@
 """
-    init_2d_rising_bubble(params, thermovar = :ρθ)
+    init_2d_dry_bubble(params, thermovar = :ρθ)
 
     Rising bubble initial condition for 2D box benchmarking.
-    Reference: https://journals.ametsoc.org/view/journals/mwre/140/4/mwr-d-10-05073.1.xml, Section 5a
-    Reference parameter values:
+        Reference: https://journals.ametsoc.org/view/journals/mwre/140/4/mwr-d-10-05073.1.xml, Section 5a    Reference parameter values:
         - x_c = 0 m
         - z_c = 350 m
         - r_c = 250 m
         - θ_b = 300 K
         - θ_c = 0.5 K
         - p_0 = 1e5 Pa
-        - cp_d = 1004 J kg⁻¹ K⁻¹
-        - cv_d = 717.5 J kg⁻¹ K⁻¹
-        - R_d = 287.0 J kg⁻¹ K⁻¹
         - g = 9.80616 m s⁻²
 """
-function init_2d_rising_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
-    # physics parameters
-    p_0::FT = CLIMAParameters.Planet.MSLP(params)
-    cp_d::FT = CLIMAParameters.Planet.cp_d(params)
-    cv_d::FT = CLIMAParameters.Planet.cv_d(params)
-    R_d::FT = CLIMAParameters.Planet.R_d(params)
-    g::FT = CLIMAParameters.Planet.grav(params)
-
+function init_2d_moist_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     # initial condition specific parameters
     x_c::FT = 0.0
     z_c::FT = 350.0
     r_c::FT = 250.0
     θ_b::FT = 300.0
     θ_c::FT = 0.5
+    q_tot_c::FT = 1e-3
+
+    # initial phase partition (specific humidity)
+    q = Thermodynamics.PhasePartition(q_tot_c, FT(0.0), FT(0.0))
+    # physics parameters
+    p_0::FT = CLIMAParameters.Planet.MSLP(params)
+    cp_m::FT = Thermodynamics.cp_m(params, q)
+    cv_m::FT = Thermodynamics.cv_m(params, q)
+    R_m::FT = Thermodynamics.gas_constant_air(params, q)
+    g::FT = CLIMAParameters.Planet.grav(params)
 
     # auxiliary quantities
     # potential temperature perturbation
@@ -44,17 +43,17 @@ function init_2d_rising_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     # exner function
     π_exn(local_geometry) = begin
         @unpack z = local_geometry.coordinates
-        return FT(1) - g * z / cp_d / θ(local_geometry)
+        return FT(1) - g * z / cp_m / θ(local_geometry)
     end
 
     # temperature
     T(local_geometry) = π_exn(local_geometry) * θ(local_geometry)
 
     # pressure
-    p(local_geometry) = p_0 * π_exn(local_geometry)^(cp_d / R_d)
+    p(local_geometry) = p_0 * π_exn(local_geometry)^(cp_m / R_m)
 
     # internal energy
-    e_int(local_geometry) = cv_d * T(local_geometry)
+    e_int(local_geometry) = cv_m * T(local_geometry)
 
     # kintetic energy
     e_kin(local_geometry) = FT(0)
@@ -65,19 +64,35 @@ function init_2d_rising_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
         return g * z
     end
 
+    # moisture
+    q_tot(local_geometry) = begin
+        @unpack x, z = local_geometry.coordinates
+        r = sqrt((x - x_c)^2 + (z - z_c)^2)
+        return r < r_c ? FT(0.5) * q_tot_c * (FT(1) + cospi(r / r_c)) :
+                   FT(0)
+    end
+
     # total energy
     e_tot(local_geometry) =
         e_int(local_geometry) + e_kin(local_geometry) + e_pot(local_geometry)
 
     # prognostic quantities
     # density
-    ρ(local_geometry) = p(local_geometry) / R_d / T(local_geometry)
+    ρ(local_geometry) = Thermodynamics.air_density(
+        params,
+        T(local_geometry),
+        p(local_geometry),
+        q,
+    )
 
     # potential temperature density
     ρθ(local_geometry) = ρ(local_geometry) * θ(local_geometry)
 
     # total energy density
     ρe_tot(local_geometry) = ρ(local_geometry) * e_tot(local_geometry)
+
+    # specific humidity density
+    ρq_tot(local_geometry) = ρ(local_geometry) * q_tot(local_geometry)
 
     # horizontal momentum vector
     ρuh(local_geometry) = Geometry.UVector(FT(0))
@@ -86,9 +101,9 @@ function init_2d_rising_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     ρw(local_geometry) = Geometry.WVector(FT(0))
 
     if thermovar == :ρθ
-        return (ρ = ρ, ρθ = ρθ, ρuh = ρuh, ρw = ρw)
+        return (ρ = ρ, ρθ = ρθ, ρuh = ρuh, ρw = ρw, ρq_tot = ρq_tot)
     elseif thermovar == :ρe_tot
-        return (ρ = ρ, ρe_tot = ρe_tot, ρuh = ρuh, ρw = ρw)
+        return (ρ = ρ, ρe_tot = ρe_tot, ρuh = ρuh, ρw = ρw, ρq_tot = ρq_tot)
     else
         throw(ArgumentError("thermovar $thermovar unknown."))
     end
