@@ -95,8 +95,10 @@ function run_2d_dry_bubble(
     model = Nonhydrostatic2DModel(
         domain = domain,
         boundary_conditions = nothing,
+        precipitation = NoPrecipitation(),
         parameters = params,
         hyperdiffusivity = FT(0),
+        cache = CacheBase(),
     )
 
     # execute differently depending on testing mode
@@ -143,7 +145,6 @@ function run_2d_dry_bubble(
             initial_affect = true,
         ))
 
-        # for now plot θ for the ending step;
         simulation = Simulation(
             model,
             stepper,
@@ -155,21 +156,6 @@ function run_2d_dry_bubble(
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
         set!(simulation, :thermodynamics, ρθ = ρθ)
         run!(simulation)
-        u_end = simulation.integrator.u
-
-        # post-processing
-        ENV["GKSwstype"] = "nul"
-        Plots.GRBackend()
-
-        # make output directory
-        path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
-        mkpath(path)
-
-        foi = Plots.plot(
-            u_end.thermodynamics.ρθ ./ u_end.base.ρ,
-            clim = (300.0, 300.8),
-        )
-        Plots.png(foi, joinpath(path, "dry_rising_bubble_2d_FT_$FT"))
 
         @test true # check is visual
     else

@@ -7,7 +7,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::AbstractBaseModelStyle,
     ::AbstractThermodynamicsStyle,
     ::AbstractMoistureStyle,
@@ -21,7 +20,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::AdvectiveForm,
     ::PotentialTemperature,
     ::Dry,
@@ -88,7 +86,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::AdvectiveForm,
     ::TotalEnergy,
     ::Dry,
@@ -110,6 +107,8 @@ end
     # thermodynamics components
     ρe_tot = Y.thermodynamics.ρe_tot
     dρe_tot = dY.thermodynamics.ρe_tot
+
+    p = Ya.p
 
     # horizontal velocity
     flux_bottom = Geometry.WVector(FT(0))
@@ -155,7 +154,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::ConservativeForm,
     ::PotentialTemperature,
     ::Dry,
@@ -226,7 +224,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::ConservativeForm,
     ::TotalEnergy,
     ::Dry,
@@ -248,6 +245,8 @@ end
     # thermodynamics components
     ρe_tot = Y.thermodynamics.ρe_tot
     dρe_tot = dY.thermodynamics.ρe_tot
+
+    p = Ya.p
 
     # horizontal velocity
     flux_bottom = Geometry.WVector(FT(0))

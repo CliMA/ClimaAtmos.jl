@@ -37,6 +37,7 @@ end
 
 function (F::PNGOutput)(integrator)
     state = integrator.u
+    cache = integrator.p
 
     # Create directory
     mkpath(F.filedir)
@@ -65,6 +66,60 @@ function (F::PNGOutput)(integrator)
         joinpath(
             F.filedir,
             F.filename * "_rho_uh" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(state.moisture.ρq_tot)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_rho_q_tot" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(cache.microphysics_cache.q_liq)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_q_liq" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(cache.microphysics_cache.q_ice)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_q_ice" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(cache.Φ)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_e_pot" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(cache.K)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_e_kin" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(cache.e_int)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_e_int" * "_$(integrator.t)" * ".png",
         ),
     )
 
@@ -98,6 +153,7 @@ function run_2d_moist_bubble(
         hyperdiffusivity = FT(100),
         boundary_conditions = nothing,
         parameters = params,
+        cache = CacheZeroMomentMicro(),
     )
 
     # execute differently depending on testing mode
@@ -173,15 +229,14 @@ function run_2d_moist_bubble(
         path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
         mkpath(path)
 
+        # cb_jld2 = JLD2Output(model, path, "moist_bubble", dt)
+        # cb_set = CallbackSet(generate_callback(cb_jld2))
         cb_png = PNGOutput(model, path, "plots_moist_bubble", 100)
         cb_set = CallbackSet(DiffEqCallbacks.PeriodicCallback(
             cb_png,
             cb_png.interval;
             initial_affect = true,
         ))
-
-        # cb_jld2 = JLD2Output(model, path, "moist_bubble", dt)
-        # cb_set = CallbackSet(generate_callback(cb_jld2))
 
         simulation = Simulation(
             model,
@@ -190,24 +245,13 @@ function run_2d_moist_bubble(
             tspan = (0.0, 500.0),
             callbacks = cb_set,
         )
+
         @unpack ρ, ρuh, ρw, ρe_tot, ρq_tot =
             init_2d_moist_bubble(FT, params, thermovar = :ρe_tot)
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
         set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
         set!(simulation, :moisture, ρq_tot = ρq_tot)
         run!(simulation)
-        u_end = simulation.integrator.u
-
-        # post-processing
-        ENV["GKSwstype"] = "nul"
-        Plots.GRBackend()
-
-        # make output directory
-        path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
-        mkpath(path)
-
-        foi = Plots.plot(u_end.moisture.ρq_tot ./ u_end.base.ρ)
-        Plots.png(foi, joinpath(path, "moist_rising_bubble_2d_FT_$FT"))
 
         @test true # check is visual
     else
@@ -222,3 +266,4 @@ end
         run_2d_moist_bubble(FT)
     end
 end
+#run_2d_moist_bubble(Float32, test_mode = :validation)

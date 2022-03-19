@@ -8,7 +8,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::ConservativeForm,
     ::PotentialTemperature,
     params,
@@ -57,7 +56,6 @@ end
     Y,
     Ya,
     t,
-    p,
     ::ConservativeForm,
     ::TotalEnergy,
     params,
@@ -75,6 +73,8 @@ end
     ρe_tot = Y.thermodynamics.ρe_tot
 
     dρe_tot = dY.thermodynamics.ρe_tot
+
+    p = Ya.p
 
     # operators /w boundary conditions
     hdiv = Operators.Divergence()
@@ -103,7 +103,7 @@ end
     Spaces.weighted_dss!(dρe_tot)
     @. dρe_tot = -κ₄ * hwdiv(ρ * hgrad(χe))
 
-    # advection 
+    # advection
     @. dρe_tot -= hdiv(uvw * (ρe_tot + p))
     @. dρe_tot -= vector_vdiv_f2c(ρw / interp_c2f(ρ) * interp_c2f(ρe_tot + p))
     @. dρe_tot -= vector_vdiv_f2c(interp_c2f(ρuh / ρ * (ρe_tot + p)))

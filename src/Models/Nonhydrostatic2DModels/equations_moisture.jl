@@ -3,9 +3,6 @@
     Y,
     Ya,
     t,
-    p,
-    Φ,
-    K,
     ::AbstractBaseModelStyle,
     ::Dry,
     ::NoPrecipitation,
@@ -19,9 +16,6 @@
     Y,
     Ya,
     t,
-    p,
-    Φ,
-    K,
     ::AdvectiveForm,
     ::EquilibriumMoisture,
     ::NoPrecipitation,
@@ -76,9 +70,6 @@ end
     Y,
     Ya,
     t,
-    p,
-    Φ,
-    K,
     ::ConservativeForm,
     ::EquilibriumMoisture,
     ::NoPrecipitation,
@@ -135,9 +126,6 @@ end
     Y,
     Ya,
     t,
-    p,
-    Φ,
-    K,
     ::ConservativeForm,
     ::EquilibriumMoisture,
     ::PrecipitationRemoval,
@@ -188,26 +176,9 @@ end
     @. dρq_tot -= vector_vdiv_f2c(interp_c2f(ρuh / ρ * (ρq_tot)))
 
     # remove precipitation rhs:
-
-    # TODO move \Phi and K to Ya
-    e_int = @. ρe_tot / ρ - Φ - K
-    q_tot = @. ρq_tot / ρ
-
-    # saturation adjustment (repeated in pressure) TODO - move to Ya
-    # (we could cache the temperature, then creating ts would not be expensive)
-    ts = Thermodynamics.PhaseEquil_ρeq.(Ref(params), ρ, e_int, q_tot)
-
-    # precipitation removal
-    q = @. Thermodynamics.PhasePartition(ts)
-    λ = @. Thermodynamics.liquid_fraction(ts)
-    I_l = @. Thermodynamics.internal_energy_liquid(ts)
-    I_i = @. Thermodynamics.internal_energy_ice(ts)
-    S_qt = @. CloudMicrophysics.Microphysics_0M.remove_precipitation(params, q)
-    S_e = @. (λ * I_l + (1 - λ) * I_i + Φ) * S_qt
-
-    @. dρq_tot += ρ * S_qt
-    @. dρe_tot += ρ * S_e
-    @. dρ += ρ * S_qt
+    @. dρq_tot += ρ * Ya.microphysics_cache.S_q_tot
+    @. dρe_tot += ρ * Ya.microphysics_cache.S_e_tot
+    @. dρ += ρ * Ya.microphysics_cache.S_q_tot
 
     # direct stiffness summation
     Spaces.weighted_dss!(dρq_tot)
