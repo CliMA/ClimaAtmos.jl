@@ -30,7 +30,7 @@ IntervalSets = "0.5"
 JLD2 = "0.4"
 OrdinaryDiffEq = "6"
 StaticArrays = "1"
-Thermodynamics = "0.5"
+Thermodynamics = "0.5, 0.6"
 UnPack = "1"
 
 [extras]
