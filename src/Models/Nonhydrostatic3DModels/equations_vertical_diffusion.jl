@@ -112,8 +112,12 @@ end
     dρe_tot = dY.thermodynamics.ρe_tot
 
     # horizontal velocity
-    flux_bottom = Geometry.Contravariant3Vector(FT(0))
-    flux_top = Geometry.Contravariant3Vector(FT(0))
+    flux_bottom =
+        Geometry.Covariant3Vector(FT(0)) ⊗
+        Geometry.Covariant12Vector(FT(0), FT(0))
+    flux_top =
+        Geometry.Covariant3Vector(FT(0)) ⊗
+        Geometry.Covariant12Vector(FT(0), FT(0))
     scalar_vgrad_c2f = Operators.GradientC2F()
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(flux_bottom),
@@ -122,16 +126,16 @@ end
     @. duh += vector_vdiv_f2c(ν * scalar_vgrad_c2f(uh))
 
     # vertical velocity
-    flux_bottom = Geometry.Contravariant3Vector(FT(0))
-    flux_top = Geometry.Contravariant3Vector(FT(0))
-
-    wbc = Operators.SetBoundaryOperator(
-        bottom = Operators.SetValue(flux_bottom),
+    flux_bottom =
+        Geometry.Covariant3Vector(FT(0)) ⊗ Geometry.Covariant3Vector(FT(0))
+    flux_top =
+        Geometry.Covariant3Vector(FT(0)) ⊗ Geometry.Covariant3Vector(FT(0))
+    vdiv_c2f = Operators.DivergenceC2F(
         top = Operators.SetValue(flux_top),
+        bottom = Operators.SetValue(flux_bottom),
     )
-    vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)),)
+    @. dw += vdiv_c2f(ν * scalar_vgrad_f2c(w))
 
     # thermodynamics: diffusion on enthalpy
     flux_bottom = Geometry.Contravariant3Vector(FT(0))
