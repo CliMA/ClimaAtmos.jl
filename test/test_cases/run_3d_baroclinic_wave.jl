@@ -12,6 +12,7 @@ using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Models: ConstantViscosity
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
@@ -43,6 +44,7 @@ function run_3d_baroclinic_wave(
         boundary_conditions = nothing,
         parameters = params,
         hyperdiffusivity = FT(1e16),
+        vertical_diffusion = ConstantViscosity(ν = FT(1)),
     )
 
     # execute differently depending on testing mode
