@@ -89,15 +89,21 @@ end
     Ya,
     t,
     p,
+    model::Nonhydrostatic3DModel,
     ::AdvectiveForm,
     ::TotalEnergy,
     ::Dry,
     vert_diffusion_style::ConstantViscosity,
-    params,
     FT,
 )
+
+    params = model.parameters
+
     # viscosity for ConstantViscosity turbulence scheme
     ν = vert_diffusion_style.ν
+
+    # unpack boundary conditions
+    bc = model.boundary_conditions
 
     # base components
     ρ = Y.base.ρ
@@ -112,12 +118,9 @@ end
     dρe_tot = dY.thermodynamics.ρe_tot
 
     # horizontal velocity
-    flux_bottom =
-        Geometry.Covariant3Vector(FT(0)) ⊗
-        Geometry.Covariant12Vector(FT(0), FT(0))
-    flux_top =
-        Geometry.Covariant3Vector(FT(0)) ⊗
-        Geometry.Covariant12Vector(FT(0), FT(0))
+    flux_bottom = get_boundary_flux(model, bc.uh.bottom, uh, Y, Ya)
+    flux_top = get_boundary_flux(model, bc.uh.top, uh, Y, Ya)
+
     scalar_vgrad_c2f = Operators.GradientC2F()
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(flux_bottom),
@@ -138,8 +141,10 @@ end
     @. dw += vdiv_c2f(ν * scalar_vgrad_f2c(w))
 
     # thermodynamics: diffusion on enthalpy
-    flux_bottom = Geometry.Contravariant3Vector(FT(0))
-    flux_top = Geometry.Contravariant3Vector(FT(0))
+
+    flux_bottom = get_boundary_flux(model, bc.ρe_tot.bottom, ρe_tot, Y, Ya)
+    flux_top = get_boundary_flux(model, bc.ρe_tot.top, ρe_tot, Y, Ya)
+
     scalar_vgrad_c2f = Operators.GradientC2F()
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(flux_bottom),

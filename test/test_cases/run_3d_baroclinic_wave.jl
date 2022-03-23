@@ -39,17 +39,31 @@ function run_3d_baroclinic_wave(
         npolynomial = npolynomial,
     )
 
+    boundary_conditions = (;
+        ρe_tot = (
+            top = NoFlux(),
+            bottom = BulkFormula(
+                FT(1e-3), # transfer coefficient, default: 1e-3 [dimenisonless]
+                FT(280) * FT(CLIMAParameters.Planet.cp_d(params)), # prescribed surface specific enthalpy (T * c_p) [J / kg]
+            ),
+        ),
+        uh = (
+            top = NoVectorFlux(),
+            bottom = DragLaw(FT(1e-3)), # drag coefficient, default: 1e-3 [dimenisonless]
+        ),
+    )
+
     model = Nonhydrostatic3DModel(
         domain = domain,
-        boundary_conditions = nothing,
+        boundary_conditions = boundary_conditions,
         parameters = params,
         hyperdiffusivity = FT(1e16),
-        vertical_diffusion = ConstantViscosity(ν = FT(1)),
+        vertical_diffusion = ConstantViscosity(ν = FT(5)), #default: 5 [m^2/s]
     )
 
     # execute differently depending on testing mode
     if test_mode == :regression
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 1.0))
+        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 100.0))
         @test simulation isa Simulation
 
         # test set function
@@ -59,6 +73,7 @@ function run_3d_baroclinic_wave(
 
         # test successful integration
         @test step!(simulation) isa Nothing # either error or integration runs
+
     # TODO!: Implement meaningful(!) regression test
 
     elseif test_mode == :validation

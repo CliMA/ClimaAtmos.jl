@@ -8,6 +8,7 @@ using Thermodynamics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models
+using ClimaAtmos.BoundaryConditions
 
 export Nonhydrostatic3DModel
 

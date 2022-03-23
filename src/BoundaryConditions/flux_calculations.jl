@@ -1,61 +1,66 @@
 """
-    get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Y, Ya)
+    get_boundary_flux(model, ::NoFlux, var::Fields.Field, Y, Ya)
 
-    Vertical flux assignment for no-flux conditions (i.e. free-slip wall)
+    Vertical flux assignment for no-flux conditions (e.g., insulating wall)
 """
-function get_boundary_flux(model, ::NoFluxCondition, var::Fields.Field, Y, Ya)
+function get_boundary_flux(model, ::NoFlux, var::Fields.Field, Y, Ya)
     FT = eltype(Y)
-    flux = Geometry.WVector(FT(0))
+    flux = Geometry.Contravariant3Vector(FT(0))
 end
 
 """
-    get_boundary_flux(model, bc::DragLawCondition, uv, Y, Ya)
+    get_boundary_flux(model, ::NoVectorFlux, var::Fields.Field, Y, Ya)
 
-    Vertical momentum fluxes for a bulk-formulation drag law, given momentum exchange coefficients
+    Vertical flux assignment for an AxisTensor with CovariantAxis{(1,2)} in no-flux conditions (e.g., free-slip wall)
 """
-function get_boundary_flux(model, bc::DragLawCondition, uv, Y, Ya)
+function get_boundary_flux(model, ::NoVectorFlux, var::Fields.Field, Y, Ya)
     FT = eltype(Y)
-    coefficients =
-        eltype(bc.coefficients) == FT ? bc.coefficients : bc.coefficients(Y, Ya)
+    flux =
+        Geometry.Covariant3Vector(FT(0)) ⊗
+        Geometry.Covariant12Vector(FT(0), FT(0))
+end
 
-    uv_1 = first_interior(uv)
+"""
+    get_boundary_flux(model, bc::DragLaw, uv, Y, Ya)
+
+    Vertical momentum fluxes for a bulk-formulation drag law, given the momentum exchange coefficient
+"""
+function get_boundary_flux(model, bc::DragLaw, uv, Y, Ya)
+    FT = eltype(Y)
+    coefficient =
+        eltype(bc.coefficient) == FT ? bc.coefficient : bc.coefficient(Y, Ya)
+
+    uv_1 = Fields.level(uv, 1)
     u_wind = norm(uv_1)
 
-    flux = Geometry.WVector(coefficients.Cd * u_wind) ⊗ uv_1
+    flux =
+        Geometry.Contravariant3Vector(coefficient * u_wind) ⊗
+        Geometry.Covariant12Vector(FT(0), FT(0)) #uv_1 # change when ClimaCore enables Fields for specifying boundary conditions (#325)
 end
 
 """
     get_boundary_flux(
         model,
-        bc::BulkFormulaCondition,
+        bc::BulkFormula,
         ρc::Fields.Field,
         Y,
         Ya,
     )
 
-    Vertical fluxes for arbitrary variables with a bulk-formulation drag law, 
+    Vertical fluxes for arbitrary variables with the bulk aerodynamic turbulent formula, 
     given variable exchange coefficients. (e.g. for energy, or tracers)
 """
-function get_boundary_flux(
-    model,
-    bc::BulkFormulaCondition,
-    ρc::Fields.Field,
-    Y,
-    Ya,
-)
+
+function get_boundary_flux(model, bc::BulkFormula, ρc::Fields.Field, Y, Ya)
     FT = eltype(Y.base)
-    coefficients =
-        eltype(bc.coefficients) == FT ? bc.coefficients : bc.coefficients(Y, Ya)
     c_sfc = bc.surface_field
 
-    ρ_1 = first_interior(Y.base.ρ)
-    ρc_1 = first_interior(ρc)
-    uv_1 = first_interior(Y.base.uv)
-    u_wind = norm(uv_1)
+    ρ_1 = Fields.level(Y.base.ρ, 1)
+    ρc_1 = Fields.level(ρc, 1)
+    uh_1 = Fields.level(Y.base.uh, 1)
+    u_wind = norm(uh_1)
 
-    flux =
-        Geometry.WVector(coefficients.Ch * u_wind * ρ_1 * (ρc_1 / ρ_1 - c_sfc))
+    bulk_flux = bc.coefficients .* ρ_1 .* u_wind .* (ρc_1 ./ ρ_1 .- c_sfc)
+
+    flux = Geometry.Contravariant3Vector.(parent(bulk_flux)[1]) # change when ClimaCore enables Fields for specifying boundary conditions (#325)
 end
-
-# Obtain the first interior datapoint of variable `v`
-first_interior(v) = Operators.getidx(v, Operators.Interior(), 1)

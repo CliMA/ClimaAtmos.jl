@@ -92,6 +92,8 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
     flux_correction = model.flux_corr
     vert_diffusion_style = model.vertical_diffusion
 
+    bc = model.boundary_conditions
+
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
     function rhs!(dY, Y, Ya, t)
@@ -158,11 +160,11 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
             Ya,
             t,
             p,
+            model,
             base_style,
             thermo_style,
             moisture_style,
             vert_diffusion_style,
-            params,
             FT,
         )
 
