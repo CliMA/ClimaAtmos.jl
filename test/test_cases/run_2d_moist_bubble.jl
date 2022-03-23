@@ -7,7 +7,7 @@ using Test
 using OrdinaryDiffEq: SSPRK33, CallbackSet
 using ClimaCorePlots, Plots
 using UnPack
-
+using DiffEqCallbacks
 
 using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_2d_moist_bubble
@@ -18,9 +18,58 @@ using ClimaAtmos.Models.Nonhydrostatic2DModels
 using ClimaAtmos.Callbacks
 using ClimaAtmos.Simulations
 
-
 # Set up parameters
 struct Bubble2DParameters <: CLIMAParameters.AbstractEarthParameterSet end
+
+"""
+    PNGOutput{M, I} <: AbstractCallback
+
+Specifies a `DiffEqCallbacks.PeriodicCallback` that
+plots some of the state variables from the integrator
+into a `.png` file.
+"""
+struct PNGOutput{M <: AbstractModel, I <: Number} <: AbstractCallback
+    model::M
+    filedir::String
+    filename::String
+    interval::I
+end
+
+function (F::PNGOutput)(integrator)
+    state = integrator.u
+
+    # Create directory
+    mkpath(F.filedir)
+
+    ENV["GKSwstype"] = "nul"
+    Plots.GRBackend()
+
+    foi = Plots.plot(state.base.ρ)
+    Plots.png(
+        foi,
+        joinpath(F.filedir, F.filename * "_rho" * "_$(integrator.t)" * ".png"),
+    )
+
+    foi = Plots.plot(state.base.ρw)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_rho_w" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    foi = Plots.plot(state.base.ρuh)
+    Plots.png(
+        foi,
+        joinpath(
+            F.filedir,
+            F.filename * "_rho_uh" * "_$(integrator.t)" * ".png",
+        ),
+    )
+
+    return nothing
+end
 
 function run_2d_moist_bubble(
     ::Type{FT};
@@ -121,11 +170,26 @@ function run_2d_moist_bubble(
         end
 
     elseif test_mode == :validation
-        # path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
-        # mkpath(path)
+        path = joinpath(@__DIR__, first(split(basename(@__FILE__), ".jl")))
+        mkpath(path)
+
+        cb_png = PNGOutput(model, path, "plots_moist_bubble", 100)
+        cb_set = CallbackSet(DiffEqCallbacks.PeriodicCallback(
+            cb_png,
+            cb_png.interval;
+            initial_affect = true,
+        ))
+
         # cb_jld2 = JLD2Output(model, path, "moist_bubble", dt)
         # cb_set = CallbackSet(generate_callback(cb_jld2))
-        simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 500.0))#, callbacks = cb_set,)
+
+        simulation = Simulation(
+            model,
+            stepper,
+            dt = dt,
+            tspan = (0.0, 500.0),
+            callbacks = cb_set,
+        )
         @unpack ρ, ρuh, ρw, ρe_tot, ρq_tot =
             init_2d_moist_bubble(FT, params, thermovar = :ρe_tot)
         set!(simulation, :base, ρ = ρ, ρuh = ρuh, ρw = ρw)
@@ -158,4 +222,3 @@ end
         run_2d_moist_bubble(FT)
     end
 end
-#run_2d_moist_bubble(Float32, test_mode=:validation)
