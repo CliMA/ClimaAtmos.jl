@@ -5,11 +5,8 @@ using ClimaCore: Geometry, Fields, Operators
 using ClimaCore.Geometry: ⊗
 
 export get_boundary_flux,
-    AbstractBoundaryCondition,
-    CustomFluxCondition,
-    NoFluxCondition,
-    DragLawCondition,
-    BulkFormulaCondition
+    AbstractBoundary, NoFlux, NoVectorFlux, DragLaw, BulkFormula
+
 
 """
     get_boundary_flux(model, bc, var, Ym, Ya)
@@ -22,7 +19,7 @@ function get_boundary_flux end
 """
 Supertype for all boundary conditions.
 """
-abstract type AbstractBoundaryCondition end
+abstract type AbstractBoundary end
 
 include("flux_conditions.jl")
 include("flux_calculations.jl")
