@@ -2,7 +2,7 @@
     JLD2Output{M, I} <: AbstractCallback
 
 Specifies that a `DiffEqCallbacks.PeriodicCallback` should be constructed that
-extracts the model state from the integrator and stores it in a `.jld2` file. 
+extracts the model state from the integrator and stores it in a `.jld2` file.
 """
 struct JLD2Output{M <: AbstractModel, I <: Number} <: AbstractCallback
     model::M
@@ -26,7 +26,7 @@ end
 
 """
     CFLAdaptive <: AbstractCallback
-    
+
 Container for CFL information callback.
 """
 mutable struct CFLAdaptive <: AbstractCallback
@@ -38,7 +38,7 @@ end
 
 """
     get_nodal_distance(space::Space)
-    
+
 Return a tuple of local spacing for a ClimaCore Space object.
 Dispatched over AbstractSpace subtypes.
 """
@@ -82,7 +82,7 @@ end
 
 """
     (F::CFLAdaptive)(integrator)
-For the given model and function space, gets the nodal distances 
+For the given model and function space, gets the nodal distances
 (local=> horizontal), (minimum=> vertical) and model velocities
 from which the CFL number is calculated at the user specified
 time interval. If the update flag is true, sets new timestep size.
@@ -135,8 +135,8 @@ end
 """
     generate_callback(F::CFLAdaptive; kwargs...)
 
-    Creates a PeriodicCallback object that computes the 
-    maximum CFL number in the domain. 
+    Creates a PeriodicCallback object that computes the
+    maximum CFL number in the domain.
 """
 function generate_callback(F::CFLAdaptive; kwargs...)
     return DiffEqCallbacks.PeriodicCallback(F, F.interval; kwargs...)
