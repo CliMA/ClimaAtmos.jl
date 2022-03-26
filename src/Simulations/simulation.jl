@@ -14,11 +14,13 @@ end
         tspan,
         callbacks = nothing,
         restart = NoRestart(),
+        Ya = nothing,
     )
 
 Construct a `Simulation` for a `model` with a time stepping `method`,
 initial conditions `Y_init`, and time step `dt` for a time interval of `tspan`.
 If `Y_init` is not provided, the model's default initial conditions are used.
+Auxiliary information can be additionally provided via `Ya`. 
 ```
 """
 function Simulation(
@@ -28,6 +30,7 @@ function Simulation(
     tspan,
     callbacks = nothing,
     restart = NoRestart(),
+    Ya = nothing,
 )
     Y = default_initial_conditions(model)
 
@@ -39,7 +42,7 @@ function Simulation(
     # we use the OrdinaryDiffEq.jl interface
     # to set up and an ODE integrator that handles
     # integration in time and callbacks
-    ode_problem = ODE.ODEProblem(ode_function, Y, tspan)
+    ode_problem = ODE.ODEProblem(ode_function, Y, tspan, Ya)
     integrator = ODE.init(ode_problem, method, dt = dt, callback = callbacks)
 
     restart = restart
