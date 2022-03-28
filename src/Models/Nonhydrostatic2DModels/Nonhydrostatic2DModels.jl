@@ -18,6 +18,7 @@ include("default_ode_cache.jl")
 include("equations_base_model.jl")
 include("equations_thermodynamics.jl")
 include("equations_moisture.jl")
+include("equations_precipitation.jl")
 include("equations_vertical_diffusion.jl")
 include("equations_cache.jl")
 

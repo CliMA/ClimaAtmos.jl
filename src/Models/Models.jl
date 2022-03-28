@@ -36,6 +36,7 @@ export AbstractModelStyle,
     CacheEmpty,
     CacheBase,
     CacheZeroMomentMicro,
+    CacheOneMomentMicro,
     get_velocities
 
 export SingleColumnModel, Nonhydrostatic2DModel, Nonhydrostatic3DModel

@@ -98,6 +98,17 @@ steps:
       queue: central
       slurm_ntasks: 1
 
+  - label: ":computer: 2d_precipitating_bubble"
+    key: "cpu_2d_precipitating_bubble"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_2d_precipitating_bubble.jl"
+    artifact_paths:
+      - "test/test_cases/run_2d_precipitating_bubble/*"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
   - label: ":computer: 3d_rising_bubble"
     key: "cpu_3d_rising_bubble"
     command:

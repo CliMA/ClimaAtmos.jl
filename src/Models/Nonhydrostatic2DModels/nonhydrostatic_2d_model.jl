@@ -124,6 +124,19 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
             FT,
         ) # Ex.: ∂ₜρq_tot = ...
 
+        rhs_precipitation!(
+            dY,
+            Y,
+            Ya,
+            t,
+            base_style,
+            moisture_style,
+            precip_style,
+            params,
+            hyperdiffusivity,
+            FT,
+        ) # Ex.: ∂ₜρq_tot = ...
+
         # vertical diffusion
         rhs_vertical_diffusion!(
             dY,
