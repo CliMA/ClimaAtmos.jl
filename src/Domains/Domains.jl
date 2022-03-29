@@ -2,7 +2,8 @@ module Domains
 
 using IntervalSets
 using Printf
-using ClimaCore: ClimaCore, Geometry, Meshes, Topologies, Spaces
+using ClimaCore:
+    ClimaCore, Geometry, Meshes, Topologies, Spaces, Fields, Hypsography
 
 export make_function_space,
     AbstractDomain,
@@ -11,13 +12,17 @@ export make_function_space,
     Column,
     HybridPlane,
     HybridBox,
-    SphericalShell
+    SphericalShell,
+    WarpedSurface,
+    CanonicalSurface
 
 import ClimaCore.Meshes:
     StretchingRule,
     Uniform,
     ExponentialStretching,
     GeneralizedExponentialStretching
+
+import ClimaCore.Hypsography: TerrainAdaption, LinearAdaption
 
 """
     make_function_space(domain)
@@ -34,6 +39,7 @@ abstract type AbstractDomain{FT} end
 abstract type AbstractVerticalDomain{FT} <: AbstractDomain{FT} end
 abstract type AbstractHybridDomain{FT} <: AbstractDomain{FT} end
 
+include("topography.jl")
 include("domain.jl")
 include("make_function_space.jl")
 

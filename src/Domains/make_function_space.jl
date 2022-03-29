@@ -25,6 +25,7 @@ function make_function_space(domain::HybridPlane)
         nelems = domain.nelements[2],
     )
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
+    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.IntervalDomain(
         Geometry.XPoint(domain.xlim[1])..Geometry.XPoint(domain.xlim[2]);
@@ -36,9 +37,26 @@ function make_function_space(domain::HybridPlane)
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace1D(horztopology, quad)
 
-    hv_center_space =
-        Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
-    hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
+    if domain.topography isa WarpedSurface
+        surface_function = domain.topography.surface_function
+        z_surface =
+            surface_function.(ClimaCore.Fields.coordinate_field(horzspace))
+        hv_face_space = ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace(
+            horzspace,
+            vert_face_space,
+            domain.topography.interior_warping,
+            z_surface,
+        )
+        hv_center_space =
+            Spaces.CenterExtrudedFiniteDifferenceSpace(hv_face_space)
+    else
+        hv_face_space = ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace(
+            horzspace,
+            vert_face_space,
+        )
+        hv_center_space =
+            Spaces.CenterExtrudedFiniteDifferenceSpace(hv_face_space)
+    end
 
     return hv_center_space, hv_face_space
 end
@@ -54,6 +72,7 @@ function make_function_space(domain::HybridBox)
         nelems = domain.nelements[3],
     )
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
+    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.RectangleDomain(
         Geometry.XPoint(domain.xlim[1])..Geometry.XPoint(domain.xlim[2]),
@@ -70,10 +89,26 @@ function make_function_space(domain::HybridBox)
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace2D(horztopology, quad)
 
-    hv_center_space =
-        Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
-    hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
-
+    if domain.topography isa WarpedSurface
+        surface_function = domain.topography.surface_function
+        z_surface =
+            surface_function.(ClimaCore.Fields.coordinate_field(horzspace))
+        hv_face_space = ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace(
+            horzspace,
+            vert_face_space,
+            domain.topography.interior_warping,
+            z_surface,
+        )
+        hv_center_space =
+            Spaces.CenterExtrudedFiniteDifferenceSpace(hv_face_space)
+    else
+        hv_face_space = ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace(
+            horzspace,
+            vert_face_space,
+        )
+        hv_center_space =
+            Spaces.CenterExtrudedFiniteDifferenceSpace(hv_face_space)
+    end
     return hv_center_space, hv_face_space
 end
 

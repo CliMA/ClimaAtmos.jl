@@ -4,8 +4,8 @@ if !haskey(ENV, "BUILDKITE")
 end
 using Test
 
+using ClimaCore: Spaces, Meshes, Hypsography, Fields
 using ClimaAtmos: Domains
-using ClimaCore: Spaces, Meshes
 import ClimaCore.Meshes:
     StretchingRule,
     Uniform,
@@ -98,5 +98,62 @@ float_types = (Float32, Float64)
             Spaces.CenterExtrudedFiniteDifferenceSpace,
             Spaces.FaceExtrudedFiniteDifferenceSpace,
         }
+    end
+end
+
+@testset "Meshes with Topography" begin
+    # Mimics test in ClimaCore
+    function warp_test_2d(coord)
+        x = coord.x
+        return sin(x) * eltype(x)(1 / 2)
+    end
+    function warp_test_3d(coord)
+        x = coord.x
+        y = coord.y
+        return sin(x)^2 * cos(y)^2 * eltype(x)(1 / 2)
+    end
+    for FT in float_types
+        # Extruded FD-Spectral Hybrid 2D
+        domain = Domains.HybridPlane(
+            FT,
+            xlim = (-0, π),
+            zlim = (0, 1),
+            nelements = (8, 5),
+            npolynomial = 4,
+            xperiodic = true,
+            topography = Domains.AnalyticalTopography(warp_test_2d),
+        )
+        cspace, fspace = Domains.make_function_space(domain)
+        ᶜcoords = Fields.coordinate_field(cspace)
+        z₀ = Fields.level(ᶜcoords.z, 1)
+        # Check ∫ₓ(z_sfc)dx == known value from warp_test_2d
+        @test sum(z₀ .- domain.zlim[2] / 5 / 2) - FT(1) <= FT(0.1 / 4 / 8 / 5)
+        @test abs(maximum(z₀) - FT(0.5)) <= FT(0.125)
+    end
+    for FT in float_types
+        # Extruded FD-Spectral Hybrid 3D
+        levels = 5:10
+        polynom = 2:4:10
+        horzelem = 2:4:10
+        for nl in levels, np in polynom, nh in horzelem
+            domain = Domains.HybridBox(
+                FT,
+                xlim = (-0, π),
+                ylim = (-0, π),
+                zlim = (0, 1),
+                nelements = (nh, nh, nl),
+                npolynomial = np,
+                xperiodic = true,
+                topography = Domains.AnalyticalTopography(warp_test_3d),
+            )
+            cspace, fspace = Domains.make_function_space(domain)
+            ᶜcoords = Fields.coordinate_field(cspace)
+            z₀ = Fields.level(ᶜcoords.z, 1)
+            # Check ∫ₛ(z_sfc)dS == known value from warp_test_3d
+            # Assumes uniform stretching
+            @test sum(z₀ .- domain.zlim[2] / 2 / domain.zlim[2]) -
+                  FT(π^2 / 8) <= FT(0.1 / np * nh * nl)
+            @test abs(maximum(z₀) - FT(0.5)) <= FT(0.125)
+        end
     end
 end

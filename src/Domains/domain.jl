@@ -17,7 +17,7 @@ julia> Column(zlim = (0, 1), nelements = 10)
 Domain set-up:
 \tz-column:\t[0.0, 1.0]
 \t# of elements:\t10
-\tVertical stretching rule:\tUniform()
+\tVertical stretching rule:\tUniform
 ```
 """
 function Column(
@@ -38,6 +38,7 @@ struct HybridPlane{FT} <: AbstractHybridDomain{FT}
     npolynomial::Int
     xperiodic::Bool
     stretching::StretchingRule
+    topography::AbstractTopography
 end
 
 """
@@ -64,7 +65,8 @@ Domain set-up:
 \txz-plane:\t[0.0, 3.1) × [0.0, 1.0]
 \t# of elements:\t(5, 10)
 \tpoly order:\t5
-\tVertical stretching rule:\tUniform()
+\tVertical stretching rule:\tUniform
+\tTopography:\tCanonicalSurface
 ```
 """
 function HybridPlane(
@@ -75,6 +77,7 @@ function HybridPlane(
     npolynomial,
     xperiodic = true,
     stretching = Uniform(),
+    topography = NoTopography(),
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert zlim[1] < zlim[2]
@@ -86,6 +89,7 @@ function HybridPlane(
         npolynomial,
         xperiodic,
         stretching,
+        topography,
     )
 end
 
@@ -98,6 +102,7 @@ struct HybridBox{FT} <: AbstractHybridDomain{FT}
     xperiodic::Bool
     yperiodic::Bool
     stretching::StretchingRule
+    topography::AbstractTopography
 end
 
 """
@@ -126,7 +131,8 @@ Domain set-up:
 \txyz-box:\t[0.0, 3.1) × [0.0, 3.1) × [0.0, 1.0]
 \t# of elements:\t(5, 5, 10)
 \tpoly order:\t5
-\tVertical stretching rule:\tUniform()
+\tVertical stretching rule:\tUniform
+\tTopography:\tCanonicalSurface
 ```
 """
 function HybridBox(
@@ -139,6 +145,7 @@ function HybridBox(
     xperiodic = true,
     yperiodic = true,
     stretching = Uniform(),
+    topography = NoTopography(),
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
@@ -153,6 +160,7 @@ function HybridBox(
         xperiodic,
         yperiodic,
         stretching,
+        topography,
     )
 end
 
@@ -162,6 +170,7 @@ struct SphericalShell{FT} <: AbstractHybridDomain{FT}
     nelements::Tuple{Int, Int}
     npolynomial::Int
     stretching::StretchingRule
+    topography::AbstractTopography
 end
 
 """
@@ -179,7 +188,8 @@ Domain set-up:
 \tsphere height:\t1.0
 \t# of elements:\t(6, 10)
 \tpoly order:\t5
-\tVertical stretching rule:\tUniform()
+\tVertical stretching rule:\tUniform
+\tTopography:\tCanonicalSurface
 ```
 """
 function SphericalShell(
@@ -189,6 +199,7 @@ function SphericalShell(
     nelements,
     npolynomial,
     stretching = Uniform(),
+    topography = NoTopography(),
 ) where {FT}
     @assert 0 < radius
     @assert 0 < height
@@ -198,6 +209,7 @@ function SphericalShell(
         nelements,
         npolynomial,
         stretching,
+        topography,
     )
 end
 
@@ -207,7 +219,11 @@ function Base.show(io::IO, domain::Column)
     printstyled(io, @sprintf("%#.2g, %#.2g", domain.zlim...), color = 7)
     printstyled(io, "]", color = 226)
     print(io, "\n\t# of elements:\t", domain.nelements)
-    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
+    print(
+        io,
+        "\n\tVertical stretching rule:\t",
+        "$(typeof(domain.stretching).name.name)",
+    )
 end
 
 function Base.show(io::IO, domain::HybridPlane)
@@ -219,7 +235,12 @@ function Base.show(io::IO, domain::HybridPlane)
     printstyled(io, "]", color = 226)
     @printf(io, "\n\t# of elements:\t(%d, %d)", domain.nelements...)
     print(io, "\n\tpoly order:\t", domain.npolynomial)
-    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
+    print(
+        io,
+        "\n\tVertical stretching rule:\t",
+        "$(typeof(domain.stretching).name.name)",
+    )
+    print(io, "\n\tTopography:\t", "$(typeof(domain.topography).name.name)")
 end
 
 function Base.show(io::IO, domain::HybridBox)
@@ -233,7 +254,12 @@ function Base.show(io::IO, domain::HybridBox)
     printstyled(io, "]", color = 226)
     @printf(io, "\n\t# of elements:\t(%d, %d, %d)", domain.nelements...)
     print(io, "\n\tpoly order:\t", domain.npolynomial)
-    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
+    print(
+        io,
+        "\n\tVertical stretching rule:\t",
+        "$(typeof(domain.stretching).name.name)",
+    )
+    print(io, "\n\tTopography:\t", "$(typeof(domain.topography).name.name)")
 end
 
 function Base.show(io::IO, domain::SphericalShell)
@@ -243,5 +269,10 @@ function Base.show(io::IO, domain::SphericalShell)
     printstyled(io, @sprintf("%#.2g", domain.height), color = 7)
     @printf(io, "\n\t# of elements:\t(%d, %d)", domain.nelements...)
     print(io, "\n\tpoly order:\t", domain.npolynomial)
-    print(io, "\n\tVertical stretching rule:\t", "$(domain.stretching)")
+    print(
+        io,
+        "\n\tVertical stretching rule:\t",
+        "$(typeof(domain.stretching).name.name)",
+    )
+    print(io, "\n\tTopography:\t", "$(typeof(domain.topography).name.name)")
 end
