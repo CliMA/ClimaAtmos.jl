@@ -2,14 +2,24 @@
     error("not implemented for this model configuration.")
 end
 
-@inline function rhs_base_model!(dY, Y, Ya, t, p, params, hyperdiffusivity, FT)
+@inline function rhs_base_model!(
+    dY,
+    Y,
+    Ya,
+    t,
+    p,
+    Φ,
+    params,
+    hyperdiffusivity,
+    FT,
+)
     # relevant parameters 
     g::FT = CLIMAParameters.Planet.grav(params)
     κ₄::FT = hyperdiffusivity
 
     # unity tensor for pressure term calculation 
     # in horizontal spectral divergence
-    I = Ref(Geometry.Axis2Tensor(
+    Ih = Ref(Geometry.Axis2Tensor(
         (Geometry.UAxis(), Geometry.UAxis()),
         @SMatrix [FT(1)]
     ),)
@@ -27,8 +37,8 @@ end
         top = Operators.Extrapolate(),
     )
     vector_interp_c2f = Operators.InterpolateC2F(
-        bottom = Operators.SetValue(Geometry.UVector(FT(0))),
-        top = Operators.SetValue(Geometry.UVector(FT(0))),
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
     )
     tensor_interp_f2c = Operators.InterpolateF2C()
 
@@ -57,42 +67,47 @@ end
         ),
     )
 
-    # unpack state
-    dYm = dY.base
-    Ym = Y.base
-    dρ = dYm.ρ
-    dρuh = dYm.ρuh
-    dρw = dYm.ρw
-    ρ = Ym.ρ
-    ρuh = Ym.ρuh
-    ρw = Ym.ρw
+    # unpack state and tendency
+    dρ = dY.base.ρ
+    dρuh = dY.base.ρuh
+    dρw = dY.base.ρw
+    ρ = Y.base.ρ
+    ρuh = Y.base.ρuh
+    ρw = Y.base.ρw
 
-    # density equation
-    @. dρ = -hdiv(ρuh)
-    @. dρ -= vector_vdiv_f2c(ρw)
-    Spaces.weighted_dss!(dρ)
+    fρ = @. scalar_interp_c2f(ρ)
+    uh = @. ρuh / ρ
+    w = @. ρw / fρ
 
     # hyperdiffusion
-    @. dρuh = hwdiv(hgrad(ρuh / ρ))
+    @. dρuh = hwdiv(hgrad(uh))
+    @. dρw = hwdiv(hgrad(w))
     Spaces.weighted_dss!(dρuh)
+    Spaces.weighted_dss!(dρw)
+
     @. dρuh = -κ₄ * hwdiv(ρ * hgrad(dρuh))
+    @. dρw = -κ₄ * hwdiv(fρ * hgrad(dρw))
+
+    # density equation
+    @. dρ = -vector_vdiv_f2c(ρw)
+    @. dρ -= hdiv(ρuh)
+    Spaces.weighted_dss!(dρ)
 
     # horizontal momentum equation
-    @. dρuh -= hdiv(ρuh ⊗ ρuh / ρ + p * I)
     @. dρuh -= tensor_vdiv_f2c(ρw ⊗ vector_interp_c2f(ρuh / ρ))
+    @. dρuh -= hdiv(ρuh ⊗ ρuh / ρ + p * Ih)
     Spaces.weighted_dss!(dρuh)
 
     # vertical momentum equation
-    uh_f = @. vector_interp_c2f(ρuh / ρ)
-    @. dρw = -hdiv(uh_f ⊗ ρw)
     @. dρw += B(
         Geometry.transform(
             Geometry.WAxis(),
-            -(scalar_grad_c2f(p)) +
-            scalar_interp_c2f(ρ) * Geometry.Covariant3Vector(-g), # TODO!: Not generally a Covariant3Vector
+            -(scalar_grad_c2f(p)) - scalar_interp_c2f(ρ) * scalar_grad_c2f(Φ),
         ) -
         tensor_vdiv_c2f(tensor_interp_f2c(ρw ⊗ ρw / scalar_interp_c2f(ρ))),
     )
+    uh_f = @. vector_interp_c2f(ρuh / ρ)
+    @. dρw = -hdiv(uh_f ⊗ ρw)
     Spaces.weighted_dss!(dρw)
 
     return dY

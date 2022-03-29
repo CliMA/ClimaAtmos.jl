@@ -140,11 +140,11 @@ function run_2d_moist_bubble(
 
         # perform regression check
         if FT == Float32
-            current_min = 236505.89f0
-            current_max = 253207.83f0
+            current_min = 236489.48f0
+            current_max = 253225.33f0
         elseif FT == Float64
-            current_min = 236505.86276988868
-            current_max = 253207.81761817695
+            current_min = 236489.46837812787
+            current_max = 253225.3365207004
         else
             error("Float type $FT not tested.")
         end
