@@ -107,7 +107,7 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
         )
 
         # main model equations
-        rhs_base_model!(dY, Y, Ya, t, p, params, hyperdiffusivity, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+        rhs_base_model!(dY, Y, Ya, t, p, Φ, params, hyperdiffusivity, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
         rhs_thermodynamics!(
             dY,
             Y,

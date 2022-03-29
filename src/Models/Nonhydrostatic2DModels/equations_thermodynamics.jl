@@ -15,25 +15,41 @@ end
     hyperdiffusivity,
     FT,
 )
-    ρ = Y.base.ρ
-    ρuh = Y.base.ρuh
-    ρw = Y.base.ρw
-    ρθ = Y.thermodynamics.ρθ
+    κ₄::FT = hyperdiffusivity
 
-    # operators /w boundary conditions
+    # operators
+    # spectral horizontal operators
     hdiv = Operators.Divergence()
-    vector_vdiv_f2c = Operators.DivergenceF2C(
-        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
-        top = Operators.SetValue(Geometry.WVector(FT(0))),
-    )
+    hwdiv = Operators.WeakDivergence()
+    hgrad = Operators.Gradient()
+
+    # vertical FD operators with BC's
+    # interpolations
     scalar_interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
     )
+    # divergence
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(Geometry.WVector(FT(0))),
+        top = Operators.SetValue(Geometry.WVector(FT(0))),
+    )
 
-    @. dY.thermodynamics.ρθ = -hdiv(ρuh * ρθ / ρ)
-    @. dY.thermodynamics.ρθ -= vector_vdiv_f2c(ρw * scalar_interp_c2f(ρθ / ρ))
-    Spaces.weighted_dss!(dY.thermodynamics.ρθ)
+    # unpack state and tendency
+    ρ = Y.base.ρ
+    ρuh = Y.base.ρuh
+    ρw = Y.base.ρw
+    ρθ = Y.thermodynamics.ρθ
+    dρθ = dY.thermodynamics.ρθ
+
+    # hyperdiffusion
+    @. dρθ = hwdiv(hgrad(ρθ ./ ρ))
+    Spaces.weighted_dss!(dρθ)
+    @. dρθ = -κ₄ * hwdiv(ρ * hgrad(dρθ))
+
+    @. dρθ -= vector_vdiv_f2c(ρw * scalar_interp_c2f(ρθ / ρ))
+    @. dρθ -= hdiv(ρuh / ρ * ρθ)
+    Spaces.weighted_dss!(dρθ)
 end
 
 @inline function rhs_thermodynamics!(
