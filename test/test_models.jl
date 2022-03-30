@@ -192,8 +192,11 @@ end
             boundary_conditions = nothing,
             parameters = (),
             hyperdiffusivity = FT(100),
+            cache = Models.CacheBase(),
         )
-        Y = Models.default_initial_conditions(model)
+        space_center, space_face = Domains.make_function_space(model.domain)
+
+        Y = Models.default_initial_conditions(model, space_center, space_face)
         @test Y isa Fields.FieldVector
         @test Y.base isa Fields.FieldVector
         @test Y.thermodynamics isa Fields.FieldVector
@@ -205,6 +208,16 @@ end
         @test norm(Y.base.ρuh) == 0
         @test norm(Y.base.ρw) == 0
         @test norm(Y.thermodynamics.ρθ) == 0
+
+        Ya = Models.default_ode_cache(
+            model,
+            model.cache,
+            space_center,
+            space_face,
+        )
+        @test Ya isa Fields.FieldVector
+        @test Ya.p isa Fields.Field
+        @test norm(Ya.p) == 0
     end
 end
 
@@ -284,7 +297,9 @@ end
             boundary_conditions = nothing,
             parameters = (),
         )
-        Y = Models.default_initial_conditions(model)
+        space_center, space_face = Domains.make_function_space(model.domain)
+
+        Y = Models.default_initial_conditions(model, space_center, space_face)
         @test Y isa Fields.FieldVector
         @test Y.base isa Fields.FieldVector
         @test Y.thermodynamics isa Fields.FieldVector
@@ -369,7 +384,9 @@ end
             boundary_conditions = nothing,
             parameters = (),
         )
-        Y = Models.default_initial_conditions(model)
+        space_center, space_face = Domains.make_function_space(model.domain)
+
+        Y = Models.default_initial_conditions(model, space_center, space_face)
         @test Y isa Fields.FieldVector
         @test Y.base isa Fields.FieldVector
         @test Y.thermodynamics isa Fields.FieldVector

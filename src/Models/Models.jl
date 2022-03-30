@@ -11,12 +11,14 @@ export AbstractModel,
     variable_types,
     variable_spaces,
     default_initial_conditions,
-    make_ode_function
+    make_ode_function,
+    default_ode_cache
 
 export AbstractModelStyle,
     AbstractBaseModelStyle,
     AbstractThermodynamicsStyle,
     AbstractMoistureStyle,
+    AbstractCacheStyle,
     AdvectiveForm,
     ConservativeForm,
     AnelasticAdvectiveForm,
@@ -31,6 +33,9 @@ export AbstractModelStyle,
     NoPrecipitation,
     PrecipitationRemoval,
     OneMoment,
+    CacheEmpty,
+    CacheBase,
+    CacheZeroMomentMicro,
     get_velocities
 
 export SingleColumnModel, Nonhydrostatic2DModel, Nonhydrostatic3DModel
@@ -47,6 +52,7 @@ abstract type AbstractNonhydrostatic3DModel <: AbstractModel end
 Supertype for all model styles.
 """
 abstract type AbstractModelStyle end
+abstract type AbstractCacheStyle <: AbstractModelStyle end
 
 """
     components(model::AbstractModel)
@@ -89,12 +95,24 @@ variable_spaces(style::AbstractModelStyle) =
     error("components not implemented for given model style $style")
 
 """
-    default_initial_conditions(model)
+    default_initial_conditions(model, space_center, space_face)
 
 Construct the initial conditions for `model`.
 """
-default_initial_conditions(model::AbstractModel) =
+default_initial_conditions(model::AbstractModel, space_center, space_face) =
     error("default_initial_conditions not implemented for given model type")
+
+"""
+    default_ode_cache(model, cache, space_center, space_face)
+
+Construct the cache for ordinary differential equations.
+"""
+default_ode_cache(
+    model::AbstractModel,
+    cache::AbstractCacheStyle,
+    space_center,
+    space_face,
+) = error("default_ode_cache not implemented for given model type")
 
 """
     make_ode_function(model)
@@ -118,6 +136,7 @@ include("style_thermodynamics.jl")
 include("style_moisture.jl")
 include("style_precipitation.jl")
 include("style_vertical_diffusion.jl")
+include("style_cache.jl")
 
 # models
 include("SingleColumnModels/SingleColumnModels.jl")

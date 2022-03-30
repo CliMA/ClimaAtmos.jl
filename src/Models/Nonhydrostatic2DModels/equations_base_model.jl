@@ -2,22 +2,13 @@
     error("not implemented for this model configuration.")
 end
 
-@inline function rhs_base_model!(
-    dY,
-    Y,
-    Ya,
-    t,
-    p,
-    Φ,
-    params,
-    hyperdiffusivity,
-    FT,
-)
-    # relevant parameters 
+@inline function rhs_base_model!(dY, Y, Ya, t, params, hyperdiffusivity, FT)
+
+    # relevant parameters
     g::FT = CLIMAParameters.Planet.grav(params)
     κ₄::FT = hyperdiffusivity
 
-    # unity tensor for pressure term calculation 
+    # unity tensor for pressure term calculation
     # in horizontal spectral divergence
     Ih = Ref(Geometry.Axis2Tensor(
         (Geometry.UAxis(), Geometry.UAxis()),
@@ -74,6 +65,10 @@ end
     ρ = Y.base.ρ
     ρuh = Y.base.ρuh
     ρw = Y.base.ρw
+
+    # unpack cache
+    p = Ya.p
+    Φ = Ya.Φ
 
     fρ = @. scalar_interp_c2f(ρ)
     uh = @. ρuh / ρ

@@ -29,17 +29,24 @@ function Simulation(
     callbacks = nothing,
     restart = NoRestart(),
 )
-    Y = default_initial_conditions(model)
+    space_center, space_face = Domains.make_function_space(model.domain)
 
-    # contains all information about the 
+    Y = default_initial_conditions(model, space_center, space_face)
+
+    # contains all information about the
     # pde systems jacobians and right-hand sides
     # to hook into the OrdinaryDiffEq.jl interface
     ode_function = make_ode_function(model)
 
+    # In the ODE interface p is meant to store equation parameters.
+    # We are hijacking it here a little bit to store optional cache data.
+    # This will be fixed with a new interface.
+    Ya = default_ode_cache(model, model.cache, space_center, space_face)
+
     # we use the OrdinaryDiffEq.jl interface
     # to set up and an ODE integrator that handles
     # integration in time and callbacks
-    ode_problem = ODE.ODEProblem(ode_function, Y, tspan)
+    ode_problem = ODE.ODEProblem(ode_function, Y, tspan, Ya)
     integrator = ODE.init(ode_problem, method, dt = dt, callback = callbacks)
 
     restart = restart
@@ -61,7 +68,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
             throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
         end
 
-        # for restart we need to use the reinit function because we don't 
+        # for restart we need to use the reinit function because we don't
         # have direct state access using OrdinaryDiffEq. For this
         # we need to copy
         if simulation.restart isa NoRestart
@@ -101,7 +108,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
             throw(ArgumentError("$varname not a compatible type."))
         end
 
-        # we need to use the reinit function because we don't 
+        # we need to use the reinit function because we don't
         # have direct state access using OrdinaryDiffEq
         ODE.reinit!(
             simulation.integrator,

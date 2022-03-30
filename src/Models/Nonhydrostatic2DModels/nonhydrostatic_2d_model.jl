@@ -5,7 +5,7 @@ A two-dimensional non-hydrostatic model, which is typically used for simulating
 the Euler equations. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct Nonhydrostatic2DModel{D, B, T, M, PR, VD, FT, BC, P} <:
+Base.@kwdef struct Nonhydrostatic2DModel{D, B, T, M, PR, VD, FT, BC, P, C} <:
                    AbstractNonhydrostatic2DModel
     domain::D
     base::B = ConservativeForm()
@@ -16,6 +16,7 @@ Base.@kwdef struct Nonhydrostatic2DModel{D, B, T, M, PR, VD, FT, BC, P} <:
     hyperdiffusivity::FT
     boundary_conditions::BC
     parameters::P
+    cache::C = CacheBase()
 end
 
 Models.components(model::Nonhydrostatic2DModel) = (
@@ -26,11 +27,14 @@ Models.components(model::Nonhydrostatic2DModel) = (
     vertical_diffusion = model.vertical_diffusion,
 )
 
-function Models.default_initial_conditions(model::Nonhydrostatic2DModel)
+function Models.default_initial_conditions(
+    model::Nonhydrostatic2DModel,
+    space_center,
+    space_face,
+)
     # we need to provide default initial conditions for the model, because the ode solver
     # requires inital conditions when getting instantiated, but we also want to support the `set!` function
     # interface for initialization and re-initialization.
-    space_center, space_face = Domains.make_function_space(model.domain)
     local_geometry_center = Fields.local_geometry_field(space_center)
     local_geometry_face = Fields.local_geometry_field(space_face)
 
@@ -80,40 +84,26 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
     function rhs!(dY, Y, Ya, t)
-        # auxiliary calculation is done here so we don't
-        # redo it all the time and can cache the values
 
-        # TODO compute ts, K, etc and dump them into params
-        # this will be later reused by microphysics
-        # ts = Thermodynamics.PhaseEquil_ρeq(
-        #     params,
-        #     ρ,
-        #     e_int,
-        #     ρq_tot / ρ
-        # )
-        # q = PhasePartition(ts)
-
-        Φ = calculate_gravitational_potential(Y, Ya, params, FT)
-        K = calculate_kinetic_energy(Y, Ya, params, FT)
-        p = calculate_pressure(
+        precompute_cache!(
+            dY,
             Y,
             Ya,
             thermo_style,
             moisture_style,
+            precip_style,
             params,
-            Φ,
-            K,
             FT,
         )
 
         # main model equations
-        rhs_base_model!(dY, Y, Ya, t, p, Φ, params, hyperdiffusivity, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+        rhs_base_model!(dY, Y, Ya, t, params, hyperdiffusivity, FT) #E x.: ∂ₜρ = ..., ∂ₜρuh = ..., etc.
+
         rhs_thermodynamics!(
             dY,
             Y,
             Ya,
             t,
-            p,
             base_style,
             thermo_style,
             params,
@@ -126,9 +116,6 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
             Y,
             Ya,
             t,
-            p,
-            Φ,
-            K,
             base_style,
             moisture_style,
             precip_style,
@@ -143,7 +130,6 @@ function Models.make_ode_function(model::Nonhydrostatic2DModel)
             Y,
             Ya,
             t,
-            p,
             base_style,
             thermo_style,
             moisture_style,

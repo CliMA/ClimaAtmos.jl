@@ -5,7 +5,7 @@ A three-dimensional non-hydrostatic model, which is typically used for simulatin
 the Euler equations. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT} <:
+Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT, C} <:
                    AbstractNonhydrostatic3DModel
     domain::D
     base::B = AdvectiveForm()
@@ -16,6 +16,7 @@ Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT} <:
     hyperdiffusivity::FT
     boundary_conditions::BC
     parameters::P
+    cache::C = CacheEmpty()
 end
 
 function Models.components(model::Nonhydrostatic3DModel)
@@ -27,11 +28,14 @@ function Models.components(model::Nonhydrostatic3DModel)
     )
 end
 
-function Models.default_initial_conditions(model::Nonhydrostatic3DModel)
+function Models.default_initial_conditions(
+    model::Nonhydrostatic3DModel,
+    space_center,
+    space_face,
+)
     # we need to provide default initial conditions for the model, because the ode solver
     # requires inital conditions when getting instantiated, but we also want to support the `set!` function
     # interface for initialization and re-initialization.
-    space_center, space_face = Domains.make_function_space(model.domain)
     local_geometry_center = Fields.local_geometry_field(space_center)
     local_geometry_face = Fields.local_geometry_field(space_face)
 
@@ -65,6 +69,15 @@ function Models.default_initial_conditions(model::Nonhydrostatic3DModel)
     )
 
     return Fields.FieldVector(; zero_inits...)
+end
+
+function Models.default_ode_cache(
+    model::Nonhydrostatic3DModel,
+    cache::CacheEmpty,
+    space_center,
+    space_face,
+)
+    return nothing
 end
 
 function Models.make_ode_function(model::Nonhydrostatic3DModel)

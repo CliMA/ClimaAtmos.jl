@@ -4,7 +4,7 @@
 A single column model. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct SingleColumnModel{D, B, T, M, VD, F, BC, P} <:
+Base.@kwdef struct SingleColumnModel{D, B, T, M, VD, F, BC, P, C} <:
                    AbstractSingleColumnModel
     domain::D
     base::B = AdvectiveForm()
@@ -14,6 +14,7 @@ Base.@kwdef struct SingleColumnModel{D, B, T, M, VD, F, BC, P} <:
     flux_corr::F = false
     boundary_conditions::BC
     parameters::P
+    cache::C = CacheEmpty()
 end
 
 function Models.components(model::SingleColumnModel)
@@ -25,11 +26,14 @@ function Models.components(model::SingleColumnModel)
     )
 end
 
-function Models.default_initial_conditions(model::SingleColumnModel)
+function Models.default_initial_conditions(
+    model::SingleColumnModel,
+    space_center,
+    space_face,
+)
     # we need to provide default initial conditions for the model, because the ode solver
     # requires inital conditions when getting instantiated, but we also want to support the `set!` function
     # interface for initialization and re-initialization.
-    space_center, space_face = Domains.make_function_space(model.domain)
     local_geometry_center = Fields.local_geometry_field(space_center)
     local_geometry_face = Fields.local_geometry_field(space_face)
 
@@ -63,6 +67,15 @@ function Models.default_initial_conditions(model::SingleColumnModel)
     )
 
     return Fields.FieldVector(; zero_inits...)
+end
+
+function Models.default_ode_cache(
+    model::SingleColumnModel,
+    cache::CacheEmpty,
+    space_center,
+    space_face,
+)
+    return nothing
 end
 
 function Models.make_ode_function(model::SingleColumnModel)
@@ -155,7 +168,7 @@ function Models.make_ode_function(model::SingleColumnModel)
         )
 
         # radiation
-        # turbulence 
+        # turbulence
         # EDMF
 
     end
