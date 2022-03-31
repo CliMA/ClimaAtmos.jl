@@ -77,7 +77,7 @@ function HybridPlane(
     npolynomial,
     xperiodic = true,
     stretching = Uniform(),
-    topography = NoTopography(),
+    topography = CanonicalSurface(),
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert zlim[1] < zlim[2]
@@ -131,7 +131,7 @@ Domain set-up:
 \txyz-box:\t[0.0, 3.1) × [0.0, 3.1) × [0.0, 1.0]
 \t# of elements:\t(5, 5, 10)
 \tpoly order:\t5
-\tVertical stretching rule:\tUniform
+\tVertical stretching rule:\tUniform()
 \tTopography:\tCanonicalSurface
 ```
 """
@@ -145,7 +145,7 @@ function HybridBox(
     xperiodic = true,
     yperiodic = true,
     stretching = Uniform(),
-    topography = NoTopography(),
+    topography = CanonicalSurface(),
 ) where {FT}
     @assert xlim[1] < xlim[2]
     @assert ylim[1] < ylim[2]
@@ -199,7 +199,7 @@ function SphericalShell(
     nelements,
     npolynomial,
     stretching = Uniform(),
-    topography = NoTopography(),
+    topography = CanonicalSurface(),
 ) where {FT}
     @assert 0 < radius
     @assert 0 < height
@@ -240,7 +240,7 @@ function Base.show(io::IO, domain::HybridPlane)
         "\n\tVertical stretching rule:\t",
         "$(typeof(domain.stretching).name.name)",
     )
-    print(io, "\n\tTopography:\t", "$(typeof(domain.topography).name.name)")
+    print(io, "\n\tTopography:\t","$(typeof(domain.topography).name.name)")
 end
 
 function Base.show(io::IO, domain::HybridBox)
@@ -259,7 +259,7 @@ function Base.show(io::IO, domain::HybridBox)
         "\n\tVertical stretching rule:\t",
         "$(typeof(domain.stretching).name.name)",
     )
-    print(io, "\n\tTopography:\t", "$(typeof(domain.topography).name.name)")
+    print(io, "\n\tTopography:\t","$(typeof(domain.topography).name.name)")
 end
 
 function Base.show(io::IO, domain::SphericalShell)
@@ -274,5 +274,5 @@ function Base.show(io::IO, domain::SphericalShell)
         "\n\tVertical stretching rule:\t",
         "$(typeof(domain.stretching).name.name)",
     )
-    print(io, "\n\tTopography:\t", "$(typeof(domain.topography).name.name)")
+    print(io, "\n\tTopography:\t","$(typeof(domain.topography).name.name)")
 end

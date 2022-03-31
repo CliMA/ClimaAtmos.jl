@@ -7,9 +7,6 @@ Returns input coordinate (canonical surface for plane/box/sphere).
 (e.g. canonical box, sphere)
 """
 struct CanonicalSurface <: AbstractTopography end
-function NoTopography()
-    return CanonicalSurface()
-end
 
 """
   WarpedSurface <: AbstractTopography
