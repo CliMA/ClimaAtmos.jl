@@ -131,7 +131,7 @@ Domain set-up:
 \txyz-box:\t[0.0, 3.1) × [0.0, 3.1) × [0.0, 1.0]
 \t# of elements:\t(5, 5, 10)
 \tpoly order:\t5
-\tVertical stretching rule:\tUniform()
+\tVertical stretching rule:\tUniform
 \tTopography:\tCanonicalSurface
 ```
 """
