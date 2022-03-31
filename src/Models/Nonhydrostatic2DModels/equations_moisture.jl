@@ -128,7 +128,7 @@ end
     t,
     ::ConservativeForm,
     ::EquilibriumMoisture,
-    ::PrecipitationRemoval,
+    ::Union{PrecipitationRemoval, OneMoment},
     params,
     hyperdiffusivity,
     FT,

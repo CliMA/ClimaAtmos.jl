@@ -135,6 +135,7 @@ end
         @test model.domain isa Domains.AbstractHybridDomain
         @test model.moisture == Models.Dry()
         @test model.thermodynamics == Models.PotentialTemperature()
+        @test model.precipitation == Models.NoPrecipitation()
         @test model.vertical_diffusion == Models.NoVerticalDiffusion()
 
         model = Nonhydrostatic2DModel(
@@ -185,6 +186,17 @@ end
               Models.variable_names(model.thermodynamics)
         @test Models.variable_names(model).moisture ==
               Models.variable_names(model.moisture)
+        model = Nonhydrostatic2DModel(
+            domain = domain,
+            thermodynamics = Models.TotalEnergy(),
+            moisture = Models.EquilibriumMoisture(),
+            precipitation = Models.OneMoment(),
+            boundary_conditions = nothing,
+            parameters = (),
+            hyperdiffusivity = FT(100),
+        )
+        @test Models.variable_names(model).precipitation ==
+              Models.variable_names(model.precipitation)
 
         # test default_initial_conditions
         model = Nonhydrostatic2DModel(
@@ -217,7 +229,88 @@ end
         )
         @test Ya isa Fields.FieldVector
         @test Ya.p isa Fields.Field
+        @test Ya.Φ isa Fields.Field
         @test norm(Ya.p) == 0
+        @test norm(Ya.Φ) == 0
+
+
+        model = Nonhydrostatic2DModel(
+            domain = domain,
+            thermodynamics = Models.TotalEnergy(),
+            moisture = Models.EquilibriumMoisture(),
+            precipitation = Models.PrecipitationRemoval(),
+            boundary_conditions = nothing,
+            parameters = (),
+            hyperdiffusivity = FT(100),
+            cache = Models.CacheZeroMomentMicro(),
+        )
+        space_center, space_face = Domains.make_function_space(model.domain)
+        Y = Models.default_initial_conditions(model, space_center, space_face)
+        Ya = Models.default_ode_cache(
+            model,
+            model.cache,
+            space_center,
+            space_face,
+        )
+        @test Ya.p isa Fields.Field
+        @test Ya.Φ isa Fields.Field
+        @test Ya.K isa Fields.Field
+        @test Ya.e_int isa Fields.Field
+        @test Ya.microphysics_cache.S_q_tot isa Fields.Field
+        @test Ya.microphysics_cache.S_e_tot isa Fields.Field
+        @test Ya.microphysics_cache.q_liq isa Fields.Field
+        @test Ya.microphysics_cache.q_ice isa Fields.Field
+        @test norm(Ya.p) == 0
+        @test norm(Ya.Φ) == 0
+        @test norm(Ya.K) == 0
+        @test norm(Ya.e_int) == 0
+        @test norm(Ya.microphysics_cache.S_q_tot) == 0
+        @test norm(Ya.microphysics_cache.S_e_tot) == 0
+        @test norm(Ya.microphysics_cache.q_liq) == 0
+        @test norm(Ya.microphysics_cache.q_ice) == 0
+
+        model = Nonhydrostatic2DModel(
+            domain = domain,
+            thermodynamics = Models.TotalEnergy(),
+            moisture = Models.EquilibriumMoisture(),
+            precipitation = Models.OneMoment(),
+            boundary_conditions = nothing,
+            parameters = (),
+            hyperdiffusivity = FT(100),
+            cache = Models.CacheOneMomentMicro(),
+        )
+        space_center, space_face = Domains.make_function_space(model.domain)
+        Y = Models.default_initial_conditions(model, space_center, space_face)
+        Ya = Models.default_ode_cache(
+            model,
+            model.cache,
+            space_center,
+            space_face,
+        )
+        @test Y.precipitation.ρq_rai isa Fields.Field
+        @test Y.precipitation.ρq_sno isa Fields.Field
+        @test norm(Y.precipitation.ρq_rai) == 0
+        @test norm(Y.precipitation.ρq_sno) == 0
+        @test Ya.p isa Fields.Field
+        @test Ya.Φ isa Fields.Field
+        @test Ya.K isa Fields.Field
+        @test Ya.e_int isa Fields.Field
+        @test Ya.microphysics_cache.S_q_tot isa Fields.Field
+        @test Ya.microphysics_cache.S_e_tot isa Fields.Field
+        @test Ya.microphysics_cache.S_q_rai isa Fields.Field
+        @test Ya.microphysics_cache.S_q_sno isa Fields.Field
+        @test Ya.microphysics_cache.q_liq isa Fields.Field
+        @test Ya.microphysics_cache.q_ice isa Fields.Field
+        @test norm(Ya.p) == 0
+        @test norm(Ya.Φ) == 0
+        @test norm(Ya.K) == 0
+        @test norm(Ya.e_int) == 0
+        @test norm(Ya.microphysics_cache.S_q_tot) == 0
+        @test norm(Ya.microphysics_cache.S_e_tot) == 0
+        @test norm(Ya.microphysics_cache.S_q_rai) == 0
+        @test norm(Ya.microphysics_cache.S_q_sno) == 0
+        @test norm(Ya.microphysics_cache.q_liq) == 0
+        @test norm(Ya.microphysics_cache.q_ice) == 0
     end
 end
 
