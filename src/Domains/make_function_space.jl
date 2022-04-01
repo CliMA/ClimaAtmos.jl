@@ -31,7 +31,8 @@ function make_function_space(domain::Column)
     center_space = Spaces.CenterFiniteDifferenceSpace(mesh)
     face_space = Spaces.FaceFiniteDifferenceSpace(center_space)
 
-    return center_space, face_space
+    # Distributed topology not supported in Column configurations
+    return (center_space, face_space, nothing, nothing)
 end
 
 function make_function_space(domain::HybridPlane)
@@ -60,7 +61,8 @@ function make_function_space(domain::HybridPlane)
         Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
     hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
 
-    return hv_center_space, hv_face_space
+    # Distributed topology unsupported in HybridPlane configurations
+    return (hv_center_space, hv_face_space, nothing, nothing)
 end
 
 function make_function_space(domain::HybridBox)
@@ -135,5 +137,5 @@ function make_function_space(domain::SphericalShell{FT}) where {FT}
         Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
     hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
 
-    return hv_center_space, hv_face_space
+    return (hv_center_space, hv_face_space, nothing, nothing)
 end
