@@ -119,6 +119,17 @@ steps:
       config: cpu
       queue: central
       slurm_ntasks: 1
+  
+  - label: ":computer: 3d_rising_bubble"
+    key: "cpu_3d_rising_bubble"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_3d_rising_bubble.jl"
+    artifact_paths:
+      - "test/test_cases/run_3d_rising_bubble/*"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 2
 
   - label: ":computer: 3d_solid_body_rotation"
     key: "cpu_3d_solid_body_rotation"
@@ -141,6 +152,17 @@ steps:
       config: cpu
       queue: central
       slurm_ntasks: 1
+  
+  - label: ":computer: 3d_balanced_flow"
+    key: "cpu_3d_balanced_flow"
+    command:
+      - "julia --color=yes --project=test test/test_cases/run_3d_balanced_flow.jl"
+    artifact_paths:
+      - "test/test_cases/run_3d_balanced_flow/*"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 2
 
   - label: ":computer: 3d_baroclinic_wave"
     key: "cpu_3d_baroclinic_wave"

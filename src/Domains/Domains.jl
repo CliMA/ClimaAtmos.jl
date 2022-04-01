@@ -34,6 +34,7 @@ abstract type AbstractDomain{FT} end
 abstract type AbstractVerticalDomain{FT} <: AbstractDomain{FT} end
 abstract type AbstractHybridDomain{FT} <: AbstractDomain{FT} end
 
+include("distributed.jl")
 include("domain.jl")
 include("make_function_space.jl")
 

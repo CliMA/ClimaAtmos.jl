@@ -4,6 +4,8 @@ version = "0.1.0"
 
 [deps]
 CLIMAParameters = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
+ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
+ClimaCommsMPI = "5f86816e-8b66-43b2-912e-75384f99de49"
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
 ClimaCorePlots = "cf7c7e5a-b407-4c48-9047-11a94a308626"
 ClimaCoreVTK = "c8b6d40d-e815-466f-95ae-c48aefa668fa"
