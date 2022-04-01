@@ -90,19 +90,19 @@ function make_function_space(domain::HybridBox)
     )
     Nv = Meshes.nelements(vertmesh)
     Nf_center, Nf_face = 2, 1
-    if !usempi
+    if usempi
+        horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
+        comms_ctx_center =
+          Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
+        comms_ctx_face =
+          Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
+    else
         horztopology = Topologies.Topology2D(horzmesh)
         quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
         comms_ctx_center =
           nothing
         comms_ctx_face =
           nothing
-    else
-        horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
-        comms_ctx_center =
-          Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
-        comms_ctx_face =
-          Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
     end
     horzspace = Spaces.SpectralElementSpace2D(horztopology, quad, comms_ctx_center)
 
@@ -129,7 +129,19 @@ function make_function_space(domain::SphericalShell{FT}) where {FT}
 
     horzdomain = ClimaCore.Domains.SphereDomain(domain.radius)
     horzmesh = Meshes.EquiangularCubedSphere(horzdomain, domain.nelements[1])
-    horztopology = Topologies.Topology2D(horzmesh)
+    if usempi
+        horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
+        comms_ctx_center =
+          Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
+        comms_ctx_face =
+          Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
+    else
+        horztopology = Topologies.Topology2D(horzmesh)
+        comms_ctx_center =
+          nothing
+        comms_ctx_face =
+          nothing
+    end
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace2D(horztopology, quad)
 
