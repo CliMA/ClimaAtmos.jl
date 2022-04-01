@@ -1,21 +1,21 @@
-usempi = get(ENV, "CLIMACORE_DISTRIBUTED", "")  == "MPI"
-if usempi 
-  using ClimaComms
-  using ClimaCommsMPI
-  const Context = ClimaCommsMPI.MPICommsContext
-  const pid, nprocs = ClimaComms.init(Context)
-  if pid == 1
-    println("Parallel run with $nprocs processes.")
-  end
-  logger_stream = ClimaComms.iamroot(Context) ? stderr : devnull
-  prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
-  atexit() do
-    global_logger(prev_logger)
-  end
+usempi = get(ENV, "CLIMACORE_DISTRIBUTED", "") == "MPI"
+if usempi
+    using ClimaComms
+    using ClimaCommsMPI
+    const Context = ClimaCommsMPI.MPICommsContext
+    const pid, nprocs = ClimaComms.init(Context)
+    if pid == 1
+        println("Parallel run with $nprocs processes.")
+    end
+    logger_stream = ClimaComms.iamroot(Context) ? stderr : devnull
+    prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
+    atexit() do
+        global_logger(prev_logger)
+    end
 else
-  using Logging: global_logger
-  using TerminalLoggers: TerminalLogger
-  global_logger(TerminalLogger())
+    using Logging: global_logger
+    using TerminalLoggers: TerminalLogger
+    global_logger(TerminalLogger())
 end
 
 function make_function_space(domain::Column)
@@ -93,18 +93,17 @@ function make_function_space(domain::HybridBox)
     if usempi
         horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
         comms_ctx_center =
-          Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
+            Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
         comms_ctx_face =
-          Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
+            Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
     else
         horztopology = Topologies.Topology2D(horzmesh)
         quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
-        comms_ctx_center =
-          nothing
-        comms_ctx_face =
-          nothing
+        comms_ctx_center = nothing
+        comms_ctx_face = nothing
     end
-    horzspace = Spaces.SpectralElementSpace2D(horztopology, quad, comms_ctx_center)
+    horzspace =
+        Spaces.SpectralElementSpace2D(horztopology, quad, comms_ctx_center)
 
     hv_center_space =
         Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
@@ -132,15 +131,13 @@ function make_function_space(domain::SphericalShell{FT}) where {FT}
     if usempi
         horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
         comms_ctx_center =
-          Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
+            Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
         comms_ctx_face =
-          Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
+            Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
     else
         horztopology = Topologies.Topology2D(horzmesh)
-        comms_ctx_center =
-          nothing
-        comms_ctx_face =
-          nothing
+        comms_ctx_center = nothing
+        comms_ctx_face = nothing
     end
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace2D(horztopology, quad)
