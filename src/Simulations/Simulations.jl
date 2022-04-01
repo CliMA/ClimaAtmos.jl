@@ -17,6 +17,7 @@ Supertype for all restart modes.
 """
 abstract type AbstractRestart end
 
+include("distributed.jl")
 include("simulation.jl")
 include("restart.jl")
 
