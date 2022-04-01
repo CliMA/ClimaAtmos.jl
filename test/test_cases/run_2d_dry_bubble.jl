@@ -74,9 +74,9 @@ end
 function run_2d_dry_bubble(
     ::Type{FT};
     stepper = SSPRK33(),
-    nelements = (10, 50),
+    nelements = (10, 40),
     npolynomial = 4,
-    dt = 0.02,
+    dt = 0.03,
     callbacks = (),
     test_mode = :regression,
     thermo_mode = :ρθ,
@@ -97,7 +97,7 @@ function run_2d_dry_bubble(
         boundary_conditions = nothing,
         precipitation = NoPrecipitation(),
         parameters = params,
-        hyperdiffusivity = FT(0),
+        hyperdiffusivity = FT(100),
         cache = CacheBase(),
     )
 
@@ -128,7 +128,7 @@ function run_2d_dry_bubble(
 
         # perform regression check
         current_min = 299.9999997747195
-        current_max = 300.49999999996226
+        current_max = 300.49692207965666
         @test minimum(parent(u.thermodynamics.ρθ ./ u.base.ρ)) ≈ current_min atol =
             1e-3
         @test maximum(parent(u.thermodynamics.ρθ ./ u.base.ρ)) ≈ current_max atol =
@@ -174,4 +174,4 @@ end
         run_2d_dry_bubble(FT)
     end
 end
-#run_2d_dry_bubble(Float32, test_mode = :validation)
+# run_2d_dry_bubble(Float32, test_mode = :validation)

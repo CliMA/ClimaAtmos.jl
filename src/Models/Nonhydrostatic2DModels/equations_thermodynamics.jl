@@ -48,6 +48,12 @@ end
 
     @. dρθ -= vector_vdiv_f2c(ρw * scalar_interp_c2f(ρθ / ρ))
     @. dρθ -= hdiv(ρuh / ρ * ρθ)
+
+    # ### UPWIND FLUX CORRECTION
+    # if upwind_correction
+    #     @. dρθ += fcc(w, ρθ)
+    # end
+
     Spaces.weighted_dss!(dρθ)
 end
 
