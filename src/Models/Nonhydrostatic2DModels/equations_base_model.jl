@@ -3,11 +3,10 @@
 end
 
 @inline function rhs_base_model!(dY, Y, Ya, t, params, hyperdiffusivity, FT)
-
-    # relevant parameters
-    g::FT = CLIMAParameters.Planet.grav(params)
+    # unpack parameters
     κ₄::FT = hyperdiffusivity
 
+    # operators
     # unity tensor for pressure term calculation
     # in horizontal spectral divergence
     Ih = Ref(Geometry.Axis2Tensor(
@@ -15,7 +14,6 @@ end
         @SMatrix [FT(1)]
     ),)
 
-    # operators
     # spectral horizontal operators
     hdiv = Operators.Divergence()
     hwdiv = Operators.WeakDivergence()
@@ -23,18 +21,14 @@ end
 
     # vertical FD operators with BC's
     # interpolators
-    scalar_interp_c2f = Operators.InterpolateC2F(
+    interp_f2c = Operators.InterpolateF2C()
+    interp_c2f = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
     )
-    vector_interp_c2f = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-    tensor_interp_f2c = Operators.InterpolateF2C()
 
     # gradients
-    scalar_grad_c2f = Operators.GradientC2F()
+    grad_c2f = Operators.GradientC2F()
     B = Operators.SetBoundaryOperator(
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),
         top = Operators.SetValue(Geometry.WVector(FT(0))),
@@ -58,6 +52,17 @@ end
         ),
     )
 
+
+    # upwinding flux correction
+    fcc = Operators.FluxCorrectionC2C(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    fcf = Operators.FluxCorrectionF2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+
     # unpack state and tendency
     dρ = dY.base.ρ
     dρuh = dY.base.ρuh
@@ -70,9 +75,10 @@ end
     p = Ya.p
     Φ = Ya.Φ
 
-    fρ = @. scalar_interp_c2f(ρ)
     uh = @. ρuh / ρ
-    w = @. ρw / fρ
+    w = @. ρw / interp_c2f(ρ)
+    wc = @. interp_f2c(ρw) / ρ
+    fρ = @. interp_c2f(ρ)
 
     # hyperdiffusion
     @. dρuh = hwdiv(hgrad(uh))
@@ -89,21 +95,28 @@ end
     Spaces.weighted_dss!(dρ)
 
     # horizontal momentum equation
-    @. dρuh -= tensor_vdiv_f2c(ρw ⊗ vector_interp_c2f(ρuh / ρ))
-    @. dρuh -= hdiv(ρuh ⊗ ρuh / ρ + p * Ih)
+    @. dρuh += -tensor_vdiv_f2c(ρw ⊗ interp_c2f(uh))
+    @. dρuh -= hdiv(ρuh ⊗ uh + p * Ih)
     Spaces.weighted_dss!(dρuh)
 
-    # vertical momentum equation
+    # vertical momentum
     @. dρw += B(
         Geometry.transform(
             Geometry.WAxis(),
-            -(scalar_grad_c2f(p)) - scalar_interp_c2f(ρ) * scalar_grad_c2f(Φ),
-        ) -
-        tensor_vdiv_c2f(tensor_interp_f2c(ρw ⊗ ρw / scalar_interp_c2f(ρ))),
+            -(grad_c2f(p)) - interp_c2f(ρ) * grad_c2f(Φ),
+        ) - tensor_vdiv_c2f(interp_f2c(ρw ⊗ w)),
     )
-    uh_f = @. vector_interp_c2f(ρuh / ρ)
-    @. dρw = -hdiv(uh_f ⊗ ρw)
-    Spaces.weighted_dss!(dρw)
+    uh_f = @. interp_c2f(ρuh / ρ)
+    @. dρw -= hdiv(uh_f ⊗ ρw)
 
+    # ### UPWIND FLUX CORRECTION
+    # upwind_correction = true
+    # if upwind_correction
+    #     @. dρ += fcc(w, ρ)
+    #     @. dρuh += fcc(w, ρuh)
+    #     @. dρw += fcf(wc, ρw)
+    # end
+
+    Spaces.weighted_dss!(dρw)
     return dY
 end
