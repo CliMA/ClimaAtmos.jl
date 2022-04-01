@@ -80,7 +80,7 @@ function rhs_base_model!(
     χuh = @. duh =
         hwgrad(hdiv(uh)) -
         Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(uh))),)
-    Spaces.weighted_dss!(duh)
+    Spaces.weighted_dss!(duh, comms_ctx_center)
     @. duh =
         -κ₄ * (
             hwgrad(hdiv(χuh)) -
@@ -135,10 +135,10 @@ function rhs_base_model!(
         @. dρ += flux_correction_center(w, ρ)
     end
 
-    # discrete stiffness summation for spectral operations
-    Spaces.weighted_dss!(dρ)
-    Spaces.weighted_dss!(duh)
-    Spaces.weighted_dss!(dw)
+    # discrete stiffness summation for spectral operations, distributed
+    Spaces.weighted_dss!(dρ, comms_ctx_center)
+    Spaces.weighted_dss!(duh, comms_ctx_center)
+    Spaces.weighted_dss!(dw, comms_ctx_face)
 
     return dY
 end
