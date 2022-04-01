@@ -4,7 +4,7 @@ if usempi
   using ClimaCommsMPI
   const Context = ClimaCommsMPI.MPICommsContext
   const pid, nprocs = ClimaComms.init(Context)
-  if pid = 1
+  if pid == 1
     println("Parallel run with $nprocs processes.")
   end
   logger_stream = ClimaComms.iamroot(Context) ? stderr : devnull
