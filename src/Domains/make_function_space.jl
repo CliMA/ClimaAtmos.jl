@@ -85,6 +85,9 @@ function make_function_space(domain::HybridBox)
     horzspace =
         Spaces.SpectralElementSpace2D(horztopology, quad, comms_ctx_center)
 
+    @info "Topology Built, Assembling Spaces"
+    @show comms_ctx_center;
+
     hv_center_space =
         Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
     hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
@@ -119,6 +122,10 @@ function make_function_space(domain::SphericalShell{FT}) where {FT}
         comms_ctx_center = nothing
         comms_ctx_face = nothing
     end
+
+    @info "Topology Built, Assembling Spaces"
+    @show comms_ctx_center;
+
     quad = Spaces.Quadratures.GLL{domain.npolynomial + 1}()
     horzspace = Spaces.SpectralElementSpace2D(horztopology, quad)
 

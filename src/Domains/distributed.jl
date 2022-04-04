@@ -1,6 +1,6 @@
 using Logging
-#usempi = get(ENV, "CLIMAATMOS_DISTRIBUTED", "") == "MPI"
-const usempi = true
+usempi = get(ENV, "CLIMAATMOS_DISTRIBUTED", "") == "MPI"
+#const usempi = true
 if usempi
     using ClimaComms
     using ClimaCommsMPI
