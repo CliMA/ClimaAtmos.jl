@@ -68,7 +68,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
         # the model's state vector to give a more informative error message
         if varname ∉
            getproperty(Models.variable_names(simulation.model), subcomponent)
-           throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
+            throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
         end
 
         # for restart we need to use the reinit function because we don't

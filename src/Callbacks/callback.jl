@@ -12,18 +12,18 @@ end
 function (F::StateDSS)(integrator)
     Y = integrator.u
     for i in propertynames(Y)
-        for j in propertynames(getproperty(Y,i))
-          # Apply DSS on fields, for all variable "types", e.g. base, 
-          # thermodynamics, moisture etc. 
-          Spaces.weighted_dss!(getproperty(getproperty(Y,i),j))
+        for j in propertynames(getproperty(Y, i))
+            # Apply DSS on fields, for all variable "types", e.g. base, 
+            # thermodynamics, moisture etc. 
+            Spaces.weighted_dss!(getproperty(getproperty(Y, i), j))
         end
     end
     return nothing
 end
 function generate_callback(F::StateDSS; kwargs...)
     if F.interval > 1
-      @warn("Suggested DSS interval is 1 timestep. Specified value is larger. \n
-            May result in instability at long integration times")
+        @warn("Suggested DSS interval is 1 timestep. Specified value is larger. \n
+              May result in instability at long integration times")
     end
     return PeriodicCallback(F, F.interval; initial_affect = true, kwargs...)
 end
