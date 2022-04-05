@@ -53,12 +53,12 @@ end
 
 function main()
     zero_flux_bcs = VerticalBoundaryConditions(
-        SetOperatorInputsAtBoundary(; face_flux = Geometry.WVector(0.0)),
-        SetOperatorInputsAtBoundary(; face_flux = Geometry.WVector(0.0)),
+        SetOperatorInputsAtBoundary(; total_face_flux = Geometry.WVector(0.0)),
+        SetOperatorInputsAtBoundary(; total_face_flux = Geometry.WVector(0.0)),
     )
     zero_velocity_bcs = VerticalBoundaryConditions(
-        SetValueAtBoundary(; value = Geometry.WVector(0.0)),
-        SetValueAtBoundary(; value = Geometry.WVector(0.0)),
+        SetTendencyAtBoundary(; tendency = Geometry.WVector(0.0)),
+        SetTendencyAtBoundary(; tendency = Geometry.WVector(0.0)),
     )
     tendencies = (
         Tendency(Var(:c, :ρ), VerticalAdvection(Var(:c, :ρ))),
@@ -119,13 +119,24 @@ Ideas for higher-level interface:
     - Do we want any other options?
 - Number of horizontal dimensions (0 vs. 1 vs. 2)
 
-struct DryFluidModel{
-    IsCompressible,
-    IsConservative,
-    IsHydrostatic,
-    EnergyVar,
-    NHorzDims,
-}
+default_dry_fluid_model(;
+    is_compressible::Bool = true,
+    is_conservative::Bool = true,
+    is_hydrostatic::Bool = false,
+    energy_var::Symbol = :ρe_tot,
+    n_horizontal_dims::Int = 2,
+) = Model(...)
+
+default_moist_fluid_model(
+    dry_fluid_model::Model;
+    saturation_adjustment_scheme::Symbol = :default,
+    kwargs...,
+) = Model(...)
+
+Such an interface is convenient for constructing default models, but it is
+inconvenient for disabling/replacing/adding tendency terms, boundary conditions,
+and formula functions. If we have such an interface, we should make it easy to
+do the latter with functions like disable_tendency_term(var, tendency_term).
 =#
 
 # TODO: Use ∇⨉c for Operators.CurlC2F.
@@ -139,6 +150,12 @@ struct DryFluidModel{
 # there is some non-empty set vars′′ ⊂ vars∖vars′ for which
 # cache_reqs(tendency_term, var, vars) is defined for all var ∈ vars′′, print
 # the warning string(
-#     "model includes $tendency_term of $(join(vars′, ", ", " and ")), but ",
-#     "not of $(join(vars′′, ", ", " and "))"
+#     "model includes $(typeof(tendency_term).name.wrapper) of ",
+#     join(vars′, ", ", " and "), ", but not of ", join(vars′′, ", ", " and "),
 # )
+
+# # Join a collection of items using the serial (Oxford) comma.
+# comma_join(items) = length(items) == 2 ? join(items, " and ") :
+#     join(items, ", ", ", and ")
+# comma_join(io::IO, items) = length(items) == 2 ? join(io, items, " and ") :
+#     join(io, items, ", ", ", and ")
