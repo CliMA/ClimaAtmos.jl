@@ -1,5 +1,6 @@
 module ClimaAtmos
 
+include("Distributed/Distributed.jl")
 include("Domains/Domains.jl")
 include("BoundaryConditions/BoundaryConditions.jl")
 include("Models/Models.jl")

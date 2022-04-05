@@ -57,7 +57,7 @@
 
     # hyperdiffusion
     χq = @. dρq_tot = hwdiv(hgrad(ρq_tot / ρ))
-    Spaces.weighted_dss!(dρq_tot)
+    Spaces.weighted_dss!(dρq_tot, comms_ctx_center)
     @. dρq_tot = -κ₄ * hwdiv(ρ * hgrad(χq))
 
     # advection
@@ -66,5 +66,5 @@
     @. dρq_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρq_tot)))
 
     # direct stiffness summation
-    Spaces.weighted_dss!(dρq_tot)
+    Spaces.weighted_dss!(dρq_tot, comms_ctx_center)
 end

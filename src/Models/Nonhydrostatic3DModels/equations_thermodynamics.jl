@@ -49,7 +49,7 @@ end
 
     # hyperdiffusion
     χe = @. dρθ = hwdiv(hgrad(ρθ / ρ))
-    Spaces.weighted_dss!(dρθ)
+    Spaces.weighted_dss!(dρθ, comms_ctx_center)
     @. dρθ = -κ₄ * hwdiv(ρ * hgrad(χe))
 
     # advection 
@@ -63,7 +63,7 @@ end
     end
 
     # direct stiffness summation
-    Spaces.weighted_dss!(dρθ)
+    Spaces.weighted_dss!(dρθ, comms_ctx_center)
 end
 
 @inline function rhs_thermodynamics!(
@@ -113,7 +113,7 @@ end
 
     # hyperdiffusion
     χe = @. dρe_tot = hwdiv(hgrad((ρe_tot + p) / ρ))
-    Spaces.weighted_dss!(dρe_tot)
+    Spaces.weighted_dss!(dρe_tot, comms_ctx_center)
     @. dρe_tot = -κ₄ * hwdiv(ρ * hgrad(χe))
 
     # advection 
@@ -127,7 +127,7 @@ end
     end
 
     # direct stiffness summation
-    Spaces.weighted_dss!(dρe_tot)
+    Spaces.weighted_dss!(dρe_tot, comms_ctx_center)
 end
 
 @inline function rhs_thermodynamics!(
@@ -177,7 +177,7 @@ end
 
     # hyperdiffusion
     χe = @. dρe_int = hwdiv(hgrad((ρe_int + p) / ρ))
-    Spaces.weighted_dss!(dρe_int)
+    Spaces.weighted_dss!(dρe_int, comms_ctx_center)
     @. dρe_int = -κ₄ * hwdiv(ρ * hgrad(χe))
 
     # advection 
@@ -196,5 +196,5 @@ end
     end
 
     # direct stiffness summation
-    Spaces.weighted_dss!(dρe_int)
+    Spaces.weighted_dss!(dρe_int, comms_ctx_center)
 end

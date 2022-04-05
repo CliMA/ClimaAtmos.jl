@@ -27,10 +27,6 @@ float_types = (Float32, Float64)
         @test domain.nelements == 2
         @test domain.stretching isa Meshes.StretchingRule
         @test domain.stretching isa Uniform
-        @test Domains.make_function_space(domain) isa Tuple{
-            Spaces.CenterFiniteDifferenceSpace,
-            Spaces.FaceFiniteDifferenceSpace,
-        }
 
         ## Hybrid plane domains
         domain = Domains.HybridPlane(
@@ -49,10 +45,6 @@ float_types = (Float32, Float64)
         @test domain.xperiodic == false
         @test domain.stretching isa Meshes.StretchingRule
         @test domain.stretching isa ExponentialStretching
-        @test Domains.make_function_space(domain) isa Tuple{
-            Spaces.CenterExtrudedFiniteDifferenceSpace,
-            Spaces.FaceExtrudedFiniteDifferenceSpace,
-        }
 
         ## Hybrid box domains
         domain = Domains.HybridBox(
@@ -74,10 +66,6 @@ float_types = (Float32, Float64)
         @test domain.yperiodic == true
         @test domain.stretching isa StretchingRule
         @test domain.stretching isa Uniform
-        @test Domains.make_function_space(domain) isa Tuple{
-            Spaces.CenterExtrudedFiniteDifferenceSpace,
-            Spaces.FaceExtrudedFiniteDifferenceSpace,
-        }
 
         ## Spherical shell domain
         domain = Domains.SphericalShell(
@@ -94,9 +82,5 @@ float_types = (Float32, Float64)
         @test domain.npolynomial == 3
         @test domain.stretching isa StretchingRule
         @test domain.stretching isa GeneralizedExponentialStretching
-        @test Domains.make_function_space(domain) isa Tuple{
-            Spaces.CenterExtrudedFiniteDifferenceSpace,
-            Spaces.FaceExtrudedFiniteDifferenceSpace,
-        }
     end
 end

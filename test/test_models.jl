@@ -477,7 +477,8 @@ end
             boundary_conditions = nothing,
             parameters = (),
         )
-        space_center, space_face = Domains.make_function_space(model.domain)
+        space_center, space_face, comms_ctx_center, comms_ctx_face =
+            Domains.make_function_space(model.domain)
 
         Y = Models.default_initial_conditions(model, space_center, space_face)
         @test Y isa Fields.FieldVector
