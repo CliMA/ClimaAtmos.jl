@@ -1,4 +1,35 @@
 """
+    StateDSS{} <: AbstractCallback
+
+Specifies the application of a DSS operation to Fields of 
+prognostic variables at user defined timestep interval. 
+Recommended timestep interval is 1.
+"""
+struct StateDSS{M <: AbstractModel, I <: Number} <: AbstractCallback
+    model::M
+    interval::I
+end
+function (F::StateDSS)(integrator)
+    Y = integrator.u
+    for i in propertynames(Y)
+        for j in propertynames(getproperty(Y,i))
+          # Apply DSS on fields, for all variable "types", e.g. base, 
+          # thermodynamics, moisture etc. 
+          Spaces.weighted_dss!(getproperty(getproperty(Y,i),j))
+        end
+    end
+    return nothing
+end
+function generate_callback(F::StateDSS; kwargs...)
+    if F.interval > 1
+      @warn("Suggested DSS interval is 1 timestep. Specified value is larger. \n
+            May result in instability at long integration times")
+    end
+    return PeriodicCallback(F, F.interval; initial_affect = true, kwargs...)
+end
+
+
+"""
     JLD2Output{M, I} <: AbstractCallback
 
 Specifies that a `DiffEqCallbacks.PeriodicCallback` should be constructed that

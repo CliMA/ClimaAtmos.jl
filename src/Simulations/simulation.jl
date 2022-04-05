@@ -33,6 +33,9 @@ function Simulation(
 
     Y = default_initial_conditions(model, space_center, space_face)
 
+    cb_dss = generate_callback(StateDSS(model, 1))
+    cbs = CallbackSet(callbacks, cb_dss)
+
     # contains all information about the
     # pde systems jacobians and right-hand sides
     # to hook into the OrdinaryDiffEq.jl interface
@@ -47,10 +50,10 @@ function Simulation(
     # to set up and an ODE integrator that handles
     # integration in time and callbacks
     ode_problem = ODE.ODEProblem(ode_function, Y, tspan, Ya)
-    integrator = ODE.init(ode_problem, method, dt = dt, callback = callbacks)
+    integrator = ODE.init(ode_problem, method, dt = dt, callback = cbs)
 
     restart = restart
-    return Simulation(model, integrator, callbacks, restart)
+    return Simulation(model, integrator, cbs, restart)
 end
 
 """
@@ -65,7 +68,7 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
         # the model's state vector to give a more informative error message
         if varname ∉
            getproperty(Models.variable_names(simulation.model), subcomponent)
-            throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
+           throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
         end
 
         # for restart we need to use the reinit function because we don't

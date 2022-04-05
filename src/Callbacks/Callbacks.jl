@@ -6,7 +6,7 @@ using UnPack
 using ClimaCore: ClimaCore, Fields, Spaces
 using ..Models
 
-export generate_callback, AbstractCallback, JLD2Output, CFLAdaptive
+export generate_callback, AbstractCallback, JLD2Output, CFLAdaptive, StateDSS
 
 """
     generate_callback(callback; kwargs...)

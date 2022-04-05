@@ -2,12 +2,13 @@ module Simulations
 
 import OrdinaryDiffEq
 const ODE = OrdinaryDiffEq
+using OrdinaryDiffEq: CallbackSet
 
 using JLD2
 using Printf
 using UnPack
 using ClimaCore: Fields
-using ..Models, ..Callbacks, ..Domains
+using ..Models, ..Callbacks, ..Domains, ..Callbacks
 
 export step!,
     run!, set!, get_spaces, Simulation, AbstractRestart, NoRestart, Restart
