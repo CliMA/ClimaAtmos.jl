@@ -127,7 +127,7 @@ function make_function_space(
 
     horzdomain = ClimaCore.Domains.SphereDomain(domain.radius)
     horzmesh = Meshes.EquiangularCubedSphere(horzdomain, domain.nelements[1])
-    if usempi
+    if distributed
         horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
         comms_ctx_center =
             Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
