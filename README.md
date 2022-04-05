@@ -83,4 +83,6 @@ If you're interested in contributing to the development of ClimaAtmos we want yo
 
 Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new) if you'd like to work on a new feature.
 
+Here is the rule of thumb [coding style](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/CodeStyle/) and [unicode usage restrictions](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/AcceptableUnicode/).
+
 For more information, check out our [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).
