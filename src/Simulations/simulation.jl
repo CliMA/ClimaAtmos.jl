@@ -28,9 +28,23 @@ function Simulation(
     tspan,
     callbacks = nothing,
     restart = NoRestart(),
+    distributed = get(ENV, "CLIMAATMOS_DISTRIBUTED", "") == "MPI",
 )
+
+    if distributed
+        Context = ClimaCommsMPI.MPICommsContext
+        pid, nprocs = ClimaComms.init(Context)
+        logger_stream = ClimaComms.iamroot(Context) ? stderr : devnull
+        prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
+        atexit() do
+            global_logger(prev_logger)
+        end
+    else
+        global_logger(TerminalLogger())
+    end
+
     space_center, space_face, comms_ctx_center, comms_ctx_face =
-        Domains.make_function_space(model.domain)
+        Domains.make_function_space(model.domain; distributed)
 
     Y = default_initial_conditions(model, space_center, space_face)
 
