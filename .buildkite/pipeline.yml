@@ -3,6 +3,10 @@ env:
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.2"
   OPENBLAS_NUM_THREADS: 1
+  CLIMATEMACHINE_SETTINGS_FIX_RNG_SEED: "true"
+  BUILDKITE_COMMIT: "${BUILDKITE_COMMIT}"
+  BUILDKITE_BRANCH: "${BUILDKITE_BRANCH}"
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
 
 agents:
   config: cpu
@@ -13,6 +17,7 @@ steps:
   - label: "init :computer:"
     key: "init_cpu_env"
     command:
+      - "echo $$JULIA_DEPOT_PATH"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
@@ -28,149 +33,65 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
     agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
       slurm_cpus_per_task: 8
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
   - wait
 
-  - label: ":computer: domains"
-    key: "cpu_domains"
-    command:
-      - "julia --color=yes --project=test test/test_domains.jl"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+  - group: "ClimaAtmos src unit tests"
+    steps:
 
-  - label: ":computer: models"
-    key: "cpu_models"
-    command:
-      - "julia --color=yes --project=test test/test_models.jl"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: domains"
+        command: "julia --color=yes --project=test test/test_domains.jl"
 
-  # Cases
+      - label: ":computer: models"
+        command: "julia --color=yes --project=test test/test_models.jl"
 
-  - label: ":computer: 1d_ekman_column regression (Float32)"
-    key: "cpu_1d_ekman_column_reg_ft32"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float32 --test_mode regression"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+  - group: "ClimaAtmos src integration tests"
+    steps:
 
-  - label: ":computer: 1d_ekman_column regression (Float64)"
-    key: "cpu_1d_ekman_column_reg_ft64"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode regression"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 1d_ekman_column regression (Float32)"
+        command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float32 --test_mode regression"
 
-  - label: ":computer: 1d_ekman_column validation"
-    key: "cpu_1d_ekman_column_val"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode validation"
-    artifact_paths:
-      - "test/test_cases/run_1d_ekman_column/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 1d_ekman_column regression (Float64)"
+        command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode regression"
 
-  - label: ":computer: 2d_dry_bubble"
-    key: "cpu_2d_dry_bubble"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_2d_dry_bubble.jl"
-    artifact_paths:
-      - "test/test_cases/run_2d_dry_bubble/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 1d_ekman_column validation"
+        command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode validation"
+        artifact_paths: "test/test_cases/run_1d_ekman_column/*"
 
-  - label: ":computer: 2d_moist_bubble"
-    key: "cpu_2d_moist_bubble"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_2d_moist_bubble.jl"
-    artifact_paths:
-      - "test/test_cases/run_2d_moist_bubble/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 2d_dry_bubble"
+        command: "julia --color=yes --project=test test/test_cases/run_2d_dry_bubble.jl"
+        artifact_paths: "test/test_cases/run_2d_dry_bubble/*"
 
-  - label: ":computer: 2d_precipitating_bubble"
-    key: "cpu_2d_precipitating_bubble"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_2d_precipitating_bubble.jl"
-    artifact_paths:
-      - "test/test_cases/run_2d_precipitating_bubble/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 2d_moist_bubble"
+        command: "julia --color=yes --project=test test/test_cases/run_2d_moist_bubble.jl"
+        artifact_paths: "test/test_cases/run_2d_moist_bubble/*"
 
-  - label: ":computer: 3d_rising_bubble"
-    key: "cpu_3d_rising_bubble"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_3d_rising_bubble.jl"
-    artifact_paths:
-      - "test/test_cases/run_3d_rising_bubble/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 2d_precipitating_bubble"
+        command: "julia --color=yes --project=test test/test_cases/run_2d_precipitating_bubble.jl"
+        artifact_paths: "test/test_cases/run_2d_precipitating_bubble/*"
 
-  - label: ":computer: 3d_solid_body_rotation"
-    key: "cpu_3d_solid_body_rotation"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_3d_solid_body_rotation.jl"
-    artifact_paths:
-      - "test/test_cases/run_3d_solid_body_rotation/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 3d_rising_bubble"
+        command: "julia --color=yes --project=test test/test_cases/run_3d_rising_bubble.jl"
+        artifact_paths: "test/test_cases/run_3d_rising_bubble/*"
 
-  - label: ":computer: 3d_balanced_flow"
-    key: "cpu_3d_balanced_flow"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_3d_balanced_flow.jl"
-    artifact_paths:
-      - "test/test_cases/run_3d_balanced_flow/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 3d_solid_body_rotation"
+        command: "julia --color=yes --project=test test/test_cases/run_3d_solid_body_rotation.jl"
+        artifact_paths: "test/test_cases/run_3d_solid_body_rotation/*"
 
-  - label: ":computer: 3d_baroclinic_wave"
-    key: "cpu_3d_baroclinic_wave"
-    command:
-      - "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
-    artifact_paths:
-      - "test/test_cases/run_3d_baroclinic_wave/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 3d_balanced_flow"
+        command: "julia --color=yes --project=test test/test_cases/run_3d_balanced_flow.jl"
+        artifact_paths: "test/test_cases/run_3d_balanced_flow/*"
 
-  - label: ":package: Single column physics - EDMF"
-    key: "cpu_single_column_physics"
-    command:
-      - "julia --color=yes --project=examples examples/TCexample.jl"
-    artifact_paths:
-      - "examples/output/TCexample/*"
-    agents:
-      config: cpu
-      queue: central
-      slurm_ntasks: 1
+      - label: ":computer: 3d_baroclinic_wave"
+        command: "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
+        artifact_paths: "test/test_cases/run_3d_baroclinic_wave/*"
 
+  - group: "Examples"
+    steps:
+
+      - label: ":package: Single column physics - EDMF"
+        command: "julia --color=yes --project=examples examples/TCexample.jl"
+        artifact_paths: "examples/output/TCexample/*"
