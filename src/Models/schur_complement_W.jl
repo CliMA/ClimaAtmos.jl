@@ -43,9 +43,9 @@ function SchurComplementW(
 
     # TODO: Automate this.
     J_eltype1 = Operators.StencilCoefs{-half, half, NTuple{2, FT}}
-    J_eltype2 =
-        flags.∂dE∂M_mode == :exact && thermo_style isa TotalEnergy ?
-        Operators.StencilCoefs{-(1 + half), 1 + half, NTuple{4, FT}} : J_eltype1
+    J_eltype2 = flags.∂dE∂M_mode == :exact && thermo_style isa TotalEnergy ?
+        Operators.StencilCoefs{-(1 + half), 1 + half, NTuple{4, FT}} :
+        J_eltype1
     J_eltype3 = Operators.StencilCoefs{-1, 1, NTuple{3, FT}}
     ∂dρ∂M = Fields.Field(J_eltype1, space_center)
     ∂dE∂M = Fields.Field(J_eltype2, space_center)

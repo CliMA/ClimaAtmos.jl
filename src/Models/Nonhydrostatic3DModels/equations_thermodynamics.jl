@@ -215,7 +215,7 @@ end
         bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
         top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
     )
-    
+
     w = Y.base.w
 
     if thermo_style isa PotentialTemperature
@@ -227,9 +227,10 @@ end
     elseif thermo_style isa InternalEnergy
         @. dY.thermodynamics.ρe_int =
             -vector_vdiv_f2c(w * interp_c2f(Y.thermodynamics.ρe_int + p)) +
-            interp_f2c(
-                dot(w, Geometry.Contravariant3Vector(scalar_vgrad_c2f(p)))
-            )
+            interp_f2c(dot(
+                w,
+                Geometry.Contravariant3Vector(scalar_vgrad_c2f(p)),
+            ))
     end
 
     # TODO: Move flux correction term here.

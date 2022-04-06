@@ -130,9 +130,10 @@ function jacobian!(W, Y, p, dtγ, t, FT)
         #     )
         @. ∂dE∂M =
             -vector_vdiv_f2c_stencil(interp_c2f(ρe_int + p) * one(w)) +
-            interp_f2c_stencil(
-                dot(scalar_vgrad_c2f(p), Geometry.Contravariant3Vector(one(w))),
-            )
+            interp_f2c_stencil(dot(
+                scalar_vgrad_c2f(p),
+                Geometry.Contravariant3Vector(one(w)),
+            ),)
     end
 
     # To convert ∂(wₜ)/∂(E) to ∂(w_data)ₜ/∂(E) and ∂(wₜ)/∂(w_data) to
@@ -269,17 +270,17 @@ function jacobian!(W, Y, p, dtγ, t, FT)
     # ∂(scalar_vgrad_c2f(K + Φ))/∂(K) = scalar_vgrad_c2f_stencil(1)
     # ∂(K)/∂(w_data) =
     #     interp_f2c(w_data) * norm_sqr(interp_f2c(w)_unit) * interp_f2c_stencil(1)
-    if :ρθ in propertynames(Y.thermodynamics) || :ρe_int in propertynames(Y.thermodynamics)
-        @. ∂dM∂M = to_scalar_coefs(
-            compose(-1 * scalar_vgrad_c2f_stencil(one(K)), ∂K∂w_data),
-        )
+    if :ρθ in propertynames(Y.thermodynamics) ||
+       :ρe_int in propertynames(Y.thermodynamics)
+        @. ∂dM∂M = to_scalar_coefs(compose(
+            -1 * scalar_vgrad_c2f_stencil(one(K)),
+            ∂K∂w_data,
+        ),)
     elseif :ρe_tot in propertynames(Y.thermodynamics)
-        @. ∂dM∂M = to_scalar_coefs(
-            compose(
-                -1 / interp_c2f(ρ) * scalar_vgrad_c2f_stencil(-ρ * R_d / cv_d) +
-                -1 * scalar_vgrad_c2f_stencil(one(K)),
-                ∂K∂w_data,
-            ),
-        )
+        @. ∂dM∂M = to_scalar_coefs(compose(
+            -1 / interp_c2f(ρ) * scalar_vgrad_c2f_stencil(-ρ * R_d / cv_d) +
+            -1 * scalar_vgrad_c2f_stencil(one(K)),
+            ∂K∂w_data,
+        ),)
     end
 end

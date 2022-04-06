@@ -61,11 +61,8 @@ function nlsolve!(
     num_redos = 0
     @label REDO
     if isnewton(nlsolver)
-        cache === nothing && throw(
-            ArgumentError(
-                "cache is not passed to `nlsolve!` when using NLNewton",
-            ),
-        )
+        cache === nothing &&
+        throw(ArgumentError("cache is not passed to `nlsolve!` when using NLNewton",),)
         if nlsolver.method === DIRK
             γW = nlsolver.γ * integrator.dt
         else

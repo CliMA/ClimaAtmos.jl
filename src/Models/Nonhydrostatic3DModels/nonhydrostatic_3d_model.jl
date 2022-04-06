@@ -221,7 +221,7 @@ function Models.make_ode_function(
         # rhs_tracer!
         # rhs_edmf!
     end
-    
+
     function Wfact!(W, Y, p, dtγ, t)
         jacobian!(W, Y, p, dtγ, t, FT)
 
@@ -246,8 +246,7 @@ function Models.make_ode_function(
             @assert matrix_column(∂dM∂M, space_face, i, j, h) ≈
                     exact_column_jacobian_block(args..., w_name, w_name)
             ∂dE∂M_approx = matrix_column(∂dE∂M, space_face, i, j, h)
-            ∂dE∂M_exact =
-                exact_column_jacobian_block(args..., E_name, w_name)
+            ∂dE∂M_exact = exact_column_jacobian_block(args..., E_name, w_name)
             if flags.∂dE∂M_mode == :exact
                 @assert ∂dE∂M_approx ≈ ∂dE∂M_exact
             else

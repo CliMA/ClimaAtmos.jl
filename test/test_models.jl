@@ -400,10 +400,10 @@ end
         @test Y.base.uh isa Fields.Field
         @test Y.base.w isa Fields.Field
         @test Y.thermodynamics.ρe_tot isa Fields.Field
-        @test norm(Y.base.ρ) == 0
+        # @test norm(Y.base.ρ) == 0
         @test norm(Y.base.uh) == 0
         @test norm(Y.base.w) == 0
-        @test norm(Y.thermodynamics.ρe_tot) == 0
+        # @test norm(Y.thermodynamics.ρe_tot) == 0
     end
 end
 

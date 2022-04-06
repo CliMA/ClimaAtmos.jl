@@ -171,13 +171,12 @@ function implicit_rhs_base_model!(
 
     @. dρ = -vector_vdiv_f2c(interp_c2f(ρ) * w)
     duh .= Ref(zero(eltype(duh)))
-    @. dw = -scalar_vgrad_c2f(p) / interp_c2f(ρ) -
-        scalar_vgrad_c2f(
+    @. dw =
+        -scalar_vgrad_c2f(p) / interp_c2f(ρ) - scalar_vgrad_c2f(
             norm(
                 Geometry.Covariant123Vector(uh) +
-                Geometry.Covariant123Vector(interp_f2c(w))
-            )^2 / 2 +
-            Φ
+                Geometry.Covariant123Vector(interp_f2c(w)),
+            )^2 / 2 + Φ,
         ) # scalar_vgrad_c2f(E)
 
     # TODO: Move flux correction term here.
