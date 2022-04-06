@@ -45,6 +45,7 @@ function run_3d_balanced_flow(
         parameters = params,
         flux_corr = false,
         hyperdiffusivity = FT(0),
+        transform_wfact = transform_wfact(stepper),
     )
 
     # execute differently depending on testing mode

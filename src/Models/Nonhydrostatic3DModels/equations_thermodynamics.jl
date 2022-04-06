@@ -1,8 +1,8 @@
-@inline function rhs_thermodynamics!(dY, Y, Ya, t, _...)
+@inline function explicit_rhs_thermodynamics!(dY, Y, Ya, t, _...)
     error("not implemented for this model configuration.")
 end
 
-@inline function rhs_thermodynamics!(
+@inline function explicit_rhs_thermodynamics!(
     dY,
     Y,
     Ya,
@@ -54,7 +54,6 @@ end
 
     # advection 
     @. dρθ -= hdiv(uvw * (ρθ))
-    @. dρθ -= vector_vdiv_f2c(w * interp_c2f(ρθ))
     @. dρθ -= vector_vdiv_f2c(interp_c2f(uh * (ρθ)))
 
     # flux correction
@@ -66,7 +65,7 @@ end
     Spaces.weighted_dss!(dρθ)
 end
 
-@inline function rhs_thermodynamics!(
+@inline function explicit_rhs_thermodynamics!(
     dY,
     Y,
     Ya,
@@ -118,7 +117,6 @@ end
 
     # advection 
     @. dρe_tot -= hdiv(uvw * (ρe_tot + p))
-    @. dρe_tot -= vector_vdiv_f2c(w * interp_c2f(ρe_tot + p))
     @. dρe_tot -= vector_vdiv_f2c(interp_c2f(uh * (ρe_tot + p)))
 
     # flux correction
@@ -130,7 +128,7 @@ end
     Spaces.weighted_dss!(dρe_tot)
 end
 
-@inline function rhs_thermodynamics!(
+@inline function explicit_rhs_thermodynamics!(
     dY,
     Y,
     Ya,
@@ -157,10 +155,6 @@ end
     hdiv = Operators.Divergence()
     hwdiv = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    scalar_vgrad_c2f = Operators.GradientC2F(
-        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    )
     vector_vdiv_f2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),
         top = Operators.SetValue(Geometry.WVector(FT(0))),
@@ -186,9 +180,7 @@ end
     @. dρe_int -=
         hdiv(uvw * (ρe_int + p)) -
         dot(uh, Geometry.Contravariant12Vector(hgrad(p)))
-    @. dρe_int -=
-        vector_vdiv_f2c(interp_c2f(uh * (ρe_int + p))) -
-        interp_f2c(dot(w, Geometry.Contravariant3Vector(scalar_vgrad_c2f(p))))
+    @. dρe_int -= vector_vdiv_f2c(interp_c2f(uh * (ρe_int + p)))
 
     # flux correction
     if flux_correction
@@ -197,4 +189,48 @@ end
 
     # direct stiffness summation
     Spaces.weighted_dss!(dρe_int)
+end
+
+@inline function implicit_rhs_thermodynamics!(
+    dY,
+    Y,
+    Ya,
+    t,
+    p,
+    ::AdvectiveForm,
+    thermo_style,
+    params,
+    FT,
+)
+    interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    interp_f2c = Operators.InterpolateF2C()
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(Geometry.Covariant3Vector(FT(0))),
+        top = Operators.SetValue(Geometry.Covariant3Vector(FT(0))),
+    )
+    scalar_vgrad_c2f = Operators.GradientC2F(
+        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+    )
+    
+    w = Y.base.w
+
+    if thermo_style isa PotentialTemperature
+        @. dY.thermodynamics.ρθ =
+            -vector_vdiv_f2c(w * interp_c2f(Y.thermodynamics.ρθ))
+    elseif thermo_style isa TotalEnergy
+        @. dY.thermodynamics.ρe_tot =
+            -vector_vdiv_f2c(w * interp_c2f(Y.thermodynamics.ρe_tot + p))
+    elseif thermo_style isa InternalEnergy
+        @. dY.thermodynamics.ρe_int =
+            -vector_vdiv_f2c(w * interp_c2f(Y.thermodynamics.ρe_int + p)) +
+            interp_f2c(
+                dot(w, Geometry.Contravariant3Vector(scalar_vgrad_c2f(p)))
+            )
+    end
+
+    # TODO: Move flux correction term here.
 end

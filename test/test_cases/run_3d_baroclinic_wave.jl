@@ -4,7 +4,7 @@ if !haskey(ENV, "BUILDKITE")
 end
 using Test
 
-using OrdinaryDiffEq: SSPRK33
+using OrdinaryDiffEq: Rosenbrock23, Rosenbrock32, SSPRK33
 using ClimaCorePlots, Plots
 using UnPack
 
@@ -12,7 +12,7 @@ using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models: ConstantViscosity
+using ClimaAtmos.Models
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
@@ -21,7 +21,7 @@ struct DryBaroclinicWaveParameters <: CLIMAParameters.AbstractEarthParameterSet 
 
 function run_3d_baroclinic_wave(
     ::Type{FT};
-    stepper = SSPRK33(),
+    stepper = Rosenbrock23(; linsolve = linsolve!),
     nelements = (6, 10),
     npolynomial = 3,
     case = :default,
@@ -45,6 +45,7 @@ function run_3d_baroclinic_wave(
         parameters = params,
         hyperdiffusivity = FT(1e16),
         vertical_diffusion = ConstantViscosity(ν = FT(1)),
+        transform_wfact = transform_wfact(stepper),
     )
 
     # execute differently depending on testing mode

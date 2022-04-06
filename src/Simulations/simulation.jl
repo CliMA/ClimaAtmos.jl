@@ -36,7 +36,7 @@ function Simulation(
     # contains all information about the
     # pde systems jacobians and right-hand sides
     # to hook into the OrdinaryDiffEq.jl interface
-    ode_function = make_ode_function(model)
+    ode_function = make_ode_function(model, space_center, space_face)
 
     # In the ODE interface p is meant to store equation parameters.
     # We are hijacking it here a little bit to store optional cache data.

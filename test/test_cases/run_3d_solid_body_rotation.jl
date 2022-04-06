@@ -4,7 +4,7 @@ if !haskey(ENV, "BUILDKITE")
 end
 using Test
 
-using OrdinaryDiffEq: SSPRK33
+using OrdinaryDiffEq: Rosenbrock23, Rosenbrock32, SSPRK33
 using ClimaCorePlots, Plots
 using UnPack
 
@@ -45,6 +45,7 @@ function run_3d_solid_body_rotation(
         parameters = params,
         flux_corr = false,
         hyperdiffusivity = FT(0),
+        transform_wfact = transform_wfact(stepper),
     )
 
     # execute differently depending on testing mode

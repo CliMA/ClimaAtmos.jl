@@ -69,7 +69,11 @@ function Models.default_initial_conditions(
     return Fields.FieldVector(; zero_inits...)
 end
 
-function Models.make_ode_function(model::Nonhydrostatic2DModel)
+function Models.make_ode_function(
+    model::Nonhydrostatic2DModel,
+    space_center,
+    space_face,
+)
     FT = eltype(model.domain) # model works on different float types
 
     # shorthands for model components & model styles

@@ -1,6 +1,12 @@
 module Models
 
-using ClimaCore: Geometry, Spaces
+using UnPack
+using LinearAlgebra
+using ForwardDiff: Dual
+using SparseArrays: spdiagm
+using OrdinaryDiffEq: Rosenbrock23, Rosenbrock32
+using ClimaCore: Geometry, Spaces, Fields, Operators
+using ClimaCore.Utilities: half
 
 export AbstractModel,
     AbstractSingleColumnModel,
@@ -12,7 +18,13 @@ export AbstractModel,
     variable_spaces,
     default_initial_conditions,
     make_ode_function,
-    default_ode_cache
+    default_ode_cache,
+    exact_column_jacobian_block,
+    vector_column,
+    matrix_column,
+    SchurComplementW,
+    linsolve!,
+    transform_wfact
 
 export AbstractModelStyle,
     AbstractBaseModelStyle,
@@ -116,11 +128,11 @@ default_ode_cache(
 ) = error("default_ode_cache not implemented for given model type")
 
 """
-    make_ode_function(model)
+    make_ode_function(model, space_center, space_face)
 
 Construct the ordinary differential equations for `model`.
 """
-make_ode_function(model::AbstractModel) =
+make_ode_function(model::AbstractModel, space_center, space_face) =
     error("make_ode_function not implemented for given model type")
 
 """
@@ -130,6 +142,11 @@ Construct the initial conditions for `model`.
 """
 get_velocities(Y, model::AbstractModel) =
     error("No method to get velocities implemented for given model type")
+
+# jacobian utilities
+include("implicit_solver_debugging_tools.jl")
+include("ordinary_diff_eq_bug_fixes.jl")
+include("schur_complement_W.jl")
 
 # model styles
 include("style_base_model.jl")

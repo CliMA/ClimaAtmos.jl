@@ -78,7 +78,11 @@ function Models.default_ode_cache(
     return nothing
 end
 
-function Models.make_ode_function(model::SingleColumnModel)
+function Models.make_ode_function(
+    model::SingleColumnModel,
+    space_center,
+    space_face,
+)
     FT = eltype(model.domain) # model works on different float types
 
     # shorthands for model components & model styles

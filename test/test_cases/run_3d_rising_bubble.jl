@@ -4,7 +4,7 @@ if !haskey(ENV, "BUILDKITE")
 end
 using Test
 
-using OrdinaryDiffEq: SSPRK33
+using OrdinaryDiffEq: Rosenbrock23, Rosenbrock32, SSPRK33
 using ClimaCorePlots, Plots
 using UnPack
 
@@ -49,6 +49,7 @@ function run_3d_rising_bubble(
         parameters = params,
         moisture = EquilibriumMoisture(),
         hyperdiffusivity = FT(100),
+        transform_wfact = transform_wfact(stepper),
     )
     model_eint = Nonhydrostatic3DModel(
         domain = domain,
@@ -57,6 +58,7 @@ function run_3d_rising_bubble(
         moisture = Dry(),
         parameters = params,
         hyperdiffusivity = FT(100),
+        transform_wfact = !(stepper in (Rosenbrock23, Rosenbrock32)),
     )
     model_pottemp = Nonhydrostatic3DModel(
         domain = domain,
@@ -64,6 +66,7 @@ function run_3d_rising_bubble(
         thermodynamics = PotentialTemperature(),
         parameters = params,
         hyperdiffusivity = FT(100),
+        transform_wfact = !(stepper in (Rosenbrock23, Rosenbrock32)),
     )
 
     # execute differently depending on testing mode

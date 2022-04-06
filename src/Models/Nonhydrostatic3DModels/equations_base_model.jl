@@ -1,8 +1,8 @@
-@inline function rhs_base_model!(dY, Y, Ya, t, _...)
+@inline function explicit_rhs_base_model!(dY, Y, Ya, t, _...)
     error("not implemented for this model configuration.")
 end
 
-function rhs_base_model!(
+function explicit_rhs_base_model!(
     dY,
     Y,
     Ya,
@@ -36,12 +36,6 @@ function rhs_base_model!(
         top = Operators.Extrapolate(),
     )
     interp_f2c = Operators.InterpolateF2C()
-
-    # gradients
-    scalar_vgrad_c2f = Operators.GradientC2F(
-        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    )
 
     # divergences
     vector_vdiv_f2c = Operators.DivergenceF2C(
@@ -96,7 +90,6 @@ function rhs_base_model!(
        Geometry.Covariant123Vector(interp_f2c(w))
     @. dρ = -hdiv(ρ * uvw) # horizontal divergence
     @. dρ -= vector_vdiv_f2c(interp_c2f(ρ * uh)) # explicit vertical part
-    @. dρ -= vector_vdiv_f2c(interp_c2f(ρ) * w) # TODO: implicit vertical part
 
     # horizontal momentum
     ω³ = @. hcurl(uh) # Contravariant3Vector
@@ -128,8 +121,6 @@ function rhs_base_model!(
 
     # vertical momentum
     @. dw = ω¹² × u¹² # Covariant3Vector on faces
-    @. dw -= scalar_vgrad_c2f(p) / interp_c2f(ρ)
-    @. dw -= scalar_vgrad_c2f(E)
 
     if flux_correction
         @. dρ += flux_correction_center(w, ρ)
@@ -141,4 +132,53 @@ function rhs_base_model!(
     Spaces.weighted_dss!(dw)
 
     return dY
+end
+
+function implicit_rhs_base_model!(
+    dY,
+    Y,
+    Ya,
+    t,
+    p,
+    Φ,
+    ::AdvectiveForm,
+    params,
+    FT,
+)
+    interp_c2f = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    interp_f2c = Operators.InterpolateF2C()
+    vector_vdiv_f2c = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(Geometry.Covariant3Vector(FT(0))),
+        top = Operators.SetValue(Geometry.Covariant3Vector(FT(0))),
+    )
+    scalar_vgrad_c2f = Operators.GradientC2F(
+        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+    )
+
+    # base components
+    dYm = dY.base
+    dρ = dYm.ρ # scalar on centers
+    duh = dYm.uh # Covariant12Vector on centers
+    dw = dYm.w # Covariant3Vector on faces
+    Ym = Y.base
+    ρ = Ym.ρ
+    uh = Ym.uh
+    w = Ym.w
+
+    @. dρ = -vector_vdiv_f2c(interp_c2f(ρ) * w)
+    duh .= Ref(zero(eltype(duh)))
+    @. dw = -scalar_vgrad_c2f(p) / interp_c2f(ρ) -
+        scalar_vgrad_c2f(
+            norm(
+                Geometry.Covariant123Vector(uh) +
+                Geometry.Covariant123Vector(interp_f2c(w))
+            )^2 / 2 +
+            Φ
+        ) # scalar_vgrad_c2f(E)
+
+    # TODO: Move flux correction term here.
 end
