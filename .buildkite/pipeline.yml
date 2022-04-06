@@ -4,6 +4,11 @@ env:
   CUDA_VERSION: "11.2"
   OPENBLAS_NUM_THREADS: 1
 
+agents:
+  config: cpu
+  queue: central
+  slurm_ntasks: 1
+
 steps:
   - label: "init :computer:"
     key: "init_cpu_env"
@@ -16,6 +21,11 @@ steps:
       - "julia --project=test -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=test -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=test -e 'using Pkg; Pkg.status()'"
+
+      - "julia --project=examples -e 'using Pkg; Pkg.develop(path = \".\")'"
+      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
     agents:
       config: cpu
@@ -152,3 +162,15 @@ steps:
       config: cpu
       queue: central
       slurm_ntasks: 1
+
+  - label: ":package: Single column physics - EDMF"
+    key: "cpu_single_column_physics"
+    command:
+      - "julia --color=yes --project=examples examples/TCexample.jl"
+    artifact_paths:
+      - "examples/output/TCexample/*"
+    agents:
+      config: cpu
+      queue: central
+      slurm_ntasks: 1
+
