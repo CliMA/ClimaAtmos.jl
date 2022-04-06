@@ -25,9 +25,9 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 CLIMAParameters = "0.4"
-ClimaCore = "0.8"
+ClimaCore = "0.9"
 ClimaCorePlots = "0.2"
-ClimaCoreVTK = "0.6"
+ClimaCoreVTK = "0.6, 0.7"
 DiffEqCallbacks = "2"
 Documenter = "0.27"
 DocumenterTools = "0.1"
