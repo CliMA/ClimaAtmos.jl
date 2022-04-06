@@ -8,7 +8,7 @@ using JLD2
 using Printf
 using UnPack
 using ClimaCore: Fields
-using ..Models, ..Callbacks, ..Domains, ..Callbacks
+using ..Models, ..Callbacks, ..Domains
 
 export step!,
     run!, set!, get_spaces, Simulation, AbstractRestart, NoRestart, Restart
