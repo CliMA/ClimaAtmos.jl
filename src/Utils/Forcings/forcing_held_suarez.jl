@@ -3,26 +3,6 @@ struct HeldSuarezForcing{S} <: AbstractAtmosForcing
     parameters::S
 end
 
-## this parameters should goes into runscript
-# model = Nonhydrostatic3DModel(......; source = (; forcing = HeldSuarezForcing(held_suarez_parameters)) )
-# day = FT(86400)
-# held_suarez_parameters = (;
-#     k_a = FT(1 / (40 * day)),
-#     k_f = FT(1 / day),
-#     k_s = FT(1 / (4 * day)),
-#     ΔT_y = FT(60),
-#     Δθ_z = FT(10),
-#     T_equator = FT(315),
-#     T_min = FT(200),
-#     σ_b = FT(7 / 10),
-#     R_d  = parameters.R_d,
-#     day  = parameters.day,
-#     grav = parameters.g,
-#     cp_d = parameters.cp_d,
-#     cv_d = parameters.cv_d,
-#     MSLP = parameters.p0,
-# )
-
 function rhs_forcing!(dY, Y, Ya, p, hs::HeldSuarezForcing, ::TotalEnergy)
     # # unpack cache 
     # TODO: make cache capability work for 3D model
@@ -38,7 +18,7 @@ function rhs_forcing!(dY, Y, Ya, p, hs::HeldSuarezForcing, ::TotalEnergy)
 
     # obtain latitude
     c_local_geometry = Fields.local_geometry_field(Y.base.ρ)
-    φ = deg2rad.(c_local_geometry.coordinates.lat),
+    φ = deg2rad.(c_local_geometry.coordinates.lat)
 
     # forcing
     σ = p / hs.parameters.p0
@@ -73,7 +53,7 @@ function rhs_forcing!(dY, Y, Ya, p, hs::HeldSuarezForcing, ::PotentialTemperatur
 
     # obtain latitude
     c_local_geometry = Fields.local_geometry_field(Y.base.ρ)
-    φ = deg2rad.(c_local_geometry.coordinates.lat),
+    φ = deg2rad.(c_local_geometry.coordinates.lat)
 
     # forcing
     σ = p / hs.parameters.p0

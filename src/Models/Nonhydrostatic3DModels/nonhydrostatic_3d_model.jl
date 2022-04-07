@@ -5,7 +5,7 @@ A three-dimensional non-hydrostatic model, which is typically used for simulatin
 the Euler equations. Required fields are `domain`, `boundary_conditions`, and
 `parameters`.
 """
-Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT, C, FC} <:
+Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT, C} <:
                    AbstractNonhydrostatic3DModel
     domain::D
     base::B = AdvectiveForm()
@@ -17,7 +17,7 @@ Base.@kwdef struct Nonhydrostatic3DModel{D, B, T, M, VD, F, BC, P, FT, C, FC} <:
     boundary_conditions::BC
     parameters::P
     cache::C = CacheEmpty()
-    source::FC = ()
+    sources::NamedTuple = (;)
 end
 
 function Models.components(model::Nonhydrostatic3DModel)
@@ -92,7 +92,7 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
     hyperdiffusivity = model.hyperdiffusivity
     flux_correction = model.flux_corr
     vert_diffusion_style = model.vertical_diffusion
-    source = model.source
+    sources = model.sources
 
     # this is the complete explicit right-hand side function
     # assembled here to be delivered to the time stepper.
@@ -171,12 +171,12 @@ function Models.make_ode_function(model::Nonhydrostatic3DModel)
         # rhs_tracer!
         # rhs_edmf!
 
-        
-            for i_source in source
-                rhs_source(i_source)
+        if !isempty(sources)
+            for source in sources
+                rhs_forcing!(dY, Y, Ya, p, source, thermo_style)
             end
-            
-        
+        end
+
     end
 
     return rhs!
