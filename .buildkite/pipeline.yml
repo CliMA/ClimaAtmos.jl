@@ -1,5 +1,6 @@
 env:
   JULIA_VERSION: "1.7.1"
+  MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.2"
   OPENBLAS_NUM_THREADS: 1
@@ -95,3 +96,88 @@ steps:
       - label: ":package: Single column physics - EDMF"
         command: "julia --color=yes --project=examples examples/TCexample.jl"
         artifact_paths: "examples/output/TCexample/*"
+
+      - label: ":computer: Rising Bubble 3D hybrid (ρθ)"
+        command: "julia --color=yes --project=examples examples/hybrid/box/bubble_3d_rhotheta.jl"
+        artifact_paths: "examples/hybrid/box/output/bubble_3d_rhotheta/*"
+
+      - label: ":computer: Rising Bubble 3D hybrid invariant (ρθ)"
+        command: "julia --color=yes --project=examples examples/hybrid/box/bubble_3d_invariant_rhotheta.jl"
+        artifact_paths: "examples/hybrid/box/output/bubble_3d_invariant_rhotheta/*"
+
+      - label: ":computer: Rising Bubble 3D hybrid invariant (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/box/bubble_3d_invariant_rhoe.jl"
+        artifact_paths: "examples/hybrid/box/output/bubble_3d_invariant_rhoe/*"
+
+      - label: ":computer: Density current 2D hybrid invariant total energy"
+        command: "julia --color=yes --project=examples examples/hybrid/plane/density_current_2dinvariant_rhoe.jl"
+        artifact_paths: "examples/hybrid/plane/output/dc_invariant_etot/*"
+
+      - label: ":computer: Density current 2D hybrid invariant potential temperature"
+        command: "julia --color=yes --project=examples examples/hybrid/plane/density_current_2dinvariant_rhotheta.jl"
+        artifact_paths: "examples/hybrid/plane/output/dc_rhotheta/*"
+
+      - label: ":computer: Density current 2D hybrid conservative form potential temperature"
+        command: "julia --color=yes --project=examples examples/hybrid/plane/density_current_2d_flux_form.jl"
+        artifact_paths: "examples/hybrid/plane/output/dc_fluxform/*"
+
+      - label: ":computer: MPI Rising Bubble 3D hybrid invariant (ρe)"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/box/bubble_3d_invariant_rhoe.jl"
+        artifact_paths: "examples/hybrid/box/output/bubble_3d_invariant_rhoe/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
+      - label: ":computer: Float 64 baroclinic wave (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float64/*"
+        env:
+          TEST_NAME: "sphere/baroclinic_wave_rhoe"
+          FLOAT_TYPE: "Float64"
+
+      - label: ":computer: baroclinic wave (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float32/*"
+        env:
+          TEST_NAME: "sphere/baroclinic_wave_rhoe"
+
+      - label: ":computer: MPI baroclinic wave (ρe)"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float32/*"
+        env:
+          TEST_NAME: "sphere/baroclinic_wave_rhoe"
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
+      - label: ":computer: baroclinic wave (ρθ)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhotheta/Float32/*"
+        env:
+          TEST_NAME: "sphere/baroclinic_wave_rhotheta"
+
+      - label: ":computer: dry held-suarez (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhoe/Float32/*"
+        env:
+          TEST_NAME: "sphere/held_suarez_rhoe"
+
+      - label: ":computer: Float64 dry held-suarez (ρθ)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhotheta/Float64/*"
+        env:
+          TEST_NAME: "sphere/held_suarez_rhotheta"
+          FLOAT_TYPE: "Float64"
+
+      - label: ":computer: dry held-suarez (ρθ)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhotheta/Float32/*"
+        env:
+          TEST_NAME: "sphere/held_suarez_rhotheta"
+
+      - label: ":computer: dry held-suarez (ρe_int)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhoe_int/Float32/*"
+        env:
+          TEST_NAME: "sphere/held_suarez_rhoe_int"
