@@ -4,7 +4,7 @@ using UnPack
 
 using CLIMAParameters
 using ClimaCore: Geometry, Spaces, Fields
-using ClimaAtmos: Models
+# using ClimaAtmos: Models
 
 using Thermodynamics
 

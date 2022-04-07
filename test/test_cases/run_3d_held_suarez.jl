@@ -60,6 +60,6 @@ simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 2dt))
 set!(simulation, :base, ρ = ρ, uh = uh, w = w)
 set!(simulation, :thermodynamics, ρe_tot = ρe_tot)
 
-# step!(simulation) 
+step!(simulation) 
 
 

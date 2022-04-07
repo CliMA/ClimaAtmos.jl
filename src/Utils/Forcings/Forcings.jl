@@ -6,6 +6,7 @@ using ...Models
 
 export AbstractForcing, AbstractAtmosForcing
 
+export rhs_forcing!
 
 export HeldSuarezForcing
 
