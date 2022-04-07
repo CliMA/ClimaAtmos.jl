@@ -5,7 +5,8 @@ const TEST_NAME = parsed_args["TEST_NAME"]
 
 
 # Test-specific definitions (may be overwritten in each test case file)
-# TODO: Allow some of these to be enironment variables or command line arguments
+# TODO: Allow some of these to be environment variables or command line arguments
+params = nothing
 horizontal_mesh = nothing # must be object of type AbstractMesh
 npoly = 0
 z_max = 0
@@ -25,10 +26,10 @@ show_progress_bar = false
 additional_callbacks = () # e.g., printing diagnostic information
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
-additional_cache(ᶜlocal_geometry, ᶠlocal_geometry, dt) = ()
+additional_cache(Y, params, dt) = NamedTuple()
 additional_tendency!(Yₜ, Y, p, t) = nothing
-center_initial_condition(local_geometry) = ()
-face_initial_condition(local_geometry) = ()
+center_initial_condition(local_geometry, params) = NamedTuple()
+face_initial_condition(local_geometry, params) = NamedTuple()
 postprocessing(sol, output_dir) = nothing
 
 ################################################################################
@@ -121,11 +122,11 @@ else
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     Y = Fields.FieldVector(
-        c = center_initial_condition.(ᶜlocal_geometry),
-        f = face_initial_condition.(ᶠlocal_geometry),
+        c = center_initial_condition.(ᶜlocal_geometry, params),
+        f = face_initial_condition.(ᶠlocal_geometry, params),
     )
 end
-p = get_cache(ᶜlocal_geometry, ᶠlocal_geometry, comms_ctx, dt)
+p = get_cache(Y, params, comms_ctx, dt)
 
 if ode_algorithm <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,
