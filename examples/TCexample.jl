@@ -3,9 +3,12 @@ using LinearAlgebra, StaticArrays
 import TurbulenceConvection
 const TC = TurbulenceConvection
 const tc_dir = pkgdir(TC)
-
+import CLIMAParameters
+const CP = CLIMAParameters
+const FT = Float64
 include(joinpath(tc_dir, "driver", "parameter_set.jl"))
-
+import Thermodynamics
+const TD = Thermodynamics
 
 import ClimaCore
 const CC = ClimaCore
@@ -22,6 +25,7 @@ import Logging
 import TerminalLoggers
 Logging.global_logger(TerminalLoggers.TerminalLogger())
 
+include("rrtmgp_model.jl")
 # set up function space
 
 function hvspace_3D(
@@ -198,7 +202,7 @@ function get_aux(edmf, hv_center_space, hv_face_space, ::Type{FT}) where {FT}
     aux_cent_fields =
         TC.FieldFromNamedTuple(hv_center_space, cent_aux_vars(FT, edmf))
     aux_face_fields =
-        TC.FieldFromNamedTuple(hv_face_space, face_aux_vars(FT, edmf))
+        TC.FieldFromNamedTuple(hv_face_space, merge(face_aux_vars(FT, edmf), (;rrtmgp_flux = FT(0))))
     aux = CC.Fields.FieldVector(cent = aux_cent_fields, face = aux_face_fields)
     return aux
 end
@@ -251,7 +255,7 @@ function get_gm_cache(Y, coords)
 end
 
 function ∑tendencies_3d_bomex!(tendencies, prog, cache, t)
-    UnPack.@unpack edmf_cache, hv_center_space, Δt = cache
+    UnPack.@unpack edmf_cache, hv_center_space, Δt, rrtmgp_model = cache
     UnPack.@unpack edmf, grid, param_set, aux, case = edmf_cache
 
     tends_face = tendencies.face
@@ -283,6 +287,7 @@ function ∑tendencies_3d_bomex!(tendencies, prog, cache, t)
 
         state = TC.State(prog_column, aux_column, tends_column)
 
+        rrtmgp_flux = state.aux.face.rrtmgp_flux
         surf = get_surface(case.surf_params, grid, state, t, param_set)
         force = case.Fo
         radiation = case.Rad
@@ -293,6 +298,20 @@ function ∑tendencies_3d_bomex!(tendencies, prog, cache, t)
         # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
         # treat them as auxiliary variables for now, until we disentangle the tendency computations.
         Cases.update_forcing(case, grid, state, t, param_set)
+        θ_liq_ice = prog_cent_column.θ_liq_ice
+
+        specific_humidity = prog_cent_column.q_tot
+        ϵ_d = FT(CP.Planet.molmass_ratio(param_set))
+        pc_0 = TC.center_ref_state(state).p0
+        T = TD.air_temperature.(
+            TD.PhaseEquil_pθq.(param_set, pc_0, θ_liq_ice, specific_humidity)
+            )
+
+        rrtmgp_model.temperature .= vec(T)
+        rrtmgp_model.pressure .= vec(pc_0)
+        rrtmgp_model.volume_mixing_ratio_h2o .= vec(@. ϵ_d * specific_humidity / (1 - specific_humidity))
+        vec(rrtmgp_flux) .= compute_fluxes!(rrtmgp_model)
+        @show vec(rrtmgp_flux)[1]
         Cases.update_radiation(case.Rad, grid, state, param_set)
 
         TC.update_aux!(edmf, grid, state, surf, param_set, t, Δt)
@@ -450,10 +469,93 @@ mass_0 = sum(Y.cent.ρ) # Computes ∫ρ∂Ω such that quadrature weighting is 
 theta_0 = sum(Y.cent.ρθ)
 
 # Solve the ODE
+ds_input = rrtmgp_artifact("atmos_state", "clearsky_as.nc")
+nlay = ds_input.dim["layer"]
+nsite = ds_input.dim["site"]
+nexpt = ds_input.dim["expt"]
+ncol = nsite * nexpt
+
+function get_var(string)
+    var = ds_input[string]
+    arr = Array(var)
+    if ndims(arr) == 3
+        return reshape(arr, size(arr, 1), ncol)[end:-1:1, :]
+    elseif ndims(arr) == 2
+        if "site" in dimnames(var) && "expt" in dimnames(var)
+            return collect(reshape(arr, ncol))
+        elseif "site" in dimnames(var)
+            return repeat(arr; outer = (1, nexpt))[end:-1:1, :]
+        else # "expt" in dimnames(var)
+            return repeat(arr; inner = (1, nsite))[end:-1:1, :]
+        end
+    else # ndims(arr) == 1
+        if "site" in dimnames(var)
+            return repeat(arr; outer = nexpt)
+        else # "expt" in dimnames(var)
+            return repeat(arr; inner = nsite)
+        end
+    end
+end
+
+vmrs = map((
+    # ("h2o", "water_vapor"),            # overwritten by vmr_h2o
+    ("co2", "carbon_dioxide_GM"),
+    # ("o3", "ozone"),                   # overwritten by vmr_o3
+    ("n2o", "nitrous_oxide_GM"),
+    ("co", "carbon_monoxide_GM"),
+    ("ch4", "methane_GM"),
+    ("o2", "oxygen_GM"),
+    ("n2", "nitrogen_GM"),
+    ("ccl4", "carbon_tetrachloride_GM"),
+    ("cfc11", "cfc11_GM"),
+    ("cfc12", "cfc12_GM"),
+    ("cfc22", "hcfc22_GM"),
+    ("hfc143a", "hfc143a_GM"),
+    ("hfc125", "hfc125_GM"),
+    ("hfc23", "hfc23_GM"),
+    ("hfc32", "hfc32_GM"),
+    ("hfc134a", "hfc134a_GM"),
+    ("cf4", "cf4_GM"),
+    # ("no2", nothing),                  # not available in input dataset
+)) do (lookup_gas_name, input_gas_name)
+    (
+        Symbol("volume_mixing_ratio_" * lookup_gas_name),
+        get_var(input_gas_name)'[1] .*
+            parse(FT, ds_input[input_gas_name].attrib["units"]),
+    )
+end
+
+# get model shape from model density
+volume_mixing_ratio_h2o = vec(CC.column(Y.cent.ρ,1,1,1))
+pc_0 = vec(CC.column(Y.cent.ρ,1,1,1))
+temperature = vec(CC.column(Y.cent.ρ,1,1,1))
+z = vec(CC.column(face_coords.z,1,1,1))
+
+rrtmgp_model = RRTMGPModel(
+        edmf_cache.param_set,
+        z;
+        level_computation = :average,
+        use_ideal_coefs_for_bottom_level = false,
+        add_isothermal_boundary_layer = false,
+        surface_emissivity = get_var("surface_emissivity")'[1],
+        solar_zenith_angle = FT(π)/2 - eps(FT),
+        weighted_irradiance = FT(CP.Planet.tot_solar_irrad(edmf_cache.param_set)),
+        dir_sw_surface_albedo = get_var("surface_albedo")'[1],
+        dif_sw_surface_albedo = get_var("surface_albedo")'[1],
+        pressure = pc_0,
+        temperature = temperature,
+        surface_temperature = get_var("surface_temperature")[1],
+        latitude = get_var("lat")[1],
+        volume_mixing_ratio_h2o = volume_mixing_ratio_h2o,
+        volume_mixing_ratio_o3 = get_var("ozone")[1],
+        vmrs...,
+        volume_mixing_ratio_no2 = 0,
+    )
+
 gm_cache = get_gm_cache(Y, coords)
 Δt = 10.0
 time_end = 6 * 3600.0
-cache = (; gm_cache..., hv_center_space, edmf_cache, Δt)
+cache = (; gm_cache..., hv_center_space, edmf_cache, Δt, rrtmgp_model)
 
 prob = ODE.ODEProblem(∑tendencies_3d_bomex!, Y, (0.0, time_end), cache)
 integrator = ODE.init(
