@@ -28,7 +28,7 @@ end
 Computes the boundary flux using the bulk formula and constant or
 Mohnin-Obukhov-based heat transfer coefficient `Ch`.
 """
-struct BulkFormula{C, T} <: AbstractBoundary
+struct BulkFormulaDryTotalEnergy{C, T} <: AbstractBoundary
     coefficients::C
-    surface_field::T
+    surface_fields::T
 end

@@ -41,6 +41,8 @@ export AbstractModelStyle,
 
 export SingleColumnModel, Nonhydrostatic2DModel, Nonhydrostatic3DModel
 
+export calculate_gravitational_potential, calculate_pressure
+
 """
 Supertypes for all models.
 """

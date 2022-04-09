@@ -10,7 +10,7 @@ using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models
 using ClimaAtmos.BoundaryConditions
 
-export Nonhydrostatic3DModel
+export Nonhydrostatic3DModel, calculate_gravitational_potential, calculate_pressure
 
 include("nonhydrostatic_3d_model.jl")
 include("equations_gravitational_potential.jl")

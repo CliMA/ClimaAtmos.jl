@@ -3,10 +3,16 @@ module BoundaryConditions
 using LinearAlgebra: norm
 using ClimaCore: Geometry, Fields, Operators
 using ClimaCore.Geometry: ⊗
+using ClimaAtmos
+
+import SurfaceFluxes
+const SF = SurfaceFluxes
+const UF = SurfaceFluxes.UniversalFunctions
+import Thermodynamics
+const TD = Thermodynamics
 
 export get_boundary_flux,
-    AbstractBoundary, NoFlux, NoVectorFlux, DragLaw, BulkFormula
-
+    AbstractBoundary, NoFlux, NoVectorFlux, DragLaw, BulkFormulaDryTotalEnergy
 
 """
     get_boundary_flux(model, bc, var, Ym, Ya)

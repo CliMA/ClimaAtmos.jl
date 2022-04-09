@@ -16,6 +16,8 @@ using ClimaAtmos.Models: ConstantViscosity
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
+using StaticArrays
+
 # Set up parameters
 struct DryBaroclinicWaveParameters <: CLIMAParameters.AbstractEarthParameterSet end
 
@@ -39,13 +41,12 @@ function run_3d_baroclinic_wave(
         npolynomial = npolynomial,
     )
 
+    coefficients = (; Cd = FT(1e-3), Ch = FT(1e-3)) # transfer coefficient, default: 1e-3 [dimenisonless]
+    surface_fields = (; surface_temperature = FT(280), surface_horizontal_velocity = SVector{2, FT}(0, 0), surface_height = FT(0))
     boundary_conditions = (;
         ρe_tot = (
             top = NoFlux(),
-            bottom = BulkFormula(
-                FT(1e-3), # transfer coefficient, default: 1e-3 [dimenisonless]
-                FT(280) * FT(CLIMAParameters.Planet.cp_d(params)), # prescribed surface specific enthalpy (T * c_p) [J / kg]
-            ),
+            bottom = BulkFormulaDryTotalEnergy(coefficients, surface_fields),
         ),
         uh = (
             top = NoVectorFlux(),
@@ -84,7 +85,7 @@ function run_3d_baroclinic_wave(
         throw(ArgumentError("$test_mode incompatible with test case."))
     end
 
-    nothing
+    simulation
 end
 
 @testset "3D baroclinic wave" begin
@@ -92,3 +93,18 @@ end
         run_3d_baroclinic_wave(FT)
     end
 end
+
+
+#=
+FT = Float64
+stepper = SSPRK33()
+nelements = (6, 10)
+npolynomial = 3
+case = :default
+dt = 0.02
+callbacks = ()
+test_mode = :regression
+
+
+
+=#
