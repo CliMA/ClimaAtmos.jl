@@ -68,10 +68,11 @@ function get_boundary_flux(model, bc::BulkFormulaDryTotalEnergy, ρc::Fields.Fie
     )
 
     qt_sfc = FT(0)
+    cv_d = TD.cv_m(model.parameters, FT)
 
     # internal energies
-    e_int_in = Fields.level(TD.air_temperature_from_ideal_gas_law.(model.parameters, p, Y.base.ρ) .* FT(1004. - 287.), 1)
-    e_int_sfc = sfc.surface_temperature .* FT(1004. - 287.)
+    e_int_in = Fields.level(TD.air_temperature_from_ideal_gas_law.(model.parameters, p, Y.base.ρ) .* cv_d, 1)
+    e_int_sfc = sfc.surface_temperature .* cv_d
 
     # horizontal velocity
     uh = Geometry.UVWVector.(Y.base.uh)
