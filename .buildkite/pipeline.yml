@@ -130,54 +130,37 @@ steps:
           slurm_ntasks: 2
 
       - label: ":computer: Float 64 baroclinic wave (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe"
         artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float64/*"
-        env:
-          TEST_NAME: "sphere/baroclinic_wave_rhoe"
-          FLOAT_TYPE: "Float64"
 
       - label: ":computer: baroclinic wave (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe --FLOAT_TYPE Float32"
         artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float32/*"
-        env:
-          TEST_NAME: "sphere/baroclinic_wave_rhoe"
 
       - label: ":computer: MPI baroclinic wave (ρe)"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe --FLOAT_TYPE Float32"
         artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float32/*"
         env:
-          TEST_NAME: "sphere/baroclinic_wave_rhoe"
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
 
       - label: ":computer: baroclinic wave (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
-        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhotheta/Float32/*"
-        env:
-          TEST_NAME: "sphere/baroclinic_wave_rhotheta"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhotheta"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhotheta/Float64/*"
 
       - label: ":computer: dry held-suarez (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe --FLOAT_TYPE Float32"
         artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhoe/Float32/*"
-        env:
-          TEST_NAME: "sphere/held_suarez_rhoe"
 
       - label: ":computer: Float64 dry held-suarez (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta"
         artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhotheta/Float64/*"
-        env:
-          TEST_NAME: "sphere/held_suarez_rhotheta"
-          FLOAT_TYPE: "Float64"
 
       - label: ":computer: dry held-suarez (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta --FLOAT_TYPE Float32"
         artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhotheta/Float32/*"
-        env:
-          TEST_NAME: "sphere/held_suarez_rhotheta"
 
       - label: ":computer: dry held-suarez (ρe_int)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --FLOAT_TYPE Float32"
         artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhoe_int/Float32/*"
-        env:
-          TEST_NAME: "sphere/held_suarez_rhoe_int"

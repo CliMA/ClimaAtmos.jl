@@ -10,7 +10,6 @@ horizontal_mesh = cubed_sphere_mesh(; radius = R, h_elem = 4)
 npoly = 4
 z_max = FT(30e3)
 z_elem = 10
-t_end = FT(60 * 60 * 24 * 10)
 dt = FT(400)
 dt_save_to_sol = FT(60 * 60 * 24)
 dt_save_to_disk = FT(0) # 0 means don't save to disk

@@ -19,12 +19,11 @@ export JULIA_MPI_BINARY=system
 export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
 
-export TEST_NAME=sphere/held_suarez_rhoe
 export OUTPUT_DIR=$YOUR_SIMULATION_OUTPUT_DIR
 #export RESTART_FILE=$YOUR_JLD2_RESTART_FILE
 
 CC_EXAMPLE=$HOME'/ClimaCore.jl/examples/'
-TESTCASE=$CC_EXAMPLE'hybrid/driver.jl'
+TESTCASE=$CC_EXAMPLE'hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe'
 
 julia --project=$CC_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
 julia --project=$CC_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
@@ -33,7 +32,6 @@ julia --project=$CC_EXAMPLE --threads=8 $TESTCASE
 
 ```
 In the runscript, one needs to specify the following environmant variable:
-* `TEST_NAME`: the experiment to run;
 * `OUTPUT_DIR`: the directory for jld2 data being saved at;
 * `RESTART_FILE`: if run from a pre-existing jld2 data saved from a previous simulation.
 
