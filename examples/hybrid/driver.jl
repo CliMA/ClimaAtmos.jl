@@ -1,10 +1,20 @@
+include("cli_options.jl")
+
+const FT = parsed_args["FLOAT_TYPE"] == "Float32" ? Float32 : Float64
+const TEST_NAME = parsed_args["TEST_NAME"]
+
+
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be enironment variables or command line arguments
 horizontal_mesh = nothing # must be object of type AbstractMesh
 npoly = 0
 z_max = 0
 z_elem = 0
-t_end = 0
+t_end = if isnothing(parsed_args["t_end"])
+    FT(60 * 60 * 24 * 10)
+else
+    parsed_args["t_end"]
+end
 dt = 0
 dt_save_to_sol = 0 # 0 means don't save to sol
 dt_save_to_disk = 0 # 0 means don't save to disk
@@ -54,17 +64,11 @@ using OrdinaryDiffEq
 using DiffEqCallbacks
 using JLD2
 
-const FT = get(ENV, "FLOAT_TYPE", "Float32") == "Float32" ? Float32 : Float64
-
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")
 
-if haskey(ENV, "TEST_NAME")
-    test_dir, test_file_name = split(ENV["TEST_NAME"], '/')
-else
-    error("ENV[\"TEST_NAME\"] required (e.g., \"sphere/baroclinic_wave_rhoe\")")
-end
+test_dir, test_file_name = split(TEST_NAME, '/')
 include(joinpath(test_dir, "$test_file_name.jl"))
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
