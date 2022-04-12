@@ -11,6 +11,7 @@ horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 npoly = 4
 z_max = FT(30e3)
 z_elem = 10
+t_end = FT(60 * 60 * 24 * 10)
 dt = FT(400)
 dt_save_to_sol = FT(60 * 60 * 24)
 dt_save_to_disk = FT(0) # 0 means don't save to disk
@@ -26,8 +27,12 @@ function additional_tendency!(Yₜ, Y, p, t)
     sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
 end
 
-center_initial_condition(local_geometry, params) =
-    center_initial_condition(local_geometry, params, Val(:ρθ))
+center_initial_condition(local_geometry, params) = center_initial_condition(
+    local_geometry,
+    params,
+    Val(:ρθ);
+    moisture_mode = Val(:equil),
+)
 
 function postprocessing(sol, output_dir)
     @info "L₂ norm of ρθ at t = $(sol.t[1]): $(norm(sol.u[1].c.ρθ))"

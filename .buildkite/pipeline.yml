@@ -129,7 +129,7 @@ steps:
         agents:
           slurm_ntasks: 2
 
-      - label: ":computer: Float 64 baroclinic wave (ρe)"
+      - label: ":computer: Float64 baroclinic wave (ρe)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe"
         artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe/Float64/*"
 
@@ -148,6 +148,14 @@ steps:
       - label: ":computer: baroclinic wave (ρθ)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhotheta"
         artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhotheta/Float64/*"
+
+      - label: ":computer: equilibrium moisture baroclinic wave (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist --FLOAT_TYPE Float32"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhoe_equilmoist/Float32/*"
+
+      - label: ":computer: equilibrium moisture baroclinic wave (ρθ)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhotheta_equilmoist --FLOAT_TYPE Float32"
+        artifact_paths: "examples/hybrid/sphere/output/baroclinic_wave_rhotheta_equilmoist/Float32/*"
 
       - label: ":computer: dry held-suarez (ρe)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe --FLOAT_TYPE Float32"

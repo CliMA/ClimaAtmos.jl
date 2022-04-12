@@ -1,25 +1,23 @@
 hyperdiffusion_cache(
-    ᶜlocal_geometry,
-    ᶠlocal_geometry;
+    Y;
     κ₄ = FT(0),
     divergence_damping_factor = FT(1),
     use_tempest_mode = false,
 ) = merge(
     (;
-        ᶜχ = similar(ᶜlocal_geometry, FT),
-        ᶜχuₕ = similar(ᶜlocal_geometry, Geometry.Covariant12Vector{FT}),
+        ᶜχ = similar(Y.c, FT),
+        ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
         κ₄,
         divergence_damping_factor,
         use_tempest_mode,
     ),
-    use_tempest_mode ? (; ᶠχw_data = similar(ᶠlocal_geometry, FT)) :
-        NamedTuple(),
+    use_tempest_mode ? (; ᶠχw_data = similar(Y.F, FT)) : NamedTuple(),
 )
 
-function hyperdiffusion_tendency!(Yₜ, Y, p, t, comms_ctx = nothing)
+function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
-    (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume that ᶜp has been updated
+    (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
     (; comms_ctx, κ₄, divergence_damping_factor, use_tempest_mode) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
@@ -54,6 +52,12 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, comms_ctx = nothing)
             Spaces.weighted_dss!(ᶜχ, comms_ctx)
             @. Yₜ.c.ρe_int -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
         end
+    end
+
+    if :ρq_tot in propertynames(Y.c)
+        @. ᶜχ = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
+        Spaces.weighted_dss!(ᶜχ, comms_ctx)
+        @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
     end
 
     if point_type <: Geometry.Abstract3DPoint

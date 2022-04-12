@@ -2,25 +2,33 @@ using LinearAlgebra: ×, norm, norm_sqr, dot
 
 using ClimaCore: Operators, Fields
 
+using Thermodynamics
+using CLIMAParameters: AbstractEarthParameterSet, Planet
+
+const TD = Thermodynamics
+
 include("schur_complement_W.jl")
 include("hyperdiffusion.jl")
 
-# Constants required before `include("staggered_nonhydrostatic_model.jl")`
-# const FT = ?    # floating-point type
-# const p_0 = ?   # reference pressure
-# const R_d = ?   # dry specific gas constant
-# const κ = ?     # kappa
-# const T_tri = ? # triple point temperature
-# const grav = ?  # gravitational acceleration
-# const Ω = ?     # planet's rotation rate (only required if space is spherical)
-# const f = ?     # Coriolis frequency (only required if space is flat)
+f_plane_coriolis_frequency(::AbstractEarthParameterSet) = 0
+
+# Note: FT must be defined before `include("staggered_nonhydrostatic_model.jl")`
+
+# Functions on which the model depends:
+# Planet.R_d(params)         # dry specific gas constant
+# Planet.kappa_d(params)     # dry adiabatic exponent
+# Planet.T_triple(params)    # triple point temperature of water
+# Planet.MSLP(params)        # reference pressure
+# Planet.grav(params)        # gravitational acceleration
+# Planet.Omega(params)       # rotation rate (only used if space is spherical)
+# Planet.cv_d(params)        # dry isochoric specific heat capacity
+# The value of cv_d is implied by the values of R_d and kappa_d
+
+# The model also depends on f_plane_coriolis_frequency(params)
+# This is a constant Coriolis frequency that is only used if space is flat
 
 # To add additional terms to the explicit part of the tendency, define new
 # methods for `additional_cache` and `additional_tendency!`.
-
-const cp_d = R_d / κ     # heat capacity at constant pressure
-const cv_d = cp_d - R_d  # heat capacity at constant volume
-const γ = cp_d / cv_d    # heat capacity ratio
 
 const divₕ = Operators.Divergence()
 const wdivₕ = Operators.WeakDivergence()
@@ -58,48 +66,89 @@ const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
 
 const C123 = Geometry.Covariant123Vector
 
-pressure_ρθ(ρθ) = p_0 * (ρθ * R_d / p_0)^γ
-pressure_ρe(ρe, K, Φ, ρ) = ρ * R_d * ((ρe / ρ - K - Φ) / cv_d + T_tri)
-pressure_ρe_int(ρe_int, ρ) = R_d * (ρe_int / cv_d + ρ * T_tri)
+partition(Yc) =
+    TD.PhasePartition(Yc.ρq_tot / Yc.ρ, Yc.ρq_liq / Yc.ρ, Yc.ρq_ice / Yc.ρ)
+function thermo_state_ρθ(ρθ, Yc, params) # Note: θ is liquid-ice potential temp
+    if (
+        :ρq_liq in propertynames(Yc) &&
+        :ρq_ice in propertynames(Yc) &&
+        :ρq_tot in propertynames(Yc)
+    )
+        return TD.PhaseNonEquil_ρθq(params, Yc.ρ, ρθ / Yc.ρ, partition(Yc))
+    elseif :ρq_tot in propertynames(Yc)
+        return TD.PhaseEquil_ρθq(params, Yc.ρ, ρθ / Yc.ρ, Yc.ρq_tot / Yc.ρ)
+    else
+        return TD.PhaseDry_ρθ(params, Yc.ρ, ρθ / Yc.ρ)
+    end
+end
+function thermo_state_ρe_int(ρe_int, Yc, params)
+    if (
+        :ρq_liq in propertynames(Yc) &&
+        :ρq_ice in propertynames(Yc) &&
+        :ρq_tot in propertynames(Yc)
+    )
+        return TD.PhaseNonEquil(params, ρe_int / Yc.ρ, Yc.ρ, partition(Yc))
+    elseif :ρq_tot in propertynames(Yc)
+        return TD.PhaseEquil_ρeq(params, Yc.ρ, ρe_int / Yc.ρ, Yc.ρq_tot / Yc.ρ)
+    else
+        return TD.PhaseDry(params, ρe_int / Yc.ρ, Yc.ρ)
+    end
+end
+thermo_state_ρe(ρe, Yc, K, Φ, params) =
+    thermo_state_ρe_int(ρe - Yc.ρ * (K + Φ), Yc, params)
 
-get_cache(ᶜlocal_geometry, ᶠlocal_geometry, comms_ctx, dt) = merge(
-    default_cache(ᶜlocal_geometry, ᶠlocal_geometry, comms_ctx),
-    additional_cache(ᶜlocal_geometry, ᶠlocal_geometry, dt),
-)
+get_cache(Y, params, comms_ctx, dt) =
+    merge(default_cache(Y, params, comms_ctx), additional_cache(Y, params, dt))
 
-function default_cache(ᶜlocal_geometry, ᶠlocal_geometry, comms_ctx)
-    ᶜcoord = ᶜlocal_geometry.coordinates
+function default_cache(Y, params, comms_ctx)
+    ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
+        Ω = FT(Planet.Omega(params))
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
     else
-        ᶜf = map(_ -> f, ᶜlocal_geometry)
+        ᶜf = map(_ -> f_plane_coriolis_frequency(params), ᶜcoord)
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
+    if (
+        :ρq_liq in propertynames(Y.c) &&
+        :ρq_ice in propertynames(Y.c) &&
+        :ρq_tot in propertynames(Y.c)
+    )
+        ts_type = TD.PhaseNonEquil{FT, typeof(params)}
+    elseif :ρq_tot in propertynames(Y.c)
+        ts_type = TD.PhaseEquil{FT, typeof(params)}
+    else
+        ts_type = TD.PhaseDry{FT, typeof(params)}
+    end
     return (;
-        ᶜuvw = similar(ᶜlocal_geometry, Geometry.Covariant123Vector{FT}),
-        ᶜK = similar(ᶜlocal_geometry, FT),
-        ᶜΦ = grav .* ᶜcoord.z,
-        ᶜp = similar(ᶜlocal_geometry, FT),
-        ᶜω³ = similar(ᶜlocal_geometry, Geometry.Contravariant3Vector{FT}),
-        ᶠω¹² = similar(ᶠlocal_geometry, Geometry.Contravariant12Vector{FT}),
-        ᶠu¹² = similar(ᶠlocal_geometry, Geometry.Contravariant12Vector{FT}),
-        ᶠu³ = similar(ᶠlocal_geometry, Geometry.Contravariant3Vector{FT}),
+        ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
+        ᶜK = similar(Y.c, FT),
+        ᶜΦ = FT(Planet.grav(params)) .* ᶜcoord.z,
+        ᶜts = similar(Y.c, ts_type),
+        ᶜp = similar(Y.c, FT),
+        ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
+        ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
+        ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
+        ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
         ∂ᶜK∂ᶠw_data = similar(
-            ᶜlocal_geometry,
+            Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
         ),
+        params,
         comms_ctx,
     )
 end
 
-additional_cache(ᶜlocal_geometry, ᶠlocal_geometry, dt) = ()
+additional_cache(Y, params, dt) = ()
+
+is_tracer(name) = !(name in (:ρ, :ρθ, :ρe, :ρe_int, :uₕ, :w))
 
 function implicit_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶜp) = p
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, params) = p
 
     # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
     # allocation because the cache is stored separately from Y, which means that
@@ -114,28 +163,24 @@ function implicit_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ = -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠw))
 
     if :ρθ in propertynames(Y.c)
-        ᶜρθ = Y.c.ρθ
-        @. ᶜp = pressure_ρθ(ᶜρθ)
-        @. Yₜ.c.ρθ = -(ᶜdivᵥ(ᶠinterp(ᶜρθ) * ᶠw))
+        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
+        @. Yₜ.c.ρθ = -(ᶜdivᵥ(ᶠinterp(Y.c.ρθ) * ᶠw))
     elseif :ρe in propertynames(Y.c)
-        ᶜρe = Y.c.ρe
-        @. ᶜp = pressure_ρe(ᶜρe, ᶜK, ᶜΦ, ᶜρ)
-        @. Yₜ.c.ρe = -(ᶜdivᵥ(ᶠinterp(ᶜρe + ᶜp) * ᶠw))
+        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
+        @. Yₜ.c.ρe = -(ᶜdivᵥ(ᶠinterp(Y.c.ρe + ᶜp) * ᶠw))
     elseif :ρe_int in propertynames(Y.c)
-        ᶜρe_int = Y.c.ρe_int
-        @. ᶜp = pressure_ρe_int(ᶜρe_int, ᶜρ)
+        @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
         @. Yₜ.c.ρe_int =
             -(
-                ᶜdivᵥ(ᶠinterp(ᶜρe_int + ᶜp) * ᶠw) -
+                ᶜdivᵥ(ᶠinterp(Y.c.ρe_int + ᶜp) * ᶠw) -
                 ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
             )
         # or, equivalently,
-        # @. Yₜ.c.ρe_int = -(ᶜdivᵥ(ᶠinterp(ᶜρe_int) * ᶠw) + ᶜp * ᶜdivᵥ(ᶠw))
+        # @. Yₜ.c.ρe_int = -(ᶜdivᵥ(ᶠinterp(Y.c.ρe_int) * ᶠw) + ᶜp * ᶜdivᵥ(ᶠw))
     end
-
-    Yₜ.c.uₕ .= Ref(zero(eltype(Yₜ.c.uₕ)))
-
-    @. Yₜ.f.w = -(ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) + ᶠgradᵥ(ᶜK + ᶜΦ))
 
     # TODO: Add flux correction to the Jacobian
     # @. Yₜ.c.ρ += ᶜFC(ᶠw, ᶜρ)
@@ -146,6 +191,16 @@ function implicit_tendency!(Yₜ, Y, p, t)
     # elseif :ρe_int in propertynames(Y.c)
     #     @. Yₜ.c.ρe_int += ᶜFC(ᶠw, ᶜρe_int)
     # end
+
+    Yₜ.c.uₕ .= Ref(zero(eltype(Yₜ.c.uₕ)))
+
+    @. Yₜ.f.w = -(ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) + ᶠgradᵥ(ᶜK + ᶜΦ))
+
+    # TODO: Add vertical advection of tracers to the Jacobian
+    for tracer_name in filter(is_tracer, propertynames(Y.c))
+        ᶜtracerₜ = getproperty(Yₜ.c, tracer_name)
+        ᶜtracerₜ .= zero(eltype(ᶜtracerₜ))
+    end
 
     return Yₜ
 end
@@ -163,7 +218,7 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜΦ, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, params) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     @. ᶜuvw = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
@@ -177,32 +232,32 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     # Energy conservation
 
     if :ρθ in propertynames(Y.c)
-        ᶜρθ = Y.c.ρθ
-        @. ᶜp = pressure_ρθ(ᶜρθ)
-        @. Yₜ.c.ρθ -= divₕ(ᶜρθ * ᶜuvw)
-        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(ᶜρθ * ᶜuₕ))
+        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
+        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
+        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
     elseif :ρe in propertynames(Y.c)
-        ᶜρe = Y.c.ρe
-        @. ᶜp = pressure_ρe(ᶜρe, ᶜK, ᶜΦ, ᶜρ)
-        @. Yₜ.c.ρe -= divₕ((ᶜρe + ᶜp) * ᶜuvw)
-        @. Yₜ.c.ρe -= ᶜdivᵥ(ᶠinterp((ᶜρe + ᶜp) * ᶜuₕ))
+        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
+        @. Yₜ.c.ρe -= divₕ((Y.c.ρe + ᶜp) * ᶜuvw)
+        @. Yₜ.c.ρe -= ᶜdivᵥ(ᶠinterp((Y.c.ρe + ᶜp) * ᶜuₕ))
     elseif :ρe_int in propertynames(Y.c)
-        ᶜρe_int = Y.c.ρe_int
-        @. ᶜp = pressure_ρe_int(ᶜρe_int, ᶜρ)
+        @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
         if point_type <: Geometry.Abstract3DPoint
             @. Yₜ.c.ρe_int -=
-                divₕ((ᶜρe_int + ᶜp) * ᶜuvw) -
+                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
                 dot(gradₕ(ᶜp), Geometry.Contravariant12Vector(ᶜuₕ))
         else
             @. Yₜ.c.ρe_int -=
-                divₕ((ᶜρe_int + ᶜp) * ᶜuvw) -
+                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
                 dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
         end
-        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((ᶜρe_int + ᶜp) * ᶜuₕ))
+        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
         # or, equivalently,
-        # @. Yₜ.c.ρe_int -= divₕ(ᶜρe_int * ᶜuvw) + ᶜp * divₕ(ᶜuvw)
+        # @. Yₜ.c.ρe_int -= divₕ(Y.c.ρe_int * ᶜuvw) + ᶜp * divₕ(ᶜuvw)
         # @. Yₜ.c.ρe_int -=
-        #     ᶜdivᵥ(ᶠinterp(ᶜρe_int * ᶜuₕ)) + ᶜp * ᶜdivᵥ(ᶠinterp(ᶜuₕ))
+        #     ᶜdivᵥ(ᶠinterp(Y.c.ρe_int * ᶜuₕ)) + ᶜp * ᶜdivᵥ(ᶠinterp(ᶜuₕ))
     end
 
     # Momentum conservation
@@ -230,6 +285,16 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     end
 
     @. Yₜ.f.w -= ᶠω¹² × ᶠu¹²
+
+    # Tracer conservation
+
+    for tracer_name in filter(is_tracer, propertynames(Y.c))
+        ᶜtracer = getproperty(Y.c, tracer_name)
+        ᶜtracerₜ = getproperty(Yₜ.c, tracer_name)
+        @. ᶜtracerₜ -= divₕ(ᶜtracer * ᶜuvw)
+        @. ᶜtracerₜ -= ᶜdivᵥ(ᶠw * ᶠinterp(ᶜtracer)) # TODO: put in implicit tend.
+        @. ᶜtracerₜ -= ᶜdivᵥ(ᶠinterp(ᶜtracer * ᶜuₕ))
+    end
 end
 
 additional_tendency!(Yₜ, Y, p, t) = nothing
@@ -244,7 +309,13 @@ function Wfact!(W, Y, p, dtγ, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶜp, ∂ᶜK∂ᶠw_data) = p
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
+
+    R_d = FT(Planet.R_d(params))
+    κ_d = FT(Planet.kappa_d(params))
+    cv_d = FT(Planet.cv_d(params))
+    T_tri = FT(Planet.T_triple(params))
+    MSLP = FT(Planet.MSLP(params))
 
     dtγ_ref[] = dtγ
 
@@ -276,7 +347,8 @@ function Wfact!(W, Y, p, dtγ, t)
 
     if :ρθ in propertynames(Y.c)
         ᶜρθ = Y.c.ρθ
-        @. ᶜp = pressure_ρθ(ᶜρθ)
+        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
 
         if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
             error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρθ")
@@ -288,7 +360,8 @@ function Wfact!(W, Y, p, dtγ, t)
     elseif :ρe in propertynames(Y.c)
         ᶜρe = Y.c.ρe
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜp = pressure_ρe(ᶜρe, ᶜK, ᶜΦ, ᶜρ)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
 
         if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
             # ᶜρeₜ = -ᶜdivᵥ(ᶠinterp(ᶜρe + ᶜp) * ᶠw)
@@ -317,7 +390,8 @@ function Wfact!(W, Y, p, dtγ, t)
         end
     elseif :ρe_int in propertynames(Y.c)
         ᶜρe_int = Y.c.ρe_int
-        @. ᶜp = pressure_ρe_int(ᶜρe_int, ᶜρ)
+        @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        @. ᶜp = TD.air_pressure(ᶜts)
 
         if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
             error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")
@@ -354,10 +428,13 @@ function Wfact!(W, Y, p, dtγ, t)
         # ∂(ᶠwₜ)/∂(ᶜρθ) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρθ)
         # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
         # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρθ) =
-        #     ᶠgradᵥ_stencil(γ * R_d * (ᶜρθ * R_d / p_0)^(γ - 1))
+        #     ᶠgradᵥ_stencil(
+        #         R_d / (1 - κ_d) * (ᶜρθ * R_d / MSLP)^(κ_d / (1 - κ_d))
+        #     )
         @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = to_scalar_coefs(
-            -1 / ᶠinterp(ᶜρ) *
-            ᶠgradᵥ_stencil(γ * R_d * (ᶜρθ * R_d / p_0)^(γ - 1)),
+            -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(
+                R_d / (1 - κ_d) * (ᶜρθ * R_d / MSLP)^(κ_d / (1 - κ_d)),
+            ),
         )
 
         if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact

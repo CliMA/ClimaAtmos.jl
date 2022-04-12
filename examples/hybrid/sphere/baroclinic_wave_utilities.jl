@@ -1,122 +1,151 @@
-# Constants required by "staggered_nonhydrostatic_model.jl"
-# const FT = ? # specified in each test file
-const p_0 = FT(1.0e5)
-const R_d = FT(287.0)
-const κ = FT(2 / 7)
-const T_tri = FT(273.16)
-const grav = FT(9.80616)
-const Ω = FT(7.29212e-5)
 include("../staggered_nonhydrostatic_model.jl")
 
-# Constants required for balanced flow and baroclinic wave initial conditions
-const R = FT(6.371229e6)
-const k = 3
-const T_e = FT(310) # temperature at the equator
-const T_p = FT(240) # temperature at the pole
-const T_0 = FT(0.5) * (T_e + T_p)
-const Γ = FT(0.005)
-const A = 1 / Γ
-const B = (T_0 - T_p) / T_0 / T_p
-const C = FT(0.5) * (k + 2) * (T_e - T_p) / T_e / T_p
-const b = 2
-const H = R_d * T_0 / grav
-const z_t = FT(15e3)
-const λ_c = FT(20)
-const ϕ_c = FT(40)
-const d_0 = R / 6
-const V_p = FT(1)
+struct BaroclinicWaveParameterSet <: AbstractEarthParameterSet end
+Planet.R_d(::BaroclinicWaveParameterSet) = 287.0
+Planet.MSLP(::BaroclinicWaveParameterSet) = 1.0e5
+Planet.grav(::BaroclinicWaveParameterSet) = 9.80616
+Planet.Omega(::BaroclinicWaveParameterSet) = 7.29212e-5
+Planet.planet_radius(::BaroclinicWaveParameterSet) = 6.371229e6
 
-# Constants required for Rayleigh sponge layer
-const z_D = FT(15e3)
-
-# Constants required for Held-Suarez forcing
-const day = FT(3600 * 24)
-const k_a = 1 / (40 * day)
-const k_f = 1 / day
-const k_s = 1 / (4 * day)
-const ΔT_y = FT(60)
-const Δθ_z = FT(10)
-const T_equator = FT(315)
-const T_min = FT(200)
-const σ_b = FT(7 / 10)
+baroclinic_wave_mesh(; params, h_elem) =
+    cubed_sphere_mesh(; radius = FT(Planet.planet_radius(params)), h_elem)
 
 ##
 ## Initial conditions
 ##
 
-τ_z_1(z) = exp(Γ * z / T_0)
-τ_z_2(z) = 1 - 2 * (z / b / H)^2
-τ_z_3(z) = exp(-(z / b / H)^2)
-τ_1(z) = 1 / T_0 * τ_z_1(z) + B * τ_z_2(z) * τ_z_3(z)
-τ_2(z) = C * τ_z_2(z) * τ_z_3(z)
-τ_int_1(z) = A * (τ_z_1(z) - 1) + B * z * τ_z_3(z)
-τ_int_2(z) = C * z * τ_z_3(z)
-F_z(z) = (1 - 3 * (z / z_t)^2 + 2 * (z / z_t)^3) * (z ≤ z_t)
-I_T(ϕ) = cosd(ϕ)^k - k * (cosd(ϕ))^(k + 2) / (k + 2)
-temp(ϕ, z) = (τ_1(z) - τ_2(z) * I_T(ϕ))^(-1)
-pres(ϕ, z) = p_0 * exp(-grav / R_d * (τ_int_1(z) - τ_int_2(z) * I_T(ϕ)))
-θ(ϕ, z) = temp(ϕ, z) * (p_0 / pres(ϕ, z))^κ
-r(λ, ϕ) = R * acos(sind(ϕ_c) * sind(ϕ) + cosd(ϕ_c) * cosd(ϕ) * cosd(λ - λ_c))
-U(ϕ, z) =
-    grav * k / R * τ_int_2(z) * temp(ϕ, z) * (cosd(ϕ)^(k - 1) - cosd(ϕ)^(k + 1))
-u(ϕ, z) = -Ω * R * cosd(ϕ) + sqrt((Ω * R * cosd(ϕ))^2 + R * cosd(ϕ) * U(ϕ, z))
-v(ϕ, z) = zero(z)
-c3(λ, ϕ) = cos(π * r(λ, ϕ) / 2 / d_0)^3
-s1(λ, ϕ) = sin(π * r(λ, ϕ) / 2 / d_0)
-cond(λ, ϕ) = (0 < r(λ, ϕ) < d_0) * (r(λ, ϕ) != R * pi)
-δu(λ, ϕ, z) =
-    -16 * V_p / 3 / sqrt(FT(3)) *
-    F_z(z) *
-    c3(λ, ϕ) *
-    s1(λ, ϕ) *
-    (-sind(ϕ_c) * cosd(ϕ) + cosd(ϕ_c) * sind(ϕ) * cosd(λ - λ_c)) /
-    sin(r(λ, ϕ) / R) * cond(λ, ϕ)
-δv(λ, ϕ, z) =
-    16 * V_p / 3 / sqrt(FT(3)) *
-    F_z(z) *
-    c3(λ, ϕ) *
-    s1(λ, ϕ) *
-    cosd(ϕ_c) *
-    sind(λ - λ_c) / sin(r(λ, ϕ) / R) * cond(λ, ϕ)
-
 function center_initial_condition(
     local_geometry,
+    params,
     ᶜ𝔼_name;
     is_balanced_flow = false,
+    moisture_mode = Val(:dry),
 )
-    (; lat, long, z) = local_geometry.coordinates
-    ρ = pres(lat, z) / R_d / temp(lat, z)
-    u₀ = u(lat, z)
-    v₀ = v(lat, z)
+    # Constants from CLIMAParameters
+    R_d = FT(Planet.R_d(params))
+    MSLP = FT(Planet.MSLP(params))
+    grav = FT(Planet.grav(params))
+    Ω = FT(Planet.Omega(params))
+    R = FT(Planet.planet_radius(params))
+
+    # Constants required for dry initial conditions
+    k = 3
+    T_e = FT(310) # temperature at the equator
+    T_p = FT(240) # temperature at the pole
+    T_0 = FT(0.5) * (T_e + T_p)
+    Γ = FT(0.005)
+    A = 1 / Γ
+    B = (T_0 - T_p) / T_0 / T_p
+    C = FT(0.5) * (k + 2) * (T_e - T_p) / T_e / T_p
+    b = 2
+    H = R_d * T_0 / grav
+    z_t = FT(15e3)
+    λ_c = FT(20)
+    ϕ_c = FT(40)
+    d_0 = R / 6
+    V_p = FT(1)
+
+    # Constants required for moist initial conditions
+    p_w = FT(3.4e4)
+    q_t = FT(1e-12)
+    q_0 = FT(0.018)
+    ϕ_w = FT(2 * π / 9)
+    ε = FT(0.608)
+
+    # Coordinates
+    z = local_geometry.coordinates.z
+    ϕ = local_geometry.coordinates.lat
+    λ = local_geometry.coordinates.long
+
+    # Initial virtual temperature and pressure
+    τ_z_1 = exp(Γ * z / T_0)
+    τ_z_2 = 1 - 2 * (z / b / H)^2
+    τ_z_3 = exp(-(z / b / H)^2)
+    τ_1 = 1 / T_0 * τ_z_1 + B * τ_z_2 * τ_z_3
+    τ_2 = C * τ_z_2 * τ_z_3
+    τ_int_1 = A * (τ_z_1 - 1) + B * z * τ_z_3
+    τ_int_2 = C * z * τ_z_3
+    I_T = cosd(ϕ)^k - k * (cosd(ϕ))^(k + 2) / (k + 2)
+    T_v = (τ_1 - τ_2 * I_T)^(-1)
+    p = MSLP * exp(-grav / R_d * (τ_int_1 - τ_int_2 * I_T))
+
+    # Initial velocity
+    U = grav * k / R * τ_int_2 * T_v * (cosd(ϕ)^(k - 1) - cosd(ϕ)^(k + 1))
+    u = -Ω * R * cosd(ϕ) + sqrt((Ω * R * cosd(ϕ))^2 + R * cosd(ϕ) * U)
+    v = FT(0)
     if !is_balanced_flow
-        u₀ += δu(long, lat, z)
-        v₀ += δv(long, lat, z)
+        F_z = (1 - 3 * (z / z_t)^2 + 2 * (z / z_t)^3) * (z ≤ z_t)
+        r = R * acos(sind(ϕ_c) * sind(ϕ) + cosd(ϕ_c) * cosd(ϕ) * cosd(λ - λ_c))
+        c3 = cos(π * r / 2 / d_0)^3
+        s1 = sin(π * r / 2 / d_0)
+        cond = (0 < r < d_0) * (r != R * pi)
+        u +=
+            -16 * V_p / 3 / sqrt(FT(3)) *
+            F_z *
+            c3 *
+            s1 *
+            (-sind(ϕ_c) * cosd(ϕ) + cosd(ϕ_c) * sind(ϕ) * cosd(λ - λ_c)) /
+            sin(r / R) * cond
+        v +=
+            16 * V_p / 3 / sqrt(FT(3)) *
+            F_z *
+            c3 *
+            s1 *
+            cosd(ϕ_c) *
+            sind(λ - λ_c) / sin(r / R) * cond
     end
-    uₕ_local = Geometry.UVVector(u₀, v₀)
+    uₕ_local = Geometry.UVVector(u, v)
     uₕ = Geometry.Covariant12Vector(uₕ_local, local_geometry)
-    if ᶜ𝔼_name === Val(:ρθ)
-        ρθ = ρ * θ(lat, z)
-        return (; ρ, ρθ, uₕ)
-    elseif ᶜ𝔼_name === Val(:ρe)
-        ρe =
-            ρ *
-            (cv_d * (temp(lat, z) - T_tri) + norm_sqr(uₕ_local) / 2 + grav * z)
-        return (; ρ, ρe, uₕ)
-    elseif ᶜ𝔼_name === Val(:ρe_int)
-        ρe_int = ρ * cv_d * (temp(lat, z) - T_tri)
-        return (; ρ, ρe_int, uₕ)
+
+    # Initial moisture and temperature
+    if moisture_mode === Val(:dry)
+        q_tot = FT(0)
+    else
+        q_tot = (p <= p_w) ? q_t :
+            q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
     end
+    T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
+    # T = T_v * (1 + q_tot) / (1 + q_tot * Planet.molmass_ratio(params))
+    # This is the actual formula, which would be consistent with TD.
+
+    # Initial values computed from the thermodynamic state
+    ts = TD.PhaseEquil_pTq(params, p, T, q_tot)
+    ρ = TD.air_density(ts)
+    if ᶜ𝔼_name === Val(:ρθ)
+        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(ts))
+    elseif ᶜ𝔼_name === Val(:ρe)
+        K = norm_sqr(uₕ_local) / 2
+        ᶜ𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(ts) + K + grav * z))
+    elseif ᶜ𝔼_name === Val(:ρe_int)
+        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(ts))
+    end
+    if moisture_mode === Val(:dry)
+        moisture_kwargs = NamedTuple()
+    elseif moisture_mode === Val(:equil)
+        moisture_kwargs = (; ρq_tot = ρ * q_tot)
+    elseif moisture_mode === Val(:nonequil)
+        moisture_kwargs = (;
+            ρq_tot = ρ * q_tot,
+            ρq_liq = ρ * TD.liquid_specific_humidity(ts),
+            ρq_ice = ρ * TD.ice_specific_humidity(ts),
+        )
+    end
+    # TODO: Include ability to handle nonzero initial cloud condensate
+
+    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs...)
 end
-face_initial_condition(local_geometry) =
+
+face_initial_condition(local_geometry, params) =
     (; w = Geometry.Covariant3Vector(FT(0)))
 
 ##
 ## Additional tendencies
 ##
 
-function rayleigh_sponge_cache(ᶜlocal_geometry, ᶠlocal_geometry, dt)
-    ᶜz = ᶜlocal_geometry.coordinates.z
-    ᶠz = ᶠlocal_geometry.coordinates.z
+function rayleigh_sponge_cache(Y, dt)
+    z_D = FT(15e3)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
     ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))
     ᶠαₘ = @. ifelse(ᶠz > z_D, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
@@ -131,17 +160,32 @@ function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.w -= ᶠβ * Y.f.w
 end
 
-held_suarez_cache(ᶜlocal_geometry) = (;
-    ᶜσ = similar(ᶜlocal_geometry, FT),
-    ᶜheight_factor = similar(ᶜlocal_geometry, FT),
-    ᶜΔρT = similar(ᶜlocal_geometry, FT),
-    ᶜφ = deg2rad.(ᶜlocal_geometry.coordinates.lat),
+held_suarez_cache(Y) = (;
+    ᶜσ = similar(Y.c, FT),
+    ᶜheight_factor = similar(Y.c, FT),
+    ᶜΔρT = similar(Y.c, FT),
+    ᶜφ = deg2rad.(Fields.coordinate_field(Y.c).lat),
 )
 
 function held_suarez_tendency!(Yₜ, Y, p, t)
-    (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ) = p # assume that ᶜp has been updated
+    (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
-    @. ᶜσ = ᶜp / p_0
+    R_d = FT(Planet.R_d(params))
+    κ_d = FT(Planet.kappa_d(params))
+    cv_d = FT(Planet.cv_d(params))
+    day = FT(Planet.day(params))
+    MSLP = FT(Planet.MSLP(params))
+
+    σ_b = FT(7 / 10)
+    k_a = 1 / (40 * day)
+    k_s = 1 / (4 * day)
+    k_f = 1 / day
+    ΔT_y = FT(60)
+    Δθ_z = FT(10)
+    T_equator = FT(315)
+    T_min = FT(200)
+
+    @. ᶜσ = ᶜp / MSLP
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
         (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
@@ -150,13 +194,13 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
             ᶜp / (Y.c.ρ * R_d) - max(
                 T_min,
                 (T_equator - ΔT_y * sin(ᶜφ)^2 - Δθ_z * log(ᶜσ) * cos(ᶜφ)^2) *
-                ᶜσ^(R_d / cp_d),
+                ᶜσ^κ_d,
             )
         )
 
     @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= ᶜΔρT * (p_0 / ᶜp)^κ
+        @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
     elseif :ρe in propertynames(Y.c)
         @. Yₜ.c.ρe -= ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)

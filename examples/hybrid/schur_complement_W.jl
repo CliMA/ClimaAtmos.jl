@@ -111,6 +111,10 @@ Note: The matrix S = A31 A13 + A32 A23 + A33 - I is the "Schur complement" of
 =#
 function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
     function _linsolve!(x, A, b, update_matrix = false; kwargs...)
+        # Initialize x as if the Jacobian is 0. This properly set the values for
+        # Fields that are not included in the Jacobian (e.g, uₕ and tracers).
+        @. x = -b
+
         (; dtγ_ref, ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄) = A
         (; S, S_column_array) = A
         dtγ = dtγ_ref[]
@@ -193,12 +197,6 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
                 ΔΔY[(2 * Nv + 1):(3 * Nv + 1)] .= vector_column(bᶠ𝕄, i, j, h)
                 @assert (-LinearAlgebra.I + dtγ * ∂Yₜ∂Y) * ΔY ≈ ΔΔY
             end
-        end
-
-        if :ρuₕ in propertynames(x.c)
-            @. x.c.ρuₕ = -b.c.ρuₕ
-        elseif :uₕ in propertynames(x.c)
-            @. x.c.uₕ = -b.c.uₕ
         end
 
         if A.transform
