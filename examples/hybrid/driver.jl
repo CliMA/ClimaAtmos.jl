@@ -266,7 +266,70 @@ if is_distributed # replace sol.u on the root processor with the global sol.u
         sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
     end
 end
+
+import JSON
+using Test
+import OrderedCollections
 if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     postprocessing(sol, output_dir)
+
+    include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
+
+    if !occursin("Float64", job_id) # only do regression tests on Float32 jobs
+
+        Y_last = sol.u[end]
+        # This is helpful for starting up new tables
+        @info "Job-specific MSE table format:"
+        println("all_best_mse[$job_id] = OrderedCollections.OrderedDict()")
+        for prop_chain in Fields.property_chains(Y_last)
+            println("all_best_mse[$job_id][$prop_chain] = 0.0")
+        end
+        @info "Solution variables:"
+        for prop_chain in Fields.property_chains(Y_last)
+            println(prop_chain)
+        end
+
+        # Extract best mse for this job:
+        best_mse = all_best_mse[job_id]
+
+        include(joinpath(
+            @__DIR__,
+            "..",
+            "..",
+            "post_processing",
+            "compute_mse.jl",
+        ))
+
+        ds_filename_computed = joinpath(output_dir, "prog_state.nc")
+
+        function process_name(s::AbstractString)
+            # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
+            s = replace(s, "components_data_" => "")
+            s = replace(s, "ₕ" => "_h")
+            s = replace(s, "ρ" => "rho")
+            return s
+        end
+        varname(pc::Tuple) = process_name(join(pc, "_"))
+
+        export_nc(Y_last; nc_filename = ds_filename_computed, varname)
+        computed_mse = regression_test(;
+            job_id,
+            best_mse,
+            ds_filename_computed,
+            # TODO: we temporarily pass ds_filename_computed
+            #       as ds_filename_reference since no results exist
+            #       yet on central.
+            ds_filename_reference = ds_filename_computed,
+            varname,
+        )
+
+        computed_mse_filename = joinpath(job_id, "computed_mse.json")
+
+        open(computed_mse_filename, "w") do io
+            JSON.print(io, computed_mse)
+        end
+        NCRegressionTests.test_mse(computed_mse, best_mse)
+    end
+
 end
