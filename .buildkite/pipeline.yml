@@ -172,3 +172,7 @@ steps:
       - label: ":computer: dry held-suarez (ρe_int)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --FLOAT_TYPE Float32"
         artifact_paths: "examples/hybrid/sphere/output/held_suarez_rhoe_int/Float32/*"
+
+      - label: ":computer: equilibrium moisture held suarez (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_equilmoist --FLOAT_TYPE Float32"
+        artifact_paths: "examples/hybrid/sphere/output/held_zuarez_rhoe_equilmoist/Float32/*"
