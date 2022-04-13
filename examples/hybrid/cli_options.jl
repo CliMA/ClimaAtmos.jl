@@ -15,6 +15,9 @@ ArgParse.@add_arg_table s begin
     "--TEST_NAME" # TODO: change to "JobName"?
     help = "Job name"
     arg_type = String
+    "--output_dir"
+    help = "Output directory"
+    arg_type = String
 end
 
 parsed_args = ArgParse.parse_args(ARGS, s)

@@ -149,12 +149,12 @@ else
     jac_kwargs = alg_kwargs = ()
 end
 
-if haskey(ENV, "OUTPUT_DIR")
-    output_dir = ENV["OUTPUT_DIR"]
+output_dir = if isnothing(parsed_args["output_dir"])
+    output_directory(s, parsed_args)
 else
-    output_dir =
-        joinpath(@__DIR__, test_dir, "output", test_file_name, string(FT))
+    parsed_args["output_dir"]
 end
+@info "Output directory: $output_dir"
 mkpath(output_dir)
 
 function make_dss_func(comms_ctx)
