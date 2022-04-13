@@ -50,6 +50,7 @@ function center_initial_condition(
 
     # Constants required for moist initial conditions
     p_w = FT(3.4e4)
+    p_t = FT(1e4)
     q_t = FT(1e-12)
     q_0 = FT(0.018)
     ϕ_w = FT(2 * π / 9)
@@ -104,7 +105,7 @@ function center_initial_condition(
     if moisture_mode === Val(:dry)
         q_tot = FT(0)
     else
-        q_tot = (p <= p_w) ? q_t :
+        q_tot = (p <= p_t) ? q_t :
             q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
     end
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
