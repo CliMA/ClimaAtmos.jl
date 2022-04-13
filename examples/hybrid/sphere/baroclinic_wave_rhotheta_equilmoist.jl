@@ -11,7 +11,6 @@ horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 npoly = 4
 z_max = FT(30e3)
 z_elem = 10
-t_end = FT(60 * 60 * 24 * 10)
 dt = FT(400)
 dt_save_to_sol = FT(60 * 60 * 24)
 dt_save_to_disk = FT(0) # 0 means don't save to disk
@@ -21,10 +20,12 @@ jacobian_flags = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ
 additional_cache(Y, params, dt) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(2e17)),
     sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
+    zero_moment_microphysics_cache(Y),
 )
 function additional_tendency!(Yₜ, Y, p, t)
     hyperdiffusion_tendency!(Yₜ, Y, p, t)
     sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+    zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 end
 
 center_initial_condition(local_geometry, params) = center_initial_condition(
