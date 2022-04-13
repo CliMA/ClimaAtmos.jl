@@ -1,3 +1,6 @@
+using CloudMicrophysics
+const CM = CloudMicrophysics
+
 include("../staggered_nonhydrostatic_model.jl")
 
 struct BaroclinicWaveParameterSet <: AbstractEarthParameterSet end
@@ -142,6 +145,8 @@ face_initial_condition(local_geometry, params) =
 ## Additional tendencies
 ##
 
+# Rayleigh sponge 
+
 function rayleigh_sponge_cache(Y, dt)
     z_D = FT(15e3)
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -159,6 +164,8 @@ function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
     @. Yₜ.f.w -= ᶠβ * Y.f.w
 end
+
+# Held-Suarez forcing
 
 held_suarez_cache(Y) = (;
     ᶜσ = similar(Y.c, FT),
@@ -205,5 +212,130 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρe -= ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int -= ᶜΔρT * cv_d
+    end
+end
+
+# 0-Moment Microphysics
+
+zero_moment_microphysics_cache(Y) =
+    (ᶜS_ρq_tot = similar(Y.c, FT), ᶜλ = similar(Y.c, FT))
+
+function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
+    (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, params) = p # assume ᶜts has been updated
+
+    # _qc_0 - set it to 0 to remove immediately after supersat
+    # _τ_precip - make it super short to get behavior similar to instantaneous
+
+    @. ᶜS_ρq_tot =
+        Y.c.ρ *
+        CM.Microphysics_0M.remove_precipitation(params, TD.PhasePartition(ᶜts))
+    @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
+    @. Yₜ.c.ρ += ᶜS_ρq_tot
+
+    @. ᶜλ = TD.liquid_fraction(ᶜts)
+
+    if :ρθ in propertynames(Y.c)
+        L_v0 = Planet.LH_v0(params)
+        L_s0 = Planet.LH_s0(params)
+        @. Yₜ.c.ρθ -=
+            ᶜS_ρq_tot / TD.exner(ᶜts) / TD.cp_m(ᶜts) *
+            (L_v0 * ᶜλ + L_s0 * (1 - ᶜλ))
+    elseif :ρe in propertynames(Y.c)
+        @. Yₜ.c.ρe +=
+            ᶜS_ρq_tot * (
+                ᶜλ * TD.internal_energy_liquid(ᶜts) +
+                (1 - ᶜλ) * TD.internal_energy_ice(ᶜts) +
+                ᶜΦ
+            )
+    elseif :ρe_int in propertynames(Y.c)
+        @. Yₜ.c.ρe_int +=
+            ᶜS_ρq_tot * (
+                ᶜλ * TD.internal_energy_liquid(ᶜts) +
+                (1 - ᶜλ) * TD.internal_energy_ice(ᶜts)
+            )
+    end
+end
+
+# Vertical diffusion boundary layer parameterization
+
+# Apply on potential temperature and moisture
+# 1) turn the liquid_theta into theta version
+# 2) have a total energy version (primary goal)
+
+# Note: ᶠv_a and ᶠz_a are 3D projections of 2D Fields (the values of uₕ and z at
+#       the first cell center of every column, respectively).
+# TODO: Allow ClimaCore to handle both 2D and 3D Fields in a single broadcast.
+#       This currently results in a mismatched spaces error.
+function vertical_diffusion_boundary_layer_cache(Y)
+    ᶠz_a = similar(Y.f, FT)
+    Fields.field_values(ᶠz_a) .=
+        Fields.field_values(Spaces.level(Fields.coordinate_field(Y.c).z, 1)) .*
+        one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
+    return (;
+        ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)), ᶠz_a, ᶠK_E = similar(Y.f, FT),
+    )
+end
+
+function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
+    C_E = FT(0.0044)
+    p_pbl = FT(85000)
+    p_strato = FT(10000)
+    K_E = C_E * norm_v_a * z_a
+    return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
+end
+
+function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
+    ᶜρ = Y.c.ρ
+    (; ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜp has been updated
+
+    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
+
+    Fields.field_values(ᶠv_a) .=
+        Fields.field_values(Spaces.level(Y.c.uₕ, 1)) .*
+        one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
+    @. ᶠK_E = eddy_diffusivity_coefficient(norm(ᶠv_a), ᶠz_a, ᶠinterp(ᶜp))
+
+    # diffusion scheme for boundary layer
+    if :ρθ in propertynames(Y.c)
+        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
+        F₊ = Geometry.Contravariant3Vector(FT(0))
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(F₊),
+            bottom = Operators.SetValue(F₋),
+        )
+        @. Yₜ.c.ρθ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρθ / ᶜρ))
+    elseif :ρe in propertynames(Y.c)
+        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
+        F₊ = Geometry.Contravariant3Vector(FT(0))
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(F₊),
+            bottom = Operators.SetValue(F₋),
+        )
+        # θ = TD.dry_pottemp(ts)
+        # Δθ = ᶜdivᵥ(ᶜK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ( θ ))
+        # T = θ ^ (cp_m / cv_m) * (ᶜρ * R_m / p_0) ^ (R_m/cv_m)
+        # ΔT = Δθ part + Δρ part lol
+        # alternatively, applying diffusion on e_int
+        # e_int = TD.internal_energy(ᶜts)
+        @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
+    elseif :ρe_int in propertynames(Y.c)
+        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
+        F₊ = Geometry.Contravariant3Vector(FT(0))
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(F₊),
+            bottom = Operators.SetValue(F₋),
+        )
+        @. Yₜ.c.ρe_int +=
+            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
+    end
+
+    if :ρq_tot in propertynames(Y.c)
+        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
+        F₊ = Geometry.Contravariant3Vector(FT(0))
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(F₊),
+            bottom = Operators.SetValue(F₋),
+        )
+        @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
     end
 end
