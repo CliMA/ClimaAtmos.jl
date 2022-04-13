@@ -19,20 +19,18 @@ export JULIA_MPI_BINARY=system
 export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
 
-export OUTPUT_DIR=$YOUR_SIMULATION_OUTPUT_DIR
 #export RESTART_FILE=$YOUR_JLD2_RESTART_FILE
 
 CC_EXAMPLE=$HOME'/ClimaCore.jl/examples/'
-TESTCASE=$CC_EXAMPLE'hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe'
+TESTCASE=$CC_EXAMPLE'hybrid/driver.jl'
 
 julia --project=$CC_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
 julia --project=$CC_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
 
-julia --project=$CC_EXAMPLE --threads=8 $TESTCASE
+julia --project=$CC_EXAMPLE --threads=8 $TESTCASE --TEST_NAME sphere/held_suarez_rhoe --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
 
 ```
 In the runscript, one needs to specify the following environmant variable:
-* `OUTPUT_DIR`: the directory for jld2 data being saved at;
 * `RESTART_FILE`: if run from a pre-existing jld2 data saved from a previous simulation.
 
 Meanwhile, to enable multithreads, one needs to change [here](https://github.com/CliMA/ClimaCore.jl/blob/main/examples/hybrid/driver.jl#L51) in `driver.jl` to be `enable_threading() = true`.

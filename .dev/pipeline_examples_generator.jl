@@ -1,7 +1,6 @@
 flattened_cli_options = (
     "--TEST_NAME sphere/baroclinic_wave_rhoe",
     "--TEST_NAME sphere/baroclinic_wave_rhoe --FLOAT_TYPE Float32",
-    "--TEST_NAME sphere/baroclinic_wave_rhoe --FLOAT_TYPE Float32",
     "--TEST_NAME sphere/baroclinic_wave_rhotheta",
     "--TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist --FLOAT_TYPE Float32",
     "--TEST_NAME sphere/baroclinic_wave_rhotheta_equilmoist --FLOAT_TYPE Float32",
@@ -10,6 +9,7 @@ flattened_cli_options = (
     "--TEST_NAME sphere/held_suarez_rhotheta --FLOAT_TYPE Float32",
     "--TEST_NAME sphere/held_suarez_rhoe_int --FLOAT_TYPE Float32",
     "--TEST_NAME sphere/held_suarez_rhoe_equilmoist --FLOAT_TYPE Float32",
+    "--TEST_NAME sphere/held_suarez_rhoe_int_equilmoist --FLOAT_TYPE Float32",
 )
 
 # Convert to tuples:
