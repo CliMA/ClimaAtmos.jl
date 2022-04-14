@@ -149,8 +149,13 @@ else
     jac_kwargs = alg_kwargs = ()
 end
 
+job_id = if isnothing(parsed_args["job_id"])
+    job_id_from_parsed_args(s, parsed_args)
+else
+    parsed_args["job_id"]
+end
 output_dir = if isnothing(parsed_args["output_dir"])
-    output_directory(s, parsed_args)
+    job_id
 else
     parsed_args["output_dir"]
 end

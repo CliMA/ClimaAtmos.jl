@@ -18,6 +18,9 @@ ArgParse.@add_arg_table s begin
     "--output_dir"
     help = "Output directory"
     arg_type = String
+    "--job_id"
+    help = "Uniquely identifying string for a particular job"
+    arg_type = String
 end
 
 parsed_args = ArgParse.parse_args(ARGS, s)
