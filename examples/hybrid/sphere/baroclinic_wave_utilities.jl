@@ -50,6 +50,7 @@ function center_initial_condition(
 
     # Constants required for moist initial conditions
     p_w = FT(3.4e4)
+    p_t = FT(1e4)
     q_t = FT(1e-12)
     q_0 = FT(0.018)
     ϕ_w = FT(2 * π / 9)
@@ -104,7 +105,7 @@ function center_initial_condition(
     if moisture_mode === Val(:dry)
         q_tot = FT(0)
     else
-        q_tot = (p <= p_w) ? q_t :
+        q_tot = (p <= p_t) ? q_t :
             q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
     end
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
@@ -234,13 +235,7 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 
     @. ᶜλ = TD.liquid_fraction(ᶜts)
 
-    if :ρθ in propertynames(Y.c)
-        L_v0 = Planet.LH_v0(params)
-        L_s0 = Planet.LH_s0(params)
-        @. Yₜ.c.ρθ -=
-            ᶜS_ρq_tot / TD.exner(ᶜts) / TD.cp_m(ᶜts) *
-            (L_v0 * ᶜλ + L_s0 * (1 - ᶜλ))
-    elseif :ρe in propertynames(Y.c)
+    if :ρe in propertynames(Y.c)
         @. Yₜ.c.ρe +=
             ᶜS_ρq_tot * (
                 ᶜλ * TD.internal_energy_liquid(ᶜts) +
@@ -296,15 +291,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     @. ᶠK_E = eddy_diffusivity_coefficient(norm(ᶠv_a), ᶠz_a, ᶠinterp(ᶜp))
 
     # diffusion scheme for boundary layer
-    if :ρθ in propertynames(Y.c)
-        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
-        F₊ = Geometry.Contravariant3Vector(FT(0))
-        ᶜdivᵥ = Operators.DivergenceF2C(
-            top = Operators.SetValue(F₊),
-            bottom = Operators.SetValue(F₋),
-        )
-        @. Yₜ.c.ρθ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρθ / ᶜρ))
-    elseif :ρe in propertynames(Y.c)
+    if :ρe in propertynames(Y.c)
         F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
         F₊ = Geometry.Contravariant3Vector(FT(0))
         ᶜdivᵥ = Operators.DivergenceF2C(
