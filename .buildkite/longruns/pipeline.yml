@@ -36,11 +36,11 @@ steps:
 
       # TODO: Add all milestone long simulation runs
 
-      - label: ":computer: held suarez (ρe) Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe  --FLOAT_TYPE Float32 --t_end 103680000 --output_dir longrun_hs" # 1200 days
+      - label: ":computer: held suarez (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe --t_end 103680000 --output_dir longrun_hs" # 1200 days
         artifact_paths: "longrun_hs_rhoe/*"
 
-      - label: ":computer: held suarez (ρe_int) Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int  --FLOAT_TYPE Float32 --t_end 103680000 --output_dir longrun_hs_rhoeint" # 1200 days
+      - label: ":computer: held suarez (ρe_int)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --t_end 103680000 --output_dir longrun_hs_rhoeint" # 1200 days
         artifact_paths: "longrun_hs_rhoeint/*"
 

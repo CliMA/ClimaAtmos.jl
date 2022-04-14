@@ -146,46 +146,46 @@ steps:
   - group: "Sphere Examples"
     steps:
 
-      - label: ":computer: baroclinic wave (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe"
-        artifact_paths: "sphere_baroclinic_wave_rhoe/*"
+      - label: ":computer: baroclinic wave (ρe) Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe --FLOAT_TYPE Float64"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
-      - label: ":computer: baroclinic wave (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhotheta"
-        artifact_paths: "sphere_baroclinic_wave_rhotheta/*"
+      - label: ":computer: baroclinic wave (ρθ) Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhotheta --FLOAT_TYPE Float64"
+        artifact_paths: "sphere_baroclinic_wave_rhotheta_Float64/*"
+
+      - label: ":computer: held suarez (ρθ) Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta --FLOAT_TYPE Float64"
+        artifact_paths: "sphere_held_suarez_rhotheta_Float64/*"
 
       - label: ":computer: held suarez (ρθ)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
-      - label: ":computer: held suarez (ρθ) Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_held_suarez_rhotheta_Float32/*"
+      - label: ":computer: held suarez (ρe) equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_equilmoist"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
-      - label: ":computer: held suarez (ρe) equilmoist Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_equilmoist  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_Float32/*"
-
-      - label: ":computer: held suarez (ρe_int) equilmoist Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int_equilmoist  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist_Float32/*"
+      - label: ":computer: held suarez (ρe_int) equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int_equilmoist"
+        artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
   - group: "Milestones"
     steps:
 
-      - label: ":computer: baroclinic wave (ρe) Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_Float32/*"
+      - label: ":computer: baroclinic wave (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe"
+        artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
-      - label: ":computer: baroclinic wave (ρe) equilmoist Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_Float32/*"
+      - label: ":computer: baroclinic wave (ρe) equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: held suarez (ρe) Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_held_suarez_rhoe_Float32/*"
+      - label: ":computer: held suarez (ρe)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe"
+        artifact_paths: "sphere_held_suarez_rhoe/*"
 
-      - label: ":computer: held suarez (ρe) int Float32"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int  --FLOAT_TYPE Float32"
-        artifact_paths: "sphere_held_suarez_rhoe_int_Float32/*"
+      - label: ":computer: held suarez (ρe_int)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int"
+        artifact_paths: "sphere_held_suarez_rhoe_int/*"
 

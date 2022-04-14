@@ -1,6 +1,6 @@
 include("cli_options.jl")
 
-const FT = parsed_args["FLOAT_TYPE"] == "Float32" ? Float32 : Float64
+const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 const TEST_NAME = parsed_args["TEST_NAME"]
 
 

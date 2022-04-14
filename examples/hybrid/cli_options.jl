@@ -4,7 +4,7 @@ ArgParse.@add_arg_table s begin
     "--FLOAT_TYPE"
     help = "Float type"
     arg_type = String
-    default = "Float64" # TODO: default to Float32
+    default = "Float32"
     "--t_end"
     help = "Simulation end time"
     arg_type = Float64
