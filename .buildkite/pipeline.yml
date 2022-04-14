@@ -32,6 +32,10 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
+      - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=perf -e 'using Pkg; Pkg.status()'"
+
     agents:
       slurm_cpus_per_task: 8
     env:
@@ -188,4 +192,24 @@ steps:
       - label: ":computer: held suarez (ρe_int)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --job_id sphere_held_suarez_rhoe_int"
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
+
+
+  - group: "Performance"
+    steps:
+
+      - label: ":rocket: flame graph: baroclinic wave (ρe)"
+        command: "julia --color=yes --project=perf perf/flame.jl --TEST_NAME sphere/baroclinic_wave_rhoe --job_id flame_sphere_baroclinic_wave_rhoe"
+        artifact_paths: "flame_sphere_baroclinic_wave_rhoe/*"
+        env:
+          CI_PERF_CPUPROFILE: "true"
+
+      - label: ":rocket: benchmark: baroclinic wave (ρe)"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --TEST_NAME sphere/baroclinic_wave_rhoe --job_id bm_sphere_baroclinic_wave_rhoe"
+        env:
+          CI_PERF_CPUPROFILE: "true"
+
+      - label: ":mag: Allocations: baroclinic wave (ρe)"
+        command: "julia --color=yes --project=perf perf/allocs.jl"
+        env:
+          CI_PERF_CPUPROFILE: "true"
 
