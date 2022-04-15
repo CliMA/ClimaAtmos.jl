@@ -3,12 +3,42 @@ const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
 
+# parameters for baroclinic wave case
 struct BaroclinicWaveParameterSet <: AbstractEarthParameterSet end
-Planet.R_d(::BaroclinicWaveParameterSet) = 287.0
-Planet.MSLP(::BaroclinicWaveParameterSet) = 1.0e5
-Planet.grav(::BaroclinicWaveParameterSet) = 9.80616
-Planet.Omega(::BaroclinicWaveParameterSet) = 7.29212e-5
-Planet.planet_radius(::BaroclinicWaveParameterSet) = 6.371229e6
+
+# parameters for held-suarez case
+abstract type AbstractHeldSuarez <: AbstractEarthParameterSet end
+# parameters for dry held-suarez case
+Base.@kwdef struct DryHeldSuarezParameterSet{FT} <: AbstractHeldSuarez
+    σ_b::FT = 7 / 10
+    k_a::FT = 1 / 40
+    k_s::FT = 1 / 4
+    k_f::FT = 1.0
+    ΔT_y::FT = 60.0
+    Δθ_z::FT = 10.0
+    T_equator::FT = 315.0
+    T_min::FT = 200.0
+end
+
+# parameters for moist held-suarez case
+Base.@kwdef struct MoistHeldSuarezParameterSet{FT} <: AbstractHeldSuarez
+    σ_b::FT = 7 / 10
+    k_a::FT = 1 / 40
+    k_s::FT = 1 / 4
+    k_f::FT = 1.0
+    ΔT_y::FT = 65.0
+    Δθ_z::FT = 10.0
+    T_equator::FT = 294.0
+    T_min::FT = 200.0
+end
+
+Planet.R_d(::Union{BaroclinicWaveParameterSet, AbstractHeldSuarez}) = 287.0
+Planet.MSLP(::Union{BaroclinicWaveParameterSet, AbstractHeldSuarez}) = 1.0e5
+Planet.grav(::Union{BaroclinicWaveParameterSet, AbstractHeldSuarez}) = 9.80616
+Planet.Omega(::Union{BaroclinicWaveParameterSet, AbstractHeldSuarez}) =
+    7.29212e-5
+Planet.planet_radius(::Union{BaroclinicWaveParameterSet, AbstractHeldSuarez}) =
+    6.371229e6
 
 baroclinic_wave_mesh(; params, h_elem) =
     cubed_sphere_mesh(; radius = FT(Planet.planet_radius(params)), h_elem)
@@ -184,14 +214,14 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     day = FT(Planet.day(params))
     MSLP = FT(Planet.MSLP(params))
 
-    σ_b = FT(7 / 10)
-    k_a = 1 / (40 * day)
-    k_s = 1 / (4 * day)
-    k_f = 1 / day
-    ΔT_y = FT(60)
-    Δθ_z = FT(10)
-    T_equator = FT(315)
-    T_min = FT(200)
+    σ_b = params.σ_b
+    k_a = params.k_a / day
+    k_s = params.k_s / day
+    k_f = params.k_f / day
+    ΔT_y = params.ΔT_y
+    Δθ_z = params.Δθ_z
+    T_equator = params.T_equator
+    T_min = params.T_min
 
     @. ᶜσ = ᶜp / MSLP
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))

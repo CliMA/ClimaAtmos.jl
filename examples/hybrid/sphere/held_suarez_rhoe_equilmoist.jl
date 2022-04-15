@@ -6,7 +6,7 @@ include("baroclinic_wave_utilities.jl")
 const sponge = false
 
 # Variables required for driver.jl (modify as needed)
-params = BaroclinicWaveParameterSet()
+params = MoistHeldSuarezParameterSet()
 horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 npoly = 4
 z_max = FT(30e3)
