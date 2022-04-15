@@ -12,6 +12,9 @@ agents:
   config: cpu
   queue: central
   slurm_ntasks: 1
+  slurm_time: 10:00:00
+
+timeout_in_minutes: 600
 
 steps:
   - label: "init :computer:"
