@@ -88,7 +88,7 @@ function get_boundary_flux(model, bc::BulkFormulaDryTotalEnergy, ρc::Fields.Fie
 
     # density
     ρ_in = Fields.level(Y.base.ρ,1)
-    ρ_sfc = Fields.level(Y.base.ρ,1)
+    ρ_sfc = Fields.level(Y.base.ρ,1) #TODO: use the new density weighted extrapolate operator
 
     # broadcast SurfaceFluxes.jl functions
     bulk_flux = map_fluxes.(parent(e_int_in), e_int_sfc, parent(u_in), u_sfc, parent(v_in), v_sfc, parent(z_in), z_sfc, parent(ρ_in), parent(ρ_sfc), qt_sfc; model = model, bc = bc)
