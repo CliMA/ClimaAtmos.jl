@@ -32,6 +32,7 @@ Manifest.toml
 *.DS
 
 # ignore simulation outputs
+*.json
 *.in
 *.vtu
 *.nc
