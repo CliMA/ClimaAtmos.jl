@@ -16,7 +16,7 @@ ArgParse.@add_arg_table s begin
     help = "(Bool) perform regression test"
     arg_type = Bool
     default = true
-    "--TEST_NAME" # TODO: change to "JobName"?
+    "--TEST_NAME"
     help = "Job name"
     arg_type = String
     "--output_dir"
