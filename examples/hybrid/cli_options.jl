@@ -61,6 +61,7 @@ job_id_from_parsed_args(s, parsed_args = ArgParse.parse_args(ARGS, s)) =
 function job_id_from_parsed_args(defaults::Dict, parsed_args)
     _parsed_args = deepcopy(parsed_args)
     s = ""
+    warn = false
     for k in keys(_parsed_args)
         # Skip defaults to alleviate verbose names
         defaults[k] == _parsed_args[k] && continue
@@ -69,12 +70,17 @@ function job_id_from_parsed_args(defaults::Dict, parsed_args)
             # We don't need keys if the value is a string
             # (alleviate verbose names)
             s *= _parsed_args[k]
+        elseif _parsed_args[k] isa Int
+            s *= k * "_" * string(_parsed_args[k])
+        elseif _parsed_args[k] isa Real
+            warn = true
         else
-            s *= k * "=" * string(_parsed_args[k])
+            s *= k * "_" * string(_parsed_args[k])
         end
         s *= "_"
     end
     s = replace(s, "/" => "_")
     s = strip(s, '_')
+    warn && @warn "Truncated job ID:$s may not be unique due to use of Real"
     return s
 end
