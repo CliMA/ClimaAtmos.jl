@@ -14,7 +14,7 @@ z_elem = 10
 dt = FT(400)
 dt_save_to_sol = FT(60 * 60 * 24)
 dt_save_to_disk = FT(0) # 0 means don't save to disk
-ode_algorithm = OrdinaryDiffEq.Rosenbrock23
+ode_algorithm = ClimaTimeSteppers.SSPKnoth
 jacobian_flags = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 
 additional_cache(Y, params, dt) = merge(
