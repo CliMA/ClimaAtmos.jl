@@ -188,9 +188,14 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     k_a = 1 / (40 * day)
     k_s = 1 / (4 * day)
     k_f = 1 / day
-    ΔT_y = FT(60)
+    if :ρq_tot in propertynames(Y.c)
+        ΔT_y = FT(65)
+        T_equator = FT(294)
+    else
+        ΔT_y = FT(60)
+        T_equator = FT(315)
+    end
     Δθ_z = FT(10)
-    T_equator = FT(315)
     T_min = FT(200)
 
     @. ᶜσ = ᶜp / MSLP
