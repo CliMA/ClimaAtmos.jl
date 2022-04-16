@@ -8,6 +8,10 @@ ArgParse.@add_arg_table s begin
     "--t_end"
     help = "Simulation end time"
     arg_type = Float64
+    "--dt_save_to_sol" # TODO: should we default to Inf?
+    help = "Time between saving solution, 0 means do not save"
+    arg_type = Float64
+    default = Float64(60 * 60 * 24)
     "--regression_test"
     help = "(Bool) perform regression test"
     arg_type = Bool
