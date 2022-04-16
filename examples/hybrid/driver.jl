@@ -17,12 +17,12 @@ else
     parsed_args["t_end"]
 end
 dt = 0
-dt_save_to_sol = 0 # 0 means don't save to sol
+dt_save_to_sol = parsed_args["dt_save_to_sol"]
 dt_save_to_disk = 0 # 0 means don't save to disk
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
 jacobian_flags = () # only required by implicit ODE algorithms
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
-show_progress_bar = false
+show_progress_bar = true
 additional_callbacks = () # e.g., printing diagnostic information
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
@@ -216,7 +216,7 @@ integrator = OrdinaryDiffEq.init(
     dt = dt,
     adaptive = false,
     progress = show_progress_bar,
-    progress_steps = 1,
+    progress_steps = 1000,
     additional_solver_kwargs...,
 )
 
