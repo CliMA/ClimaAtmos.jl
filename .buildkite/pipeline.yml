@@ -28,7 +28,6 @@ steps:
       - "julia --project=test -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=test -e 'using Pkg; Pkg.status()'"
 
-      - "julia --project=examples -e 'using Pkg; Pkg.develop(path = \".\")'"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
