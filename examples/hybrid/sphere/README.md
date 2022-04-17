@@ -38,10 +38,9 @@ Commonly used command line arguements for experiment setps:
 * `--t_end`: specifies the simulation time in seconds;
 * `--FLOAT_TYPE`: can be Float32 or Float64; is default to Float32 if not specified;
 * `--regression_test`: a boolean var to specify whether the regression test is performed; is default to true if not specified;
+* `--enable_threading`: a boolean var to enable multi-threading; defaults to false; Note that Julia must be launched with, for example, `--threads=8`.
 * `--job_id`: a uniquely defined id for a job; is default based on the parsed args of the experiment if not specified;
 * `--output_dir`: specifies the output directory that saves all the jld2 outputs; is default to `job_id` if not specified.
-
-Meanwhile, to enable multithreads, one needs to change [here](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/driver.jl#L62) in `driver.jl` to be `enable_threading() = true`.
 
 To use `sphere/held_suarez_rhoe` as an example, one needs to modify [these lines](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/sphere/held_suarez_rhoe.jl#L6-L16) into the specific setup. In particular, `dt_save_to_disk=FT(0)` means no jld2 outputs. A non-zero value specifies the frequency in seconds to save the data into jld2 files. 
 
