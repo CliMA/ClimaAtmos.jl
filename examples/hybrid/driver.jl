@@ -59,7 +59,7 @@ atexit() do
 end
 
 import ClimaCore: enable_threading
-enable_threading() = false
+enable_threading() = parsed_args["enable_threading"]
 
 using OrdinaryDiffEq
 using DiffEqCallbacks

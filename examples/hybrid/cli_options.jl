@@ -16,6 +16,10 @@ ArgParse.@add_arg_table s begin
     help = "(Bool) perform regression test"
     arg_type = Bool
     default = true
+    "--enable_threading"
+    help = "Enable multi-threading. Note: Julia must be launched with (e.g.,) `--threads=8`"
+    arg_type = Bool
+    default = false
     "--TEST_NAME"
     help = "Job name"
     arg_type = String
