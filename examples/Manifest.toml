@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.0"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -197,9 +197,12 @@ version = "0.2.2"
 
 [[deps.ClimaCoreTempestRemap]]
 deps = ["ClimaCore", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll", "Test"]
-git-tree-sha1 = "71695cd25e50f4bf0b715a6f48b226cae3a26e2e"
+git-tree-sha1 = "c4560292ff9f5d1f8ef64eb7195fe04fce1fdf99"
+repo-rev = "3e1398e"
+repo-subdir = "lib/ClimaCoreTempestRemap"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d934ef94-cdd4-4710-83d6-720549644b70"
-version = "0.3.2"
+version = "0.3.1"
 
 [[deps.ClimaCoreVTK]]
 deps = ["ClimaCore", "WriteVTK"]

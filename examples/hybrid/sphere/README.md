@@ -21,21 +21,29 @@ export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
 
 #export RESTART_FILE=$YOUR_JLD2_RESTART_FILE
 
-CC_EXAMPLE=$HOME'/ClimaCore.jl/examples/'
-TESTCASE=$CC_EXAMPLE'hybrid/driver.jl'
+CA_EXAMPLE=$HOME'/ClimaAtmos.jl/examples/'
+DRIVER=$CA_EXAMPLE'hybrid/driver.jl'
 
-julia --project=$CC_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
-julia --project=$CC_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
+julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
+julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
 
-julia --project=$CC_EXAMPLE --threads=8 $TESTCASE --TEST_NAME sphere/held_suarez_rhoe --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
+julia --project=$CA_EXAMPLE --threads=8 $DRIVER --TEST_NAME sphere/held_suarez_rhoe --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
 
 ```
 In the runscript, one needs to specify the following environmant variable:
 * `RESTART_FILE`: if run from a pre-existing jld2 data saved from a previous simulation.
 
-Meanwhile, to enable multithreads, one needs to change [here](https://github.com/CliMA/ClimaCore.jl/blob/main/examples/hybrid/driver.jl#L51) in `driver.jl` to be `enable_threading() = true`.
+Commonly used command line arguements for experiment setps:
+* `--TEST_NAME`: specifies which experiment are to run (e.g., sphere/baroclinic_wave_rhoe);
+* `--t_end`: specifies the simulation time in seconds;
+* `--FLOAT_TYPE`: can be Float32 or Float64; is default to Float32 if not specified;
+* `--regression_test`: a boolean var to specify whether the regression test is performed; is default to true if not specified;
+* `--job_id`: a uniquely defined id for a job; is default based on the parsed args of the experiment if not specified;
+* `--output_dir`: specifies the output directory that saves all the jld2 outputs; is default to `job_id` if not specified.
 
-To use `sphere/held_suarez_rhoe` as an example, one needs to modify [these lines](https://github.com/CliMA/ClimaCore.jl/blob/main/examples/hybrid/sphere/held_suarez_rhoe.jl#L6-L16) into the specific setup. In particular, `dt_save_to_disk=FT(0)` means no jld2 outputs. A non-zero value specifies the frequency in seconds to save the data into jld2 files. 
+Meanwhile, to enable multithreads, one needs to change [here](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/driver.jl#L62) in `driver.jl` to be `enable_threading() = true`.
+
+To use `sphere/held_suarez_rhoe` as an example, one needs to modify [these lines](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/sphere/held_suarez_rhoe.jl#L6-L16) into the specific setup. In particular, `dt_save_to_disk=FT(0)` means no jld2 outputs. A non-zero value specifies the frequency in seconds to save the data into jld2 files. 
 
 
 ## Remapping the CG nodal outputs in `jld2` onto the regular lat/lon grids and save into `nc` files
