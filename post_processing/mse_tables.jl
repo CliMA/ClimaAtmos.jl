@@ -5,57 +5,103 @@
 #
 all_best_mse = OrderedCollections.OrderedDict()
 #
-all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 0.0
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_held_suarez_rhotheta"][(:f, :w, :components, :data, 1)] = 0.0
+all_best_mse["baroclinic_wave"] = OrderedCollections.OrderedDict()
+all_best_mse["baroclinic_wave"][(:c, :ρ)] = 0.0
+all_best_mse["baroclinic_wave"][(:c, :ρe)] = 0.0
+all_best_mse["baroclinic_wave"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["baroclinic_wave"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["baroclinic_wave"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρ)] = 5.65942830117116
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe)] = 85.23592339487384
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 97.76492704220679
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 108.61056446374805
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρq_tot)] = 2.8634876260279927e7
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 4327.304023709154
+all_best_mse["held_suarez"] = OrderedCollections.OrderedDict()
+all_best_mse["held_suarez"][(:c, :ρ)] = 0.0
+all_best_mse["held_suarez"][(:c, :ρe)] = 0.0
+all_best_mse["held_suarez"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["held_suarez"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["held_suarez"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρ)] = 18.172317923888418
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρe_int)] = 2027.1050302567492
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 99.80823620018441
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 112.16487081950187
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρq_tot)] = 2.935288909061718e7
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:f, :w, :components, :data, 1)] = 4423.926297465283
+all_best_mse["held_suarez_topo"] = OrderedCollections.OrderedDict()
+all_best_mse["held_suarez_topo"][(:c, :ρ)] = 0.0
+all_best_mse["held_suarez_topo"][(:c, :ρe)] = 0.0
+all_best_mse["held_suarez_topo"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["held_suarez_topo"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["held_suarez_topo"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_baroclinic_wave_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 0.0
+all_best_mse["equil_baroclinic_wave"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_baroclinic_wave"][(:c, :ρ)] = 0.0
+all_best_mse["equil_baroclinic_wave"][(:c, :ρe)] = 0.0
+all_best_mse["equil_baroclinic_wave"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_baroclinic_wave"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_baroclinic_wave"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_baroclinic_wave"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 0.0
+all_best_mse["equil_held_suarez"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_held_suarez"][(:c, :ρ)] = 0.0
+all_best_mse["equil_held_suarez"][(:c, :ρe)] = 0.0
+all_best_mse["equil_held_suarez"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_held_suarez"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_held_suarez"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_held_suarez"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_held_suarez_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe"][(:f, :w, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_grayrad"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_idealized_aqua_grayrad"][(:c, :ρ)] = 0.0
+all_best_mse["equil_idealized_aqua_grayrad"][(:c, :ρe)] = 0.0
+all_best_mse["equil_idealized_aqua_grayrad"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_idealized_aqua_grayrad"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_grayrad"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_idealized_aqua_grayrad"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_held_suarez_rhoe_int"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρe_int)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_int"][(:f, :w, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_idealized_aqua_allskyrad"][(:c, :ρ)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad"][(:c, :ρe)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad"][(:f, :w, :components, :data, 1)] = 0.0
+#
+all_best_mse["equil_idealized_aqua_allskyrad_topo"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_idealized_aqua_allskyrad_topo"][(:c, :ρ)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_topo"][(:c, :ρe)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_topo"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_topo"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_topo"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_topo"][(:f, :w, :components, :data, 1)] = 0.0
+#
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"][(:c, :ρ)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"][(:c, :ρe)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf"][(:f, :w, :components, :data, 1)] = 0.0
+#
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"] = OrderedCollections.OrderedDict()
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"][(:c, :ρ)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"][(:c, :ρe)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"][(:c, :ρq_tot)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["equil_idealized_aqua_allskyrad_edmf_topo"][(:f, :w, :components, :data, 1)] = 0.0
+#
+all_best_mse["radiative_equilibrium_gray"] = OrderedCollections.OrderedDict()
+all_best_mse["radiative_equilibrium_gray"][(:c, :ρ)] = 0.0
+all_best_mse["radiative_equilibrium_gray"][(:c, :ρe)] = 0.0
+all_best_mse["radiative_equilibrium_gray"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["radiative_equilibrium_gray"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["radiative_equilibrium_gray"][(:f, :w, :components, :data, 1)] = 0.0
+#
+all_best_mse["radiative_equilibrium_allsky"] = OrderedCollections.OrderedDict()
+all_best_mse["radiative_equilibrium_allsky"][(:c, :ρ)] = 0.0
+all_best_mse["radiative_equilibrium_allsky"][(:c, :ρe)] = 0.0
+all_best_mse["radiative_equilibrium_allsky"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["radiative_equilibrium_allsky"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["radiative_equilibrium_allsky"][(:f, :w, :components, :data, 1)] = 0.0
+#
+all_best_mse["radiative_convective_equilibrium"] = OrderedCollections.OrderedDict()
+all_best_mse["radiative_convective_equilibrium"][(:c, :ρ)] = 0.0
+all_best_mse["radiative_convective_equilibrium"][(:c, :ρe)] = 0.0
+all_best_mse["radiative_convective_equilibrium"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["radiative_convective_equilibrium"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["radiative_convective_equilibrium"][(:f, :w, :components, :data, 1)] = 0.0
 #
 #! format: on
 #################################

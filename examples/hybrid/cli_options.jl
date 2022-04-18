@@ -15,6 +15,45 @@ ArgParse.@add_arg_table s begin
     help = "Time between saving solution, 0 means do not save"
     arg_type = Float64
     default = Float64(60 * 60 * 24)
+    "--config"
+    help = "Spatial configuration [`SP`: Spherical, `SC`: Single Column, `BO`: Box]"
+    arg_type = String
+    default = "SP"
+    "--HSF"
+    help = "Held Suarez Forcing"
+    arg_type = Bool
+    default = false
+    "--topo"
+    help = "Use topology"
+    arg_type = Bool
+    default = false
+    "--moist"
+    help = "Moisture model [`dry`: dry, `equil`: equilibrium, `non_equil`: non-equilibrium]"
+    arg_type = String
+    default = "dry"
+    "--micro"
+    help = "Microphysics scheme [`0M`: 0-moment microphysics, `1M`: 1-moment microphysics]"
+    arg_type = String
+    default = "dry"
+    "--surf_flux"
+    help = "Use SurfaceFluxes"
+    arg_type = Bool
+    default = false
+    "--VD"
+    help = "Apply vertical diffusion"
+    arg_type = Bool
+    default = false
+    "--rad"
+    help = "Radiation model [`nothing`: no radiation, `gray`: gray radiation (RRTMGP), `all_sky`: all-sky radiation (RRTMGP)]"
+    arg_type = String
+    "--edmf"
+    help = "Use Eddy-Diffusivity Mass-Flux (EDMF) model"
+    arg_type = Bool
+    default = false
+    "--DE"
+    help = "Solve Dynamical Equations (DE)"
+    arg_type = Bool
+    default = true
     "--regression_test"
     help = "(Bool) perform regression test"
     arg_type = Bool

@@ -177,21 +177,57 @@ steps:
   - group: "Milestones"
     steps:
 
-      - label: ":computer: baroclinic wave (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe --job_id sphere_baroclinic_wave_rhoe --regression_test true"
-        artifact_paths: "sphere_baroclinic_wave_rhoe/*"
+      - label: "Dry Baroclinic Wave"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id baroclinic_wave: --config SP --regression_test true"
+        artifact_paths: "baroclinic_wave/*"
 
-      - label: ":computer: baroclinic wave (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
+      - label: "Dry Held Suarez"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id held_suarez: --config SP --HSF true --regression_test true"
+        artifact_paths: "held_suarez/*"
 
-      - label: ":computer: held suarez (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe --job_id sphere_held_suarez_rhoe --regression_test true"
-        artifact_paths: "sphere_held_suarez_rhoe/*"
+      - label: "Dry Held Suarez with topology"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id held_suarez_topo: --config SP --HSF true --topo true --regression_test true"
+        artifact_paths: "held_suarez_topo/*"
 
-      - label: ":computer: held suarez (ρe_int)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true"
-        artifact_paths: "sphere_held_suarez_rhoe_int/*"
+      - label: "Moist Baroclinic Wave"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_baroclinic_wave: --config SP --moist equil --micro 0M --regression_test true"
+        artifact_paths: "equil_baroclinic_wave/*"
+
+      - label: "Moist Held Suarez"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_held_suarez: --config SP --moist equil --HSF true --surf_flux true --VD true --micro 0M --regression_test true"
+        artifact_paths: "equil_held_suarez/*"
+
+      - label: "Moist idealized aqua planet + gray radiation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_idealized_aqua_grayrad: --config SP --moist equil --surf_flux true --VD true --micro 0M --rad gray --regression_test true"
+        artifact_paths: "equil_idealized_aqua_grayrad/*"
+
+      - label: "Moist idealized aqua planet + all-sky radiation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_idealized_aqua_allskyrad: --config SP --moist equil --surf_flux true --VD true --micro 0M --rad all_sky --regression_test true"
+        artifact_paths: "equil_idealized_aqua_allskyrad/*"
+
+      - label: "Moist idealized aqua planet + all-sky radiation + topology"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_idealized_aqua_allskyrad_topo: --config SP --moist equil --surf_flux true --VD true --micro 0M --rad all_sky --topo true --regression_test true"
+        artifact_paths: "equil_idealized_aqua_allskyrad_topo/*"
+
+      - label: "Moist idealized aqua planet + all-sky radiation + edmf"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_idealized_aqua_allskyrad_edmf: --config SP --moist equil --surf_flux true --rad all_sky --edmf true --regression_test true"
+        artifact_paths: "equil_idealized_aqua_allskyrad_edmf/*"
+
+      - label: "Moist idealized aqua planet + all-sky radiation + edmf + topology"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id equil_idealized_aqua_allskyrad_edmf_topo: --config SP --moist equil --surf_flux true --rad all_sky --edmf true --topo true --regression_test true"
+        artifact_paths: "equil_idealized_aqua_allskyrad_edmf_topo/*"
+
+      - label: "Single Column Radiative Equilibrium (gray)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id radiative_equilibrium_gray: --config SC --DE false --rad gray --regression_test true"
+        artifact_paths: "radiative_equilibrium_gray/*"
+
+      - label: "Single Column Radiative Equilibrium (RE, all-sky)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id radiative_equilibrium_allsky: --config SC --DE false --rad all_sky --regression_test true"
+        artifact_paths: "radiative_equilibrium_allsky/*"
+
+      - label: "Single Column Radiative Convective Equilibrium (RCE, all-sky)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id radiative_convective_equilibrium: --config SC --DE false --rad all_sky --edmf true --regression_test true"
+        artifact_paths: "radiative_convective_equilibrium/*"
 
   - group: "Performance"
     steps:
