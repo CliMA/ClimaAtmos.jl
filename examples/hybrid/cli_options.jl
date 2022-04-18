@@ -8,6 +8,9 @@ ArgParse.@add_arg_table s begin
     "--t_end"
     help = "Simulation end time"
     arg_type = Float64
+    "--dt"
+    help = "Simulation time step"
+    arg_type = Float64
     "--dt_save_to_sol" # TODO: should we default to Inf?
     help = "Time between saving solution, 0 means do not save"
     arg_type = Float64
