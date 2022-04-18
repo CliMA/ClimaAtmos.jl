@@ -150,6 +150,8 @@ function implicit_tendency!(Yₜ, Y, p, t)
     ᶠw = Y.f.w
     (; ᶜK, ᶜΦ, ᶜts, ᶜp, params) = p
 
+    ᶠupwind_product = Operators.UpwindBiasedProductC2F()
+
     # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
     # allocation because the cache is stored separately from Y, which means that
     # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
@@ -165,17 +167,24 @@ function implicit_tendency!(Yₜ, Y, p, t)
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
         @. ᶜp = TD.air_pressure(ᶜts)
-        @. Yₜ.c.ρθ = -(ᶜdivᵥ(ᶠinterp(Y.c.ρθ) * ᶠw))
+        @. Yₜ.c.ρθ =
+            -(ᶜdivᵥ(ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, Y.c.ρθ / Y.c.ρ)))
     elseif :ρe in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(ᶜts)
-        @. Yₜ.c.ρe = -(ᶜdivᵥ(ᶠinterp(Y.c.ρe + ᶜp) * ᶠw))
+        @. Yₜ.c.ρe =
+            -(ᶜdivᵥ(
+                ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, (Y.c.ρe + ᶜp) / Y.c.ρ),
+            ))
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         @. ᶜp = TD.air_pressure(ᶜts)
         @. Yₜ.c.ρe_int =
             -(
-                ᶜdivᵥ(ᶠinterp(Y.c.ρe_int + ᶜp) * ᶠw) -
+                (ᶜdivᵥ(
+                    ᶠinterp(Y.c.ρ) *
+                    ᶠupwind_product(ᶠw, (Y.c.ρe_int + ᶜp) / Y.c.ρ),
+                )) -
                 ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
             )
         # or, equivalently,
@@ -230,6 +239,7 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
 
     # Energy conservation
+    ᶠupwind_product = Operators.UpwindBiasedProductC2F()
 
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
@@ -292,7 +302,8 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
         ᶜtracer = getproperty(Y.c, tracer_name)
         ᶜtracerₜ = getproperty(Yₜ.c, tracer_name)
         @. ᶜtracerₜ -= divₕ(ᶜtracer * ᶜuvw)
-        @. ᶜtracerₜ -= ᶜdivᵥ(ᶠw * ᶠinterp(ᶜtracer)) # TODO: put in implicit tend.
+        @. ᶜtracerₜ -=
+            ᶜdivᵥ(ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, ᶜtracer / Y.c.ρ)) # TODO: put in implicit tend.
         @. ᶜtracerₜ -= ᶜdivᵥ(ᶠinterp(ᶜtracer * ᶜuₕ))
     end
 end
