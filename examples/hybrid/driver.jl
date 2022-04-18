@@ -16,7 +16,11 @@ t_end = if isnothing(parsed_args["t_end"])
 else
     parsed_args["t_end"]
 end
-dt = 0
+dt = if isnothing(parsed_args["dt"])
+    FT(400)
+else
+    parsed_args["dt"]
+end
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
 dt_save_to_disk = 0 # 0 means don't save to disk
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
