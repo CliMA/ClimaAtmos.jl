@@ -1,6 +1,7 @@
 include("NCRegressionTests.jl")
 import .NCRegressionTests
 import NCDatasets
+import Dates
 import ClimaCoreTempestRemap
 const CCTR = ClimaCoreTempestRemap
 
@@ -51,13 +52,21 @@ function regression_test(;
     if haskey(ENV, "BUILDKITE_COMMIT") && isnothing(ds_filename_reference)
         cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
         path = find_latest_dataset_folder(; dir = cluster_data_prefix)
+
+        # To fix the reference dataset, use, for example:
+        #     path = joinpath(cluster_data_prefix, "992d070")
+        # where `992d070` is the commit sha to fix our reference to.
+
         # TODO: make this more robust in case folder/file changes
         main_files = readdir(path)
-        if any(x -> basename(x) == ds_filename_computed, main_files)
-            ds_filename_reference = joinpath(path, ds_filename_computed)
+        @info "Files on main:"
+        for file_on_main in main_files
+            println("   file:$file_on_main, basename: $(basename(file_on_main))")
         end
+        println("ds_filename_computed: $ds_filename_computed")
+        ds_filename_reference = joinpath(path, ds_filename_computed)
     end
-    @info "ClimaAtmos.jl main dataset: $ds_filename_reference"
+    println("ClimaAtmos.jl main dataset: $ds_filename_reference")
 
     computed_mse = NCRegressionTests.compute_mse(;
         job_name = string(job_id),

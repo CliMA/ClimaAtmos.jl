@@ -313,16 +313,8 @@ if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
         varname(pc::Tuple) = process_name(join(pc, "_"))
 
         export_nc(Y_last; nc_filename = ds_filename_computed, varname)
-        computed_mse = regression_test(;
-            job_id,
-            best_mse,
-            ds_filename_computed,
-            # TODO: we temporarily pass ds_filename_computed
-            #       as ds_filename_reference since no results exist
-            #       yet on central.
-            ds_filename_reference = ds_filename_computed,
-            varname,
-        )
+        computed_mse =
+            regression_test(; job_id, best_mse, ds_filename_computed, varname)
 
         computed_mse_filename = joinpath(job_id, "computed_mse.json")
 
