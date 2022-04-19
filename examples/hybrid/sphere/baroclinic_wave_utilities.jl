@@ -1,4 +1,7 @@
+using Statistics: mean
+using SurfaceFluxes
 using CloudMicrophysics
+const SF = SurfaceFluxes
 const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
@@ -266,13 +269,49 @@ end
 #       the first cell center of every column, respectively).
 # TODO: Allow ClimaCore to handle both 2D and 3D Fields in a single broadcast.
 #       This currently results in a mismatched spaces error.
-function vertical_diffusion_boundary_layer_cache(Y)
+function vertical_diffusion_boundary_layer_cache(
+    Y;
+    Cd = FT(0.001),
+    Ch = FT(0.001),
+)
     ᶠz_a = similar(Y.f, FT)
+    z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
     Fields.field_values(ᶠz_a) .=
-        Fields.field_values(Spaces.level(Fields.coordinate_field(Y.c).z, 1)) .*
-        one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
+        Fields.field_values(z_bottom) .* one.(Fields.field_values(ᶠz_a))
+    # TODO: fix VIJFH copyto! to remove the one.(...)
+
+    if :ρq_tot in propertynames(Y.c)
+        dif_flux_ρq_tot = similar(z_bottom, Geometry.WVector{FT})
+    else
+        dif_flux_ρq_tot = Ref(Geometry.WVector(FT(0)))
+    end
+
+    if (
+        :ρq_liq in propertynames(Y.c) &&
+        :ρq_ice in propertynames(Y.c) &&
+        :ρq_tot in propertynames(Y.c)
+    )
+        ts_type = TD.PhaseNonEquil{FT, typeof(params)}
+    elseif :ρq_tot in propertynames(Y.c)
+        ts_type = TD.PhaseEquil{FT, typeof(params)}
+    else
+        ts_type = TD.PhaseDry{FT, typeof(params)}
+    end
+    coef_type = SF.Coefficients{
+        FT,
+        SF.InteriorValues{FT, Tuple{FT, FT}, ts_type},
+        SF.SurfaceValues{FT, Tuple{FT, FT}, TD.PhaseEquil{FT, typeof(params)}},
+    }
+
     return (;
-        ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)), ᶠz_a, ᶠK_E = similar(Y.f, FT),
+        ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
+        ᶠz_a,
+        ᶠK_E = similar(Y.f, FT),
+        flux_coefficients = similar(z_bottom, coef_type),
+        dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
+        dif_flux_ρq_tot,
+        Cd,
+        Ch,
     )
 end
 
@@ -284,9 +323,51 @@ function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
 
+function constant_T_saturated_surface_coefs(
+    ts_int,
+    uₕ_int,
+    z_int,
+    z_sfc,
+    Cd,
+    Ch,
+    params,
+)
+    T_sfc = FT(280)
+    T_int = TD.air_temperature(ts_int)
+    Rm_int = TD.gas_constant_air(ts_int)
+    ρ_sfc = TD.air_density(ts_int) * (T_sfc / T_int)^(TD.cv_m(ts_int) / Rm_int)
+    q_sfc = TD.q_vap_saturation_generic(params, T_sfc, ρ_sfc, TD.Liquid())
+    ts_sfc = TD.PhaseEquil_ρTq(params, ρ_sfc, T_sfc, q_sfc)
+    return SF.Coefficients{FT}(;
+        state_in = SF.InteriorValues(z_int, (uₕ_int.u, uₕ_int.v), ts_int),
+        state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
+        Cd,
+        Ch,
+        z0m = FT(0),
+        z0b = FT(0),
+    )
+end
+
+# This is the same as SF.sensible_heat_flux, but without the Φ term.
+# TODO: Move this to SurfaceFluxes.jl.
+function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
+    cp_d::FT = Planet.cp_d(param_set)
+    R_d::FT = Planet.R_d(param_set)
+    T_0::FT = Planet.T_0(param_set)
+    cp_m = TD.cp_m(SF.ts_in(sc))
+    ρ_sfc = TD.air_density(SF.ts_sfc(sc))
+    T_in = TD.air_temperature(SF.ts_in(sc))
+    T_sfc = TD.air_temperature(SF.ts_sfc(sc))
+    ΔT = T_in - T_sfc
+    hd_sfc = cp_d * (T_sfc - T_0) + R_d * T_0
+    E = SF.evaporation(sc, param_set, Ch)
+    return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
+end
+
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
-    (; ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜp has been updated
+    (; ᶜts, ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -295,38 +376,50 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
     @. ᶠK_E = eddy_diffusivity_coefficient(norm(ᶠv_a), ᶠz_a, ᶠinterp(ᶜp))
 
-    # diffusion scheme for boundary layer
-    if :ρe in propertynames(Y.c)
-        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
-        F₊ = Geometry.Contravariant3Vector(FT(0))
-        ᶜdivᵥ = Operators.DivergenceF2C(
-            top = Operators.SetValue(F₊),
-            bottom = Operators.SetValue(F₋),
+    flux_coefficients .=
+        constant_T_saturated_surface_coefs.(
+            Spaces.level(ᶜts, 1),
+            Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
+            Spaces.level(Fields.coordinate_field(Y.c).z, 1),
+            FT(0), # TODO: get actual value of z_sfc
+            Cd,
+            Ch,
+            params,
         )
-        # θ = TD.dry_pottemp(ts)
-        # Δθ = ᶜdivᵥ(ᶜK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ( θ ))
-        # T = θ ^ (cp_m / cv_m) * (ᶜρ * R_m / p_0) ^ (R_m/cv_m)
-        # ΔT = Δθ part + Δρ part lol
-        # alternatively, applying diffusion on e_int
-        # e_int = TD.internal_energy(ᶜts)
+
+    if :ρe in propertynames(Y.c)
+        @. dif_flux_energy = Geometry.WVector(SF.sensible_heat_flux(
+            params,
+            Ch,
+            flux_coefficients,
+            nothing,
+        ))
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(Geometry.WVector(FT(0))),
+            bottom = Operators.SetValue(mean(dif_flux_energy)),
+        )
         @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
-        F₊ = Geometry.Contravariant3Vector(FT(0))
+        @. dif_flux_energy = Geometry.WVector(sensible_heat_flux_ρe_int(
+            params,
+            Ch,
+            flux_coefficients,
+            nothing,
+        ))
         ᶜdivᵥ = Operators.DivergenceF2C(
-            top = Operators.SetValue(F₊),
-            bottom = Operators.SetValue(F₋),
+            top = Operators.SetValue(Geometry.WVector(FT(0))),
+            bottom = Operators.SetValue(mean(dif_flux_energy)),
         )
         @. Yₜ.c.ρe_int +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
     end
 
     if :ρq_tot in propertynames(Y.c)
-        F₋ = Geometry.Contravariant3Vector(FT(0)) # TODO: Make real :)
-        F₊ = Geometry.Contravariant3Vector(FT(0))
+        @. dif_flux_ρq_tot =
+            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
         ᶜdivᵥ = Operators.DivergenceF2C(
-            top = Operators.SetValue(F₊),
-            bottom = Operators.SetValue(F₋),
+            top = Operators.SetValue(Geometry.WVector(FT(0))),
+            bottom = Operators.SetValue(mean(dif_flux_ρq_tot)),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
     end
