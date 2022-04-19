@@ -163,34 +163,34 @@ steps:
         artifact_paths: "sphere_held_suarez_rhotheta_Float64/*"
 
       - label: ":computer: held suarez (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta --job_id sphere_held_suarez_rhotheta"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhotheta --job_id sphere_held_suarez_rhotheta --regression_test true"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_equilmoist --job_id sphere_held_suarez_rhoe_equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_equilmoist --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_int) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int_equilmoist --job_id sphere_held_suarez_rhoe_int_equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int_equilmoist --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
   - group: "Milestones"
     steps:
 
       - label: ":computer: baroclinic wave (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe --job_id sphere_baroclinic_wave_rhoe"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe --job_id sphere_baroclinic_wave_rhoe --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist --job_id sphere_baroclinic_wave_rhoe_equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/baroclinic_wave_rhoe_equilmoist --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe --job_id sphere_held_suarez_rhoe"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe --job_id sphere_held_suarez_rhoe --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe/*"
 
       - label: ":computer: held suarez (ρe_int)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --job_id sphere_held_suarez_rhoe_int"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME sphere/held_suarez_rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
   - group: "Performance"

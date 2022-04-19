@@ -5,13 +5,6 @@
 #
 all_best_mse = OrderedCollections.OrderedDict()
 #
-all_best_mse["mpi_baroclinic_wave_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["mpi_baroclinic_wave_rhoe"][(:c, :ρ)] = 0.0
-all_best_mse["mpi_baroclinic_wave_rhoe"][(:c, :ρe)] = 0.0
-all_best_mse["mpi_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["mpi_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["mpi_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 0.0
-#
 all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 0.0
 all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 0.0
