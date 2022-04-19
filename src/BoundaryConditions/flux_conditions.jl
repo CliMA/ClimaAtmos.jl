@@ -1,27 +1,34 @@
 """
-    NoFluxCondition <: AbstractBoundaryCondition
+    NoFlux <: AbstractBoundary
 
 Computes a fixed boundary flux of 0.
 """
-struct NoFluxCondition <: AbstractBoundaryCondition end
+struct NoFlux <: AbstractBoundary end
 
 """
-    DragLawCondition{C} <: AbstractBoundaryCondition
+    NoVectorFlux <: AbstractBoundary
+
+Computes a fixed boundary vector flux of 0
+"""
+struct NoVectorFlux <: AbstractBoundary end
+
+"""
+    DragLaw{C} <: AbstractBoundary
 
 Computes the boundary flux using the bulk formula and constant or
 Mohnin-Obukhov-based drag coefficient `Cd`. Specific to momentum density.
 """
-struct DragLawCondition{C} <: AbstractBoundaryCondition
-    coefficients::C
+struct DragLaw{C} <: AbstractBoundary
+    coefficient::C
 end
 
 """
-    BulkFormulaCondition{C, T} <: AbstractBoundaryCondition
+    BulkFormula{C, T} <: AbstractBoundary
 
 Computes the boundary flux using the bulk formula and constant or
 Mohnin-Obukhov-based heat transfer coefficient `Ch`.
 """
-struct BulkFormulaCondition{C, T} <: AbstractBoundaryCondition
+struct BulkFormula{C, T} <: AbstractBoundary
     coefficients::C
     surface_field::T
 end
