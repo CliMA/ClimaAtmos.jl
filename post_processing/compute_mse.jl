@@ -85,13 +85,24 @@ function regression_test(; job_id, best_mse, ds_filename_computed, varname)
         return best_mse
     end
 
-    computed_mse = NCRegressionTests.compute_mse(;
-        job_name = string(job_id),
-        best_mse = best_mse,
-        ds_filename_computed = ds_filename_computed,
-        ds_filename_reference = ds_filename_reference,
-        varname = varname,
-    )
+    local computed_mse
+    try
+        computed_mse = NCRegressionTests.compute_mse(;
+            job_name = string(job_id),
+            best_mse = best_mse,
+            ds_filename_computed = ds_filename_computed,
+            ds_filename_reference = ds_filename_reference,
+            varname = varname,
+        )
+    catch err
+        msg = ""
+        msg *= "The regression test broke. Please find\n"
+        msg *= "`post_processing/README.md` and read the section\n\n"
+        msg *= "  `How to merge pull requests (PR) that get approved but *break* regression tests`\n\n"
+        msg *= "for how to merge this PR."
+        @info msg
+        rethrow(err.error)
+    end
     return computed_mse
 
 end
