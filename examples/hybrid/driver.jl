@@ -270,10 +270,17 @@ end
 import JSON
 using Test
 import OrderedCollections
-if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
+if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    postprocessing(sol, output_dir)
+    if TEST_NAME == "sphere/baroclinic_wave_rhoe" ||
+       TEST_NAME == "sphere/baroclinic_wave_rhotheta"
+        paperplots(sol, output_dir, p, FT(90), FT(180))
+    else
+        postprocessing(sol, output_dir)
+    end
+end
 
+if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
     include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
 
     if parsed_args["regression_test"]
