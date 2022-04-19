@@ -276,7 +276,7 @@ if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
 
     include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
 
-    if !occursin("Float64", job_id) # only do regression tests on Float32 jobs
+    if parsed_args["regression_test"]
 
         Y_last = sol.u[end]
         # This is helpful for starting up new tables
