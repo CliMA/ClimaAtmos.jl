@@ -10,8 +10,8 @@
 
 * ``\rho``: _mass_ in kg/m³. This is discretized at cell centers.
 * ``\boldsymbol{u}`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u} = \boldsymbol{u}_h + \boldsymbol{u}_v`` where
-  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` are the horizontal covariant part (with respect to the reference element), stored at cell centers.
-  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the vertical covariant part, stored at cell faces.
+  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` are the horizontal covariant vector (with respect to the reference element), stored at cell centers.
+  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the vertical covariant vector, stored at cell faces.
 * _energy_, stored at cell centers; can be either:
   - ``\rho e``: _total energy_ in J/m³
   - ``\rho e_\text{int}``: _internal energy_ in J/m³
@@ -96,10 +96,10 @@ By breaking the curl and cross product terms into horizontal and vertical contri
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - \frac{1}{\rho} \nabla_h p  - \nabla_h (\Phi + K)
 ```
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ parts.
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors.
 
 !!! todo
-    Without topography, these are equal to their covariant parts (i.e. ``\boldsymbol{u}^h = \boldsymbol{u}_h``), but these will need to be with the addition of topography.
+    Without topography, these are equal to their covariant vectors (i.e. ``\boldsymbol{u}^h = \boldsymbol{u}_h``), but these will need to be with the addition of topography.
 
 The ``(\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as
 ```math
