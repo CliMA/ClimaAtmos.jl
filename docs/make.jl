@@ -19,7 +19,13 @@ makedocs(
         "Running instructions" => "running_instructions.md",
         "Contributor Guide" => "contributor_guide.md",
         "Function Index" => "function_index.md",
+        "Equations" => "equations.md",
     ],
 )
 
-deploydocs(repo = "github.com/CliMA/ClimaAtmos.jl.git", devbranch = "main")
+deploydocs(
+    repo = "github.com/CliMA/ClimaAtmos.jl.git",
+    devbranch = "main",
+    push_preview = true,
+    forcepush = true,
+)

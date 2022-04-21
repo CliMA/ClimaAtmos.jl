@@ -1,2 +1,3 @@
 [deps]
+ClimaAtmos = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
