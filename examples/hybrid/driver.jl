@@ -65,7 +65,7 @@ end
 import ClimaCore: enable_threading
 enable_threading() = parsed_args["enable_threading"]
 
-using OrdinaryDiffEq
+using OrdinaryDiffEq, ClimaTimeSteppers
 using DiffEqCallbacks
 using JLD2
 
@@ -135,6 +135,7 @@ p = get_cache(Y, params, comms_ctx, dt)
 if ode_algorithm <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,
     OrdinaryDiffEq.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
+    ClimaTimeSteppers.RosenbrockAlgorithm,
 }
     use_transform = !(ode_algorithm in (Rosenbrock23, Rosenbrock32))
     W = SchurComplementW(Y, use_transform, jacobian_flags, test_implicit_solver)
