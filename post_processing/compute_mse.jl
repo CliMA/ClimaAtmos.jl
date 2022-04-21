@@ -1,5 +1,4 @@
-include("NCRegressionTests.jl")
-import .NCRegressionTests
+import NCRegressionTests
 import NCDatasets
 import Dates
 import ClimaCoreTempestRemap
