@@ -28,6 +28,9 @@ if haskey(ENV, "BUILDKITE_COMMIT") && haskey(ENV, "BUILDKITE_BRANCH")
             @info "Moving $src to $dst"
             mv(src, dst; force = true)
         end
+        ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl")
+        ref_counter_file_main = joinpath(path, "ref_counter.jl")
+        mv(ref_counter_file_PR, ref_counter_file_main; force = true)
         @info "readdir(): $(readdir(path))"
     end
 else

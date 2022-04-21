@@ -37,36 +37,53 @@ via `varname`.
 If running on buildkite, we get `ds_filename_reference`
 from the latest merged dataset on Caltech central.
 """
-function regression_test(;
-    job_id,
-    best_mse,
-    ds_filename_computed,
-    ds_filename_reference = nothing,
-    varname,
-)
-
-    # # Kickstart CI: do not uncomment.
-    # return best_mse
+function regression_test(; job_id, best_mse, ds_filename_computed, varname)
+    local ds_filename_reference
 
     # Note: cluster_data_prefix is also defined in move_output.jl
-    if haskey(ENV, "BUILDKITE_COMMIT") && isnothing(ds_filename_reference)
+    if haskey(ENV, "BUILDKITE_COMMIT")
         cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
         path = find_latest_dataset_folder(; dir = cluster_data_prefix)
-
-        # To fix the reference dataset, use, for example:
-        #     path = joinpath(cluster_data_prefix, "992d070")
-        # where `992d070` is the commit sha to fix our reference to.
-
-        # TODO: make this more robust in case folder/file changes
-        main_files = readdir(path)
-        @info "Files on main:"
-        for file_on_main in main_files
+        if isempty(path)
+            @warn "No paths on main found, assuming self-reference"
+            @info "Please review output results before merging."
+            return best_mse
+        end
+        @info "Files on main:" # for debugging
+        for file_on_main in readdir(path)
             println("   file:$file_on_main, basename: $(basename(file_on_main))")
         end
-        println("ds_filename_computed: $ds_filename_computed")
+        ref_counter_file_main = joinpath(path, "ref_counter.jl")
+        if !isfile(ref_counter_file_main)
+            @warn "`ref_counter.jl` not found on main, assuming self-reference"
+            @info "Please review output results before merging."
+            return best_mse
+        end
+        ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl")
+        @assert isfile(ref_counter_file_PR)
+        @assert isfile(ref_counter_file_main)
+
+        ref_counter_PR = parse(Int, first(readlines(ref_counter_file_PR)))
+        ref_counter_main = parse(Int, first(readlines(ref_counter_file_main)))
+        self_reference = ref_counter_PR == ref_counter_main
+        if ref_counter_PR == ref_counter_main + 1
+            @warn "`ref_counter.jl` incremented, assuming self-reference"
+            @info "Please review output results before merging."
+            return best_mse
+        elseif ref_counter_PR == ref_counter_main
+            @info "Comparing results against main commit:$path"
+        else
+            error("Unexpected reference")
+        end
         ds_filename_reference = joinpath(path, ds_filename_computed)
+        @info "`ds_filename_computed`: `$ds_filename_computed`"
+        @info "`ds_filename_reference`: `$ds_filename_reference`"
+        @assert isfile(ds_filename_reference)
+    else
+        @warn "Buildkite not detected. Skipping regression tests."
+        @info "Please review output results before merging."
+        return best_mse
     end
-    println("ClimaAtmos.jl main dataset: $ds_filename_reference")
 
     computed_mse = NCRegressionTests.compute_mse(;
         job_name = string(job_id),

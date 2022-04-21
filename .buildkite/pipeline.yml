@@ -218,6 +218,9 @@ steps:
   - label: ":robot_face: Print new mse tables"
     command: "julia --color=yes --project=examples post_processing/print_new_mse.jl"
 
+  - label: ":robot_face: Print new reference counter"
+    command: "julia --color=yes --project=examples post_processing/print_new_ref_counter.jl"
+
   - wait
 
   - label: ":robot_face: Move main results"
