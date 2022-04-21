@@ -88,7 +88,7 @@ Uses the advective form equation
 
 #### Horizontal velocity
 
-By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v \boldsymbol{u}_v = 0``), we obtain
+By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain
 
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
