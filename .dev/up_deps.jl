@@ -14,6 +14,7 @@ dirs = (
 
 cd(root) do
     for dir in dirs
+        @info "Updating environment $dir"
         cmd = `$(Base.julia_cmd()) --project=$dir -e 'import Pkg; Pkg.update()'`
         run(cmd)
     end
