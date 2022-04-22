@@ -50,7 +50,7 @@ function regression_test(; job_id, best_mse, ds_filename_computed, varname)
         end
         @info "Files on main:" # for debugging
         for file_on_main in readdir(path)
-            println("   file:$file_on_main, basename: $(basename(file_on_main))")
+            @info "   File:`$file_on_main`"
         end
         ref_counter_file_main = joinpath(path, "ref_counter.jl")
         if !isfile(ref_counter_file_main)
@@ -70,7 +70,7 @@ function regression_test(; job_id, best_mse, ds_filename_computed, varname)
             @info "Please review output results before merging."
             return best_mse
         elseif ref_counter_PR == ref_counter_main
-            @info "Comparing results against main commit:$path"
+            @info "Comparing results against main path:$path"
         else
             error("Unexpected reference")
         end

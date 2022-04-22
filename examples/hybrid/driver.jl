@@ -163,7 +163,7 @@ output_dir = if isnothing(parsed_args["output_dir"])
 else
     parsed_args["output_dir"]
 end
-@info "Output directory: $output_dir"
+@info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
 function make_dss_func(comms_ctx)
@@ -291,10 +291,6 @@ if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
         println("all_best_mse[$job_id] = OrderedCollections.OrderedDict()")
         for prop_chain in Fields.property_chains(Y_last)
             println("all_best_mse[$job_id][$prop_chain] = 0.0")
-        end
-        @info "Solution variables:"
-        for prop_chain in Fields.property_chains(Y_last)
-            println(prop_chain)
         end
 
         # Extract best mse for this job:
