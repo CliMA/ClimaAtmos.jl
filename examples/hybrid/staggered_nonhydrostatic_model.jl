@@ -140,8 +140,6 @@ function default_cache(Y, params, comms_ctx)
     )
 end
 
-additional_cache(Y, params, dt) = ()
-
 is_tracer(name) = !(name in (:ρ, :ρθ, :ρe, :ρe_int, :uₕ, :w))
 
 function implicit_tendency!(Yₜ, Y, p, t)

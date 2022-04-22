@@ -21,7 +21,7 @@ dirs_to_monitor = [
 #! format: off
 
 cli_options = [
-    ("--TEST_NAME sphere/baroclinic_wave_rhoe --job_id alloc_sphere_baroclinic_wave_rhoe"),
+    ("--TEST_NAME baroclinic_wave_rhoe --job_id alloc_sphere_baroclinic_wave_rhoe"),
 ]
 #! format: on
 
