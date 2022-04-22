@@ -73,8 +73,27 @@ include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")
 
-test_dir, test_file_name = split(TEST_NAME, '/')
-include(joinpath(test_dir, "$test_file_name.jl"))
+using ClimaCorePlots, Plots
+using ClimaCore.DataLayouts
+using NCDatasets
+using ClimaCoreTempestRemap
+using ClimaCore
+
+
+include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
+
+const sponge = false
+
+# Variables required for driver.jl (modify as needed)
+params = BaroclinicWaveParameterSet()
+horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
+npoly = 4
+z_max = FT(30e3)
+z_elem = 10
+dt_save_to_disk = FT(0) # 0 means don't save to disk
+ode_algorithm = OrdinaryDiffEq.Rosenbrock23
+
+include(joinpath("sphere", "$TEST_NAME.jl"))
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
 # bytes required to store an element from Y.c or Y.f (or, really, from any Field
@@ -172,12 +191,12 @@ function make_dss_func(comms_ctx)
     dss_func(Y, t, integrator) = foreach(_dss!, Fields._values(Y))
     return dss_func
 end
-function make_save_to_disk_func(output_dir, test_file_name, is_distributed)
+function make_save_to_disk_func(output_dir, is_distributed)
     function save_to_disk_func(integrator)
         day = floor(Int, integrator.t / (60 * 60 * 24))
         @info "Saving prognostic variables to JLD2 file on day $day"
         suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
-        output_file = joinpath(output_dir, "$(test_file_name)_day$day$suffix")
+        output_file = joinpath(output_dir, "day$day$suffix")
         jldsave(output_file; t = integrator.t, Y = integrator.u)
         return nothing
     end
@@ -185,8 +204,7 @@ function make_save_to_disk_func(output_dir, test_file_name, is_distributed)
 end
 
 dss_func = make_dss_func(comms_ctx)
-save_to_disk_func =
-    make_save_to_disk_func(output_dir, test_file_name, is_distributed)
+save_to_disk_func = make_save_to_disk_func(output_dir, is_distributed)
 
 dss_callback = FunctionCallingCallback(dss_func, func_start = true)
 if dt_save_to_disk == 0
@@ -228,7 +246,7 @@ if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
 end
 
-@info "Running `$test_dir/$test_file_name` test case"
+@info "Running job:`$job_id`"
 sol = @timev OrdinaryDiffEq.solve!(integrator)
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
@@ -270,10 +288,11 @@ end
 import JSON
 using Test
 import OrderedCollections
+include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if TEST_NAME == "sphere/baroclinic_wave_rhoe" ||
-       TEST_NAME == "sphere/baroclinic_wave_rhotheta"
+    if TEST_NAME == "baroclinic_wave_rhoe" ||
+       TEST_NAME == "baroclinic_wave_rhotheta"
         paperplots(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir)

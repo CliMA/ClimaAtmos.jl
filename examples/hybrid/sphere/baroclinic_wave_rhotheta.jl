@@ -1,20 +1,3 @@
-using ClimaCorePlots, Plots
-using ClimaCore.DataLayouts
-using NCDatasets
-using ClimaCoreTempestRemap
-
-include("baroclinic_wave_utilities.jl")
-
-const sponge = false
-
-# Variables required for driver.jl (modify as needed)
-params = BaroclinicWaveParameterSet()
-horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
-npoly = 4
-z_max = FT(30e3)
-z_elem = 10
-dt_save_to_disk = FT(0) # 0 means don't save to disk
-ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 jacobian_flags = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 
 additional_cache(Y, params, dt) = merge(

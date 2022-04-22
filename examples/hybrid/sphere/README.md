@@ -27,14 +27,14 @@ DRIVER=$CA_EXAMPLE'hybrid/driver.jl'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
 
-julia --project=$CA_EXAMPLE --threads=8 $DRIVER --TEST_NAME sphere/held_suarez_rhoe --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
+julia --project=$CA_EXAMPLE --threads=8 $DRIVER --TEST_NAME held_suarez_rhoe --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
 
 ```
 In the runscript, one needs to specify the following environmant variable:
 * `RESTART_FILE`: if run from a pre-existing jld2 data saved from a previous simulation.
 
 Commonly used command line arguements for experiment setps:
-* `--TEST_NAME`: specifies which experiment are to run (e.g., sphere/baroclinic_wave_rhoe);
+* `--TEST_NAME`: specifies which experiment are to run (e.g., baroclinic_wave_rhoe);
 * `--t_end`: specifies the simulation time in seconds;
 * `--FLOAT_TYPE`: can be Float32 or Float64; is default to Float32 if not specified;
 * `--regression_test`: a boolean var to specify whether the regression test is performed; is default to true if not specified;
