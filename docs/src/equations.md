@@ -1,21 +1,23 @@
 # Equations
 
-
 !!! note
 
     This follows what is _currently_ implemented in `examples`: it should be kept up-to-date as code is modified. If you think something _should_ be changed (but hasn't been), please add a note.
 
+This describes the ClimaAtmos model equations and its discretizations. Where possible, we use a coordinate invariant form: the ClimaCore operators generally handle the conversions between bases internally.
+
+
 
 ## Prognostic variables
 
-* ``\rho``: _mass_ in kg/m³. This is discretized at cell centers.
+* ``\rho``: _density_ in kg/m³. This is discretized at cell centers.
 * ``\boldsymbol{u}`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u} = \boldsymbol{u}_h + \boldsymbol{u}_v`` where
-  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` are the horizontal covariant part (with respect to the reference element), stored at cell centers.
-  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the vertical covariant part, stored at cell faces.
+  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` is the projection onto horizontal covariant components (covariance here means with respect to the reference element), stored at cell centers.
+  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
 * _energy_, stored at cell centers; can be either:
   - ``\rho e``: _total energy_ in J/m³
   - ``\rho e_\text{int}``: _internal energy_ in J/m³
-* ``\rho \theta``: _other conserved scalars_ (moisture, tracers, etc), again stored at cell centers.
+* ``\rho \chi``: _other conserved scalars_ (moisture, tracers, etc), again stored at cell centers.
 
 ## Operators
 
@@ -31,18 +33,19 @@ We make use of the following operators
 
 ### Differentiation operators
 
-- ``D_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence)
-- ``D^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C)
-  - The fluxes are set to zero at the top and bottom boundaries.
-- ``G_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient)
-- ``G^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F)
+- ``D_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence).
+- ``D^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
+  - Currently fluxes are set to zero at the top and bottom boundaries: this will need to be modified with the addition of diffusive fluxes.
+- ``G_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
+- ``G^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
   - the gradient is set to 0 at the top and bottom boundaries.
 - ``C_h`` is the [horizontal curl](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
-  - ``C_h[\boldsymbol{u}_h]`` returns a vector with only a vertical _contravariant_ component.
-  - ``C_h[\boldsymbol{u}_v]`` returns a vector with only a horizontal _contravariant_ component.
-- ``C^f_v`` is the [center-to-face vertical curl](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F)
+  - ``C_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
+  - ``C_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
+- ``C^f_v`` is the [center-to-face vertical curl](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
   - ``C^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
   - the curl is set to 0 at the top and bottom boundaries.
+    - We need to clarify how best to handle this.
 
 ## Auxiliary and derived quantities
 
@@ -50,12 +53,13 @@ We make use of the following operators
   ```math
   \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
   ```
-  where ``\phi`` is latitude, and ``\Omega = 7.29212 \times 10^{-5}`` is the rotation rate (in rads/sec) and ``\boldsymbol{e}^v`` is the normal radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
-* ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude.
-* ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the kinetic energy per mass (J/kg), reconstructed at cell centers by
-```math
-K = \tfrac{1}{2} \|\boldsymbol{u}_h + I^c(\boldsymbol{u}_v)\|^2 .
-```
+  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (typically 7.29212 \times 10^{-5}) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+* ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
+* ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
+  ```math
+  K = \tfrac{1}{2} \|\boldsymbol{u}_h + I^c(\boldsymbol{u}_v)\|^2.
+  ```
+  where ``\|\boldsymbol{u}\|^2 = g^{ij} \boldsymbol{u}_i \boldsymbol{u}_j`` and ``g^{ij}`` is the metric tensor.
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 
 ## Equations and discretizations
@@ -78,15 +82,14 @@ with the
 term treated implicitly.
 
 
-### Velocity
+### Momentum
 
 Uses the advective form equation
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla p  - \nabla(\Phi + K)
 ```
 
-
-#### Horizontal velocity
+#### Horizontal momentum
 
 By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v \boldsymbol{u}_v = 0``), we obtain
 
@@ -114,7 +117,7 @@ and the ``\frac{1}{\rho} \nabla_h p  + \nabla_h (\Phi + K)`` as
 \frac{1}{\rho} G_h[p] + G_h[\Phi + K]
 ```
 
-#### Vertical velocity
+#### Vertical momentum
 Similarly for vertical velocity
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v  =
@@ -197,16 +200,16 @@ is treated implicitly.
 
 ### Scalars
 
-For an arbitrary scalar ``\theta``, the density-weighted scalar ``\rho\theta`` follows the continuity equation
+For an arbitrary scalar ``\chi``, the density-weighted scalar ``\rho\chi`` follows the continuity equation
 
 ```math
-\frac{\partial}{\partial t} \rho \theta = - \nabla \cdot(\rho \theta \boldsymbol{u})
+\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u})
 ```
 
 This is discretized using the following
 ```math
-\frac{\partial}{\partial t} \rho \theta \approx
-- D_h[ \rho \theta (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \theta}{\rho} \right) \right]
+\frac{\partial}{\partial t} \rho \chi \approx
+- D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
+- D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
 ```
 Currently tracers are not treated implicitly.
