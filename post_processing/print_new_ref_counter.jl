@@ -31,24 +31,32 @@ elseif !isfile(joinpath(path, "ref_counter.jl")) # no file found
         ref_counter = 1
     end
 else
-    @info "Ref counter file found"
+    @info "Ref counter file found in path:`$path`"
     ref_counter_contents = readlines(joinpath(path, "ref_counter.jl"))
-    @info "`ref_counter.jl` contents: `$(ref_counter_contents)`"
+    @info "`$(path)/ref_counter.jl` contents: `$(ref_counter_contents)`"
     ref_counter = parse(Int, first(ref_counter_contents))
-    @info "Ref counter: `$(ref_counter)`"
+    @info "Old reference counter: `$(ref_counter)`"
+    ref_counter += 1 # increment counter
+    @info "New reference counter: `$(ref_counter)`"
 end
 
 ref_counter == 0 && error("Uncaught case")
 
 msg = ""
-msg *= "Reference counter\n"
-msg *= "Copy the reference counter below (only"
+msg *= "Pull request author:\n"
+msg *= "Copy the reference counter below (only\n"
 msg *= "the number) and paste into the file:\n\n"
 msg *= "    `post_processing/ref_counter.jl`\n\n"
 msg *= "if this PR satisfies one of the following:\n"
 msg *= "   - Variable name has changed\n"
 msg *= "   - A new regression test was added\n"
-msg *= "   - Grid resolution has changed\n"
+msg *= "   - Grid resolution has changed\n\n"
+msg *= "For more information, please find\n"
+msg *= "`post_processing/README.md` and read the section\n\n"
+msg *= "  `How to merge pull requests (PR) that get approved\n"
+msg *= "   but *break* regression tests`\n\n"
+msg *= "for how to merge this PR."
+
 @info msg
 
 println("------------")
