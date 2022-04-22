@@ -14,11 +14,7 @@ end
     ρ = Y.base.ρ
     ρθ = Y.thermodynamics.ρθ
 
-    p = @. Thermodynamics.air_pressure(Thermodynamics.PhaseDry_ρθ(
-        params,
-        ρ,
-        ρθ / ρ,
-    ))
+    p = @. TD.air_pressure(params, TD.PhaseDry_ρθ(params, ρ, ρθ / ρ))
 
     return p
 end

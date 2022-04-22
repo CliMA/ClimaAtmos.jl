@@ -25,12 +25,12 @@ function init_2d_precipitating_bubble(
     q_tot_c::FT = 1e-3
 
     # initial phase partition (specific humidity)
-    q = Thermodynamics.PhasePartition(q_tot_c, FT(0.0), FT(0.0))
+    q = TD.PhasePartition(q_tot_c, FT(0.0), FT(0.0))
     # physics parameters
     p_0::FT = CLIMAParameters.Planet.MSLP(params)
-    cp_m::FT = Thermodynamics.cp_m(params, q)
-    cv_m::FT = Thermodynamics.cv_m(params, q)
-    R_m::FT = Thermodynamics.gas_constant_air(params, q)
+    cp_m::FT = TD.cp_m(params, q)
+    cv_m::FT = TD.cv_m(params, q)
+    R_m::FT = TD.gas_constant_air(params, q)
     g::FT = CLIMAParameters.Planet.grav(params)
 
     # auxiliary quantities
@@ -86,12 +86,8 @@ function init_2d_precipitating_bubble(
 
     # prognostic quantities
     # density
-    ρ(local_geometry) = Thermodynamics.air_density(
-        params,
-        T(local_geometry),
-        p(local_geometry),
-        q,
-    )
+    ρ(local_geometry) =
+        TD.air_density(params, T(local_geometry), p(local_geometry), q)
 
     # potential temperature density
     ρθ(local_geometry) = ρ(local_geometry) * θ(local_geometry)

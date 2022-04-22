@@ -5,11 +5,11 @@ const CM1M = CloudMicrophysics.Microphysics_1M
 
     # saturation adjustment
     q_tot = ρq_tot / ρ
-    ts = Thermodynamics.PhaseEquil_ρeq(params, ρ, e_int, q_tot)
-    q = Thermodynamics.PhasePartition(ts)
-    λ = Thermodynamics.liquid_fraction(ts)
-    I_l = Thermodynamics.internal_energy_liquid(ts)
-    I_i = Thermodynamics.internal_energy_ice(ts)
+    ts = TD.PhaseEquil_ρeq(params, ρ, e_int, q_tot)
+    q = TD.PhasePartition(params, ts)
+    λ = TD.liquid_fraction(params, ts)
+    I_l = TD.internal_energy_liquid(params, ts)
+    I_i = TD.internal_energy_ice(params, ts)
 
     # precipitation removal source terms
     # (cached to avoid re-computing many times per time step)
@@ -41,16 +41,16 @@ end
 
     # saturation adjustment
     q_tot = ρq_tot / ρ
-    ts = Thermodynamics.PhaseEquil_ρeq(params, ρ, e_int, q_tot)
+    ts = TD.PhaseEquil_ρeq(params, ρ, e_int, q_tot)
 
-    q = Thermodynamics.PhasePartition(ts)
-    T = Thermodynamics.air_temperature(ts)
-    λ = Thermodynamics.liquid_fraction(ts)
-    I_d = Thermodynamics.internal_energy_dry(ts)
-    I_v = Thermodynamics.internal_energy_vapor(ts)
-    I_l = Thermodynamics.internal_energy_liquid(ts)
-    I_i = Thermodynamics.internal_energy_ice(ts)
-    L_f = Thermodynamics.latent_heat_fusion(ts)
+    q = TD.PhasePartition(params, ts)
+    T = TD.air_temperature(params, ts)
+    λ = TD.liquid_fraction(params, ts)
+    I_d = TD.internal_energy_dry(params, ts)
+    I_v = TD.internal_energy_vapor(params, ts)
+    I_l = TD.internal_energy_liquid(params, ts)
+    I_i = TD.internal_energy_ice(params, ts)
+    L_f = TD.latent_heat_fusion(params, ts)
 
     _T_freeze = CLIMAParameters.Planet.T_freeze(params)
     _cv_l = CLIMAParameters.Planet.cv_l(params)
@@ -201,12 +201,8 @@ end
 
     # update cached gravitational potential (TODO - should be done only once)
     @. Ya.Φ = g * z
-    # save pressure into cache
-    @. Ya.p = Thermodynamics.air_pressure(Thermodynamics.PhaseDry_ρθ(
-        params,
-        ρ,
-        ρθ / ρ,
-    ))
+    # TODO: save ts into cache
+    @. Ya.p = TD.air_pressure(params, TD.PhaseDry_ρθ(params, ρ, ρθ / ρ))
 end
 
 @inline function precompute_cache!(
@@ -242,12 +238,10 @@ end
     @. Ya.e_int = ρe_tot / ρ - Ya.Φ - Ya.K
 
     # update cached pressure
-    @. Ya.p = Thermodynamics.air_pressure(Thermodynamics.PhaseEquil_ρeq(
+    @. Ya.p = TD.air_pressure(
         params,
-        ρ,
-        Ya.e_int,
-        ρq_tot / ρ,
-    ))
+        TD.PhaseEquil_ρeq(params, ρ, Ya.e_int, ρq_tot / ρ),
+    )
 
     # update cached microphysics helper variables
     @. Ya.microphysics_cache =
@@ -289,12 +283,10 @@ end
     @. Ya.e_int = ρe_tot / ρ - Ya.Φ - Ya.K
 
     # update cached pressure
-    @. Ya.p = Thermodynamics.air_pressure(Thermodynamics.PhaseEquil_ρeq(
+    @. Ya.p = TD.air_pressure(
         params,
-        ρ,
-        Ya.e_int,
-        ρq_tot / ρ,
-    ))
+        TD.PhaseEquil_ρeq(params, ρ, Ya.e_int, ρq_tot / ρ),
+    )
 
     # update cached microphysics helper variables
     @. Ya.microphysics_cache = precompute_microphysics_1M(

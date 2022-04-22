@@ -41,8 +41,8 @@ function paperplots(sol, output_dir, p, nlat, nlon)
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        @. ᶜp = TD.air_pressure(ᶜts)
-        ᶜT = @. TD.air_temperature(ᶜts)
+        @. ᶜp = TD.air_pressure(params, ᶜts)
+        ᶜT = @. TD.air_temperature(params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort, comms_ctx)

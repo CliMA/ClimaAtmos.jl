@@ -14,11 +14,7 @@ end
     ρ = Y.base.ρ
     ρθ = Y.thermodynamics.ρθ
 
-    p = @. Thermodynamics.air_pressure(Thermodynamics.PhaseDry_ρθ(
-        params,
-        ρ,
-        ρθ / ρ,
-    ))
+    p = @. TD.air_pressure(params, TD.PhaseDry_ρθ(params, ρ, ρθ / ρ))
 
     return p
 end
@@ -36,7 +32,7 @@ end
     ρe_int = Y.thermodynamics.ρe_int
 
     e_int = @. ρe_int / ρ
-    p = Thermodynamics.air_pressure.(Thermodynamics.PhaseDry.(params, e_int, ρ))
+    p = TD.air_pressure.(Ref(params), TD.PhaseDry.(Ref(params), e_int, ρ))
 
     return p
 end
@@ -63,7 +59,7 @@ end
     Φ = calculate_gravitational_potential(Y, Ya, params, FT)
 
     e_int = @. ρe_tot / ρ - Φ - norm(uvw)^2 / 2
-    p = Thermodynamics.air_pressure.(Thermodynamics.PhaseDry.(params, e_int, ρ))
+    p = TD.air_pressure.(Ref(params), TD.PhaseDry.(Ref(params), e_int, ρ))
 
     return p
 end
@@ -94,12 +90,10 @@ end
 
     # saturation adjustment
     p =
-        Thermodynamics.air_pressure.(Thermodynamics.PhaseEquil_ρeq.(
+        TD.air_pressure.(
             Ref(params),
-            ρ,
-            e_int,
-            q_tot,
-        ))
+            TD.PhaseEquil_ρeq.(Ref(params), ρ, e_int, q_tot),
+        )
 
     return p
 end

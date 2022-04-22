@@ -12,6 +12,7 @@ using ...Domains, ...Models
 using LinearAlgebra: norm_sqr
 
 export Nonhydrostatic2DModel
+const TD = Thermodynamics
 
 include("nonhydrostatic_2d_model.jl")
 include("default_ode_cache.jl")
