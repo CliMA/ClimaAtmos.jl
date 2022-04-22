@@ -10,6 +10,7 @@ using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models
 using ClimaAtmos.BoundaryConditions
 
+const TD = Thermodynamics
 export Nonhydrostatic3DModel
 
 include("nonhydrostatic_3d_model.jl")

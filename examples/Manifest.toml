@@ -1663,9 +1663,9 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 
 [[deps.SurfaceFluxes]]
 deps = ["CLIMAParameters", "DocStringExtensions", "KernelAbstractions", "RootSolvers", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "9fbc78aa79e57dad4d50f57f9c204ac9172bcb92"
+git-tree-sha1 = "247b54b48c6ec8b68a6c1a6ca5ba014ea979522b"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.2.2"
+version = "0.3.0"
 
 [[deps.TOML]]
 deps = ["Dates"]

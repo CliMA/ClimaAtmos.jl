@@ -10,6 +10,7 @@ using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models, ...BoundaryConditions
 
 export SingleColumnModel
+const TD = Thermodynamics
 
 include("single_column_model.jl")
 include("equations_base_model.jl")

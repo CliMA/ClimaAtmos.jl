@@ -44,8 +44,8 @@ function paperplots(sol, output_dir, p, nlat, nlon)
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
-        @. ᶜp = TD.air_pressure(ᶜts)
-        ᶜT = @. TD.air_temperature(ᶜts)
+        @. ᶜp = TD.air_pressure(params, ᶜts)
+        ᶜT = @. TD.air_temperature(params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort, comms_ctx)

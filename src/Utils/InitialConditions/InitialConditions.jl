@@ -7,6 +7,7 @@ using ClimaCore: Geometry, Spaces, Fields
 using ClimaAtmos: Models
 
 using Thermodynamics
+const TD = Thermodynamics
 
 include("init_1d_ekman_column.jl")
 include("init_2d_dry_bubble.jl")
