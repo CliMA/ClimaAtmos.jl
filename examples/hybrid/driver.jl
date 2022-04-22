@@ -3,6 +3,14 @@ include("cli_options.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 TEST_NAME = parsed_args["TEST_NAME"]
 
+using OrdinaryDiffEq
+using DiffEqCallbacks
+using JLD2
+using ClimaCorePlots, Plots
+using ClimaCore.DataLayouts
+using NCDatasets
+using ClimaCoreTempestRemap
+using ClimaCore
 
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
@@ -65,20 +73,9 @@ end
 import ClimaCore: enable_threading
 enable_threading() = parsed_args["enable_threading"]
 
-using OrdinaryDiffEq
-using DiffEqCallbacks
-using JLD2
-
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")
-
-using ClimaCorePlots, Plots
-using ClimaCore.DataLayouts
-using NCDatasets
-using ClimaCoreTempestRemap
-using ClimaCore
-
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
@@ -291,9 +288,10 @@ import OrderedCollections
 include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if TEST_NAME == "baroclinic_wave_rhoe" ||
-       TEST_NAME == "baroclinic_wave_rhotheta"
-        paperplots(sol, output_dir, p, FT(90), FT(180))
+    if TEST_NAME == "baroclinic_wave_rhoe"
+        paperplots_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
+    elseif TEST_NAME == "baroclinic_wave_rhotheta"
+        paperplots_baro_wave_ρθ(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir)
     end
