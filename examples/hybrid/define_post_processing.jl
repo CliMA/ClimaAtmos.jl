@@ -117,7 +117,7 @@ function postprocessing(sol, output_dir)
 end
 
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10
-function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
+function paperplots_baro_wave(sol, output_dir, p, nlat, nlon, ::Val{:ρθ})
     (; comms_ctx, ᶜts, ᶜp, params) = p
     days = [8, 10]
 
@@ -242,7 +242,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
 
 end
 
-function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
+function paperplots_baro_wave(sol, output_dir, p, nlat, nlon, ::Val{:ρe})
     (; comms_ctx, ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
     days = [8, 10]
 

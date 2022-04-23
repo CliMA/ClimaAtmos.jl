@@ -3,6 +3,17 @@ include("cli_options.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 TEST_NAME = parsed_args["TEST_NAME"]
 
+parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
+
+moisture_mode() = Symbol(parse_arg(parsed_args, "moist", "dry"))
+@assert moisture_mode() in (:dry, :equil, :nonequil)
+
+energy_variable(::Val{:rhoe}) = :ρe
+energy_variable(::Val{:rhoe_int}) = :ρe_int
+energy_variable(::Val{:rhotheta}) = :ρθ
+energy_name() =
+    energy_variable(Val(Symbol(parse_arg(parsed_args, "energy_name", "rhoe")))) # e.g., :ρθ
+
 using OrdinaryDiffEq
 using DiffEqCallbacks
 using JLD2
@@ -12,27 +23,35 @@ using NCDatasets
 using ClimaCoreTempestRemap
 using ClimaCore
 
+import ClimaCore
+if parsed_args["trunc_stack_traces"]
+    function Base.show(
+        io::IO,
+        ::Type{F},
+    ) where {F <: ClimaCore.Fields.FieldVector}
+        print(io, "FieldVector{...}")
+    end
+    function Base.show(io::IO, ::Type{F}) where {F <: ClimaCore.Fields.Field}
+        print(io, "Field{...}")
+    end
+end
+
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
-params = nothing
 horizontal_mesh = nothing # must be object of type AbstractMesh
 npoly = 0
 z_max = 0
 z_elem = 0
-t_end = if isnothing(parsed_args["t_end"])
-    FT(60 * 60 * 24 * 10)
-else
-    parsed_args["t_end"]
-end
-dt = if isnothing(parsed_args["dt"])
-    FT(400)
-else
-    parsed_args["dt"]
-end
+t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
+dt = parse_arg(parsed_args, "dt", FT(400))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
 dt_save_to_disk = 0 # 0 means don't save to disk
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
-jacobian_flags = () # only required by implicit ODE algorithms
+jacobi_flags(::Val{:ρe}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::Val{:ρe_int}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::Val{:ρθ}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobian_flags = jacobi_flags(Val(energy_name()))
+
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
 show_progress_bar = true
 additional_callbacks = () # e.g., printing diagnostic information
@@ -40,9 +59,13 @@ additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 additional_cache(Y, params, dt) = NamedTuple()
 additional_tendency!(Yₜ, Y, p, t) = nothing
-center_initial_condition(local_geometry, params) = NamedTuple()
-face_initial_condition(local_geometry, params) = NamedTuple()
 postprocessing(sol, output_dir) = nothing
+ic_kwargs() = (Val(energy_name()), Val(moisture_mode()))
+@info "Initial condition kwargs: `$(ic_kwargs())`"
+center_initial_condition(ᶜlocal_geometry, params) =
+    center_initial_condition(ᶜlocal_geometry, params, ic_kwargs()...)
+face_initial_condition(ᶠlocal_geometry, params) =
+    face_initial_condition(ᶠlocal_geometry, params, ic_kwargs()...)
 
 ################################################################################
 
@@ -82,7 +105,7 @@ include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 const sponge = false
 
 # Variables required for driver.jl (modify as needed)
-params = BaroclinicWaveParameterSet()
+const params = BaroclinicWaveParameterSet()
 horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 npoly = 4
 z_max = FT(30e3)
@@ -174,11 +197,7 @@ job_id = if isnothing(parsed_args["job_id"])
 else
     parsed_args["job_id"]
 end
-output_dir = if isnothing(parsed_args["output_dir"])
-    job_id
-else
-    parsed_args["output_dir"]
-end
+output_dir = parse_arg(parsed_args, "output_dir", job_id)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
@@ -288,10 +307,9 @@ import OrderedCollections
 include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if TEST_NAME == "baroclinic_wave_rhoe"
-        paperplots_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
-    elseif TEST_NAME == "baroclinic_wave_rhotheta"
-        paperplots_baro_wave_ρθ(sol, output_dir, p, FT(90), FT(180))
+    if moisture_mode == :dry && occursin("baroclinic_wave", TEST_NAME)
+        args = (FT(90), FT(180), Val(energy_name()))
+        paperplots_baro_wave(sol, output_dir, p, args...)
     else
         postprocessing(sol, output_dir)
     end

@@ -11,6 +11,14 @@ ArgParse.@add_arg_table s begin
     "--dt"
     help = "Simulation time step"
     arg_type = Float64
+    "--moist"
+    help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
+    arg_type = String
+    default = "dry"
+    "--energy_name"
+    help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
+    arg_type = String
+    default = "rhoe"
     "--dt_save_to_sol" # TODO: should we default to Inf?
     help = "Time between saving solution, 0 means do not save"
     arg_type = Float64
@@ -26,12 +34,17 @@ ArgParse.@add_arg_table s begin
     "--TEST_NAME"
     help = "Job name"
     arg_type = String
+    default = "baroclinic_wave_rhoe"
     "--output_dir"
     help = "Output directory"
     arg_type = String
     "--job_id"
     help = "Uniquely identifying string for a particular job"
     arg_type = String
+    "--trunc_stack_traces"
+    help = "Truncate stack traces by truncating printing of fields and fieldvectors"
+    arg_type = Bool
+    default = false
 end
 
 parsed_args = ArgParse.parse_args(ARGS, s)
