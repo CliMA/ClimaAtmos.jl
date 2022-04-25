@@ -53,13 +53,13 @@ We make use of the following operators
   ```math
   \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
   ```
-  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (typically 7.29212 \times 10^{-5}) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, 7.29212 \times 10^{-5}) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
   ```math
   K = \tfrac{1}{2} \|\boldsymbol{u}_h + I^c(\boldsymbol{u}_v)\|^2.
   ```
-  where ``\|\boldsymbol{u}\|^2 = g^{ij} \boldsymbol{u}_i \boldsymbol{u}_j`` and ``g^{ij}`` is the metric tensor.
+  where ``\|\boldsymbol{u}\|^2 = g^{ij} \boldsymbol{u}_i \boldsymbol{u}_j`` and ``g^{ij}`` is the contravariant metric tensor.
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 
 ## Equations and discretizations
