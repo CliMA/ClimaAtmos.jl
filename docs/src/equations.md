@@ -10,8 +10,8 @@
 
 * ``\rho``: _mass_ in kg/m³. This is discretized at cell centers.
 * ``\boldsymbol{u}`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u} = \boldsymbol{u}_h + \boldsymbol{u}_v`` where
-  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` are the horizontal covariant vector (with respect to the reference element), stored at cell centers.
-  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the vertical covariant vector, stored at cell faces.
+  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` are the horizontal vector with horizontal covariant components (with respect to the reference element), stored at cell centers.
+  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the vertical vector with horizontal covariant components, stored at cell faces.
 * _energy_, stored at cell centers; can be either:
   - ``\rho e``: _total energy_ in J/m³
   - ``\rho e_\text{int}``: _internal energy_ in J/m³
