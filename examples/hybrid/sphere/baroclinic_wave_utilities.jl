@@ -392,24 +392,19 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         )
 
     if :ρe in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(SF.sensible_heat_flux(
-            params,
-            Ch,
-            flux_coefficients,
-            nothing,
-        ))
+        @. dif_flux_energy = Geometry.WVector(
+            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(mean(dif_flux_energy)),
         )
         @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(sensible_heat_flux_ρe_int(
-            params,
-            Ch,
-            flux_coefficients,
-            nothing,
-        ))
+        @. dif_flux_energy = Geometry.WVector(
+            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(mean(dif_flux_energy)),
