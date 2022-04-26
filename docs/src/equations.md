@@ -68,7 +68,7 @@ We make use of the following operators
 
 Follows the continuity equation
 ```math
-\frac{\partial}{\partial t} \rho = - \nabla \cdot(\rho \boldsymbol{u})
+\frac{\partial}{\partial t} \rho = - \nabla \cdot(\rho \boldsymbol{u}) .
 ```
 
 This is discretized using the following
@@ -86,23 +86,23 @@ term treated implicitly.
 
 Uses the advective form equation
 ```math
-\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla p  - \nabla(\Phi + K)
+\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla p  - \nabla(\Phi + K) .
 ```
 
 #### Horizontal momentum
 
-By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v \boldsymbol{u}_v = 0``), we obtain
+By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain
 
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
   - (\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_h p  - \nabla_h (\Phi + K)
+  - \frac{1}{\rho} \nabla_h p  - \nabla_h (\Phi + K) ,
 ```
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ parts.
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors.
 
 !!! todo
-    Without topography, these are equal to their covariant parts (i.e. ``\boldsymbol{u}^h = \boldsymbol{u}_h``), but these will need to be with the addition of topography.
+    Without topography, these are equal to their covariant vectors (i.e. ``\boldsymbol{u}^h = \boldsymbol{u}_h``), but these will need to be updated with the addition of topography.
 
 The ``(\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as
 ```math
@@ -114,25 +114,26 @@ The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \bolds
 ```
 and the ``\frac{1}{\rho} \nabla_h p  + \nabla_h (\Phi + K)`` as
 ```math
-\frac{1}{\rho} G_h[p] + G_h[\Phi + K]
+\frac{1}{\rho} G_h[p] + G_h[\Phi + K] ,
 ```
+where all these terms are treated explicitly.
 
 #### Vertical momentum
 Similarly for vertical velocity
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v  =
   - (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_v p - \nabla_v(\Phi + K)
+  - \frac{1}{\rho} \nabla_v p - \nabla_v(\Phi + K) .
 ```
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
 ```math
-(C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}_h)
+(C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}_h) ,
 ```
 and the ``\frac{1}{\rho} \nabla_v p + \nabla_v(\Phi + K)`` term as
 ```math
-\frac{1}{I^f(\rho)} G^f_v[p] + G^f[K + \Phi]
+\frac{1}{I^f(\rho)} G^f_v[p] + G^f[K + \Phi] ,
 ```
-and treated implicitly.
+with the latter treated implicitly.
 
 
 ### Total energy
@@ -147,7 +148,7 @@ is discretized using
 - D^c_v \left[
   I^f(\rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)
   + (\rho e + p) I^f(\boldsymbol{u}_h)
-  \right]
+  \right] .
 ```
 Currently the central reconstruction
 ```math
@@ -166,7 +167,7 @@ is treated implicitly.
 ### Internal energy
 
 ```math
-\frac{\partial}{\partial t} \rho e_\text{int} = - \nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}) + (\nabla p) \cdot \boldsymbol{u}
+\frac{\partial}{\partial t} \rho e_\text{int} = - \nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}) + (\nabla p) \cdot \boldsymbol{u} .
 ```
 The ``\nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}`` term is discretized the same as in total energy:
 
@@ -175,11 +176,11 @@ D_h[ (\rho e_\text{int} + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] +
 D^c_v\left[
   I^f(\rho) U^f\left(I^f(\boldsymbol{u}_v, \frac{\rho e_\text{int} + p}{\rho} \right)
   + (\rho e_\text{int} + p)  I^f(\boldsymbol{u}_h)
-\right]
+\right] .
 ```
 The ``(\nabla p) \cdot \boldsymbol{u}`` term is discretized as
 ```math
-I^c( G^f_v(p) \cdot \boldsymbol{u}_v) + G_h(p) \cdot \boldsymbol{u}_h
+I^c( G^f_v(p) \cdot \boldsymbol{u}_v) + G_h(p) \cdot \boldsymbol{u}_h .
 ```
 !!! todo
     We will need to add ``\nabla_h \cdot u_v`` and ``\nabla_v \cdot u_h`` terms, as they will be non-zero in the presence of topography.
@@ -203,13 +204,13 @@ is treated implicitly.
 For an arbitrary scalar ``\chi``, the density-weighted scalar ``\rho\chi`` follows the continuity equation
 
 ```math
-\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u})
+\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}) .
 ```
 
 This is discretized using the following
 ```math
 \frac{\partial}{\partial t} \rho \chi \approx
 - D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
+- D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right] .
 ```
 Currently tracers are not treated implicitly.
