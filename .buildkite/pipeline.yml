@@ -185,6 +185,10 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhoe_equilmoist --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
+      - label: ":computer: baroclinic wave (ρe) equilmoist radiation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhoe_equilmoist_radiation --job_id sphere_baroclinic_wave_rhoe_equilmoist_radiation"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_radiation/*"
+
       - label: ":computer: held suarez (ρe)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe --job_id sphere_held_suarez_rhoe --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe/*"
