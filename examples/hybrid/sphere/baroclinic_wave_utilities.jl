@@ -13,6 +13,10 @@ Planet.grav(::BaroclinicWaveParameterSet) = 9.80616
 Planet.Omega(::BaroclinicWaveParameterSet) = 7.29212e-5
 Planet.planet_radius(::BaroclinicWaveParameterSet) = 6.371229e6
 
+# parameters for 0-Moment Microphysics
+Atmos.Microphysics_0M.τ_precip(::BaroclinicWaveParameterSet) = dt # timescale for precipitation removal
+Atmos.Microphysics_0M.qc_0(::BaroclinicWaveParameterSet) = 5e-6 # criterion for removal after supersaturation
+
 baroclinic_wave_mesh(; params, h_elem) =
     cubed_sphere_mesh(; radius = FT(Planet.planet_radius(params)), h_elem)
 
@@ -231,9 +235,6 @@ zero_moment_microphysics_cache(Y) =
 
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, params) = p # assume ᶜts has been updated
-
-    # _qc_0 - set it to 0 to remove immediately after supersat
-    # _τ_precip - make it super short to get behavior similar to instantaneous
 
     @. ᶜS_ρq_tot =
         Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
