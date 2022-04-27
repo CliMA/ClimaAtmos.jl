@@ -12,6 +12,18 @@ using NCDatasets
 using ClimaCoreTempestRemap
 using ClimaCore
 
+parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
+
+moisture_mode() = Symbol(parse_arg(parsed_args, "moist", "dry"))
+@assert moisture_mode() in (:dry, :equil, :nonequil)
+
+energy_variable(::Val{:rhoe}) = :ρe
+energy_variable(::Val{:rhoe_int}) = :ρe_int
+energy_variable(::Val{:rhotheta}) = :ρθ
+energy_name() =
+    energy_variable(Val(Symbol(parse_arg(parsed_args, "energy_name", "rhoe")))) # e.g., :ρθ
+@assert energy_name() in (:ρe, :ρe_int, :ρθ)
+
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
 params = nothing
@@ -19,18 +31,10 @@ horizontal_mesh = nothing # must be object of type AbstractMesh
 quad = nothing # must be object of type QuadratureStyle
 z_max = 0
 z_elem = 0
-t_end = if isnothing(parsed_args["t_end"])
-    FT(60 * 60 * 24 * 10)
-else
-    parsed_args["t_end"]
-end
-dt = if isnothing(parsed_args["dt"])
-    FT(400)
-else
-    parsed_args["dt"]
-end
+t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
+dt = parse_arg(parsed_args, "dt", FT(400))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
-dt_save_to_disk = 0 # 0 means don't save to disk
+dt_save_to_disk = parse_arg(parsed_args, "dt_save_to_disk", FT(0))
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
 jacobian_flags = () # only required by implicit ODE algorithms
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
@@ -87,7 +91,6 @@ horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 quad = Spaces.Quadratures.GLL{5}()
 z_max = FT(30e3)
 z_elem = 10
-dt_save_to_disk = FT(0) # 0 means don't save to disk
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 include(joinpath("sphere", "$TEST_NAME.jl"))
@@ -174,11 +177,7 @@ job_id = if isnothing(parsed_args["job_id"])
 else
     parsed_args["job_id"]
 end
-output_dir = if isnothing(parsed_args["output_dir"])
-    job_id
-else
-    parsed_args["output_dir"]
-end
+output_dir = parse_arg(parsed_args, "output_dir", job_id)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
@@ -204,14 +203,10 @@ dss_func = make_dss_func(comms_ctx)
 save_to_disk_func = make_save_to_disk_func(output_dir, is_distributed)
 
 dss_callback = FunctionCallingCallback(dss_func, func_start = true)
-if dt_save_to_disk == 0
-    save_to_disk_callback = nothing
+save_to_disk_callback = if dt_save_to_disk == 0
+    nothing
 else
-    save_to_disk_callback = PeriodicCallback(
-        save_to_disk_func,
-        dt_save_to_disk;
-        initial_affect = true,
-    )
+    PeriodicCallback(save_to_disk_func, dt_save_to_disk; initial_affect = true)
 end
 callback =
     CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)

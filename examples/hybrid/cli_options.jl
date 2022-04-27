@@ -15,6 +15,21 @@ ArgParse.@add_arg_table s begin
     help = "Time between saving solution, 0 means do not save"
     arg_type = Float64
     default = Float64(60 * 60 * 24)
+    "--dt_save_to_disk"
+    help = "Time between saving to disk, 0 means do not save"
+    arg_type = Float64
+    default = Float64(0)
+    "--moist"
+    help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
+    arg_type = String
+    default = "dry"
+    "--rad"
+    help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
+    arg_type = String
+    "--energy_name"
+    help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
+    arg_type = String
+    default = "rhoe"
     "--regression_test"
     help = "(Bool) perform regression test"
     arg_type = Bool
@@ -22,7 +37,7 @@ ArgParse.@add_arg_table s begin
     "--enable_threading"
     help = "Enable multi-threading. Note: Julia must be launched with (e.g.,) `--threads=8`"
     arg_type = Bool
-    default = false
+    default = true
     "--TEST_NAME"
     help = "Job name"
     arg_type = String
