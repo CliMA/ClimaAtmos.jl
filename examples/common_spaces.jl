@@ -30,8 +30,7 @@ function cubed_sphere_mesh(; radius, h_elem)
     return Meshes.EquiangularCubedSphere(domain, h_elem)
 end
 
-function make_horizontal_space(mesh, npoly)
-    quad = Spaces.Quadratures.GLL{npoly + 1}()
+function make_horizontal_space(mesh, quad)
     if mesh isa Meshes.AbstractMesh1D
         topology = Topologies.IntervalTopology(mesh)
         space = Spaces.SpectralElementSpace1D(topology, quad)
@@ -44,12 +43,11 @@ end
 
 function make_distributed_horizontal_space(
     mesh,
-    npoly,
+    quad,
     Context,
     nlevels,
     max_field_element_size,
 )
-    quad = Spaces.Quadratures.GLL{npoly + 1}()
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
     elseif mesh isa Meshes.AbstractMesh2D

@@ -16,7 +16,7 @@ using ClimaCore
 # TODO: Allow some of these to be environment variables or command line arguments
 params = nothing
 horizontal_mesh = nothing # must be object of type AbstractMesh
-npoly = 0
+quad = nothing # must be object of type QuadratureStyle
 z_max = 0
 z_elem = 0
 t_end = if isnothing(parsed_args["t_end"])
@@ -34,7 +34,7 @@ dt_save_to_disk = 0 # 0 means don't save to disk
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
 jacobian_flags = () # only required by implicit ODE algorithms
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
-show_progress_bar = true
+show_progress_bar = isinteractive()
 additional_callbacks = () # e.g., printing diagnostic information
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
@@ -84,7 +84,7 @@ const sponge = false
 # Variables required for driver.jl (modify as needed)
 params = BaroclinicWaveParameterSet()
 horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
-npoly = 4
+quad = Spaces.Quadratures.GLL{5}()
 z_max = FT(30e3)
 z_elem = 10
 dt_save_to_disk = FT(0) # 0 means don't save to disk
@@ -117,7 +117,7 @@ if haskey(ENV, "RESTART_FILE")
         comms_ctx = Spaces.setup_comms(
             Context,
             axes(Y.c).horizontal_space.topology,
-            Spaces.Quadratures.GLL{npoly + 1}(),
+            quad,
             z_elem + 1,
             max_field_element_size,
         )
@@ -129,13 +129,13 @@ else
     if is_distributed
         h_space, comms_ctx = make_distributed_horizontal_space(
             horizontal_mesh,
-            npoly,
+            quad,
             Context,
             z_elem + 1,
             max_field_element_size,
         )
     else
-        h_space = make_horizontal_space(horizontal_mesh, npoly)
+        h_space = make_horizontal_space(horizontal_mesh, quad)
         comms_ctx = nothing
     end
     center_space, face_space = make_hybrid_spaces(h_space, z_max, z_elem)
@@ -235,7 +235,7 @@ integrator = OrdinaryDiffEq.init(
     dt = dt,
     adaptive = false,
     progress = show_progress_bar,
-    progress_steps = 1000,
+    progress_steps = isinteractive() ? 1 : 1000,
     additional_solver_kwargs...,
 )
 
@@ -248,7 +248,7 @@ sol = @timev OrdinaryDiffEq.solve!(integrator)
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
     if ClimaComms.iamroot(Context)
-        global_h_space = make_horizontal_space(horizontal_mesh, npoly)
+        global_h_space = make_horizontal_space(horizontal_mesh, quad)
         global_center_space, global_face_space =
             make_hybrid_spaces(global_h_space, z_max, z_elem)
         global_Y_c_type = Fields.Field{
@@ -292,6 +292,8 @@ if !is_distributed
         paperplots_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
     elseif TEST_NAME == "baroclinic_wave_rhotheta"
         paperplots_baro_wave_ρθ(sol, output_dir, p, FT(90), FT(180))
+    elseif TEST_NAME == "single_column_radiative_equilibrium"
+        custom_postprocessing(sol, output_dir)
     else
         postprocessing(sol, output_dir)
     end

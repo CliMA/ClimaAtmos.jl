@@ -106,7 +106,8 @@ function default_cache(Y, params, comms_ctx)
         Ω = FT(Planet.Omega(params))
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
     else
-        ᶜf = map(_ -> f_plane_coriolis_frequency(params), ᶜcoord)
+        f = FT(f_plane_coriolis_frequency(params))
+        ᶜf = map(_ -> f, ᶜcoord)
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     if (
