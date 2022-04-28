@@ -370,3 +370,214 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     end
 
 end
+
+# plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
+function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
+    (; comms_ctx, ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
+    days = [8, 10]
+
+    # obtain pressure, temperature, and vorticity at cg points;
+    # and remap them onto lat lon
+    for day in days
+        iu = findall(x -> x == day * 24 * 3600, sol.t)[1]
+        Y = sol.u[iu]
+
+        # compute pressure, temperature, vorticity
+        ᶜρ = Y.c.ρ
+        ᶜuₕ = Y.c.uₕ
+        ᶠw = Y.f.w
+        ᶠw_phy = Geometry.WVector.(ᶠw)
+        ᶜw_phy = ᶜinterp.(ᶠw_phy)
+        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜp = TD.air_pressure(params, ᶜts)
+
+        ᶜq = @. TD.PhasePartition(params, ᶜts)
+        ᶜcloudwater = @. TD.condensate(ᶜq) # @. ᶜq.liq + ᶜq.ice
+        ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
+
+        ᶜT = @. TD.air_temperature(params, ᶜts)
+        curl_uh = @. curlₕ(Y.c.uₕ)
+        ᶜvort = Geometry.WVector.(curl_uh)
+        Spaces.weighted_dss!(ᶜvort, comms_ctx)
+
+        # space info to generate nc raw data
+        cspace = axes(Y.c)
+        hspace = cspace.horizontal_space
+        Nq =
+            Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+
+        # create a temporary dir for intermediate data
+        remap_tmpdir = output_dir * "/remaptmp/"
+        mkpath(remap_tmpdir)
+
+        ### create an nc file to store raw cg data 
+        # create data
+        datafile_cc = remap_tmpdir * "/bw-raw_day" * string(day) * ".nc"
+        nc = NCDataset(datafile_cc, "c")
+        # defines the appropriate dimensions and variables for a space coordinate
+        def_space_coord(nc, cspace, type = "cgll")
+        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+        nc_time = def_time_coord(nc)
+        # defines variables for pressure, temperature, and vorticity
+        nc_p = defVar(nc, "pres", FT, cspace, ("time",))
+        nc_T = defVar(nc, "T", FT, cspace, ("time",))
+        nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
+        nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+        nc_w = defVar(nc, "w", FT, cspace, ("time",))
+        nc_ρ = defVar(nc, "rho", FT, cspace, ("time",))
+        nc_cloudwater = defVar(nc, "cloud_water", FT, cspace, ("time",))
+        nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
+
+        nc_time[1] = FT(day * 24 * 3600)
+        nc_p[:, 1] = ᶜp
+        nc_T[:, 1] = ᶜT
+        nc_ω[:, 1] = ᶜvort
+        nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
+        nc_w[:, 1] = ᶜw_phy
+        nc_ρ[:, 1] = ᶜρ
+        nc_cloudwater[:, 1] = ᶜcloudwater
+        nc_watervapor[:, 1] = ᶜwatervapor
+
+        close(nc)
+
+        # write out our cubed sphere mesh
+        meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
+        write_exodus(meshfile_cc, hspace.topology)
+
+        meshfile_rll = remap_tmpdir * "/mesh_rll.g"
+        rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
+
+        meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
+        overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
+
+        weightfile = remap_tmpdir * "/remap_weights.nc"
+        remap_weights(
+            weightfile,
+            meshfile_cc,
+            meshfile_rll,
+            meshfile_overlap;
+            in_type = "cgll",
+            in_np = Nq,
+        )
+
+        datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
+        apply_remap(
+            datafile_latlon,
+            datafile_cc,
+            weightfile,
+            [
+                "pres",
+                "T",
+                "vort",
+                "qt",
+                "w",
+                "rho",
+                "cloud_water",
+                "water_vapor",
+            ],
+        )
+
+        rm(remap_tmpdir, recursive = true)
+    end
+
+    # create plots as in the reference
+    for day in days
+        datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
+        ncdata = NCDataset(datafile_latlon, "r")
+        lon = ncdata["lon"][:]
+        lat = ncdata["lat"][:]
+
+        p = ncdata["pres"][:]
+        T = ncdata["T"][:]
+        vort = ncdata["vort"][:] * FT(1e5)
+        qt = ncdata["qt"][:] * FT(1e3)
+        cloud_water = ncdata["cloud_water"][:] * FT(1e3)
+        water_vapor = ncdata["water_vapor"][:] * FT(1e3)
+        rho = ncdata["rho"][:]
+        w = ncdata["w"][:]
+
+        vert_intg_cloud_water =
+            sum(cloud_water .* rho, dims = 3) ./ sum(rho, dims = 3)
+        vert_intg_water_vapor =
+            sum(water_vapor .* rho, dims = 3) ./ sum(rho, dims = 3)
+
+        latidx = findall(x -> x >= 0, lat)
+        lonidx = findall(x -> 0 <= x <= 240, lon)
+
+        plot_p = contourf(
+            lon[lonidx],
+            lat[latidx],
+            p[lonidx, latidx, 1, 1]',
+            color = :rainbow,
+            title = "pressure (1500m) day " * string(day),
+        )
+        png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
+
+        plot_T = contourf(
+            lon[lonidx],
+            lat[latidx],
+            T[lonidx, latidx, 1, 1]',
+            color = :rainbow,
+            levels = 220:10:310,
+            title = "temperature (1500m) day " * string(day),
+        )
+        png(plot_T, output_dir * "/bw-temperature-day" * string(day) * ".png")
+
+        plot_ω = contourf(
+            lon[lonidx],
+            lat[latidx],
+            vort[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "vorticity (1500m) day " * string(day),
+        )
+        png(plot_ω, output_dir * "/bw-vorticity-day" * string(day) * ".png")
+
+        plot_qt = contourf(
+            lon[lonidx],
+            lat[latidx],
+            qt[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "qt (1500m) day " * string(day),
+        )
+        png(plot_qt, output_dir * "/bw-qt-day" * string(day) * ".png")
+
+        plot_w = contourf(
+            lon[lonidx],
+            lat[latidx],
+            w[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "w (1500m) day " * string(day),
+        )
+        png(plot_w, output_dir * "/bw-w-day" * string(day) * ".png")
+
+        plot_cw = contourf(
+            lon[lonidx],
+            lat[latidx],
+            vert_intg_cloud_water[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "cloud condensate (vertically integrated; g/kg) day " *
+                    string(day),
+        )
+        png(
+            plot_cw,
+            output_dir * "/bw-vert_intg_cloud_water-day" * string(day) * ".png",
+        )
+
+        plot_wv = contourf(
+            lon[lonidx],
+            lat[latidx],
+            vert_intg_water_vapor[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "water vapor (vertically integrated; g/kg) day " *
+                    string(day),
+        )
+        png(
+            plot_wv,
+            output_dir * "/bw-vert_intg_water_vapor-day" * string(day) * ".png",
+        )
+
+        rm(datafile_latlon)
+    end
+
+end
