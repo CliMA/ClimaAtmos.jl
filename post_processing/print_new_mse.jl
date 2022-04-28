@@ -39,9 +39,9 @@ for job_id in keys(computed_mse)
     println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
     for var in keys(computed_mse[job_id])
         if computed_mse[job_id][var] == "NA"
-            println("all_best_mse[\"$job_id\"][\"$var\"] = \"$(computed_mse[job_id][var])\"")
+            println("all_best_mse[\"$job_id\"][$(var)] = \"$(computed_mse[job_id][var])\"")
         else
-            println("all_best_mse[\"$job_id\"][\"$var\"] = $(computed_mse[job_id][var])")
+            println("all_best_mse[\"$job_id\"][$(var)] = $(computed_mse[job_id][var])")
         end
     end
     println("#")
