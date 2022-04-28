@@ -36,7 +36,7 @@ z_max = 0
 z_elem = 0
 z_stretch = nothing
 t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
-dt = parse_arg(parsed_args, "dt", FT(400))
+dt = FT(parse_arg(parsed_args, "dt", FT(400)))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
 dt_save_to_disk = parse_arg(parsed_args, "dt_save_to_disk", FT(0))
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
@@ -90,7 +90,7 @@ include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 const sponge = false
 
 # Variables required for driver.jl (modify as needed)
-params = BaroclinicWaveParameterSet()
+params = BaroclinicWaveParameterSet((; dt))
 horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 quad = Spaces.Quadratures.GLL{5}()
 z_max = FT(30e3)
