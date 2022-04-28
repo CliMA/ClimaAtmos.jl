@@ -289,6 +289,8 @@ if !is_distributed
         paperplots_baro_wave_ρθ(sol, output_dir, p, FT(90), FT(180))
     elseif TEST_NAME == "single_column_radiative_equilibrium"
         custom_postprocessing(sol, output_dir)
+    elseif TEST_NAME == "baroclinic_wave_rhoe_equilmoist"
+        paperplots_moist_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir)
     end
