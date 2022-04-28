@@ -13,6 +13,7 @@ function rrtmgp_model_cache(
     interpolation = BestFit(),
     bottom_extrapolation = SameAsInterpolation(),
     idealized_insolation = true,
+    idealized_h2o = false,
 )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -104,6 +105,10 @@ function rrtmgp_model_cache(
         solar_zenith_angle = weighted_irradiance = NaN # initialized in tendency
     end
 
+    if idealized_h2o && radiation_mode isa GrayRadiation
+        error("idealized_h2o cannot be used with GrayRadiation")
+    end
+
     # surface_emissivity and surface_albedo are provided for each of 100 sites,
     # which we average across
     rrtmgp_model = RRTMGPModel(
@@ -134,6 +139,7 @@ function rrtmgp_model_cache(
         weighted_irradiance = similar(Spaces.level(Y.c, 1), FT),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         idealized_insolation,
+        idealized_h2o,
         rrtmgp_model,
     )
 end
@@ -155,7 +161,7 @@ function rrtmgp_model_callback!(integrator)
 
     (; ᶜK, ᶜΦ, ᶜts, ᶜp, params) = p
     (; ᶜT, ᶜvmr_h2o, insolation_tuple, zenith_angle, weighted_irradiance) = p
-    (; ᶠradiation_flux, idealized_insolation, rrtmgp_model) = p
+    (; ᶠradiation_flux, idealized_insolation, idealized_h2o, rrtmgp_model) = p
 
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
@@ -172,8 +178,34 @@ function rrtmgp_model_callback!(integrator)
     rrtmgp_model.center_temperature .= field2array(ᶜT)
 
     if !(rrtmgp_model.radiation_mode isa GrayRadiation)
-        @. ᶜvmr_h2o =
-            TD.vol_vapor_mixing_ratio(params, TD.PhasePartition(params, ᶜts))
+        if idealized_h2o
+            # slowly increase the relative humidity from 0 to 0.6 to account for
+            # the fact that we have a very unrealistic initial condition
+            max_relative_humidity = FT(0.6)
+            t_increasing_humidity = FT(60 * 60 * 24 * 30)
+            if t < t_increasing_humidity
+                max_relative_humidity *= t / t_increasing_humidity
+            end
+
+            # temporarily store ᶜq_tot in ᶜvmr_h2o
+            ᶜq_tot = ᶜvmr_h2o
+            @. ᶜq_tot = max_relative_humidity * TD.q_vap_saturation(params, ᶜts)
+
+            # filter ᶜq_tot so that it is monotonically decreasing with z
+            for i in 2:Spaces.nlevels(axes(ᶜq_tot))
+                level = Fields.field_values(Spaces.level(ᶜq_tot, i))
+                prev_level = Fields.field_values(Spaces.level(ᶜq_tot, i - 1))
+                @. level = min(level, prev_level)
+            end
+
+            # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
+            @. ᶜvmr_h2o = TD.shum_to_mixing_ratio(ᶜq_tot, ᶜq_tot)
+        else
+            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
+                params,
+                TD.PhasePartition(params, ᶜts),
+            )
+        end
         rrtmgp_model.center_volume_mixing_ratio_h2o .= field2array(ᶜvmr_h2o)
     end
 
@@ -184,16 +216,27 @@ function rrtmgp_model_callback!(integrator)
         au = FT(astro_unit())
 
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-        @. insolation_tuple = instantaneous_zenith_angle(
-            date_time,
-            bottom_coords.long,
-            bottom_coords.lat,
-            params,
-        ) # each tuple is (zenith angle, azimuthal angle, earth-sun distance)
-        @. zenith_angle = min(first(insolation_tuple), max_zenith_angle)
-        @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
-        rrtmgp_model.solar_zenith_angle .= field2array(zenith_angle)
-        rrtmgp_model.weighted_irradiance .= field2array(weighted_irradiance)
+        if eltype(bottom_coords) <: Geometry.LatLongZPoint
+            @. insolation_tuple = instantaneous_zenith_angle(
+                date_time,
+                Float64(bottom_coords.long),
+                Float64(bottom_coords.lat),
+                params,
+            ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
+            @. zenith_angle = min(first(insolation_tuple), max_zenith_angle)
+            @. weighted_irradiance =
+                irradiance * (au / last(insolation_tuple))^2
+            rrtmgp_model.solar_zenith_angle .= field2array(zenith_angle)
+            rrtmgp_model.weighted_irradiance .= field2array(weighted_irradiance)
+        else
+            # assume that the latitude and longitude are both 0 for flat space
+            insolation_tuple =
+                instantaneous_zenith_angle(date_time, 0.0, 0.0, params)
+            zenith_angle = min(first(insolation_tuple), max_zenith_angle)
+            weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
+            rrtmgp_model.solar_zenith_angle .= zenith_angle
+            rrtmgp_model.weighted_irradiance .= weighted_irradiance
+        end
     end
 
     update_fluxes!(rrtmgp_model)

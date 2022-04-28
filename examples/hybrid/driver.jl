@@ -31,6 +31,7 @@ horizontal_mesh = nothing # must be object of type AbstractMesh
 quad = nothing # must be object of type QuadratureStyle
 z_max = 0
 z_elem = 0
+z_stretch = nothing
 t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
 dt = parse_arg(parsed_args, "dt", FT(400))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
@@ -91,6 +92,7 @@ horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
 quad = Spaces.Quadratures.GLL{5}()
 z_max = FT(30e3)
 z_elem = 10
+z_stretch = Meshes.Uniform()
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 include(joinpath("sphere", "$TEST_NAME.jl"))
@@ -141,7 +143,8 @@ else
         h_space = make_horizontal_space(horizontal_mesh, quad)
         comms_ctx = nothing
     end
-    center_space, face_space = make_hybrid_spaces(h_space, z_max, z_elem)
+    center_space, face_space =
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     Y = Fields.FieldVector(
@@ -245,7 +248,7 @@ if is_distributed # replace sol.u on the root processor with the global sol.u
     if ClimaComms.iamroot(Context)
         global_h_space = make_horizontal_space(horizontal_mesh, quad)
         global_center_space, global_face_space =
-            make_hybrid_spaces(global_h_space, z_max, z_elem)
+            make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
         global_Y_c_type = Fields.Field{
             typeof(Fields.field_values(Y.c)),
             typeof(global_center_space),
