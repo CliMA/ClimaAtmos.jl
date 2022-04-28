@@ -38,11 +38,12 @@ Commonly used command line arguements for experiment setps:
 * `--t_end`: specifies the simulation time in seconds;
 * `--FLOAT_TYPE`: can be Float32 or Float64; is default to Float32 if not specified;
 * `--regression_test`: a boolean var to specify whether the regression test is performed; is default to true if not specified;
-* `--enable_threading`: a boolean var to enable multi-threading; defaults to false; Note that Julia must be launched with, for example, `--threads=8`.
+* `--enable_threading`: a boolean var to enable multi-threading; defaults to true; Note that Julia must be launched with, for example, `--threads=8`.
 * `--job_id`: a uniquely defined id for a job; is default based on the parsed args of the experiment if not specified;
 * `--output_dir`: specifies the output directory that saves all the jld2 outputs; is default to `job_id` if not specified.
+* `--dt_save_to_disk`: specifies specifies the frequency in seconds to save the data into jld2 files. Defaults to `dt_save_to_disk = 0`, which means no jld2 outputs.
 
-To use `sphere/held_suarez_rhoe` as an example, one needs to modify [these lines](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/sphere/held_suarez_rhoe.jl#L6-L16) into the specific setup. In particular, `dt_save_to_disk=FT(0)` means no jld2 outputs. A non-zero value specifies the frequency in seconds to save the data into jld2 files. 
+To use `held_suarez_rhoe` as an example, one needs to modify [this driver](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/driver.jl) into the specific setup.
 
 
 ## Remapping the CG nodal outputs in `jld2` onto the regular lat/lon grids and save into `nc` files

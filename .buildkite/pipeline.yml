@@ -155,23 +155,23 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
       - label: ":computer: baroclinic wave (ρθ) Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhotheta --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64"
         artifact_paths: "sphere_baroclinic_wave_rhotheta_Float64/*"
 
       - label: ":computer: held suarez (ρθ) Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhotheta --FLOAT_TYPE Float64 --job_id sphere_held_suarez_rhotheta_Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhotheta --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_held_suarez_rhotheta_Float64"
         artifact_paths: "sphere_held_suarez_rhotheta_Float64/*"
 
       - label: ":computer: held suarez (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhotheta --job_id sphere_held_suarez_rhotheta --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhotheta --energy_name rhotheta --job_id sphere_held_suarez_rhotheta --regression_test true"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_equilmoist --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_equilmoist --moist equil --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_int) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_int_equilmoist --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_int_equilmoist --energy_name rhoe_int --moist equil --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
   - group: "Milestones"
@@ -186,11 +186,11 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhoe_equilmoist --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhoe_equilmoist --moist equil --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: baroclinic wave (ρe) equilmoist radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhoe_equilmoist_radiation --job_id sphere_baroclinic_wave_rhoe_equilmoist_radiation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME baroclinic_wave_rhoe_equilmoist_radiation --moist equil --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_radiation"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_radiation/*"
 
       - label: ":computer: held suarez (ρe)"
@@ -198,7 +198,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe/*"
 
       - label: ":computer: held suarez (ρe_int)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_int --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
   - group: "Performance"
