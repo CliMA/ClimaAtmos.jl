@@ -61,6 +61,7 @@ Then you can merge your PR by copying the new reference counter, printed in the 
 
 A simple view of how this can be done is by considering the following. Below is an toy example list of several commits merged into the main branch, identified by its commit SHA (left column), or hash. NCData from each of these commits are compared against NCData in a reference commit (possibly itself). The self references are needed when we hit a failure mode (described above).
 
+```
 hash of      hash of
  merged     reference
  commit      commit
@@ -73,6 +74,7 @@ hash of      hash of
 "SIgf1i" => "dHkJqc"
 "vTsCoY" => "dHkJqc"
 "VvCzAH" => "dHkJqc"
+```
 
 Ideally, we could `git commit` the commit hash into our PRs in order to update the reference when we hit a failure mode. However, there are two issues with this:
 

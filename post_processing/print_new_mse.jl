@@ -83,9 +83,14 @@ end
 for job_id in keys(percent_reduction_mse)
     @info "percent_reduction_mse[$job_id] = $(percent_reduction_mse[job_id])"
 end
-@info "min mse reduction (%) over all cases = $(min(values(percent_reduction_mse)...))"
+if !isempty(percent_reduction_mse)
+    @info "min mse reduction (%) over all cases = $(min(values(percent_reduction_mse)...))"
+end
 
 if any(values(files_skipped))
-    @show files_skipped
+    @info "Skipped files:"
+    for key in keys(files_skipped)
+        @info "     job_id:`$key`, file:`$(files_skipped[key])`"
+    end
     error("Some MSE files where skipped due to missing files")
 end
