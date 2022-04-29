@@ -58,6 +58,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. ᶜχ = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
         Spaces.weighted_dss!(ᶜχ, comms_ctx)
         @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
+        @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
     end
 
     if point_type <: Geometry.Abstract3DPoint
