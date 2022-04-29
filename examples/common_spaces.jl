@@ -64,13 +64,13 @@ function make_distributed_horizontal_space(
     return space, comms_ctx
 end
 
-function make_hybrid_spaces(h_space, z_max, z_elem)
+function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
         Geometry.ZPoint(z_max);
         boundary_tags = (:bottom, :top),
     )
-    z_mesh = Meshes.IntervalMesh(z_domain, nelems = z_elem)
+    z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     z_topology = Topologies.IntervalTopology(z_mesh)
     z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
     center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)

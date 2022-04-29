@@ -12,17 +12,19 @@ params = EarthParameterSet()
 horizontal_mesh =
     periodic_rectangle_mesh(; x_max = Δx, y_max = Δx, x_elem = 1, y_elem = 1)
 quad = Spaces.Quadratures.GL{1}()
-z_max = FT(100e3)
-z_elem = 100
-t_end = FT(60 * 60 * 24 * 365.25 * 5)
+z_max = FT(90e3)
+z_elem = 90
+z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
+t_end = FT(60 * 60 * 24 * 365.25)
 dt = FT(60 * 60 * 3)
-dt_save_to_sol = 100 * dt
+dt_save_to_sol = 10 * dt
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 jacobian_flags = (;
     ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = 𝔼_name == :ρe ? :no_∂ᶜp∂ᶜK : :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact,
 )
 
-additional_cache(Y, params, dt) = rrtmgp_model_cache(Y, params)
+additional_cache(Y, params, dt) =
+    rrtmgp_model_cache(Y, params; idealized_h2o = true)
 additional_tendency!(Yₜ, Y, p, t) = rrtmgp_model_tendency!(Yₜ, Y, p, t)
 additional_callbacks = (PeriodicCallback(
     rrtmgp_model_callback!,
@@ -36,11 +38,11 @@ function center_initial_condition(local_geometry, params)
     MSLP = FT(Planet.MSLP(params))
     grav = FT(Planet.grav(params))
 
-    T₀ = FT(300)
-
     z = local_geometry.coordinates.z
-    p = MSLP * exp(-z * grav / (R_d * T₀))
-    ρ = p / (R_d * T₀)
+
+    T = FT(300)
+    p = MSLP * exp(-z * grav / (R_d * T))
+    ρ = p / (R_d * T)
     ts = TD.PhaseDry_ρp(params, ρ, p)
 
     if 𝔼_name == :ρθ
@@ -90,7 +92,7 @@ function custom_postprocessing(sol, output_dir)
             vec(Fields.coordinate_field(Y.c).z ./ 1000);
             xlabel = "T [K]",
             ylabel = "z [km]",
-            xlims = (100, 300),
+            xlims = (190, 310),
             legend = false,
         )
     end
