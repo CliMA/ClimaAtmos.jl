@@ -422,6 +422,6 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             bottom = Operators.SetValue(-mean(dif_flux_ρq_tot)),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
-        @. Yₜ.c.ρ += ᶜdivᵥ(FT(0) * ᶠgradᵥ(ᶜρ))
+        @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
     end
 end
