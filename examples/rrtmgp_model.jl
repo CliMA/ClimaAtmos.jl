@@ -65,8 +65,8 @@ struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRadiationMode end
     abstract type AbstractInterpolation
 
 A method for obtaining cell face pressures/temperatures from cell center
-pressures/temperatures, or vice versa. The available options are `BestFit`,
-`UniformZ`, `UniformP`, `GeometricMean`, and `ArithmeticMean`. `BestFit`
+pressures/temperatures, or vice versa. The available options are `LogP`, `BestFit`,
+`UniformZ`, `UniformP`, `GeometricMean`, and `ArithmeticMean`. `LogP` and `BestFit`
 requires z-coordinates to be provided, while the other options do not. If both
 cell center and cell face values are provided, `NoInterpolation` should be used.
 
@@ -75,16 +75,10 @@ used for interpolation on the interior faces and for extrapolation on the
 boundary faces. To get cell center values from cell face values, it is only used
 for interpolation.
 
-For `BestFit`, we start by assuming that there is some constant lapse rate
-    ∂T(z)/∂z = L.
-This tells us that, for some constant T₀,
-    T(z) = T₀ + L * z.
-Since T(z₁) = T₁ and T(z₂) = T₂, for some z₁ != z₂, we have that
-    T₁ = T₀ + L * z₁ and T₂ = T₀ + L * z₂ ==>
-    T₂ - T₁ = L * (z₂ - z₁) ==>
-    L = (T₂ - T₁) / (z₂ - z₁) ==>
-    T₁ = T₀ + (T₂ - T₁) / (z₂ - z₁) * z₁ ==>
-    T₀ = (T₁ * z₂ - T₂ * z₁) / (z₂ - z₁) ==>
+For `LogP`, we assume temperature and log(pressure) is linear in z, so we have
+    T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁)
+    p(z) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁))
+For `BestFit`, we start by assuming that temperature is linear in z, so we have
     T(z) = T₁ + (T₂ - T₁) / (z₂ - z₁) * (z - z₁).
 To get p(z), we do different things depending on whether or not T₁ == T₂ (i.e.,
 whether or not L == 0).
@@ -146,6 +140,7 @@ struct GeometricMean <: AbstractInterpolation end
 struct UniformZ <: AbstractInterpolation end
 struct UniformP <: AbstractInterpolation end
 struct BestFit <: AbstractInterpolation end
+struct LogP <: AbstractInterpolation end
 
 """
     abstract type AbstractBottomExtrapolation
@@ -186,14 +181,14 @@ struct UseSurfaceTempAtBottom <: AbstractBottomExtrapolation end
 struct HydrostaticBottom <: AbstractBottomExtrapolation end
 
 requires_z(::Any) = false
-requires_z(::Union{BestFit, HydrostaticBottom}) = true
+requires_z(::Union{BestFit, LogP, HydrostaticBottom}) = true
 
 uniform_z_p(T, p₁, T₁, p₂, T₂) =
     T₁ == T₂ ? sqrt(p₁ * p₂) : p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
-#best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
-#    T₁ == T₂ ? p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
-#    p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
-best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁))
+best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
+    T₁ == T₂ ? p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
+    p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
+log_p_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁))
 
 function interp!(::ArithmeticMean, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
     @. T = (Tꜜ + Tꜛ) / 2
@@ -215,6 +210,10 @@ function interp!(::BestFit, p, T, z, pꜜ, Tꜜ, zꜜ, pꜛ, Tꜛ, zꜛ)
     @. T = Tꜜ + (Tꜛ - Tꜜ) * (z - zꜜ) / (zꜛ - zꜜ)
     @. p = best_fit_p(T, z, pꜜ, Tꜜ, zꜜ, pꜛ, Tꜛ, zꜛ)
 end
+function interp!(::LogP, p, T, z, pꜜ, Tꜜ, zꜜ, pꜛ, Tꜛ, zꜛ)
+    @. T = Tꜜ + (Tꜛ - Tꜜ) * (z - zꜜ) / (zꜛ - zꜜ)
+    @. p = log_p_p(T, z, pꜜ, Tꜜ, zꜜ, pꜛ, Tꜛ, zꜛ)
+end
 
 function extrap!(::ArithmeticMean, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
     @. T = (3 * T⁺ - T⁺⁺) / 2
@@ -235,6 +234,10 @@ end
 function extrap!(::BestFit, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺, Tₛ, params)
     @. T = T⁺ + (T⁺⁺ - T⁺) * (z - z⁺) / (z⁺⁺ - z⁺)
     @. p = best_fit_p(T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺)
+end
+function extrap!(::LogP, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺, Tₛ, params)
+    @. T = T⁺ + (T⁺⁺ - T⁺) * (z - z⁺) / (z⁺⁺ - z⁺)
+    @. p = log_p_p(T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺)
 end
 function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
     FT = eltype(p)
