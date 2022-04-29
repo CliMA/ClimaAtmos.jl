@@ -10,8 +10,8 @@ function rrtmgp_model_cache(
     Y,
     params;
     radiation_mode = ClearSkyRadiation(),
-    interpolation = BestFit(),
-    bottom_extrapolation = SameAsInterpolation(),
+    interpolation = LogP(),
+    bottom_extrapolation = HydrostaticBottom(),
     idealized_insolation = true,
     idealized_h2o = false,
 )

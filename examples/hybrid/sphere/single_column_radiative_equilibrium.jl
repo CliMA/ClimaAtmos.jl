@@ -27,7 +27,6 @@ additional_cache(Y, params, dt) = rrtmgp_model_cache(
     Y,
     params;
     idealized_h2o = true,
-    bottom_extrapolation = HydrostaticBottom(),
 )
 additional_tendency!(Yₜ, Y, p, t) = rrtmgp_model_tendency!(Yₜ, Y, p, t)
 additional_callbacks = (PeriodicCallback(
