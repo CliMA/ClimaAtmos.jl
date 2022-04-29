@@ -193,8 +193,7 @@ uniform_z_p(T, p₁, T₁, p₂, T₂) =
 #best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
 #    T₁ == T₂ ? p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
 #    p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
-best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
-    p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁))
+best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) = p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁))
 
 function interp!(::ArithmeticMean, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
     @. T = (Tꜜ + Tꜛ) / 2
