@@ -193,9 +193,10 @@ end
 function make_save_to_disk_func(output_dir, is_distributed)
     function save_to_disk_func(integrator)
         day = floor(Int, integrator.t / (60 * 60 * 24))
-        @info "Saving prognostic variables to JLD2 file on day $day"
+        sec = Int(mod(integrator.t, 3600 * 24))
+        @info "Saving prognostic variables to JLD2 file on day $day second $sec"
         suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
-        output_file = joinpath(output_dir, "day$day$suffix")
+        output_file = joinpath(output_dir, "day$day.$sec$suffix")
         jldsave(output_file; t = integrator.t, Y = integrator.u)
         return nothing
     end
