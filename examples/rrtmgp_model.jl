@@ -178,7 +178,7 @@ This tells us that, for some constant T₀,
 Since T(z⁺) = T⁺, we have that
     T⁺ = T₀ + g / cₚ * z⁺ ==>
     T₀ = T⁺ - g / cₚ * z⁺ ==>
-    T(z) = T⁺ + g / cₚ * (z - z⁺).
+    T(z) = T⁺ + g / cₚ * (z⁺ - z).
 """
 abstract type AbstractBottomExtrapolation end
 struct SameAsInterpolation <: AbstractBottomExtrapolation end
@@ -190,9 +190,11 @@ requires_z(::Union{BestFit, HydrostaticBottom}) = true
 
 uniform_z_p(T, p₁, T₁, p₂, T₂) =
     T₁ == T₂ ? sqrt(p₁ * p₂) : p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
+#best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
+#    T₁ == T₂ ? p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
+#    p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
 best_fit_p(T, z, p₁, T₁, z₁, p₂, T₂, z₂) =
-    T₁ == T₂ ? p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁)) :
-    p₁ * (p₂ / p₁)^(log(T / T₁) / log(T₂ / T₁))
+    p₁ * (p₂ / p₁)^((z - z₁) / (z₂ - z₁))
 
 function interp!(::ArithmeticMean, p, T, pꜜ, Tꜜ, pꜛ, Tꜛ)
     @. T = (Tꜜ + Tꜛ) / 2

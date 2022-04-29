@@ -1,7 +1,8 @@
 include("cli_options.jl")
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-TEST_NAME = parsed_args["TEST_NAME"]
+#TEST_NAME = parsed_args["TEST_NAME"]
+TEST_NAME = "single_column_radiative_equilibrium"
 
 using OrdinaryDiffEq
 using DiffEqCallbacks
