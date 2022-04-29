@@ -308,9 +308,9 @@ if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
         Y_last = sol.u[end]
         # This is helpful for starting up new tables
         @info "Job-specific MSE table format:"
-        println("all_best_mse[$job_id] = OrderedCollections.OrderedDict()")
+        println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
         for prop_chain in Fields.property_chains(Y_last)
-            println("all_best_mse[$job_id][$prop_chain] = 0.0")
+            println("all_best_mse[\"$job_id\"][$prop_chain] = 0.0")
         end
 
         # Extract best mse for this job:
@@ -336,8 +336,12 @@ if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
         varname(pc::Tuple) = process_name(join(pc, "_"))
 
         export_nc(Y_last; nc_filename = ds_filename_computed, varname)
-        computed_mse =
-            regression_test(; job_id, best_mse, ds_filename_computed, varname)
+        computed_mse = regression_test(;
+            job_id,
+            reference_mse = best_mse,
+            ds_filename_computed,
+            varname,
+        )
 
         computed_mse_filename = joinpath(job_id, "computed_mse.json")
 
