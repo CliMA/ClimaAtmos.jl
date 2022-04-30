@@ -15,17 +15,17 @@ import ClimaCore:
     Operators
 using ClimaCore.Geometry
 using Logging
-#ENV["CLIMACORE_DISTRIBUTED"] = "MPI" # TODO: remove before merging
+# ENV["CLIMACORE_DISTRIBUTED"] = "MPI" # TODO: remove before merging
 usempi = get(ENV, "CLIMACORE_DISTRIBUTED", "") == "MPI"
 if usempi
     using ClimaComms
     using ClimaCommsMPI
-    const Context = ClimaCommsMPI.MPICommsContext
-    const pid, nprocs = ClimaComms.init(Context)
+    const comms_ctx = ClimaCommsMPI.MPICommsContext()
+    const pid, nprocs = ClimaComms.init(comms_ctx)
     if pid == 1
         println("parallel run with $nprocs processes")
     end
-    logger_stream = ClimaComms.iamroot(Context) ? stderr : devnull
+    logger_stream = ClimaComms.iamroot(comms_ctx) ? stderr : devnull
 
     prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
     atexit() do
@@ -66,27 +66,18 @@ function hvspace_3D(
     Nf_center, Nf_face = 2, 1 #1 + 3 + 1
     quad = Spaces.Quadratures.GLL{npoly + 1}()
     horzmesh = Meshes.RectilinearMesh(horzdomain, xelem, yelem)
-    if usempi
-        horztopology = Topologies.DistributedTopology2D(horzmesh, Context)
-        comms_ctx_center =
-            Spaces.setup_comms(Context, horztopology, quad, Nv, Nf_center)
-        comms_ctx_face =
-            Spaces.setup_comms(Context, horztopology, quad, Nv + 1, Nf_face)
-    else
-        horztopology = Topologies.Topology2D(horzmesh)
-        comms_ctx_center = nothing
-        comms_ctx_face = nothing
-    end
-    horzspace =
-        Spaces.SpectralElementSpace2D(horztopology, quad, comms_ctx_center)
+    horztopology =
+        usempi ? Topologies.DistributedTopology2D(comms_ctx, horzmesh) :
+        Topologies.Topology2D(horzmesh)
+    horzspace = Spaces.SpectralElementSpace2D(horztopology, quad)
 
     hv_center_space =
         Spaces.ExtrudedFiniteDifferenceSpace(horzspace, vert_center_space)
     hv_face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(hv_center_space)
-    return (hv_center_space, hv_face_space, comms_ctx_center, comms_ctx_face)
+    return (hv_center_space, hv_face_space, horztopology)
 end
 # set up 3D domain - doubly periodic box
-hv_center_space, hv_face_space, comms_ctx_center, comms_ctx_face =
+hv_center_space, hv_face_space, horztopology =
     hvspace_3D((-500, 500), (-500, 500), (0, 1000), usempi = usempi)
 
 const MSLP = 1e5 # mean sea level pressure
@@ -142,14 +133,13 @@ uₕ = map(_ -> Geometry.Covariant12Vector(0.0, 0.0), coords)
 w = map(_ -> Geometry.Covariant3Vector(0.0), face_coords)
 Y = Fields.FieldVector(Yc = Yc, uₕ = uₕ, w = w)
 
-energy_0 =
-    usempi ? ClimaComms.reduce(comms_ctx_center, sum(Y.Yc.ρe), +) : sum(Y.Yc.ρe)
-mass_0 =
-    usempi ? ClimaComms.reduce(comms_ctx_center, sum(Y.Yc.ρ), +) : sum(Y.Yc.ρ)
+energy_0 = usempi ? ClimaComms.reduce(comms_ctx, sum(Y.Yc.ρe), +) : sum(Y.Yc.ρe)
+mass_0 = usempi ? ClimaComms.reduce(comms_ctx, sum(Y.Yc.ρ), +) : sum(Y.Yc.ρ)
 
-if !usempi || (usempi && ClimaComms.iamroot(Context))
+if !usempi || (usempi && ClimaComms.iamroot(comms_ctx))
     @show (energy_0, mass_0)
 end
+ghost_buffer = usempi ? Spaces.create_ghost_buffer(Y, horztopology) : nothing
 
 function rhs_invariant!(dY, Y, _, t)
 
@@ -199,8 +189,8 @@ function rhs_invariant!(dY, Y, _, t)
         Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(
             cuₕ,
         ))),)
-    Spaces.weighted_dss!(dρe, comms_ctx_center)
-    Spaces.weighted_dss!(duₕ, comms_ctx_center)
+    Spaces.weighted_dss!(dρe, ghost_buffer)
+    Spaces.weighted_dss!(duₕ, ghost_buffer)
 
     κ₄ = 100.0 # m^4/s
     @. dρe = -κ₄ * hwdiv(cρ * hgrad(χe))
@@ -292,9 +282,9 @@ function rhs_invariant!(dY, Y, _, t)
     @. dρe += fcc(fw, cρe)
     # dYc.ρuₕ += fcc(w, Yc.ρuₕ)
 
-    Spaces.weighted_dss!(dY.Yc, comms_ctx_center)
-    Spaces.weighted_dss!(dY.uₕ, comms_ctx_center)
-    Spaces.weighted_dss!(dY.w, comms_ctx_face)
+    Spaces.weighted_dss!(dY.Yc, ghost_buffer)
+    Spaces.weighted_dss!(dY.uₕ, ghost_buffer)
+    Spaces.weighted_dss!(dY.w, ghost_buffer)
     return dY
 end
 
@@ -324,9 +314,9 @@ Es = FT[]
 Mass = FT[]
 if usempi
     for sol_step in sol_invariant.u
-        Es_step = ClimaComms.reduce(comms_ctx_center, sum(sol_step.Yc.ρe), +)
-        Mass_step = ClimaComms.reduce(comms_ctx_center, sum(sol_step.Yc.ρ), +)
-        if ClimaComms.iamroot(Context)
+        Es_step = ClimaComms.reduce(comms_ctx, sum(sol_step.Yc.ρe), +)
+        Mass_step = ClimaComms.reduce(comms_ctx, sum(sol_step.Yc.ρ), +)
+        if ClimaComms.iamroot(comms_ctx)
             push!(Es, Es_step)
             push!(Mass, Mass_step)
         end
@@ -346,7 +336,7 @@ dir = "bubble_3d_invariant_rhoe"
 path = joinpath(@__DIR__, "output", dir)
 mkpath(path)
 
-if !usempi || (usempi && ClimaComms.iamroot(Context))
+if !usempi || (usempi && ClimaComms.iamroot(comms_ctx))
     # post-processing
     Plots.png(
         Plots.plot((Es .- energy_0) ./ energy_0),
@@ -375,5 +365,3 @@ if !usempi || (usempi && ClimaComms.iamroot(Context))
         "Mass",
     )
 end
-
-usempi && exit()
