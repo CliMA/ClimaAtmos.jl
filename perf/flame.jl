@@ -46,12 +46,14 @@ if !isempty(get(ENV, "CI_PERF_CPUPROFILE", ""))
         gs_profile_uri = "gs://clima-ci/$profile_uri"
         dl_profile_uri = "https://storage.googleapis.com/clima-ci/$profile_uri"
 
+        #=
         # sync to bucket
         run(`gsutil cp $(joinpath(output_path, cpufile)) $gs_profile_uri`)
 
         # print link
         println("+++ Profiler link for '$profile_uri': ")
         print_link_url(profiler_url(dl_profile_uri))
+        =#
     end
 else
     import PProf
