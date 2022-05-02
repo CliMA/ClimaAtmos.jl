@@ -6,7 +6,14 @@ using ClimaCore.Utilities: half
 const compose = Operators.ComposeStencils()
 const apply = Operators.ApplyStencil()
 
-struct SchurComplementW{F, FT, J1, J2, J3, J4, S, A}
+# Note: We denote energy variables with 𝔼, momentum variables with 𝕄, and tracer
+# variables with 𝕋.
+is_energy_var(symbol) = symbol in (:ρθ, :ρe, :ρe_int)
+is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
+is_tracer_var(symbol) =
+    !(symbol == :ρ || is_energy_var(symbol) || is_momentum_var(symbol))
+
+struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
     # whether this struct is used to compute Wfact_t or Wfact
     transform::Bool
 
@@ -22,6 +29,7 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, S, A}
     ∂ᶠ𝕄ₜ∂ᶜ𝔼::J3
     ∂ᶠ𝕄ₜ∂ᶜρ::J3
     ∂ᶠ𝕄ₜ∂ᶠ𝕄::J4
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple::J5
 
     # cache for the Schur complement linear solve
     S::S
@@ -32,27 +40,34 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, S, A}
 end
 
 function SchurComplementW(Y, transform, flags, test = false)
+    @assert length(filter(isequal(:ρ), propertynames(Y.c))) == 1
+    @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
+    @assert length(filter(is_momentum_var, propertynames(Y.c))) == 1
+    @assert length(filter(is_momentum_var, propertynames(Y.f))) == 1
+    @assert length(propertynames(Y.f)) == 1
+
     FT = eltype(Y)
     dtγ_ref = Ref(zero(FT))
-    center_space = axes(Y.c)
-    face_space = axes(Y.f)
 
-    # TODO: Automate this.
-    J_eltype1 = Operators.StencilCoefs{-half, half, NTuple{2, FT}}
-    J_eltype2 = flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact && :ρe in propertynames(Y.c) ?
-        Operators.StencilCoefs{-(1 + half), 1 + half, NTuple{4, FT}} :
-        J_eltype1
-    J_eltype3 = Operators.StencilCoefs{-1, 1, NTuple{3, FT}}
-    ∂ᶜρₜ∂ᶠ𝕄 = Fields.Field(J_eltype1, center_space)
-    ∂ᶜ𝔼ₜ∂ᶠ𝕄 = Fields.Field(J_eltype2, center_space)
-    ∂ᶠ𝕄ₜ∂ᶜ𝔼 = Fields.Field(J_eltype1, face_space)
-    ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(J_eltype1, face_space)
-    ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(J_eltype3, face_space)
+    bidiag_type = Operators.StencilCoefs{-half, half, NTuple{2, FT}}
+    tridiag_type = Operators.StencilCoefs{-1, 1, NTuple{3, FT}}
+    quaddiag_type = Operators.StencilCoefs{-(1 + half), 1 + half, NTuple{4, FT}}
 
-    # TODO: Automate this.
-    S_eltype = Operators.StencilCoefs{-1, 1, NTuple{3, FT}}
-    S = Fields.Field(S_eltype, face_space)
-    N = Spaces.nlevels(face_space)
+    ∂ᶜ𝔼ₜ∂ᶠ𝕄_type = flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact && :ρe in propertynames(Y.c) ?
+        quaddiag_type : bidiag_type
+    ∂ᶜρₜ∂ᶠ𝕄 = Fields.Field(bidiag_type, axes(Y.c))
+    ∂ᶜ𝔼ₜ∂ᶠ𝕄 = Fields.Field(∂ᶜ𝔼ₜ∂ᶠ𝕄_type, axes(Y.c))
+    ∂ᶠ𝕄ₜ∂ᶜ𝔼 = Fields.Field(bidiag_type, axes(Y.f))
+    ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
+    ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
+    ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple = NamedTuple{ᶜ𝕋_names}(ntuple(
+        _ -> Fields.Field(bidiag_type, axes(Y.c)),
+        length(ᶜ𝕋_names),
+    ),)
+
+    S = Fields.Field(tridiag_type, axes(Y.f))
+    N = Spaces.nlevels(axes(Y.f))
     S_column_array = Tridiagonal(
         Array{FT}(undef, N - 1),
         Array{FT}(undef, N),
@@ -66,6 +81,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         typeof(∂ᶜ𝔼ₜ∂ᶠ𝕄),
         typeof(∂ᶠ𝕄ₜ∂ᶜρ),
         typeof(∂ᶠ𝕄ₜ∂ᶠ𝕄),
+        typeof(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple),
         typeof(S),
         typeof(S_column_array),
     }(
@@ -77,6 +93,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         ∂ᶠ𝕄ₜ∂ᶜ𝔼,
         ∂ᶠ𝕄ₜ∂ᶜρ,
         ∂ᶠ𝕄ₜ∂ᶠ𝕄,
+        ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple,
         S,
         S_column_array,
         test,
@@ -89,57 +106,65 @@ end
 Base.similar(w::SchurComplementW) = w
 
 #=
-A = [-I           0            dtγ ∂ᶜρₜ∂ᶠ𝕄    ;
-     0            -I           dtγ ∂ᶜ𝔼ₜ∂ᶠ𝕄    ;
-     dtγ ∂ᶠ𝕄ₜ∂ᶜρ  dtγ ∂ᶠ𝕄ₜ∂ᶜ𝔼  dtγ ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I] =
-    [-I   0    A13    ;
-     0    -I   A23    ;
-     A31  A32  A33 - I]
-b = [b1; b2; b3]
-x = [x1; x2; x3]
-Solving A x = b:
-    -x1 + A13 x3 = b1 ==> x1 = -b1 + A13 x3  (1)
-    -x2 + A23 x3 = b2 ==> x2 = -b2 + A23 x3  (2)
-    A31 x1 + A32 x2 + (A33 - I) x3 = b3  (3)
-Substitute (1) and (2) into (3):
-    A31 (-b1 + A13 x3) + A32 (-b2 + A23 x3) + (A33 - I) x3 = b3 ==>
-    (A31 A13 + A32 A23 + A33 - I) x3 = b3 + A31 b1 + A32 b2 ==>
-    x3 = (A31 A13 + A32 A23 + A33 - I) \ (b3 + A31 b1 + A32 b2)
-Finally, use (1) and (2) to get x1 and x2.
-Note: The matrix S = A31 A13 + A32 A23 + A33 - I is the "Schur complement" of
-[-I 0; 0 -I] (the top-left 4 blocks) in A.
+x = [xᶜρ
+     xᶜ𝔼
+     xᶜ𝕄
+     ⋮
+     xᶜ𝕋[i]
+     ⋮
+     xᶠ𝕄],
+b = [bᶜρ
+     bᶜ𝔼
+     bᶜ𝕄
+     ⋮
+     bᶜ𝕋[i]
+     ⋮
+     bᶠ𝕄], and
+A = -I + dtγ J =
+    [    -I            0       0  ⋯  0  ⋯  dtγ ∂ᶜρₜ∂ᶠ𝕄
+          0           -I       0  ⋯  0  ⋯  dtγ ∂ᶜ𝔼ₜ∂ᶠ𝕄
+          0            0      -I  ⋯  0  ⋯       0
+          ⋮            ⋮        ⋮  ⋱  ⋮          ⋮
+          0            0       0  ⋯ -I  ⋯  dtγ ∂ᶜ𝕋[i]ₜ∂ᶠ𝕄
+          ⋮            ⋮        ⋮     ⋮  ⋱       ⋮
+     dtγ ∂ᶠ𝕄ₜ∂ᶜρ  dtγ ∂ᶠ𝕄ₜ∂ᶜ𝔼  0  ⋯  0  ⋯  dtγ ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I].
+
+To simplify our notation, let us denote
+A = [-I    0    0  ⋯  0  ⋯  Aρ𝕄
+      0   -I    0  ⋯  0  ⋯  A𝔼𝕄
+      0    0   -I  ⋯  0  ⋯   0
+      ⋮    ⋮     ⋮  ⋱  ⋮      ⋮
+      0    0    0  ⋯ -I  ⋯  A𝕋𝕄[i]
+      ⋮    ⋮     ⋮     ⋮  ⋱   ⋮
+     A𝕄ρ A𝕄𝔼   0  ⋯  0  ⋯  A𝕄𝕄 - I]
+
+If A x = b, then
+    -xᶜρ + Aρ𝕄 xᶠ𝕄 = bᶜρ ==> xᶜρ = -bᶜρ + Aρ𝕄 xᶠ𝕄                   (1)
+    -xᶜ𝔼 + A𝔼𝕄 xᶠ𝕄 = bᶜ𝔼 ==> xᶜ𝔼 = -bᶜ𝔼 + A𝔼𝕄 xᶠ𝕄                   (2)
+    -xᶜ𝕄 = bᶜ𝕄 ==> xᶜ𝕄 = -bᶜ𝕄                                       (3)
+    -xᶜ𝕋[i] + A𝕋𝕄[i] xᶠ𝕄 = bᶜ𝕋[i] ==> xᶜ𝕋[i] = -bᶜ𝕋[i] + A𝕋𝕄[i] xᶠ𝕄  (4)
+    A𝕄ρ xᶜρ + A𝕄𝔼 xᶜ𝔼 + (A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄                        (5)
+
+Substituting (1) and (2) into (5) gives us
+    A𝕄ρ (-bᶜρ + Aρ𝕄 xᶠ𝕄) + A𝕄𝔼 (-bᶜ𝔼 + A𝔼𝕄 xᶠ𝕄) + (A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄 ==>
+    (A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄 + A𝕄ρ bᶜρ + A𝕄𝔼 bᶜ𝔼 ==>
+    xᶠ𝕄 = (A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I) \ (bᶠ𝕄 + A𝕄ρ bᶜρ + A𝕄𝔼 bᶜ𝔼)
+
+Given xᶠ𝕄, we can use (1), (2), (3), and (4) to get xᶜρ, xᶜ𝔼, xᶜ𝕄, and xᶜ𝕋[i].
+
+Note: The matrix S = A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I is the "Schur complement" of
+the large -I block in A.
 =#
 function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
     function _linsolve!(x, A, b, update_matrix = false; kwargs...)
-        # Initialize x as if the Jacobian is 0. This properly set the values for
-        # Fields that are not included in the Jacobian (e.g, uₕ and tracers).
-        @. x = -b
-
-        (; dtγ_ref, ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄) = A
-        (; S, S_column_array) = A
+        (; dtγ_ref, S, S_column_array) = A
+        (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
         dtγ = dtγ_ref[]
 
-        xᶜρ = x.c.ρ
-        bᶜρ = b.c.ρ
-        if :ρθ in propertynames(x.c)
-            xᶜ𝔼 = x.c.ρθ
-            bᶜ𝔼 = b.c.ρθ
-        elseif :ρe in propertynames(x.c)
-            xᶜ𝔼 = x.c.ρe
-            bᶜ𝔼 = b.c.ρe
-        elseif :ρe_int in propertynames(x.c)
-            xᶜ𝔼 = x.c.ρe_int
-            bᶜ𝔼 = b.c.ρe_int
-        end
-        if :ρw in propertynames(x.f)
-            xᶠ𝕄 = x.f.ρw.components.data.:1
-            bᶠ𝕄 = b.f.ρw.components.data.:1
-        elseif :w in propertynames(x.f)
-            xᶠ𝕄 = x.f.w.components.data.:1
-            bᶠ𝕄 = b.f.w.components.data.:1
-        end
+        # Compute Schur complement
 
-        # TODO: Extend LinearAlgebra.I to work with stencil fields.
+        # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
+        # than 2 diagonals per Jacobian block.
         FT = eltype(eltype(S))
         I = Ref(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
         if Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
@@ -156,6 +181,20 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
                 dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
         end
 
+        # Compute xᶠ𝕄
+
+        xᶜρ = x.c.ρ
+        bᶜρ = b.c.ρ
+        ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
+        xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
+        bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
+        ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
+        xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
+        bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
+        ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
+        xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
+        bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
+
         @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
 
         # TODO: Do this with stencil_solve!.
@@ -169,35 +208,69 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
             ldiv!(lu!(S_column_array), xᶠ𝕄_column_view)
         end
 
+        # Compute remaining components of x
+
         @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
         @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
+        @. xᶜ𝕄 = -bᶜ𝕄
+        for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
+            xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
+            bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+            @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
+        end
+
+        # Verify correctness (if needed)
 
         if A.test && Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) == (-half, half)
-            Ni, Nj, _, Nv, Nh = size(Spaces.local_geometry_data(axes(xᶜρ)))
-            ∂Yₜ∂Y = Array{FT}(undef, 3 * Nv + 1, 3 * Nv + 1)
-            ΔY = Array{FT}(undef, 3 * Nv + 1)
-            ΔΔY = Array{FT}(undef, 3 * Nv + 1)
+            Ni, Nj, _, Nv, Nh = size(Fields.field_values(x.c))
+            Nᶜf = DataLayouts.typesize(FT, eltype(x.c))
+            J_col = zeros(FT, Nv * Nᶜf + Nv + 1, Nv * Nᶜf + Nv + 1)
             for h in 1:Nh, j in 1:Nj, i in 1:Ni
-                ∂Yₜ∂Y .= zero(FT)
-                ∂Yₜ∂Y[1:Nv, (2 * Nv + 1):(3 * Nv + 1)] .=
+                x_col = Fields.FieldVector(;
+                    c = Spaces.column(x.c, i, j, h),
+                    f = Spaces.column(x.f, i, j, h),
+                )
+                b_col = Fields.FieldVector(;
+                    c = Spaces.column(b.c, i, j, h),
+                    f = Spaces.column(b.f, i, j, h),
+                )
+                ᶜρ_position = findfirst(isequal(:ρ), propertynames(x.c))
+                ᶜρ_offset =
+                    DataLayouts.fieldtypeoffset(FT, eltype(x.c), ᶜρ_position)
+                ᶜρ_indices = (Nv * ᶜρ_offset + 1):(Nv * (ᶜρ_offset + 1))
+                ᶜ𝔼_position = findfirst(is_energy_var, propertynames(x.c))
+                ᶜ𝔼_offset =
+                    DataLayouts.fieldtypeoffset(FT, eltype(x.c), ᶜ𝔼_position)
+                ᶜ𝔼_indices = (Nv * ᶜ𝔼_offset + 1):(Nv * (ᶜ𝔼_offset + 1))
+                ᶠ𝕄_indices = (Nv * Nᶜf + 1):(Nv * (Nᶜf + 1) + 1)
+                J_col[ᶜρ_indices, ᶠ𝕄_indices] .=
                     matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                ∂Yₜ∂Y[(Nv + 1):(2 * Nv), (2 * Nv + 1):(3 * Nv + 1)] .=
+                J_col[ᶜ𝔼_indices, ᶠ𝕄_indices] .=
                     matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                ∂Yₜ∂Y[(2 * Nv + 1):(3 * Nv + 1), 1:Nv] .=
+                J_col[ᶠ𝕄_indices, ᶜρ_indices] .=
                     matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(x.c), i, j, h)
-                ∂Yₜ∂Y[(2 * Nv + 1):(3 * Nv + 1), (Nv + 1):(2 * Nv)] .=
+                J_col[ᶠ𝕄_indices, ᶜ𝔼_indices] .=
                     matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(x.c), i, j, h)
-                ∂Yₜ∂Y[(2 * Nv + 1):(3 * Nv + 1), (2 * Nv + 1):(3 * Nv + 1)] .=
+                J_col[ᶠ𝕄_indices, ᶠ𝕄_indices] .=
                     matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                ΔY[1:Nv] .= vector_column(xᶜρ, i, j, h)
-                ΔY[(Nv + 1):(2 * Nv)] .= vector_column(xᶜ𝔼, i, j, h)
-                ΔY[(2 * Nv + 1):(3 * Nv + 1)] .= vector_column(xᶠ𝕄, i, j, h)
-                ΔΔY[1:Nv] .= vector_column(bᶜρ, i, j, h)
-                ΔΔY[(Nv + 1):(2 * Nv)] .= vector_column(bᶜ𝔼, i, j, h)
-                ΔΔY[(2 * Nv + 1):(3 * Nv + 1)] .= vector_column(bᶠ𝕄, i, j, h)
-                @assert (-LinearAlgebra.I + dtγ * ∂Yₜ∂Y) * ΔY ≈ ΔΔY
+                for ᶜ𝕋_position in findall(is_tracer_var, propertynames(x.c))
+                    ᶜ𝕋_offset = DataLayouts.fieldtypeoffset(
+                        FT,
+                        eltype(x.c),
+                        ᶜ𝕋_position,
+                    )
+                    ᶜ𝕋_indices = (Nv * ᶜ𝕋_offset + 1):(Nv * (ᶜ𝕋_offset + 1))
+                    ᶜ𝕋_name = propertynames(x.c)[ᶜ𝕋_position]
+                    ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                    J_col[ᶜ𝕋_indices, ᶠ𝕄_indices] .=
+                        matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
+                end
+                @assert (-LinearAlgebra.I + dtγ * J_col) * x_col ≈ b_col
             end
         end
+
+        # Apply transform (if needed)
 
         if A.transform
             x .*= dtγ

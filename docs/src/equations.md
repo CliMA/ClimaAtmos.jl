@@ -213,4 +213,15 @@ This is discretized using the following
 - D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
 - D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right] .
 ```
-Currently tracers are not treated implicitly.
+Currently the central reconstruction
+```math
+- D^c_v[ I^f(\rho \chi) \boldsymbol{u}_v ]
+```
+is treated implicitly.
+
+!!! todo
+    The Jacobian computation should be updated so that the upwinded term
+    ```math
+    - D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
+    ```
+    is treated implicitly.
