@@ -19,10 +19,3 @@ additional_callbacks = (PeriodicCallback(
     FT(6 * 60 * 60); # update RRTMGPModel every 6 hours
     initial_affect = true,
 ),)
-
-center_initial_condition(local_geometry, params) = center_initial_condition(
-    local_geometry,
-    params,
-    Val(:ρe);
-    moisture_mode = Val(:equil),
-)

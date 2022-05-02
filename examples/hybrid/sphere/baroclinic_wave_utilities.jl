@@ -27,12 +27,18 @@ baroclinic_wave_mesh(; params, h_elem) =
 ## Initial conditions
 ##
 
+function face_initial_condition(local_geometry, params)
+    z = local_geometry.coordinates.z
+    FT = eltype(z)
+    (; w = Geometry.Covariant3Vector(FT(0)))
+end
+
 function center_initial_condition(
     local_geometry,
     params,
-    ᶜ𝔼_name;
+    ᶜ𝔼_name,
+    moisture_mode;
     is_balanced_flow = false,
-    moisture_mode = Val(:dry),
 )
     # Constants from CLIMAParameters
     R_d = FT(Planet.R_d(params))
@@ -148,9 +154,6 @@ function center_initial_condition(
 
     return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs...)
 end
-
-face_initial_condition(local_geometry, params) =
-    (; w = Geometry.Covariant3Vector(FT(0)))
 
 ##
 ## Additional tendencies

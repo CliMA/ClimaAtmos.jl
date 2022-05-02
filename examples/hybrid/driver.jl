@@ -48,8 +48,6 @@ additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 additional_cache(Y, params, dt) = NamedTuple()
 additional_tendency!(Yₜ, Y, p, t) = nothing
-center_initial_condition(local_geometry, params) = NamedTuple()
-face_initial_condition(local_geometry, params) = NamedTuple()
 postprocessing(sol, output_dir) = nothing
 
 ################################################################################
@@ -137,7 +135,12 @@ else
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     Y = Fields.FieldVector(
-        c = center_initial_condition.(ᶜlocal_geometry, params),
+        c = center_initial_condition.(
+            ᶜlocal_geometry,
+            params,
+            Val(energy_name()),
+            Val(moisture_mode()),
+        ),
         f = face_initial_condition.(ᶠlocal_geometry, params),
     )
 end

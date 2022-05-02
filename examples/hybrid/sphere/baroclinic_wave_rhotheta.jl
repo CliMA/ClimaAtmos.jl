@@ -8,6 +8,3 @@ function additional_tendency!(Yₜ, Y, p, t)
     hyperdiffusion_tendency!(Yₜ, Y, p, t)
     sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
 end
-
-center_initial_condition(local_geometry, params) =
-    center_initial_condition(local_geometry, params, Val(:ρθ))
