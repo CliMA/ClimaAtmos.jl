@@ -12,6 +12,9 @@ using NCDatasets
 using ClimaCoreTempestRemap
 using ClimaCore
 
+import Random
+Random.seed!(1234)
+
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 moisture_mode() = Symbol(parse_arg(parsed_args, "moist", "dry"))
