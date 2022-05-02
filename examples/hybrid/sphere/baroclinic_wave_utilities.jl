@@ -6,7 +6,9 @@ const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
 
-struct BaroclinicWaveParameterSet <: AbstractEarthParameterSet end
+struct BaroclinicWaveParameterSet{NT} <: AbstractEarthParameterSet
+    named_tuple::NT
+end
 Planet.R_d(::BaroclinicWaveParameterSet) = 287.0
 Planet.MSLP(::BaroclinicWaveParameterSet) = 1.0e5
 Planet.grav(::BaroclinicWaveParameterSet) = 9.80616
@@ -14,7 +16,8 @@ Planet.Omega(::BaroclinicWaveParameterSet) = 7.29212e-5
 Planet.planet_radius(::BaroclinicWaveParameterSet) = 6.371229e6
 
 # parameters for 0-Moment Microphysics
-Atmos.Microphysics_0M.τ_precip(::BaroclinicWaveParameterSet) = dt # timescale for precipitation removal
+Atmos.Microphysics_0M.τ_precip(param_set::BaroclinicWaveParameterSet) =
+    param_set.named_tuple.dt # timescale for precipitation removal
 Atmos.Microphysics_0M.qc_0(::BaroclinicWaveParameterSet) = 5e-6 # criterion for removal after supersaturation
 
 baroclinic_wave_mesh(; params, h_elem) =
