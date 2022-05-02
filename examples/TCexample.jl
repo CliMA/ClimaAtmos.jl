@@ -130,7 +130,33 @@ end
 coords = CC.Fields.coordinate_field(hv_center_space)
 face_coords = CC.Fields.coordinate_field(hv_face_space)
 
-function init_state(edmf, coords, face_coords, hv_center_space, hv_face_space)
+cent_prognostic_vars(::Type{FT}, local_geometry, edmf) where {FT} = (;
+    ρ = FT(0),
+    ρθ = FT(0),
+    ρuₕ = CCG.UVVector(FT(0), FT(0)),
+    u = FT(0),
+    v = FT(0),
+    θ_liq_ice = FT(0),
+    q_tot = FT(0),
+    TC.cent_prognostic_vars_edmf(FT, edmf)...,
+)
+
+face_prognostic_vars(::Type{FT}, local_geometry, edmf) where {FT} = (;
+    ρw = CCG.WVector(FT(0)),
+    w = FT(0),
+    TC.face_prognostic_vars_edmf(FT, local_geometry, edmf)...,
+)
+
+init_state(edmf, args...) = init_state(eltype(edmf), edmf, args...)
+
+function init_state(
+    ::Type{FT},
+    edmf,
+    coords,
+    face_coords,
+    hv_center_space,
+    hv_face_space,
+) where {FT}
     Yc = map(coords) do coord
         bubble = init_dry_rising_bubble_3d(coord.x, coord.y, coord.z)
         bubble
@@ -140,28 +166,10 @@ function init_state(edmf, coords, face_coords, hv_center_space, hv_face_space)
         CCG.WVector(0.0)
     end
 
-    FT = Float64
-    cent_prog_fields = TC.FieldFromNamedTuple(
-        hv_center_space,
-        (;
-            ρ = FT(0),
-            ρθ = FT(0),
-            ρuₕ = CCG.UVVector(FT(0), FT(0)),
-            u = FT(0),
-            v = FT(0),
-            θ_liq_ice = FT(0),
-            q_tot = FT(0),
-            TC.cent_prognostic_vars_edmf(FT, edmf)...,
-        ),
-    )
-    face_prog_fields = TC.FieldFromNamedTuple(
-        hv_face_space,
-        (;
-            ρw = CCG.WVector(FT(0)),
-            w = FT(0),
-            TC.face_prognostic_vars_edmf(FT, edmf)...,
-        ),
-    )
+    cent_prog_fields =
+        TC.FieldFromNamedTuple(hv_center_space, cent_prognostic_vars, FT, edmf)
+    face_prog_fields =
+        TC.FieldFromNamedTuple(hv_face_space, face_prognostic_vars, FT, edmf)
     Y = CC.Fields.FieldVector(cent = cent_prog_fields, face = face_prog_fields)
     @. Y.cent.ρ = Yc.ρ
     @. Y.cent.ρθ = Yc.ρθ

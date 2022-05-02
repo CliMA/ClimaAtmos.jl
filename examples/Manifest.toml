@@ -423,9 +423,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "221ff6c6c9ede484e9f8be4974697187c06eb06b"
+git-tree-sha1 = "70f5bfdfbdc6c9d2b7a143d70ae88f4cb7b193b1"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.55"
+version = "0.25.56"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -474,9 +474,9 @@ version = "2.4.8+0"
 
 [[deps.ExponentialUtilities]]
 deps = ["ArrayInterface", "GenericSchur", "LinearAlgebra", "Printf", "Requires", "SparseArrays", "libblastrampoline_jll"]
-git-tree-sha1 = "951c44b4af9d1e061d5cf789a30881471604c14c"
+git-tree-sha1 = "789a5aaec6856ad774a95cdb558806afeeb256f9"
 uuid = "d4d017d3-3776-5f7e-afef-a10c40355c18"
-version = "1.14.0"
+version = "1.15.0"
 
 [[deps.ExprTools]]
 git-tree-sha1 = "56559bbef6ca5ea0c0818fa5c90320398a6fbf8d"
@@ -1027,9 +1027,9 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "44a7b7bb7dd1afe12bac119df6a7e540fa2c96bc"
+git-tree-sha1 = "76c987446e8d555677f064aaac1145c4c17662f8"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.13"
+version = "0.3.14"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -1312,9 +1312,9 @@ version = "1.2.0"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "c64338ef7b60f8458a9feaadd378261bd3279c89"
+git-tree-sha1 = "d05baca9ec540de3d8b12ef660c7353aae9f9477"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.28.0"
+version = "1.28.1"
 
 [[deps.PoissonRandom]]
 deps = ["Random", "Statistics", "Test"]
@@ -1538,9 +1538,9 @@ version = "0.6.32"
 
 [[deps.SciMLBase]]
 deps = ["ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "RecipesBase", "RecursiveArrayTools", "StaticArrays", "Statistics", "Tables", "TreeViews"]
-git-tree-sha1 = "a5305dca1b3ebf83d9c92e2fa244424f1bdb1627"
+git-tree-sha1 = "331f8250fe6a575522635cda5615a4e28fc60efe"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.31.0"
+version = "1.31.1"
 
 [[deps.Scratch]]
 deps = ["Dates"]
@@ -1664,9 +1664,9 @@ version = "0.3.5"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "StaticArrays", "Tables"]
-git-tree-sha1 = "57617b34fa34f91d536eb265df67c2d4519b8b98"
+git-tree-sha1 = "8f705dd141733d79aa2932143af6c6e0b6cea8df"
 uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-version = "0.6.5"
+version = "0.6.6"
 
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
@@ -1774,9 +1774,9 @@ version = "0.3.4"
 
 [[deps.TurbulenceConvection]]
 deps = ["CLIMAParameters", "ClimaCore", "CloudMicrophysics", "Dierckx", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Flux", "LambertW", "LinearAlgebra", "OperatorFlux", "StaticArrays", "StatsBase", "StochasticDiffEq", "Thermodynamics", "UnPack"]
-git-tree-sha1 = "6b825852dbd24152659f32b324e2279010b26aca"
+git-tree-sha1 = "852612e308e337d0f194ee313c20147e162e7980"
 uuid = "8e072fc4-01f8-44fb-b9dc-f9336c367e6b"
-version = "0.20.0"
+version = "0.22.0"
 
 [[deps.URIs]]
 git-tree-sha1 = "97bbe755a53fe859669cd907f2d96aee8d2c1355"
@@ -1998,9 +1998,9 @@ version = "1.5.2+0"
 
 [[deps.Zygote]]
 deps = ["AbstractFFTs", "ChainRules", "ChainRulesCore", "DiffRules", "Distributed", "FillArrays", "ForwardDiff", "IRTools", "InteractiveUtils", "LinearAlgebra", "MacroTools", "NaNMath", "Random", "Requires", "SparseArrays", "SpecialFunctions", "Statistics", "ZygoteRules"]
-git-tree-sha1 = "8c3e9ae8c2b520200df59d4f683a0dab65685ade"
+git-tree-sha1 = "9c65b4b9d4547c4d16fc3f73e3f6ebee08730c76"
 uuid = "e88e6eb3-aa80-5325-afca-941959d7151f"
-version = "0.6.38"
+version = "0.6.39"
 
 [[deps.ZygoteRules]]
 deps = ["MacroTools"]
