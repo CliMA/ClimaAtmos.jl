@@ -12,7 +12,7 @@ function additional_tendency!(Yₜ, Y, p, t)
     sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     held_suarez_tendency!(Yₜ, Y, p, t)
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
-    relax_pbl_qt!(Yₜ, Y, p. t)
+    relax_pbl_qt!(Yₜ, Y, p, t)
     zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 end
 
