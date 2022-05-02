@@ -425,3 +425,14 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
     end
 end
+
+# relax qt to saturated qt in boundary layer, timescale 30 minimum
+# a hacky replacement for mhs bc
+function relax_pbl_qt!(Yₜ, Y, p. t)
+    (; ᶜts, params) = p 
+    ᶜqt_sat = @. TD.q_vap_saturation(params, ᶜts)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜαₘ = @. ifelse(ᶜz < FT(2000), FT( 1 / (30*60) ), FT(0))
+
+    @. Yₜ.c.ρq_tot -= ᶜαₘ * ( Y.c.ρq_tot - Y.c.ρ * ᶜqt_sat) 
+end
