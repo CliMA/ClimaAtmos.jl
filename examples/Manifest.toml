@@ -173,21 +173,21 @@ version = "0.1.2"
 
 [[deps.ClimaComms]]
 deps = ["CUDA", "KernelAbstractions", "StaticArrays"]
-git-tree-sha1 = "b144631d46a36eb36add96cb5cd32693ea53ef11"
+git-tree-sha1 = "50fbb76557f11e28ec21ad2fbe5e7547f1b1f432"
 uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
-version = "0.1.1"
+version = "0.3.0"
 
 [[deps.ClimaCommsMPI]]
 deps = ["ClimaComms", "KernelAbstractions", "MPI"]
-git-tree-sha1 = "d97be357454b856ffb48ede77043509f39093740"
+git-tree-sha1 = "2a1857a51eab7e1b15dd709ccef3c3ccabd7a6f6"
 uuid = "5f86816e-8b66-43b2-912e-75384f99de49"
-version = "0.1.1"
+version = "0.3.2"
 
 [[deps.ClimaCore]]
-deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "IntervalSets", "LinearAlgebra", "RecursiveArrayTools", "RootSolvers", "Rotations", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "7caf4f9d92ba3038c3ec9886920844e4efa7a1de"
+deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "RecursiveArrayTools", "RootSolvers", "Rotations", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
+git-tree-sha1 = "009f1bcb7abe7bcd33e2e744ac3843d1d5c8bda3"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.9.0"
+version = "0.10.1"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
@@ -197,12 +197,9 @@ version = "0.2.3"
 
 [[deps.ClimaCoreTempestRemap]]
 deps = ["ClimaCore", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll", "Test"]
-git-tree-sha1 = "c4560292ff9f5d1f8ef64eb7195fe04fce1fdf99"
-repo-rev = "3e1398e"
-repo-subdir = "lib/ClimaCoreTempestRemap"
-repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
+git-tree-sha1 = "f70e2666a48c38bc95cb40d5cc99bedc0dc8b0e3"
 uuid = "d934ef94-cdd4-4710-83d6-720549644b70"
-version = "0.3.1"
+version = "0.3.3"
 
 [[deps.ClimaCoreVTK]]
 deps = ["ClimaCore", "WriteVTK"]
@@ -426,9 +423,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "58d51b2cc7648b750f5fc012d45ddc3bfc0628ee"
+git-tree-sha1 = "221ff6c6c9ede484e9f8be4974697187c06eb06b"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.54"
+version = "0.25.55"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -913,9 +910,9 @@ version = "0.4.5"
 
 [[deps.Latexify]]
 deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "Printf", "Requires"]
-git-tree-sha1 = "6f14549f7760d84b2db7a9b10b88cd3cc3025730"
+git-tree-sha1 = "46a39b9c58749eefb5f2dc1178cb8fab5332b1ab"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.15.14"
+version = "0.15.15"
 
 [[deps.LayoutPointers]]
 deps = ["ArrayInterface", "LinearAlgebra", "ManualMemory", "SIMDTypes", "Static"]
@@ -1315,9 +1312,9 @@ version = "1.2.0"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "GeometryBasics", "JSON", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "6f2dd1cf7a4bbf4f305a0d8750e351cb46dfbe80"
+git-tree-sha1 = "c64338ef7b60f8458a9feaadd378261bd3279c89"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.27.6"
+version = "1.28.0"
 
 [[deps.PoissonRandom]]
 deps = ["Random", "Statistics", "Test"]

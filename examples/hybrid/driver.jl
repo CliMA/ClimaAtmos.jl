@@ -50,7 +50,6 @@ face_initial_condition(local_geometry, params) = NamedTuple()
 postprocessing(sol, output_dir) = nothing
 
 ################################################################################
-
 is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED")
 
 using Logging
@@ -58,25 +57,26 @@ if is_distributed
     using ClimaComms
     if ENV["CLIMACORE_DISTRIBUTED"] == "MPI"
         using ClimaCommsMPI
-        const Context = ClimaCommsMPI.MPICommsContext
+        const comms_ctx = ClimaCommsMPI.MPICommsContext()
     else
         error("ENV[\"CLIMACORE_DISTRIBUTED\"] only supports the \"MPI\" option")
     end
-    const pid, nprocs = ClimaComms.init(Context)
-    logger_stream = ClimaComms.iamroot(Context) ? stderr : devnull
+    const pid, nprocs = ClimaComms.init(comms_ctx)
+    logger_stream = ClimaComms.iamroot(comms_ctx) ? stderr : devnull
     prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
     @info "Setting up distributed run on $nprocs \
         processor$(nprocs == 1 ? "" : "s")"
 else
+    const comms_ctx = nothing
     using TerminalLoggers: TerminalLogger
     prev_logger = global_logger(TerminalLogger())
 end
 atexit() do
     global_logger(prev_logger)
 end
-
-import ClimaCore: enable_threading
-enable_threading() = parsed_args["enable_threading"]
+using OrdinaryDiffEq
+using DiffEqCallbacks
+using JLD2
 
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
@@ -96,6 +96,9 @@ z_stretch = Meshes.Uniform()
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 include(joinpath("sphere", "$TEST_NAME.jl"))
+
+import ClimaCore: enable_threading
+enable_threading() = parsed_args["enable_threading"]
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
 # bytes required to store an element from Y.c or Y.f (or, really, from any Field
@@ -118,30 +121,13 @@ if haskey(ENV, "RESTART_FILE")
     close(restart_data)
     ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
     ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
-    if is_distributed
-        comms_ctx = Spaces.setup_comms(
-            Context,
-            axes(Y.c).horizontal_space.topology,
-            quad,
-            z_elem + 1,
-            max_field_element_size,
-        )
-    else
-        comms_ctx = nothing
-    end
 else
     t_start = FT(0)
     if is_distributed
-        h_space, comms_ctx = make_distributed_horizontal_space(
-            horizontal_mesh,
-            quad,
-            Context,
-            z_elem + 1,
-            max_field_element_size,
-        )
+        h_space =
+            make_distributed_horizontal_space(horizontal_mesh, quad, comms_ctx)
     else
         h_space = make_horizontal_space(horizontal_mesh, quad)
-        comms_ctx = nothing
     end
     center_space, face_space =
         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
@@ -152,7 +138,7 @@ else
         f = face_initial_condition.(ᶠlocal_geometry, params),
     )
 end
-p = get_cache(Y, params, comms_ctx, dt)
+p = get_cache(Y, params, dt)
 
 if ode_algorithm <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,
@@ -184,12 +170,6 @@ output_dir = parse_arg(parsed_args, "output_dir", job_id)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
-function make_dss_func(comms_ctx)
-    _dss!(x::Fields.Field) = Spaces.weighted_dss!(x, comms_ctx)
-    _dss!(::Any) = nothing
-    dss_func(Y, t, integrator) = foreach(_dss!, Fields._values(Y))
-    return dss_func
-end
 function make_save_to_disk_func(output_dir, is_distributed)
     function save_to_disk_func(integrator)
         day = floor(Int, integrator.t / (60 * 60 * 24))
@@ -203,10 +183,13 @@ function make_save_to_disk_func(output_dir, is_distributed)
     return save_to_disk_func
 end
 
-dss_func = make_dss_func(comms_ctx)
 save_to_disk_func = make_save_to_disk_func(output_dir, is_distributed)
 
-dss_callback = FunctionCallingCallback(dss_func, func_start = true)
+dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
+    p = integrator.p
+    Spaces.weighted_dss!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss!(Y.f, p.ghost_buffer.f)
+end
 save_to_disk_callback = if dt_save_to_disk == 0
     nothing
 else
@@ -246,7 +229,7 @@ end
 sol = @timev OrdinaryDiffEq.solve!(integrator)
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
-    if ClimaComms.iamroot(Context)
+    if ClimaComms.iamroot(comms_ctx)
         global_h_space = make_horizontal_space(horizontal_mesh, quad)
         global_center_space, global_face_space =
             make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
@@ -269,14 +252,14 @@ if is_distributed # replace sol.u on the root processor with the global sol.u
             DataLayouts.gather(comms_ctx, Fields.field_values(sol.u[i].c))
         global_Y_f =
             DataLayouts.gather(comms_ctx, Fields.field_values(sol.u[i].f))
-        if ClimaComms.iamroot(Context)
+        if ClimaComms.iamroot(comms_ctx)
             global_sol_u[i] = Fields.FieldVector(
                 c = Fields.Field(global_Y_c, global_center_space),
                 f = Fields.Field(global_Y_f, global_face_space),
             )
         end
     end
-    if ClimaComms.iamroot(Context)
+    if ClimaComms.iamroot(comms_ctx)
         sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
     end
 end
@@ -300,7 +283,7 @@ if !is_distributed
     end
 end
 
-if !is_distributed || (is_distributed && ClimaComms.iamroot(Context))
+if !is_distributed || ClimaComms.iamroot(comms_ctx)
     include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
 
     if parsed_args["regression_test"]

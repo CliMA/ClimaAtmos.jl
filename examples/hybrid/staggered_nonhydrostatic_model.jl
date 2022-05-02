@@ -97,10 +97,10 @@ end
 thermo_state_ρe(ρe, Yc, K, Φ, params) =
     thermo_state_ρe_int(ρe - Yc.ρ * (K + Φ), Yc, params)
 
-get_cache(Y, params, comms_ctx, dt) =
-    merge(default_cache(Y, params, comms_ctx), additional_cache(Y, params, dt))
+get_cache(Y, params, dt) =
+    merge(default_cache(Y, params), additional_cache(Y, params, dt))
 
-function default_cache(Y, params, comms_ctx)
+function default_cache(Y, params)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = FT(Planet.Omega(params))
@@ -137,7 +137,13 @@ function default_cache(Y, params, comms_ctx)
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
         ),
         params,
-        comms_ctx,
+        ghost_buffer = (
+            c = Spaces.create_ghost_buffer(Y.c),
+            f = Spaces.create_ghost_buffer(Y.f),
+            χ = Spaces.create_ghost_buffer(Y.c.ρ), # for hyperdiffusion
+            χw = Spaces.create_ghost_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
+            χuₕ = Spaces.create_ghost_buffer(Y.c.uₕ), # for hyperdiffusion
+        ),
     )
 end
 
@@ -217,8 +223,8 @@ function remaining_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     default_remaining_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
-    Spaces.weighted_dss!(Yₜ.c, p.comms_ctx)
-    Spaces.weighted_dss!(Yₜ.f, p.comms_ctx)
+    Spaces.weighted_dss!(Yₜ.c, p.ghost_buffer.c)
+    Spaces.weighted_dss!(Yₜ.f, p.ghost_buffer.f)
     return Yₜ
 end
 
