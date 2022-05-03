@@ -955,6 +955,7 @@ cell faces in the extension.
 function update_fluxes!(model)
     model.implied_values != :none && update_implied_values!(model)
     model.add_isothermal_boundary_layer && update_boundary_layer!(model)
+    clip_values!(model)
     update_concentrations!(model.radiation_mode, model)
     !model.disable_longwave && update_lw_fluxes!(model.radiation_mode, model)
     !model.disable_shortwave && update_sw_fluxes!(model.radiation_mode, model)
@@ -994,9 +995,6 @@ function update_implied_values!(model)
         ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)
         update_views(extrap!, mode, outs, ins, others, 1, 1, 2)
     end
-    p_min = get_p_min(model)
-    @. p_lay = max(p_lay, p_min)
-    @. p_lev = max(p_lev, p_min)
 end
 update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
     mode,
@@ -1025,6 +1023,16 @@ end
 update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.Vmr) =
     @views vmr.vmr[end, :, :] .= vmr.vmr[end - 1, :, :]
 
+function clip_values!(model)
+    (; p_lay, p_lev) = model.solver.as
+    if !(model.radiation_mode isa GrayRadiation)
+        (; vmr_h2o) = model.solver.as.vmr
+        @. vmr_h2o = max(vmr_h2o, 0)
+    end
+    p_min = get_p_min(model)
+    @. p_lay = max(p_lay, p_min)
+    @. p_lev = max(p_lev, p_min)
+end
 update_concentrations!(::GrayRadiation, model) = nothing
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_dry!(
     model.solver.as.p_lev,
