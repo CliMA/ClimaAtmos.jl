@@ -14,10 +14,3 @@ function additional_tendency!(Yₜ, Y, p, t)
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 end
-
-center_initial_condition(local_geometry, params) = center_initial_condition(
-    local_geometry,
-    params,
-    Val(:ρe);
-    moisture_mode = Val(:equil),
-)

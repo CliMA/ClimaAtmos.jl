@@ -33,29 +33,34 @@ additional_callbacks = (PeriodicCallback(
     save_positions = (false, false), # do not save Y before and after callback
 ),)
 
-function center_initial_condition(local_geometry, params)
+# TODO: dispatch into this method
+function center_initial_condition(
+    local_geometry,
+    params,
+    ᶜ𝔼_name,
+    moisture_mode,
+)
+    z = local_geometry.coordinates.z
+    FT = eltype(z)
+
     R_d = FT(Planet.R_d(params))
     MSLP = FT(Planet.MSLP(params))
     grav = FT(Planet.grav(params))
-
-    z = local_geometry.coordinates.z
 
     T = FT(300)
     p = MSLP * exp(-z * grav / (R_d * T))
     ρ = p / (R_d * T)
     ts = TD.PhaseDry_ρp(params, ρ, p)
 
-    if 𝔼_name == :ρθ
+    if ᶜ𝔼_name === Val(:ρθ)
         𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
-    elseif 𝔼_name == :ρe
+    elseif ᶜ𝔼_name === Val(:ρe)
         𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
-    elseif 𝔼_name == :ρe_int
+    elseif ᶜ𝔼_name === Val(:ρe_int)
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
     return (; ρ, 𝔼_kwarg..., uₕ = Geometry.Covariant12Vector(FT(0), FT(0)))
 end
-face_initial_condition(local_geometry, params) =
-    (; w = Geometry.Covariant3Vector(FT(0)))
 
 function custom_postprocessing(sol, output_dir)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
