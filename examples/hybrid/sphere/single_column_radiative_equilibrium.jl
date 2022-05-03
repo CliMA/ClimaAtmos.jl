@@ -19,9 +19,6 @@ t_end = FT(60 * 60 * 24 * 365.25)
 dt = FT(60 * 60 * 3)
 dt_save_to_sol = 10 * dt
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
-jacobian_flags = (;
-    ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = 𝔼_name == :ρe ? :no_∂ᶜp∂ᶜK : :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact,
-)
 
 additional_cache(Y, params, dt) =
     rrtmgp_model_cache(Y, params; idealized_h2o = true)

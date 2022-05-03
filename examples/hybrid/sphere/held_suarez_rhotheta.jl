@@ -1,5 +1,3 @@
-jacobian_flags = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(2e17),
         use_tempest_mode = use_tempest_mode),

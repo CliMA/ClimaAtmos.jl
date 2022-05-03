@@ -40,7 +40,10 @@ dt = FT(parse_arg(parsed_args, "dt", FT(400)))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
 dt_save_to_disk = parse_arg(parsed_args, "dt_save_to_disk", FT(0))
 ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
-jacobian_flags = () # only required by implicit ODE algorithms
+jacobi_flags(::Val{:ρe}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::Val{:ρe_int}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::Val{:ρθ}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobian_flags = jacobi_flags(Val(energy_name()))
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
 show_progress_bar = isinteractive()
 additional_callbacks = () # e.g., printing diagnostic information
