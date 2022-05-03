@@ -58,6 +58,7 @@ const ᶜFC = Operators.FluxCorrectionC2C(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
 )
+const ᶠupwind_product = Operators.UpwindBiasedProductC2F()
 
 const ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp)
 const ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp)
@@ -147,21 +148,18 @@ function default_cache(Y, params)
     )
 end
 
-is_tracer(name) = !(name in (:ρ, :ρθ, :ρe, :ρe_int, :uₕ, :w))
-
 function implicit_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜK, ᶜΦ, ᶜts, ᶜp, params) = p
 
-    ᶠupwind_product = Operators.UpwindBiasedProductC2F()
-
     # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
     # allocation because the cache is stored separately from Y, which means that
     # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
     if eltype(Y) <: Dual
         ᶜK = similar(ᶜρ)
+        ᶜts = similar(ᶜρ, eltype(ᶜts).name.wrapper{eltype(ᶜρ)})
         ᶜp = similar(ᶜρ)
     end
 
@@ -210,10 +208,10 @@ function implicit_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.f.w = -(ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) + ᶠgradᵥ(ᶜK + ᶜΦ))
 
-    # TODO: Add vertical advection of tracers to the Jacobian
-    for tracer_name in filter(is_tracer, propertynames(Y.c))
-        ᶜtracerₜ = getproperty(Yₜ.c, tracer_name)
-        ᶜtracerₜ .= zero(eltype(ᶜtracerₜ))
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+        ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+        ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+        @. ᶜ𝕋ₜ = -(ᶜdivᵥ(ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, ᶜ𝕋 / Y.c.ρ)))
     end
 
     return Yₜ
@@ -244,7 +242,6 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
 
     # Energy conservation
-    ᶠupwind_product = Operators.UpwindBiasedProductC2F()
 
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
@@ -303,13 +300,11 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
 
     # Tracer conservation
 
-    for tracer_name in filter(is_tracer, propertynames(Y.c))
-        ᶜtracer = getproperty(Y.c, tracer_name)
-        ᶜtracerₜ = getproperty(Yₜ.c, tracer_name)
-        @. ᶜtracerₜ -= divₕ(ᶜtracer * ᶜuvw)
-        @. ᶜtracerₜ -=
-            ᶜdivᵥ(ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, ᶜtracer / Y.c.ρ)) # TODO: put in implicit tend.
-        @. ᶜtracerₜ -= ᶜdivᵥ(ᶠinterp(ᶜtracer * ᶜuₕ))
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+        ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+        ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+        @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
+        @. ᶜ𝕋ₜ -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋 * ᶜuₕ))
     end
 end
 
@@ -321,7 +316,8 @@ Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} 
     T(axes(T), S(one(T′)))
 
 function Wfact!(W, Y, p, dtγ, t)
-    (; flags, dtγ_ref, ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄) = W
+    (; flags, dtγ_ref) = W
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = W
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -566,23 +562,35 @@ function Wfact!(W, Y, p, dtγ, t)
         ),)
     end
 
-    if W.test
+    # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜ𝕋) * ᶠw)
+    # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋) * ᶠw_unit)
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+        ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+        @. ∂ᶜ𝕋ₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋) * one(ᶠw)))
+    end
+
+    # TODO: Figure out a way to test the Jacobian when the thermodynamic state
+    # is PhaseEquil (i.e., when implicit_tendency! calls saturation adjustment).
+    if W.test && !(eltype(ᶜts) <: TD.PhaseEquil)
         # Checking every column takes too long, so just check one.
         i, j, h = 1, 1, 1
-        if :ρθ in propertynames(Y.c)
-            ᶜ𝔼_name = :ρθ
-        elseif :ρe in propertynames(Y.c)
-            ᶜ𝔼_name = :ρe
-        elseif :ρe_int in propertynames(Y.c)
-            ᶜ𝔼_name = :ρe_int
-        end
         args = (implicit_tendency!, Y, p, t, i, j, h)
+        ᶜ𝔼_name = filter(is_energy_var, propertynames(Y.c))[1]
+
         @assert matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ==
                 exact_column_jacobian_block(args..., (:c, :ρ), (:f, :w))
         @assert matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(Y.c), i, j, h) ≈
                 exact_column_jacobian_block(args..., (:f, :w), (:c, ᶜ𝔼_name))
         @assert matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
                 exact_column_jacobian_block(args..., (:f, :w), (:f, :w))
+        for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+            ᶜ𝕋_tuple = (:c, ᶜ𝕋_name)
+            @assert matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
+                    exact_column_jacobian_block(args..., ᶜ𝕋_tuple, (:f, :w))
+        end
+
         ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx = matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(Y.f), i, j, h)
         ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact =
             exact_column_jacobian_block(args..., (:c, ᶜ𝔼_name), (:f, :w))
@@ -593,6 +601,7 @@ function Wfact!(W, Y, p, dtγ, t)
             @assert err < 1e-6
             # Note: the highest value seen so far is ~3e-7 (only applies to ρe)
         end
+
         ∂ᶠ𝕄ₜ∂ᶜρ_approx = matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(Y.c), i, j, h)
         ∂ᶠ𝕄ₜ∂ᶜρ_exact = exact_column_jacobian_block(args..., (:f, :w), (:c, :ρ))
         if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
