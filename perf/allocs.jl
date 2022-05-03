@@ -22,6 +22,7 @@ dirs_to_monitor = [
 
 cli_options = [
     ("--TEST_NAME baroclinic_wave_rhoe --job_id alloc_sphere_baroclinic_wave_rhoe"),
+    ("--TEST_NAME held_suarez_rhoe_equilmoist --moist equil --job_id alloc_sphere_held_suarez_rhoe_equilmoist"),
 ]
 #! format: on
 
