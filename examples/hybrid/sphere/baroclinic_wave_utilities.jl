@@ -69,7 +69,7 @@ function center_initial_condition(
     p_t = FT(1e4)
     q_t = FT(1e-12)
     q_0 = FT(0.018)
-    ϕ_w = FT(2 * π / 9)
+    ϕ_w = FT(40)
     ε = FT(0.608)
 
     # Coordinates
