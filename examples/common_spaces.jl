@@ -58,6 +58,7 @@ function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
         boundary_tags = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
+    @info "z heights" z_mesh.faces
     z_topology = Topologies.IntervalTopology(z_mesh)
     z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
     center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)

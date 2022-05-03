@@ -150,7 +150,7 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: baroclinic wave (ρe) equilmoist radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_radiation --dt 300"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_radiation --dt 200 --t_end 432000"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_radiation/*"
 
       - label: ":computer: held suarez (ρe)"

@@ -171,7 +171,7 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = Meshes.Uniform()
+    z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
     z_max = FT(30e3)
     z_elem = 10
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
