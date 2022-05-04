@@ -641,3 +641,45 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     end
 
 end
+
+function custom_postprocessing(sol, output_dir)
+    get_var(i, var) = Fields.single_field(sol.u[i], var)
+    n = length(sol.u)
+    #! format: off
+    get_row(var) = [
+        "Y.$(join(var, '.'))";;
+        "$(norm(get_var(1, var), 2)) → $(norm(get_var(n, var), 2))";;
+        "$(mean(get_var(1, var))) → $(mean(get_var(n, var)))";;
+        "$(maximum(abs, get_var(1, var))) → $(maximum(abs, get_var(n, var)))";;
+        "$(minimum(abs, get_var(1, var))) → $(minimum(abs, get_var(n, var)))";;
+    ]
+    #! format: on
+    pretty_table(
+        vcat(map(get_row, Fields.property_chains(sol.u[1]))...);
+        title = "Change in Y from t = $(sol.t[1]) to t = $(sol.t[n]):",
+        header = ["var", "‖var‖₂", "mean(var)", "max(∣var∣)", "min(∣var∣)"],
+        alignment = :c,
+    )
+
+    anim = @animate for Y in sol.u
+        if :ρθ in propertynames(Y.c)
+            ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        elseif :ρe in propertynames(Y.c)
+            grav = FT(Planet.grav(params))
+            ᶜK = @. norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+            ᶜΦ = grav .* Fields.coordinate_field(Y.c).z
+            ᶜts = @. thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        elseif :ρe_int in propertynames(Y.c)
+            ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        end
+        plot(
+            vec(TD.air_temperature.(params, ᶜts)),
+            vec(Fields.coordinate_field(Y.c).z ./ 1000);
+            xlabel = "T [K]",
+            ylabel = "z [km]",
+            xlims = (190, 310),
+            legend = false,
+        )
+    end
+    Plots.mp4(anim, joinpath(output_dir, "T.mp4"), fps = 10)
+end

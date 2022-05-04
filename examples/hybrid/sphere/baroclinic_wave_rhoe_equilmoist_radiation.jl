@@ -1,5 +1,3 @@
-include("../radiation_utilities.jl")
-
 additional_cache(Y, params, dt) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(2e17)),
     sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
