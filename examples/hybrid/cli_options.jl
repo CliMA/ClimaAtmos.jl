@@ -1,55 +1,57 @@
 import ArgParse
-s = ArgParse.ArgParseSettings()
-ArgParse.@add_arg_table s begin
-    "--FLOAT_TYPE"
-    help = "Float type"
-    arg_type = String
-    default = "Float32"
-    "--t_end"
-    help = "Simulation end time"
-    arg_type = Float64
-    "--dt"
-    help = "Simulation time step"
-    arg_type = Float64
-    "--dt_save_to_sol" # TODO: should we default to Inf?
-    help = "Time between saving solution, 0 means do not save"
-    arg_type = Float64
-    default = Float64(60 * 60 * 24)
-    "--dt_save_to_disk"
-    help = "Time between saving to disk, 0 means do not save"
-    arg_type = Float64
-    default = Float64(0)
-    "--moist"
-    help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
-    arg_type = String
-    default = "dry"
-    "--rad"
-    help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
-    arg_type = String
-    "--energy_name"
-    help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
-    arg_type = String
-    default = "rhoe"
-    "--regression_test"
-    help = "(Bool) perform regression test"
-    arg_type = Bool
-    default = false
-    "--enable_threading"
-    help = "Enable multi-threading. Note: Julia must be launched with (e.g.,) `--threads=8`"
-    arg_type = Bool
-    default = true
-    "--TEST_NAME"
-    help = "Job name"
-    arg_type = String
-    "--output_dir"
-    help = "Output directory"
-    arg_type = String
-    "--job_id"
-    help = "Uniquely identifying string for a particular job"
-    arg_type = String
+function parse_commandline()
+    s = ArgParse.ArgParseSettings()
+    ArgParse.@add_arg_table s begin
+        "--FLOAT_TYPE"
+        help = "Float type"
+        arg_type = String
+        default = "Float32"
+        "--t_end"
+        help = "Simulation end time"
+        arg_type = Float64
+        "--dt"
+        help = "Simulation time step"
+        arg_type = Float64
+        "--dt_save_to_sol" # TODO: should we default to Inf?
+        help = "Time between saving solution, 0 means do not save"
+        arg_type = Float64
+        default = Float64(60 * 60 * 24)
+        "--dt_save_to_disk"
+        help = "Time between saving to disk, 0 means do not save"
+        arg_type = Float64
+        default = Float64(0)
+        "--moist"
+        help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
+        arg_type = String
+        default = "dry"
+        "--rad"
+        help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
+        arg_type = String
+        "--energy_name"
+        help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
+        arg_type = String
+        default = "rhoe"
+        "--regression_test"
+        help = "(Bool) perform regression test"
+        arg_type = Bool
+        default = false
+        "--enable_threading"
+        help = "Enable multi-threading. Note: Julia must be launched with (e.g.,) `--threads=8`"
+        arg_type = Bool
+        default = true
+        "--TEST_NAME"
+        help = "Job name"
+        arg_type = String
+        "--output_dir"
+        help = "Output directory"
+        arg_type = String
+        "--job_id"
+        help = "Uniquely identifying string for a particular job"
+        arg_type = String
+    end
+    parsed_args = ArgParse.parse_args(ARGS, s)
+    return (s, parsed_args)
 end
-
-parsed_args = ArgParse.parse_args(ARGS, s)
 
 function cli_defaults(s::ArgParse.ArgParseSettings)
     defaults = Dict()
@@ -58,14 +60,6 @@ function cli_defaults(s::ArgParse.ArgParseSettings)
         defaults[arg.dest_name] = arg.default
     end
     return defaults
-end
-
-#= Use the job ID for the output folder =#
-function output_directory(
-    s::ArgParse.ArgParseSettings,
-    parsed_args = ArgParse.parse_args(ARGS, s),
-)
-    return job_id_from_parsed_args(s, parsed_args)
 end
 
 """
@@ -98,7 +92,7 @@ function job_id_from_parsed_args(defaults::Dict, parsed_args)
             s *= _parsed_args[k]
         elseif _parsed_args[k] isa Int
             s *= k * "_" * string(_parsed_args[k])
-        elseif _parsed_args[k] isa Real
+        elseif _parsed_args[k] isa AbstractFloat
             warn = true
         else
             s *= k * "_" * string(_parsed_args[k])

@@ -1,4 +1,5 @@
 include("cli_options.jl")
+(s, parsed_args) = parse_commandline()
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 TEST_NAME = parsed_args["TEST_NAME"]
