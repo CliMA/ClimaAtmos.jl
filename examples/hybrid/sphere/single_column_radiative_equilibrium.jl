@@ -8,8 +8,8 @@ params = EarthParameterSet()
 horizontal_mesh =
     periodic_rectangle_mesh(; x_max = Δx, y_max = Δx, x_elem = 1, y_elem = 1)
 quad = Spaces.Quadratures.GL{1}()
-z_max = FT(90e3)
-z_elem = 90
+z_max = FT(70e3)
+z_elem = 70
 z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
 t_end = FT(60 * 60 * 24 * 365.25)
 dt = FT(60 * 60 * 3)
