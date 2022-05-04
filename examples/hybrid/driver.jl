@@ -3,6 +3,8 @@ include("cli_options.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 TEST_NAME = parsed_args["TEST_NAME"]
 
+rad = parsed_args["rad"]
+
 using OrdinaryDiffEq
 using DiffEqCallbacks
 using JLD2
@@ -99,6 +101,7 @@ z_elem = 10
 z_stretch = Meshes.Uniform()
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
+!isnothing(rad) && include("radiation_utilities.jl")
 include(joinpath("sphere", "$TEST_NAME.jl"))
 
 import ClimaCore: enable_threading

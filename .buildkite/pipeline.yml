@@ -178,7 +178,7 @@ steps:
     steps:
 
       - label: ":computer: single column radiative equilibrium"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME single_column_radiative_equilibrium --job_id sphere_single_column_radiative_equilibrium"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME single_column_radiative_equilibrium --rad clearsky --job_id sphere_single_column_radiative_equilibrium"
         artifact_paths: "sphere_single_column_radiative_equilibrium/*"
 
       - label: ":computer: baroclinic wave (ρe)"
