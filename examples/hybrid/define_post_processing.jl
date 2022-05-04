@@ -386,6 +386,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
+        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
         ᶠw_phy = Geometry.WVector.(ᶠw)
         ᶜw_phy = ᶜinterp.(ᶠw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
@@ -428,6 +429,8 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         nc_ρ = defVar(nc, "rho", FT, cspace, ("time",))
         nc_cloudwater = defVar(nc, "cloud_water", FT, cspace, ("time",))
         nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
+        nc_u = defVar(nc, "u", FT, cspace, ("time",))
+        nc_v = defVar(nc, "v", FT, cspace, ("time",))
 
         nc_time[1] = FT(day * 24 * 3600)
         nc_p[:, 1] = ᶜp
@@ -438,6 +441,8 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         nc_ρ[:, 1] = ᶜρ
         nc_cloudwater[:, 1] = ᶜcloudwater
         nc_watervapor[:, 1] = ᶜwatervapor
+        nc_u[:, 1] = ᶜuₕ_phy.components.data.:1
+        nc_v[:, 1] = ᶜuₕ_phy.components.data.:2
 
         close(nc)
 
@@ -475,6 +480,8 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
                 "rho",
                 "cloud_water",
                 "water_vapor",
+                "u",
+                "v",
             ],
         )
 
@@ -496,6 +503,8 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         water_vapor = ncdata["water_vapor"][:] * FT(1e3)
         rho = ncdata["rho"][:]
         w = ncdata["w"][:]
+        u = ncdata["u"][:]
+        v = ncdata["v"][:]
 
         vert_intg_cloud_water =
             sum(cloud_water .* rho, dims = 3) ./ sum(rho, dims = 3)
@@ -531,7 +540,22 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             color = :balance,
             title = "vorticity (1500m) day " * string(day),
         )
-        png(plot_ω, output_dir * "/bw-vorticity-day" * string(day) * ".png")
+        png(
+            plot_ω,
+            output_dir * "/bw-vorticity_lower-day" * string(day) * ".png",
+        )
+
+        plot_ω = contourf(
+            lon[lonidx],
+            lat[latidx],
+            vort[lonidx, latidx, 3, 1]',
+            color = :balance,
+            title = "vorticity (7500m) day " * string(day),
+        )
+        png(
+            plot_ω,
+            output_dir * "/bw-vorticity_uppper-day" * string(day) * ".png",
+        )
 
         plot_qt = contourf(
             lon[lonidx],
@@ -550,6 +574,42 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             title = "w (1500m) day " * string(day),
         )
         png(plot_w, output_dir * "/bw-w-day" * string(day) * ".png")
+
+        plot_u = contourf(
+            lon[lonidx],
+            lat[latidx],
+            u[lonidx, latidx, 3, 1]',
+            color = :balance,
+            title = "u (7500m) day " * string(day),
+        )
+        png(plot_u, output_dir * "/bw-u7500-day" * string(day) * ".png")
+
+        plot_u = contourf(
+            lon[lonidx],
+            lat[latidx],
+            u[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "u (1500m) day " * string(day),
+        )
+        png(plot_u, output_dir * "/bw-u1500-day" * string(day) * ".png")
+
+        plot_v = contourf(
+            lon[lonidx],
+            lat[latidx],
+            v[lonidx, latidx, 3, 1]',
+            color = :balance,
+            title = "v (7500m) day " * string(day),
+        )
+        png(plot_v, output_dir * "/bw-v7500-day" * string(day) * ".png")
+
+        plot_v = contourf(
+            lon[lonidx],
+            lat[latidx],
+            v[lonidx, latidx, 1, 1]',
+            color = :balance,
+            title = "v (1500m) day " * string(day),
+        )
+        png(plot_v, output_dir * "/bw-v1500-day" * string(day) * ".png")
 
         plot_cw = contourf(
             lon[lonidx],
