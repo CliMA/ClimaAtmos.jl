@@ -30,6 +30,9 @@ energy_name() =
     energy_variable(Val(Symbol(parse_arg(parsed_args, "energy_name", "rhoe")))) # e.g., :ρθ
 @assert energy_name() in (:ρe, :ρe_int, :ρθ)
 
+upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
+@assert upwinding_mode() in (:none, :first_order, :third_order)
+
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
 params = nothing
@@ -168,7 +171,7 @@ else
         f = face_initial_condition.(ᶠlocal_geometry, params),
     )
 end
-p = get_cache(Y, params, dt)
+p = get_cache(Y, params, upwinding_mode(), dt)
 
 if ode_algorithm <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,

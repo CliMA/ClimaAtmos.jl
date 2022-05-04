@@ -44,6 +44,10 @@ function parse_commandline()
         help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
         arg_type = String
         default = "rhoe"
+        "--upwinding"
+        help = "Upwinding mode [`none`, `first_order` , `third_order` (default)]"
+        arg_type = String
+        default = "third_order"
         "--regression_test"
         help = "(Bool) perform regression test"
         arg_type = Bool
