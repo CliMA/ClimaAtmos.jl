@@ -61,6 +61,7 @@ We make use of the following operators
   ```
   where ``\|\boldsymbol{u}\|^2 = g^{ij} \boldsymbol{u}_i \boldsymbol{u}_j`` and ``g^{ij}`` is the contravariant metric tensor.
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
+* ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
 
 ## Equations and discretizations
 
@@ -139,7 +140,7 @@ with the latter treated implicitly.
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u})
+\frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R)
 ```
 is discretized using
 ```math
@@ -148,6 +149,7 @@ is discretized using
 - D^c_v \left[
   I^f(\rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)
   + (\rho e + p) I^f(\boldsymbol{u}_h)
+  + \boldsymbol{F}_R
   \right] .
 ```
 Currently the central reconstruction
@@ -167,7 +169,7 @@ is treated implicitly.
 ### Internal energy
 
 ```math
-\frac{\partial}{\partial t} \rho e_\text{int} = - \nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}) + (\nabla p) \cdot \boldsymbol{u} .
+\frac{\partial}{\partial t} \rho e_\text{int} = - \nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u} + \boldsymbol{F}_R) + (\nabla p) \cdot \boldsymbol{u} .
 ```
 The ``\nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}`` term is discretized the same as in total energy:
 
@@ -176,6 +178,7 @@ D_h[ (\rho e_\text{int} + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] +
 D^c_v\left[
   I^f(\rho) U^f\left(I^f(\boldsymbol{u}_v, \frac{\rho e_\text{int} + p}{\rho} \right)
   + (\rho e_\text{int} + p)  I^f(\boldsymbol{u}_h)
+  + \boldsymbol{F}_R
 \right] .
 ```
 The ``(\nabla p) \cdot \boldsymbol{u}`` term is discretized as
