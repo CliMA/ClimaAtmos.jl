@@ -61,6 +61,10 @@ function parse_commandline()
         "--job_id"
         help = "Uniquely identifying string for a particular job"
         arg_type = String
+        "--trunc_stack_traces"
+        help = "Set to `true` to truncate printing of ClimaCore `Field`s"
+        arg_type = Bool
+        default = true
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
