@@ -16,8 +16,6 @@ dt = FT(60 * 60 * 3)
 dt_save_to_sol = 10 * dt
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
-additional_cache(Y, params, dt) =
-    rrtmgp_model_cache(Y, params; idealized_h2o = true)
 additional_tendency!(Yₜ, Y, p, t) = rrtmgp_model_tendency!(Yₜ, Y, p, t)
 additional_callbacks = (PeriodicCallback(
     rrtmgp_model_callback!,

@@ -24,6 +24,19 @@ function parse_commandline()
         help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
         arg_type = String
         default = "dry"
+        "--microphy"
+        help = "Microphysics model [`nothing` (default), `0M`]"
+        arg_type = String
+        "--forcing"
+        help = "Forcing [`nothing` (default), `held_suarez`]"
+        arg_type = String
+        "--turbconv"
+        help = "Turbulence Convection model [`nothing` (default), `const_diffusivity`]"
+        arg_type = String
+        "--idealized_h2o"
+        help = "Use idealized H2O in radiation model [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--rad"
         help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
         arg_type = String

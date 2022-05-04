@@ -52,7 +52,25 @@ show_progress_bar = isinteractive()
 additional_callbacks = () # e.g., printing diagnostic information
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
-additional_cache(Y, params, dt) = NamedTuple()
+
+const sponge = false
+microphy = parsed_args["microphy"]
+forcing = parsed_args["forcing"]
+idealized_h2o = parsed_args["idealized_h2o"]
+turbconv = parsed_args["turbconv"]
+
+# TODO: flip order so that NamedTuple() is fallback.
+additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
+    hyperdiffusion_cache(Y; κ₄ = FT(2e17), use_tempest_mode),
+    sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
+    isnothing(microphy) ? NamedTuple() : zero_moment_microphysics_cache(Y),
+    isnothing(forcing) ? NamedTuple() : held_suarez_cache(Y),
+    isnothing(rad) ? NamedTuple() :
+        rrtmgp_model_cache(Y, params; idealized_h2o),
+    isnothing(turbconv) ? NamedTuple() :
+        vertical_diffusion_boundary_layer_cache(Y),
+)
+
 additional_tendency!(Yₜ, Y, p, t) = nothing
 postprocessing(sol, output_dir) = nothing
 
@@ -90,8 +108,6 @@ include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
-
-const sponge = false
 
 # Variables required for driver.jl (modify as needed)
 params = BaroclinicWaveParameterSet((; dt))
