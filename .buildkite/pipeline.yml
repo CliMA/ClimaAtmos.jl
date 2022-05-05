@@ -167,11 +167,11 @@ steps:
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_equilmoist --turbconv const_diffusivity --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 300"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_equilmoist --turbconv const_diffusivity --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200 --t_end 432000"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_int) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_int_equilmoist --turbconv const_diffusivity --energy_name rhoe_int --forcing held_suarez --moist equil --microphy 0M --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true --dt 200"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe_int_equilmoist --turbconv const_diffusivity --energy_name rhoe_int --forcing held_suarez --moist equil --microphy 0M --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true --dt 200 --t_end 432000"
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
   - group: "Milestones"
