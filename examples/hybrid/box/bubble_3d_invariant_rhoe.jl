@@ -150,8 +150,8 @@ else
     nothing
 end
 
-function rhs_invariant!(dY, Y, _, t)
-
+function rhs_invariant!(dY, Y, p, t)
+    (; ghost_buffer) = p
     cρ = Y.Yc.ρ # scalar on centers
     fw = Y.w # Covariant3Vector on faces
     cuₕ = Y.uₕ # Covariant12Vector on centers
@@ -297,12 +297,13 @@ function rhs_invariant!(dY, Y, _, t)
     return dY
 end
 
+p = (; ghost_buffer)
 dYdt = similar(Y);
-rhs_invariant!(dYdt, Y, nothing, 0.0);
+rhs_invariant!(dYdt, Y, p, 0.0);
 # run!
 using OrdinaryDiffEq
 Δt = 0.050
-prob = ODEProblem(rhs_invariant!, Y, (0.0, 700.0))
+prob = ODEProblem(rhs_invariant!, Y, (0.0, 700.0), p)
 integrator = OrdinaryDiffEq.init(
     prob,
     SSPRK33(),
