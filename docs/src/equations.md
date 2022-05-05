@@ -28,8 +28,8 @@ We make use of the following operators
 * ``I^c`` is the [face-to-center reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateF2C)
 * ``I^f`` is the [center-to-face reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateC2F)
   - Currently this is just the arithmetic mean, but we will need to use a weighted version with stretched vertical grids.
-* ``U^f`` is the [center-to-face upwind product operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.UpwindBiasedProductC2F)
-  - Currently this is first-order, we will switch this to third-order.
+* ``U^f`` is the [3rd-order center-to-face upwind product operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F)
+  - We use first-order upwinded reconstruction at the first interior face.
 
 ### Differentiation operators
 
