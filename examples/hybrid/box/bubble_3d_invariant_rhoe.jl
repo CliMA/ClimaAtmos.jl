@@ -139,7 +139,16 @@ mass_0 = usempi ? ClimaComms.reduce(comms_ctx, sum(Y.Yc.ρ), +) : sum(Y.Yc.ρ)
 if !usempi || (usempi && ClimaComms.iamroot(comms_ctx))
     @show (energy_0, mass_0)
 end
-ghost_buffer = usempi ? Spaces.create_ghost_buffer(Y, horztopology) : nothing
+ghost_buffer = if usempi
+    (;
+        dYc = Spaces.create_ghost_buffer(Y, Y.Yc),
+        dρe = Spaces.create_ghost_buffer(Y, Y.Yc.ρe),
+        duₕ = Spaces.create_ghost_buffer(Y, Y.uₕ),
+        dw = Spaces.create_ghost_buffer(Y, Y.w),
+    )
+else
+    nothing
+end
 
 function rhs_invariant!(dY, Y, _, t)
 
@@ -189,8 +198,8 @@ function rhs_invariant!(dY, Y, _, t)
         Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(
             cuₕ,
         ))),)
-    Spaces.weighted_dss!(dρe, ghost_buffer)
-    Spaces.weighted_dss!(duₕ, ghost_buffer)
+    Spaces.weighted_dss!(dρe, ghost_buffer.dρe)
+    Spaces.weighted_dss!(duₕ, ghost_buffer.duₕ)
 
     κ₄ = 100.0 # m^4/s
     @. dρe = -κ₄ * hwdiv(cρ * hgrad(χe))
@@ -282,9 +291,9 @@ function rhs_invariant!(dY, Y, _, t)
     @. dρe += fcc(fw, cρe)
     # dYc.ρuₕ += fcc(w, Yc.ρuₕ)
 
-    Spaces.weighted_dss!(dY.Yc, ghost_buffer)
-    Spaces.weighted_dss!(dY.uₕ, ghost_buffer)
-    Spaces.weighted_dss!(dY.w, ghost_buffer)
+    Spaces.weighted_dss!(dY.Yc, ghost_buffer.dYc)
+    Spaces.weighted_dss!(dY.uₕ, ghost_buffer.duₕ)
+    Spaces.weighted_dss!(dY.w, ghost_buffer.dw)
     return dY
 end
 
