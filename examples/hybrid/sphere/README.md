@@ -41,7 +41,10 @@ Commonly used command line arguements for experiment setps:
 * `--enable_threading`: a boolean var to enable multi-threading; defaults to true; Note that Julia must be launched with, for example, `--threads=8`.
 * `--job_id`: a uniquely defined id for a job; is default based on the parsed args of the experiment if not specified;
 * `--output_dir`: specifies the output directory that saves all the jld2 outputs; is default to `job_id` if not specified.
-* `--dt_save_to_disk`: specifies specifies the frequency in seconds to save the data into jld2 files. Defaults to `dt_save_to_disk = 0`, which means no jld2 outputs.
+* `--dt_save_to_disk`: specifies the frequency in seconds to save the data into jld2 files. Defaults to `dt_save_to_disk = 0`, which means no jld2 outputs.
+* `--forcing`: specifies the forcing used. Options: [`nothing` (default), `held_suarez`]
+* `--microphy`: specifies the microphysics scheme used. Options: [`nothing` (default), `0M`]
+* `--turbconv`: specifies the turbulence scheme used. Options: [`nothing` (default), `const_diff`]
 
 To use `held_suarez_rhoe` as an example, one needs to modify [this driver](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/driver.jl) into the specific setup.
 
