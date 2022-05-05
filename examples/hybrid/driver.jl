@@ -4,7 +4,19 @@ include("cli_options.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 TEST_NAME = parsed_args["TEST_NAME"]
 
+microphy = parsed_args["microphy"]
+forcing = parsed_args["forcing"]
+idealized_h2o = parsed_args["idealized_h2o"]
+vert_diff = parsed_args["vert_diff"]
 rad = parsed_args["rad"]
+hyperdiff = parsed_args["hyperdiff"]
+
+@assert microphy in (nothing, "0M")
+@assert forcing in (nothing, "held_suarez")
+@assert idealized_h2o in (true, false)
+@assert vert_diff in (true, false)
+@assert rad in (nothing, "clearsky", "gray", "allsky")
+@assert hyperdiff in (true, false)
 
 using OrdinaryDiffEq
 using DiffEqCallbacks
@@ -57,10 +69,6 @@ additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
 const sponge = false
-microphy = parsed_args["microphy"]
-forcing = parsed_args["forcing"]
-idealized_h2o = parsed_args["idealized_h2o"]
-turbconv = parsed_args["turbconv"]
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
@@ -70,12 +78,28 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     isnothing(forcing) ? NamedTuple() : held_suarez_cache(Y),
     isnothing(rad) ? NamedTuple() :
         rrtmgp_model_cache(Y, params; idealized_h2o),
-    isnothing(turbconv) ? NamedTuple() :
-        vertical_diffusion_boundary_layer_cache(Y),
+    vert_diff ? vertical_diffusion_boundary_layer_cache(Y) : NamedTuple(),
+    (;
+        tendency_knobs = (;
+            hs_forcing = forcing == "held_suarez",
+            microphy_0M = microphy == "0M",
+            rad_flux = !isnothing(rad),
+            vert_diff,
+            hyperdiff,
+        ),
+    ),
 )
 
-additional_tendency!(Yₜ, Y, p, t) = nothing
-postprocessing(sol, output_dir) = nothing
+additional_tendency!(Yₜ, Y, p, t) = begin
+    (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
+    (; microphy_0M, hyperdiff) = p.tendency_knobs
+    hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+    hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t)
+    vert_diff && vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
+    microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
+    rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t)
+end
 
 ################################################################################
 is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED")
@@ -123,7 +147,19 @@ z_stretch = Meshes.Uniform()
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 !isnothing(rad) && include("radiation_utilities.jl")
-include(joinpath("sphere", "$TEST_NAME.jl"))
+
+if isfile(joinpath(@__DIR__, "sphere", "$TEST_NAME.jl"))
+    include(joinpath(@__DIR__, "sphere", "$TEST_NAME.jl"))
+end
+
+# TODO: use dispatch to define this
+if TEST_NAME == "baroclinic_wave_rhoe_equilmoist_radiation"
+    additional_callbacks = (PeriodicCallback(
+        rrtmgp_model_callback!,
+        FT(6 * 60 * 60); # update RRTMGPModel every 6 hours
+        initial_affect = true,
+    ),)
+end
 
 import ClimaCore: enable_threading
 enable_threading() = parsed_args["enable_threading"]
@@ -172,6 +208,11 @@ else
     )
 end
 p = get_cache(Y, params, upwinding_mode(), dt)
+
+# Print tendencies:
+for key in keys(p.tendency_knobs)
+    @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
+end
 
 if ode_algorithm <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,

@@ -22,7 +22,7 @@ dirs_to_monitor = [
 
 cli_options = [
     ("--TEST_NAME baroclinic_wave_rhoe --job_id alloc_sphere_baroclinic_wave_rhoe"),
-    ("--TEST_NAME held_suarez_rhoe_equilmoist --turbconv const_diffusivity --moist equil --forcing held_suarez --microphy 0M"),
+    ("--TEST_NAME held_suarez_rhoe_equilmoist --vert_diff true --moist equil --forcing held_suarez --microphy 0M"),
 ]
 #! format: on
 

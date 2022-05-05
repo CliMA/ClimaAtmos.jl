@@ -30,9 +30,14 @@ function parse_commandline()
         "--forcing"
         help = "Forcing [`nothing` (default), `held_suarez`]"
         arg_type = String
-        "--turbconv"
-        help = "Turbulence Convection model [`nothing` (default), `const_diffusivity`]"
-        arg_type = String
+        "--vert_diff"
+        help = "Vertical diffusion [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
+        "--hyperdiff"
+        help = "Hyperdiffusion [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
         "--idealized_h2o"
         help = "Use idealized H2O in radiation model [`false` (default), `true`]"
         arg_type = Bool
