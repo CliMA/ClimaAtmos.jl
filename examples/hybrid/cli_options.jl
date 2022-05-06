@@ -74,6 +74,10 @@ function parse_commandline()
         help = "Set to `true` to truncate printing of ClimaCore `Field`s"
         arg_type = Bool
         default = true
+        "--fps"
+        help = "Frames per second for animations"
+        arg_type = Int
+        default = 5
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
