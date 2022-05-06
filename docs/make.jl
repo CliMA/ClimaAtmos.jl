@@ -8,6 +8,7 @@ makedocs(
     modules = [ClimaAtmos],
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
+    strict = true,
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
