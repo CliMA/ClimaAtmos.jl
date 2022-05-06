@@ -44,7 +44,7 @@ Commonly used command line arguements for experiment setps:
 * `--dt_save_to_disk`: specifies the frequency in seconds to save the data into jld2 files. Defaults to `dt_save_to_disk = 0`, which means no jld2 outputs.
 * `--forcing`: specifies the forcing used. Options: [`nothing` (default), `held_suarez`]
 * `--microphy`: specifies the microphysics scheme used. Options: [`nothing` (default), `0M`]
-* `--turbconv`: specifies the turbulence scheme used. Options: [`nothing` (default), `const_diff`]
+* `--vert_diff`: specifies if vertical diffusion is used. Options: [`false` (default), `true`]
 
 To use `held_suarez_rhoe` as an example, one needs to modify [this driver](https://github.com/CliMA/ClimaAtmos.jl/blob/main/examples/hybrid/driver.jl) into the specific setup.
 

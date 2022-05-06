@@ -16,7 +16,6 @@ dt = FT(60 * 60 * 3)
 dt_save_to_sol = 10 * dt
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
-additional_tendency!(Yₜ, Y, p, t) = rrtmgp_model_tendency!(Yₜ, Y, p, t)
 additional_callbacks = (PeriodicCallback(
     rrtmgp_model_callback!,
     dt; # this will usually be bigger than dt, but for this example it can be dt

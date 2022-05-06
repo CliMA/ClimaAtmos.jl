@@ -337,8 +337,6 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     end
 end
 
-additional_tendency!(Yₜ, Y, p, t) = nothing
-
 # Allow one() to be called on vectors.
 Base.one(::T) where {T <: Geometry.AxisTensor} = one(T)
 Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} =
