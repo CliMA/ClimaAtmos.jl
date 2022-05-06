@@ -128,7 +128,7 @@ Similarly for vertical velocity
 ```
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
 ```math
-(C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}_h) ,
+(C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
 ```
 and the ``\frac{1}{\rho} \nabla_v p + \nabla_v(\Phi + K)`` term as
 ```math
