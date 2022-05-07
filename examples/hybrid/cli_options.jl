@@ -20,6 +20,10 @@ function parse_commandline()
         help = "Time between saving to disk, 0 means do not save"
         arg_type = Float64
         default = Float64(0)
+        "--config" # TODO: add box
+        help = "Spatial configuration [`sphere` (default), `column`]"
+        arg_type = String
+        default = "sphere"
         "--moist"
         help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
         arg_type = String

@@ -18,8 +18,10 @@ hyperdiff = parsed_args["hyperdiff"]
 @assert vert_diff in (true, false)
 @assert rad in (nothing, "clearsky", "gray", "allsky")
 @assert hyperdiff in (true, false)
+@assert parsed_args["config"] in ("sphere", "column")
 
 using OrdinaryDiffEq
+using PrettyTables
 using DiffEqCallbacks
 using JLD2
 using ClimaCorePlots, Plots
@@ -49,16 +51,10 @@ upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
 params = nothing
-horizontal_mesh = nothing # must be object of type AbstractMesh
-quad = nothing # must be object of type QuadratureStyle
-z_max = 0
-z_elem = 0
-z_stretch = nothing
 t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
 dt = FT(parse_arg(parsed_args, "dt", FT(400)))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
 dt_save_to_disk = parse_arg(parsed_args, "dt_save_to_disk", FT(0))
-ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
 jacobi_flags(::Val{:ρe}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::Val{:ρe_int}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::Val{:ρθ}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -140,11 +136,6 @@ include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
 params = BaroclinicWaveParameterSet((; dt))
-horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
-quad = Spaces.Quadratures.GLL{5}()
-z_max = FT(30e3)
-z_elem = 10
-z_stretch = Meshes.Uniform()
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 !isnothing(rad) && include("radiation_utilities.jl")
@@ -174,6 +165,30 @@ enable_threading() = parsed_args["enable_threading"]
 # we will just hardcode the value of 4.
 max_field_element_size = 4 # ρ = 1 byte, 𝔼 = 1 byte, uₕ = 2 bytes
 
+center_space, face_space = if parsed_args["config"] == "sphere"
+    quad = Spaces.Quadratures.GLL{5}()
+    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
+    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+    z_stretch = Meshes.Uniform()
+    z_max = FT(30e3)
+    z_elem = 10
+    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+elseif parsed_args["config"] == "column" # single column
+    Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
+    quad = Spaces.Quadratures.GL{1}()
+    horizontal_mesh = periodic_rectangle_mesh(;
+        x_max = Δx,
+        y_max = Δx,
+        x_elem = 1,
+        y_elem = 1,
+    )
+    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+    z_max = FT(70e3)
+    z_elem = 70
+    z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
+    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+end
+
 if haskey(ENV, "RESTART_FILE")
     restart_file_name = ENV["RESTART_FILE"]
     if is_distributed
@@ -186,16 +201,11 @@ if haskey(ENV, "RESTART_FILE")
     close(restart_data)
     ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
     ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
+    # TODO:   quad, horizontal_mesh, z_stretch,
+    #         z_max, z_elem should be taken from Y.
+    #         when restarting
 else
     t_start = FT(0)
-    if is_distributed
-        h_space =
-            make_distributed_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    else
-        h_space = make_horizontal_space(horizontal_mesh, quad)
-    end
-    center_space, face_space =
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     Y = Fields.FieldVector(
@@ -305,7 +315,7 @@ sol = @timev OrdinaryDiffEq.solve!(integrator)
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
     if ClimaComms.iamroot(comms_ctx)
-        global_h_space = make_horizontal_space(horizontal_mesh, quad)
+        global_h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
         global_center_space, global_face_space =
             make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
         global_Y_c_type = Fields.Field{

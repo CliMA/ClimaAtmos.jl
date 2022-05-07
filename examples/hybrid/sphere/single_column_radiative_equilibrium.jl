@@ -1,20 +1,9 @@
-using PrettyTables
-
 struct EarthParameterSet <: AbstractEarthParameterSet end
 
-Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-
 params = EarthParameterSet()
-horizontal_mesh =
-    periodic_rectangle_mesh(; x_max = Δx, y_max = Δx, x_elem = 1, y_elem = 1)
-quad = Spaces.Quadratures.GL{1}()
-z_max = FT(70e3)
-z_elem = 70
-z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
 t_end = FT(60 * 60 * 24 * 365.25)
 dt = FT(60 * 60 * 3)
 dt_save_to_sol = 10 * dt
-ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 additional_callbacks = (PeriodicCallback(
     rrtmgp_model_callback!,
