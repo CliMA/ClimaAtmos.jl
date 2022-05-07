@@ -50,7 +50,6 @@ upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
-params = nothing
 t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
 dt = FT(parse_arg(parsed_args, "dt", FT(400)))
 dt_save_to_sol = parsed_args["dt_save_to_sol"]
@@ -61,7 +60,6 @@ jacobi_flags(::Val{:ρθ}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ�
 jacobian_flags = jacobi_flags(Val(energy_name()))
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
 show_progress_bar = isinteractive()
-additional_callbacks = () # e.g., printing diagnostic information
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
@@ -135,22 +133,26 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-params = BaroclinicWaveParameterSet((; dt))
+params = if TEST_NAME == "single_column_radiative_equilibrium"
+    EarthParameterSet()
+else
+    BaroclinicWaveParameterSet((; dt))
+end
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 !isnothing(rad) && include("radiation_utilities.jl")
 
-if isfile(joinpath(@__DIR__, "sphere", "$TEST_NAME.jl"))
-    include(joinpath(@__DIR__, "sphere", "$TEST_NAME.jl"))
-end
-
-# TODO: use dispatch to define this
-if TEST_NAME == "baroclinic_wave_rhoe_equilmoist_radiation"
-    additional_callbacks = (PeriodicCallback(
+additional_callbacks = if !isnothing(rad)
+    # TODO: better if-else criteria?
+    dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
+    (PeriodicCallback(
         rrtmgp_model_callback!,
-        FT(6 * 60 * 60); # update RRTMGPModel every 6 hours
-        initial_affect = true,
+        dt_rad; # update RRTMGPModel every dt_rad
+        initial_affect = true, # run callback at t = 0
+        save_positions = (false, false), # do not save Y before and after callback
     ),)
+else
+    ()
 end
 
 import ClimaCore: enable_threading
@@ -208,6 +210,13 @@ else
     t_start = FT(0)
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+
+    center_initial_condition = if parsed_args["config"] == "sphere"
+        center_initial_condition_sphere
+    elseif parsed_args["config"] == "column"
+        center_initial_condition_column
+    end
+
     Y = Fields.FieldVector(
         c = center_initial_condition.(
             ᶜlocal_geometry,

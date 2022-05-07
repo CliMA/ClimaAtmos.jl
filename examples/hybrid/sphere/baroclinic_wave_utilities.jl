@@ -6,6 +6,9 @@ const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
 
+# TODO: combine/generalize these two structs
+struct EarthParameterSet <: AbstractEarthParameterSet end
+
 struct BaroclinicWaveParameterSet{NT} <: AbstractEarthParameterSet
     named_tuple::NT
 end
@@ -33,13 +36,48 @@ function face_initial_condition(local_geometry, params)
     (; w = Geometry.Covariant3Vector(FT(0)))
 end
 
-function center_initial_condition(
+function center_initial_condition_column(
+    local_geometry,
+    params,
+    ᶜ𝔼_name,
+    moisture_mode,
+)
+    z = local_geometry.coordinates.z
+    FT = eltype(z)
+
+    R_d = FT(Planet.R_d(params))
+    MSLP = FT(Planet.MSLP(params))
+    grav = FT(Planet.grav(params))
+
+    T = FT(300)
+    p = MSLP * exp(-z * grav / (R_d * T))
+    ρ = p / (R_d * T)
+    ts = TD.PhaseDry_ρp(params, ρ, p)
+
+    if ᶜ𝔼_name === Val(:ρθ)
+        𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+    elseif ᶜ𝔼_name === Val(:ρe)
+        𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
+    elseif ᶜ𝔼_name === Val(:ρe_int)
+        𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+    end
+    return (; ρ, 𝔼_kwarg..., uₕ = Geometry.Covariant12Vector(FT(0), FT(0)))
+end
+
+function center_initial_condition_sphere(
     local_geometry,
     params,
     ᶜ𝔼_name,
     moisture_mode;
     is_balanced_flow = false,
 )
+
+    # Coordinates
+    z = local_geometry.coordinates.z
+    ϕ = local_geometry.coordinates.lat
+    λ = local_geometry.coordinates.long
+    FT = eltype(z)
+
     # Constants from CLIMAParameters
     R_d = FT(Planet.R_d(params))
     MSLP = FT(Planet.MSLP(params))
@@ -71,11 +109,6 @@ function center_initial_condition(
     q_0 = FT(0.018)
     ϕ_w = FT(40)
     ε = FT(0.608)
-
-    # Coordinates
-    z = local_geometry.coordinates.z
-    ϕ = local_geometry.coordinates.lat
-    λ = local_geometry.coordinates.long
 
     # Initial virtual temperature and pressure
     τ_z_1 = exp(Γ * z / T_0)
