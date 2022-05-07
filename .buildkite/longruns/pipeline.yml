@@ -32,7 +32,7 @@ steps:
 
   - wait
 
-  - group: "Long runs"
+  - group: "Core Long runs"
 
     steps:
 
@@ -50,3 +50,12 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
+  - group: "Experimental Long runs"
+
+    steps:
+
+      - label: ":computer: held suarez (ρe)"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --TEST_NAME held_suarez_rhoe --forcing held_suarez --dt 300 --t_end 69120000 --fps 30 --job_id longrun_hs_rhoe_dt300 --dt_save_to_sol 21600" # 800 days
+        artifact_paths: "longrun_hs_rhoe_dt300/*"
+        agents:
+          slurm_cpus_per_task: 8
