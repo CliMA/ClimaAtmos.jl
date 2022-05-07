@@ -68,7 +68,7 @@ components(model::AbstractModel) =
 
 Return the state variable names for `style`.
 # Example
-```jldoctest; setup = :(using ClimaAtmos.Models)
+```setup = :(using ClimaAtmos.Models)
 julia> Models.variable_names(NonEquilibriumMoisture())
 (:ρq_tot, :ρq_liq, :ρq_ice)
 ```
