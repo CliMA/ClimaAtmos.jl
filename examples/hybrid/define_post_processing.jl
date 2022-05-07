@@ -124,6 +124,17 @@ function postprocessing(sol, output_dir, fps)
     profile_animation(sol, output_dir, fps)
 end
 
+# Dispatcher:
+paperplots_baro_wave(args...) =
+    paperplots_baro_wave(Val(energy_name()), Val(moisture_mode()), args...)
+
+paperplots_baro_wave(::Val{:ρθ}, ::Val{:dry}, args...) =
+    paperplots_baro_wave_ρθ(args...)
+paperplots_baro_wave(::Val{:ρe}, ::Val{:dry}, args...) =
+    paperplots_baro_wave_ρe(args...)
+paperplots_baro_wave(::Val{:ρe}, ::Val{:equil}, args...) =
+    paperplots_moist_baro_wave_ρe(args...)
+
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10
 function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
     (; ghost_buffer, ᶜts, ᶜp, params) = p
