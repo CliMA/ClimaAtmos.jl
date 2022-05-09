@@ -44,6 +44,24 @@ end
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
+function time_to_seconds(s::String)
+    factor = Dict(
+        "secs" => 1,
+        "mins" => 60,
+        "hours" => 60 * 60,
+        "days" => 60 * 60 * 24,
+    )
+    s == "Inf" && return Inf
+    if count(occursin.(keys(factor), Ref(s))) != 1
+        error("Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]")
+    end
+    for match in keys(factor)
+        occursin(match, s) || continue
+        return parse(Float64, first(split(s, match))) * factor[match]
+    end
+    error("Uncaught case in computing time from given string.")
+end
+
 moisture_mode() = Symbol(parse_arg(parsed_args, "moist", "dry"))
 @assert moisture_mode() in (:dry, :equil, :nonequil)
 
@@ -59,10 +77,10 @@ upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
-t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
-dt = FT(parse_arg(parsed_args, "dt", FT(400)))
-dt_save_to_sol = parsed_args["dt_save_to_sol"]
-dt_save_to_disk = parse_arg(parsed_args, "dt_save_to_disk", FT(0))
+t_end = FT(time_to_seconds(parsed_args["t_end"]))
+dt = FT(time_to_seconds(parsed_args["dt"]))
+dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 jacobi_flags(::Val{:ρe}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::Val{:ρe_int}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::Val{:ρθ}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -291,7 +309,7 @@ dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     Spaces.weighted_dss!(Y.c, p.ghost_buffer.c)
     Spaces.weighted_dss!(Y.f, p.ghost_buffer.f)
 end
-save_to_disk_callback = if dt_save_to_disk == 0
+save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
 else
     PeriodicCallback(save_to_disk_func, dt_save_to_disk; initial_affect = true)
@@ -313,7 +331,7 @@ problem = SplitODEProblem(
 integrator = OrdinaryDiffEq.init(
     problem,
     ode_algorithm(; alg_kwargs...);
-    saveat = dt_save_to_sol == 0 ? [] : dt_save_to_sol,
+    saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
     callback = callback,
     dt = dt,
     adaptive = false,
