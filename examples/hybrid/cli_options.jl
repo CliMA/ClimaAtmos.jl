@@ -65,9 +65,6 @@ function parse_commandline()
         help = "Enable multi-threading. Note: Julia must be launched with (e.g.,) `--threads=8`"
         arg_type = Bool
         default = true
-        "--TEST_NAME"
-        help = "Job name"
-        arg_type = String
         "--output_dir"
         help = "Output directory"
         arg_type = String

@@ -1,8 +1,8 @@
 include("cli_options.jl")
+include("classify_case.jl")
 (s, parsed_args) = parse_commandline()
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-TEST_NAME = parsed_args["TEST_NAME"]
 
 fps = parsed_args["fps"]
 microphy = parsed_args["microphy"]
@@ -133,7 +133,7 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-params = if TEST_NAME == "single_column_radiative_equilibrium"
+params = if is_column_radiative_equilibrium(parsed_args)
     EarthParameterSet()
 else
     BaroclinicWaveParameterSet((; dt))
@@ -364,14 +364,10 @@ import OrderedCollections
 include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if TEST_NAME == "baroclinic_wave_rhoe"
-        paperplots_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
-    elseif TEST_NAME == "baroclinic_wave_rhotheta"
-        paperplots_baro_wave_ρθ(sol, output_dir, p, FT(90), FT(180))
-    elseif TEST_NAME == "single_column_radiative_equilibrium"
+    if is_baro_wave(parsed_args)
+        paperplots_baro_wave(sol, output_dir, p, FT(90), FT(180))
+    elseif is_column_radiative_equilibrium(parsed_args)
         custom_postprocessing(sol, output_dir)
-    elseif TEST_NAME == "baroclinic_wave_rhoe_equilmoist"
-        paperplots_moist_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir, fps)
     end
