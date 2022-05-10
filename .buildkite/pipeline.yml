@@ -127,18 +127,18 @@ steps:
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200 --t_end 432000"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 5days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_int) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --energy_name rhoe_int --forcing held_suarez --moist equil --microphy 0M --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true --dt 200 --t_end 432000"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --energy_name rhoe_int --forcing held_suarez --moist equil --microphy 0M --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true --dt 200secs --t_end 5days"
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
   - group: "Milestones"
     steps:
 
       - label: ":computer: single column radiative equilibrium"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --t_end 31536000 --dt 10800 --dt_save_to_sol 108000 --job_id sphere_single_column_radiative_equilibrium"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium"
         artifact_paths: "sphere_single_column_radiative_equilibrium/*"
 
       - label: ":computer: baroclinic wave (ρe)"
@@ -146,7 +146,7 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 300"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 300secs"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe)"
@@ -158,7 +158,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
       - label: ":computer: aquaplanet (ρe) equilmoist gray radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200 --t_end 432000"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200secs --t_end 5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
 
   - group: "Performance"
