@@ -35,6 +35,13 @@ using ClimaCore
 import Random
 Random.seed!(1234)
 
+!isnothing(rad) && include("radiation_utilities.jl")
+radiation_mode = if rad == "clearsky"
+    ClearSkyRadiation()
+elseif rad == "gray"
+    GrayRadiation()
+end
+
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 moisture_mode() = Symbol(parse_arg(parsed_args, "moist", "dry"))
@@ -74,7 +81,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     isnothing(microphy) ? NamedTuple() : zero_moment_microphysics_cache(Y),
     isnothing(forcing) ? NamedTuple() : held_suarez_cache(Y),
     isnothing(rad) ? NamedTuple() :
-        rrtmgp_model_cache(Y, params; idealized_h2o),
+        rrtmgp_model_cache(Y, params; radiation_mode, idealized_h2o),
     vert_diff ? vertical_diffusion_boundary_layer_cache(Y) : NamedTuple(),
     (;
         tendency_knobs = (;
@@ -141,8 +148,6 @@ else
     BaroclinicWaveParameterSet((; dt))
 end
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
-
-!isnothing(rad) && include("radiation_utilities.jl")
 
 additional_callbacks = if !isnothing(rad)
     # TODO: better if-else criteria?
