@@ -1,7 +1,9 @@
 include("cli_options.jl")
-include("classify_case.jl")
-(s, parsed_args) = parse_commandline()
+if !(@isdefined parsed_args)
+    (s, parsed_args) = parse_commandline()
+end
 
+include("classify_case.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
