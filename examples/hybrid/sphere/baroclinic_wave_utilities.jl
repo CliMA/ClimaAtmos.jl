@@ -313,8 +313,8 @@ end
 #       This currently results in a mismatched spaces error.
 function vertical_diffusion_boundary_layer_cache(
     Y;
-    Cd = FT(0.001),
-    Ch = FT(0.001),
+    Cd = FT(0.0044),
+    Ch = FT(0.0044),
 )
     ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
