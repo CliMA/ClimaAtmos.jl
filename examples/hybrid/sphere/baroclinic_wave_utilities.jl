@@ -366,6 +366,7 @@ function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
 end
 
 function constant_T_saturated_surface_coefs(
+    lat,
     ts_int,
     uₕ_int,
     z_int,
@@ -374,7 +375,7 @@ function constant_T_saturated_surface_coefs(
     Ch,
     params,
 )
-    T_sfc = FT(280)
+    T_sfc = 29 * exp(-lat^2 / (2 * 26^2)) + 271
     T_int = TD.air_temperature(params, ts_int)
     Rm_int = TD.gas_constant_air(params, ts_int)
     ρ_sfc =
@@ -422,6 +423,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     flux_coefficients .=
         constant_T_saturated_surface_coefs.(
+            Spaces.level(Fields.coordinate_field(Y.c).lat, 1),
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
             Spaces.level(Fields.coordinate_field(Y.c).z, 1),
@@ -432,22 +434,29 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         )
 
     if :ρe in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
-            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-        )
+        @. dif_flux_energy =
+            -Geometry.WVector(
+                SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+                SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+            )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(-mean(dif_flux_energy)),
+            bottom = Operators.SetValue(dif_flux_energy),
         )
         @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-        )
+        @. dif_flux_energy =
+            -Geometry.WVector(
+                sensible_heat_flux_ρe_int(
+                    params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+            )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(-mean(dif_flux_energy)),
+            bottom = Operators.SetValue(dif_flux_energy),
         )
         @. Yₜ.c.ρe_int +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
@@ -455,10 +464,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρq_tot in propertynames(Y.c)
         @. dif_flux_ρq_tot =
-            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
+            -Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(-mean(dif_flux_ρq_tot)),
+            bottom = Operators.SetValue(dif_flux_ρq_tot),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
