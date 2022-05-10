@@ -45,7 +45,7 @@ steps:
           slurm_cpus_per_task: 8
 
       - label: ":computer: held suarez (ρe_int)"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --t_end 103680000 --upwinding none --fps 30 --job_id longrun_hs_rhoeint --dt_save_to_sol 21600" # 1200 days
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --t_end 103680000 --upwinding none --fps 30 --job_id longrun_hs_rhoeint --dt_save_to_sol 21600" # 1200 days
         artifact_paths: "longrun_hs_rhoeint/*"
         agents:
           slurm_cpus_per_task: 8
