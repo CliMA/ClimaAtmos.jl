@@ -393,6 +393,8 @@ if !is_distributed
         paperplots_baro_wave(sol, output_dir, p, FT(90), FT(180))
     elseif is_column_radiative_equilibrium(parsed_args)
         custom_postprocessing(sol, output_dir)
+    elseif forcing == "held_suarez" && t_end >= (3600 * 24 * 400)
+        paperplots_held_suarez(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir, fps)
     end
