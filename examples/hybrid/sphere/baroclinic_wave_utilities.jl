@@ -39,8 +39,8 @@ end
 function center_initial_condition_column(
     local_geometry,
     params,
-    ᶜ𝔼_name,
-    moisture_mode,
+    energy_form,
+    moisture_model,
 )
     z = local_geometry.coordinates.z
     FT = eltype(z)
@@ -54,11 +54,11 @@ function center_initial_condition_column(
     ρ = p / (R_d * T)
     ts = TD.PhaseDry_ρp(params, ρ, p)
 
-    if ᶜ𝔼_name === Val(:ρθ)
+    if energy_form isa PotentialTemperature
         𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
-    elseif ᶜ𝔼_name === Val(:ρe)
+    elseif energy_form isa TotalEnergy
         𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
-    elseif ᶜ𝔼_name === Val(:ρe_int)
+    elseif energy_form isa InternalEnergy
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
     return (; ρ, 𝔼_kwarg..., uₕ = Geometry.Covariant12Vector(FT(0), FT(0)))
@@ -67,8 +67,8 @@ end
 function center_initial_condition_sphere(
     local_geometry,
     params,
-    ᶜ𝔼_name,
-    moisture_mode;
+    energy_form,
+    moisture_model;
     is_balanced_flow = false,
 )
 
@@ -151,7 +151,7 @@ function center_initial_condition_sphere(
     uₕ = Geometry.Covariant12Vector(uₕ_local, local_geometry)
 
     # Initial moisture and temperature
-    if moisture_mode === Val(:dry)
+    if moisture_model isa DryModel
         q_tot = FT(0)
     else
         q_tot =
@@ -165,19 +165,19 @@ function center_initial_condition_sphere(
     # Initial values computed from the thermodynamic state
     ts = TD.PhaseEquil_pTq(params, p, T, q_tot)
     ρ = TD.air_density(params, ts)
-    if ᶜ𝔼_name === Val(:ρθ)
+    if energy_form isa PotentialTemperature
         ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
-    elseif ᶜ𝔼_name === Val(:ρe)
+    elseif energy_form isa TotalEnergy
         K = norm_sqr(uₕ_local) / 2
         ᶜ𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + K + grav * z))
-    elseif ᶜ𝔼_name === Val(:ρe_int)
+    elseif energy_form isa InternalEnergy
         ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
-    if moisture_mode === Val(:dry)
+    if moisture_model isa DryModel
         moisture_kwargs = NamedTuple()
-    elseif moisture_mode === Val(:equil)
+    elseif moisture_model isa EquilMoistModel
         moisture_kwargs = (; ρq_tot = ρ * q_tot)
-    elseif moisture_mode === Val(:nonequil)
+    elseif moisture_model isa NonEquilMoistModel
         moisture_kwargs = (;
             ρq_tot = ρ * q_tot,
             ρq_liq = ρ * TD.liquid_specific_humidity(params, ts),
@@ -213,9 +213,11 @@ function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.w -= ᶠβ * Y.f.w
 end
 
+forcing_cache(Y, ::Nothing) = NamedTuple()
+
 # Held-Suarez forcing
 
-held_suarez_cache(Y) = (;
+forcing_cache(Y, ::HeldSuarezForcing) = (;
     ᶜσ = similar(Y.c, FT),
     ᶜheight_factor = similar(Y.c, FT),
     ᶜΔρT = similar(Y.c, FT),
@@ -270,7 +272,8 @@ end
 
 # 0-Moment Microphysics
 
-zero_moment_microphysics_cache(Y) =
+microphysics_cache(Y, ::Nothing) = NamedTuple()
+microphysics_cache(Y, ::Microphysics0Moment) =
     (ᶜS_ρq_tot = similar(Y.c, FT), ᶜλ = similar(Y.c, FT))
 
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)

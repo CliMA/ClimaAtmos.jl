@@ -128,26 +128,26 @@ end
 # Dispatcher:
 # baroclinic wave
 paperplots_baro_wave(args...) =
-    paperplots_baro_wave(Val(energy_name()), Val(moisture_mode()), args...)
+    paperplots_baro_wave(energy_form(), moisture_model(), args...)
 
-paperplots_baro_wave(::Val{:ρθ}, ::Val{:dry}, args...) =
+paperplots_baro_wave(::PotentialTemperature, ::DryModel, args...) =
     paperplots_baro_wave_ρθ(args...)
-paperplots_baro_wave(::Val{:ρe}, ::Val{:dry}, args...) =
+paperplots_baro_wave(::TotalEnergy, ::DryModel, args...) =
     paperplots_baro_wave_ρe(args...)
-paperplots_baro_wave(::Val{:ρe}, ::Val{:equil}, args...) =
+paperplots_baro_wave(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_baro_wave_ρe(args...)
 
 # held-suarez
 paperplots_held_suarez(args...) =
-    paperplots_held_suarez(Val(energy_name()), Val(moisture_mode()), args...)
+    paperplots_held_suarez(energy_form(), moisture_model(), args...)
 
-paperplots_held_suarez(::Val{:ρθ}, ::Val{:dry}, args...) =
+paperplots_held_suarez(::PotentialTemperature, ::DryModel, args...) =
     paperplots_dry_held_suarez_ρθ(args...)
-paperplots_held_suarez(::Val{:ρe}, ::Val{:dry}, args...) =
+paperplots_held_suarez(::TotalEnergy, ::DryModel, args...) =
     paperplots_dry_held_suarez_ρe(args...)
-paperplots_held_suarez(::Val{:ρe_int}, ::Val{:dry}, args...) =
+paperplots_held_suarez(::InternalEnergy, ::DryModel, args...) =
     paperplots_dry_held_suarez_ρe_int(args...)
-paperplots_held_suarez(::Val{:ρe}, ::Val{:equil}, args...) =
+paperplots_held_suarez(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_held_suarez_ρe(args...)
 
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10
