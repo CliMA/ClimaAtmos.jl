@@ -1,3 +1,5 @@
+module RRTMGPInterface
+
 using Pkg
 using NCDatasets
 using RRTMGP
@@ -1177,3 +1179,5 @@ function compute_optical_props_kernel!(
         op.g[glaycol...] = FT(0)
     end
 end
+
+end # end module

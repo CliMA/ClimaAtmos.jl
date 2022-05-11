@@ -4,25 +4,23 @@ using Dates: Second, DateTime
 using Insolation: instantaneous_zenith_angle
 using CLIMAParameters: AbstractEarthParameterSet, Planet, astro_unit
 
-include("../rrtmgp_model.jl")
-
 function rrtmgp_model_cache(
     Y,
     params;
-    radiation_mode = ClearSkyRadiation(),
-    interpolation = BestFit(),
-    bottom_extrapolation = SameAsInterpolation(),
+    radiation_mode = RRTMGPI.ClearSkyRadiation(),
+    interpolation = RRTMGPI.BestFit(),
+    bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
     idealized_h2o = false,
 )
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        latitude = field2array(bottom_coords.lat)
+        latitude = RRTMGPI.field2array(bottom_coords.lat)
     else
-        latitude = field2array(zero(bottom_coords.z)) # flat space is on Equator
+        latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    input_data = rrtmgp_artifact("atmos_state", "clearsky_as.nc")
-    if radiation_mode isa GrayRadiation
+    input_data = RRTMGPI.rrtmgp_artifact("atmos_state", "clearsky_as.nc")
+    if radiation_mode isa RRTMGPI.GrayRadiation
         kwargs = (;
             lapse_rate = 3.5,
             optical_thickness_parameter = (@. (
@@ -53,7 +51,8 @@ function rrtmgp_model_cache(
             ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end
         ᶜp = @. TD.air_pressure(params, ᶜts)
-        center_volume_mixing_ratio_o3 = field2array(@. FT(pressure2ozone(ᶜp)))
+        center_volume_mixing_ratio_o3 =
+            RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
 
         # the first value for each global mean volume mixing ratio is the
         # present-day value
@@ -82,16 +81,17 @@ function rrtmgp_model_cache(
             volume_mixing_ratio_no2 = 1e-8, # not available in input_data
             latitude,
         )
-        if !(radiation_mode isa ClearSkyRadiation)
+        if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
             error("rrtmgp_model_cache not yet implemented for $radiation_mode")
         end
     end
 
-    if requires_z(interpolation) || requires_z(bottom_extrapolation)
+    if RRTMGPI.requires_z(interpolation) ||
+       RRTMGPI.requires_z(bottom_extrapolation)
         kwargs = (;
             kwargs...,
-            center_z = field2array(Fields.coordinate_field(Y.c).z),
-            face_z = field2array(Fields.coordinate_field(Y.f).z),
+            center_z = RRTMGPI.field2array(Fields.coordinate_field(Y.c).z),
+            face_z = RRTMGPI.field2array(Fields.coordinate_field(Y.f).z),
         )
     end
 
@@ -105,13 +105,13 @@ function rrtmgp_model_cache(
         solar_zenith_angle = weighted_irradiance = NaN # initialized in tendency
     end
 
-    if idealized_h2o && radiation_mode isa GrayRadiation
+    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
         error("idealized_h2o cannot be used with GrayRadiation")
     end
 
     # surface_emissivity and surface_albedo are provided for each of 100 sites,
     # which we average across
-    rrtmgp_model = RRTMGPModel(
+    rrtmgp_model = RRTMGPI.RRTMGPModel(
         params;
         FT = Float64,
         ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
@@ -174,10 +174,10 @@ function rrtmgp_model_callback!(integrator)
 
     @. ᶜp = TD.air_pressure(params, ᶜts)
     @. ᶜT = TD.air_temperature(params, ᶜts)
-    rrtmgp_model.center_pressure .= field2array(ᶜp)
-    rrtmgp_model.center_temperature .= field2array(ᶜT)
+    rrtmgp_model.center_pressure .= RRTMGPI.field2array(ᶜp)
+    rrtmgp_model.center_temperature .= RRTMGPI.field2array(ᶜT)
 
-    if !(rrtmgp_model.radiation_mode isa GrayRadiation)
+    if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
         if idealized_h2o
             # slowly increase the relative humidity from 0 to 0.6 to account for
             # the fact that we have a very unrealistic initial condition
@@ -206,7 +206,8 @@ function rrtmgp_model_callback!(integrator)
                 TD.PhasePartition(params, ᶜts),
             )
         end
-        rrtmgp_model.center_volume_mixing_ratio_h2o .= field2array(ᶜvmr_h2o)
+        rrtmgp_model.center_volume_mixing_ratio_h2o .=
+            RRTMGPI.field2array(ᶜvmr_h2o)
     end
 
     if !idealized_insolation
@@ -226,8 +227,9 @@ function rrtmgp_model_callback!(integrator)
             @. zenith_angle = min(first(insolation_tuple), max_zenith_angle)
             @. weighted_irradiance =
                 irradiance * (au / last(insolation_tuple))^2
-            rrtmgp_model.solar_zenith_angle .= field2array(zenith_angle)
-            rrtmgp_model.weighted_irradiance .= field2array(weighted_irradiance)
+            rrtmgp_model.solar_zenith_angle .= RRTMGPI.field2array(zenith_angle)
+            rrtmgp_model.weighted_irradiance .=
+                RRTMGPI.field2array(weighted_irradiance)
         else
             # assume that the latitude and longitude are both 0 for flat space
             insolation_tuple =
@@ -239,6 +241,6 @@ function rrtmgp_model_callback!(integrator)
         end
     end
 
-    update_fluxes!(rrtmgp_model)
-    field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    RRTMGPI.update_fluxes!(rrtmgp_model)
+    RRTMGPI.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
 end

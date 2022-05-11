@@ -1421,6 +1421,12 @@ version = "0.5.6"
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
+[[deps.RRTMGP]]
+deps = ["Adapt", "CLIMAParameters", "CUDA", "Compat", "Coverage", "DocStringExtensions", "GaussQuadrature", "NCDatasets", "Pkg", "Profile", "StaticArrays", "Test"]
+git-tree-sha1 = "1f21a2708f5fdecaa9fd2efe4cebc0cdb1d2b173"
+uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
+version = "0.3.1"
+
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
