@@ -34,12 +34,15 @@ using ClimaCore
 
 import Random
 Random.seed!(1234)
+include(joinpath("..", "RRTMGPInterface.jl"))
+import .RRTMGPInterface
+RRTMGPI = RRTMGPInterface
 
 !isnothing(rad) && include("radiation_utilities.jl")
 radiation_mode = if rad == "clearsky"
-    ClearSkyRadiation()
+    RRTMGPI.ClearSkyRadiation()
 elseif rad == "gray"
-    GrayRadiation()
+    RRTMGPI.GrayRadiation()
 end
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
