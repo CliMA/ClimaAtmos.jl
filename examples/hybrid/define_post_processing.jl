@@ -12,7 +12,7 @@ end
 processed_varname(pc::Tuple) = process_name(join(pc, "_"))
 
 # TODO: Make this a RecipesBase.@recipe
-function profile_animation(sol, output_dir)
+function profile_animation(sol, output_dir, fps)
     # Column animations
     Y0 = first(sol.u)
     for prop_chain in Fields.property_chains(Y0)
@@ -60,11 +60,15 @@ function profile_animation(sol, output_dir)
             )
             Plots.title!("$(space_string(var_space))")
         end
-        Plots.mp4(anim, joinpath(output_dir, "profile_$var_name.mp4"), fps = 5)
+        Plots.mp4(
+            anim,
+            joinpath(output_dir, "profile_$var_name.mp4"),
+            fps = fps,
+        )
     end
 end
 
-function contour_animations(sol, output_dir)
+function contour_animations(sol, output_dir, fps)
     for prop_chain in Fields.property_chains(sol.u[end])
         var_name = processed_varname(prop_chain)
         @info "Creating animation for variable:`$(var_name)`"
@@ -78,11 +82,15 @@ function contour_animations(sol, output_dir)
             clim = (minimum(var), maximum(var))
             Plots.plot(var, level = level, clim = clim)
         end
-        Plots.mp4(anim, joinpath(output_dir, "contour_$var_name.mp4"), fps = 5)
+        Plots.mp4(
+            anim,
+            joinpath(output_dir, "contour_$var_name.mp4"),
+            fps = fps,
+        )
     end
 end
 
-function postprocessing(sol, output_dir)
+function postprocessing(sol, output_dir, fps)
     for prop_chain in Fields.property_chains(sol.u[1])
         var_name = processed_varname(prop_chain)
         var = Fields.single_field(sol.u[1], prop_chain)
@@ -94,13 +102,13 @@ function postprocessing(sol, output_dir)
         @info "L₂ norm of `$(var_name)` at t = $(sol.t[end]): $(norm(var))"
     end
 
-    # contour_animations(sol, output_dir) # For generic contours:
+    # contour_animations(sol, output_dir, fps) # For generic contours:
 
     anim = Plots.@animate for Y in sol.u
         ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
         Plots.plot(ᶜv, level = 3, clim = (-6, 6))
     end
-    Plots.mp4(anim, joinpath(output_dir, "v.mp4"), fps = 5)
+    Plots.mp4(anim, joinpath(output_dir, "v.mp4"), fps = fps)
 
     prop_chains = Fields.property_chains(sol.u[1])
     if any(pc -> pc == (:c, :ρq_tot), prop_chains)
@@ -108,13 +116,24 @@ function postprocessing(sol, output_dir)
             ᶜq_tot = Y.c.ρq_tot ./ Y.c.ρ
             Plots.plot(ᶜq_tot .* FT(1e3), level = 3, clim = (0, 1))
         end
-        Plots.mp4(anim, joinpath(output_dir, "contour_q_tot.mp4"), fps = 5)
+        Plots.mp4(anim, joinpath(output_dir, "contour_q_tot.mp4"), fps = fps)
     else
         @info "Moisture not found. property_chains: `$(prop_chains)`"
     end
 
-    profile_animation(sol, output_dir)
+    profile_animation(sol, output_dir, fps)
 end
+
+# Dispatcher:
+paperplots_baro_wave(args...) =
+    paperplots_baro_wave(Val(energy_name()), Val(moisture_mode()), args...)
+
+paperplots_baro_wave(::Val{:ρθ}, ::Val{:dry}, args...) =
+    paperplots_baro_wave_ρθ(args...)
+paperplots_baro_wave(::Val{:ρe}, ::Val{:dry}, args...) =
+    paperplots_baro_wave_ρe(args...)
+paperplots_baro_wave(::Val{:ρe}, ::Val{:equil}, args...) =
+    paperplots_moist_baro_wave_ρe(args...)
 
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10
 function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)

@@ -8,6 +8,7 @@ makedocs(
     modules = [ClimaAtmos],
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
+    strict = true,
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
@@ -20,6 +21,7 @@ makedocs(
         "Contributor Guide" => "contributor_guide.md",
         "Function Index" => "function_index.md",
         "Equations" => "equations.md",
+        "Command line arguments" => "cl_args.md",
     ],
 )
 

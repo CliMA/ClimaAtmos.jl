@@ -30,7 +30,7 @@ function cubed_sphere_mesh(; radius, h_elem)
     return Meshes.EquiangularCubedSphere(domain, h_elem)
 end
 
-function make_horizontal_space(mesh, quad)
+function make_horizontal_space(mesh, quad, ::Nothing)
     if mesh isa Meshes.AbstractMesh1D
         topology = Topologies.IntervalTopology(mesh)
         space = Spaces.SpectralElementSpace1D(topology, quad)
@@ -41,7 +41,7 @@ function make_horizontal_space(mesh, quad)
     return space
 end
 
-function make_distributed_horizontal_space(mesh, quad, comms_ctx)
+function make_horizontal_space(mesh, quad, comms_ctx)
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
     elseif mesh isa Meshes.AbstractMesh2D
@@ -58,6 +58,7 @@ function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
         boundary_tags = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
+    @info "z heights" z_mesh.faces
     z_topology = Topologies.IntervalTopology(z_mesh)
     z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
     center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)

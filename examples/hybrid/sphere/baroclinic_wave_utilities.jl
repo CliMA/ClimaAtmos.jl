@@ -6,6 +6,9 @@ const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
 
+# TODO: combine/generalize these two structs
+struct EarthParameterSet <: AbstractEarthParameterSet end
+
 struct BaroclinicWaveParameterSet{NT} <: AbstractEarthParameterSet
     named_tuple::NT
 end
@@ -33,13 +36,48 @@ function face_initial_condition(local_geometry, params)
     (; w = Geometry.Covariant3Vector(FT(0)))
 end
 
-function center_initial_condition(
+function center_initial_condition_column(
+    local_geometry,
+    params,
+    ᶜ𝔼_name,
+    moisture_mode,
+)
+    z = local_geometry.coordinates.z
+    FT = eltype(z)
+
+    R_d = FT(Planet.R_d(params))
+    MSLP = FT(Planet.MSLP(params))
+    grav = FT(Planet.grav(params))
+
+    T = FT(300)
+    p = MSLP * exp(-z * grav / (R_d * T))
+    ρ = p / (R_d * T)
+    ts = TD.PhaseDry_ρp(params, ρ, p)
+
+    if ᶜ𝔼_name === Val(:ρθ)
+        𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+    elseif ᶜ𝔼_name === Val(:ρe)
+        𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
+    elseif ᶜ𝔼_name === Val(:ρe_int)
+        𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+    end
+    return (; ρ, 𝔼_kwarg..., uₕ = Geometry.Covariant12Vector(FT(0), FT(0)))
+end
+
+function center_initial_condition_sphere(
     local_geometry,
     params,
     ᶜ𝔼_name,
     moisture_mode;
     is_balanced_flow = false,
 )
+
+    # Coordinates
+    z = local_geometry.coordinates.z
+    ϕ = local_geometry.coordinates.lat
+    λ = local_geometry.coordinates.long
+    FT = eltype(z)
+
     # Constants from CLIMAParameters
     R_d = FT(Planet.R_d(params))
     MSLP = FT(Planet.MSLP(params))
@@ -71,11 +109,6 @@ function center_initial_condition(
     q_0 = FT(0.018)
     ϕ_w = FT(40)
     ε = FT(0.608)
-
-    # Coordinates
-    z = local_geometry.coordinates.z
-    ϕ = local_geometry.coordinates.lat
-    λ = local_geometry.coordinates.long
 
     # Initial virtual temperature and pressure
     τ_z_1 = exp(Γ * z / T_0)
@@ -280,8 +313,8 @@ end
 #       This currently results in a mismatched spaces error.
 function vertical_diffusion_boundary_layer_cache(
     Y;
-    Cd = FT(0.001),
-    Ch = FT(0.001),
+    Cd = FT(0.0044),
+    Ch = FT(0.0044),
 )
     ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
@@ -333,6 +366,7 @@ function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
 end
 
 function constant_T_saturated_surface_coefs(
+    lat,
     ts_int,
     uₕ_int,
     z_int,
@@ -341,7 +375,7 @@ function constant_T_saturated_surface_coefs(
     Ch,
     params,
 )
-    T_sfc = FT(280)
+    T_sfc = 29 * exp(-lat^2 / (2 * 26^2)) + 271
     T_int = TD.air_temperature(params, ts_int)
     Rm_int = TD.gas_constant_air(params, ts_int)
     ρ_sfc =
@@ -389,6 +423,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     flux_coefficients .=
         constant_T_saturated_surface_coefs.(
+            Spaces.level(Fields.coordinate_field(Y.c).lat, 1),
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
             Spaces.level(Fields.coordinate_field(Y.c).z, 1),
@@ -399,22 +434,29 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         )
 
     if :ρe in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
-            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-        )
+        @. dif_flux_energy =
+            -Geometry.WVector(
+                SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+                SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+            )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(-mean(dif_flux_energy)),
+            bottom = Operators.SetValue(dif_flux_energy),
         )
         @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-        )
+        @. dif_flux_energy =
+            -Geometry.WVector(
+                sensible_heat_flux_ρe_int(
+                    params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+            )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(-mean(dif_flux_energy)),
+            bottom = Operators.SetValue(dif_flux_energy),
         )
         @. Yₜ.c.ρe_int +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
@@ -422,10 +464,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρq_tot in propertynames(Y.c)
         @. dif_flux_ρq_tot =
-            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
+            -Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(-mean(dif_flux_ρq_tot)),
+            bottom = Operators.SetValue(dif_flux_ρq_tot),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
