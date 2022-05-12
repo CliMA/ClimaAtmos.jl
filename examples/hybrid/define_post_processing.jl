@@ -891,15 +891,16 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         iu = findall(x -> x == unique_time[i], sol.t)[1]
         Y = sol.u[iu]
 
+        # zonal wind
+        ᶜuₕ = Y.c.uₕ
+        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+
         # temperature
+        ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
-
-        # zonal wind
-        ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
         # assigning to nc obj
         nc_θ[:, i] = ᶜθ
