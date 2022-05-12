@@ -353,7 +353,7 @@ function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
 end
 
 function constant_T_saturated_surface_coefs(
-    lat,
+    T_sfc,
     ts_int,
     uₕ_int,
     z_int,
@@ -362,7 +362,6 @@ function constant_T_saturated_surface_coefs(
     Ch,
     params,
 )
-    T_sfc = 29 * exp(-lat^2 / (2 * 26^2)) + 271
     T_int = TD.air_temperature(params, ts_int)
     Rm_int = TD.gas_constant_air(params, ts_int)
     ρ_sfc =
@@ -398,7 +397,7 @@ end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
-    (; ᶜts, ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (; ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -410,7 +409,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     flux_coefficients .=
         constant_T_saturated_surface_coefs.(
-            Spaces.level(Fields.coordinate_field(Y.c).lat, 1),
+            T_sfc,
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
             Spaces.level(Fields.coordinate_field(Y.c).z, 1),

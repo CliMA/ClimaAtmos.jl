@@ -119,9 +119,9 @@ function rrtmgp_model_cache(
         interpolation,
         bottom_extrapolation,
         add_isothermal_boundary_layer = true,
-        center_pressure = NaN, # initialized in tendency
-        center_temperature = NaN, # initialized in tendency
-        surface_temperature = (@. 29 * exp(-(latitude / 26)^2 / 2) + 271),
+        center_pressure = NaN, # initialized in callback
+        center_temperature = NaN, # initialized in callback
+        surface_temperature = NaN, # initialized in callback
         surface_emissivity = mean(input_data["surface_emissivity"]),
         direct_sw_surface_albedo = mean(input_data["surface_albedo"]),
         diffuse_sw_surface_albedo = mean(input_data["surface_albedo"]),
@@ -158,7 +158,7 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, params) = p
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, T_sfc, params) = p
     (; ᶜT, ᶜvmr_h2o, insolation_tuple, zenith_angle, weighted_irradiance) = p
     (; ᶠradiation_flux, idealized_insolation, idealized_h2o, rrtmgp_model) = p
 
@@ -175,6 +175,7 @@ function rrtmgp_model_callback!(integrator)
     @. ᶜT = TD.air_temperature(params, ᶜts)
     rrtmgp_model.center_pressure .= RRTMGPI.field2array(ᶜp)
     rrtmgp_model.center_temperature .= RRTMGPI.field2array(ᶜT)
+    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
     if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
         if idealized_h2o
