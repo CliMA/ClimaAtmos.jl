@@ -62,8 +62,8 @@ function Models.default_initial_conditions(
 
     # filter out the nothing subcomponents (e.g., a Dry() doesn't have moisture variables)
     zero_inits = NamedTuple(
-        c => zero_inits[c]
-        for c in keys(zero_inits) if !isnothing(zero_inits[c])
+        c => zero_inits[c] for
+        c in keys(zero_inits) if !isnothing(zero_inits[c])
     )
 
     return Fields.FieldVector(; zero_inits...)

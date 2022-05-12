@@ -53,7 +53,8 @@ function SchurComplementW(Y, transform, flags, test = false)
     tridiag_type = Operators.StencilCoefs{-1, 1, NTuple{3, FT}}
     quaddiag_type = Operators.StencilCoefs{-(1 + half), 1 + half, NTuple{4, FT}}
 
-    ∂ᶜ𝔼ₜ∂ᶠ𝕄_type = flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact && :ρe in propertynames(Y.c) ?
+    ∂ᶜ𝔼ₜ∂ᶠ𝕄_type =
+        flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact && :ρe in propertynames(Y.c) ?
         quaddiag_type : bidiag_type
     ∂ᶜρₜ∂ᶠ𝕄 = Fields.Field(bidiag_type, axes(Y.c))
     ∂ᶜ𝔼ₜ∂ᶠ𝕄 = Fields.Field(∂ᶜ𝔼ₜ∂ᶠ𝕄_type, axes(Y.c))
@@ -61,10 +62,9 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
     ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple = NamedTuple{ᶜ𝕋_names}(ntuple(
-        _ -> Fields.Field(bidiag_type, axes(Y.c)),
-        length(ᶜ𝕋_names),
-    ),)
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple = NamedTuple{ᶜ𝕋_names}(
+        ntuple(_ -> Fields.Field(bidiag_type, axes(Y.c)), length(ᶜ𝕋_names)),
+    )
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))

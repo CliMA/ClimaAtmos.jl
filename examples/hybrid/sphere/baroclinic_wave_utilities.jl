@@ -154,7 +154,8 @@ function center_initial_condition_sphere(
     if moisture_mode === Val(:dry)
         q_tot = FT(0)
     else
-        q_tot = (p <= p_t) ? q_t :
+        q_tot =
+            (p <= p_t) ? q_t :
             q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
     end
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.

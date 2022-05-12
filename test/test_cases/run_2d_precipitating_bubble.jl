@@ -252,11 +252,13 @@ function run_2d_precipitating_bubble(
         # cb_jld2 = JLD2Output(model, path, "moist_bubble", dt)
         # cb_set = CallbackSet(generate_callback(cb_jld2))
         cb_png = PNGOutput(model, path, "plots_precipitating_bubble", 100)
-        cb_set = CallbackSet(DiffEqCallbacks.PeriodicCallback(
-            cb_png,
-            cb_png.interval;
-            initial_affect = true,
-        ))
+        cb_set = CallbackSet(
+            DiffEqCallbacks.PeriodicCallback(
+                cb_png,
+                cb_png.interval;
+                initial_affect = true,
+            ),
+        )
 
         simulation = Simulation(
             model,

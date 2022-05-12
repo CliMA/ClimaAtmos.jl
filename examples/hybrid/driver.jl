@@ -56,7 +56,9 @@ function time_to_seconds(s::String)
     )
     s == "Inf" && return Inf
     if count(occursin.(keys(factor), Ref(s))) != 1
-        error("Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]")
+        error(
+            "Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]",
+        )
     end
     for match in keys(factor)
         occursin(match, s) || continue
@@ -102,7 +104,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     isnothing(microphy) ? NamedTuple() : zero_moment_microphysics_cache(Y),
     isnothing(forcing) ? NamedTuple() : held_suarez_cache(Y),
     isnothing(rad) ? NamedTuple() :
-        rrtmgp_model_cache(Y, params; radiation_mode, idealized_h2o),
+    rrtmgp_model_cache(Y, params; radiation_mode, idealized_h2o),
     vert_diff ? vertical_diffusion_boundary_layer_cache(Y) : NamedTuple(),
     (;
         tendency_knobs = (;
@@ -111,7 +113,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
             rad_flux = !isnothing(rad),
             vert_diff,
             hyperdiff,
-        ),
+        )
     ),
 )
 
@@ -173,12 +175,14 @@ ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 additional_callbacks = if !isnothing(rad)
     # TODO: better if-else criteria?
     dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
-    (PeriodicCallback(
-        rrtmgp_model_callback!,
-        dt_rad; # update RRTMGPModel every dt_rad
-        initial_affect = true, # run callback at t = 0
-        save_positions = (false, false), # do not save Y before and after callback
-    ),)
+    (
+        PeriodicCallback(
+            rrtmgp_model_callback!,
+            dt_rad; # update RRTMGPModel every dt_rad
+            initial_affect = true, # run callback at t = 0
+            save_positions = (false, false), # do not save Y before and after callback
+        ),
+    )
 else
     ()
 end
@@ -268,7 +272,8 @@ if ode_algorithm <: Union{
 }
     use_transform = !(ode_algorithm in (Rosenbrock23, Rosenbrock32))
     W = SchurComplementW(Y, use_transform, jacobian_flags, test_implicit_solver)
-    jac_kwargs = use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
+    jac_kwargs =
+        use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
         (; jac_prototype = W, Wfact = Wfact!)
 
     alg_kwargs = (; linsolve = linsolve!)
@@ -419,13 +424,9 @@ if !is_distributed || ClimaComms.iamroot(comms_ctx)
         # Extract best mse for this job:
         best_mse = all_best_mse[job_id]
 
-        include(joinpath(
-            @__DIR__,
-            "..",
-            "..",
-            "post_processing",
-            "compute_mse.jl",
-        ))
+        include(
+            joinpath(@__DIR__, "..", "..", "post_processing", "compute_mse.jl"),
+        )
 
         ds_filename_computed = joinpath(output_dir, "prog_state.nc")
 
