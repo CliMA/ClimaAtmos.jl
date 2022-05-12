@@ -46,7 +46,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         elseif :ρe in propertynames(Y.c)
             @. ᶜχ = wdivₕ(gradₕ((Y.c.ρe + ᶜp) / ᶜρ)) # ᶜχe
             Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
-            @. Yₜ.c.ρe -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
+            @. Yₜ.c.ρe -= κ₄ / 10. * wdivₕ(ᶜρ * gradₕ(ᶜχ))
         elseif :ρe_int in propertynames(Y.c)
             @. ᶜχ = wdivₕ(gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ)) # ᶜχe_int
             Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
@@ -57,8 +57,8 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if :ρq_tot in propertynames(Y.c)
         @. ᶜχ = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
         Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
-        @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
-        @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
+        @. Yₜ.c.ρq_tot -= κ₄ / 10. * wdivₕ(ᶜρ * gradₕ(ᶜχ))
+        @. Yₜ.c.ρ -= κ₄ / 10. * wdivₕ(ᶜρ * gradₕ(ᶜχ))
     end
 
     if point_type <: Geometry.Abstract3DPoint

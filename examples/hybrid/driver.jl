@@ -18,11 +18,16 @@ hyperdiff = parsed_args["hyperdiff"]
 
 include("types.jl")
 
-moisture_model() = moisture_model(parsed_args)
-energy_form() = energy_form(parsed_args)
-radiation_model() = radiation_model(parsed_args)
-microphysics_model() = microphysics_model(parsed_args)
-forcing_type() = forcing_type(parsed_args)
+#moisture_model() = moisture_model(parsed_args)
+moisture_model() = EquilMoistModel()
+#energy_form() = energy_form(parsed_args)
+energy_form() = TotalEnergy()
+#radiation_model() = radiation_model(parsed_args)
+radiation_model() = RRTMGPI.GrayRadiation()
+#microphysics_model() = microphysics_model(parsed_args)
+microphysics_model() = Microphysics0Moment()
+#forcing_type() = forcing_type(parsed_args)
+forcing_type() = HeldSuarezForcing()
 
 using OrdinaryDiffEq
 using PrettyTables
@@ -69,8 +74,10 @@ upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
-t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt = FT(time_to_seconds(parsed_args["dt"]))
+#t_end = FT(time_to_seconds(parsed_args["t_end"]))
+t_end = 60 * 60 * 24 * 10
+#dt = FT(time_to_seconds(parsed_args["dt"]))
+dt = 400
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 jacobi_flags(::TotalEnergy) =
@@ -178,7 +185,8 @@ else
 end
 
 import ClimaCore: enable_threading
-enable_threading() = parsed_args["enable_threading"]
+#enable_threading() = parsed_args["enable_threading"]
+enable_threading() = true
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
 # bytes required to store an element from Y.c or Y.f (or, really, from any Field
