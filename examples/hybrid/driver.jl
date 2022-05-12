@@ -193,9 +193,15 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
-    z_max = FT(30e3)
-    z_elem = 10
+    if is_baro_wave(parsed_args)
+        z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
+        z_max = FT(30e3)
+        z_elem = 10
+    else
+        z_stretch = Meshes.GeneralizedExponentialStretching(FT(600), FT(5000))
+        z_max = FT(42e3)
+        z_elem = 15
+    end
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
