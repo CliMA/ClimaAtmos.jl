@@ -3,7 +3,6 @@ using LinearAlgebra: ×, norm, norm_sqr, dot
 using ClimaCore: Operators, Fields
 
 using Thermodynamics
-using CLIMAParameters: AbstractEarthParameterSet, Planet, Atmos
 
 const TD = Thermodynamics
 

@@ -2,7 +2,6 @@ using Statistics: mean
 using Dierckx: Spline1D
 using Dates: Second, DateTime
 using Insolation: instantaneous_zenith_angle
-using CLIMAParameters: AbstractEarthParameterSet, Planet, astro_unit
 
 function rrtmgp_model_cache(
     Y,
