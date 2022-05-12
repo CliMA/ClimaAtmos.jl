@@ -65,7 +65,11 @@ function set!(simulation::Simulation, subcomponent = :base; kwargs...)
         # the model's state vector to give a more informative error message
         if varname ∉
            getproperty(Models.variable_names(simulation.model), subcomponent)
-            throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
+            throw(
+                ArgumentError(
+                    "$varname not in state vector subcomponent $subcomponent.",
+                ),
+            )
         end
 
         # for restart we need to use the reinit function because we don't
@@ -136,7 +140,11 @@ function get_spaces(simulation::Simulation, subcomponent_name = :base, args...)
     for varname in args
         if varname ∉
            getproperty(state_variable_names(simulation.model), subcomponent)
-            throw(ArgumentError("$varname not in state vector subcomponent $subcomponent."))
+            throw(
+                ArgumentError(
+                    "$varname not in state vector subcomponent $subcomponent.",
+                ),
+            )
         end
         subcomponent = getproperty(simulation.integrator.u, subcomponent_name)
         target_field = getproperty(subcomponent, varname)

@@ -21,8 +21,8 @@ dirs_to_monitor = [
 #! format: off
 
 cli_options = [
-    ("--TEST_NAME baroclinic_wave_rhoe --job_id alloc_sphere_baroclinic_wave_rhoe"),
-    ("--TEST_NAME held_suarez_rhoe_equilmoist --vert_diff true --moist equil --forcing held_suarez --microphy 0M"),
+    ("--job_id alloc_sphere_baroclinic_wave_rhoe"),
+    ("--vert_diff true --moist equil --forcing held_suarez --microphy 0M"),
 ]
 #! format: on
 

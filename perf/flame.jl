@@ -34,8 +34,9 @@ if !isempty(get(ENV, "CI_PERF_CPUPROFILE", ""))
 
         print_link_url(url) = print("\033]1339;url='$(url)'\a\n")
 
-        profiler_url(uri) =
-            URIs.URI("https://profiler.firefox.com/from-url/$(URIs.escapeuri(uri))",)
+        profiler_url(uri) = URIs.URI(
+            "https://profiler.firefox.com/from-url/$(URIs.escapeuri(uri))",
+        )
 
         # copy the file to the clima-ci bucket
         buildkite_pipeline = ENV["BUILDKITE_PIPELINE_SLUG"]

@@ -68,8 +68,7 @@ function init_2d_moist_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     q_tot(local_geometry) = begin
         @unpack x, z = local_geometry.coordinates
         r = sqrt((x - x_c)^2 + (z - z_c)^2)
-        return r < r_c ? FT(0.5) * q_tot_c * (FT(1) + cospi(r / r_c)) :
-                   FT(0)
+        return r < r_c ? FT(0.5) * q_tot_c * (FT(1) + cospi(r / r_c)) : FT(0)
     end
 
     # total energy

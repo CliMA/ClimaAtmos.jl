@@ -63,7 +63,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)),)
+    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)))
 
     # thermodynamics
     flux_bottom = Geometry.WVector(FT(0))
@@ -130,7 +130,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)),)
+    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)))
 
     # thermodynamics: diffusion on enthalpy
     flux_bottom = Geometry.WVector(FT(0))
@@ -201,7 +201,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw / ρ)),)
+    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw / ρ)))
 
     # thermodynamics
     flux_bottom = Geometry.WVector(FT(0))
@@ -273,7 +273,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw / ρ)),)
+    @. dρw += wbc(vdiv_c2f(ν * ρ * scalar_vgrad_f2c(ρw / ρ)))
 
     # thermodynamics: diffusion on enthalpy
     flux_bottom = Geometry.WVector(FT(0))

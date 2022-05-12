@@ -74,12 +74,15 @@ float_types = (Float32, Float64)
             Nothing,
             (ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},),
             (
-                ρq_tot =
-                    Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
-                ρq_liq =
-                    Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
-                ρq_ice =
-                    Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},
+                ρq_tot = Spaces.ExtrudedFiniteDifferenceSpace{
+                    Spaces.CellCenter,
+                },
+                ρq_liq = Spaces.ExtrudedFiniteDifferenceSpace{
+                    Spaces.CellCenter,
+                },
+                ρq_ice = Spaces.ExtrudedFiniteDifferenceSpace{
+                    Spaces.CellCenter,
+                },
             ),
             (ρθ = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},),
             (ρe_tot = Spaces.ExtrudedFiniteDifferenceSpace{Spaces.CellCenter},),

@@ -191,31 +191,28 @@ function implicit_tendency!(Yₜ, Y, p, t)
         if isnothing(ᶠupwind_product)
             @. Yₜ.c.ρe = -(ᶜdivᵥ(ᶠinterp(Y.c.ρe + ᶜp) * ᶠw))
         else
-            @. Yₜ.c.ρe =
-                -(ᶜdivᵥ(
-                    ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, (Y.c.ρe + ᶜp) / Y.c.ρ),
-                ))
+            @. Yₜ.c.ρe = -(ᶜdivᵥ(
+                ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, (Y.c.ρe + ᶜp) / Y.c.ρ),
+            ))
         end
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
         if isnothing(ᶠupwind_product)
-            @. Yₜ.c.ρe_int =
-                -(
-                    ᶜdivᵥ(ᶠinterp(Y.c.ρe_int + ᶜp) * ᶠw) -
-                    ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
-                )
+            @. Yₜ.c.ρe_int = -(
+                ᶜdivᵥ(ᶠinterp(Y.c.ρe_int + ᶜp) * ᶠw) -
+                ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
+            )
             # or, equivalently,
             # Yₜ.c.ρe_int = -(ᶜdivᵥ(ᶠinterp(Y.c.ρe_int) * ᶠw) + ᶜp * ᶜdivᵥ(ᶠw))
         else
-            @. Yₜ.c.ρe_int =
-                -(
-                    ᶜdivᵥ(
-                        ᶠinterp(Y.c.ρ) *
-                        ᶠupwind_product(ᶠw, (Y.c.ρe_int + ᶜp) / Y.c.ρ),
-                    ) -
-                    ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
-                )
+            @. Yₜ.c.ρe_int = -(
+                ᶜdivᵥ(
+                    ᶠinterp(Y.c.ρ) *
+                    ᶠupwind_product(ᶠw, (Y.c.ρe_int + ᶜp) / Y.c.ρ),
+                ) -
+                ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
+            )
         end
     end
 
@@ -410,11 +407,10 @@ function Wfact!(W, Y, p, dtγ, t)
             #     -ᶜdivᵥ_stencil(
             #         ᶠinterp(ᶜρ) * ∂(ᶠupwind_product(ᶠw, ᶜρθ / ᶜρ))/∂(ᶠw_data),
             #     )
-            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 =
-                -(ᶜdivᵥ_stencil(
-                    ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw + εw, ᶜρθ / ᶜρ) /
-                    to_scalar(ᶠw + εw),
-                ))
+            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(
+                ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw + εw, ᶜρθ / ᶜρ) /
+                to_scalar(ᶠw + εw),
+            ))
         end
     elseif :ρe in propertynames(Y.c)
         ᶜρe = Y.c.ρe
@@ -446,8 +442,10 @@ function Wfact!(W, Y, p, dtγ, t)
                 # ∂ᶜ𝔼ₜ∂ᶠ𝕄 has 3 diagonals instead of 5
                 @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρe + ᶜp) * one(ᶠw)))
             else
-                error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact or :no_∂ᶜp∂ᶜK when using ρe \
-                       without upwinding")
+                error(
+                    "∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact or :no_∂ᶜp∂ᶜK when using ρe \
+                     without upwinding",
+                )
             end
         else
             # TODO: Add Operator2Stencil for UpwindBiasedProductC2F to ClimaCore
@@ -460,12 +458,10 @@ function Wfact!(W, Y, p, dtγ, t)
                 #         ᶠinterp(ᶜρ) *
                 #         ∂(ᶠupwind_product(ᶠw, (ᶜρe + ᶜp) / ᶜρ))/∂(ᶠw_data),
                 #     )
-                @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 =
-                    -(ᶜdivᵥ_stencil(
-                        ᶠinterp(ᶜρ) *
-                        ᶠupwind_product(ᶠw + εw, (ᶜρe + ᶜp) / ᶜρ) /
-                        to_scalar(ᶠw + εw),
-                    ))
+                @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(
+                    ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw + εw, (ᶜρe + ᶜp) / ᶜρ) /
+                    to_scalar(ᶠw + εw),
+                ))
             else
                 error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe with \
                        upwinding")
@@ -494,14 +490,12 @@ function Wfact!(W, Y, p, dtγ, t)
             #             Geometry.Contravariant3Vector(ᶠw_unit),
             #         ),)
             #     )
-            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 =
-                -(
-                    ᶜdivᵥ_stencil(ᶠinterp(ᶜρe_int + ᶜp) * one(ᶠw)) -
-                    ᶜinterp_stencil(dot(
-                        ᶠgradᵥ(ᶜp),
-                        Geometry.Contravariant3Vector(one(ᶠw)),
-                    ),)
+            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 = -(
+                ᶜdivᵥ_stencil(ᶠinterp(ᶜρe_int + ᶜp) * one(ᶠw)) -
+                ᶜinterp_stencil(
+                    dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(one(ᶠw))),
                 )
+            )
         else
             # ᶜρe_intₜ =
             #     -(
@@ -521,17 +515,15 @@ function Wfact!(W, Y, p, dtγ, t)
             #             Geometry.Contravariant3Vector(ᶠw_unit),
             #         ),)
             #     )
-            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 =
-                -(
-                    ᶜdivᵥ_stencil(
-                        ᶠinterp(ᶜρ) *
-                        ᶠupwind_product(ᶠw + εw, (ᶜρe_int + ᶜp) / ᶜρ) /
-                        to_scalar(ᶠw + εw),
-                    ) - ᶜinterp_stencil(dot(
-                        ᶠgradᵥ(ᶜp),
-                        Geometry.Contravariant3Vector(one(ᶠw)),
-                    ),)
+            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 = -(
+                ᶜdivᵥ_stencil(
+                    ᶠinterp(ᶜρ) *
+                    ᶠupwind_product(ᶠw + εw, (ᶜρe_int + ᶜp) / ᶜρ) /
+                    to_scalar(ᶠw + εw),
+                ) - ᶜinterp_stencil(
+                    dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(one(ᶠw))),
                 )
+            )
         end
     end
 
@@ -666,11 +658,13 @@ function Wfact!(W, Y, p, dtγ, t)
         @. ∂ᶠ𝕄ₜ∂ᶠ𝕄 =
             to_scalar_coefs(compose(-1 * ᶠgradᵥ_stencil(one(ᶜK)), ∂ᶜK∂ᶠw_data))
     elseif :ρe in propertynames(Y.c)
-        @. ∂ᶠ𝕄ₜ∂ᶠ𝕄 = to_scalar_coefs(compose(
-            -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(-(ᶜρ * R_d / cv_d)) +
-            -1 * ᶠgradᵥ_stencil(one(ᶜK)),
-            ∂ᶜK∂ᶠw_data,
-        ),)
+        @. ∂ᶠ𝕄ₜ∂ᶠ𝕄 = to_scalar_coefs(
+            compose(
+                -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(-(ᶜρ * R_d / cv_d)) +
+                -1 * ᶠgradᵥ_stencil(one(ᶜK)),
+                ∂ᶜK∂ᶠw_data,
+            ),
+        )
     end
 
     for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
@@ -686,11 +680,10 @@ function Wfact!(W, Y, p, dtγ, t)
             #     -ᶜdivᵥ_stencil(
             #         ᶠinterp(ᶜρ) * ∂(ᶠupwind_product(ᶠw, ᶜ𝕋 / ᶜρ))/∂(ᶠw_data),
             #     )
-            @. ∂ᶜ𝕋ₜ∂ᶠ𝕄 =
-                -(ᶜdivᵥ_stencil(
-                    ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw + εw, ᶜ𝕋 / ᶜρ) /
-                    to_scalar(ᶠw + εw),
-                ))
+            @. ∂ᶜ𝕋ₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(
+                ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw + εw, ᶜ𝕋 / ᶜρ) /
+                to_scalar(ᶠw + εw),
+            ))
         end
     end
 

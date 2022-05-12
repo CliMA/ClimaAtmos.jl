@@ -57,20 +57,14 @@
 
     # auxiliary variables
     v_rai = @. Geometry.WVector(
-        interp_c2f(CM1M.terminal_velocity(
-            params,
-            CM1M.RainType(),
-            ρ,
-            ρq_rai / ρ,
-        )) * FT(-1),
+        interp_c2f(
+            CM1M.terminal_velocity(params, CM1M.RainType(), ρ, ρq_rai / ρ),
+        ) * FT(-1),
     )
     v_sno = @. Geometry.WVector(
-        interp_c2f(CM1M.terminal_velocity(
-            params,
-            CM1M.SnowType(),
-            ρ,
-            ρq_sno / ρ,
-        )) * FT(-1),
+        interp_c2f(
+            CM1M.terminal_velocity(params, CM1M.SnowType(), ρ, ρq_sno / ρ),
+        ) * FT(-1),
     )
     uvw_rai = @. Geometry.Covariant123Vector(ρuh / ρ) +
        Geometry.Covariant123Vector(interp_f2c(ρw) / ρ) +

@@ -51,10 +51,9 @@ function rhs_base_model!(
 
     # curls
     vector_vcurl_c2f = Operators.CurlC2F(
-        bottom = Operators.SetCurl(Geometry.Contravariant12Vector(
-            FT(0),
-            FT(0),
-        )),
+        bottom = Operators.SetCurl(
+            Geometry.Contravariant12Vector(FT(0), FT(0)),
+        ),
         top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
     )
 
@@ -78,15 +77,15 @@ function rhs_base_model!(
 
     # hyperdiffusion
     χuh = @. duh =
-        hwgrad(hdiv(uh)) -
-        Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(uh))),)
+        hwgrad(hdiv(uh)) - Geometry.Covariant12Vector(
+            hwcurl(Geometry.Covariant3Vector(hcurl(uh))),
+        )
     Spaces.weighted_dss!(duh)
     @. duh =
         -κ₄ * (
-            hwgrad(hdiv(χuh)) -
-            Geometry.Covariant12Vector(hwcurl(Geometry.Covariant3Vector(hcurl(
-                χuh,
-            ))),)
+            hwgrad(hdiv(χuh)) - Geometry.Covariant12Vector(
+                hwcurl(Geometry.Covariant3Vector(hcurl(χuh))),
+            )
         )
 
     # density
@@ -103,16 +102,16 @@ function rhs_base_model!(
     ω¹² = @. hcurl(w) # Contravariant12Vector
     @. ω¹² += vector_vcurl_c2f(uh) # Contravariant12Vector
     u¹² = # TODO!: Will need to be changed with topography
-        @. Geometry.Contravariant12Vector(Geometry.Covariant123Vector(interp_c2f(
-            uh,
-        )),) # Contravariant12Vector in 3D
+        @. Geometry.Contravariant12Vector(
+            Geometry.Covariant123Vector(interp_c2f(uh)),
+        ) # Contravariant12Vector in 3D
     u³ = @. Geometry.Contravariant3Vector(Geometry.Covariant123Vector(w))  # TODO!: Will need to be changed with topography
     # coriolis
     if Ω != 0
         lat = Fields.coordinate_field(axes(ρ)).lat
-        f = @. Geometry.Contravariant3Vector(Geometry.WVector(
-            2 * Ω * sind(lat),
-        ))  # TODO!: Will need to be changed with topography
+        f = @. Geometry.Contravariant3Vector(
+            Geometry.WVector(2 * Ω * sind(lat)),
+        )  # TODO!: Will need to be changed with topography
     else
         y = Fields.coordinate_field(axes(ρ)).y
         f = @. Geometry.Contravariant3Vector(Geometry.WVector(Ω * y))

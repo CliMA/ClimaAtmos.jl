@@ -1,25 +1,31 @@
 include("cli_options.jl")
-(s, parsed_args) = parse_commandline()
+if !(@isdefined parsed_args)
+    (s, parsed_args) = parse_commandline()
+end
 
+include("classify_case.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-TEST_NAME = parsed_args["TEST_NAME"]
 
 fps = parsed_args["fps"]
-microphy = parsed_args["microphy"]
-forcing = parsed_args["forcing"]
 idealized_h2o = parsed_args["idealized_h2o"]
 vert_diff = parsed_args["vert_diff"]
-rad = parsed_args["rad"]
 hyperdiff = parsed_args["hyperdiff"]
 
-@assert microphy in (nothing, "0M")
-@assert forcing in (nothing, "held_suarez")
 @assert idealized_h2o in (true, false)
 @assert vert_diff in (true, false)
-@assert rad in (nothing, "clearsky", "gray", "allsky")
 @assert hyperdiff in (true, false)
+@assert parsed_args["config"] in ("sphere", "column")
+
+include("types.jl")
+
+moisture_model() = moisture_model(parsed_args)
+energy_form() = energy_form(parsed_args)
+radiation_model() = radiation_model(parsed_args)
+microphysics_model() = microphysics_model(parsed_args)
+forcing_type() = forcing_type(parsed_args)
 
 using OrdinaryDiffEq
+using PrettyTables
 using DiffEqCallbacks
 using JLD2
 using ClimaCorePlots, Plots
@@ -30,42 +36,52 @@ using ClimaCore
 
 import Random
 Random.seed!(1234)
+include(joinpath("..", "RRTMGPInterface.jl"))
+import .RRTMGPInterface
+RRTMGPI = RRTMGPInterface
+
+!isnothing(radiation_model()) && include("radiation_utilities.jl")
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
-moisture_mode() = Symbol(parse_arg(parsed_args, "moist", "dry"))
-@assert moisture_mode() in (:dry, :equil, :nonequil)
-
-energy_variable(::Val{:rhoe}) = :ρe
-energy_variable(::Val{:rhoe_int}) = :ρe_int
-energy_variable(::Val{:rhotheta}) = :ρθ
-energy_name() =
-    energy_variable(Val(Symbol(parse_arg(parsed_args, "energy_name", "rhoe")))) # e.g., :ρθ
-@assert energy_name() in (:ρe, :ρe_int, :ρθ)
+function time_to_seconds(s::String)
+    factor = Dict(
+        "secs" => 1,
+        "mins" => 60,
+        "hours" => 60 * 60,
+        "days" => 60 * 60 * 24,
+    )
+    s == "Inf" && return Inf
+    if count(occursin.(keys(factor), Ref(s))) != 1
+        error(
+            "Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]",
+        )
+    end
+    for match in keys(factor)
+        occursin(match, s) || continue
+        return parse(Float64, first(split(s, match))) * factor[match]
+    end
+    error("Uncaught case in computing time from given string.")
+end
 
 upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 @assert upwinding_mode() in (:none, :first_order, :third_order)
 
 # Test-specific definitions (may be overwritten in each test case file)
 # TODO: Allow some of these to be environment variables or command line arguments
-params = nothing
-horizontal_mesh = nothing # must be object of type AbstractMesh
-quad = nothing # must be object of type QuadratureStyle
-z_max = 0
-z_elem = 0
-z_stretch = nothing
-t_end = parse_arg(parsed_args, "t_end", FT(60 * 60 * 24 * 10))
-dt = FT(parse_arg(parsed_args, "dt", FT(400)))
-dt_save_to_sol = parsed_args["dt_save_to_sol"]
-dt_save_to_disk = parse_arg(parsed_args, "dt_save_to_disk", FT(0))
-ode_algorithm = nothing # must be object of type OrdinaryDiffEqAlgorithm
-jacobi_flags(::Val{:ρe}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobi_flags(::Val{:ρe_int}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobi_flags(::Val{:ρθ}) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobian_flags = jacobi_flags(Val(energy_name()))
+t_end = FT(time_to_seconds(parsed_args["t_end"]))
+dt = FT(time_to_seconds(parsed_args["dt"]))
+dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
+jacobi_flags(::TotalEnergy) =
+    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::InternalEnergy) =
+    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::PotentialTemperature) =
+    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobian_flags = jacobi_flags(energy_form())
 max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
 show_progress_bar = isinteractive()
-additional_callbacks = () # e.g., printing diagnostic information
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
@@ -75,19 +91,19 @@ const sponge = false
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(2e16), use_tempest_mode),
     sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
-    isnothing(microphy) ? NamedTuple() : zero_moment_microphysics_cache(Y),
-    isnothing(forcing) ? NamedTuple() : held_suarez_cache(Y),
-    isnothing(rad) ? NamedTuple() :
-        rrtmgp_model_cache(Y, params; idealized_h2o),
+    microphysics_cache(Y, microphysics_model()),
+    forcing_cache(Y, forcing_type()),
+    isnothing(radiation_model()) ? NamedTuple() :
+    rrtmgp_model_cache(Y, params, radiation_model(); idealized_h2o),
     vert_diff ? vertical_diffusion_boundary_layer_cache(Y) : NamedTuple(),
     (;
         tendency_knobs = (;
-            hs_forcing = forcing == "held_suarez",
-            microphy_0M = microphy == "0M",
-            rad_flux = !isnothing(rad),
+            hs_forcing = forcing_type() isa HeldSuarezForcing,
+            microphy_0M = microphysics_model() isa Microphysics0Moment,
+            rad_flux = !isnothing(radiation_model()),
             vert_diff,
             hyperdiff,
-        ),
+        )
     ),
 )
 
@@ -139,28 +155,26 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-params = BaroclinicWaveParameterSet((; dt))
-horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 8)
-quad = Spaces.Quadratures.GLL{5}()
-z_max = FT(30e3)
-z_elem = 15
-#z_stretch = Meshes.Uniform()
-z_stretch = Meshes.GeneralizedExponentialStretching(FT(300), FT(5000))
+params = if is_column_radiative_equilibrium(parsed_args)
+    EarthParameterSet()
+else
+    BaroclinicWaveParameterSet((; dt))
+end
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
-!isnothing(rad) && include("radiation_utilities.jl")
-
-if isfile(joinpath(@__DIR__, "sphere", "$TEST_NAME.jl"))
-    include(joinpath(@__DIR__, "sphere", "$TEST_NAME.jl"))
-end
-
-# TODO: use dispatch to define this
-if TEST_NAME == "baroclinic_wave_rhoe_equilmoist_radiation"
-    additional_callbacks = (PeriodicCallback(
-        rrtmgp_model_callback!,
-        FT(6 * 60 * 60); # update RRTMGPModel every 6 hours
-        initial_affect = true,
-    ),)
+additional_callbacks = if !isnothing(radiation_model())
+    # TODO: better if-else criteria?
+    dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
+    (
+        PeriodicCallback(
+            rrtmgp_model_callback!,
+            dt_rad; # update RRTMGPModel every dt_rad
+            initial_affect = true, # run callback at t = 0
+            save_positions = (false, false), # do not save Y before and after callback
+        ),
+    )
+else
+    ()
 end
 
 import ClimaCore: enable_threading
@@ -175,6 +189,30 @@ enable_threading() = parsed_args["enable_threading"]
 # we will just hardcode the value of 4.
 max_field_element_size = 4 # ρ = 1 byte, 𝔼 = 1 byte, uₕ = 2 bytes
 
+center_space, face_space = if parsed_args["config"] == "sphere"
+    quad = Spaces.Quadratures.GLL{5}()
+    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
+    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+    z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
+    z_max = FT(30e3)
+    z_elem = 10
+    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+elseif parsed_args["config"] == "column" # single column
+    Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
+    quad = Spaces.Quadratures.GL{1}()
+    horizontal_mesh = periodic_rectangle_mesh(;
+        x_max = Δx,
+        y_max = Δx,
+        x_elem = 1,
+        y_elem = 1,
+    )
+    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+    z_max = FT(70e3)
+    z_elem = 70
+    z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
+    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+end
+
 if haskey(ENV, "RESTART_FILE")
     restart_file_name = ENV["RESTART_FILE"]
     if is_distributed
@@ -187,24 +225,26 @@ if haskey(ENV, "RESTART_FILE")
     close(restart_data)
     ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
     ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
+    # TODO:   quad, horizontal_mesh, z_stretch,
+    #         z_max, z_elem should be taken from Y.
+    #         when restarting
 else
     t_start = FT(0)
-    if is_distributed
-        h_space =
-            make_distributed_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    else
-        h_space = make_horizontal_space(horizontal_mesh, quad)
-    end
-    center_space, face_space =
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+
+    center_initial_condition = if parsed_args["config"] == "sphere"
+        center_initial_condition_sphere
+    elseif parsed_args["config"] == "column"
+        center_initial_condition_column
+    end
+
     Y = Fields.FieldVector(
         c = center_initial_condition.(
             ᶜlocal_geometry,
             params,
-            Val(energy_name()),
-            Val(moisture_mode()),
+            Ref(energy_form()),
+            Ref(moisture_model()),
         ),
         f = face_initial_condition.(ᶠlocal_geometry, params),
     )
@@ -222,7 +262,8 @@ if ode_algorithm <: Union{
 }
     use_transform = !(ode_algorithm in (Rosenbrock23, Rosenbrock32))
     W = SchurComplementW(Y, use_transform, jacobian_flags, test_implicit_solver)
-    jac_kwargs = use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
+    jac_kwargs =
+        use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
         (; jac_prototype = W, Wfact = Wfact!)
 
     alg_kwargs = (; linsolve = linsolve!)
@@ -266,7 +307,7 @@ dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     Spaces.weighted_dss!(Y.c, p.ghost_buffer.c)
     Spaces.weighted_dss!(Y.f, p.ghost_buffer.f)
 end
-save_to_disk_callback = if dt_save_to_disk == 0
+save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
 else
     PeriodicCallback(save_to_disk_func, dt_save_to_disk; initial_affect = true)
@@ -288,7 +329,7 @@ problem = SplitODEProblem(
 integrator = OrdinaryDiffEq.init(
     problem,
     ode_algorithm(; alg_kwargs...);
-    saveat = dt_save_to_sol == 0 ? [] : dt_save_to_sol,
+    saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
     callback = callback,
     dt = dt,
     adaptive = false,
@@ -306,7 +347,7 @@ sol = @timev OrdinaryDiffEq.solve!(integrator)
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
     if ClimaComms.iamroot(comms_ctx)
-        global_h_space = make_horizontal_space(horizontal_mesh, quad)
+        global_h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
         global_center_space, global_face_space =
             make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
         global_Y_c_type = Fields.Field{
@@ -346,14 +387,12 @@ import OrderedCollections
 include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if TEST_NAME == "baroclinic_wave_rhoe"
-        paperplots_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
-    elseif TEST_NAME == "baroclinic_wave_rhotheta"
-        paperplots_baro_wave_ρθ(sol, output_dir, p, FT(90), FT(180))
-    elseif TEST_NAME == "single_column_radiative_equilibrium"
+    if is_baro_wave(parsed_args)
+        paperplots_baro_wave(sol, output_dir, p, FT(90), FT(180))
+    elseif is_column_radiative_equilibrium(parsed_args)
         custom_postprocessing(sol, output_dir)
-    elseif TEST_NAME == "baroclinic_wave_rhoe_equilmoist"
-        paperplots_moist_baro_wave_ρe(sol, output_dir, p, FT(90), FT(180))
+    elseif forcing_type() isa HeldSuarezForcing && t_end >= (3600 * 24 * 400)
+        paperplots_held_suarez(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir, fps)
     end
@@ -375,13 +414,9 @@ if !is_distributed || ClimaComms.iamroot(comms_ctx)
         # Extract best mse for this job:
         best_mse = all_best_mse[job_id]
 
-        include(joinpath(
-            @__DIR__,
-            "..",
-            "..",
-            "post_processing",
-            "compute_mse.jl",
-        ))
+        include(
+            joinpath(@__DIR__, "..", "..", "post_processing", "compute_mse.jl"),
+        )
 
         ds_filename_computed = joinpath(output_dir, "prog_state.nc")
 

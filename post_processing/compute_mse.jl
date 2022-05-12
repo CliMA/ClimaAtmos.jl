@@ -91,7 +91,9 @@ function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
         elseif ref_counter_PR == ref_counter_main # unchanged reference
             @info "Comparing results against main path:$path"
         else
-            error("Unexpected reference. Please open an issue pointing to this build.")
+            error(
+                "Unexpected reference. Please open an issue pointing to this build.",
+            )
         end
         ds_filename_reference = joinpath(path, ds_filename_computed)
         @info "`ds_filename_computed`: `$ds_filename_computed`"

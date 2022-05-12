@@ -88,7 +88,7 @@ end
     )
     vdiv_c2f = Operators.DivergenceC2F()
     scalar_vgrad_f2c = Operators.GradientF2C()
-    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)),)
+    @. dw += wbc(vdiv_c2f(ν * scalar_vgrad_f2c(w)))
 
     # thermodynamics
     # flux_bottom = get_boundary_flux(bc_ρθ.bottom, ρθ, Y, Ya)

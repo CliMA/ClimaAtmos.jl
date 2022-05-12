@@ -1,6 +1,6 @@
 function make_function_space(domain::Column)
     column = ClimaCore.Domains.IntervalDomain(
-        Geometry.ZPoint(domain.zlim[1])..Geometry.ZPoint(domain.zlim[2]);
+        Geometry.ZPoint(domain.zlim[1]) .. Geometry.ZPoint(domain.zlim[2]);
         boundary_tags = (:bottom, :top),
     )
     mesh = Meshes.IntervalMesh(
@@ -16,7 +16,7 @@ end
 
 function make_function_space(domain::HybridPlane)
     vertdomain = ClimaCore.Domains.IntervalDomain(
-        Geometry.ZPoint(domain.zlim[1])..Geometry.ZPoint(domain.zlim[2]);
+        Geometry.ZPoint(domain.zlim[1]) .. Geometry.ZPoint(domain.zlim[2]);
         boundary_tags = (:bottom, :top),
     )
     vertmesh = Meshes.IntervalMesh(
@@ -27,7 +27,7 @@ function make_function_space(domain::HybridPlane)
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.IntervalDomain(
-        Geometry.XPoint(domain.xlim[1])..Geometry.XPoint(domain.xlim[2]);
+        Geometry.XPoint(domain.xlim[1]) .. Geometry.XPoint(domain.xlim[2]);
         periodic = domain.xperiodic,
         boundary_tags = domain.xperiodic ? nothing : (:left, :right),
     )
@@ -45,7 +45,7 @@ end
 
 function make_function_space(domain::HybridBox)
     vertdomain = ClimaCore.Domains.IntervalDomain(
-        Geometry.ZPoint(domain.zlim[1])..Geometry.ZPoint(domain.zlim[2]);
+        Geometry.ZPoint(domain.zlim[1]) .. Geometry.ZPoint(domain.zlim[2]);
         boundary_tags = (:bottom, :top),
     )
     vertmesh = Meshes.IntervalMesh(
@@ -56,8 +56,8 @@ function make_function_space(domain::HybridBox)
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(vertmesh)
 
     horzdomain = ClimaCore.Domains.RectangleDomain(
-        Geometry.XPoint(domain.xlim[1])..Geometry.XPoint(domain.xlim[2]),
-        Geometry.YPoint(domain.ylim[1])..Geometry.YPoint(domain.ylim[2]),
+        Geometry.XPoint(domain.xlim[1]) .. Geometry.XPoint(domain.xlim[2]),
+        Geometry.YPoint(domain.ylim[1]) .. Geometry.YPoint(domain.ylim[2]),
         x1periodic = true,
         x2periodic = true,
     )

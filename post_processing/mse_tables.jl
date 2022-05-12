@@ -6,56 +6,56 @@
 all_best_mse = OrderedCollections.OrderedDict()
 #
 all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 0.4775594337002111
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 0.19759905652893225
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 1)] = 34266.015811724246
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 2)] = 36065.46036982125
-all_best_mse["sphere_held_suarez_rhotheta"][(:f, :w, :components, :data, 1)] = 39038.11272905916
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 8119.95098336995
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 5673.105858860113
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 1)] = 34266.02039858688
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 2)] = 36065.46030873768
+all_best_mse["sphere_held_suarez_rhotheta"][(:f, :w, :components, :data, 1)] = 39034.42301715659
 #
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρ)] = 5.577394561047046
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe)] = 2598.4997861700767
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 35664.582231018016
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 37815.87681815437
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρq_tot)] = 1.120439432983028e6
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 37991.58333627958
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρ)] = 8287.839769869395
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe)] = 9991.570300097826
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 35664.587087882326
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 37815.876729473064
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρq_tot)] = 2.8194663399998033e6
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 37988.755508562404
 #
 all_best_mse["sphere_baroclinic_wave_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρ)] = 0.8627451542604228
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe)] = 7.444508533309317
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 34068.54772711041
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 35670.67752342032
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 45067.812083412704
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρ)] = 8085.500081101647
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe)] = 2860.6867858715614
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 34068.551941908125
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 35670.67704803959
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 45065.24419592622
 #
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 1.0766377376116971
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe)] = 2178.5586836993148
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 32812.21765209773
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 34290.33583812611
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 1.1037792237572859e8
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 51281.75337869067
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 8090.500279390383
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe)] = 10072.450481456663
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 32812.22144277304
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 34290.33533252234
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 4.2408913711774945e8
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 51267.984687928285
 #
 all_best_mse["sphere_held_suarez_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρ)] = 0.5033393662110333
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe)] = 4.421547448586976
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 1)] = 36072.7932431925
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 2)] = 38080.0918722839
-all_best_mse["sphere_held_suarez_rhoe"][(:f, :w, :components, :data, 1)] = 37321.12152981984
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρ)] = 8086.0074796777035
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe)] = 2553.305284306563
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 1)] = 36072.798383251386
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 2)] = 38080.09175435031
+all_best_mse["sphere_held_suarez_rhoe"][(:f, :w, :components, :data, 1)] = 37316.20080769244
 #
 all_best_mse["sphere_held_suarez_rhoe_int"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρ)] = 0.6522877308438431
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρe_int)] = 58.79965486750936
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 1)] = 34340.8208803665
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 2)] = 36547.61117144068
-all_best_mse["sphere_held_suarez_rhoe_int"][(:f, :w, :components, :data, 1)] = 44945.62015018725
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρ)] = 8151.9967747314
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρe_int)] = 21036.030944694892
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 1)] = 34340.82525412827
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 2)] = 36547.61107908048
+all_best_mse["sphere_held_suarez_rhoe_int"][(:f, :w, :components, :data, 1)] = 44917.433114562584
 #
 all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρ)] = 67.18872931688702
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρe_int)] = 37586.953746244944
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 30725.327405077183
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 32458.150161943526
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρq_tot)] = 1.2150500120713473e6
-all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:f, :w, :components, :data, 1)] = 51690.31526278284
+all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρ)] = 8722.315976779828
+all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρe_int)] = 150207.23863663574
+all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 30725.327650991945
+all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 32458.150227525806
+all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:c, :ρq_tot)] = 3.0432255753766866e6
+all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:f, :w, :components, :data, 1)] = 51694.53324863835
 #
 #! format: on
 #################################

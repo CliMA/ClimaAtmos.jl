@@ -396,13 +396,15 @@ function ∑tendencies_3d_bomex_gm!(dY, Y, cache, t)
 
     # Horizontal momentum
     @. dρuₕ += -uvdivf2c(ρw ⊗ If(uₕ))
-    Ih = Ref(CCG.Axis2Tensor(
-        (CCG.UVAxis(), CCG.UVAxis()),
-        @SMatrix [
-            1.0 0.0
-            0.0 1.0
-        ]
-    ),)
+    Ih = Ref(
+        CCG.Axis2Tensor(
+            (CCG.UVAxis(), CCG.UVAxis()),
+            @SMatrix [
+                1.0 0.0
+                0.0 1.0
+            ]
+        ),
+    )
     @. dρuₕ -= hdiv(ρuₕ ⊗ uₕ + p * Ih)
 
     # vertical momentum

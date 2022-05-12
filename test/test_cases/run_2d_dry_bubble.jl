@@ -139,11 +139,13 @@ function run_2d_dry_bubble(
         mkpath(path)
 
         cb_png = PNGOutput(model, path, "plots_dry_bubble", 100)
-        cb_set = CallbackSet(DiffEqCallbacks.PeriodicCallback(
-            cb_png,
-            cb_png.interval;
-            initial_affect = true,
-        ))
+        cb_set = CallbackSet(
+            DiffEqCallbacks.PeriodicCallback(
+                cb_png,
+                cb_png.interval;
+                initial_affect = true,
+            ),
+        )
 
         simulation = Simulation(
             model,
