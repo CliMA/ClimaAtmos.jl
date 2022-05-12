@@ -9,6 +9,7 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
+high_top = parsed_args["high_top"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
@@ -171,14 +172,14 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    if is_baro_wave(parsed_args)
+    if high_top
+        z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
+        z_max = FT(45e3)
+        z_elem = 25
+    else
         z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
         z_max = FT(30e3)
         z_elem = 10
-    else
-        z_stretch = Meshes.GeneralizedExponentialStretching(FT(600), FT(5000))
-        z_max = FT(42e3)
-        z_elem = 15
     end
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 elseif parsed_args["config"] == "column" # single column
