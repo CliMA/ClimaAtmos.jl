@@ -4,12 +4,20 @@ if !(@isdefined parsed_args)
 end
 
 include("classify_case.jl")
+include("utilities.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
+t_end = FT(time_to_seconds(parsed_args["t_end"]))
+dt = FT(time_to_seconds(parsed_args["dt"]))
+dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
+
+include("parameter_set.jl")
+params = create_parameter_set(FT, parsed_args)
 
 @assert idealized_h2o in (true, false)
 @assert vert_diff in (true, false)
@@ -44,35 +52,10 @@ RRTMGPI = RRTMGPInterface
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
-function time_to_seconds(s::String)
-    factor = Dict(
-        "secs" => 1,
-        "mins" => 60,
-        "hours" => 60 * 60,
-        "days" => 60 * 60 * 24,
-    )
-    s == "Inf" && return Inf
-    if count(occursin.(keys(factor), Ref(s))) != 1
-        error(
-            "Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]",
-        )
-    end
-    for match in keys(factor)
-        occursin(match, s) || continue
-        return parse(Float64, first(split(s, match))) * factor[match]
-    end
-    error("Uncaught case in computing time from given string.")
-end
 
 upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 @assert upwinding_mode() in (:none, :first_order, :third_order)
 
-# Test-specific definitions (may be overwritten in each test case file)
-# TODO: Allow some of these to be environment variables or command line arguments
-t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt = FT(time_to_seconds(parsed_args["dt"]))
-dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::InternalEnergy) =
@@ -155,11 +138,6 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-params = if is_column_radiative_equilibrium(parsed_args)
-    EarthParameterSet()
-else
-    BaroclinicWaveParameterSet((; dt))
-end
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 additional_callbacks = if !isnothing(radiation_model())
