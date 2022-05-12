@@ -6,8 +6,8 @@ using CLIMAParameters: AbstractEarthParameterSet, Planet, astro_unit
 
 function rrtmgp_model_cache(
     Y,
-    params;
-    radiation_mode = RRTMGPI.ClearSkyRadiation(),
+    params,
+    radiation_mode::RRTMGPI.AbstractRadiationMode = RRTMGPI.ClearSkyRadiation();
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
