@@ -72,8 +72,7 @@ function init_2d_precipitating_bubble(
     q_tot(local_geometry) = begin
         @unpack x, z = local_geometry.coordinates
         r = sqrt((x - x_c)^2 + (z - z_c)^2)
-        return r < r_c ? FT(0.5) * q_tot_c * (FT(1) + cospi(r / r_c)) :
-                   FT(0)
+        return r < r_c ? FT(0.5) * q_tot_c * (FT(1) + cospi(r / r_c)) : FT(0)
     end
 
     # precipitation

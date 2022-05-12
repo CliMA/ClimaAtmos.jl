@@ -9,10 +9,12 @@ end
     # operators
     # unity tensor for pressure term calculation
     # in horizontal spectral divergence
-    Ih = Ref(Geometry.Axis2Tensor(
-        (Geometry.UAxis(), Geometry.UAxis()),
-        @SMatrix [FT(1)]
-    ),)
+    Ih = Ref(
+        Geometry.Axis2Tensor(
+            (Geometry.UAxis(), Geometry.UAxis()),
+            @SMatrix [FT(1)]
+        ),
+    )
 
     # spectral horizontal operators
     hdiv = Operators.Divergence()

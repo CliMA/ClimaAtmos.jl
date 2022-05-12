@@ -550,7 +550,8 @@ function RRTMGPModel(
         src_lw =
             RRTMGP.Sources.source_func_longwave(FT, ncol, nlay, op_symbol, DA)
         flux_lw = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
-        fluxb_lw = radiation_mode isa GrayRadiation ? nothing :
+        fluxb_lw =
+            radiation_mode isa GrayRadiation ? nothing :
             RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
         set_and_save!(flux_lw.flux_up, "face_lw_flux_up", t...)
         set_and_save!(flux_lw.flux_dn, "face_lw_flux_dn", t...)
@@ -607,7 +608,8 @@ function RRTMGPModel(
         src_sw =
             RRTMGP.Sources.source_func_shortwave(FT, ncol, nlay, op_symbol, DA)
         flux_sw = RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
-        fluxb_sw = radiation_mode isa GrayRadiation ? nothing :
+        fluxb_sw =
+            radiation_mode isa GrayRadiation ? nothing :
             RRTMGP.Fluxes.FluxSW(ncol, nlay, FT, DA)
         set_and_save!(flux_sw.flux_up, "face_sw_flux_up", t...)
         set_and_save!(flux_sw.flux_dn, "face_sw_flux_dn", t...)
@@ -724,7 +726,8 @@ function RRTMGPModel(
 
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
-            gas_name -> !(gas_name in ("h2o", "h2o_frgn", "h2o_self", "o3")),
+            gas_name ->
+                !(gas_name in ("h2o", "h2o_frgn", "h2o_self", "o3")),
             keys(idx_gases),
         )
         # TODO: This gives the wrong types for CUDA 3.4 and above.
@@ -900,7 +903,8 @@ function set_and_save!(
     end
 
     if startswith(name, "center_") || startswith(name, "face_")
-        domain_range = startswith(name, "center_") ? (1:domain_nlay) :
+        domain_range =
+            startswith(name, "center_") ? (1:domain_nlay) :
             (1:(domain_nlay + 1))
         domain_view = view(array, domain_range, :)
         set_array!(domain_view, domain_value, domain_symbol)
@@ -920,7 +924,8 @@ function set_and_save!(
                 extension_value = pop!(dict, extension_symbol)
             end
 
-            extension_range = startswith(name, "center_") ?
+            extension_range =
+                startswith(name, "center_") ?
                 ((domain_nlay + 1):(domain_nlay + extension_nlay)) :
                 ((domain_nlay + 2):(domain_nlay + extension_nlay + 1))
             extension_view = view(array, extension_range, :)
@@ -962,7 +967,7 @@ function update_fluxes!(model)
     !model.disable_longwave && update_lw_fluxes!(model.radiation_mode, model)
     !model.disable_shortwave && update_sw_fluxes!(model.radiation_mode, model)
     !(model.disable_longwave || model.disable_shortwave) &&
-    update_net_fluxes!(model.radiation_mode, model)
+        update_net_fluxes!(model.radiation_mode, model)
     return model.face_flux
 end
 
@@ -991,7 +996,8 @@ function update_implied_values!(model)
         update_views(interp!, mode, outs, ins, (), 2:nlay, 1:(nlay - 1), 2:nlay)
         others = (t_sfc, model.params)
         update_views(extrap!, mode, outs, ins, others, nlay + 1, nlay, nlay - 1)
-        mode = model.bottom_extrapolation isa SameAsInterpolation ?
+        mode =
+            model.bottom_extrapolation isa SameAsInterpolation ?
             model.interpolation : model.bottom_extrapolation
         outs = requires_z(mode) ? (p_lev, t_lev, z_lev) : (p_lev, t_lev)
         ins = requires_z(mode) ? (p_lay, t_lay, z_lay) : (p_lay, t_lay)

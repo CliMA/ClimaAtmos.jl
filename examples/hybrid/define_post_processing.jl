@@ -38,7 +38,8 @@ function profile_animation(sol, output_dir, fps)
             end
             for h in 1:Nh, j in 1:Nj, i in 1:Ni
                 ϕ_col = ClimaCore.column(var, i, j, h)
-                ϕ_col_std .+= sqrt.((vec(ϕ_col) .- ϕ_col_ave) .^ 2 ./ n_columns)
+                ϕ_col_std .+=
+                    sqrt.((vec(ϕ_col) .- ϕ_col_ave) .^ 2 ./ n_columns)
             end
 
             # TODO: use xribbon when supported: https://github.com/JuliaPlots/Plots.jl/issues/2702
@@ -170,8 +171,9 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         # space info to generate nc raw data
         cspace = axes(Y.c)
         hspace = cspace.horizontal_space
-        Nq =
-            Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+        Nq = Spaces.Quadratures.degrees_of_freedom(
+            cspace.horizontal_space.quadrature_style,
+        )
 
         # create a temporary dir for intermediate data
         remap_tmpdir = output_dir * "/remaptmp/"
@@ -299,8 +301,9 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         # space info to generate nc raw data
         cspace = axes(Y.c)
         hspace = cspace.horizontal_space
-        Nq =
-            Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+        Nq = Spaces.Quadratures.degrees_of_freedom(
+            cspace.horizontal_space.quadrature_style,
+        )
 
         # create a temporary dir for intermediate data
         remap_tmpdir = output_dir * "/remaptmp/"
@@ -438,8 +441,9 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         # space info to generate nc raw data
         cspace = axes(Y.c)
         hspace = cspace.horizontal_space
-        Nq =
-            Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+        Nq = Spaces.Quadratures.degrees_of_freedom(
+            cspace.horizontal_space.quadrature_style,
+        )
 
         # create a temporary dir for intermediate data
         remap_tmpdir = output_dir * "/remaptmp/"
@@ -688,8 +692,9 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
     Y = sol.u[1]
     cspace = axes(Y.c)
     hspace = cspace.horizontal_space
-    Nq =
-        Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+    Nq = Spaces.Quadratures.degrees_of_freedom(
+        cspace.horizontal_space.quadrature_style,
+    )
 
     # create a temporary dir for intermediate data
     remap_tmpdir = output_dir * "/remaptmp/"
@@ -856,8 +861,9 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     Y = sol.u[1]
     cspace = axes(Y.c)
     hspace = cspace.horizontal_space
-    Nq =
-        Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+    Nq = Spaces.Quadratures.degrees_of_freedom(
+        cspace.horizontal_space.quadrature_style,
+    )
 
     # create a temporary dir for intermediate data
     remap_tmpdir = output_dir * "/remaptmp/"
@@ -1025,8 +1031,9 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
     Y = sol.u[1]
     cspace = axes(Y.c)
     hspace = cspace.horizontal_space
-    Nq =
-        Spaces.Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style,)
+    Nq = Spaces.Quadratures.degrees_of_freedom(
+        cspace.horizontal_space.quadrature_style,
+    )
 
     # create a temporary dir for intermediate data
     remap_tmpdir = output_dir * "/remaptmp/"
