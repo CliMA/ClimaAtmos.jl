@@ -771,7 +771,7 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
     rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped" * string(day) * ".nc"
+    datafile_latlon = output_dir * "/hs-remapped.nc"
     ncdata = NCDataset(datafile_latlon, "r")
     lat = ncdata["lat"][:]
     z = ncdata["z"][:]
@@ -942,7 +942,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped" * string(day) * ".nc"
+    datafile_latlon = output_dir * "/hs-remapped.nc"
     ncdata = NCDataset(datafile_latlon, "r")
     lat = ncdata["lat"][:]
     z = ncdata["z"][:]
@@ -1111,7 +1111,7 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
     rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped" * string(day) * ".nc"
+    datafile_latlon = output_dir * "/hs-remapped.nc"
     ncdata = NCDataset(datafile_latlon, "r")
     lat = ncdata["lat"][:]
     z = ncdata["z"][:]
