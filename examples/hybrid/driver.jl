@@ -268,7 +268,8 @@ job_id = if isnothing(parsed_args["job_id"])
 else
     parsed_args["job_id"]
 end
-output_dir = parse_arg(parsed_args, "output_dir", job_id)
+default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+output_dir = parse_arg(parsed_args, "output_dir", default_output)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
