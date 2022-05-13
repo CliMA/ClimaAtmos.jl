@@ -146,7 +146,7 @@ ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
-    dt_rad = parsed_args["config"] == "column" ? dt : FT(5 * 60 * 60)
+    dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
     (
         PeriodicCallback(
             rrtmgp_model_callback!,
