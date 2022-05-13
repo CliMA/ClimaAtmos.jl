@@ -12,6 +12,9 @@ idealized_h2o = parsed_args["idealized_h2o"]
 high_top = parsed_args["high_top"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
+h_elem = parsed_args["h_elem"]
+z_elem = parsed_args["z_elem"]
+κ₄ = parsed_args["kappa_4"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -73,7 +76,7 @@ const sponge = false
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
-    hyperdiffusion_cache(Y; κ₄ = FT(2e17), use_tempest_mode),
+    hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
     sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
@@ -170,7 +173,7 @@ max_field_element_size = 4 # ρ = 1 byte, 𝔼 = 1 byte, uₕ = 2 bytes
 
 center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
-    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
+    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
     if high_top
         z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
@@ -329,7 +332,11 @@ if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
 end
 
 @info "Running job:`$job_id`"
-sol = @timev OrdinaryDiffEq.solve!(integrator)
+if is_distributed
+    walltime = @elapsed sol = @timev OrdinaryDiffEq.solve!(integrator)
+else
+    sol = @timev OrdinaryDiffEq.solve!(integrator)
+end
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
     if ClimaComms.iamroot(comms_ctx)
@@ -364,6 +371,11 @@ if is_distributed # replace sol.u on the root processor with the global sol.u
     end
     if ClimaComms.iamroot(comms_ctx)
         sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
+        println("walltime = $walltime (seconds)")
+        scaling_file =
+            joinpath(output_dir, "scaling_data_$(nprocs)_processes.jld2")
+        println("writing performance data to $scaling_file")
+        jldsave(scaling_file; nprocs, walltime)
     end
 end
 

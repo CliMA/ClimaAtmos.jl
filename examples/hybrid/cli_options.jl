@@ -85,6 +85,18 @@ function parse_commandline()
         help = "Frames per second for animations"
         arg_type = Int
         default = 5
+        "--h_elem"
+        help = "number of elements per edge on a cubed sphere"
+        arg_type = Int
+        default = 4
+        "--z_elem"
+        help = "number of vertical elements"
+        arg_type = Int
+        default = 10
+        "--kappa_4"
+        help = "Hyperdiffusion parameter"
+        arg_type = Float64
+        default = Float64(2e17)
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
