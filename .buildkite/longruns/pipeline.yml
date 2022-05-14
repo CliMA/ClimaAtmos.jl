@@ -6,7 +6,6 @@ env:
   OPENBLAS_NUM_THREADS: 1
   BUILDKITE_COMMIT: "${BUILDKITE_COMMIT}"
   BUILDKITE_BRANCH: "${BUILDKITE_BRANCH}"
-  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
 
 agents:
   config: cpu
@@ -20,7 +19,6 @@ steps:
   - label: "init :computer:"
     key: "init_cpu_env"
     command:
-      - "echo $$JULIA_DEPOT_PATH"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
@@ -49,7 +47,7 @@ steps:
         artifact_paths: "longrun_hs_rhoe/*"
         agents:
           slurm_cpus_per_task: 8
-          
+
       - label: ":computer: held suarez (ρe) equilmoist"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --upwinding none --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_equil/*"
@@ -65,7 +63,7 @@ steps:
   - group: "Experimental Long runs"
 
     steps:
-      
+
       - label: ":computer: held suarez (ρe) hightop"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --high_top true --dt 300secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_hightop --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_hightop/*"
@@ -78,4 +76,4 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-     
+
