@@ -333,7 +333,7 @@ end
 
 @info "Running job:`$job_id`"
 if is_distributed
-    walltime = @elapsed sol = @timev OrdinaryDiffEq.solve!(integrator)
+    walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
