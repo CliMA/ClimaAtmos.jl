@@ -36,15 +36,15 @@ steps:
 
       # TODO: Add all milestone long simulation runs
 
-      - label: ":computer: held suarez (ρe) central"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --t_end 1200days --upwinding none --fps 30 --job_id longrun_hs_rhoe_central --dt_save_to_sol 6hours"
-        artifact_paths: "longrun_hs_rhoe_central/*"
+      - label: ":computer: held suarez (ρe)"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --t_end 1200days --fps 30 --job_id longrun_hs_rhoe --dt_save_to_sol 6hours"
+        artifact_paths: "longrun_hs_rhoe/*"
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe)"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --dt 300secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe --dt_save_to_sol 6hours"
-        artifact_paths: "longrun_hs_rhoe/*"
+      - label: ":computer: held suarez (ρe) third order"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --dt 300secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 6hours"
+        artifact_paths: "longrun_hs_rhoe_third/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -54,9 +54,9 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_int) central"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --t_end 1200days --upwinding none --fps 30 --job_id longrun_hs_rhoeint_central --dt_save_to_sol 6hours"
-        artifact_paths: "longrun_hs_rhoeint_central/*"
+      - label: ":computer: held suarez (ρe_int)"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --t_end 1200days --upwinding none --fps 30 --job_id longrun_hs_rhoeint --dt_save_to_sol 6hours"
+        artifact_paths: "longrun_hs_rhoeint/*"
         agents:
           slurm_cpus_per_task: 8
 
