@@ -111,11 +111,14 @@ function default_cache(Y, params, upwinding_mode)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = FT(Planet.Omega(params))
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
+        lat_sfc = Fields.level(ᶜcoord.lat, 1)
     else
         f = FT(f_plane_coriolis_frequency(params))
         ᶜf = map(_ -> f, ᶜcoord)
+        lat_sfc = map(_ -> FT(0), Fields.level(ᶜcoord, 1))
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
+    T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
     if (
         :ρq_liq in propertynames(Y.c) &&
         :ρq_ice in propertynames(Y.c) &&
@@ -138,6 +141,7 @@ function default_cache(Y, params, upwinding_mode)
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
+        T_sfc,
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
