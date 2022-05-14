@@ -60,9 +60,9 @@ function parse_commandline()
         arg_type = String
         default = "rhoe"
         "--upwinding"
-        help = "Upwinding mode [`none`, `first_order` , `third_order` (default)]"
+        help = "Upwinding mode [`none` (default), `first_order` , `third_order`]"
         arg_type = String
-        default = "third_order"
+        default = "none"
         "--regression_test"
         help = "(Bool) perform regression test"
         arg_type = Bool

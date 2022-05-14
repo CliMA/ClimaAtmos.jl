@@ -127,10 +127,10 @@ steps:
       - label: ":computer: held suarez (ρθ)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
-
-      - label: ":computer: held suarez (ρe) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 5days"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
+      
+      - label: ":computer: held suarez (ρe) third order"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --job_id sphere_held_suarez_rhoe_third"
+        artifact_paths: "sphere_held_suarez_rhoe_third/*"
 
       - label: ":computer: held suarez (ρe) equilmoist hightop"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --high_top true --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_hightop --dt 200secs --t_end 1days"
@@ -162,6 +162,10 @@ steps:
       - label: ":computer: held suarez (ρe_int)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
+      
+      - label: ":computer: held suarez (ρe) equilmoist"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 5days"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: aquaplanet (ρe) equilmoist gray radiation"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200secs --t_end 5days"
