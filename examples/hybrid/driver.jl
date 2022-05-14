@@ -9,11 +9,11 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
-high_top = parsed_args["high_top"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
 h_elem = parsed_args["h_elem"]
-z_elem = parsed_args["z_elem"]
+z_elem = Int(parsed_args["z_elem"])
+z_max = FT(parsed_args["z_max"])
 κ₄ = parsed_args["kappa_4"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 dt = FT(time_to_seconds(parsed_args["dt"]))
@@ -175,15 +175,7 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    if high_top
-        z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
-        z_max = FT(45e3)
-        z_elem = 25
-    else
-        z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
-        z_max = FT(30e3)
-        z_elem = 10
-    end
+    z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
@@ -195,8 +187,6 @@ elseif parsed_args["config"] == "column" # single column
         y_elem = 1,
     )
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_max = FT(70e3)
-    z_elem = 70
     z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 end
