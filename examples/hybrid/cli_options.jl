@@ -36,10 +36,6 @@ function parse_commandline()
         "--forcing"
         help = "Forcing [`nothing` (default), `held_suarez`]"
         arg_type = String
-        "--high_top"
-        help = "High model top (45km) [`false` (default), `true`]"
-        arg_type = Bool
-        default = false
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool
@@ -93,6 +89,10 @@ function parse_commandline()
         help = "number of vertical elements"
         arg_type = Int
         default = 10
+        "--z_max"
+        help = "Model top height. Default: 30km"
+        arg_type = Float64
+        default = Float64(30e3)
         "--kappa_4"
         help = "Hyperdiffusion parameter"
         arg_type = Float64
