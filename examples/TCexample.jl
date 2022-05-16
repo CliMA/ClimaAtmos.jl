@@ -218,13 +218,8 @@ function get_edmf_cache(grid, hv_center_space, hv_face_space, namelist)
     Fo = TC.ForcingBase(case_type, param_set)
     Rad = TC.RadiationBase(case_type)
     surf_ref_state = Cases.surface_ref_state(case_type, param_set, namelist)
-    surf_params = Cases.surface_params(
-        case_type,
-        grid,
-        surf_ref_state,
-        param_set;
-        Ri_bulk_crit,
-    )
+    surf_params =
+        Cases.surface_params(case_type, surf_ref_state, param_set; Ri_bulk_crit)
     inversion_type = Cases.inversion_type(case_type)
     case = Cases.CasesBase(case_type; inversion_type, surf_params, Fo, Rad)
     precip_name = TC.parse_namelist(

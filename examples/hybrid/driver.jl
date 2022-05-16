@@ -4,12 +4,24 @@ if !(@isdefined parsed_args)
 end
 
 include("classify_case.jl")
+include("utilities.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
+h_elem = parsed_args["h_elem"]
+z_elem = Int(parsed_args["z_elem"])
+z_max = FT(parsed_args["z_max"])
+κ₄ = parsed_args["kappa_4"]
+t_end = FT(time_to_seconds(parsed_args["t_end"]))
+dt = FT(time_to_seconds(parsed_args["dt"]))
+dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
+
+include("parameter_set.jl")
+params = create_parameter_set(FT, parsed_args)
 
 @assert idealized_h2o in (true, false)
 @assert vert_diff in (true, false)
@@ -44,35 +56,10 @@ RRTMGPI = RRTMGPInterface
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
-function time_to_seconds(s::String)
-    factor = Dict(
-        "secs" => 1,
-        "mins" => 60,
-        "hours" => 60 * 60,
-        "days" => 60 * 60 * 24,
-    )
-    s == "Inf" && return Inf
-    if count(occursin.(keys(factor), Ref(s))) != 1
-        error(
-            "Bad format for flag $s. Examples: [`10secs`, `20mins`, `30hours`, `40days`]",
-        )
-    end
-    for match in keys(factor)
-        occursin(match, s) || continue
-        return parse(Float64, first(split(s, match))) * factor[match]
-    end
-    error("Uncaught case in computing time from given string.")
-end
 
 upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
 @assert upwinding_mode() in (:none, :first_order, :third_order)
 
-# Test-specific definitions (may be overwritten in each test case file)
-# TODO: Allow some of these to be environment variables or command line arguments
-t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt = FT(time_to_seconds(parsed_args["dt"]))
-dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::InternalEnergy) =
@@ -89,7 +76,7 @@ const sponge = false
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
-    hyperdiffusion_cache(Y; κ₄ = FT(2e16), use_tempest_mode),
+    hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
     sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
@@ -155,11 +142,6 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-params = if is_column_radiative_equilibrium(parsed_args)
-    EarthParameterSet()
-else
-    BaroclinicWaveParameterSet((; dt))
-end
 ode_algorithm = OrdinaryDiffEq.Rosenbrock23
 
 additional_callbacks = if !isnothing(radiation_model())
@@ -191,11 +173,9 @@ max_field_element_size = 4 # ρ = 1 byte, 𝔼 = 1 byte, uₕ = 2 bytes
 
 center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
-    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = 4)
+    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
     z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
-    z_max = FT(30e3)
-    z_elem = 10
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
@@ -207,8 +187,6 @@ elseif parsed_args["config"] == "column" # single column
         y_elem = 1,
     )
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_max = FT(70e3)
-    z_elem = 70
     z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 end
@@ -283,7 +261,8 @@ job_id = if isnothing(parsed_args["job_id"])
 else
     parsed_args["job_id"]
 end
-output_dir = parse_arg(parsed_args, "output_dir", job_id)
+default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+output_dir = parse_arg(parsed_args, "output_dir", default_output)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
@@ -343,7 +322,11 @@ if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
 end
 
 @info "Running job:`$job_id`"
-sol = @timev OrdinaryDiffEq.solve!(integrator)
+if is_distributed
+    walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+else
+    sol = @timev OrdinaryDiffEq.solve!(integrator)
+end
 
 if is_distributed # replace sol.u on the root processor with the global sol.u
     if ClimaComms.iamroot(comms_ctx)
@@ -378,6 +361,11 @@ if is_distributed # replace sol.u on the root processor with the global sol.u
     end
     if ClimaComms.iamroot(comms_ctx)
         sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
+        println("walltime = $walltime (seconds)")
+        scaling_file =
+            joinpath(output_dir, "scaling_data_$(nprocs)_processes.jld2")
+        println("writing performance data to $scaling_file")
+        jldsave(scaling_file; nprocs, walltime)
     end
 end
 

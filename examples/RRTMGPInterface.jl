@@ -1178,7 +1178,7 @@ function compute_optical_props_kernel!(
         p_lev[glay, gcol],
         p_lev[glay + 1, gcol],
         p_lev[1, gcol],
-        FT(0.22), # hardcode the value of τ₀ for shortwave gray radiation
+        FT(0), # hardcode the value of τ₀ for shortwave gray radiation
     )
     if op isa RRTMGP.Optics.TwoStream
         op.ssa[glaycol...] = FT(0)

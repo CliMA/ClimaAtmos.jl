@@ -2,7 +2,6 @@ using Statistics: mean
 using Dierckx: Spline1D
 using Dates: Second, DateTime
 using Insolation: instantaneous_zenith_angle
-using CLIMAParameters: AbstractEarthParameterSet, Planet, astro_unit
 
 function rrtmgp_model_cache(
     Y,
@@ -23,9 +22,8 @@ function rrtmgp_model_cache(
     if radiation_mode isa RRTMGPI.GrayRadiation
         kwargs = (;
             lapse_rate = 3.5,
-            optical_thickness_parameter = (@. (
-                (300 + 60 * (FT(1 / 3) - sind(latitude)^2)) / 200
-            )^4 - 1),
+            optical_thickness_parameter = (@. 7.2 +
+                                              (1.8 - 7.2) * sind(latitude)^2),
         )
     else
         # the pressure and ozone concentrations are provided for each of 100
@@ -109,8 +107,6 @@ function rrtmgp_model_cache(
         error("idealized_h2o cannot be used with GrayRadiation")
     end
 
-    # surface_emissivity and surface_albedo are provided for each of 100 sites,
-    # which we average across
     rrtmgp_model = RRTMGPI.RRTMGPModel(
         params;
         FT = Float64,
@@ -120,12 +116,12 @@ function rrtmgp_model_cache(
         interpolation,
         bottom_extrapolation,
         add_isothermal_boundary_layer = true,
-        center_pressure = NaN, # initialized in tendency
-        center_temperature = NaN, # initialized in tendency
-        surface_temperature = (@. 29 * exp(-(latitude / 26)^2 / 2) + 271),
-        surface_emissivity = mean(input_data["surface_emissivity"]),
-        direct_sw_surface_albedo = mean(input_data["surface_albedo"]),
-        diffuse_sw_surface_albedo = mean(input_data["surface_albedo"]),
+        center_pressure = NaN, # initialized in callback
+        center_temperature = NaN, # initialized in callback
+        surface_temperature = NaN, # initialized in callback
+        surface_emissivity = FT(1),
+        direct_sw_surface_albedo = FT(0.38),
+        diffuse_sw_surface_albedo = FT(0.38),
         solar_zenith_angle,
         weighted_irradiance,
         kwargs...,
@@ -159,7 +155,7 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, params) = p
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, T_sfc, params) = p
     (; ᶜT, ᶜvmr_h2o, insolation_tuple, zenith_angle, weighted_irradiance) = p
     (; ᶠradiation_flux, idealized_insolation, idealized_h2o, rrtmgp_model) = p
 
@@ -176,6 +172,7 @@ function rrtmgp_model_callback!(integrator)
     @. ᶜT = TD.air_temperature(params, ᶜts)
     rrtmgp_model.center_pressure .= RRTMGPI.field2array(ᶜp)
     rrtmgp_model.center_temperature .= RRTMGPI.field2array(ᶜT)
+    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
     if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
         if idealized_h2o

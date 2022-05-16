@@ -771,7 +771,7 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
     rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped" * string(day) * ".nc"
+    datafile_latlon = output_dir * "/hs-remapped.nc"
     ncdata = NCDataset(datafile_latlon, "r")
     lat = ncdata["lat"][:]
     z = ncdata["z"][:]
@@ -891,15 +891,16 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         iu = findall(x -> x == unique_time[i], sol.t)[1]
         Y = sol.u[iu]
 
+        # zonal wind
+        ᶜuₕ = Y.c.uₕ
+        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+
         # temperature
+        ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
-
-        # zonal wind
-        ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
         # assigning to nc obj
         nc_θ[:, i] = ᶜθ
@@ -941,7 +942,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped" * string(day) * ".nc"
+    datafile_latlon = output_dir * "/hs-remapped.nc"
     ncdata = NCDataset(datafile_latlon, "r")
     lat = ncdata["lat"][:]
     z = ncdata["z"][:]
@@ -1110,7 +1111,7 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
     rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped" * string(day) * ".nc"
+    datafile_latlon = output_dir * "/hs-remapped.nc"
     ncdata = NCDataset(datafile_latlon, "r")
     lat = ncdata["lat"][:]
     z = ncdata["z"][:]

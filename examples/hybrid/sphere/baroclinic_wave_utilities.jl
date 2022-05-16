@@ -6,23 +6,6 @@ const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
 
-# TODO: combine/generalize these two structs
-struct EarthParameterSet <: AbstractEarthParameterSet end
-
-struct BaroclinicWaveParameterSet{NT} <: AbstractEarthParameterSet
-    named_tuple::NT
-end
-Planet.R_d(::BaroclinicWaveParameterSet) = 287.0
-Planet.MSLP(::BaroclinicWaveParameterSet) = 1.0e5
-Planet.grav(::BaroclinicWaveParameterSet) = 9.80616
-Planet.Omega(::BaroclinicWaveParameterSet) = 7.29212e-5
-Planet.planet_radius(::BaroclinicWaveParameterSet) = 6.371229e6
-
-# parameters for 0-Moment Microphysics
-Atmos.Microphysics_0M.τ_precip(param_set::BaroclinicWaveParameterSet) =
-    param_set.named_tuple.dt # timescale for precipitation removal
-Atmos.Microphysics_0M.qc_0(::BaroclinicWaveParameterSet) = 5e-6 # criterion for removal after supersaturation
-
 baroclinic_wave_mesh(; params, h_elem) =
     cubed_sphere_mesh(; radius = FT(Planet.planet_radius(params)), h_elem)
 
@@ -370,7 +353,7 @@ function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
 end
 
 function constant_T_saturated_surface_coefs(
-    lat,
+    T_sfc,
     ts_int,
     uₕ_int,
     z_int,
@@ -379,7 +362,6 @@ function constant_T_saturated_surface_coefs(
     Ch,
     params,
 )
-    T_sfc = 29 * exp(-lat^2 / (2 * 26^2)) + 271
     T_int = TD.air_temperature(params, ts_int)
     Rm_int = TD.gas_constant_air(params, ts_int)
     ρ_sfc =
@@ -415,7 +397,7 @@ end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
-    (; ᶜts, ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (; ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -427,7 +409,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     flux_coefficients .=
         constant_T_saturated_surface_coefs.(
-            Spaces.level(Fields.coordinate_field(Y.c).lat, 1),
+            T_sfc,
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
             Spaces.level(Fields.coordinate_field(Y.c).z, 1),

@@ -1,0 +1,121 @@
+env:
+  JULIA_VERSION: "1.7.1"
+  MPICH_VERSION: "4.0.0"
+  OPENMPI_VERSION: "4.1.1"
+  CUDA_VERSION: "11.2"
+  OPENBLAS_NUM_THREADS: 1
+  CLIMATEMACHINE_SETTINGS_FIX_RNG_SEED: "true"
+  BUILDKITE_COMMIT: "${BUILDKITE_COMMIT}"
+  BUILDKITE_BRANCH: "${BUILDKITE_BRANCH}"
+
+agents:
+  config: cpu
+  queue: central
+  slurm_ntasks: 1
+  slurm_time: 04:00:00
+
+timeout_in_minutes: 240
+
+steps:
+  - label: "init :computer:"
+    key: "init_cpu_env"
+    command:
+      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
+
+    agents:
+      slurm_cpus_per_task: 8
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+
+  - wait
+
+  - group: "ClimaAtmos scaling tests"
+    steps:
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (2) processes"
+      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths: "sphere_held_suarez_rhoe/*"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 2
+        slurm_mem: 64GB
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (4) processes"
+      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths: "sphere_held_suarez_rhoe/*"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 4
+        slurm_mem: 64GB
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (8) processes"
+      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths: "sphere_held_suarez_rhoe/*"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 8
+        slurm_mem: 64GB
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (16) processes"
+      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths: "sphere_held_suarez_rhoe/*"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 16
+        slurm_mem: 128GB
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (32) processes"
+      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths: "sphere_held_suarez_rhoe/*"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 32
+        slurm_mem: 256GB
+
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (64) processes"
+      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths: "sphere_held_suarez_rhoe/*"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 2
+        slurm_tasks_per_node: 32
+        slurm_mem: 256GB
+
+  - wait
+
+  - label: ":computer: scaling plots"
+    key: "cpu_scaling_plots"
+    command:
+      - "julia --color=yes --project=examples examples/hybrid/plot_scaling_results.jl --job_id sphere_held_suarez_rhoe"
+    artifact_paths: "sphere_held_suarez_rhoe/Scaling.png"
+    agents:
+      config: cpu
+      queue: central
+      slurm_nodes: 1
+      slurm_tasks_per_node: 1
