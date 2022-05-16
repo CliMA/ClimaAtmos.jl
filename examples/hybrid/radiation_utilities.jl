@@ -22,9 +22,8 @@ function rrtmgp_model_cache(
     if radiation_mode isa RRTMGPI.GrayRadiation
         kwargs = (;
             lapse_rate = 3.5,
-            optical_thickness_parameter = (@. (
-                (300 + 60 * (FT(1 / 3) - sind(latitude)^2)) / 200
-            )^4 - 1),
+            optical_thickness_parameter = (@. 7.2 +
+                                              (1.8 - 7.2) * sind(latitude)^2),
         )
     else
         # the pressure and ozone concentrations are provided for each of 100
@@ -108,8 +107,6 @@ function rrtmgp_model_cache(
         error("idealized_h2o cannot be used with GrayRadiation")
     end
 
-    # surface_emissivity and surface_albedo are provided for each of 100 sites,
-    # which we average across
     rrtmgp_model = RRTMGPI.RRTMGPModel(
         params;
         FT = Float64,
@@ -122,9 +119,9 @@ function rrtmgp_model_cache(
         center_pressure = NaN, # initialized in callback
         center_temperature = NaN, # initialized in callback
         surface_temperature = NaN, # initialized in callback
-        surface_emissivity = mean(input_data["surface_emissivity"]),
-        direct_sw_surface_albedo = mean(input_data["surface_albedo"]),
-        diffuse_sw_surface_albedo = mean(input_data["surface_albedo"]),
+        surface_emissivity = FT(1),
+        direct_sw_surface_albedo = FT(0.38),
+        diffuse_sw_surface_albedo = FT(0.38),
         solar_zenith_angle,
         weighted_irradiance,
         kwargs...,
