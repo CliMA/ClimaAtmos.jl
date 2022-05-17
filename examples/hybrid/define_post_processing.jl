@@ -939,7 +939,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    # rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
