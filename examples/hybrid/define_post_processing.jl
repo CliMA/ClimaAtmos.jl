@@ -1193,6 +1193,199 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
 
 end
 
+function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
+    (; ᶜts, params, ᶜK, ᶜΦ) = p
+
+    ### save raw data into nc -> in preparation for remapping
+    # space info to generate nc raw data
+    Y = sol.u[1]
+    cspace = axes(Y.c)
+    hspace = cspace.horizontal_space
+    Nq = Spaces.Quadratures.degrees_of_freedom(
+        cspace.horizontal_space.quadrature_style,
+    )
+
+    # create a temporary dir for intermediate data
+    remap_tmpdir = output_dir * "/remaptmp/"
+    mkpath(remap_tmpdir)
+
+    # create an nc file to store raw cg data
+    # create data
+    datafile_cc = remap_tmpdir * "/hs-raw.nc"
+    nc = NCDataset(datafile_cc, "c")
+    # defines the appropriate dimensions and variables for a space coordinate
+    def_space_coord(nc, cspace, type = "cgll")
+    # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+    nc_time = def_time_coord(nc)
+    # defines variables for pressure, temperature, and vorticity
+    nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
+    nc_T = defVar(nc, "T", FT, cspace, ("time",))
+    nc_u = defVar(nc, "u", FT, cspace, ("time",))
+    nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+
+    unique_time = unique(sol.t) # for some reason, if time of save to solution coincides with time of save to disk, a duplicate copy is saved in sol
+
+    # save raw data
+    for i in 1:length(unique_time)
+        nc_time[i] = unique_time[i]
+
+        iu = findall(x -> x == unique_time[i], sol.t)[1]
+        Y = sol.u[iu]
+
+        # zonal wind
+        ᶜuₕ = Y.c.uₕ
+        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+
+        # temperature
+        ᶠw = Y.f.w
+        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        ᶜT = @. TD.air_temperature(params, ᶜts)
+        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+
+        # qt
+        ᶜqt = Y.c.ρq_tot ./ Y.c.ρ
+
+        # assigning to nc obj
+        nc_θ[:, i] = ᶜθ
+        nc_T[:, i] = ᶜT
+        nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+        nc_qt[:, i] = ᶜqt
+    end
+
+    close(nc)
+
+    ### write out our cubed sphere mesh
+    meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
+    write_exodus(meshfile_cc, hspace.topology)
+
+    meshfile_rll = remap_tmpdir * "/mesh_rll.g"
+    rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
+
+    meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
+    overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
+
+    weightfile = remap_tmpdir * "/remap_weights.nc"
+    remap_weights(
+        weightfile,
+        meshfile_cc,
+        meshfile_rll,
+        meshfile_overlap;
+        in_type = "cgll",
+        in_np = Nq,
+    )
+
+    ### remap to lat/lon
+    datafile_latlon = output_dir * "/hs-remapped.nc"
+    apply_remap(
+        datafile_latlon,
+        datafile_cc,
+        weightfile,
+        ["PotentialTemperature", "T", "u", "qt"],
+    )
+
+    rm(remap_tmpdir, recursive = true)
+
+    ### load remapped data and create statistics for plots
+    datafile_latlon = output_dir * "/hs-remapped.nc"
+    ncdata = NCDataset(datafile_latlon, "r")
+    lat = ncdata["lat"][:]
+    z = ncdata["z"][:]
+    time = ncdata["time"][:]
+
+    T = ncdata["T"][:, :, :, time .> 3600 * 24 * 200]
+    θ = ncdata["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
+    u = ncdata["u"][:, :, :, time .> 3600 * 24 * 200]
+    qt = ncdata["qt"][:, :, :, time .> 3600 * 24 * 200]
+
+    u_timeave_zonalave = calc_zonalave_timeave(u)
+    T_timeave_zonalave = calc_zonalave_timeave(T)
+    θ_timeave_zonalave = calc_zonalave_timeave(θ)
+    qt_timeave_zonalave = calc_zonalave_timeave(qt)
+
+    T2_timeave_zonalave = calc_zonalave_variance(T)
+
+    Plots.png(
+        Plots.contourf(
+            lat,
+            z,
+            u_timeave_zonalave',
+            color = :balance,
+            clim = (-30, 30),
+            linewidth = 0,
+            yaxis = :log,
+            title = "u",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+        output_dir * "/hs-u.png",
+    )
+
+    Plots.png(
+        Plots.contourf(
+            lat,
+            z,
+            T_timeave_zonalave',
+            levels = 190:10:310,
+            clim = (190, 310),
+            contour_labels = true,
+            yaxis = :log,
+            title = "T",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+        output_dir * "/hs-T.png",
+    )
+
+    Plots.png(
+        Plots.contourf(
+            lat,
+            z,
+            θ_timeave_zonalave',
+            levels = 260:10:360,
+            clim = (260, 360),
+            contour_labels = true,
+            yaxis = :log,
+            title = "theta",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+        output_dir * "/hs-theta.png",
+    )
+
+    Plots.png(
+        Plots.contourf(
+            lat,
+            z,
+            qt_timeave_zonalave' * 1000,
+            color = :balance,
+            levels = -10:2:30,
+            linewidth = 0,
+            yaxis = :log,
+            title = "qt",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+        output_dir * "/hs-qt.png",
+    )
+
+    Plots.png(
+        Plots.contourf(
+            lat,
+            z,
+            T2_timeave_zonalave',
+            color = :balance,
+            clim = (0, 40),
+            linewidth = 0,
+            yaxis = :log,
+            title = "[T^2]",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+        output_dir * "/hs-T2.png",
+    )
+end
+
 function custom_postprocessing(sol, output_dir)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
     n = length(sol.u)
