@@ -185,8 +185,8 @@ function rayleigh_sponge_cache(Y, dt)
     ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))
     ᶠαₘ = @. ifelse(ᶠz > z_D, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(π / 2 * (ᶜz - z_D) / (zmax - z_D))^2
-    ᶠβ = @. ᶠαₘ * sin(π / 2 * (ᶠz - z_D) / (zmax - z_D))^2
+    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - z_D) / (zmax - z_D))^2
+    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - z_D) / (zmax - z_D))^2
     return (; ᶜβ, ᶠβ)
 end
 
@@ -247,7 +247,7 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
     elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe -= ᶜΔρT * cv_d
+	    @. Yₜ.c.ρe -= FT(0) #ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int -= ᶜΔρT * cv_d
     end
