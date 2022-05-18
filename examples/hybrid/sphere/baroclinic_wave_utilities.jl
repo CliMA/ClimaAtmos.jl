@@ -302,6 +302,7 @@ function vertical_diffusion_boundary_layer_cache(
     Y;
     Cd = FT(0.0044),
     Ch = FT(0.0044),
+    diffuse_momentum = true,
 )
     ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
@@ -309,6 +310,12 @@ function vertical_diffusion_boundary_layer_cache(
         Fields.field_values(z_bottom) .* one.(Fields.field_values(ᶠz_a))
     # TODO: fix VIJFH copyto! to remove the one.(...)
 
+    dif_flux_uₕ =
+        Geometry.Contravariant3Vector.(zeros(axes(z_bottom))) .⊗
+        Geometry.Covariant12Vector.(
+            zeros(axes(z_bottom)),
+            zeros(axes(z_bottom)),
+        )
     if :ρq_tot in propertynames(Y.c)
         dif_flux_ρq_tot = similar(z_bottom, Geometry.WVector{FT})
     else
@@ -337,10 +344,12 @@ function vertical_diffusion_boundary_layer_cache(
         ᶠz_a,
         ᶠK_E = similar(Y.f, FT),
         flux_coefficients = similar(z_bottom, coef_type),
+        dif_flux_uₕ,
         dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
         dif_flux_ρq_tot,
         Cd,
         Ch,
+        diffuse_momentum,
     )
 end
 
@@ -395,10 +404,24 @@ function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
     return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
 end
 
+function get_momentum_fluxes(params, Cd, flux_coefficients, nothing)
+    ρτxz, ρτyz = SF.momentum_fluxes(params, Cd, flux_coefficients, nothing)
+    return (; ρτxz = ρτxz, ρτyz = ρτyz)
+end
+
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     (; ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
-    (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
+    (;
+        flux_coefficients,
+        dif_flux_uₕ,
+        dif_flux_energy,
+        dif_flux_ρq_tot,
+        Cd,
+        Ch,
+        diffuse_momentum,
+        params,
+    ) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -418,6 +441,29 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             Ch,
             params,
         )
+
+    if diffuse_momentum
+        (; ρτxz, ρτyz) =
+            get_momentum_fluxes.(params, Cd, flux_coefficients, nothing)
+        u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
+        normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
+        ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
+        parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
+            -parent(
+                Geometry.Contravariant3Vector.(normal) .⊗
+                Geometry.Covariant12Vector.(
+                    Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
+                ),
+            )
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(
+                Geometry.Contravariant3Vector(FT(0)) ⊗
+                Geometry.Covariant12Vector(FT(0), FT(0)),
+            ),
+            bottom = Operators.SetValue(dif_flux_uₕ),
+        )
+        @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
+    end
 
     if :ρe in propertynames(Y.c)
         @. dif_flux_energy =

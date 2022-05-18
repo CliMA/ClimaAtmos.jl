@@ -49,14 +49,20 @@ steps:
           slurm_cpus_per_task: 8
 
       - label: ":computer: held suarez (ρe) equilmoist"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --upwinding none --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 6hours"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_equil/*"
         agents:
           slurm_cpus_per_task: 8
 
       - label: ":computer: held suarez (ρe_int)"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --t_end 1200days --upwinding none --fps 30 --job_id longrun_hs_rhoeint --dt_save_to_sol 6hours"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --t_end 1200days --fps 30 --job_id longrun_hs_rhoeint --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoeint/*"
+        agents:
+          slurm_cpus_per_task: 8
+
+      - label: ":computer: aquaplanet (ρe) equilmoist gray radiation"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 6hours"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -65,7 +71,7 @@ steps:
     steps:
 
       - label: ":computer: held suarez (ρe) hightop"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 25 --dt 300secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_hightop --dt_save_to_sol 6hours"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 25 --dt 300secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_hightop --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_hightop/*"
         agents:
           slurm_cpus_per_task: 8

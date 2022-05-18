@@ -36,6 +36,8 @@ radiation_model() = radiation_model(parsed_args)
 microphysics_model() = microphysics_model(parsed_args)
 forcing_type() = forcing_type(parsed_args)
 
+diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
+
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
@@ -82,7 +84,9 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     forcing_cache(Y, forcing_type()),
     isnothing(radiation_model()) ? NamedTuple() :
     rrtmgp_model_cache(Y, params, radiation_model(); idealized_h2o),
-    vert_diff ? vertical_diffusion_boundary_layer_cache(Y) : NamedTuple(),
+    vert_diff ?
+    vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :
+    NamedTuple(),
     (;
         tendency_knobs = (;
             hs_forcing = forcing_type() isa HeldSuarezForcing,
