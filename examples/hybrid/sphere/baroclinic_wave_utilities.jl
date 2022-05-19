@@ -185,8 +185,8 @@ function rayleigh_sponge_cache(Y, dt)
     ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))
     ᶠαₘ = @. ifelse(ᶠz > z_D, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(π / 2 * (ᶜz - z_D) / (zmax - z_D))^2
-    ᶠβ = @. ᶠαₘ * sin(π / 2 * (ᶠz - z_D) / (zmax - z_D))^2
+    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - z_D) / (zmax - z_D))^2
+    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - z_D) / (zmax - z_D))^2
     return (; ᶜβ, ᶠβ)
 end
 
