@@ -266,20 +266,85 @@ output_dir = parse_arg(parsed_args, "output_dir", default_output)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
-function make_save_to_disk_func(output_dir, is_distributed)
+function make_save_to_disk_func(output_dir, p, is_distributed)
     function save_to_disk_func(integrator)
+        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
+
+        Y = integrator.u
+        ᶜuₕ = Y.c.uₕ
+        ᶠw = Y.f.w
+
+        # kinetic energy
+        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+
+        # pressure, temperature, potential temperature
+        if :ρθ in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        elseif :ρe in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        elseif :ρe_int in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        end
+        @. ᶜp = TD.air_pressure(params, ᶜts)
+        ᶜT = @. TD.air_temperature(params, ᶜts)
+        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+
+        # precipitation
+        @. ᶜS_ρq_tot =
+            Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+                params,
+                TD.PhasePartition(params, ᶜts),
+            )
+
+        # vorticity 
+        curl_uh = @. curlₕ(Y.c.uₕ)
+        ᶜvort = Geometry.WVector.(curl_uh)
+        Spaces.weighted_dss!(ᶜvort)
+
+        # cloudwater and watervapor for moist simulation
+        if :ρq_tot in propertynames(Y.c)
+            ᶜq = @. TD.PhasePartition(params, ᶜts)
+            ᶜcloud_water = @. ᶜq.liq
+            ᶜcloud_ice = @. ᶜq.ice
+            ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
+            diagnostic = (;
+                pressure = ᶜp,
+                temperature = ᶜT,
+                potential_temperature = ᶜθ,
+                kinetic_energy = ᶜK,
+                vorticity = ᶜvort,
+                cloud_water = ᶜcloud_water,
+                cloud_ice = ᶜcloud_ice,
+                water_vapor = ᶜwatervapor,
+                precipitation_removal = ᶜS_ρq_tot,
+            )
+        else
+            diagnostic = (;
+                pressure = ᶜp,
+                temperature = ᶜT,
+                potential_temperature = ᶜθ,
+                kinetic_energy = ᶜK,
+                vorticity = ᶜvort,
+            )
+        end
+
         day = floor(Int, integrator.t / (60 * 60 * 24))
         sec = Int(mod(integrator.t, 3600 * 24))
         @info "Saving prognostic variables to JLD2 file on day $day second $sec"
         suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
         output_file = joinpath(output_dir, "day$day.$sec$suffix")
-        jldsave(output_file; t = integrator.t, Y = integrator.u)
+        jldsave(
+            output_file;
+            t = integrator.t,
+            Y = integrator.u,
+            diagnostic = diagnostic,
+        )
         return nothing
     end
     return save_to_disk_func
 end
 
-save_to_disk_func = make_save_to_disk_func(output_dir, is_distributed)
+save_to_disk_func = make_save_to_disk_func(output_dir, p, is_distributed)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
