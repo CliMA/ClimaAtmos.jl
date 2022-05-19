@@ -2,6 +2,8 @@ using LinearAlgebra: ×, norm, norm_sqr, dot
 
 using ClimaCore: Operators, Fields
 
+using ClimaCore.Geometry: ⊗
+
 using Thermodynamics
 
 const TD = Thermodynamics
