@@ -777,11 +777,9 @@ version = "0.5.1"
 
 [[deps.Insolation]]
 deps = ["CLIMAParameters", "Dates"]
-git-tree-sha1 = "6ed0ccc2dc82631e63c56a34462a67f2bb07e088"
-repo-rev = "main"
-repo-url = "https://github.com/CliMA/Insolation.jl.git"
+git-tree-sha1 = "2aa2375a058a64b03a814899d04c7237ad8151cf"
 uuid = "e98cc03f-d57e-4e3c-b70c-8d51efe9e0d8"
-version = "0.1.0"
+version = "0.2.0"
 
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
