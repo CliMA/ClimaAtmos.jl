@@ -9,16 +9,19 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
-vert_diff = parsed_args["vert_diff"]
+#vert_diff = parsed_args["vert_diff"]
+vert_diff = true
 hyperdiff = parsed_args["hyperdiff"]
 h_elem = parsed_args["h_elem"]
-#z_elem = Int(parsed_args["z_elem"])
-z_elem = 20
+z_elem = Int(parsed_args["z_elem"])
 z_max = FT(parsed_args["z_max"])
 κ₄ = parsed_args["kappa_4"]
-t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt = FT(time_to_seconds(parsed_args["dt"]))
-dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+#t_end = FT(time_to_seconds(parsed_args["t_end"]))
+t_end = 432000
+#dt = FT(time_to_seconds(parsed_args["dt"]))
+dt = 200
+#dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+dt_save_to_sol = 21600
 dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 include("parameter_set.jl")
@@ -36,11 +39,10 @@ moisture_model() = EquilMoistModel()
 #energy_form() = energy_form(parsed_args)
 energy_form() = TotalEnergy()
 #radiation_model() = radiation_model(parsed_args)
-radiation_model() = RRTMGPI.GrayRadiation()
+radiation_model() = RRTMGPI.ClearSkyRadiation()
 #microphysics_model() = microphysics_model(parsed_args)
 microphysics_model() = Microphysics0Moment()
-#forcing_type() = forcing_type(parsed_args)
-forcing_type() = HeldSuarezForcing()
+forcing_type() = forcing_type(parsed_args)
 
 using OrdinaryDiffEq
 using PrettyTables
