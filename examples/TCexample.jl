@@ -296,7 +296,7 @@ function ∑tendencies_3d_bomex!(tendencies, prog, cache, t)
         # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
         # treat them as auxiliary variables for now, until we disentangle the tendency computations.
         Cases.update_forcing(case, grid, state, t, param_set)
-        Cases.update_radiation(case.Rad, grid, state, param_set)
+        Cases.update_radiation(case.Rad, grid, state, t, param_set)
 
         TC.update_aux!(edmf, grid, state, surf, param_set, t, Δt)
 
