@@ -307,9 +307,14 @@ mkpath(output_dir)
 
 function make_save_to_disk_func(output_dir, p, is_distributed)
     function save_to_disk_func(integrator)
-        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
-
         Y = integrator.u
+
+        if :ρq_tot in propertynames(Y.c)
+            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
+        else
+            (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
+        end
+
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
 
@@ -328,34 +333,37 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
 
-        # precipitation
-        @. ᶜS_ρq_tot =
-            Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
-                params,
-                TD.PhasePartition(params, ᶜts),
-            )
-
         # vorticity 
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
 
-        # cloudwater and watervapor for moist simulation
+        # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
         if :ρq_tot in propertynames(Y.c)
             ᶜq = @. TD.PhasePartition(params, ᶜts)
-            ᶜcloud_water = @. ᶜq.liq
+            ᶜcloud_liquid = @. ᶜq.liq
             ᶜcloud_ice = @. ᶜq.ice
             ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
+            ᶜRH = @. TD.relative_humidity(params, ᶜts)
+
+            # precipitation
+            @. ᶜS_ρq_tot =
+                Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+                    params,
+                    TD.PhasePartition(params, ᶜts),
+                )
+
             diagnostic = (;
                 pressure = ᶜp,
                 temperature = ᶜT,
                 potential_temperature = ᶜθ,
                 kinetic_energy = ᶜK,
                 vorticity = ᶜvort,
-                cloud_water = ᶜcloud_water,
+                cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
                 precipitation_removal = ᶜS_ρq_tot,
+                relative_humidity = ᶜRH,
             )
         else
             diagnostic = (;
