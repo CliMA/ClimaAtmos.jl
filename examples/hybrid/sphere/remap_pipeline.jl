@@ -17,6 +17,12 @@ else
     error("ENV[\"THERMO_VAR\"] require (\"e_tot\" or \"theta\")")
 end
 
+if haskey(ENV, "MOIST_MODE")
+    moist_mode = ENV["MOIST_MODE"]
+else
+    error("ENV[\"MOIST_MODE\"] require (\"dry\" or \"equil\")")
+end
+
 if haskey(ENV, "NC_DIR")
     nc_dir = ENV["NC_DIR"]
 else
@@ -38,6 +44,8 @@ else
     println("NLON is default to 180.")
 end
 
+const ᶜinterp = Operators.InterpolateF2C()
+
 jld2_files = filter(x -> endswith(x, ".jld2"), readdir(jld2_dir, join = true))
 
 function remap2latlon(filein, nc_dir, nlat, nlon)
@@ -46,6 +54,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     # get time and states from jld2 data
     t_now = datain["t"]
     Y = datain["Y"]
+    diag = datain["diagnostic"]
 
     # float type
     FT = eltype(Y)
@@ -74,7 +83,23 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     nc_thermo = defVar(nc, ENV["THERMO_VAR"], FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
     nc_v = defVar(nc, "v", FT, cspace, ("time",))
-    # TODO: interpolate w onto center space and save it the same way as the other vars
+    nc_w = defVar(nc, "w", FT, cspace, ("time",))
+    # define variables for the diagnostic states
+    nc_pres = defVar(nc, "pressure", FT, cspace, ("time",))
+    nc_T = defVar(nc, "temperature", FT, cspace, ("time",))
+    nc_θ = defVar(nc, "potential_temperature", FT, cspace, ("time",))
+    nc_K = defVar(nc, "kinetic_energy", FT, cspace, ("time",))
+    nc_vort = defVar(nc, "vorticity", FT, cspace, ("time",))
+    # define moist varibales if moist mode is equil
+    if ENV["MOIST_MODE"] == "equil"
+        nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+        nc_RH = defVar(nc, "RH", FT, cspace, ("time",))
+        nc_cloudliq = defVar(nc, "cloud_liquid", FT, cspace, ("time",))
+        nc_cloudice = defVar(nc, "cloud_ice", FT, cspace, ("time",))
+        nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
+        nc_precipitation_removal =
+            defVar(nc, "precipitation_removal", FT, cspace, ("time",))
+    end
 
     # time
     nc_time[1] = t_now
@@ -94,6 +119,25 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), Y.c.uₕ)
     nc_u[:, 1] = uh_phy.components.data.:1
     nc_v[:, 1] = uh_phy.components.data.:2
+    # physical vertical velocity
+    ᶠw_phy = Geometry.WVector.(Y.f.w)
+    ᶜw_phy = ᶜinterp.(ᶠw_phy)
+    nc_w[:, 1] = ᶜw_phy
+    # diagnostic variables
+    nc_pres[:, 1] = diag.pressure
+    nc_T[:, 1] = diag.temperature
+    nc_θ[:, 1] = diag.potential_temperature
+    nc_K[:, 1] = diag.kinetic_energy
+    nc_vort[:, 1] = diag.vorticity
+
+    if ENV["MOIST_MODE"] == "equil"
+        nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
+        nc_RH[:, 1] = diag.relative_humidity
+        nc_cloudliq[:, 1] = diag.cloud_liquid
+        nc_cloudice[:, 1] = diag.cloud_ice
+        nc_watervapor[:, 1] = diag.water_vapor
+        nc_precipitation_removal[:, 1] = diag.precipitation_removal
+    end
 
     close(nc)
 
@@ -118,13 +162,51 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     )
 
     datafile_latlon = nc_dir * split(split(filein, "/")[end], ".")[1] * ".nc"
-    apply_remap(
-        datafile_latlon,
-        datafile_cc,
-        weightfile,
-        ["rho", ENV["THERMO_VAR"], "u", "v"],
-    )
-
+    if ENV["MOIST_MODE"] == "dry"
+        apply_remap(
+            datafile_latlon,
+            datafile_cc,
+            weightfile,
+            [
+                "rho",
+                ENV["THERMO_VAR"],
+                "u",
+                "v",
+                "w",
+                "pressure",
+                "temperature",
+                "potential_temperature",
+                "kinetic_energy",
+                "vorticity",
+            ],
+        )
+    elseif ENV["MOIST_MODE"] == "equil"
+        apply_remap(
+            datafile_latlon,
+            datafile_cc,
+            weightfile,
+            [
+                "rho",
+                ENV["THERMO_VAR"],
+                "u",
+                "v",
+                "w",
+                "pressure",
+                "temperature",
+                "potential_temperature",
+                "kinetic_energy",
+                "vorticity",
+                "qt",
+                "RH",
+                "cloud_ice",
+                "cloud_liquid",
+                "water_vapor",
+                "precipitation_removal",
+            ],
+        )
+    else
+        error("ENV[\"MOIST_MODE\"] require (\"dry\" or \"equil\")")
+    end
     rm(remap_tmpdir, recursive = true)
 
 end
