@@ -72,3 +72,19 @@ function forcing_type(parsed_args)
         HeldSuarezForcing()
     end
 end
+
+function turbconv_model(parsed_args, namelist)
+    turbconv = parsed_args["turbconv"]
+    precip_model = nothing
+    @assert turbconv in (nothing, "edmf")
+    return if turbconv == "edmf"
+        TC.EDMFModel(namelist, precip_model)
+    else
+        nothing
+    end
+end
+
+Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
+Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
+Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
+Base.broadcastable(x::AbstractForcing) = Ref(x)
