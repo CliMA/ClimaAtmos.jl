@@ -241,15 +241,14 @@ end
 
 # Rayleigh sponge
 
-function rayleigh_sponge_cache(Y, dt)
-    z_D = FT(15e3)
+function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > z_D, 1 / (20 * dt), FT(0))
+    ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - z_D) / (zmax - z_D))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - z_D) / (zmax - z_D))^2
+    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
     return (; ᶜβ, ᶠβ)
 end
 
@@ -257,6 +256,39 @@ function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     (; ᶜβ, ᶠβ) = p
     @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
     @. Yₜ.f.w -= ᶠβ * Y.f.w
+end
+
+# Viscous sponge
+
+function viscous_sponge_cache(Y; zd_viscous = FT(15e3), κ₂ = FT(1e5))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶜαₘ = @. ifelse(ᶜz > zd_viscous, κ₂, FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_viscous, κ₂, FT(0))
+    zmax = maximum(ᶠz)
+    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
+    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
+    return (; ᶜβ, ᶠβ)
+end
+
+function viscous_sponge_tendency!(Yₜ, Y, p, t)
+    (; ᶜβ, ᶠβ, ᶜp) = p
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    if :ρθ in propertynames(Y.c)
+        @. Yₜ.c.ρθ += ᶜβ * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
+    elseif :ρe in propertynames(Y.c)
+        @. Yₜ.c.ρe += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe + ᶜp) / ᶜρ))
+    elseif :ρe_int in propertynames(Y.c)
+        @. Yₜ.c.ρe_int += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
+    end
+    @. Yₜ.c.uₕ +=
+        ᶜβ * (
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
+                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
+            )
+        )
+    @. Yₜ.f.w.components.data.:1 += ᶠβ * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end
 
 forcing_cache(Y, ::Nothing) = NamedTuple()
