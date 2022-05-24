@@ -82,12 +82,14 @@ show_progress_bar = isinteractive()
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
-const sponge = false
+const rayleigh_sponge = false
+const viscous_sponge = false
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
-    sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
+    rayleigh_sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
+    viscous_sponge ? viscous_sponge_cache(Y) : NamedTuple(),
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
     isnothing(radiation_model()) ? NamedTuple() :
@@ -115,7 +117,8 @@ additional_tendency!(Yₜ, Y, p, t) = begin
     (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
     (; microphy_0M, hyperdiff, has_turbconv) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+    rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+    viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
     hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t)
     vert_diff && vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
