@@ -2,6 +2,8 @@ using Statistics: mean
 using SurfaceFluxes
 using CloudMicrophysics
 const SF = SurfaceFluxes
+const CCG = ClimaCore.Geometry
+const TC = TurbulenceConvection
 const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
@@ -13,10 +15,38 @@ baroclinic_wave_mesh(; params, h_elem) =
 ## Initial conditions
 ##
 
-function face_initial_condition(local_geometry, params)
+function init_state(
+    center_initial_condition,
+    face_initial_condition,
+    center_space,
+    face_space,
+    params,
+    models,
+)
+    ᶜlocal_geometry = Fields.local_geometry_field(center_space)
+    ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+    c =
+        center_initial_condition.(
+            ᶜlocal_geometry,
+            params,
+            models.energy_form,
+            models.moisture_model,
+            models.turbconv_model,
+        )
+    f = face_initial_condition.(ᶠlocal_geometry, params, models.turbconv_model)
+    Y = Fields.FieldVector(; c, f)
+    return Y
+end
+
+function face_initial_condition(local_geometry, params, turbconv_model)
     z = local_geometry.coordinates.z
     FT = eltype(z)
-    (; w = Geometry.Covariant3Vector(FT(0)))
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    else
+        TC.face_prognostic_vars_edmf(FT, local_geometry, turbconv_model)
+    end
+    (; w = Geometry.Covariant3Vector(FT(0)), tc_kwargs...)
 end
 
 function center_initial_condition_column(
@@ -24,6 +54,7 @@ function center_initial_condition_column(
     params,
     energy_form,
     moisture_model,
+    turbconv_model,
 )
     z = local_geometry.coordinates.z
     FT = eltype(z)
@@ -44,14 +75,34 @@ function center_initial_condition_column(
     elseif energy_form isa InternalEnergy
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
-    return (; ρ, 𝔼_kwarg..., uₕ = Geometry.Covariant12Vector(FT(0), FT(0)))
+
+    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    elseif turbconv_model isa TC.EDMFModel
+        (;
+            ρθ_liq_ice = FT(0),
+            ρq_tot = FT(0),
+            u = FT(0),
+            v = FT(0),
+            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
+        )
+    end
+
+    return (;
+        ρ,
+        𝔼_kwarg...,
+        uₕ = Geometry.Covariant12Vector(FT(0), FT(0)),
+        tc_kwargs...,
+    )
 end
 
 function center_initial_condition_sphere(
     local_geometry,
     params,
     energy_form,
-    moisture_model;
+    moisture_model,
+    turbconv_model;
     is_balanced_flow = false,
 )
 
@@ -169,24 +220,35 @@ function center_initial_condition_sphere(
     end
     # TODO: Include ability to handle nonzero initial cloud condensate
 
-    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs...)
+    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    elseif turbconv_model isa TC.EDMFModel
+        (;
+            ρθ_liq_ice = FT(0),
+            ρq_tot = FT(0),
+            u = FT(0),
+            v = FT(0),
+            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
+        )
+    end
+    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
 end
 
 ##
 ## Additional tendencies
 ##
 
-# Rayleigh sponge 
+# Rayleigh sponge
 
-function rayleigh_sponge_cache(Y, dt)
-    z_D = FT(20e3)
+function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > z_D, 1 / (20 * dt), FT(0))
+    ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - z_D) / (zmax - z_D))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - z_D) / (zmax - z_D))^2
+    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
     return (; ᶜβ, ᶠβ)
 end
 
@@ -194,6 +256,39 @@ function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     (; ᶜβ, ᶠβ) = p
     @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
     @. Yₜ.f.w -= ᶠβ * Y.f.w
+end
+
+# Viscous sponge
+
+function viscous_sponge_cache(Y; zd_viscous = FT(15e3), κ₂ = FT(1e5))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶜαₘ = @. ifelse(ᶜz > zd_viscous, κ₂, FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_viscous, κ₂, FT(0))
+    zmax = maximum(ᶠz)
+    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
+    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
+    return (; ᶜβ, ᶠβ)
+end
+
+function viscous_sponge_tendency!(Yₜ, Y, p, t)
+    (; ᶜβ, ᶠβ, ᶜp) = p
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    if :ρθ in propertynames(Y.c)
+        @. Yₜ.c.ρθ += ᶜβ * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
+    elseif :ρe in propertynames(Y.c)
+        @. Yₜ.c.ρe += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe + ᶜp) / ᶜρ))
+    elseif :ρe_int in propertynames(Y.c)
+        @. Yₜ.c.ρe_int += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
+    end
+    @. Yₜ.c.uₕ +=
+        ᶜβ * (
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
+                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
+            )
+        )
+    @. Yₜ.f.w.components.data.:1 += ᶠβ * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end
 
 forcing_cache(Y, ::Nothing) = NamedTuple()

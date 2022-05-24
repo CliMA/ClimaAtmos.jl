@@ -21,6 +21,7 @@ function profile_animation(sol, output_dir, fps)
         Ni, Nj, _, _, Nh = size(ClimaCore.Spaces.local_geometry_data(var_space))
         n_columns = Nh * Nj * Ni # TODO: is this correct?
         @info "Creating profile animation with `n_columns` = $n_columns, for `$var_name`"
+        @info "Number of timesteps: $(length(sol.u))"
         anim = Plots.@animate for Y in sol.u
             var = Fields.single_field(Y, prop_chain)
             temporary = ClimaCore.column(var, 1, 1, 1)
@@ -1191,6 +1192,10 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
         output_dir * "/hs-T2.png",
     )
 
+end
+
+function postprocessing_edmf(sol, output_dir, fps)
+    profile_animation(sol, output_dir, fps)
 end
 
 function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
