@@ -109,7 +109,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     nc_rho[:, 1] = Y.c.ρ
     # thermodynamics
     if ENV["THERMO_VAR"] == "e_tot"
-        nc_thermo[:, 1] = Y.c.ρe ./ Y.c.ρ
+        nc_thermo[:, 1] = Y.c.ρe_tot ./ Y.c.ρ
     elseif ENV["THERMO_VAR"] == "theta"
         nc_thermo[:, 1] = Y.c.ρθ ./ Y.c.ρ
     else

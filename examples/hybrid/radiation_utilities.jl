@@ -42,9 +42,9 @@ function rrtmgp_model_cache(
             Spline1D(input_center_pressure, input_center_volume_mixing_ratio_o3)
         if :ρθ in propertynames(Y.c)
             ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe in propertynames(Y.c)
+        elseif :ρe_tot in propertynames(Y.c)
             ᶜΦ = FT(Planet.grav(params)) .* Fields.coordinate_field(Y.c).z
-            ᶜts = @. thermo_state_ρe(Y.c.ρe, Y.c, 0, ᶜΦ, params)
+            ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, 0, ᶜΦ, params)
         elseif :ρe_int in propertynames(Y.c)
             ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end
@@ -144,8 +144,8 @@ function rrtmgp_model_tendency!(Yₜ, Y, p, t)
     ᶜdivᵥ = Operators.DivergenceF2C()
     if :ρθ in propertynames(Y.c)
         error("rrtmgp_model_tendency! not implemented for ρθ")
-    elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe -= ᶜdivᵥ(ᶠradiation_flux)
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠradiation_flux)
     end
@@ -161,9 +161,9 @@ function rrtmgp_model_callback!(integrator)
 
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-    elseif :ρe in propertynames(Y.c)
+    elseif :ρe_tot in propertynames(Y.c)
         @. ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
     end

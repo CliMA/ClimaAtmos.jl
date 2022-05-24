@@ -292,7 +292,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
@@ -427,7 +427,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶠw_phy = Geometry.WVector.(ᶠw)
         ᶜw_phy = ᶜinterp.(ᶠw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
 
         ᶜq = @. TD.PhasePartition(params, ᶜts)
@@ -899,7 +899,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         # temperature
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
 
@@ -1244,7 +1244,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         # temperature
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
 
@@ -1413,11 +1413,11 @@ function custom_postprocessing(sol, output_dir)
     anim = @animate for Y in sol.u
         if :ρθ in propertynames(Y.c)
             ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe in propertynames(Y.c)
+        elseif :ρe_tot in propertynames(Y.c)
             grav = FT(Planet.grav(params))
             ᶜK = @. norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
             ᶜΦ = grav .* Fields.coordinate_field(Y.c).z
-            ᶜts = @. thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+            ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         elseif :ρe_int in propertynames(Y.c)
             ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end
