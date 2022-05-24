@@ -179,7 +179,7 @@ end
 # Rayleigh sponge 
 
 function rayleigh_sponge_cache(Y, dt)
-    z_D = FT(15e3)
+    z_D = FT(20e3)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))

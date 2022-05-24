@@ -74,7 +74,7 @@ show_progress_bar = isinteractive()
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
-const sponge = false
+const sponge = true
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
