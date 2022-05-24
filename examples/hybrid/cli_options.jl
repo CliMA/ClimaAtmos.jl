@@ -112,6 +112,26 @@ function parse_commandline()
         help = "Hyperdiffusion parameter"
         arg_type = Float64
         default = Float64(2e17)
+        "--rayleigh_sponge"
+        help = "Rayleigh sponge [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--viscous_sponge"
+        help = "Viscous sponge [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--zd_rayleigh"
+        help = "Rayleigh sponge height"
+        arg_type = Float64
+        default = Float64(15e3)
+        "--zd_viscous"
+        help = "Viscous sponge height"
+        arg_type = Float64
+        default = Float64(15e3)
+        "--kappa_2_sponge"
+        help = "Viscous sponge coefficient"
+        arg_type = Float64
+        default = Float64(1e5)
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

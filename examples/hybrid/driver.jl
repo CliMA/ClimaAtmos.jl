@@ -16,6 +16,11 @@ h_elem = parsed_args["h_elem"]
 z_elem = Int(parsed_args["z_elem"])
 z_max = FT(parsed_args["z_max"])
 κ₄ = parsed_args["kappa_4"]
+rayleigh_sponge = parsed_args["rayleigh_sponge"]
+viscous_sponge = parsed_args["viscous_sponge"]
+zd_rayleigh = parsed_args["zd_rayleigh"]
+zd_viscous = parsed_args["zd_viscous"]
+κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -25,6 +30,8 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
+@assert rayleigh_sponge in (true, false)
+@assert viscous_sponge in (true, false)
 
 include("types.jl")
 
@@ -82,14 +89,14 @@ show_progress_bar = isinteractive()
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
-const rayleigh_sponge = false
-const viscous_sponge = false
-
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
-    rayleigh_sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
-    viscous_sponge ? viscous_sponge_cache(Y) : NamedTuple(),
+    rayleigh_sponge ?
+    rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
+    NamedTuple(),
+    viscous_sponge ?
+    viscous_sponge_cache(Y; zd_viscous = FT(zd_viscous), κ₂ = FT(κ₂_sponge)) : NamedTuple(),
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
     isnothing(radiation_model()) ? NamedTuple() :
