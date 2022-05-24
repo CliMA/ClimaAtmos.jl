@@ -247,15 +247,17 @@ function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
     ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
     ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
-    return (; ᶜβ, ᶠβ)
+    ᶜβ_rayleigh =
+        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    ᶠβ_rayleigh =
+        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    return (; ᶜβ_rayleigh, ᶠβ_rayleigh)
 end
 
 function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
-    (; ᶜβ, ᶠβ) = p
-    @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
-    @. Yₜ.f.w -= ᶠβ * Y.f.w
+    (; ᶜβ_rayleigh, ᶠβ_rayleigh) = p
+    @. Yₜ.c.uₕ -= ᶜβ_rayleigh * Y.c.uₕ
+    @. Yₜ.f.w -= ᶠβ_rayleigh * Y.f.w
 end
 
 # Viscous sponge
@@ -266,29 +268,32 @@ function viscous_sponge_cache(Y; zd_viscous = FT(15e3), κ₂ = FT(1e5))
     ᶜαₘ = @. ifelse(ᶜz > zd_viscous, κ₂, FT(0))
     ᶠαₘ = @. ifelse(ᶠz > zd_viscous, κ₂, FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
-    return (; ᶜβ, ᶠβ)
+    ᶜβ_viscous =
+        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
+    ᶠβ_viscous =
+        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
+    return (; ᶜβ_viscous, ᶠβ_viscous)
 end
 
 function viscous_sponge_tendency!(Yₜ, Y, p, t)
-    (; ᶜβ, ᶠβ, ᶜp) = p
+    (; ᶜβ_viscous, ᶠβ_viscous, ᶜp) = p
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ += ᶜβ * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
+        @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
     elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρe += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρe_int += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
     end
     @. Yₜ.c.uₕ +=
-        ᶜβ * (
+        ᶜβ_viscous * (
             wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
                 wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
             )
         )
-    @. Yₜ.f.w.components.data.:1 += ᶠβ * wdivₕ(gradₕ(Y.f.w.components.data.:1))
+    @. Yₜ.f.w.components.data.:1 +=
+        ᶠβ_viscous * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end
 
 forcing_cache(Y, ::Nothing) = NamedTuple()
