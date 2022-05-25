@@ -207,6 +207,14 @@ git-tree-sha1 = "2a0f6f12ccdf50089e708b68e73b1fe08fb53cd8"
 uuid = "c8b6d40d-e815-466f-95ae-c48aefa668fa"
 version = "0.7.1"
 
+[[deps.ClimaTimeSteppers]]
+deps = ["CUDA", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "LinearAlgebra", "MPI", "SciMLBase", "StaticArrays"]
+git-tree-sha1 = "78ea4e2c13066b2f65aafca37edaa20c46b1afc8"
+repo-rev = "sb/ars343"
+repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
+uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
+version = "0.2.1"
+
 [[deps.CloseOpenIntervals]]
 deps = ["ArrayInterface", "Static"]
 git-tree-sha1 = "f576084239e6bdf801007c80e27e2cc2cd963fe0"

@@ -1,3 +1,14 @@
+using OrdinaryDiffEq
+using PrettyTables
+using DiffEqCallbacks
+using JLD2
+using ClimaCorePlots, Plots
+using ClimaCore.DataLayouts
+using NCDatasets
+using ClimaCoreTempestRemap
+using ClimaCore
+using ClimaTimeSteppers
+
 include("cli_options.jl")
 if !(@isdefined parsed_args)
     (s, parsed_args) = parse_commandline()
@@ -32,15 +43,6 @@ radiation_model() = radiation_model(parsed_args)
 microphysics_model() = microphysics_model(parsed_args)
 forcing_type() = forcing_type(parsed_args)
 
-using OrdinaryDiffEq
-using PrettyTables
-using DiffEqCallbacks
-using JLD2
-using ClimaCorePlots, Plots
-using ClimaCore.DataLayouts
-using NCDatasets
-using ClimaCoreTempestRemap
-using ClimaCore
 
 import Random
 Random.seed!(1234)
@@ -90,15 +92,15 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     ),
 )
 
-additional_tendency!(Yₜ, Y, p, t) = begin
+additional_step!(Yx, Y, p, t, dt) = begin
     (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
     (; microphy_0M, hyperdiff) = p.tendency_knobs
-    hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
-    hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t)
-    vert_diff && vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
-    microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
-    rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t)
+    hyperdiff && hyperdiffusion_step!(Yx, Y, p, t, dt)
+    sponge && rayleigh_sponge_step!(Yx, Y, p, t, dt)
+    hs_forcing && held_suarez_step!(Yx, Y, p, t, dt)
+    vert_diff && vertical_diffusion_boundary_layer_step!(Yx, Y, p, t, dt)
+    microphy_0M && zero_moment_microphysics_step!(Yx, Y, p, t, dt)
+    rad_flux && rrtmgp_model_step!(Yx, Y, p, t, dt)
 end
 
 ################################################################################
@@ -138,7 +140,7 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-ode_algorithm = OrdinaryDiffEq.Rosenbrock23
+ode_algorithm = ClimaTimeSteppers.ARS343
 
 additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
@@ -156,7 +158,7 @@ else
 end
 
 import ClimaCore: enable_threading
-enable_threading() = parsed_args["enable_threading"]
+#enable_threading() = parsed_args["enable_threading"]
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
 # bytes required to store an element from Y.c or Y.f (or, really, from any Field
@@ -243,8 +245,9 @@ end
 if ode_algorithm <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,
     OrdinaryDiffEq.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
+    ARS343
 }
-    use_transform = !(ode_algorithm in (Rosenbrock23, Rosenbrock32))
+    use_transform = !(ode_algorithm in (Rosenbrock23, Rosenbrock32, ARS343))
     W = SchurComplementW(Y, use_transform, jacobian_flags, test_implicit_solver)
     jac_kwargs =
         use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
@@ -286,18 +289,13 @@ end
 
 save_to_disk_func = make_save_to_disk_func(output_dir, is_distributed)
 
-dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
-    p = integrator.p
-    Spaces.weighted_dss!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss!(Y.f, p.ghost_buffer.f)
-end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
 else
     PeriodicCallback(save_to_disk_func, dt_save_to_disk; initial_affect = true)
 end
 callback =
-    CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)
+    CallbackSet(save_to_disk_callback, additional_callbacks...)
 
 problem = SplitODEProblem(
     ODEFunction(
@@ -305,7 +303,7 @@ problem = SplitODEProblem(
         jac_kwargs...,
         tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
     ),
-    remaining_tendency!,
+    remaining_step!,
     Y,
     (t_start, t_end),
     p,

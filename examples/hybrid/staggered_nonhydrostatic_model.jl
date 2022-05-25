@@ -242,16 +242,15 @@ function implicit_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
-function remaining_tendency!(Yₜ, Y, p, t)
-    Yₜ .= zero(eltype(Yₜ))
-    default_remaining_tendency!(Yₜ, Y, p, t)
-    additional_tendency!(Yₜ, Y, p, t)
-    Spaces.weighted_dss!(Yₜ.c, p.ghost_buffer.c)
-    Spaces.weighted_dss!(Yₜ.f, p.ghost_buffer.f)
-    return Yₜ
+function remaining_step!(Yx, Y, p, t, dt)
+    default_remaining_step!(Yx, Y, p, t, dt)
+    additional_step!(Yx, Y, p, t, dt)
+    Spaces.weighted_dss!(Yx.c, p.ghost_buffer.c)
+    Spaces.weighted_dss!(Yx.f, p.ghost_buffer.f)
+    return Yx
 end
 
-function default_remaining_tendency!(Yₜ, Y, p, t)
+function default_remaining_step!(Yx, Y, p, t, dt)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -263,38 +262,38 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
 
     # Mass conservation
 
-    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
+    @. Yx.c.ρ -= dt * divₕ(ᶜρ * ᶜuvw)
+    @. Yx.c.ρ -= dt * ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
 
     # Energy conservation
 
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
-        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
-        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
+        @. Yx.c.ρθ -= dt * divₕ(Y.c.ρθ * ᶜuvw)
+        @. Yx.c.ρθ -= dt * ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
     elseif :ρe in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
-        @. Yₜ.c.ρe -= divₕ((Y.c.ρe + ᶜp) * ᶜuvw)
-        @. Yₜ.c.ρe -= ᶜdivᵥ(ᶠinterp((Y.c.ρe + ᶜp) * ᶜuₕ))
+        @. Yx.c.ρe -= dt * divₕ((Y.c.ρe + ᶜp) * ᶜuvw)
+        @. Yx.c.ρe -= dt * ᶜdivᵥ(ᶠinterp((Y.c.ρe + ᶜp) * ᶜuₕ))
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
         if point_type <: Geometry.Abstract3DPoint
-            @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
-                dot(gradₕ(ᶜp), Geometry.Contravariant12Vector(ᶜuₕ))
+            @. Yx.c.ρe_int -=
+                dt * divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
+                dt * dot(gradₕ(ᶜp), Geometry.Contravariant12Vector(ᶜuₕ))
         else
-            @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
-                dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
+            @. Yx.c.ρe_int -=
+                dt * divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
+                dt * dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
         end
-        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
+        @. Yx.c.ρe_int -= dt * ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
         # or, equivalently,
-        # @. Yₜ.c.ρe_int -= divₕ(Y.c.ρe_int * ᶜuvw) + ᶜp * divₕ(ᶜuvw)
-        # @. Yₜ.c.ρe_int -=
-        #     ᶜdivᵥ(ᶠinterp(Y.c.ρe_int * ᶜuₕ)) + ᶜp * ᶜdivᵥ(ᶠinterp(ᶜuₕ))
+        # @. Yx.c.ρe_int -= dt * divₕ(Y.c.ρe_int * ᶜuvw) + ᶜp * divₕ(ᶜuvw)
+        # @. Yx.c.ρe_int -=
+        #     dt * ᶜdivᵥ(ᶠinterp(Y.c.ρe_int * ᶜuₕ)) + ᶜp * ᶜdivᵥ(ᶠinterp(ᶜuₕ))
     end
 
     # Momentum conservation
@@ -312,24 +311,24 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     @. ᶠu¹² = Geometry.Contravariant12Vector(ᶠinterp(ᶜuₕ))
     @. ᶠu³ = Geometry.Contravariant3Vector(ᶠw)
 
-    @. Yₜ.c.uₕ -=
-        ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × Geometry.Contravariant12Vector(ᶜuₕ)
+    @. Yx.c.uₕ -=
+        dt * (ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × Geometry.Contravariant12Vector(ᶜuₕ))
     if point_type <: Geometry.Abstract3DPoint
-        @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+        @. Yx.c.uₕ -= dt * (gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
     elseif point_type <: Geometry.Abstract2DPoint
-        @. Yₜ.c.uₕ -=
-            Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+        @. Yx.c.uₕ -=
+            dt * (Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)))
     end
 
-    @. Yₜ.f.w -= ᶠω¹² × ᶠu¹²
+    @. Yx.f.w -= dt * ᶠω¹² × ᶠu¹²
 
     # Tracer conservation
 
     for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
-        ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
-        @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
-        @. ᶜ𝕋ₜ -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋 * ᶜuₕ))
+        ᶜ𝕋x = getproperty(Yx.c, ᶜ𝕋_name)
+        @. ᶜ𝕋x -= dt * divₕ(ᶜ𝕋 * ᶜuvw)
+        @. ᶜ𝕋x -= dt * ᶜdivᵥ(ᶠinterp(ᶜ𝕋 * ᶜuₕ))
     end
 end
 

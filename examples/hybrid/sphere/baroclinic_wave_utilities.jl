@@ -176,7 +176,7 @@ end
 ## Additional tendencies
 ##
 
-# Rayleigh sponge 
+# Rayleigh sponge
 
 function rayleigh_sponge_cache(Y, dt)
     z_D = FT(15e3)
@@ -190,10 +190,10 @@ function rayleigh_sponge_cache(Y, dt)
     return (; ᶜβ, ᶠβ)
 end
 
-function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+function rayleigh_sponge_step!(Yₜ, Y, p, t, dt)
     (; ᶜβ, ᶠβ) = p
-    @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
-    @. Yₜ.f.w -= ᶠβ * Y.f.w
+    @. Yₜ.c.uₕ -= dt*ᶜβ * Y.c.uₕ
+    @. Yₜ.f.w -= dt*ᶠβ * Y.f.w
 end
 
 forcing_cache(Y, ::Nothing) = NamedTuple()
@@ -207,7 +207,7 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
     ᶜφ = deg2rad.(Fields.coordinate_field(Y.c).lat),
 )
 
-function held_suarez_tendency!(Yₜ, Y, p, t)
+function held_suarez_tendency!(Yx, Y, p, t, dt)
     (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
     R_d = FT(Planet.R_d(params))
@@ -243,13 +243,13 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
             )
         )
 
-    @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
+    @. Yx.c.uₕ -= dt*(k_f * ᶜheight_factor) * Y.c.uₕ
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
+        @. Yx.c.ρθ -= dt*ᶜΔρT * (MSLP / ᶜp)^κ_d
     elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe -= ᶜΔρT * cv_d
+        @. Yx.c.ρe -= dt*ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int -= ᶜΔρT * cv_d
+        @. Yx.c.ρe_int -= dt*ᶜΔρT * cv_d
     end
 end
 
@@ -259,7 +259,7 @@ microphysics_cache(Y, ::Nothing) = NamedTuple()
 microphysics_cache(Y, ::Microphysics0Moment) =
     (ᶜS_ρq_tot = similar(Y.c, FT), ᶜλ = similar(Y.c, FT))
 
-function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
+function zero_moment_microphysics_tendency!(Yx, Y, p, t, dt)
     (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, params) = p # assume ᶜts has been updated
 
     @. ᶜS_ρq_tot =
@@ -267,21 +267,21 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
             params,
             TD.PhasePartition(params, ᶜts),
         )
-    @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
-    @. Yₜ.c.ρ += ᶜS_ρq_tot
+    @. Yx.c.ρq_tot += dt*ᶜS_ρq_tot
+    @. Yx.c.ρ += dt*ᶜS_ρq_tot
 
     @. ᶜλ = TD.liquid_fraction(params, ᶜts)
 
     if :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe +=
-            ᶜS_ρq_tot * (
+        @. Yx.c.ρe +=
+        dt*ᶜS_ρq_tot * (
                 ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts) +
                 ᶜΦ
             )
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int +=
-            ᶜS_ρq_tot * (
+        @. Yx.c.ρe_int +=
+        dt*ᶜS_ρq_tot * (
                 ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts)
             )
@@ -396,7 +396,7 @@ function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
     return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
 end
 
-function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
+function vertical_diffusion_boundary_layer_step!(Yt, Y, p, t, dt)
     ᶜρ = Y.c.ρ
     (; ᶜts, ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
@@ -430,7 +430,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_energy),
         )
-        @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
+        @. Yx.c.ρe += dt*ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
         @. dif_flux_energy =
             -Geometry.WVector(
@@ -445,8 +445,8 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_energy),
         )
-        @. Yₜ.c.ρe_int +=
-            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
+        @. Yx.c.ρe_int +=
+            dt*ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
     end
 
     if :ρq_tot in propertynames(Y.c)
@@ -456,7 +456,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_ρq_tot),
         )
-        @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
-        @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
+        @. Yx.c.ρq_tot += dt*ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
+        @. Yx.c.ρ += dt*ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
     end
 end
