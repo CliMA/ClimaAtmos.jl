@@ -9,49 +9,60 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
-#vert_diff = parsed_args["vert_diff"]
-vert_diff = true
+idealized_insolation = parsed_args["idealized_insolation"]
+vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
+turbconv = parsed_args["turbconv"]
 h_elem = parsed_args["h_elem"]
 z_elem = Int(parsed_args["z_elem"])
 z_max = FT(parsed_args["z_max"])
 κ₄ = parsed_args["kappa_4"]
-#t_end = FT(time_to_seconds(parsed_args["t_end"]))
-t_end = 432000
-#dt = FT(time_to_seconds(parsed_args["dt"]))
-dt = 200
-#dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-dt_save_to_sol = 21600
+rayleigh_sponge = parsed_args["rayleigh_sponge"]
+viscous_sponge = parsed_args["viscous_sponge"]
+zd_rayleigh = parsed_args["zd_rayleigh"]
+zd_viscous = parsed_args["zd_viscous"]
+κ₂_sponge = parsed_args["kappa_2_sponge"]
+t_end = FT(time_to_seconds(parsed_args["t_end"]))
+dt = FT(time_to_seconds(parsed_args["dt"]))
+dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
-include("parameter_set.jl")
-params = create_parameter_set(FT, parsed_args)
-
+@assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
+@assert rayleigh_sponge in (true, false)
+@assert viscous_sponge in (true, false)
 
 include("types.jl")
 
-#moisture_model() = moisture_model(parsed_args)
-moisture_model() = EquilMoistModel()
-#energy_form() = energy_form(parsed_args)
-energy_form() = TotalEnergy()
-#radiation_model() = radiation_model(parsed_args)
-radiation_model() = RRTMGPI.ClearSkyRadiation()
-#microphysics_model() = microphysics_model(parsed_args)
-microphysics_model() = Microphysics0Moment()
+import TurbulenceConvection
+const TC = TurbulenceConvection
+include("TurbulenceConvectionUtils.jl")
+import .TurbulenceConvectionUtils
+TCU = TurbulenceConvectionUtils
+namelist = turbconv == "edmf" ? TCU.NameList.default_namelist("Bomex") : nothing
+
+include("parameter_set.jl")
+# TODO: unify parsed_args and namelist
+params = create_parameter_set(FT, parsed_args, namelist)
+
+moisture_model() = moisture_model(parsed_args)
+energy_form() = energy_form(parsed_args)
+radiation_model() = radiation_model(parsed_args)
+microphysics_model() = microphysics_model(parsed_args)
 forcing_type() = forcing_type(parsed_args)
+turbconv_model() = turbconv_model(parsed_args, namelist)
+
+diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
 using JLD2
-using ClimaCorePlots, Plots
 using ClimaCore.DataLayouts
 using NCDatasets
-using ClimaCoreTempestRemap
 using ClimaCore
 
 import Random
@@ -80,17 +91,27 @@ show_progress_bar = isinteractive()
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
-const sponge = false
-
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
-    sponge ? rayleigh_sponge_cache(Y, dt) : NamedTuple(),
+    rayleigh_sponge ?
+    rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
+    NamedTuple(),
+    viscous_sponge ?
+    viscous_sponge_cache(Y; zd_viscous = FT(zd_viscous), κ₂ = FT(κ₂_sponge)) : NamedTuple(),
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
     isnothing(radiation_model()) ? NamedTuple() :
-    rrtmgp_model_cache(Y, params, radiation_model(); idealized_h2o),
-    vert_diff ? vertical_diffusion_boundary_layer_cache(Y) : NamedTuple(),
+    rrtmgp_model_cache(
+        Y,
+        params,
+        radiation_model();
+        idealized_insolation,
+        idealized_h2o,
+    ),
+    vert_diff ?
+    vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :
+    NamedTuple(),
     (;
         tendency_knobs = (;
             hs_forcing = forcing_type() isa HeldSuarezForcing,
@@ -98,19 +119,26 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
             rad_flux = !isnothing(radiation_model()),
             vert_diff,
             hyperdiff,
+            has_turbconv = !isnothing(turbconv_model()),
         )
     ),
+    (; Δt = dt),
+    (; enable_default_remaining_tendency = isnothing(turbconv_model())),
+    !isnothing(turbconv_model()) ?
+    (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
 )
 
 additional_tendency!(Yₜ, Y, p, t) = begin
     (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
-    (; microphy_0M, hyperdiff) = p.tendency_knobs
+    (; microphy_0M, hyperdiff, has_turbconv) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+    rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+    viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
     hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t)
     vert_diff && vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t)
+    has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t)
 end
 
 ################################################################################
@@ -150,7 +178,15 @@ include("../common_spaces.jl")
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 # Variables required for driver.jl (modify as needed)
-ode_algorithm = OrdinaryDiffEq.Rosenbrock23
+function get_ode_algorithm(parsed_args)
+    ode_algo = parsed_args["ode_algo"]
+    ode_algo_dict = Dict(
+        "Rosenbrock23" => OrdinaryDiffEq.Rosenbrock23,
+        "Euler" => OrdinaryDiffEq.Euler,
+    )
+    return ode_algo_dict[ode_algo]
+end
+ode_algorithm = get_ode_algorithm(parsed_args)
 
 additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
@@ -196,9 +232,19 @@ elseif parsed_args["config"] == "column" # single column
         y_elem = 1,
     )
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
+    z_stretch = if parsed_args["z_stretch"]
+        Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
+    else
+        Meshes.Uniform()
+    end
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 end
+
+models = (;
+    moisture_model = moisture_model(),
+    energy_form = energy_form(),
+    turbconv_model = turbconv_model(),
+)
 
 if haskey(ENV, "RESTART_FILE")
     restart_file_name = ENV["RESTART_FILE"]
@@ -226,17 +272,20 @@ else
         center_initial_condition_column
     end
 
-    Y = Fields.FieldVector(
-        c = center_initial_condition.(
-            ᶜlocal_geometry,
-            params,
-            Ref(energy_form()),
-            Ref(moisture_model()),
-        ),
-        f = face_initial_condition.(ᶠlocal_geometry, params),
+    Y = init_state(
+        center_initial_condition,
+        face_initial_condition,
+        center_space,
+        face_space,
+        params,
+        models,
     )
 end
+
 p = get_cache(Y, params, upwinding_mode(), dt)
+if parsed_args["turbconv"] == "edmf"
+    TCU.init_tc!(Y, p, params, namelist)
+end
 
 # Print tendencies:
 for key in keys(p.tendency_knobs)
@@ -275,20 +324,93 @@ output_dir = parse_arg(parsed_args, "output_dir", default_output)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
-function make_save_to_disk_func(output_dir, is_distributed)
+function make_save_to_disk_func(output_dir, p, is_distributed)
     function save_to_disk_func(integrator)
+        Y = integrator.u
+
+        if :ρq_tot in propertynames(Y.c)
+            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
+        else
+            (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
+        end
+
+        ᶜuₕ = Y.c.uₕ
+        ᶠw = Y.f.w
+
+        # kinetic energy
+        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+
+        # pressure, temperature, potential temperature
+        if :ρθ in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        elseif :ρe_tot in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
+        elseif :ρe_int in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        end
+        @. ᶜp = TD.air_pressure(params, ᶜts)
+        ᶜT = @. TD.air_temperature(params, ᶜts)
+        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+
+        # vorticity 
+        curl_uh = @. curlₕ(Y.c.uₕ)
+        ᶜvort = Geometry.WVector.(curl_uh)
+        Spaces.weighted_dss!(ᶜvort)
+
+        # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
+        if :ρq_tot in propertynames(Y.c)
+            ᶜq = @. TD.PhasePartition(params, ᶜts)
+            ᶜcloud_liquid = @. ᶜq.liq
+            ᶜcloud_ice = @. ᶜq.ice
+            ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
+            ᶜRH = @. TD.relative_humidity(params, ᶜts)
+
+            # precipitation
+            @. ᶜS_ρq_tot =
+                Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+                    params,
+                    TD.PhasePartition(params, ᶜts),
+                )
+
+            diagnostic = (;
+                pressure = ᶜp,
+                temperature = ᶜT,
+                potential_temperature = ᶜθ,
+                kinetic_energy = ᶜK,
+                vorticity = ᶜvort,
+                cloud_liquid = ᶜcloud_liquid,
+                cloud_ice = ᶜcloud_ice,
+                water_vapor = ᶜwatervapor,
+                precipitation_removal = ᶜS_ρq_tot,
+                relative_humidity = ᶜRH,
+            )
+        else
+            diagnostic = (;
+                pressure = ᶜp,
+                temperature = ᶜT,
+                potential_temperature = ᶜθ,
+                kinetic_energy = ᶜK,
+                vorticity = ᶜvort,
+            )
+        end
+
         day = floor(Int, integrator.t / (60 * 60 * 24))
         sec = Int(mod(integrator.t, 3600 * 24))
         @info "Saving prognostic variables to JLD2 file on day $day second $sec"
         suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
         output_file = joinpath(output_dir, "day$day.$sec$suffix")
-        jldsave(output_file; t = integrator.t, Y = integrator.u)
+        jldsave(
+            output_file;
+            t = integrator.t,
+            Y = integrator.u,
+            diagnostic = diagnostic,
+        )
         return nothing
     end
     return save_to_disk_func
 end
 
-save_to_disk_func = make_save_to_disk_func(output_dir, is_distributed)
+save_to_disk_func = make_save_to_disk_func(output_dir, p, is_distributed)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
@@ -303,17 +425,21 @@ end
 callback =
     CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)
 
-problem = SplitODEProblem(
-    ODEFunction(
-        implicit_tendency!;
-        jac_kwargs...,
-        tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
-    ),
-    remaining_tendency!,
-    Y,
-    (t_start, t_end),
-    p,
-)
+problem = if parsed_args["split_ode"]
+    SplitODEProblem(
+        ODEFunction(
+            implicit_tendency!;
+            jac_kwargs...,
+            tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
+        ),
+        remaining_tendency!,
+        Y,
+        (t_start, t_end),
+        p,
+    )
+else
+    OrdinaryDiffEq.ODEProblem(remaining_tendency!, Y, (t_start, t_end), p)
+end
 integrator = OrdinaryDiffEq.init(
     problem,
     ode_algorithm(; alg_kwargs...);
@@ -381,6 +507,8 @@ end
 import JSON
 using Test
 import OrderedCollections
+using ClimaCoreTempestRemap
+using ClimaCorePlots, Plots
 include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
@@ -388,6 +516,8 @@ if !is_distributed
         paperplots_baro_wave(sol, output_dir, p, FT(90), FT(180))
     elseif is_column_radiative_equilibrium(parsed_args)
         custom_postprocessing(sol, output_dir)
+    elseif is_column_edmf(parsed_args)
+        postprocessing_edmf(sol, output_dir, fps)
     elseif forcing_type() isa HeldSuarezForcing && t_end >= (3600 * 24 * 400)
         paperplots_held_suarez(sol, output_dir, p, FT(90), FT(180))
     else
@@ -398,15 +528,14 @@ end
 if !is_distributed || ClimaComms.iamroot(comms_ctx)
     include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
 
+    Y_last = sol.u[end]
+    # This is helpful for starting up new tables
+    @info "Job-specific MSE table format:"
+    println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
+    for prop_chain in Fields.property_chains(Y_last)
+        println("all_best_mse[\"$job_id\"][$prop_chain] = 0.0")
+    end
     if parsed_args["regression_test"]
-
-        Y_last = sol.u[end]
-        # This is helpful for starting up new tables
-        @info "Job-specific MSE table format:"
-        println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
-        for prop_chain in Fields.property_chains(Y_last)
-            println("all_best_mse[\"$job_id\"][$prop_chain] = 0.0")
-        end
 
         # Extract best mse for this job:
         best_mse = all_best_mse[job_id]
@@ -434,7 +563,7 @@ if !is_distributed || ClimaComms.iamroot(comms_ctx)
             varname,
         )
 
-        computed_mse_filename = joinpath(job_id, "computed_mse.json")
+        computed_mse_filename = joinpath(output_dir, "computed_mse.json")
 
         open(computed_mse_filename, "w") do io
             JSON.print(io, computed_mse)

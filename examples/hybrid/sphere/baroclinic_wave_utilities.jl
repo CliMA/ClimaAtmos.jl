@@ -2,6 +2,8 @@ using Statistics: mean
 using SurfaceFluxes
 using CloudMicrophysics
 const SF = SurfaceFluxes
+const CCG = ClimaCore.Geometry
+const TC = TurbulenceConvection
 const CM = CloudMicrophysics
 
 include("../staggered_nonhydrostatic_model.jl")
@@ -13,10 +15,38 @@ baroclinic_wave_mesh(; params, h_elem) =
 ## Initial conditions
 ##
 
-function face_initial_condition(local_geometry, params)
+function init_state(
+    center_initial_condition,
+    face_initial_condition,
+    center_space,
+    face_space,
+    params,
+    models,
+)
+    ᶜlocal_geometry = Fields.local_geometry_field(center_space)
+    ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+    c =
+        center_initial_condition.(
+            ᶜlocal_geometry,
+            params,
+            models.energy_form,
+            models.moisture_model,
+            models.turbconv_model,
+        )
+    f = face_initial_condition.(ᶠlocal_geometry, params, models.turbconv_model)
+    Y = Fields.FieldVector(; c, f)
+    return Y
+end
+
+function face_initial_condition(local_geometry, params, turbconv_model)
     z = local_geometry.coordinates.z
     FT = eltype(z)
-    (; w = Geometry.Covariant3Vector(FT(0)))
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    else
+        TC.face_prognostic_vars_edmf(FT, local_geometry, turbconv_model)
+    end
+    (; w = Geometry.Covariant3Vector(FT(0)), tc_kwargs...)
 end
 
 function center_initial_condition_column(
@@ -24,6 +54,7 @@ function center_initial_condition_column(
     params,
     energy_form,
     moisture_model,
+    turbconv_model,
 )
     z = local_geometry.coordinates.z
     FT = eltype(z)
@@ -40,18 +71,38 @@ function center_initial_condition_column(
     if energy_form isa PotentialTemperature
         𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
-        𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
+        𝔼_kwarg = (; ρe_tot = ρ * (TD.internal_energy(params, ts) + grav * z))
     elseif energy_form isa InternalEnergy
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
-    return (; ρ, 𝔼_kwarg..., uₕ = Geometry.Covariant12Vector(FT(0), FT(0)))
+
+    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    elseif turbconv_model isa TC.EDMFModel
+        (;
+            ρθ_liq_ice = FT(0),
+            ρq_tot = FT(0),
+            u = FT(0),
+            v = FT(0),
+            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
+        )
+    end
+
+    return (;
+        ρ,
+        𝔼_kwarg...,
+        uₕ = Geometry.Covariant12Vector(FT(0), FT(0)),
+        tc_kwargs...,
+    )
 end
 
 function center_initial_condition_sphere(
     local_geometry,
     params,
     energy_form,
-    moisture_model;
+    moisture_model,
+    turbconv_model;
     is_balanced_flow = false,
 )
 
@@ -152,7 +203,8 @@ function center_initial_condition_sphere(
         ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
         K = norm_sqr(uₕ_local) / 2
-        ᶜ𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + K + grav * z))
+        ᶜ𝔼_kwarg =
+            (; ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z))
     elseif energy_form isa InternalEnergy
         ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
@@ -169,31 +221,80 @@ function center_initial_condition_sphere(
     end
     # TODO: Include ability to handle nonzero initial cloud condensate
 
-    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs...)
+    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    elseif turbconv_model isa TC.EDMFModel
+        (;
+            ρθ_liq_ice = FT(0),
+            ρq_tot = FT(0),
+            u = FT(0),
+            v = FT(0),
+            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
+        )
+    end
+    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
 end
 
 ##
 ## Additional tendencies
 ##
 
-# Rayleigh sponge 
+# Rayleigh sponge
 
-function rayleigh_sponge_cache(Y, dt)
-    z_D = FT(15e3)
+function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > z_D, 1 / (20 * dt), FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > z_D, 1 / (20 * dt), FT(0))
+    ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - z_D) / (zmax - z_D))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - z_D) / (zmax - z_D))^2
-    return (; ᶜβ, ᶠβ)
+    ᶜβ_rayleigh =
+        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    ᶠβ_rayleigh =
+        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    return (; ᶜβ_rayleigh, ᶠβ_rayleigh)
 end
 
 function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
-    (; ᶜβ, ᶠβ) = p
-    @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
-    @. Yₜ.f.w -= ᶠβ * Y.f.w
+    (; ᶜβ_rayleigh, ᶠβ_rayleigh) = p
+    @. Yₜ.c.uₕ -= ᶜβ_rayleigh * Y.c.uₕ
+    @. Yₜ.f.w -= ᶠβ_rayleigh * Y.f.w
+end
+
+# Viscous sponge
+
+function viscous_sponge_cache(Y; zd_viscous = FT(15e3), κ₂ = FT(1e5))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶜαₘ = @. ifelse(ᶜz > zd_viscous, κ₂, FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_viscous, κ₂, FT(0))
+    zmax = maximum(ᶠz)
+    ᶜβ_viscous =
+        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
+    ᶠβ_viscous =
+        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
+    return (; ᶜβ_viscous, ᶠβ_viscous)
+end
+
+function viscous_sponge_tendency!(Yₜ, Y, p, t)
+    (; ᶜβ_viscous, ᶠβ_viscous, ᶜp) = p
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    if :ρθ in propertynames(Y.c)
+        @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
+    elseif :ρe_int in propertynames(Y.c)
+        @. Yₜ.c.ρe_int += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
+    end
+    @. Yₜ.c.uₕ +=
+        ᶜβ_viscous * (
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
+                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
+            )
+        )
+    @. Yₜ.f.w.components.data.:1 +=
+        ᶠβ_viscous * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end
 
 forcing_cache(Y, ::Nothing) = NamedTuple()
@@ -246,8 +347,8 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
-    elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe -= ᶜΔρT * cv_d
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot -= ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int -= ᶜΔρT * cv_d
     end
@@ -272,8 +373,8 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 
     @. ᶜλ = TD.liquid_fraction(params, ᶜts)
 
-    if :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe +=
+    if :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot +=
             ᶜS_ρq_tot * (
                 ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts) +
@@ -302,6 +403,7 @@ function vertical_diffusion_boundary_layer_cache(
     Y;
     Cd = FT(0.0044),
     Ch = FT(0.0044),
+    diffuse_momentum = true,
 )
     ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
@@ -309,6 +411,12 @@ function vertical_diffusion_boundary_layer_cache(
         Fields.field_values(z_bottom) .* one.(Fields.field_values(ᶠz_a))
     # TODO: fix VIJFH copyto! to remove the one.(...)
 
+    dif_flux_uₕ =
+        Geometry.Contravariant3Vector.(zeros(axes(z_bottom))) .⊗
+        Geometry.Covariant12Vector.(
+            zeros(axes(z_bottom)),
+            zeros(axes(z_bottom)),
+        )
     if :ρq_tot in propertynames(Y.c)
         dif_flux_ρq_tot = similar(z_bottom, Geometry.WVector{FT})
     else
@@ -337,10 +445,12 @@ function vertical_diffusion_boundary_layer_cache(
         ᶠz_a,
         ᶠK_E = similar(Y.f, FT),
         flux_coefficients = similar(z_bottom, coef_type),
+        dif_flux_uₕ,
         dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
         dif_flux_ρq_tot,
         Cd,
         Ch,
+        diffuse_momentum,
     )
 end
 
@@ -395,10 +505,24 @@ function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
     return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
 end
 
+function get_momentum_fluxes(params, Cd, flux_coefficients, nothing)
+    ρτxz, ρτyz = SF.momentum_fluxes(params, Cd, flux_coefficients, nothing)
+    return (; ρτxz = ρτxz, ρτyz = ρτyz)
+end
+
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     (; ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
-    (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
+    (;
+        flux_coefficients,
+        dif_flux_uₕ,
+        dif_flux_energy,
+        dif_flux_ρq_tot,
+        Cd,
+        Ch,
+        diffuse_momentum,
+        params,
+    ) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -419,7 +543,30 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             params,
         )
 
-    if :ρe in propertynames(Y.c)
+    if diffuse_momentum
+        (; ρτxz, ρτyz) =
+            get_momentum_fluxes.(params, Cd, flux_coefficients, nothing)
+        u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
+        normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
+        ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
+        parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
+            -parent(
+                Geometry.Contravariant3Vector.(normal) .⊗
+                Geometry.Covariant12Vector.(
+                    Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
+                ),
+            )
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(
+                Geometry.Contravariant3Vector(FT(0)) ⊗
+                Geometry.Covariant12Vector(FT(0), FT(0)),
+            ),
+            bottom = Operators.SetValue(dif_flux_uₕ),
+        )
+        @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
+    end
+
+    if :ρe_tot in propertynames(Y.c)
         @. dif_flux_energy =
             -Geometry.WVector(
                 SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
@@ -429,7 +576,8 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_energy),
         )
-        @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρe_tot +=
+            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
         @. dif_flux_energy =
             -Geometry.WVector(

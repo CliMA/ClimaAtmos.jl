@@ -21,6 +21,7 @@ function profile_animation(sol, output_dir, fps)
         Ni, Nj, _, _, Nh = size(ClimaCore.Spaces.local_geometry_data(var_space))
         n_columns = Nh * Nj * Ni # TODO: is this correct?
         @info "Creating profile animation with `n_columns` = $n_columns, for `$var_name`"
+        @info "Number of timesteps: $(length(sol.u))"
         anim = Plots.@animate for Y in sol.u
             var = Fields.single_field(Y, prop_chain)
             temporary = ClimaCore.column(var, 1, 1, 1)
@@ -291,7 +292,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
@@ -426,7 +427,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶠw_phy = Geometry.WVector.(ᶠw)
         ᶜw_phy = ᶜinterp.(ᶠw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
 
         ᶜq = @. TD.PhasePartition(params, ᶜts)
@@ -898,7 +899,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         # temperature
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
 
@@ -939,7 +940,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    # rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
@@ -1193,6 +1194,10 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
 
 end
 
+function postprocessing_edmf(sol, output_dir, fps)
+    profile_animation(sol, output_dir, fps)
+end
+
 function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params, ᶜK, ᶜΦ) = p
 
@@ -1239,7 +1244,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         # temperature
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
 
@@ -1408,11 +1413,11 @@ function custom_postprocessing(sol, output_dir)
     anim = @animate for Y in sol.u
         if :ρθ in propertynames(Y.c)
             ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe in propertynames(Y.c)
+        elseif :ρe_tot in propertynames(Y.c)
             grav = FT(Planet.grav(params))
             ᶜK = @. norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
             ᶜΦ = grav .* Fields.coordinate_field(Y.c).z
-            ᶜts = @. thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+            ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         elseif :ρe_int in propertynames(Y.c)
             ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end

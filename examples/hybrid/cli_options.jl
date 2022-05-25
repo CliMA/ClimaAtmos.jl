@@ -40,8 +40,15 @@ function parse_commandline()
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--turbconv"
+        help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
+        arg_type = String
         "--hyperdiff"
         help = "Hyperdiffusion [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
+        "--idealized_insolation"
+        help = "Use idealized insolation in radiation model [`false`, `true` (default)]"
         arg_type = Bool
         default = true
         "--idealized_h2o"
@@ -59,6 +66,14 @@ function parse_commandline()
         help = "Upwinding mode [`none` (default), `first_order` , `third_order`]"
         arg_type = String
         default = "none"
+        "--ode_algo"
+        help = "ODE algorithm [`Rosenbrock23` (default), `Euler`]"
+        arg_type = String
+        default = "Rosenbrock23"
+        "--split_ode"
+        help = "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
+        arg_type = Bool
+        default = true
         "--regression_test"
         help = "(Bool) perform regression test"
         arg_type = Bool
@@ -93,10 +108,34 @@ function parse_commandline()
         help = "Model top height. Default: 30km"
         arg_type = Float64
         default = Float64(30e3)
+        "--z_stretch"
+        help = "Stretch grid in z-direction. [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
         "--kappa_4"
         help = "Hyperdiffusion parameter"
         arg_type = Float64
         default = Float64(2e17)
+        "--rayleigh_sponge"
+        help = "Rayleigh sponge [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--viscous_sponge"
+        help = "Viscous sponge [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--zd_rayleigh"
+        help = "Rayleigh sponge height"
+        arg_type = Float64
+        default = Float64(15e3)
+        "--zd_viscous"
+        help = "Viscous sponge height"
+        arg_type = Float64
+        default = Float64(15e3)
+        "--kappa_2_sponge"
+        help = "Viscous sponge coefficient"
+        arg_type = Float64
+        default = Float64(1e5)
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
