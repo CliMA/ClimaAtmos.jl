@@ -9,6 +9,7 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
+idealized_insolation = parsed_args["idealized_insolation"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
 turbconv = parsed_args["turbconv"]
@@ -26,6 +27,7 @@ dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
+@assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
@@ -100,7 +102,13 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
     isnothing(radiation_model()) ? NamedTuple() :
-    rrtmgp_model_cache(Y, params, radiation_model(); idealized_h2o),
+    rrtmgp_model_cache(
+        Y,
+        params,
+        radiation_model();
+        idealized_insolation,
+        idealized_h2o,
+    ),
     vert_diff ?
     vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :
     NamedTuple(),

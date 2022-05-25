@@ -100,6 +100,21 @@ steps:
         command: "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
         artifact_paths: "test/test_cases/run_3d_baroclinic_wave/*"
 
+  - group: "Column Examples"
+    steps:
+
+      - label: ":computer: single column radiative equilibrium gray"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_gray"
+        artifact_paths: "sphere_single_column_radiative_equilibrium_gray/*"
+
+      - label: ":computer: single column radiative equilibrium clearsky"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky"
+        artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky/*"
+      
+      - label: ":computer: single column radiative equilibrium clearsky varying insolation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_insolation false --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky_insolation"
+        artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky_insolation/*"
+
   - group: "MPI Examples"
     steps:
 
@@ -144,10 +159,6 @@ steps:
 
   - group: "Milestones"
     steps:
-
-      - label: ":computer: single column radiative equilibrium"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium"
-        artifact_paths: "sphere_single_column_radiative_equilibrium/*"
 
       - label: ":computer: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --regression_test true"
