@@ -47,6 +47,10 @@ function parse_commandline()
         help = "Hyperdiffusion [`true` (default), `false`]"
         arg_type = Bool
         default = true
+        "--idealized_insolation"
+        help = "Use idealized insolation in radiation model [`false`, `true` (default)]"
+        arg_type = Bool
+        default = true
         "--idealized_h2o"
         help = "Use idealized H2O in radiation model [`false` (default), `true`]"
         arg_type = Bool
