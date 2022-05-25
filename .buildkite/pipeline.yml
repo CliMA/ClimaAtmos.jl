@@ -103,7 +103,7 @@ steps:
   - group: "MPI Examples"
     steps:
 
-      - label: ":computer: MPI baroclinic wave (ρe)"
+      - label: ":computer: MPI baroclinic wave (ρe_tot)"
         command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe"
         artifact_paths: "mpi_baroclinic_wave_rhoe/*"
         env:
@@ -114,7 +114,7 @@ steps:
   - group: "Sphere Examples"
     steps:
 
-      - label: ":computer: baroclinic wave (ρe) Float64"
+      - label: ":computer: baroclinic wave (ρe_tot) Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64"
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
@@ -126,11 +126,11 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
-      - label: ":computer: held suarez (ρe) third order"
+      - label: ":computer: held suarez (ρe_tot) third order"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --job_id sphere_held_suarez_rhoe_third"
         artifact_paths: "sphere_held_suarez_rhoe_third/*"
 
-      - label: ":computer: held suarez (ρe) equilmoist hightop"
+      - label: ":computer: held suarez (ρe_tot) equilmoist hightop"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_hightop --dt 200secs --t_end 1days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop/*"
       
@@ -149,15 +149,15 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium"
         artifact_paths: "sphere_single_column_radiative_equilibrium/*"
 
-      - label: ":computer: baroclinic wave (ρe)"
+      - label: ":computer: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
-      - label: ":computer: baroclinic wave (ρe) equilmoist"
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 300secs"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: held suarez (ρe)"
+      - label: ":computer: held suarez (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe/*"
 
@@ -165,11 +165,11 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true"
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
-      - label: ":computer: held suarez (ρe) equilmoist"
+      - label: ":computer: held suarez (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 5days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
-      - label: ":computer: aquaplanet (ρe) equilmoist gray radiation"
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200secs --t_end 5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
 
@@ -180,18 +180,18 @@ steps:
   - group: "Performance"
     steps:
 
-      - label: ":rocket: flame graph: baroclinic wave (ρe)"
+      - label: ":rocket: flame graph: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_sphere_baroclinic_wave_rhoe"
         artifact_paths: "flame_sphere_baroclinic_wave_rhoe/*"
         env:
           CI_PERF_CPUPROFILE: "true"
 
-      - label: ":rocket: benchmark: baroclinic wave (ρe)"
+      - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
         env:
           CI_PERF_CPUPROFILE: "true"
 
-      - label: ":mag: Allocations: baroclinic wave (ρe)"
+      - label: ":mag: Allocations: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/allocs.jl"
         env:
           CI_PERF_CPUPROFILE: "true"

@@ -14,7 +14,7 @@ all_best_mse["sphere_held_suarez_rhotheta"][(:f, :w, :components, :data, 1)] = 0
 #
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe)] = 0.0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe_tot)] = 0.0
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρq_tot)] = 0.0
@@ -22,14 +22,14 @@ all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:f, :w, :components, :data, 
 #
 all_best_mse["sphere_baroclinic_wave_rhoe"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe)] = 0.0
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe_tot)] = 0.0
 all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["sphere_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 0.0
 #
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe)] = 0.0
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 0.0
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0.0
@@ -37,7 +37,7 @@ all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :da
 #
 all_best_mse["sphere_held_suarez_rhoe"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe)] = 0.0
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe_tot)] = 0.0
 all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["sphere_held_suarez_rhoe"][(:f, :w, :components, :data, 1)] = 0.0

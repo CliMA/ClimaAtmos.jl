@@ -43,10 +43,10 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜχ = wdivₕ(gradₕ(Y.c.ρθ / ᶜρ)) # ᶜχθ
             Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
             @. Yₜ.c.ρθ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
-        elseif :ρe in propertynames(Y.c)
-            @. ᶜχ = wdivₕ(gradₕ((Y.c.ρe + ᶜp) / ᶜρ)) # ᶜχe
+        elseif :ρe_tot in propertynames(Y.c)
+            @. ᶜχ = wdivₕ(gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ)) # ᶜχe
             Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
-            @. Yₜ.c.ρe -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
+            @. Yₜ.c.ρe_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
         elseif :ρe_int in propertynames(Y.c)
             @. ᶜχ = wdivₕ(gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ)) # ᶜχe_int
             Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)

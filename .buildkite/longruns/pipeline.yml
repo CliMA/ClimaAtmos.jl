@@ -36,25 +36,25 @@ steps:
 
       # TODO: Add all milestone long simulation runs
 
-      - label: ":computer: held suarez (ρe)"
+      - label: ":computer: held suarez (ρe_tot)"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --t_end 1200days --fps 30 --job_id longrun_hs_rhoe --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe/*"
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe) third order"
+      - label: ":computer: held suarez (ρe_tot) third order"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --dt 300secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_third/*"
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe) equilmoist"
+      - label: ":computer: held suarez (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_equil/*"
         agents:
           slurm_cpus_per_task: 8
-         
-      - label: ":computer: aquaplanet (ρe) equilmoist gray radiation"
+
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 6hours"
         artifact_paths: "longrun_aquaplanet_rhoe_equil/*"
         agents:
@@ -70,19 +70,19 @@ steps:
 
     steps:
 
-      - label: ":computer: held suarez (ρe) hightop"
+      - label: ":computer: held suarez (ρe_tot) hightop"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 25 --dt 300secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_hightop --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_hightop/*"
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe) equilmoist hightop rayleigh"
+      - label: ":computer: held suarez (ρe_tot) equilmoist hightop rayleigh"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --z_max 45e3 --z_elem 25 --vert_diff true --microphy 0M --rayleigh_sponge true --zd_rayleigh 30e3 --dt 200secs --t_end 400days --upwinding none --fps 30 --job_id longrun_hs_rhoe_equil_hightop_rayleigh --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_equil_hightop_rayleigh/*"
         agents:
           slurm_cpus_per_task: 8
-      
-      - label: ":computer: held suarez (ρe) equilmoist hightop viscous"
+
+      - label: ":computer: held suarez (ρe_tot) equilmoist hightop viscous"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --z_max 45e3 --z_elem 25 --vert_diff true --microphy 0M --viscous_sponge true --zd_viscous 30e3 --dt 200secs --t_end 400days --upwinding none --fps 30 --job_id longrun_hs_rhoe_equil_hightop_viscous --dt_save_to_sol 6hours"
         artifact_paths: "longrun_hs_rhoe_equil_hightop_viscous/*"
         agents:

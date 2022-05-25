@@ -334,8 +334,8 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         # pressure, temperature, potential temperature
         if :ρθ in propertynames(Y.c)
             @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        elseif :ρe_tot in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         elseif :ρe_int in propertynames(Y.c)
             @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end

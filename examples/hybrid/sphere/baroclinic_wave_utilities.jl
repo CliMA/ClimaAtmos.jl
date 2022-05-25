@@ -71,7 +71,7 @@ function center_initial_condition_column(
     if energy_form isa PotentialTemperature
         𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
-        𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
+        𝔼_kwarg = (; ρe_tot = ρ * (TD.internal_energy(params, ts) + grav * z))
     elseif energy_form isa InternalEnergy
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
@@ -203,7 +203,8 @@ function center_initial_condition_sphere(
         ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
         K = norm_sqr(uₕ_local) / 2
-        ᶜ𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + K + grav * z))
+        ᶜ𝔼_kwarg =
+            (; ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z))
     elseif energy_form isa InternalEnergy
         ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
@@ -281,8 +282,8 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
-    elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe + ᶜp) / ᶜρ))
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
     end
@@ -346,8 +347,8 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
-    elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe -= ᶜΔρT * cv_d
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot -= ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int -= ᶜΔρT * cv_d
     end
@@ -372,8 +373,8 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 
     @. ᶜλ = TD.liquid_fraction(params, ᶜts)
 
-    if :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe +=
+    if :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot +=
             ᶜS_ρq_tot * (
                 ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts) +
@@ -565,7 +566,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
     end
 
-    if :ρe in propertynames(Y.c)
+    if :ρe_tot in propertynames(Y.c)
         @. dif_flux_energy =
             -Geometry.WVector(
                 SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
@@ -575,7 +576,8 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_energy),
         )
-        @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρe_tot +=
+            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
         @. dif_flux_energy =
             -Geometry.WVector(

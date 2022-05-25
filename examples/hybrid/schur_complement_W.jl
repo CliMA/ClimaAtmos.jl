@@ -8,7 +8,7 @@ const apply = Operators.ApplyStencil()
 
 # Note: We denote energy variables with 𝔼, momentum variables with 𝕄, and tracer
 # variables with 𝕋.
-is_energy_var(symbol) = symbol in (:ρθ, :ρe, :ρe_int)
+is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρe_int)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
 is_tracer_var(symbol) =
     !(symbol == :ρ || is_energy_var(symbol) || is_momentum_var(symbol))
@@ -54,7 +54,7 @@ function SchurComplementW(Y, transform, flags, test = false)
     quaddiag_type = Operators.StencilCoefs{-(1 + half), 1 + half, NTuple{4, FT}}
 
     ∂ᶜ𝔼ₜ∂ᶠ𝕄_type =
-        flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact && :ρe in propertynames(Y.c) ?
+        flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact && :ρe_tot in propertynames(Y.c) ?
         quaddiag_type : bidiag_type
     ∂ᶜρₜ∂ᶠ𝕄 = Fields.Field(bidiag_type, axes(Y.c))
     ∂ᶜ𝔼ₜ∂ᶠ𝕄 = Fields.Field(∂ᶜ𝔼ₜ∂ᶠ𝕄_type, axes(Y.c))
