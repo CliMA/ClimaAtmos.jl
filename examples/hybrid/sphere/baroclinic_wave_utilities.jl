@@ -550,7 +550,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
         ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
         parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
-            -parent(
+            parent(
                 Geometry.Contravariant3Vector.(normal) .⊗
                 Geometry.Covariant12Vector.(
                     Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
@@ -561,36 +561,29 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                 Geometry.Contravariant3Vector(FT(0)) ⊗
                 Geometry.Covariant12Vector(FT(0), FT(0)),
             ),
-            bottom = Operators.SetValue(dif_flux_uₕ),
+            bottom = Operators.SetValue(.-dif_flux_uₕ),
         )
         @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
     end
 
     if :ρe_tot in propertynames(Y.c)
-        @. dif_flux_energy =
-            -Geometry.WVector(
-                SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
-                SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-            )
+        @. dif_flux_energy = Geometry.WVector(
+            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy),
+            bottom = Operators.SetValue(.-dif_flux_energy),
         )
         @. Yₜ.c.ρe_tot +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy =
-            -Geometry.WVector(
-                sensible_heat_flux_ρe_int(
-                    params,
-                    Ch,
-                    flux_coefficients,
-                    nothing,
-                ) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-            )
+        @. dif_flux_energy = Geometry.WVector(
+            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy),
+            bottom = Operators.SetValue(.-dif_flux_energy),
         )
         @. Yₜ.c.ρe_int +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
@@ -598,10 +591,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρq_tot in propertynames(Y.c)
         @. dif_flux_ρq_tot =
-            -Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
+            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_ρq_tot),
+            bottom = Operators.SetValue(.-dif_flux_ρq_tot),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))

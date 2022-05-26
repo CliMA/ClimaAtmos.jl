@@ -356,6 +356,14 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
 
+        dry_diagnostic = (;
+            pressure = ᶜp,
+            temperature = ᶜT,
+            potential_temperature = ᶜθ,
+            kinetic_energy = ᶜK,
+            vorticity = ᶜvort,
+        )
+
         # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
         if :ρq_tot in propertynames(Y.c)
             ᶜq = @. TD.PhasePartition(params, ᶜts)
@@ -371,12 +379,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                     TD.PhasePartition(params, ᶜts),
                 )
 
-            diagnostic = (;
-                pressure = ᶜp,
-                temperature = ᶜT,
-                potential_temperature = ᶜθ,
-                kinetic_energy = ᶜK,
-                vorticity = ᶜvort,
+            moist_diagnostic = (;
                 cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
@@ -384,14 +387,22 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                 relative_humidity = ᶜRH,
             )
         else
-            diagnostic = (;
-                pressure = ᶜp,
-                temperature = ᶜT,
-                potential_temperature = ᶜθ,
-                kinetic_energy = ᶜK,
-                vorticity = ᶜvort,
-            )
+            moist_diagnostic = NamedTuple()
         end
+
+        if vert_diff
+            (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
+            vert_diff_diagnostic = (;
+                sfc_flux_momentum = dif_flux_uₕ,
+                sfc_flux_energy = dif_flux_energy,
+                sfc_evaporation = dif_flux_ρq_tot,
+            )
+        else
+            vert_diff_diagnostic = NamedTuple()
+        end
+
+        diagnostic =
+            merge(dry_diagnostic, moist_diagnostic, vert_diff_diagnostic)
 
         day = floor(Int, integrator.t / (60 * 60 * 24))
         sec = Int(mod(integrator.t, 3600 * 24))
