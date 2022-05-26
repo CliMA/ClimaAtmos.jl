@@ -22,9 +22,12 @@ viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
-t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt = FT(time_to_seconds(parsed_args["dt"]))
-dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+#t_end = FT(time_to_seconds(parsed_args["t_end"]))
+t_end = 4000
+#dt = FT(time_to_seconds(parsed_args["dt"]))
+dt = 40
+#dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+dt_save_to_sol = 40
 dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 @assert idealized_insolation in (true, false)
