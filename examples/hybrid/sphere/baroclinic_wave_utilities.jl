@@ -396,7 +396,7 @@ function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
     return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
 end
 
-function vertical_diffusion_boundary_layer_step!(Yt, Y, p, t, dt)
+function vertical_diffusion_boundary_layer_step!(Yx, Y, p, t, dt)
     ᶜρ = Y.c.ρ
     (; ᶜts, ᶜp, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (; flux_coefficients, dif_flux_energy, dif_flux_ρq_tot, Cd, Ch, params) = p
