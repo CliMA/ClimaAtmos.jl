@@ -376,7 +376,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
 
             # precipitation
             @. ᶜS_ρq_tot =
-                Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+                Y.c.ρ * CM.Microphysics0M.remove_precipitation(
                     params,
                     TD.PhasePartition(params, ᶜts),
                 )

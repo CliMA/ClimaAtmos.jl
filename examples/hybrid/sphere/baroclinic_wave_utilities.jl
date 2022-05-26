@@ -76,15 +76,11 @@ function center_initial_condition_column(
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
 
-    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
     tc_kwargs = if turbconv_model isa Nothing
         NamedTuple()
     elseif turbconv_model isa TC.EDMFModel
         (;
-            ρθ_liq_ice = FT(0),
-            ρq_tot = FT(0),
-            u = FT(0),
-            v = FT(0),
+            ρq_tot = FT(0), # TC needs this, for now.
             TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
         )
     end
@@ -439,7 +435,7 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, params) = p # assume ᶜts has been updated
 
     @. ᶜS_ρq_tot =
-        Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+        Y.c.ρ * CM.Microphysics0M.remove_precipitation(
             params,
             TD.PhasePartition(params, ᶜts),
         )
