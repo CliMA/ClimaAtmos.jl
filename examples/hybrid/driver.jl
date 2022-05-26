@@ -9,6 +9,7 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
+idealized_insolation = parsed_args["idealized_insolation"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
 turbconv = parsed_args["turbconv"]
@@ -26,6 +27,7 @@ dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
+@assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
@@ -100,7 +102,13 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     microphysics_cache(Y, microphysics_model()),
     forcing_cache(Y, forcing_type()),
     isnothing(radiation_model()) ? NamedTuple() :
-    rrtmgp_model_cache(Y, params, radiation_model(); idealized_h2o),
+    rrtmgp_model_cache(
+        Y,
+        params,
+        radiation_model();
+        idealized_insolation,
+        idealized_h2o,
+    ),
     vert_diff ?
     vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :
     NamedTuple(),
@@ -334,8 +342,8 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         # pressure, temperature, potential temperature
         if :ρθ in propertynames(Y.c)
             @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρe(Y.c.ρe, Y.c, ᶜK, ᶜΦ, params)
+        elseif :ρe_tot in propertynames(Y.c)
+            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         elseif :ρe_int in propertynames(Y.c)
             @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end
@@ -347,6 +355,14 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
+
+        dry_diagnostic = (;
+            pressure = ᶜp,
+            temperature = ᶜT,
+            potential_temperature = ᶜθ,
+            kinetic_energy = ᶜK,
+            vorticity = ᶜvort,
+        )
 
         # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
         if :ρq_tot in propertynames(Y.c)
@@ -363,12 +379,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                     TD.PhasePartition(params, ᶜts),
                 )
 
-            diagnostic = (;
-                pressure = ᶜp,
-                temperature = ᶜT,
-                potential_temperature = ᶜθ,
-                kinetic_energy = ᶜK,
-                vorticity = ᶜvort,
+            moist_diagnostic = (;
                 cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
@@ -376,14 +387,22 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                 relative_humidity = ᶜRH,
             )
         else
-            diagnostic = (;
-                pressure = ᶜp,
-                temperature = ᶜT,
-                potential_temperature = ᶜθ,
-                kinetic_energy = ᶜK,
-                vorticity = ᶜvort,
-            )
+            moist_diagnostic = NamedTuple()
         end
+
+        if vert_diff
+            (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
+            vert_diff_diagnostic = (;
+                sfc_flux_momentum = dif_flux_uₕ,
+                sfc_flux_energy = dif_flux_energy,
+                sfc_evaporation = dif_flux_ρq_tot,
+            )
+        else
+            vert_diff_diagnostic = NamedTuple()
+        end
+
+        diagnostic =
+            merge(dry_diagnostic, moist_diagnostic, vert_diff_diagnostic)
 
         day = floor(Int, integrator.t / (60 * 60 * 24))
         sec = Int(mod(integrator.t, 3600 * 24))

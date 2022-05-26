@@ -71,7 +71,7 @@ function center_initial_condition_column(
     if energy_form isa PotentialTemperature
         𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
-        𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + grav * z))
+        𝔼_kwarg = (; ρe_tot = ρ * (TD.internal_energy(params, ts) + grav * z))
     elseif energy_form isa InternalEnergy
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
@@ -203,7 +203,8 @@ function center_initial_condition_sphere(
         ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
         K = norm_sqr(uₕ_local) / 2
-        ᶜ𝔼_kwarg = (; ρe = ρ * (TD.internal_energy(params, ts) + K + grav * z))
+        ᶜ𝔼_kwarg =
+            (; ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z))
     elseif energy_form isa InternalEnergy
         ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
@@ -247,15 +248,17 @@ function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
     ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
     ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
-    return (; ᶜβ, ᶠβ)
+    ᶜβ_rayleigh =
+        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    ᶠβ_rayleigh =
+        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    return (; ᶜβ_rayleigh, ᶠβ_rayleigh)
 end
 
 function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
-    (; ᶜβ, ᶠβ) = p
-    @. Yₜ.c.uₕ -= ᶜβ * Y.c.uₕ
-    @. Yₜ.f.w -= ᶠβ * Y.f.w
+    (; ᶜβ_rayleigh, ᶠβ_rayleigh) = p
+    @. Yₜ.c.uₕ -= ᶜβ_rayleigh * Y.c.uₕ
+    @. Yₜ.f.w -= ᶠβ_rayleigh * Y.f.w
 end
 
 # Viscous sponge
@@ -266,29 +269,32 @@ function viscous_sponge_cache(Y; zd_viscous = FT(15e3), κ₂ = FT(1e5))
     ᶜαₘ = @. ifelse(ᶜz > zd_viscous, κ₂, FT(0))
     ᶠαₘ = @. ifelse(ᶠz > zd_viscous, κ₂, FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
-    ᶠβ = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
-    return (; ᶜβ, ᶠβ)
+    ᶜβ_viscous =
+        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
+    ᶠβ_viscous =
+        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
+    return (; ᶜβ_viscous, ᶠβ_viscous)
 end
 
 function viscous_sponge_tendency!(Yₜ, Y, p, t)
-    (; ᶜβ, ᶠβ, ᶜp) = p
+    (; ᶜβ_viscous, ᶠβ_viscous, ᶜp) = p
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ += ᶜβ * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
-    elseif :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int += ᶜβ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρe_int += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
     end
     @. Yₜ.c.uₕ +=
-        ᶜβ * (
+        ᶜβ_viscous * (
             wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
                 wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
             )
         )
-    @. Yₜ.f.w.components.data.:1 += ᶠβ * wdivₕ(gradₕ(Y.f.w.components.data.:1))
+    @. Yₜ.f.w.components.data.:1 +=
+        ᶠβ_viscous * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end
 
 forcing_cache(Y, ::Nothing) = NamedTuple()
@@ -341,8 +347,8 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
-    elseif :ρe in propertynames(Y.c)
-	    @. Yₜ.c.ρe -= FT(0) #ᶜΔρT * cv_d
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot -= ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int -= ᶜΔρT * cv_d
     end
@@ -367,8 +373,8 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
 
     @. ᶜλ = TD.liquid_fraction(params, ᶜts)
 
-    if :ρe in propertynames(Y.c)
-        @. Yₜ.c.ρe +=
+    if :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot +=
             ᶜS_ρq_tot * (
                 ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts) +
@@ -544,7 +550,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
         ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
         parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
-            -parent(
+            parent(
                 Geometry.Contravariant3Vector.(normal) .⊗
                 Geometry.Covariant12Vector.(
                     Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
@@ -555,35 +561,29 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                 Geometry.Contravariant3Vector(FT(0)) ⊗
                 Geometry.Covariant12Vector(FT(0), FT(0)),
             ),
-            bottom = Operators.SetValue(dif_flux_uₕ),
+            bottom = Operators.SetValue(.-dif_flux_uₕ),
         )
         @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
     end
 
-    if :ρe in propertynames(Y.c)
-        @. dif_flux_energy =
-            -Geometry.WVector(
-                SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
-                SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-            )
-        ᶜdivᵥ = Operators.DivergenceF2C(
-            top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy),
+    if :ρe_tot in propertynames(Y.c)
+        @. dif_flux_energy = Geometry.WVector(
+            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
         )
-        @. Yₜ.c.ρe += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe + ᶜp) / ᶜρ))
-    elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy =
-            -Geometry.WVector(
-                sensible_heat_flux_ρe_int(
-                    params,
-                    Ch,
-                    flux_coefficients,
-                    nothing,
-                ) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-            )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy),
+            bottom = Operators.SetValue(.-dif_flux_energy),
+        )
+        @. Yₜ.c.ρe_tot +=
+            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
+    elseif :ρe_int in propertynames(Y.c)
+        @. dif_flux_energy = Geometry.WVector(
+            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
+        ᶜdivᵥ = Operators.DivergenceF2C(
+            top = Operators.SetValue(Geometry.WVector(FT(0))),
+            bottom = Operators.SetValue(.-dif_flux_energy),
         )
         @. Yₜ.c.ρe_int +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
@@ -591,10 +591,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρq_tot in propertynames(Y.c)
         @. dif_flux_ρq_tot =
-            -Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
+            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_ρq_tot),
+            bottom = Operators.SetValue(.-dif_flux_ρq_tot),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
