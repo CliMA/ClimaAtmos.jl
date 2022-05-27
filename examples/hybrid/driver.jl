@@ -265,7 +265,9 @@ else
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
 
-    center_initial_condition = if parsed_args["config"] == "sphere"
+    center_initial_condition = if is_baro_wave(parsed_args)
+        center_initial_condition_baroclinic_wave
+    elseif parsed_args["config"] == "sphere"
         center_initial_condition_sphere
     elseif parsed_args["config"] == "column"
         center_initial_condition_column
