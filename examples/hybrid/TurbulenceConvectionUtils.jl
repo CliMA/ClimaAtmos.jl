@@ -76,11 +76,6 @@ function get_edmf_cache(Y, namelist, param_set)
     return (; edmf, case, param_set, aux = get_aux(edmf, Y, FT), precip_model)
 end
 
-interval_mesh(space::CC.Spaces.ExtrudedFiniteDifferenceSpace) =
-    space.vertical_topology.mesh
-interval_mesh(space::CC.Spaces.FiniteDifferenceSpace) = space.topology.mesh
-interval_mesh(field::CC.Fields.Field) = interval_mesh(axes(field))
-
 function tc_column_state(prog, aux, tendencies, inds...)
     prog_cent_column = CC.column(prog.c, inds...)
     prog_face_column = CC.column(prog.f, inds...)
@@ -174,19 +169,17 @@ function init_tc!(Y, p, param_set, namelist)
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
         state = tc_column_state(Y, aux, nothing, i, j, h)
 
-        grid = TC.Grid(interval_mesh(state.prog.cent))
+        grid = TC.Grid(axes(state.prog.cent))
         FT = eltype(grid)
+        t = FT(0)
         compute_ref_state!(state, grid, param_set; ts_g = surf_ref_state)
 
-
         Cases.initialize_profiles(case, grid, param_set, state)
-        set_thermo_state!(state, grid, edmf.moisture_model, param_set)
+        set_thermo_state_pθq!(state, grid, edmf.moisture_model, param_set)
+        set_grid_mean_from_thermo_state!(param_set, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, param_set)
-
         Cases.initialize_forcing(case, grid, state, param_set)
         Cases.initialize_radiation(case, grid, state, param_set)
-
-        t = FT(0)
         initialize_edmf(edmf, grid, state, case, param_set, t)
     end
 end
@@ -201,9 +194,9 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
     for h in 1:Nh, j in 1:Nj, i in 1:Ni
         state = tc_column_state(Y, aux, Yₜ, i, j, h)
 
-        grid = TC.Grid(interval_mesh(state.prog.cent))
+        grid = TC.Grid(axes(state.prog.cent))
         # TODO: uncomment what's not needed
-        set_thermo_state!(state, grid, edmf.moisture_model, param_set)
+        set_thermo_state_peq!(state, grid, edmf.moisture_model, param_set)
 
         # TODO: where should this live?
         aux_gm = TC.center_aux_grid_mean(state)

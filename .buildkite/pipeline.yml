@@ -189,7 +189,7 @@ steps:
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
 
       - label: ":computer: Single column EDMF on single column"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --energy_name rhotheta --moist equil --turbconv edmf --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_single_column --dt 6secs --t_end 6hours --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_single_column --dt 6secs --t_end 6hours --regression_test true"
         artifact_paths: "edmf_single_column/*"
 
   - group: "Performance"
