@@ -1,7 +1,8 @@
-const CM0M = CloudMicrophysics.Microphysics_0M
-const CM1M = CloudMicrophysics.Microphysics_1M
+const CM0M = CloudMicrophysics.Microphysics0M
+const CM1M = CloudMicrophysics.Microphysics1M
+const CMCT = CloudMicrophysics.CommonTypes
 
-@inline function precompute_microphysics_0M(ρq_tot, ρ, e_int, Φ, params)
+@inline function precompute_Microphysics0M(ρq_tot, ρ, e_int, Φ, params)
 
     # saturation adjustment
     q_tot = ρq_tot / ρ
@@ -24,7 +25,7 @@ const CM1M = CloudMicrophysics.Microphysics_1M
     return (; S_q_tot, S_e_tot, q_liq, q_ice)
 end
 
-@inline function precompute_microphysics_1M(
+@inline function precompute_Microphysics1M(
     ρq_tot,
     ρq_rai,
     ρq_sno,
@@ -76,8 +77,8 @@ end
     # source of rain water via accretion cloud water - rain
     tmp = CM1M.accretion(
         params,
-        CM1M.LiquidType(),
-        CM1M.RainType(),
+        CMCT.LiquidType(),
+        CMCT.RainType(),
         q.liq,
         q_rai,
         ρ,
@@ -88,7 +89,7 @@ end
 
     # source of snow via accretion cloud ice - snow
     tmp =
-        CM1M.accretion(params, CM1M.IceType(), CM1M.SnowType(), q.ice, q_sno, ρ)
+        CM1M.accretion(params, CMCT.IceType(), CMCT.SnowType(), q.ice, q_sno, ρ)
     S_q_sno += tmp
     #S_qi -= tmp
     S_e_tot -= tmp * (I_i + Φ)
@@ -96,8 +97,8 @@ end
     # sink of cloud water via accretion cloud water - snow
     tmp = CM1M.accretion(
         params,
-        CM1M.LiquidType(),
-        CM1M.SnowType(),
+        CMCT.LiquidType(),
+        CMCT.SnowType(),
         q.liq,
         q_sno,
         ρ,
@@ -116,7 +117,7 @@ end
 
     # sink of cloud ice via accretion cloud ice - rain
     tmp1 =
-        CM1M.accretion(params, CM1M.IceType(), CM1M.RainType(), q.ice, q_rai, ρ)
+        CM1M.accretion(params, CMCT.IceType(), CMCT.RainType(), q.ice, q_rai, ρ)
     # sink of rain via accretion cloud ice - rain
     tmp2 = CM1M.accretion_rain_sink(params, q.ice, q_rai, ρ)
     #S_qi -= tmp1
@@ -129,8 +130,8 @@ end
     if T < _T_freeze
         tmp = CM1M.accretion_snow_rain(
             params,
-            CM1M.SnowType(),
-            CM1M.RainType(),
+            CMCT.SnowType(),
+            CMCT.RainType(),
             q_sno,
             q_rai,
             ρ,
@@ -141,8 +142,8 @@ end
     else
         tmp = CM1M.accretion_snow_rain(
             params,
-            CM1M.RainType(),
-            CM1M.SnowType(),
+            CMCT.RainType(),
+            CMCT.SnowType(),
             q_rai,
             q_sno,
             ρ,
@@ -153,12 +154,12 @@ end
     end
 
     # rain evaporation sink (it already has negative sign for evaporation)
-    tmp = CM1M.evaporation_sublimation(params, CM1M.RainType(), q, q_rai, ρ, T)
+    tmp = CM1M.evaporation_sublimation(params, CMCT.RainType(), q, q_rai, ρ, T)
     S_q_rai += tmp
     S_e_tot -= tmp * (I_l + Φ)
 
     # snow sublimation/deposition source/sink
-    tmp = CM1M.evaporation_sublimation(params, CM1M.SnowType(), q, q_sno, ρ, T)
+    tmp = CM1M.evaporation_sublimation(params, CMCT.SnowType(), q, q_sno, ρ, T)
     S_q_sno += tmp
     S_e_tot -= tmp * (I_i + Φ)
 
@@ -245,7 +246,7 @@ end
 
     # update cached microphysics helper variables
     @. Ya.microphysics_cache =
-        precompute_microphysics_0M(ρq_tot, ρ, Ya.e_int, Ya.Φ, $Ref(params))
+        precompute_Microphysics0M(ρq_tot, ρ, Ya.e_int, Ya.Φ, $Ref(params))
 end
 
 @inline function precompute_cache!(
@@ -289,7 +290,7 @@ end
     )
 
     # update cached microphysics helper variables
-    @. Ya.microphysics_cache = precompute_microphysics_1M(
+    @. Ya.microphysics_cache = precompute_Microphysics1M(
         ρq_tot,
         ρq_rai,
         ρq_sno,

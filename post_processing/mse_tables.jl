@@ -59,11 +59,10 @@ all_best_mse["sphere_held_suarez_rhoe_int_equilmoist"][(:f, :w, :components, :da
 #
 all_best_mse["edmf_single_column"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_single_column"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_single_column"][(:c, :ρθ)] = 0.0
-all_best_mse["edmf_single_column"][(:c, :ρθ_liq_ice)] = 0.0
+all_best_mse["edmf_single_column"][(:c, :ρe_tot)] = 0.0
+all_best_mse["edmf_single_column"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["edmf_single_column"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["edmf_single_column"][(:c, :ρq_tot)] = 0.0
-all_best_mse["edmf_single_column"][(:c, :u)] = 0.0
-all_best_mse["edmf_single_column"][(:c, :v)] = 0.0
 all_best_mse["edmf_single_column"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["edmf_single_column"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_single_column"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
