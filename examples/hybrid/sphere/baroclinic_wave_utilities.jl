@@ -245,18 +245,17 @@ function center_initial_condition_sphere(
     FT = eltype(z)
 
     # Constants from CLIMAParameters
-    R_d = FT(Planet.R_d(params))
-    MSLP = FT(Planet.MSLP(params))
     grav = FT(Planet.grav(params))
 
-    # Constants required for initial conditions
-    T_0 = FT(300)
-
     # Initial temperature and pressure
-    # TODO: It would be better to use one of the reference profiles 
-    H = R_d * T_0 / grav
-    T = T_0 + rand(FT) * FT(0.1) * (z < 5000)
-    p = MSLP * exp(-z / H)
+    temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
+        params,
+        FT(290),
+        FT(220),
+        FT(8e3),
+    )
+    T, p = temp_profile(params, z)
+    T += rand(FT) * FT(0.1) * (z < 5000)
 
     # Initial velocity
     u = FT(0)
