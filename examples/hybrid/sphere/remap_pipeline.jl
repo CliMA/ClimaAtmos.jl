@@ -84,7 +84,6 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     # define variables for the prognostic states 
     nc_rho = defVar(nc, "rho", FT, cspace, ("time",))
     nc_thermo = defVar(nc, ENV["THERMO_VAR"], FT, cspace, ("time",))
-    nc_q = defVar(nc, "qt", FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
     nc_v = defVar(nc, "v", FT, cspace, ("time",))
     nc_w = defVar(nc, "w", FT, cspace, ("time",))
@@ -105,6 +104,9 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
             defVar(nc, "precipitation_removal", FT, cspace, ("time",))
     end
 
+    nc_sfc_flux_energy = defVar(nc, "sfc_flux_energy", FT, hspace, ("time",))
+    nc_sfc_evaporation = defVar(nc, "sfc_evaporation", FT, hspace, ("time",))
+    
     # time
     nc_time[1] = t_now
 
@@ -119,7 +121,6 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     else
         error("Invalid ENV[[\"THERMO_VAR\"]!")
     end
-    nc_q[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
     # physical horizontal velocity
     uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), Y.c.uₕ)
     nc_u[:, 1] = uh_phy.components.data.:1
@@ -144,15 +145,9 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_precipitation_removal[:, 1] = diag.precipitation_removal
     end
 
-    ᶠw_phy = Geometry.WVector.(Y.f.w)
-    ᶜw_phy = ᶜinterp.(ᶠw_phy)
-    nc_w[:, 1] = ᶜw_phy
-
-    curl_uh = @. curlₕ(Y.c.uₕ)
-    ᶜvort = Geometry.WVector.(curl_uh)
-    Spaces.weighted_dss!(ᶜvort)
-    nc_ω[:, 1] = ᶜvort
-
+    nc_sfc_flux_energy[:, 1] = diag.sfc_flux_energy.components.data.:1
+    nc_sfc_evaporation[:, 1] = diag.sfc_evaporation.components.data.:1
+    
     close(nc)
 
     # write out our cubed sphere mesh
@@ -216,6 +211,8 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
                 "cloud_liquid",
                 "water_vapor",
                 "precipitation_removal",
+		"sfc_flux_energy",
+		"sfc_evaporation",
             ],
         )
     else

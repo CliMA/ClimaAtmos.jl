@@ -93,7 +93,7 @@ test_implicit_solver = false # makes solver extremely slow when set to `true`
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
-    hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
+    hyperdiffusion_cache(Y; κ₄ = FT(κ₄), divergence_damping_factor = FT(1), use_tempest_mode),
     rayleigh_sponge ?
     rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
     NamedTuple(),
