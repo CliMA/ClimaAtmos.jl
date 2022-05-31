@@ -8,6 +8,7 @@ using NCDatasets
 using ClimaCoreTempestRemap
 using ClimaCore
 using ClimaTimeSteppers
+using ClimaTimeSteppers.Callbacks
 
 include("cli_options.jl")
 if !(@isdefined parsed_args)
@@ -146,11 +147,10 @@ additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
     dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
     (
-        PeriodicCallback(
+        EveryXSimulationTime(
             rrtmgp_model_callback!,
             dt_rad; # update RRTMGPModel every dt_rad
-            initial_affect = true, # run callback at t = 0
-            save_positions = (false, false), # do not save Y before and after callback
+            atinit = true, # run callback at t = 0
         ),
     )
 else

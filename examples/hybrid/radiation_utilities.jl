@@ -148,9 +148,9 @@ function rrtmgp_model_step!(Yx, Y, p, t, dt)
     if :ρθ in propertynames(Y.c)
         error("rrtmgp_model_tendency! not implemented for ρθ")
     elseif :ρe in propertynames(Y.c)
-        @. Yx.c.ρe -= dt*ᶜdivᵥ(ᶠradiation_flux)
+        @. Yx.c.ρe -= dt * ᶜdivᵥ(ᶠradiation_flux)
     elseif :ρe_int in propertynames(Y.c)
-        @. Yx.c.ρe_int -= dt*ᶜdivᵥ(ᶠradiation_flux)
+        @. Yx.c.ρe_int -= dt * ᶜdivᵥ(ᶠradiation_flux)
     end
 end
 function rrtmgp_model_callback!(integrator)
