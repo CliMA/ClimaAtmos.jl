@@ -56,13 +56,13 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil/*"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray/*"
         agents:
           slurm_cpus_per_task: 8
       
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_clearsky --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_clearsky/*"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky/*"
         agents:
           slurm_cpus_per_task: 8
 
