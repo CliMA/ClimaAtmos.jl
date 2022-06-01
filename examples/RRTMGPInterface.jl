@@ -4,7 +4,7 @@ using Pkg
 using NCDatasets
 using RRTMGP
 using CLIMAParameters: AbstractEarthParameterSet, Planet
-using ClimaCore: Fields, DataLayouts
+using ClimaCore: DataLayouts, Spaces, Fields
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
@@ -20,6 +20,10 @@ simplify the process of getting and setting values in an `RRTMGPModel`; e.g.
     model.center_temperature .= field2array(center_temperature_field)
     field2array(face_flux_field) .= model.face_flux
 ```
+
+The dimensions of the resulting array are `([number of vertical nodes], number
+of horizontal nodes)`. Also, `field` must be a `Field` of scalars, so that the
+element type of the array is the same as the struct type of `field`.
 """
 function field2array(field::Fields.Field)
     if sizeof(eltype(field)) != sizeof(eltype(parent(field)))
@@ -29,16 +33,67 @@ function field2array(field::Fields.Field)
     end
     return data2array(Fields.field_values(field))
 end
-
-const DataLayoutWithV =
-    Union{DataLayouts.VF, DataLayouts.VIFH, DataLayouts.VIJFH}
-const DataLayoutWithoutV =
-    Union{DataLayouts.IF, DataLayouts.IFH, DataLayouts.IJF, DataLayouts.IJFH}
-data2array(data::DataLayoutWithV) =
+data2array(data::Union{DataLayouts.IF, DataLayouts.IFH}) =
+    reshape(parent(data), :)
+data2array(data::Union{DataLayouts.IJF, DataLayouts.IJFH}) =
+    reshape(parent(data), :)
+data2array(data::Union{DataLayouts.VF, DataLayouts.VIFH, DataLayouts.VIJFH}) =
     reshape(parent(data), size(parent(data), 1), :)
-data2array(data::DataLayoutWithoutV) = reshape(parent(data), :)
-data2array(data::DataLayouts.AbstractData) =
-    error("data2array not yet implemented for $(typeof(data).name.wrapper)")
+
+"""
+    array2field(array, space)
+
+Wraps `array` in a `ClimaCore` `Field` that is defined over `space`. Can be used
+to simplify the process of getting and setting values in an `RRTMGPModel`; e.g.
+```
+    array2field(model.center_temperature, center_space) .=
+        center_temperature_field
+    face_flux_field .= array2field(model.face_flux, face_space)
+```
+
+The dimensions of `array` are assumed to be `([number of vertical nodes], number
+of horizontal nodes)`. Also, `array` must represent a `Field` of scalars, so
+that the struct type of the resulting `Field` is the same as the element type of
+`array`. If this restriction were removed, one would also need to pass the
+desired `Field` struct type as an argument to `array2field`, which would then
+need to permute the dimensions of `array` to match the target `DataLayout`.
+"""
+array2field(array, space) =
+    Fields.Field(array2data(array, Spaces.local_geometry_data(space)), space)
+array2data(
+    array::AbstractArray{T, 1},
+    ::DataLayouts.IF{<:Any, Ni},
+) where {T, Ni} = DataLayouts.IF{T, Ni}(reshape(array, Ni, 1))
+array2data(
+    array::AbstractArray{T, 1},
+    ::DataLayouts.IFH{<:Any, Ni},
+) where {T, Ni} = DataLayouts.IFH{T, Ni}(reshape(array, Ni, 1, :))
+array2data(
+    array::AbstractArray{T, 1},
+    ::DataLayouts.IJF{<:Any, Nij},
+) where {T, Nij} = DataLayouts.IJF{T, Nij}(reshape(array, Nij, Nij, 1))
+array2data(
+    array::AbstractArray{T, 1},
+    ::DataLayouts.IJFH{<:Any, Nij},
+) where {T, Nij} = DataLayouts.IJFH{T, Nij}(reshape(array, Nij, Nij, 1, :))
+array2data(array::AbstractArray{T, 2}, ::DataLayouts.VF) where {T} =
+    DataLayouts.VF{T}(reshape(array, size(array, 1), 1))
+array2data(
+    array::AbstractArray{T, 2},
+    ::DataLayouts.VIFH{<:Any, Ni},
+) where {T, Ni} =
+    DataLayouts.VIFH{T, Ni}(reshape(array, size(array, 1), Ni, 1, :))
+array2data(
+    array::AbstractArray{T, 2},
+    ::DataLayouts.VIJFH{<:Any, Nij},
+) where {T, Nij} =
+    DataLayouts.VIJFH{T, Nij}(reshape(array, size(array, 1), Nij, Nij, 1, :))
+
+# This code allows array2field to work correctly.
+# TODO: Move this to ClimaCore if we decide to keep array2field.
+import ClimaCore.DataLayouts: parent_array_type
+parent_array_type(::Type{<:Base.ReshapedArray{T, N, P}}) where {T, N, P} =
+    parent_array_type(P)
 
 """
     rrtmgp_artifact(subfolder, file_name)

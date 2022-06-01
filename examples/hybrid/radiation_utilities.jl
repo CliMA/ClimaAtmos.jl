@@ -100,7 +100,7 @@ function rrtmgp_model_cache(
             @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
                (4 * cos(solar_zenith_angle))
     else
-        solar_zenith_angle = weighted_irradiance = NaN # initialized in tendency
+        solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
     end
 
     if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
@@ -119,23 +119,19 @@ function rrtmgp_model_cache(
         center_pressure = NaN, # initialized in callback
         center_temperature = NaN, # initialized in callback
         surface_temperature = NaN, # initialized in callback
-        surface_emissivity = FT(1),
-        direct_sw_surface_albedo = FT(0.38),
-        diffuse_sw_surface_albedo = FT(0.38),
+        surface_emissivity = 1,
+        direct_sw_surface_albedo = 0.38,
+        diffuse_sw_surface_albedo = 0.38,
         solar_zenith_angle,
         weighted_irradiance,
         kwargs...,
     )
     close(input_data)
     return (;
-        ᶜT = similar(Y.c, FT),
-        ᶜvmr_h2o = similar(Y.c, FT),
-        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
-        zenith_angle = similar(Spaces.level(Y.c, 1), FT),
-        weighted_irradiance = similar(Spaces.level(Y.c, 1), FT),
-        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         idealized_insolation,
         idealized_h2o,
+        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
+        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         rrtmgp_model,
     )
 end
@@ -155,10 +151,14 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, T_sfc, params) = p
-    (; ᶜT, ᶜvmr_h2o, insolation_tuple, zenith_angle, weighted_irradiance) = p
-    (; ᶠradiation_flux, idealized_insolation, idealized_h2o, rrtmgp_model) = p
+    (; ᶜK, ᶜΦ, ᶜts, T_sfc, params) = p
+    (; idealized_insolation, idealized_h2o) = p
+    (; insolation_tuple, ᶠradiation_flux, rrtmgp_model) = p
 
+    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
+
+    ᶜp = RRTMGPI.array2field(rrtmgp_model.center_pressure, axes(Y.c))
+    ᶜT = RRTMGPI.array2field(rrtmgp_model.center_temperature, axes(Y.c))
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
     elseif :ρe_tot in propertynames(Y.c)
@@ -167,14 +167,14 @@ function rrtmgp_model_callback!(integrator)
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
     end
-
     @. ᶜp = TD.air_pressure(params, ᶜts)
     @. ᶜT = TD.air_temperature(params, ᶜts)
-    rrtmgp_model.center_pressure .= RRTMGPI.field2array(ᶜp)
-    rrtmgp_model.center_temperature .= RRTMGPI.field2array(ᶜT)
-    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
     if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
+        ᶜvmr_h2o = RRTMGPI.array2field(
+            rrtmgp_model.center_volume_mixing_ratio_h2o,
+            axes(Y.c),
+        )
         if idealized_h2o
             # slowly increase the relative humidity from 0 to 0.6 to account for
             # the fact that we have a very unrealistic initial condition
@@ -203,8 +203,6 @@ function rrtmgp_model_callback!(integrator)
                 TD.PhasePartition(params, ᶜts),
             )
         end
-        rrtmgp_model.center_volume_mixing_ratio_h2o .=
-            RRTMGPI.field2array(ᶜvmr_h2o)
     end
 
     if !idealized_insolation
@@ -215,26 +213,32 @@ function rrtmgp_model_callback!(integrator)
 
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
+            solar_zenith_angle = RRTMGPI.array2field(
+                rrtmgp_model.solar_zenith_angle,
+                axes(bottom_coords),
+            )
+            weighted_irradiance = RRTMGPI.array2field(
+                rrtmgp_model.weighted_irradiance,
+                axes(bottom_coords),
+            )
             @. insolation_tuple = instantaneous_zenith_angle(
                 date_time,
                 Float64(bottom_coords.long),
                 Float64(bottom_coords.lat),
                 params,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
-            @. zenith_angle = min(first(insolation_tuple), max_zenith_angle)
+            @. solar_zenith_angle =
+                min(first(insolation_tuple), max_zenith_angle)
             @. weighted_irradiance =
                 irradiance * (au / last(insolation_tuple))^2
-            rrtmgp_model.solar_zenith_angle .= RRTMGPI.field2array(zenith_angle)
-            rrtmgp_model.weighted_irradiance .=
-                RRTMGPI.field2array(weighted_irradiance)
         else
             # assume that the latitude and longitude are both 0 for flat space
             insolation_tuple =
                 instantaneous_zenith_angle(date_time, 0.0, 0.0, params)
-            zenith_angle = min(first(insolation_tuple), max_zenith_angle)
-            weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
-            rrtmgp_model.solar_zenith_angle .= zenith_angle
-            rrtmgp_model.weighted_irradiance .= weighted_irradiance
+            rrtmgp_model.solar_zenith_angle .=
+                min(first(insolation_tuple), max_zenith_angle)
+            rrtmgp_model.weighted_irradiance .=
+                irradiance * (au / last(insolation_tuple))^2
         end
     end
 
