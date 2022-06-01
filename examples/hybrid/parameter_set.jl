@@ -62,6 +62,10 @@ TCECP.c_rf_opt(ps::TCEarthParameterSet) = ps.named_tuple.c_rf_opt
 TCECP.c_linear(ps::TCEarthParameterSet) = ps.named_tuple.c_linear
 TCECP.c_gen_stoch(ps::TCEarthParameterSet) = ps.named_tuple.c_gen_stoch
 TCECP.covar_lim(ps::TCEarthParameterSet) = ps.named_tuple.covar_lim
+TCECP.prescribed_precip_frac_value(ps::TCEarthParameterSet) =
+    ps.named_tuple.prescribed_precip_frac_value
+TCECP.precip_fraction_limiter(ps::TCEarthParameterSet) =
+    ps.named_tuple.precip_fraction_limiter
 
 
 function create_parameter_set(::Type{FT}, parsed_args, namelist) where {FT}
@@ -111,6 +115,18 @@ function create_parameter_set(::Type{FT}, parsed_args, namelist) where {FT}
                 namelist,
                 "thermodynamics",
                 "diagnostic_covar_limiter",
+            ),
+            prescribed_precip_frac_value = TC.parse_namelist(
+                namelist,
+                "microphysics",
+                "prescribed_precip_frac_value";
+                default = 1.0,
+            ),
+            precip_fraction_limiter = TC.parse_namelist(
+                namelist,
+                "microphysics",
+                "precip_fraction_limiter";
+                default = 0.3,
             ),
         ))
     elseif is_column_radiative_equilibrium(parsed_args)

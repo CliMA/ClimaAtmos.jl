@@ -135,7 +135,7 @@ function parse_commandline()
         "--kappa_2_sponge"
         help = "Viscous sponge coefficient"
         arg_type = Float64
-        default = Float64(1e5)
+        default = Float64(1e6)
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
