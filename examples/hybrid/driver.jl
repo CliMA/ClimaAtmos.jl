@@ -57,6 +57,7 @@ turbconv_model() = turbconv_model(parsed_args, namelist)
 
 diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
+using NVTX
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
@@ -426,8 +427,12 @@ save_to_disk_func = make_save_to_disk_func(output_dir, p, is_distributed)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
-    Spaces.weighted_dss!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss!(Y.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
 end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
@@ -467,10 +472,12 @@ integrator = OrdinaryDiffEq.init(
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
 end
-
 @info "Running job:`$job_id`"
 if is_distributed
+    OrdinaryDiffEq.step!(integrator)
+    ClimaComms.barrier(comms_ctx)
     walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+    ClimaComms.barrier(comms_ctx)
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end

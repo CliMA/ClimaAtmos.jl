@@ -2,7 +2,7 @@ env:
   JULIA_VERSION: "1.7.2"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
-  CUDA_VERSION: "11.2"
+  CUDA_VERSION: "11.3"
   OPENBLAS_NUM_THREADS: 1
   CLIMATEMACHINE_SETTINGS_FIX_RNG_SEED: "true"
   BUILDKITE_COMMIT: "${BUILDKITE_COMMIT}"
@@ -11,7 +11,6 @@ env:
 agents:
   config: cpu
   queue: central
-  slurm_ntasks: 1
   slurm_time: 04:00:00
 
 timeout_in_minutes: 240
@@ -34,11 +33,33 @@ steps:
   - group: "ClimaAtmos scaling tests"
     steps:
 
-    - label: ":computer: MPI Held-Suarez scaling test(ρe_tot) - (2) processes"
-      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
-      artifact_paths: "sphere_held_suarez_rhoe/*"
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (1) process"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths:
+        - "sphere_held_suarez_rhoe/scaling_data_1_processes.jld2"
+        - "sphere_held_suarez_rhoe/report.1.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 1
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 1
+        slurm_mem: 64GB
+
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (2) processes"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths:
+        - "sphere_held_suarez_rhoe/scaling_data_2_processes.jld2"
+        - "sphere_held_suarez_rhoe/report.2.nsys-rep"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 2
       agents:
         config: cpu
         queue: central
@@ -46,11 +67,16 @@ steps:
         slurm_tasks_per_node: 2
         slurm_mem: 64GB
 
-    - label: ":computer: MPI Held-Suarez scaling test(ρe_tot) - (4) processes"
-      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
-      artifact_paths: "sphere_held_suarez_rhoe/*"
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (4) processes"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths:
+        - "sphere_held_suarez_rhoe/scaling_data_4_processes.jld2"
+        - "sphere_held_suarez_rhoe/report.4.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 4
       agents:
         config: cpu
         queue: central
@@ -58,11 +84,16 @@ steps:
         slurm_tasks_per_node: 4
         slurm_mem: 64GB
 
-    - label: ":computer: MPI Held-Suarez scaling test(ρe_tot) - (8) processes"
-      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
-      artifact_paths: "sphere_held_suarez_rhoe/*"
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (8) processes"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths:
+        - "sphere_held_suarez_rhoe/scaling_data_8_processes.jld2"
+        - "sphere_held_suarez_rhoe/report.8.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 8
       agents:
         config: cpu
         queue: central
@@ -70,11 +101,16 @@ steps:
         slurm_tasks_per_node: 8
         slurm_mem: 64GB
 
-    - label: ":computer: MPI Held-Suarez scaling test(ρe_tot) - (16) processes"
-      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
-      artifact_paths: "sphere_held_suarez_rhoe/*"
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (16) processes"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths:
+        - "sphere_held_suarez_rhoe/scaling_data_16_processes.jld2"
+        - "sphere_held_suarez_rhoe/report.16.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 16
       agents:
         config: cpu
         queue: central
@@ -82,11 +118,16 @@ steps:
         slurm_tasks_per_node: 16
         slurm_mem: 128GB
 
-    - label: ":computer: MPI Held-Suarez scaling test(ρe_tot) - (32) processes"
-      command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
-      artifact_paths: "sphere_held_suarez_rhoe/*"
+    - label: ":computer: MPI Held-Suarez scaling test(ρe) - (32) processes"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
+      artifact_paths:
+        - "sphere_held_suarez_rhoe/scaling_data_32_processes.jld2"
+        - "sphere_held_suarez_rhoe/report.32.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 32
       agents:
         config: cpu
         queue: central
@@ -97,7 +138,7 @@ steps:
 
     - label: ":computer: MPI Held-Suarez scaling test(ρe_tot) - (64) processes"
       command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 40 --h_elem 16 --kappa_4 1e15" 
-      artifact_paths: "sphere_held_suarez_rhoe/*"
+      artifact_paths: "sphere_held_suarez_rhoe/scaling_data_64_processes.jld2"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
       agents:
@@ -113,7 +154,9 @@ steps:
     key: "cpu_scaling_plots"
     command:
       - "julia --color=yes --project=examples examples/hybrid/plot_scaling_results.jl --job_id sphere_held_suarez_rhoe"
-    artifact_paths: "sphere_held_suarez_rhoe/Scaling.png"
+    artifact_paths:
+      - "sphere_held_suarez_rhoe/Scaling.png"
+      - "sphere_held_suarez_rhoe/Scaling_efficiency.png"
     agents:
       config: cpu
       queue: central

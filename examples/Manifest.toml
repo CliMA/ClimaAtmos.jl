@@ -1169,6 +1169,12 @@ git-tree-sha1 = "e161b835c6aa9e2339c1e72c3d4e39891eac7a4f"
 uuid = "a00861dc-f156-4864-bf3c-e6376f28a68d"
 version = "0.2.3"
 
+[[deps.NVTX]]
+deps = ["Colors"]
+git-tree-sha1 = "bf350bf3a8f837b3d8fac433721ed4f3f9742a7f"
+uuid = "5da4648a-3479-48b8-97b9-01cb529c0a1f"
+version = "0.1.0"
+
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
