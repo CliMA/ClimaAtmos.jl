@@ -1,4 +1,5 @@
 using Plots
+using Plots.PlotMeasures
 using JLD2
 
 include("cli_options.jl")
@@ -14,7 +15,6 @@ else
 end
 
 output_dir = parse_arg(parsed_args, "output_dir", job_id)
-@show output_dir
 I = Int
 FT = Float64
 
@@ -23,18 +23,18 @@ walltime = FT[]
 
 for filename in readdir(output_dir)
     if occursin("scaling_data_", filename)
-        @show filename
         dict = load(joinpath(output_dir, filename))
         push!(nprocs, I(dict["nprocs"]))
         push!(walltime, FT(dict["walltime"]))
     end
 end
-@show nprocs
-@show walltime
 
 order = sortperm(nprocs)
 nprocs, walltime = nprocs[order], walltime[order]
-nprocs_string = [string(i) for i in nprocs]
+cpu_hours = nprocs .* walltime / (60 * 60)
+
+scaling_efficiency =
+    trunc.(100 * (walltime[1] ./ nprocs) ./ walltime, digits = 1)
 
 function linkfig(figpath, alt = "")
     # buildkite-agent upload figpath
@@ -51,17 +51,51 @@ Plots.GRBackend()
 Plots.png(
     plot(
         log2.(nprocs),
-        walltime,
+        cpu_hours,
         markershape = :circle,
-        xticks = (log2.(nprocs), nprocs_string),
+        xticks = (log2.(nprocs), [string(i) for i in nprocs]),
         xlabel = "nprocs",
-        ylabel = "wall time (sec)",
+        ylabel = "CPU hours",
         title = "Scaling data",
         label = "simulation time = 1 hour",
-        legend = :topright,
+        legend = :top,
         grid = :true,
+        left_margin = 10mm,
+        bottom_margin = 10mm,
+        top_margin = 10mm,
     ),
     figpath,
 )
 
 linkfig(relpath(figpath, joinpath(@__DIR__, "../..")), "Scaling Data")
+
+figpath = joinpath(output_dir, "Scaling_efficiency.png")
+
+Plots.GRBackend()
+Plots.png(
+    plot(
+        log2.(nprocs),
+        scaling_efficiency,
+        markershape = :circle,
+        xticks = (log2.(nprocs), [string(i) for i in nprocs]),
+        ylims = ((0, 110)),
+        xlabel = "nprocs",
+        ylabel = "Efficiency",
+        title = "Scaling efficiency",
+        label = "simulation time = 1 hour",
+        legend = :bottomleft,
+        grid = :true,
+        left_margin = 10mm,
+        bottom_margin = 10mm,
+        top_margin = 10mm,
+        annotations = (
+            log2.(nprocs),
+            scaling_efficiency .- 5,
+            [string(i) * "%" for i in scaling_efficiency],
+            10,
+        ),
+    ),
+    figpath,
+)
+
+linkfig(relpath(figpath, joinpath(@__DIR__, "../..")), "Scaling Efficiency")

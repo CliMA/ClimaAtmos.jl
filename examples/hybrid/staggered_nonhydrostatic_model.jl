@@ -255,8 +255,12 @@ function remaining_tendency!(Yₜ, Y, p, t)
         default_remaining_tendency!(Yₜ, Y, p, t)
     end
     additional_tendency!(Yₜ, Y, p, t)
-    Spaces.weighted_dss!(Yₜ.c, p.ghost_buffer.c)
-    Spaces.weighted_dss!(Yₜ.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_start!(Yₜ.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_internal!(Yₜ.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_internal!(Yₜ.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_ghost!(Yₜ.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_ghost!(Yₜ.f, p.ghost_buffer.f)
     return Yₜ
 end
 
