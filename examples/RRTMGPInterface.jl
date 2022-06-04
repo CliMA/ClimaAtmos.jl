@@ -653,7 +653,7 @@ function RRTMGPModel(
                     Int,
                     FT,
                     DA,
-                    !use_pade_cloud_optics_method,
+                    !use_pade_cloud_optics_mode,
                 )
                 close(ds_sw_cld)
                 lookups = (; lookups..., lookup_sw_cld)

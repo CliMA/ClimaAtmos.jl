@@ -55,6 +55,10 @@ function parse_commandline()
         help = "Use idealized H2O in radiation model [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--idealized_clouds"
+        help = "Use idealized clouds in radiation model [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--rad"
         help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
         arg_type = String
