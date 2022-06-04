@@ -10,6 +10,7 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
+idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
 turbconv = parsed_args["turbconv"]
@@ -29,6 +30,7 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
+@assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
@@ -109,6 +111,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
         radiation_model();
         idealized_insolation,
         idealized_h2o,
+        idealized_clouds,
     ),
     vert_diff ?
     vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :

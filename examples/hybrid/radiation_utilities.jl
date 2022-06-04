@@ -11,7 +11,18 @@ function rrtmgp_model_cache(
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
     idealized_h2o = false,
+    idealized_clouds = false,
 )
+    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
+        error("idealized_h2o can't be used with $radiation_mode")
+    end
+    if idealized_clouds && (
+        radiation_mode isa RRTMGPI.GrayRadiation ||
+        radiation_mode isa RRTMGPI.ClearSkyRadiation
+    )
+        error("idealized_clouds can't be used with $radiation_mode")
+    end
+
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
         latitude = RRTMGPI.field2array(bottom_coords.lat)
@@ -80,7 +91,42 @@ function rrtmgp_model_cache(
             latitude,
         )
         if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-            error("rrtmgp_model_cache not yet implemented for $radiation_mode")
+            kwargs = (;
+                kwargs...,
+                center_cloud_liquid_effective_radius = 12,
+                center_cloud_ice_effective_radius = 95,
+                ice_roughness = 2,
+            )
+            ᶜz = Fields.coordinate_field(Y.c).z
+            ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+            if idealized_clouds # icy cloud on top and wet cloud on bottom
+                ᶜis_bottom_cloud = Fields.Field(
+                    DataLayouts.replace_basetype(Fields.field_values(ᶜz), Bool),
+                    axes(Y.c),
+                ) # need to fix several ClimaCore bugs in order to simplify this
+                ᶜis_top_cloud = similar(ᶜis_bottom_cloud)
+                @. ᶜis_bottom_cloud = ᶜz > 1e3 && ᶜz < 1.5e3
+                @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
+                kwargs = (;
+                    kwargs...,
+                    center_cloud_liquid_water_path = RRTMGPI.field2array(
+                        @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
+                    ),
+                    center_cloud_ice_water_path = RRTMGPI.field2array(
+                        @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
+                    ),
+                    center_cloud_boolean_mask = RRTMGPI.field2array(
+                        @. ᶜis_bottom_cloud || ᶜis_top_cloud
+                    ),
+                )
+            else
+                kwargs = (;
+                    kwargs...,
+                    center_cloud_liquid_water_path = NaN, # initialized in callback
+                    center_cloud_ice_water_path = NaN, # initialized in callback
+                    center_cloud_boolean_mask = false, # initialized in callback
+                )
+            end
         end
     end
 
@@ -93,18 +139,13 @@ function rrtmgp_model_cache(
         )
     end
 
-    if idealized_insolation
-        # perpetual equinox with no diurnal cycle
+    if idealized_insolation # perpetual equinox with no diurnal cycle
         solar_zenith_angle = FT(π) / 3
         weighted_irradiance =
             @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
                (4 * cos(solar_zenith_angle))
     else
         solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
-    end
-
-    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
-        error("idealized_h2o cannot be used with GrayRadiation")
     end
 
     rrtmgp_model = RRTMGPI.RRTMGPModel(
@@ -130,6 +171,7 @@ function rrtmgp_model_cache(
     return (;
         idealized_insolation,
         idealized_h2o,
+        idealized_clouds,
         insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         rrtmgp_model,
@@ -152,7 +194,7 @@ function rrtmgp_model_callback!(integrator)
     t = integrator.t
 
     (; ᶜK, ᶜΦ, ᶜts, T_sfc, params) = p
-    (; idealized_insolation, idealized_h2o) = p
+    (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, rrtmgp_model) = p
 
     rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
@@ -240,6 +282,29 @@ function rrtmgp_model_callback!(integrator)
             rrtmgp_model.weighted_irradiance .=
                 irradiance * (au / last(insolation_tuple))^2
         end
+    end
+
+    if !idealized_clouds && !(
+        rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation ||
+        rrtmgp_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+    )
+        ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+        ᶜlwp = RRTMGPI.array2field(
+            rrtmgp_model.center_cloud_liquid_water_path,
+            axes(Y.c),
+        )
+        ᶜiwp = RRTMGPI.array2field(
+            rrtmgp_model.center_cloud_ice_water_path,
+            axes(Y.c),
+        )
+        ᶜmask = RRTMGPI.array2field(
+            rrtmgp_model.center_cloud_boolean_mask,
+            axes(Y.c),
+        )
+        # multiply by 1000 to convert from kg/m^2 to g/m^2
+        @. ᶜlwp = 1000 * Y.c.ρ * TD.liquid_specific_humidity(params, ᶜts) * ᶜΔz
+        @. ᶜiwp = 1000 * Y.c.ρ * TD.ice_specific_humidity(params, ᶜts) * ᶜΔz
+        @. ᶜmask = TD.has_condensate(params, ᶜts)
     end
 
     RRTMGPI.update_fluxes!(rrtmgp_model)

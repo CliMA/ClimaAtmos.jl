@@ -35,13 +35,16 @@ end
 
 function radiation_model(parsed_args)
     radiation_name = parsed_args["rad"]
-    @assert radiation_name in (nothing, "clearsky", "gray", "allsky")
+    @assert radiation_name in
+            (nothing, "clearsky", "gray", "allsky", "allskywithclear")
     return if radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation()
     elseif radiation_name == "gray"
         RRTMGPI.GrayRadiation()
     elseif radiation_name == "allsky"
         RRTMGPI.AllSkyRadiation()
+    elseif radiation_name == "allskywithclear"
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics()
     else
         nothing
     end
