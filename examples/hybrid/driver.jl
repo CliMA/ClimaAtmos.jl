@@ -404,8 +404,41 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
             vert_diff_diagnostic = NamedTuple()
         end
 
-        diagnostic =
-            merge(dry_diagnostic, moist_diagnostic, vert_diff_diagnostic)
+        if !isnothing(radiation_model())
+            (;
+                face_lw_flux_dn,
+                face_lw_flux_up,
+                face_sw_flux_dn,
+                face_sw_flux_up,
+            ) = p.rrtmgp_model
+            rad_diagnostic = (;
+                lw_flux_down = RRTMGPI.array2field(
+                    FT.(face_lw_flux_dn),
+                    axes(Y.f),
+                ),
+                lw_flux_up = RRTMGPI.array2field(
+                    FT.(face_lw_flux_up),
+                    axes(Y.f),
+                ),
+                sw_flux_down = RRTMGPI.array2field(
+                    FT.(face_sw_flux_dn),
+                    axes(Y.f),
+                ),
+                sw_flux_up = RRTMGPI.array2field(
+                    FT.(face_sw_flux_up),
+                    axes(Y.f),
+                ),
+            )
+        else
+            rad_diagnostic = NamedTuple()
+        end
+
+        diagnostic = merge(
+            dry_diagnostic,
+            moist_diagnostic,
+            vert_diff_diagnostic,
+            rad_diagnostic,
+        )
 
         day = floor(Int, integrator.t / (60 * 60 * 24))
         sec = Int(mod(integrator.t, 3600 * 24))
