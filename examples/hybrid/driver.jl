@@ -55,7 +55,7 @@ energy_form() = energy_form(parsed_args)
 radiation_model() = radiation_model(parsed_args)
 microphysics_model() = microphysics_model(parsed_args)
 forcing_type() = forcing_type(parsed_args)
-turbconv_model() = turbconv_model(parsed_args, namelist)
+turbconv_model() = turbconv_model(FT, parsed_args, namelist)
 
 diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
