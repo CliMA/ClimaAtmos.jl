@@ -62,18 +62,23 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 
     if point_type <: Geometry.Abstract3DPoint
+       # @. ᶜχuₕ =
+       #     wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
+       #         wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
+       #     )
         @. ᶜχuₕ =
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
-                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
-            )
+        wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
+            Geometry.Covariant12Axis(), 
+            (wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))))
+        )
         Spaces.weighted_dss!(ᶜχuₕ, ghost_buffer.χuₕ)
         @. Yₜ.c.uₕ -=
             κ₄ * (
                 divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                Geometry.Covariant12Vector(
-                    wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜχuₕ))),
-                )
-            )
+                Geometry.project(Geometry.Covariant12Axis(),
+                  wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜχuₕ)))
+                 )     
+            )     
     elseif point_type <: Geometry.Abstract2DPoint
         @. ᶜχuₕ = Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜuₕ)))
         Spaces.weighted_dss!(ᶜχuₕ, ghost_buffer.χuₕ)

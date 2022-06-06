@@ -154,7 +154,7 @@ paperplots_held_suarez(::TotalEnergy, ::EquilMoistModel, args...) =
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10
 function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params) = p
-    days = [8, 10]
+    days = [1,10,20,30,40,50,60,70,80,90,100]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -249,7 +249,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
-            color = :rainbow,
+            color = :bluesreds,
             title = "pressure (1500m) day " * string(day),
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
@@ -258,7 +258,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
-            color = :rainbow,
+            color = :bluesreds,
             levels = 220:10:310,
             title = "temperature (1500m) day " * string(day),
         )
@@ -280,7 +280,7 @@ end
 
 function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-    days = [8, 10]
+    days = [1,10,20,30,40,50,60,70,80,90,100]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -358,7 +358,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             ["pres", "T", "vort"],
         )
 
-        rm(remap_tmpdir, recursive = true)
+     #   rm(remap_tmpdir, recursive = true)
     end
 
     # create plots as in the paper
@@ -372,15 +372,17 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         T = ncdata["T"][:]
         vort = ncdata["vort"][:] * FT(1e5)
 
-        latidx = findall(x -> x >= 0, lat)
-        lonidx = findall(x -> 0 <= x <= 240, lon)
-
+        #latidx = findall(x -> x >= 0, lat)
+        #lonidx = findall(x -> 0 <= x <= 240, lon)
+        latidx = findall(x -> -90 <= x <= 90, lat)
+        lonidx = findall(x -> 0 <= x <= 360, lon)
+        
         plot_p = contourf(
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
-            color = :rainbow,
-            title = "pressure (1500m) day " * string(day),
+            color = :bluesreds,
+            title = "pressure day " * string(day),
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
 
@@ -388,9 +390,9 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
-            color = :rainbow,
+            color = :bluesreds,
             levels = 220:10:310,
-            title = "temperature (1500m) day " * string(day),
+            title = "temperature day " * string(day),
         )
         png(plot_T, output_dir * "/bw-temperature-day" * string(day) * ".png")
 
@@ -399,11 +401,11 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lat[latidx],
             vort[lonidx, latidx, 1, 1]',
             color = :balance,
-            title = "vorticity (1500m) day " * string(day),
+            title = "vorticity day " * string(day),
         )
         png(plot_ω, output_dir * "/bw-vorticity-day" * string(day) * ".png")
 
-        rm(datafile_latlon)
+        #rm(datafile_latlon)
     end
 
 end
@@ -411,7 +413,7 @@ end
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-    days = [8, 10]
+    days = [1,10,20,30,40,50,60,70,80,90,100]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -556,7 +558,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
-            color = :rainbow,
+            color = :bluesreds,
             title = "pressure (1500m) day " * string(day),
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
@@ -565,7 +567,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
-            color = :rainbow,
+            color = :bluesreds,
             levels = 220:10:310,
             title = "temperature (1500m) day " * string(day),
         )

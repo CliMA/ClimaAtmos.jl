@@ -318,11 +318,15 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     @. ᶠω¹² += ᶠcurlᵥ(ᶜuₕ)
 
     # TODO: Modify to account for topography
-    @. ᶠu¹² = Geometry.Contravariant12Vector(ᶠinterp(ᶜuₕ))
-    @. ᶠu³ = Geometry.Contravariant3Vector(ᶠw)
+    #@. ᶠu¹² = Geometry.Contravariant12Vector(ᶠinterp(ᶜuₕ))
+    fuw = @. Geometry.Covariant123Vector(ᶠinterp(ᶜuₕ)) + Geometry.Covariant123Vector(ᶠw)
+    cuw = @. Geometry.Covariant123Vector(ᶜuₕ) + Geometry.Covariant123Vector(ᶜinterp(ᶠw))
+    @. ᶠu¹² = Geometry.project(Geometry.Contravariant12Axis(), fuw)
+    @. ᶠu³ = Geometry.project(Geometry.Contravariant3Axis(), fuw)
 
     @. Yₜ.c.uₕ -=
-        ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × Geometry.Contravariant12Vector(ᶜuₕ)
+    ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × (Geometry.project(Geometry.Contravariant12Axis(), cuw))
+        #ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × Geometry.Contravariant12Vector(ᶜuₕ)
     if point_type <: Geometry.Abstract3DPoint
         @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
     elseif point_type <: Geometry.Abstract2DPoint

@@ -177,7 +177,7 @@ function center_initial_condition_baroclinic_wave(
             cosd(ϕ_c) *
             sind(λ - λ_c) / sin(r / R) * cond
     end
-    uₕ_local = Geometry.UVVector(u, v)
+    uₕ_local = Geometry.UVVector(u,v)
     uₕ = Geometry.Covariant12Vector(uₕ_local, local_geometry)
 
     # Initial moisture and temperature
@@ -359,9 +359,8 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t)
     end
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
-                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
-            )
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(Geometry.Covariant12Axis(),
+                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))))
         )
     @. Yₜ.f.w.components.data.:1 +=
         ᶠβ_viscous * wdivₕ(gradₕ(Y.f.w.components.data.:1))
@@ -400,7 +399,9 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     end
     Δθ_z = FT(10)
     T_min = FT(200)
-
+  
+#    @show ᶜp
+#    @show (maximum(ᶜp), minimum(ᶜp))
     @. ᶜσ = ᶜp / MSLP
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =

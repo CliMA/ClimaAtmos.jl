@@ -136,6 +136,10 @@ function parse_commandline()
         help = "Viscous sponge coefficient"
         arg_type = Float64
         default = Float64(1e6)
+        "--topography"
+        help = "Function prescribing topography"
+        arg_type = String
+        default = "nothing"
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

@@ -22,6 +22,7 @@ viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
+topography = Symbol(parsed_args["topography"])
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -176,6 +177,7 @@ include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
+include(joinpath("sphere", "topography.jl"))
 
 # Variables required for driver.jl (modify as needed)
 function get_ode_algorithm(parsed_args)
@@ -220,7 +222,9 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
     z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
-    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; 
+                       params = params, 
+                       surface_warp=earth_orography)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
     quad = Spaces.Quadratures.GL{1}()
@@ -267,6 +271,7 @@ else
 
     center_initial_condition = if is_baro_wave(parsed_args)
         center_initial_condition_baroclinic_wave
+        #center_initial_condition_sphere
     elseif parsed_args["config"] == "sphere"
         center_initial_condition_sphere
     elseif parsed_args["config"] == "column"
@@ -526,14 +531,15 @@ if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
         paperplots_baro_wave(sol, output_dir, p, FT(90), FT(180))
+        custom_postprocessing(sol, output_dir)
     elseif is_column_radiative_equilibrium(parsed_args)
         custom_postprocessing(sol, output_dir)
     elseif is_column_edmf(parsed_args)
         postprocessing_edmf(sol, output_dir, fps)
-    elseif forcing_type() isa HeldSuarezForcing && t_end >= (3600 * 24 * 400)
+    elseif forcing_type() isa HeldSuarezForcing #&& t_end >= (3600 * 24 * 400)
         paperplots_held_suarez(sol, output_dir, p, FT(90), FT(180))
     else
-        postprocessing(sol, output_dir, fps)
+        #postprocessing(sol, output_dir, fps)
     end
 end
 
