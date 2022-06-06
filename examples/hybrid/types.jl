@@ -76,12 +76,12 @@ function forcing_type(parsed_args)
     end
 end
 
-function turbconv_model(parsed_args, namelist)
+function turbconv_model(FT, parsed_args, namelist)
     turbconv = parsed_args["turbconv"]
     precip_model = nothing
     @assert turbconv in (nothing, "edmf")
     return if turbconv == "edmf"
-        TC.EDMFModel(namelist, precip_model)
+        TC.EDMFModel(FT, namelist, precip_model)
     else
         nothing
     end
