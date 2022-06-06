@@ -112,6 +112,16 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_sw_flux_down = defVar(nc, "sw_flux_down", FT, fspace, ("time",))
         nc_sw_flux_up = defVar(nc, "sw_flux_up", FT, fspace, ("time",))
     end
+    if :clear_lw_flux_down in propertynames(diag)
+        nc_clear_lw_flux_down =
+            defVar(nc, "clear_lw_flux_down", FT, fspace, ("time",))
+        nc_clear_lw_flux_up =
+            defVar(nc, "clear_lw_flux_up", FT, fspace, ("time",))
+        nc_clear_sw_flux_down =
+            defVar(nc, "clear_sw_flux_down", FT, fspace, ("time",))
+        nc_clear_sw_flux_up =
+            defVar(nc, "clear_sw_flux_up", FT, fspace, ("time",))
+    end
 
     # time
     nc_time[1] = t_now
@@ -172,6 +182,12 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_sw_flux_up[:, 1] = diag.sw_flux_up
     end
 
+    if :clear_lw_flux_down in propertynames(diag)
+        nc_clear_lw_flux_down[:, 1] = diag.clear_lw_flux_down
+        nc_clear_lw_flux_up[:, 1] = diag.clear_lw_flux_up
+        nc_clear_sw_flux_down[:, 1] = diag.clear_sw_flux_down
+        nc_clear_sw_flux_up[:, 1] = diag.clear_sw_flux_up
+    end
     close(nc)
 
     # write out our cubed sphere mesh
@@ -231,12 +247,23 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     else
         rad_flux_variables = String[]
     end
+    if :clear_lw_flux_down in propertynames(diag)
+        rad_flux_clear_variables = [
+            "clear_lw_flux_down",
+            "clear_lw_flux_up",
+            "clear_sw_flux_down",
+            "clear_sw_flux_up",
+        ]
+    else
+        rad_flux_clear_variables = String[]
+    end
 
     netcdf_variables = vcat(
         dry_variables,
         moist_variables,
         sfc_flux_variables,
         rad_flux_variables,
+        rad_flux_clear_variables,
     )
     apply_remap(datafile_latlon, datafile_cc, weightfile, netcdf_variables)
     rm(remap_tmpdir, recursive = true)

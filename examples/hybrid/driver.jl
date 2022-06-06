@@ -432,8 +432,38 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                     axes(Y.f),
                 ),
             )
+            if radiation_model() isa
+               RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+                (;
+                    face_clear_lw_flux_dn,
+                    face_clear_lw_flux_up,
+                    face_clear_sw_flux_dn,
+                    face_clear_sw_flux_up,
+                ) = p.rrtmgp_model
+                rad_clear_diagnostic = (;
+                    clear_lw_flux_down = RRTMGPI.array2field(
+                        FT.(face_clear_lw_flux_dn),
+                        axes(Y.f),
+                    ),
+                    clear_lw_flux_up = RRTMGPI.array2field(
+                        FT.(face_clear_lw_flux_up),
+                        axes(Y.f),
+                    ),
+                    clear_sw_flux_down = RRTMGPI.array2field(
+                        FT.(face_clear_sw_flux_dn),
+                        axes(Y.f),
+                    ),
+                    clear_sw_flux_up = RRTMGPI.array2field(
+                        FT.(face_clear_sw_flux_up),
+                        axes(Y.f),
+                    ),
+                )
+            else
+                rad_clear_diagnostic = NamedTuple()
+            end
         else
             rad_diagnostic = NamedTuple()
+            rad_clear_diagnostic = NamedTuple()
         end
 
         diagnostic = merge(
@@ -441,6 +471,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
             moist_diagnostic,
             vert_diff_diagnostic,
             rad_diagnostic,
+            rad_clear_diagnostic,
         )
 
         day = floor(Int, integrator.t / (60 * 60 * 24))
