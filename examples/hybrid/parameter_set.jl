@@ -22,6 +22,7 @@ Planet.MSLP(::BaroclinicWaveParameterSet) = 1.0e5
 Planet.grav(::BaroclinicWaveParameterSet) = 9.80616
 Planet.Omega(::BaroclinicWaveParameterSet) = 7.29212e-5
 Planet.planet_radius(::BaroclinicWaveParameterSet) = 6.371229e6
+Planet.ρ_cloud_liq(::BaroclinicWaveParameterSet) = 1e3
 
 # parameters for 0-Moment Microphysics
 Atmos.Microphysics_0M.τ_precip(param_set::BaroclinicWaveParameterSet) =

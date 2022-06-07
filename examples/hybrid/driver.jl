@@ -334,7 +334,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         Y = integrator.u
 
         if :ρq_tot in propertynames(Y.c)
-            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
+            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, col_integrated_precip, ᶜK, ᶜΦ) = p
         else
             (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
         end
@@ -384,12 +384,15 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                     params,
                     TD.PhasePartition(params, ᶜts),
                 )
+            col_integrated_precip =
+                vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
 
             moist_diagnostic = (;
                 cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
                 precipitation_removal = ᶜS_ρq_tot,
+                column_integrated_precip = col_integrated_precip,
                 relative_humidity = ᶜRH,
             )
         else
