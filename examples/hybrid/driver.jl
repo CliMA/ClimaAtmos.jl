@@ -326,171 +326,204 @@ output_dir = parse_arg(parsed_args, "output_dir", default_output)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)
 
-function make_save_to_disk_func(output_dir, p, is_distributed)
+function make_save_to_disk_func(output_dir, p)
     function save_to_disk_func(integrator)
-        Y = integrator.u
-
-        if :ρq_tot in propertynames(Y.c)
-            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, col_integrated_precip, ᶜK, ᶜΦ) = p
-        else
-            (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-        end
-
-        ᶜuₕ = Y.c.uₕ
-        ᶠw = Y.f.w
-
-        # kinetic energy
-        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-
-        # pressure, temperature, potential temperature
-        if :ρθ in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe_tot in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        elseif :ρe_int in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-        end
-        @. ᶜp = TD.air_pressure(params, ᶜts)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
-
-        # vorticity
-        curl_uh = @. curlₕ(Y.c.uₕ)
-        ᶜvort = Geometry.WVector.(curl_uh)
-        Spaces.weighted_dss!(ᶜvort)
-
-        dry_diagnostic = (;
-            pressure = ᶜp,
-            temperature = ᶜT,
-            potential_temperature = ᶜθ,
-            kinetic_energy = ᶜK,
-            vorticity = ᶜvort,
-        )
-
-        # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
-        if :ρq_tot in propertynames(Y.c)
-            ᶜq = @. TD.PhasePartition(params, ᶜts)
-            ᶜcloud_liquid = @. ᶜq.liq
-            ᶜcloud_ice = @. ᶜq.ice
-            ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
-            ᶜRH = @. TD.relative_humidity(params, ᶜts)
-
-            # precipitation
-            @. ᶜS_ρq_tot =
-                Y.c.ρ * CM.Microphysics0M.remove_precipitation(
-                    params,
-                    TD.PhasePartition(params, ᶜts),
+        if is_distributed
+            if ClimaComms.iamroot(comms_ctx)
+                global_h_space =
+                    make_horizontal_space(horizontal_mesh, quad, nothing)
+                global_center_space, global_face_space =
+                    make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
+            end
+            global_Y_c = DataLayouts.gather(
+                comms_ctx,
+                Fields.field_values(integrator.u.c),
+            )
+            global_Y_f = DataLayouts.gather(
+                comms_ctx,
+                Fields.field_values(integrator.u.f),
+            )
+            if ClimaComms.iamroot(comms_ctx)
+                global_u = Fields.FieldVector(
+                    c = Fields.Field(global_Y_c, global_center_space),
+                    f = Fields.Field(global_Y_f, global_face_space),
                 )
-            col_integrated_precip =
-                vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
-
-            moist_diagnostic = (;
-                cloud_liquid = ᶜcloud_liquid,
-                cloud_ice = ᶜcloud_ice,
-                water_vapor = ᶜwatervapor,
-                precipitation_3d = ᶜS_ρq_tot,
-                precipitation_2d = col_integrated_precip,
-                relative_humidity = ᶜRH,
-            )
-        else
-            moist_diagnostic = NamedTuple()
-        end
-
-        if vert_diff
-            (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
-            vert_diff_diagnostic = (;
-                sfc_flux_momentum = dif_flux_uₕ,
-                sfc_flux_energy = dif_flux_energy,
-                sfc_evaporation = dif_flux_ρq_tot,
-            )
-        else
-            vert_diff_diagnostic = NamedTuple()
-        end
-
-        if !isnothing(radiation_model())
-            (;
-                face_lw_flux_dn,
-                face_lw_flux_up,
-                face_sw_flux_dn,
-                face_sw_flux_up,
-            ) = p.rrtmgp_model
-            rad_diagnostic = (;
-                lw_flux_down = RRTMGPI.array2field(
-                    FT.(face_lw_flux_dn),
-                    axes(Y.f),
-                ),
-                lw_flux_up = RRTMGPI.array2field(
-                    FT.(face_lw_flux_up),
-                    axes(Y.f),
-                ),
-                sw_flux_down = RRTMGPI.array2field(
-                    FT.(face_sw_flux_dn),
-                    axes(Y.f),
-                ),
-                sw_flux_up = RRTMGPI.array2field(
-                    FT.(face_sw_flux_up),
-                    axes(Y.f),
-                ),
-            )
-            if radiation_model() isa
-               RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
-                (;
-                    face_clear_lw_flux_dn,
-                    face_clear_lw_flux_up,
-                    face_clear_sw_flux_dn,
-                    face_clear_sw_flux_up,
-                ) = p.rrtmgp_model
-                rad_clear_diagnostic = (;
-                    clear_lw_flux_down = RRTMGPI.array2field(
-                        FT.(face_clear_lw_flux_dn),
-                        axes(Y.f),
-                    ),
-                    clear_lw_flux_up = RRTMGPI.array2field(
-                        FT.(face_clear_lw_flux_up),
-                        axes(Y.f),
-                    ),
-                    clear_sw_flux_down = RRTMGPI.array2field(
-                        FT.(face_clear_sw_flux_dn),
-                        axes(Y.f),
-                    ),
-                    clear_sw_flux_up = RRTMGPI.array2field(
-                        FT.(face_clear_sw_flux_up),
-                        axes(Y.f),
-                    ),
-                )
-            else
-                rad_clear_diagnostic = NamedTuple()
+            end
+            if ClimaComms.iamroot(comms_ctx)
+                Y = global_u
+                day = floor(Int, integrator.t / (60 * 60 * 24))
+                sec = Int(mod(integrator.t, 3600 * 24))
+                @info "Saving prognostic variables to JLD2 file on day $day second $sec"
+                suffix = ".jld2"
+                output_file = joinpath(output_dir, "day$day.$sec$suffix")
+                jldsave(output_file; t = integrator.t, Y = Y)
             end
         else
-            rad_diagnostic = NamedTuple()
-            rad_clear_diagnostic = NamedTuple()
+            Y = integrator.u
+
+            if :ρq_tot in propertynames(Y.c)
+                (; ᶜts, ᶜp, ᶜS_ρq_tot, params, col_integrated_precip, ᶜK, ᶜΦ) =
+                    p
+            else
+                (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
+            end
+
+            ᶜuₕ = Y.c.uₕ
+            ᶠw = Y.f.w
+
+            # kinetic energy
+            @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+
+            # pressure, temperature, potential temperature
+            if :ρθ in propertynames(Y.c)
+                @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+            elseif :ρe_tot in propertynames(Y.c)
+                @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
+            elseif :ρe_int in propertynames(Y.c)
+                @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+            end
+            @. ᶜp = TD.air_pressure(params, ᶜts)
+            ᶜT = @. TD.air_temperature(params, ᶜts)
+            ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+
+            # vorticity 
+            curl_uh = @. curlₕ(Y.c.uₕ)
+            ᶜvort = Geometry.WVector.(curl_uh)
+            Spaces.weighted_dss!(ᶜvort)
+
+            dry_diagnostic = (;
+                pressure = ᶜp,
+                temperature = ᶜT,
+                potential_temperature = ᶜθ,
+                kinetic_energy = ᶜK,
+                vorticity = ᶜvort,
+            )
+
+            # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
+            if :ρq_tot in propertynames(Y.c)
+                ᶜq = @. TD.PhasePartition(params, ᶜts)
+                ᶜcloud_liquid = @. ᶜq.liq
+                ᶜcloud_ice = @. ᶜq.ice
+                ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
+                ᶜRH = @. TD.relative_humidity(params, ᶜts)
+
+                # precipitation
+                @. ᶜS_ρq_tot =
+                    Y.c.ρ * CM.Microphysics0M.remove_precipitation(
+                        params,
+                        TD.PhasePartition(params, ᶜts),
+                    )
+                col_integrated_precip =
+                    vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
+
+                moist_diagnostic = (;
+                    cloud_liquid = ᶜcloud_liquid,
+                    cloud_ice = ᶜcloud_ice,
+                    water_vapor = ᶜwatervapor,
+                    precipitation_removal = ᶜS_ρq_tot,
+                    column_integrated_precip = col_integrated_precip,
+                    relative_humidity = ᶜRH,
+                )
+            else
+                moist_diagnostic = NamedTuple()
+            end
+
+            if vert_diff
+                (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
+                vert_diff_diagnostic = (;
+                    sfc_flux_momentum = dif_flux_uₕ,
+                    sfc_flux_energy = dif_flux_energy,
+                    sfc_evaporation = dif_flux_ρq_tot,
+                )
+            else
+                vert_diff_diagnostic = NamedTuple()
+            end
+
+            if !isnothing(radiation_model())
+                (;
+                    face_lw_flux_dn,
+                    face_lw_flux_up,
+                    face_sw_flux_dn,
+                    face_sw_flux_up,
+                ) = p.rrtmgp_model
+                rad_diagnostic = (;
+                    lw_flux_down = RRTMGPI.array2field(
+                        FT.(face_lw_flux_dn),
+                        axes(Y.f),
+                    ),
+                    lw_flux_up = RRTMGPI.array2field(
+                        FT.(face_lw_flux_up),
+                        axes(Y.f),
+                    ),
+                    sw_flux_down = RRTMGPI.array2field(
+                        FT.(face_sw_flux_dn),
+                        axes(Y.f),
+                    ),
+                    sw_flux_up = RRTMGPI.array2field(
+                        FT.(face_sw_flux_up),
+                        axes(Y.f),
+                    ),
+                )
+                if radiation_model() isa
+                   RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+                    (;
+                        face_clear_lw_flux_dn,
+                        face_clear_lw_flux_up,
+                        face_clear_sw_flux_dn,
+                        face_clear_sw_flux_up,
+                    ) = p.rrtmgp_model
+                    rad_clear_diagnostic = (;
+                        clear_lw_flux_down = RRTMGPI.array2field(
+                            FT.(face_clear_lw_flux_dn),
+                            axes(Y.f),
+                        ),
+                        clear_lw_flux_up = RRTMGPI.array2field(
+                            FT.(face_clear_lw_flux_up),
+                            axes(Y.f),
+                        ),
+                        clear_sw_flux_down = RRTMGPI.array2field(
+                            FT.(face_clear_sw_flux_dn),
+                            axes(Y.f),
+                        ),
+                        clear_sw_flux_up = RRTMGPI.array2field(
+                            FT.(face_clear_sw_flux_up),
+                            axes(Y.f),
+                        ),
+                    )
+                else
+                    rad_clear_diagnostic = NamedTuple()
+                end
+            else
+                rad_diagnostic = NamedTuple()
+                rad_clear_diagnostic = NamedTuple()
+            end
+
+            diagnostic = merge(
+                dry_diagnostic,
+                moist_diagnostic,
+                vert_diff_diagnostic,
+                rad_diagnostic,
+                rad_clear_diagnostic,
+            )
+
+            day = floor(Int, integrator.t / (60 * 60 * 24))
+            sec = Int(mod(integrator.t, 3600 * 24))
+            @info "Saving prognostic variables to JLD2 file on day $day second $sec"
+            suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
+            output_file = joinpath(output_dir, "day$day.$sec$suffix")
+            jldsave(
+                output_file;
+                t = integrator.t,
+                Y = integrator.u,
+                diagnostic = diagnostic,
+            )
         end
-
-        diagnostic = merge(
-            dry_diagnostic,
-            moist_diagnostic,
-            vert_diff_diagnostic,
-            rad_diagnostic,
-            rad_clear_diagnostic,
-        )
-
-        day = floor(Int, integrator.t / (60 * 60 * 24))
-        sec = Int(mod(integrator.t, 3600 * 24))
-        @info "Saving prognostic variables to JLD2 file on day $day second $sec"
-        suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
-        output_file = joinpath(output_dir, "day$day.$sec$suffix")
-        jldsave(
-            output_file;
-            t = integrator.t,
-            Y = integrator.u,
-            diagnostic = diagnostic,
-        )
         return nothing
     end
     return save_to_disk_func
 end
 
-save_to_disk_func = make_save_to_disk_func(output_dir, p, is_distributed)
+save_to_disk_func = make_save_to_disk_func(output_dir, p)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
