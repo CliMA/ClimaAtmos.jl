@@ -35,13 +35,16 @@ end
 
 function radiation_model(parsed_args)
     radiation_name = parsed_args["rad"]
-    @assert radiation_name in (nothing, "clearsky", "gray", "allsky")
+    @assert radiation_name in
+            (nothing, "clearsky", "gray", "allsky", "allskywithclear")
     return if radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation()
     elseif radiation_name == "gray"
         RRTMGPI.GrayRadiation()
     elseif radiation_name == "allsky"
         RRTMGPI.AllSkyRadiation()
+    elseif radiation_name == "allskywithclear"
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics()
     else
         nothing
     end
@@ -73,12 +76,12 @@ function forcing_type(parsed_args)
     end
 end
 
-function turbconv_model(parsed_args, namelist)
+function turbconv_model(FT, parsed_args, namelist)
     turbconv = parsed_args["turbconv"]
     precip_model = nothing
     @assert turbconv in (nothing, "edmf")
     return if turbconv == "edmf"
-        TC.EDMFModel(namelist, precip_model)
+        TC.EDMFModel(FT, namelist, precip_model)
     else
         nothing
     end

@@ -24,7 +24,7 @@ Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
-CLIMAParameters = "0.4"
+CLIMAParameters = "0.4, 0.5, 0.6"
 ClimaCore = "0.10"
 ClimaCorePlots = "0.2"
 ClimaCoreVTK = "0.6, 0.7"
@@ -38,7 +38,7 @@ OrdinaryDiffEq = "5.64.0"
 DiffEqBase = "~6.84.0"
 Plots = "1.27"
 StaticArrays = "1.4"
-Thermodynamics = "0.7"
+Thermodynamics = "0.8"
 UnPack = "1"
 
 [extras]

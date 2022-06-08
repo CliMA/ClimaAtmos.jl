@@ -10,6 +10,7 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
+idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
 hyperdiff = parsed_args["hyperdiff"]
 turbconv = parsed_args["turbconv"]
@@ -32,6 +33,7 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
+@assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
@@ -56,10 +58,11 @@ energy_form() = energy_form(parsed_args)
 radiation_model() = radiation_model(parsed_args)
 microphysics_model() = microphysics_model(parsed_args)
 forcing_type() = forcing_type(parsed_args)
-turbconv_model() = turbconv_model(parsed_args, namelist)
+turbconv_model() = turbconv_model(FT, parsed_args, namelist)
 
 diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
+using NVTX
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
@@ -111,6 +114,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
         radiation_model();
         idealized_insolation,
         idealized_h2o,
+        idealized_clouds,
     ),
     vert_diff ?
     vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :
@@ -269,7 +273,9 @@ else
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
 
-    center_initial_condition = if parsed_args["config"] == "sphere"
+    center_initial_condition = if is_baro_wave(parsed_args)
+        center_initial_condition_baroclinic_wave
+    elseif parsed_args["config"] == "sphere"
         center_initial_condition_sphere
     elseif parsed_args["config"] == "column"
         center_initial_condition_column
@@ -332,7 +338,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         Y = integrator.u
 
         if :ρq_tot in propertynames(Y.c)
-            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
+            (; ᶜts, ᶜp, ᶜS_ρq_tot, params, col_integrated_precip, ᶜK, ᶜΦ) = p
         else
             (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
         end
@@ -360,6 +366,14 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
 
+        dry_diagnostic = (;
+            pressure = ᶜp,
+            temperature = ᶜT,
+            potential_temperature = ᶜθ,
+            kinetic_energy = ᶜK,
+            vorticity = ᶜvort,
+        )
+
         # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
         if :ρq_tot in propertynames(Y.c)
             ᶜq = @. TD.PhasePartition(params, ᶜts)
@@ -370,32 +384,102 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
 
             # precipitation
             @. ᶜS_ρq_tot =
-                Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+                Y.c.ρ * CM.Microphysics0M.remove_precipitation(
                     params,
                     TD.PhasePartition(params, ᶜts),
                 )
+            col_integrated_precip =
+                vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
 
-            diagnostic = (;
-                pressure = ᶜp,
-                temperature = ᶜT,
-                potential_temperature = ᶜθ,
-                kinetic_energy = ᶜK,
-                vorticity = ᶜvort,
+            moist_diagnostic = (;
                 cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
                 precipitation_removal = ᶜS_ρq_tot,
+                column_integrated_precip = col_integrated_precip,
                 relative_humidity = ᶜRH,
             )
         else
-            diagnostic = (;
-                pressure = ᶜp,
-                temperature = ᶜT,
-                potential_temperature = ᶜθ,
-                kinetic_energy = ᶜK,
-                vorticity = ᶜvort,
-            )
+            moist_diagnostic = NamedTuple()
         end
+
+        if vert_diff
+            (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
+            vert_diff_diagnostic = (;
+                sfc_flux_momentum = dif_flux_uₕ,
+                sfc_flux_energy = dif_flux_energy,
+                sfc_evaporation = dif_flux_ρq_tot,
+            )
+        else
+            vert_diff_diagnostic = NamedTuple()
+        end
+
+        if !isnothing(radiation_model())
+            (;
+                face_lw_flux_dn,
+                face_lw_flux_up,
+                face_sw_flux_dn,
+                face_sw_flux_up,
+            ) = p.rrtmgp_model
+            rad_diagnostic = (;
+                lw_flux_down = RRTMGPI.array2field(
+                    FT.(face_lw_flux_dn),
+                    axes(Y.f),
+                ),
+                lw_flux_up = RRTMGPI.array2field(
+                    FT.(face_lw_flux_up),
+                    axes(Y.f),
+                ),
+                sw_flux_down = RRTMGPI.array2field(
+                    FT.(face_sw_flux_dn),
+                    axes(Y.f),
+                ),
+                sw_flux_up = RRTMGPI.array2field(
+                    FT.(face_sw_flux_up),
+                    axes(Y.f),
+                ),
+            )
+            if radiation_model() isa
+               RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+                (;
+                    face_clear_lw_flux_dn,
+                    face_clear_lw_flux_up,
+                    face_clear_sw_flux_dn,
+                    face_clear_sw_flux_up,
+                ) = p.rrtmgp_model
+                rad_clear_diagnostic = (;
+                    clear_lw_flux_down = RRTMGPI.array2field(
+                        FT.(face_clear_lw_flux_dn),
+                        axes(Y.f),
+                    ),
+                    clear_lw_flux_up = RRTMGPI.array2field(
+                        FT.(face_clear_lw_flux_up),
+                        axes(Y.f),
+                    ),
+                    clear_sw_flux_down = RRTMGPI.array2field(
+                        FT.(face_clear_sw_flux_dn),
+                        axes(Y.f),
+                    ),
+                    clear_sw_flux_up = RRTMGPI.array2field(
+                        FT.(face_clear_sw_flux_up),
+                        axes(Y.f),
+                    ),
+                )
+            else
+                rad_clear_diagnostic = NamedTuple()
+            end
+        else
+            rad_diagnostic = NamedTuple()
+            rad_clear_diagnostic = NamedTuple()
+        end
+
+        diagnostic = merge(
+            dry_diagnostic,
+            moist_diagnostic,
+            vert_diff_diagnostic,
+            rad_diagnostic,
+            rad_clear_diagnostic,
+        )
 
         day = floor(Int, integrator.t / (60 * 60 * 24))
         sec = Int(mod(integrator.t, 3600 * 24))
@@ -417,8 +501,12 @@ save_to_disk_func = make_save_to_disk_func(output_dir, p, is_distributed)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
-    Spaces.weighted_dss!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss!(Y.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+    Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
+    Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
 end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
@@ -458,10 +546,12 @@ integrator = OrdinaryDiffEq.init(
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
 end
-
 @info "Running job:`$job_id`"
 if is_distributed
+    OrdinaryDiffEq.step!(integrator)
+    ClimaComms.barrier(comms_ctx)
     walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+    ClimaComms.barrier(comms_ctx)
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end

@@ -11,7 +11,18 @@ function rrtmgp_model_cache(
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
     idealized_h2o = false,
+    idealized_clouds = false,
 )
+    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
+        error("idealized_h2o can't be used with $radiation_mode")
+    end
+    if idealized_clouds && (
+        radiation_mode isa RRTMGPI.GrayRadiation ||
+        radiation_mode isa RRTMGPI.ClearSkyRadiation
+    )
+        error("idealized_clouds can't be used with $radiation_mode")
+    end
+
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
         latitude = RRTMGPI.field2array(bottom_coords.lat)
@@ -80,7 +91,42 @@ function rrtmgp_model_cache(
             latitude,
         )
         if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
-            error("rrtmgp_model_cache not yet implemented for $radiation_mode")
+            kwargs = (;
+                kwargs...,
+                center_cloud_liquid_effective_radius = 12,
+                center_cloud_ice_effective_radius = 95,
+                ice_roughness = 2,
+            )
+            ᶜz = Fields.coordinate_field(Y.c).z
+            ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+            if idealized_clouds # icy cloud on top and wet cloud on bottom
+                ᶜis_bottom_cloud = Fields.Field(
+                    DataLayouts.replace_basetype(Fields.field_values(ᶜz), Bool),
+                    axes(Y.c),
+                ) # need to fix several ClimaCore bugs in order to simplify this
+                ᶜis_top_cloud = similar(ᶜis_bottom_cloud)
+                @. ᶜis_bottom_cloud = ᶜz > 1e3 && ᶜz < 1.5e3
+                @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
+                kwargs = (;
+                    kwargs...,
+                    center_cloud_liquid_water_path = RRTMGPI.field2array(
+                        @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
+                    ),
+                    center_cloud_ice_water_path = RRTMGPI.field2array(
+                        @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
+                    ),
+                    center_cloud_boolean_mask = RRTMGPI.field2array(
+                        @. ᶜis_bottom_cloud || ᶜis_top_cloud
+                    ),
+                )
+            else
+                kwargs = (;
+                    kwargs...,
+                    center_cloud_liquid_water_path = NaN, # initialized in callback
+                    center_cloud_ice_water_path = NaN, # initialized in callback
+                    center_cloud_boolean_mask = false, # initialized in callback
+                )
+            end
         end
     end
 
@@ -93,18 +139,13 @@ function rrtmgp_model_cache(
         )
     end
 
-    if idealized_insolation
-        # perpetual equinox with no diurnal cycle
+    if idealized_insolation # perpetual equinox with no diurnal cycle
         solar_zenith_angle = FT(π) / 3
         weighted_irradiance =
             @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
                (4 * cos(solar_zenith_angle))
     else
-        solar_zenith_angle = weighted_irradiance = NaN # initialized in tendency
-    end
-
-    if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
-        error("idealized_h2o cannot be used with GrayRadiation")
+        solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
     end
 
     rrtmgp_model = RRTMGPI.RRTMGPModel(
@@ -119,23 +160,20 @@ function rrtmgp_model_cache(
         center_pressure = NaN, # initialized in callback
         center_temperature = NaN, # initialized in callback
         surface_temperature = NaN, # initialized in callback
-        surface_emissivity = FT(1),
-        direct_sw_surface_albedo = FT(0.38),
-        diffuse_sw_surface_albedo = FT(0.38),
+        surface_emissivity = 1,
+        direct_sw_surface_albedo = 0.38,
+        diffuse_sw_surface_albedo = 0.38,
         solar_zenith_angle,
         weighted_irradiance,
         kwargs...,
     )
     close(input_data)
     return (;
-        ᶜT = similar(Y.c, FT),
-        ᶜvmr_h2o = similar(Y.c, FT),
-        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
-        zenith_angle = similar(Spaces.level(Y.c, 1), FT),
-        weighted_irradiance = similar(Spaces.level(Y.c, 1), FT),
-        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         idealized_insolation,
         idealized_h2o,
+        idealized_clouds,
+        insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
+        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
         rrtmgp_model,
     )
 end
@@ -155,10 +193,14 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, T_sfc, params) = p
-    (; ᶜT, ᶜvmr_h2o, insolation_tuple, zenith_angle, weighted_irradiance) = p
-    (; ᶠradiation_flux, idealized_insolation, idealized_h2o, rrtmgp_model) = p
+    (; ᶜK, ᶜΦ, ᶜts, T_sfc, params) = p
+    (; idealized_insolation, idealized_h2o, idealized_clouds) = p
+    (; insolation_tuple, ᶠradiation_flux, rrtmgp_model) = p
 
+    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
+
+    ᶜp = RRTMGPI.array2field(rrtmgp_model.center_pressure, axes(Y.c))
+    ᶜT = RRTMGPI.array2field(rrtmgp_model.center_temperature, axes(Y.c))
     if :ρθ in propertynames(Y.c)
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
     elseif :ρe_tot in propertynames(Y.c)
@@ -167,14 +209,14 @@ function rrtmgp_model_callback!(integrator)
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
     end
-
     @. ᶜp = TD.air_pressure(params, ᶜts)
     @. ᶜT = TD.air_temperature(params, ᶜts)
-    rrtmgp_model.center_pressure .= RRTMGPI.field2array(ᶜp)
-    rrtmgp_model.center_temperature .= RRTMGPI.field2array(ᶜT)
-    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
     if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
+        ᶜvmr_h2o = RRTMGPI.array2field(
+            rrtmgp_model.center_volume_mixing_ratio_h2o,
+            axes(Y.c),
+        )
         if idealized_h2o
             # slowly increase the relative humidity from 0 to 0.6 to account for
             # the fact that we have a very unrealistic initial condition
@@ -203,8 +245,6 @@ function rrtmgp_model_callback!(integrator)
                 TD.PhasePartition(params, ᶜts),
             )
         end
-        rrtmgp_model.center_volume_mixing_ratio_h2o .=
-            RRTMGPI.field2array(ᶜvmr_h2o)
     end
 
     if !idealized_insolation
@@ -215,27 +255,56 @@ function rrtmgp_model_callback!(integrator)
 
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
+            solar_zenith_angle = RRTMGPI.array2field(
+                rrtmgp_model.solar_zenith_angle,
+                axes(bottom_coords),
+            )
+            weighted_irradiance = RRTMGPI.array2field(
+                rrtmgp_model.weighted_irradiance,
+                axes(bottom_coords),
+            )
             @. insolation_tuple = instantaneous_zenith_angle(
                 date_time,
                 Float64(bottom_coords.long),
                 Float64(bottom_coords.lat),
                 params,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
-            @. zenith_angle = min(first(insolation_tuple), max_zenith_angle)
+            @. solar_zenith_angle =
+                min(first(insolation_tuple), max_zenith_angle)
             @. weighted_irradiance =
                 irradiance * (au / last(insolation_tuple))^2
-            rrtmgp_model.solar_zenith_angle .= RRTMGPI.field2array(zenith_angle)
-            rrtmgp_model.weighted_irradiance .=
-                RRTMGPI.field2array(weighted_irradiance)
         else
             # assume that the latitude and longitude are both 0 for flat space
             insolation_tuple =
                 instantaneous_zenith_angle(date_time, 0.0, 0.0, params)
-            zenith_angle = min(first(insolation_tuple), max_zenith_angle)
-            weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
-            rrtmgp_model.solar_zenith_angle .= zenith_angle
-            rrtmgp_model.weighted_irradiance .= weighted_irradiance
+            rrtmgp_model.solar_zenith_angle .=
+                min(first(insolation_tuple), max_zenith_angle)
+            rrtmgp_model.weighted_irradiance .=
+                irradiance * (au / last(insolation_tuple))^2
         end
+    end
+
+    if !idealized_clouds && !(
+        rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation ||
+        rrtmgp_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+    )
+        ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+        ᶜlwp = RRTMGPI.array2field(
+            rrtmgp_model.center_cloud_liquid_water_path,
+            axes(Y.c),
+        )
+        ᶜiwp = RRTMGPI.array2field(
+            rrtmgp_model.center_cloud_ice_water_path,
+            axes(Y.c),
+        )
+        ᶜmask = RRTMGPI.array2field(
+            rrtmgp_model.center_cloud_boolean_mask,
+            axes(Y.c),
+        )
+        # multiply by 1000 to convert from kg/m^2 to g/m^2
+        @. ᶜlwp = 1000 * Y.c.ρ * TD.liquid_specific_humidity(params, ᶜts) * ᶜΔz
+        @. ᶜiwp = 1000 * Y.c.ρ * TD.ice_specific_humidity(params, ᶜts) * ᶜΔz
+        @. ᶜmask = TD.has_condensate(params, ᶜts)
     end
 
     RRTMGPI.update_fluxes!(rrtmgp_model)

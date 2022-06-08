@@ -76,15 +76,11 @@ function center_initial_condition_column(
         𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
     end
 
-    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
     tc_kwargs = if turbconv_model isa Nothing
         NamedTuple()
     elseif turbconv_model isa TC.EDMFModel
         (;
-            ρθ_liq_ice = FT(0),
-            ρq_tot = FT(0),
-            u = FT(0),
-            v = FT(0),
+            ρq_tot = FT(0), # TC needs this, for now.
             TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
         )
     end
@@ -97,7 +93,7 @@ function center_initial_condition_column(
     )
 end
 
-function center_initial_condition_sphere(
+function center_initial_condition_baroclinic_wave(
     local_geometry,
     params,
     energy_form,
@@ -199,6 +195,80 @@ function center_initial_condition_sphere(
     # Initial values computed from the thermodynamic state
     ts = TD.PhaseEquil_pTq(params, p, T, q_tot)
     ρ = TD.air_density(params, ts)
+    if energy_form isa PotentialTemperature
+        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+    elseif energy_form isa TotalEnergy
+        K = norm_sqr(uₕ_local) / 2
+        ᶜ𝔼_kwarg =
+            (; ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z))
+    elseif energy_form isa InternalEnergy
+        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+    end
+    if moisture_model isa DryModel
+        moisture_kwargs = NamedTuple()
+    elseif moisture_model isa EquilMoistModel
+        moisture_kwargs = (; ρq_tot = ρ * q_tot)
+    elseif moisture_model isa NonEquilMoistModel
+        moisture_kwargs = (;
+            ρq_tot = ρ * q_tot,
+            ρq_liq = ρ * TD.liquid_specific_humidity(params, ts),
+            ρq_ice = ρ * TD.ice_specific_humidity(params, ts),
+        )
+    end
+    # TODO: Include ability to handle nonzero initial cloud condensate
+
+    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    elseif turbconv_model isa TC.EDMFModel
+        (;
+            ρθ_liq_ice = FT(0),
+            ρq_tot = FT(0),
+            u = FT(0),
+            v = FT(0),
+            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
+        )
+    end
+    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
+end
+
+function center_initial_condition_sphere(
+    local_geometry,
+    params,
+    energy_form,
+    moisture_model,
+    turbconv_model;
+)
+
+    # Coordinates
+    z = local_geometry.coordinates.z
+    FT = eltype(z)
+
+    # Constants from CLIMAParameters
+    grav = FT(Planet.grav(params))
+
+    # Initial temperature and pressure
+    temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
+        params,
+        FT(290),
+        FT(220),
+        FT(8e3),
+    )
+    T, p = temp_profile(params, z)
+    T += rand(FT) * FT(0.1) * (z < 5000)
+
+    # Initial velocity
+    u = FT(0)
+    v = FT(0)
+    uₕ_local = Geometry.UVVector(u, v)
+    uₕ = Geometry.Covariant12Vector(uₕ_local, local_geometry)
+
+    # Initial moisture
+    q_tot = FT(0)
+
+    # Initial values computed from the thermodynamic state
+    ρ = TD.air_density(params, T, p)
+    ts = TD.PhaseEquil_ρTq(params, ρ, T, q_tot)
     if energy_form isa PotentialTemperature
         ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
     elseif energy_form isa TotalEnergy
@@ -357,14 +427,37 @@ end
 # 0-Moment Microphysics
 
 microphysics_cache(Y, ::Nothing) = NamedTuple()
-microphysics_cache(Y, ::Microphysics0Moment) =
-    (ᶜS_ρq_tot = similar(Y.c, FT), ᶜλ = similar(Y.c, FT))
+microphysics_cache(Y, ::Microphysics0Moment) = (
+    ᶜS_ρq_tot = similar(Y.c, FT),
+    ᶜλ = similar(Y.c, FT),
+    col_integrated_precip = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
+)
+
+vertical∫_col(field::ClimaCore.Fields.CenterExtrudedFiniteDifferenceField) =
+    vertical∫_col(field, 1)
+vertical∫_col(field::ClimaCore.Fields.FaceExtrudedFiniteDifferenceField) =
+    vertical∫_col(field, ClimaCore.Operators.PlusHalf(1))
+
+function vertical∫_col(
+    field::ClimaCore.Fields.Field,
+    one_index::Union{Int, ClimaCore.Operators.PlusHalf},
+)
+    Δz = Fields.local_geometry_field(field).∂x∂ξ.components.data.:9
+    Ni, Nj, _, _, Nh = size(ClimaCore.Spaces.local_geometry_data(axes(field)))
+    planar_field = similar(Fields.level(field, one_index))
+    for inds in Iterators.product(1:Ni, 1:Nj, 1:Nh)
+        Δz_col = column(Δz, inds...)
+        field_col = column(field, inds...)
+        parent(planar_field) .= sum(parent(field_col .* Δz_col))
+    end
+    return planar_field
+end
 
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
-    (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, params) = p # assume ᶜts has been updated
+    (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, col_integrated_precip, params) = p # assume ᶜts has been updated
 
     @. ᶜS_ρq_tot =
-        Y.c.ρ * CM.Microphysics_0M.remove_precipitation(
+        Y.c.ρ * CM.Microphysics0M.remove_precipitation(
             params,
             TD.PhasePartition(params, ᶜts),
         )
@@ -387,6 +480,10 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts)
             )
     end
+
+    # update precip in cache for coupler's use
+    col_integrated_precip =
+        vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
 end
 
 # Vertical diffusion boundary layer parameterization
@@ -550,7 +647,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
         ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
         parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
-            -parent(
+            parent(
                 Geometry.Contravariant3Vector.(normal) .⊗
                 Geometry.Covariant12Vector.(
                     Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
@@ -561,36 +658,29 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                 Geometry.Contravariant3Vector(FT(0)) ⊗
                 Geometry.Covariant12Vector(FT(0), FT(0)),
             ),
-            bottom = Operators.SetValue(dif_flux_uₕ),
+            bottom = Operators.SetValue(.-dif_flux_uₕ),
         )
         @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
     end
 
     if :ρe_tot in propertynames(Y.c)
-        @. dif_flux_energy =
-            -Geometry.WVector(
-                SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
-                SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-            )
+        @. dif_flux_energy = Geometry.WVector(
+            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy),
+            bottom = Operators.SetValue(.-dif_flux_energy),
         )
         @. Yₜ.c.ρe_tot +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy =
-            -Geometry.WVector(
-                sensible_heat_flux_ρe_int(
-                    params,
-                    Ch,
-                    flux_coefficients,
-                    nothing,
-                ) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-            )
+        @. dif_flux_energy = Geometry.WVector(
+            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        )
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy),
+            bottom = Operators.SetValue(.-dif_flux_energy),
         )
         @. Yₜ.c.ρe_int +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_int + ᶜp) / ᶜρ))
@@ -598,10 +688,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρq_tot in propertynames(Y.c)
         @. dif_flux_ρq_tot =
-            -Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
+            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_ρq_tot),
+            bottom = Operators.SetValue(.-dif_flux_ρq_tot),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
