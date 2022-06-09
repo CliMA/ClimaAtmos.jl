@@ -59,6 +59,7 @@ turbconv_model() = turbconv_model(FT, parsed_args, namelist)
 
 diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
+using Colors
 using NVTX
 using OrdinaryDiffEq
 using PrettyTables
@@ -497,12 +498,19 @@ save_to_disk_func = make_save_to_disk_func(output_dir, p, is_distributed)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
+    NVTX.isactive() && (
+        dss_dss_callback = NVTX.range_start(;
+            message = "dss callback",
+            color = colorant"yellow",
+        )
+    )
     Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
     Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
     Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
     Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
     Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
     Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+    NVTX.isactive() && NVTX.range_end(dss_dss_callback)
 end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
