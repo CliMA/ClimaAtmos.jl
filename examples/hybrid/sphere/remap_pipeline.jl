@@ -98,6 +98,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
         nc_precipitation_removal =
             defVar(nc, "precipitation_removal", FT, cspace, ("time",))
+        nc_precipitation = defVar(nc, "precipitation", FT, hspace, ("time",))
     end
     # define surface flux variables
     if :sfc_flux_energy in propertynames(diag)
@@ -126,9 +127,6 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
             defVar(nc, "clear_sw_flux_up", FT, fspace, ("time",))
     end
 
-    nc_sfc_flux_energy = defVar(nc, "sfc_flux_energy", FT, hspace, ("time",))
-    nc_sfc_evaporation = defVar(nc, "sfc_evaporation", FT, hspace, ("time",))
-    
     # time
     nc_time[1] = t_now
 
@@ -165,6 +163,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_cloudice[:, 1] = diag.cloud_ice
         nc_watervapor[:, 1] = diag.water_vapor
         nc_precipitation_removal[:, 1] = diag.precipitation_removal
+        nc_precipitation[:, 1] = diag.column_integrated_precip
     end
 
     if :sfc_flux_energy in propertynames(diag)
@@ -237,6 +236,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
             "cloud_liquid",
             "water_vapor",
             "precipitation_removal",
+	    "precipitation",
         ]
     else
         moist_variables = String[]
