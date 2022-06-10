@@ -388,8 +388,8 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                 cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
-                precipitation_removal = ᶜS_ρq_tot,
-                column_integrated_precip = col_integrated_precip,
+                precipitation_3d = ᶜS_ρq_tot,
+                precipitation_2d = col_integrated_precip,
                 relative_humidity = ᶜRH,
             )
         else
