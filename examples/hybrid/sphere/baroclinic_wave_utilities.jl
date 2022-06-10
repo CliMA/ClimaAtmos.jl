@@ -427,11 +427,34 @@ end
 # 0-Moment Microphysics
 
 microphysics_cache(Y, ::Nothing) = NamedTuple()
-microphysics_cache(Y, ::Microphysics0Moment) =
-    (ᶜS_ρq_tot = similar(Y.c, FT), ᶜλ = similar(Y.c, FT))
+microphysics_cache(Y, ::Microphysics0Moment) = (
+    ᶜS_ρq_tot = similar(Y.c, FT),
+    ᶜλ = similar(Y.c, FT),
+    col_integrated_precip = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
+)
+
+vertical∫_col(field::ClimaCore.Fields.CenterExtrudedFiniteDifferenceField) =
+    vertical∫_col(field, 1)
+vertical∫_col(field::ClimaCore.Fields.FaceExtrudedFiniteDifferenceField) =
+    vertical∫_col(field, ClimaCore.Operators.PlusHalf(1))
+
+function vertical∫_col(
+    field::ClimaCore.Fields.Field,
+    one_index::Union{Int, ClimaCore.Operators.PlusHalf},
+)
+    Δz = Fields.local_geometry_field(field).∂x∂ξ.components.data.:9
+    Ni, Nj, _, _, Nh = size(ClimaCore.Spaces.local_geometry_data(axes(field)))
+    planar_field = similar(Fields.level(field, one_index))
+    for inds in Iterators.product(1:Ni, 1:Nj, 1:Nh)
+        Δz_col = column(Δz, inds...)
+        field_col = column(field, inds...)
+        parent(planar_field) .= sum(parent(field_col .* Δz_col))
+    end
+    return planar_field
+end
 
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
-    (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, params) = p # assume ᶜts has been updated
+    (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, col_integrated_precip, params) = p # assume ᶜts has been updated
 
     @. ᶜS_ρq_tot =
         Y.c.ρ * CM.Microphysics0M.remove_precipitation(
@@ -457,6 +480,10 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
                 (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts)
             )
     end
+
+    # update precip in cache for coupler's use
+    col_integrated_precip =
+        vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
 end
 
 # Vertical diffusion boundary layer parameterization

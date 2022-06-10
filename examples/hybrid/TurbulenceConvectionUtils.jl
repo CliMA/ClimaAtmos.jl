@@ -25,7 +25,6 @@ const tc_dir = pkgdir(TC)
 
 include(joinpath(tc_dir, "driver", "dycore.jl"))
 include(joinpath(tc_dir, "driver", "Surface.jl"))
-include(joinpath(tc_dir, "driver", "TimeStepping.jl"))
 include(joinpath(tc_dir, "driver", "initial_conditions.jl"))
 
 include(joinpath(tc_dir, "driver", "Cases.jl"))
@@ -52,8 +51,7 @@ function get_edmf_cache(Y, namelist, param_set)
     surf_ref_state = Cases.surface_ref_state(case_type, param_set, namelist)
     surf_params =
         Cases.surface_params(case_type, surf_ref_state, param_set; Ri_bulk_crit)
-    inversion_type = Cases.inversion_type(case_type)
-    case = Cases.CasesBase(case_type; inversion_type, surf_params, Fo, Rad)
+    case = Cases.CasesBase(case_type; surf_params, Fo, Rad)
     precip_name = TC.parse_namelist(
         namelist,
         "microphysics",
@@ -71,9 +69,17 @@ function get_edmf_cache(Y, namelist, param_set)
     else
         error("Invalid precip_name $(precip_name)")
     end
-    edmf = TC.EDMFModel(namelist, precip_model)
     FT = CC.Spaces.undertype(axes(Y.c))
-    return (; edmf, case, param_set, aux = get_aux(edmf, Y, FT), precip_model)
+    edmf = TC.EDMFModel(FT, namelist, precip_model)
+    @info "EDMFModel: \n$(summary(edmf))"
+    return (;
+        edmf,
+        case,
+        param_set,
+        surf_ref_state,
+        aux = get_aux(edmf, Y, FT),
+        precip_model,
+    )
 end
 
 function tc_column_state(prog, aux, tendencies, inds...)
@@ -112,62 +118,14 @@ end
 
 function init_tc!(Y, p, param_set, namelist)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, aux, case) = edmf_cache
+    (; edmf, param_set, surf_ref_state, aux, case) = edmf_cache
 
-    case_type = Cases.get_case(namelist)
-    surf_ref_state = Cases.surface_ref_state(case_type, param_set, namelist)
-
-    Fo = TC.ForcingBase(
-        case_type,
-        param_set;
-        Cases.forcing_kwargs(case_type, namelist)...,
-    )
-    Rad = TC.RadiationBase(case_type)
-    TS = TimeStepping(namelist)
-
-    # Create the class for precipitation
-
-    precip_name = TC.parse_namelist(
-        namelist,
-        "microphysics",
-        "precipitation_model";
-        default = "None",
-        valid_options = ["None", "cutoff", "clima_1m"],
-    )
-
-    precip_model = if precip_name == "None"
-        TC.NoPrecipitation()
-    elseif precip_name == "cutoff"
-        TC.CutoffPrecipitation()
-    elseif precip_name == "clima_1m"
-        TC.Clima1M()
-    else
-        error("Invalid precip_name $(precip_name)")
-    end
-
-    edmf = TC.EDMFModel(namelist, precip_model)
-    isbits(edmf) ||
-        error("Something non-isbits was added to edmf and needs to be fixed.")
+    FT = eltype(edmf)
     N_up = TC.n_updrafts(edmf)
 
-    Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
-    spk = Cases.surface_param_kwargs(case_type, namelist)
-    surf_params = Cases.surface_params(
-        case_type,
-        surf_ref_state,
-        param_set;
-        Ri_bulk_crit = Ri_bulk_crit,
-        spk...,
-    )
-    inversion_type = Cases.inversion_type(case_type)
-    case =
-        Cases.CasesBase(case_type; inversion_type, surf_params, Fo, Rad, spk...)
-
-    # TODO: write iterator for this
-    Ni, Nj, _, _, Nh = size(CC.Spaces.local_geometry_data(axes(Y.c)))
-    for h in 1:Nh, j in 1:Nj, i in 1:Ni
+    for inds in TC.iterate_columns(Y.c)
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
-        state = tc_column_state(Y, aux, nothing, i, j, h)
+        state = tc_column_state(Y, aux, nothing, inds...)
 
         grid = TC.Grid(axes(state.prog.cent))
         FT = eltype(grid)
@@ -190,20 +148,15 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
     (; edmf, param_set, aux, case, precip_model) = edmf_cache
 
     # TODO: write iterator for this
-    Ni, Nj, _, _, Nh = size(CC.Spaces.local_geometry_data(axes(Y.c)))
-    for h in 1:Nh, j in 1:Nj, i in 1:Ni
-        state = tc_column_state(Y, aux, Yₜ, i, j, h)
-
+    for inds in TC.iterate_columns(Y.c)
+        state = tc_column_state(Y, aux, Yₜ, inds...)
         grid = TC.Grid(axes(state.prog.cent))
-        # TODO: uncomment what's not needed
+
         set_thermo_state_peq!(state, grid, edmf.moisture_model, param_set)
 
-        # TODO: where should this live?
         aux_gm = TC.center_aux_grid_mean(state)
-        ts_gm = aux_gm.ts
-        @inbounds for k in TC.real_center_indices(grid)
-            aux_gm.θ_virt[k] = TD.virtual_pottemp(param_set, ts_gm[k])
-        end
+
+        @. aux_gm.θ_virt = TD.virtual_pottemp(param_set, aux_gm.ts)
 
         surf = get_surface(case.surf_params, grid, state, t, param_set)
         force = case.Fo
@@ -219,26 +172,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
 
         TC.update_aux!(edmf, grid, state, surf, param_set, t, Δt)
 
-        # add tendencies
-        en_thermo = edmf.en_thermo
-        # causes division error in dry bubble first time step
-        TC.compute_precipitation_formation_tendencies(
-            grid,
-            state,
-            edmf,
-            precip_model,
-            Δt,
-            param_set,
-        )
-        TC.microphysics(
-            en_thermo,
-            grid,
-            state,
-            edmf,
-            precip_model,
-            Δt,
-            param_set,
-        )
         TC.compute_precipitation_sink_tendencies(
             precip_model,
             edmf,

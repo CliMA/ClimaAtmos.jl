@@ -58,6 +58,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
 
     # reconstruct space, obtain Nq from space
     cspace = axes(Y.c)
+    fspace = axes(Y.f)
     hspace = cspace.horizontal_space
     Nq = Spaces.Quadratures.degrees_of_freedom(
         cspace.horizontal_space.quadrature_style,
@@ -73,6 +74,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     nc = NCDataset(datafile_cc, "c")
     # defines the appropriate dimensions and variables for a space coordinate
     def_space_coord(nc, cspace, type = "cgll")
+    def_space_coord(nc, fspace, type = "cgll")
     # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
     nc_time = def_time_coord(nc)
     # define variables for the prognostic states 
@@ -97,7 +99,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_precipitation_removal =
             defVar(nc, "precipitation_removal", FT, cspace, ("time",))
     end
-    # define surfae flux variables
+    # define surface flux variables
     if :sfc_flux_energy in propertynames(diag)
         nc_sfc_flux_energy =
             defVar(nc, "sfc_flux_energy", FT, hspace, ("time",))
@@ -105,6 +107,23 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
             defVar(nc, "sfc_evaporation", FT, hspace, ("time",))
         nc_sfc_flux_u = defVar(nc, "sfc_flux_u", FT, hspace, ("time",))
         nc_sfc_flux_v = defVar(nc, "sfc_flux_v", FT, hspace, ("time",))
+    end
+    # define radiative flux variables
+    if :lw_flux_down in propertynames(diag)
+        nc_lw_flux_down = defVar(nc, "lw_flux_down", FT, fspace, ("time",))
+        nc_lw_flux_up = defVar(nc, "lw_flux_up", FT, fspace, ("time",))
+        nc_sw_flux_down = defVar(nc, "sw_flux_down", FT, fspace, ("time",))
+        nc_sw_flux_up = defVar(nc, "sw_flux_up", FT, fspace, ("time",))
+    end
+    if :clear_lw_flux_down in propertynames(diag)
+        nc_clear_lw_flux_down =
+            defVar(nc, "clear_lw_flux_down", FT, fspace, ("time",))
+        nc_clear_lw_flux_up =
+            defVar(nc, "clear_lw_flux_up", FT, fspace, ("time",))
+        nc_clear_sw_flux_down =
+            defVar(nc, "clear_sw_flux_down", FT, fspace, ("time",))
+        nc_clear_sw_flux_up =
+            defVar(nc, "clear_sw_flux_up", FT, fspace, ("time",))
     end
 
     nc_sfc_flux_energy = defVar(nc, "sfc_flux_energy", FT, hspace, ("time",))
@@ -162,6 +181,19 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_sfc_flux_v[:, 1] = sfc_flux_momentum_phy.components.data.:2
     end
 
+    if :lw_flux_down in propertynames(diag)
+        nc_lw_flux_down[:, 1] = diag.lw_flux_down
+        nc_lw_flux_up[:, 1] = diag.lw_flux_up
+        nc_sw_flux_down[:, 1] = diag.sw_flux_down
+        nc_sw_flux_up[:, 1] = diag.sw_flux_up
+    end
+
+    if :clear_lw_flux_down in propertynames(diag)
+        nc_clear_lw_flux_down[:, 1] = diag.clear_lw_flux_down
+        nc_clear_lw_flux_up[:, 1] = diag.clear_lw_flux_up
+        nc_clear_sw_flux_down[:, 1] = diag.clear_sw_flux_down
+        nc_clear_sw_flux_up[:, 1] = diag.clear_sw_flux_up
+    end
     close(nc)
 
     # write out our cubed sphere mesh
@@ -215,8 +247,30 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     else
         sfc_flux_variables = String[]
     end
+    if :lw_flux_down in propertynames(diag)
+        rad_flux_variables =
+            ["lw_flux_down", "lw_flux_up", "sw_flux_down", "sw_flux_up"]
+    else
+        rad_flux_variables = String[]
+    end
+    if :clear_lw_flux_down in propertynames(diag)
+        rad_flux_clear_variables = [
+            "clear_lw_flux_down",
+            "clear_lw_flux_up",
+            "clear_sw_flux_down",
+            "clear_sw_flux_up",
+        ]
+    else
+        rad_flux_clear_variables = String[]
+    end
 
-    netcdf_variables = vcat(dry_variables, moist_variables, sfc_flux_variables)
+    netcdf_variables = vcat(
+        dry_variables,
+        moist_variables,
+        sfc_flux_variables,
+        rad_flux_variables,
+        rad_flux_clear_variables,
+    )
     apply_remap(datafile_latlon, datafile_cc, weightfile, netcdf_variables)
     rm(remap_tmpdir, recursive = true)
 
