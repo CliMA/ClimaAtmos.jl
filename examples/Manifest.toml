@@ -1790,9 +1790,9 @@ version = "0.3.4"
 
 [[deps.TurbulenceConvection]]
 deps = ["CLIMAParameters", "ClimaCore", "CloudMicrophysics", "Dierckx", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Flux", "LambertW", "LinearAlgebra", "OperatorFlux", "Random", "StaticArrays", "StatsBase", "StochasticDiffEq", "Thermodynamics", "UnPack"]
-git-tree-sha1 = "595ccbb63bfba45d9a8bd9f6f6b3dfeee968cbc1"
+git-tree-sha1 = "f2ab8a7c8e117cab82f00b3f24206dde86bf75ce"
 uuid = "8e072fc4-01f8-44fb-b9dc-f9336c367e6b"
-version = "0.30.0"
+version = "0.31.0"
 
 [[deps.URIs]]
 git-tree-sha1 = "97bbe755a53fe859669cd907f2d96aee8d2c1355"
