@@ -148,10 +148,11 @@ paperplots_held_suarez(::InternalEnergy, ::DryModel, args...) =
 paperplots_held_suarez(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_held_suarez_ρe(args...)
 
-# plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10
+# plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10 (if the simulation lasts 10 days)
 function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params) = p
-    days = [8, 10]
+    last_day = floor(Int, sol.t[end] / (24 * 3600))
+    days = [last_day - 2, last_day]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -277,7 +278,8 @@ end
 
 function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-    days = [8, 10]
+    last_day = floor(Int, sol.t[end] / (24 * 3600))
+    days = [last_day - 2, last_day]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -408,7 +410,8 @@ end
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-    days = [8, 10]
+    last_day = floor(Int, sol.t[end] / (24 * 3600))
+    days = [last_day - 2, last_day]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon

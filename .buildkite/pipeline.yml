@@ -133,6 +133,10 @@ steps:
   - group: "Sphere Examples"
     steps:
 
+      - label: ":computer: baroclinic wave (ρe_tot) IMEXEuler"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 2days --dt 60secs --ode_algo IMEXEuler --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
+
       - label: ":computer: baroclinic wave (ρe_tot) Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64"
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"

@@ -90,7 +90,8 @@ jacobi_flags(::InternalEnergy) =
 jacobi_flags(::PotentialTemperature) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobian_flags = jacobi_flags(energy_form())
-max_newton_iters = 10 # only required by ODE algorithms that use Newton's method
+max_newton_iters = 2 # only required by ODE algorithms that use Newton's method
+newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
 show_progress_bar = isinteractive()
 additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
@@ -182,16 +183,7 @@ include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
-# Variables required for driver.jl (modify as needed)
-function get_ode_algorithm(parsed_args)
-    ode_algo = parsed_args["ode_algo"]
-    ode_algo_dict = Dict(
-        "Rosenbrock23" => OrdinaryDiffEq.Rosenbrock23,
-        "Euler" => OrdinaryDiffEq.Euler,
-    )
-    return ode_algo_dict[ode_algo]
-end
-ode_algorithm = get_ode_algorithm(parsed_args)
+ode_algorithm = getproperty(OrdinaryDiffEq, Symbol(parsed_args["ode_algo"]))
 
 additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
@@ -299,23 +291,27 @@ for key in keys(p.tendency_knobs)
     @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
 end
 
-if ode_algorithm <: Union{
+ode_algorithm_type =
+    ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
+if ode_algorithm_type <: Union{
     OrdinaryDiffEq.OrdinaryDiffEqImplicitAlgorithm,
     OrdinaryDiffEq.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
 }
-    use_transform = !(ode_algorithm in (Rosenbrock23, Rosenbrock32))
+    use_transform = !(ode_algorithm_type in (Rosenbrock23, Rosenbrock32))
     W = SchurComplementW(Y, use_transform, jacobian_flags, test_implicit_solver)
     jac_kwargs =
         use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
         (; jac_prototype = W, Wfact = Wfact!)
 
     alg_kwargs = (; linsolve = linsolve!)
-    if ode_algorithm <: Union{
+    if ode_algorithm_type <: Union{
         OrdinaryDiffEq.OrdinaryDiffEqNewtonAlgorithm,
         OrdinaryDiffEq.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
-        alg_kwargs =
-            (; alg_kwargs..., nlsolve = NLNewton(; max_iter = max_newton_iters))
+        alg_kwargs = (;
+            alg_kwargs...,
+            nlsolve = NLNewton(; κ = newton_κ, max_iter = max_newton_iters),
+        )
     end
 else
     jac_kwargs = alg_kwargs = ()
@@ -359,7 +355,7 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
         ᶜT = @. TD.air_temperature(params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(params, ᶜts)
 
-        # vorticity 
+        # vorticity
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
@@ -393,8 +389,8 @@ function make_save_to_disk_func(output_dir, p, is_distributed)
                 cloud_liquid = ᶜcloud_liquid,
                 cloud_ice = ᶜcloud_ice,
                 water_vapor = ᶜwatervapor,
-                precipitation_removal = ᶜS_ρq_tot,
-                column_integrated_precip = col_integrated_precip,
+                precipitation_3d = ᶜS_ρq_tot,
+                precipitation_2d = col_integrated_precip,
                 relative_humidity = ᶜRH,
             )
         else

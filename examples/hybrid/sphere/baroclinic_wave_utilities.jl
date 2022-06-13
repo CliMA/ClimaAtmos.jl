@@ -448,7 +448,8 @@ function vertical∫_col(
     for inds in Iterators.product(1:Ni, 1:Nj, 1:Nh)
         Δz_col = column(Δz, inds...)
         field_col = column(field, inds...)
-        parent(planar_field) .= sum(parent(field_col .* Δz_col))
+        planar_field_column = column(planar_field, inds...)
+        parent(planar_field_column) .= sum(parent(field_col .* Δz_col))
     end
     return planar_field
 end
