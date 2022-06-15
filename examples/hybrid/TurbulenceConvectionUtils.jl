@@ -23,12 +23,12 @@ import TurbulenceConvection
 const TC = TurbulenceConvection
 const tc_dir = pkgdir(TC)
 
+include(joinpath(tc_dir, "driver", "Cases.jl"))
+import .Cases
+
 include(joinpath(tc_dir, "driver", "dycore.jl"))
 include(joinpath(tc_dir, "driver", "Surface.jl"))
 include(joinpath(tc_dir, "driver", "initial_conditions.jl"))
-
-include(joinpath(tc_dir, "driver", "Cases.jl"))
-import .Cases
 
 const tc_dir = pkgdir(TC)
 include(joinpath(tc_dir, "driver", "generate_namelist.jl"))
@@ -37,21 +37,24 @@ import .NameList
 function get_aux(edmf, Y, ::Type{FT}) where {FT}
     fspace = axes(Y.f)
     cspace = axes(Y.c)
-    aux_cent_fields = TC.FieldFromNamedTuple(cspace, cent_aux_vars(FT, edmf))
-    aux_face_fields = TC.FieldFromNamedTuple(fspace, face_aux_vars(FT, edmf))
+    aux_cent_fields = TC.FieldFromNamedTuple(cspace, cent_aux_vars, FT, edmf)
+    aux_face_fields = TC.FieldFromNamedTuple(fspace, face_aux_vars, FT, edmf)
     aux = CC.Fields.FieldVector(cent = aux_cent_fields, face = aux_face_fields)
     return aux
 end
 
 function get_edmf_cache(Y, namelist, param_set)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
-    case_type = Cases.get_case(namelist)
-    Fo = TC.ForcingBase(case_type, param_set)
-    Rad = TC.RadiationBase(case_type)
-    surf_ref_state = Cases.surface_ref_state(case_type, param_set, namelist)
+    case = Cases.get_case(namelist)
+    forcing = Cases.ForcingBase(
+        case,
+        param_set;
+        Cases.forcing_kwargs(case, namelist)...,
+    )
+    radiation = Cases.RadiationBase(case)
+    surf_ref_state = Cases.surface_ref_state(case, param_set, namelist)
     surf_params =
-        Cases.surface_params(case_type, surf_ref_state, param_set; Ri_bulk_crit)
-    case = Cases.CasesBase(case_type; surf_params, Fo, Rad)
+        Cases.surface_params(case, surf_ref_state, param_set; Ri_bulk_crit)
     precip_name = TC.parse_namelist(
         namelist,
         "microphysics",
@@ -75,6 +78,9 @@ function get_edmf_cache(Y, namelist, param_set)
     return (;
         edmf,
         case,
+        forcing,
+        radiation,
+        surf_params,
         param_set,
         surf_ref_state,
         aux = get_aux(edmf, Y, FT),
@@ -118,7 +124,16 @@ end
 
 function init_tc!(Y, p, param_set, namelist)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_ref_state, aux, case) = edmf_cache
+    (;
+        edmf,
+        param_set,
+        surf_ref_state,
+        aux,
+        surf_params,
+        forcing,
+        radiation,
+        case,
+    ) = edmf_cache
 
     FT = eltype(edmf)
     N_up = TC.n_updrafts(edmf)
@@ -127,7 +142,7 @@ function init_tc!(Y, p, param_set, namelist)
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
         state = tc_column_state(Y, aux, nothing, inds...)
 
-        grid = TC.Grid(axes(state.prog.cent))
+        grid = TC.Grid(state)
         FT = eltype(grid)
         t = FT(0)
         compute_ref_state!(state, grid, param_set; ts_g = surf_ref_state)
@@ -136,39 +151,47 @@ function init_tc!(Y, p, param_set, namelist)
         set_thermo_state_pθq!(state, grid, edmf.moisture_model, param_set)
         set_grid_mean_from_thermo_state!(param_set, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, param_set)
-        Cases.initialize_forcing(case, grid, state, param_set)
-        Cases.initialize_radiation(case, grid, state, param_set)
-        initialize_edmf(edmf, grid, state, case, param_set, t)
+        Cases.initialize_forcing(case, forcing, grid, state, param_set)
+        Cases.initialize_radiation(case, radiation, grid, state, param_set)
+        initialize_edmf(edmf, grid, state, surf_params, param_set, t, case)
     end
 end
 
 
 function sgs_flux_tendency!(Yₜ, Y, p, t)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, aux, case, precip_model) = edmf_cache
+    (;
+        edmf,
+        param_set,
+        aux,
+        case,
+        surf_params,
+        radiation,
+        forcing,
+        precip_model,
+    ) = edmf_cache
 
     # TODO: write iterator for this
     for inds in TC.iterate_columns(Y.c)
         state = tc_column_state(Y, aux, Yₜ, inds...)
-        grid = TC.Grid(axes(state.prog.cent))
+        grid = TC.Grid(state)
 
         set_thermo_state_peq!(state, grid, edmf.moisture_model, param_set)
+        assign_thermo_aux!(state, grid, edmf.moisture_model, param_set)
 
         aux_gm = TC.center_aux_grid_mean(state)
 
         @. aux_gm.θ_virt = TD.virtual_pottemp(param_set, aux_gm.ts)
 
-        surf = get_surface(case.surf_params, grid, state, t, param_set)
-        force = case.Fo
-        radiation = case.Rad
+        surf = get_surface(surf_params, grid, state, t, param_set)
 
-        TC.affect_filter!(edmf, grid, state, param_set, surf, case.casename, t)
+        TC.affect_filter!(edmf, grid, state, param_set, surf, t)
 
         # Update aux / pre-tendencies filters. TODO: combine these into a function that minimizes traversals
         # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
         # treat them as auxiliary variables for now, until we disentangle the tendency computations.
         Cases.update_forcing(case, grid, state, t, param_set)
-        Cases.update_radiation(case.Rad, grid, state, t, param_set)
+        Cases.update_radiation(radiation, grid, state, t, param_set)
 
         TC.update_aux!(edmf, grid, state, surf, param_set, t, Δt)
 
@@ -197,7 +220,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
             state,
             surf,
             radiation,
-            force,
+            forcing,
             param_set,
         )
     end
