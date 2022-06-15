@@ -100,10 +100,7 @@ By breaking the curl and cross product terms into horizontal and vertical contri
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - \frac{1}{\rho} \nabla_h p  - \nabla_h (\Phi + K) ,
 ```
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors.
-
-!!! todo
-    Without topography, these are equal to their covariant vectors (i.e. ``\boldsymbol{u}^h = \boldsymbol{u}_h``), but these will need to be updated with the addition of topography.
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
 
 The ``(\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as
 ```math
