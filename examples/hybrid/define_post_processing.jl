@@ -2,6 +2,32 @@
 space_string(::Spaces.FaceExtrudedFiniteDifferenceSpace) = "(Face field)"
 space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
 
+import ClimaCoreTempestRemap: def_space_coord
+
+function def_space_coord(
+    nc::NCDataset,
+    space::Spaces.ExtrudedFiniteDifferenceSpace{S};
+    type = "dgll",
+) where {S <: Spaces.Staggering}
+    hvar = def_space_coord(nc, space.horizontal_space; type = type)
+    if space.vertical_topology isa Topologies.IntervalTopology
+        vvar = def_space_coord(
+            nc,
+            Spaces.FiniteDifferenceSpace{S}(space.vertical_topology),
+        )
+    elseif space.vertical_topology isa
+           ClimaCore.Hypsography.TerrainWarpedIntervalTopology
+        vvar = def_space_coord(
+            nc,
+            Spaces.CenterFiniteDifferenceSpace(
+                space.vertical_topology.topology,
+            ),
+        )
+    end
+
+    (hvar..., vvar...)
+end
+
 function process_name(s::AbstractString)
     # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
     s = replace(s, "components_data_" => "")
@@ -273,7 +299,6 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
 
         rm(datafile_latlon)
     end
-
 end
 
 function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
