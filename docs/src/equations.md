@@ -107,8 +107,10 @@ where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and verti
 
 The ``(\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as
 ```math
-I^c((C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times \boldsymbol{u}^v)
+I^c((C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times \boldsymbol{u}^v) .
 ```
+Note that ``\boldsymbol{u}^v`` is zero at the boundary, so the boundary conditions for ``C^f_v`` can be ignored.
+
 The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h`` term is discretized as
 ```math
 (2 \boldsymbol{\Omega}^v + C_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
@@ -135,6 +137,9 @@ and the ``\frac{1}{\rho} \nabla_v p + \nabla_v(\Phi + K)`` term as
 \frac{1}{I^f(\rho)} G^f_v[p] + G^f[K + \Phi] ,
 ```
 with the latter treated implicitly.
+
+!!! todo
+    In the presence of topography, ``\boldsymbol{u}_v`` at the boundary should be defined such that ``\boldsymbol{u}^v = 0``. Since ``\boldsymbol{u}_h`` is defined at cell centers, this requires some extrapolation procedure. Note that due to how the other boundary conditions are applied, this choice should only affect computation of kinetic energy.
 
 
 ### Total energy
