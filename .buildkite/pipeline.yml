@@ -130,6 +130,14 @@ steps:
         agents:
           slurm_ntasks: 2
 
+      - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 5days"
+        artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
   - group: "Sphere Examples"
     steps:
 
