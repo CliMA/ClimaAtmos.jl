@@ -101,7 +101,7 @@ steps:
           slurm_cpus_per_task: 8
       
       - label: ":computer: held suarez (ρe_tot) equilmoist third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 150secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_third/*"
         agents:
           slurm_cpus_per_task: 8
