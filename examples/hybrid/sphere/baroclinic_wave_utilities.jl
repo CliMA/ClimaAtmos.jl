@@ -635,17 +635,14 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     z_field = Fields.coordinate_field(Y.c).z
     ᶜz_interior = Fields.field_values(Spaces.level(z_field), 1)
     ᶠz_surface = Fields.field_values(z_sfc)
-    Δz_local =
-        Fields.Field(ᶜz_interior, axes(z_bottom)) .-
-        Fields.Field(ᶠz_surface, axes(z_bottom))
 
     flux_coefficients .=
         constant_T_saturated_surface_coefs.(
             T_sfc,
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-            Δz_local,
-            FT(0),
+            Fields.Field(ᶜz_interior, axes(z_bottom)),
+            Fields.Field(ᶠz_surface, axes(z_bottom)),
             Cd,
             Ch,
             params,
