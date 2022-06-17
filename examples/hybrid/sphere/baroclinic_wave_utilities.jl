@@ -379,13 +379,30 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
 )
 
 function held_suarez_tendency!(Yₜ, Y, p, t)
-    (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+    (;ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
     R_d = FT(Planet.R_d(params))
     κ_d = FT(Planet.kappa_d(params))
     cv_d = FT(Planet.cv_d(params))
     day = FT(Planet.day(params))
     MSLP = FT(Planet.MSLP(params))
+
+    if :ρθ in propertynames(Y.c)
+      ts_int = Spaces.level(thermo_state_ρθ.(Y.c.ρθ, Y.c, params), 1)
+    elseif :ρe_tot in propertynames(Y.c)
+      ts_int = Spaces.level(thermo_state_ρθ.(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params), 1)
+    elseif :ρe_int in propertynames(Y.c)
+      ts_int = Spaces.level(thermo_state_ρθ.(Y.c.ρe_int, Y.c, params), 1)
+    end
+    
+    T_int = @. TD.air_temperature(params, ts_int)
+    Rm_int = @. TD.gas_constant_air(params, ts_int)
+    ρ_sfc =
+        @. TD.air_density(params, ts_int) *
+        (T_sfc / T_int)^(TD.cv_m(params, ts_int) / Rm_int)
+    q_sfc = @. TD.q_vap_saturation_generic(params, T_sfc, ρ_sfc, TD.Liquid())
+    ts_sfc = @. TD.PhaseEquil_ρTq(params, ρ_sfc, T_sfc, q_sfc)
+    p_sfc = @. TD.air_pressure(ts_sfc)
 
     σ_b = FT(7 / 10)
     k_a = 1 / (40 * day)
@@ -401,7 +418,7 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     Δθ_z = FT(10)
     T_min = FT(200)
 
-    @. ᶜσ = ᶜp / MSLP
+    @. ᶜσ = ᶜp / p_sfc
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
         (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
