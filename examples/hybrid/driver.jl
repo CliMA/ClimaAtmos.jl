@@ -22,7 +22,7 @@ viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
-topography = Symbol(parsed_args["topography"])
+topography = parsed_args["topography"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -217,6 +217,17 @@ enable_threading() = parsed_args["enable_threading"]
 # we will just hardcode the value of 4.
 max_field_element_size = 4 # ρ = 1 byte, 𝔼 = 1 byte, uₕ = 2 bytes
 
+
+if topography == "DCMIP200"
+    warp_fn= dcmip200_orography
+elseif topography == "Earth"
+    warp_fn = earth_orography
+elseif topography == "Bell"
+    warp_fn = smooth_peak
+elseif topography == "LiftSurface"
+    warp_fn = lift_surface
+end
+
 center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
@@ -224,7 +235,7 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; 
                        params = params, 
-                       surface_warp=earth_orography)
+                       surface_warp=warp_fn)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
     quad = Spaces.Quadratures.GL{1}()
@@ -325,7 +336,7 @@ job_id = if isnothing(parsed_args["job_id"])
 else
     parsed_args["job_id"]
 end
-default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+default_output = haskey(ENV, "CI") ? job_id : joinpath("/central/scratch/asridhar/output", job_id)
 output_dir = parse_arg(parsed_args, "output_dir", default_output)
 @info "Output directory: `$output_dir`"
 mkpath(output_dir)

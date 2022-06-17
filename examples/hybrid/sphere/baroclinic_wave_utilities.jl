@@ -378,7 +378,7 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
 )
 
 function held_suarez_tendency!(Yₜ, Y, p, t)
-    (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+    (; ᶜp, ᶜp_sfc, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
     R_d = FT(Planet.R_d(params))
     κ_d = FT(Planet.kappa_d(params))
@@ -399,9 +399,7 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     end
     Δθ_z = FT(10)
     T_min = FT(200)
-  
-#    @show ᶜp
-#    @show (maximum(ᶜp), minimum(ᶜp))
+
     @. ᶜσ = ᶜp / MSLP
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
@@ -522,6 +520,7 @@ function vertical_diffusion_boundary_layer_cache(
         Cd,
         Ch,
         diffuse_momentum,
+        z_bottom
     )
 end
 
@@ -555,8 +554,8 @@ function constant_T_saturated_surface_coefs(
         state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
         Cd,
         Ch,
-        z0m = FT(0),
-        z0b = FT(0),
+        z0m = FT(0.0001),
+        z0b = FT(0.0001),
     )
 end
 
@@ -583,7 +582,7 @@ end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
-    (; ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (;z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (;
         flux_coefficients,
         dif_flux_uₕ,
@@ -591,6 +590,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         dif_flux_ρq_tot,
         Cd,
         Ch,
+        z_bottom,
         diffuse_momentum,
         params,
     ) = p
@@ -602,13 +602,22 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
     @. ᶠK_E = eddy_diffusivity_coefficient(norm(ᶠv_a), ᶠz_a, ᶠinterp(ᶜp))
 
-    flux_coefficients .=
+    # Workaround to cast z_surface (face values) onto consistent space for computation
+    # TODO: Revisit when "space not same instance is dealt with"
+    z_field = Fields.coordinate_field(Y.c).z
+    ᶜz_interior = Fields.field_values(Spaces.level(z_field,1))
+    ᶠz_surface = Fields.field_values(z_sfc)
+    z_space = axes(ᶜz_interior)
+    Δz_local = Fields.Field(ᶜz_interior,axes(z_bottom)) .- Fields.Field(ᶠz_surface, axes(z_bottom))
+    @assert typeof(Fields.Field(ᶜz_interior, axes(Y.c))) == typeof(Fields.Field(ᶠz_surface, axes(Y.c)))
+
+    flux_coefficients .= 
         constant_T_saturated_surface_coefs.(
             T_sfc,
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-            Spaces.level(Fields.coordinate_field(Y.c).z, 1),
-            FT(0), # TODO: get actual value of z_sfc
+            Δz_local, 
+            FT(0),
             Cd,
             Ch,
             params,
@@ -620,6 +629,16 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
         normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
         ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
+
+        # ASR TEMP 
+        #parent(dif_flux_uₕ) .= parent(
+        #                              Geometry.project.(
+        #                                                Geometry.Contravariant3Axis(), 
+        #                                                Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
+        #                                               )
+        #                             )
+        # ASR TEMP 
+
         parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
             parent(
                 Geometry.Contravariant3Vector.(normal) .⊗
@@ -638,6 +657,12 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     end
 
     if :ρe_tot in propertynames(Y.c)
+        # ASR TEMP 
+        #@. dif_flux_energy = Geometry.project(Geometry.Contravariant3Axis(), Geometry.WVector(
+        #    SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
+        #    SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
+        #   ))
+        # ASR TEMP 
         @. dif_flux_energy = Geometry.WVector(
             SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
             SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),

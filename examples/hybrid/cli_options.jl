@@ -137,7 +137,7 @@ function parse_commandline()
         arg_type = Float64
         default = Float64(1e6)
         "--topography"
-        help = "Function prescribing topography"
+        help = "Surface warping type [`DCMIP200`, `Earth`, `Bell`] "
         arg_type = String
         default = "nothing"
     end

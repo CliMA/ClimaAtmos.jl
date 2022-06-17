@@ -6,6 +6,8 @@ using ClimaCore.Geometry: ⊗
 
 using Thermodynamics
 
+using ClimaCore.Utilities: half
+
 const TD = Thermodynamics
 
 include("schur_complement_W.jl")
@@ -110,6 +112,7 @@ get_cache(Y, params, upwinding_mode, dt) = merge(
 
 function default_cache(Y, params, upwinding_mode)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
+    ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = FT(Planet.Omega(params))
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
@@ -132,12 +135,15 @@ function default_cache(Y, params, upwinding_mode)
     else
         ts_type = TD.PhaseDry{FT}
     end
+    z_sfc = Fields.level(ᶠcoord.z,half)
     return (;
+        z_sfc,
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜΦ = FT(Planet.grav(params)) .* ᶜcoord.z,
         ᶜts = similar(Y.c, ts_type),
         ᶜp = similar(Y.c, FT),
+        ᶜp_sfc = similar(Fields.level(Y.c,1), FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
@@ -166,7 +172,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, params, ᶠupwind_product) = p
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜp_sfc, params, ᶠupwind_product) = p
 
     # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
     # allocation because the cache is stored separately from Y, which means that
@@ -264,7 +270,7 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, params) = p
+    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜp_sfc, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, params) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     @. ᶜuvw = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
@@ -319,13 +325,13 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
 
     # TODO: Modify to account for topography
     #@. ᶠu¹² = Geometry.Contravariant12Vector(ᶠinterp(ᶜuₕ))
-    fuw = @. Geometry.Covariant123Vector(ᶠinterp(ᶜuₕ)) + Geometry.Covariant123Vector(ᶠw)
-    cuw = @. Geometry.Covariant123Vector(ᶜuₕ) + Geometry.Covariant123Vector(ᶜinterp(ᶠw))
-    @. ᶠu¹² = Geometry.project(Geometry.Contravariant12Axis(), fuw)
-    @. ᶠu³ = Geometry.project(Geometry.Contravariant3Axis(), fuw)
+    fuvw = @. Geometry.Covariant123Vector(ᶠinterp(ᶜuₕ)) + Geometry.Covariant123Vector(ᶠw)
+    cuvw = @. Geometry.Covariant123Vector(ᶜuₕ) + Geometry.Covariant123Vector(ᶜinterp(ᶠw))
+    @. ᶠu¹² = Geometry.project(Geometry.Contravariant12Axis(), fuvw)
+    @. ᶠu³ = Geometry.project(Geometry.Contravariant3Axis(), fuvw)
 
     @. Yₜ.c.uₕ -=
-    ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × (Geometry.project(Geometry.Contravariant12Axis(), cuw))
+    ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × (Geometry.project(Geometry.Contravariant12Axis(), cuvw))
         #ᶜinterp(ᶠω¹² × ᶠu³) + (ᶜf + ᶜω³) × Geometry.Contravariant12Vector(ᶜuₕ)
     if point_type <: Geometry.Abstract3DPoint
         @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
@@ -357,7 +363,7 @@ function Wfact!(W, Y, p, dtγ, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params, ᶠupwind_product) = p
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜp_sfc, ∂ᶜK∂ᶠw_data, params, ᶠupwind_product) = p
 
     R_d = FT(Planet.R_d(params))
     κ_d = FT(Planet.kappa_d(params))

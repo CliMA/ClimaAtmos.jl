@@ -1,3 +1,7 @@
+using NCDatasets
+using DelimitedFiles
+using Dierckx
+
 """
   dcmip_orography(λ,ϕ)
 λ = Longitude (degrees)
@@ -19,20 +23,38 @@ function dcmip200_orography(coords)
   h₀ = FT(2000)
   if rₘ < Rₘ
     zₛ = FT(h₀/2) * (1 + cospi(rₘ/Rₘ)) * (cospi(rₘ/ζₘ))^2
-    #zₛ = FT(h₀/2) * (1 + cospi(rₘ/Rₘ)) 
   else
     zₛ = @. FT(0)
   end
   return zₛ
 end
 
-using NCDatasets
-using DelimitedFiles
-using Dierckx
+function lift_surface(coords)
+  zₛ = @. FT(500.0)
+  return zₛ
+end
+
+function smooth_peak(coords)
+  λ, ϕ = coords.long, coords.lat # Unpack longitude, latitude (degrees # Unpack longitude, latitude (degrees # Unpack longitude, latitude (degrees # Unpack longitude, latitude (degrees))))
+  FT = eltype(λ)
+  ϕₘ = FT(0) # degrees (equator)
+  λₘ = FT(3/2 * 180)  # degrees
+  rₘ = @. FT(acos(sind(ϕₘ)*sind(ϕ) + cosd(ϕₘ)*cosd(ϕ)*cosd(λ-λₘ))) # Great circle distance (rads)
+  Rₘ = FT(3π/4) # Moutain radius
+  ζₘ = FT(π/16) # Mountain oscillation half-width
+  h₀ = FT(6000)
+  if rₘ < Rₘ
+    zₛ = FT(h₀/2) * (1 + cospi(rₘ/Rₘ)) 
+  else
+    zₛ = @. FT(0)
+  end
+  return zₛ
+end
+
 
 # Load ETOPO1 ice-sheet surface data
 # Ocean values are considered 0
-data = NCDataset("/home/akshay/Research/Codes/ClimaAtmos.jl/examples/hybrid/sphere/ETOPO1_Ice_g_gdal.grd")
+data = NCDataset("/groups/esm/asridhar/ETOPO1_Ice_g_gdal.grd")
 # Unpack information
 x_range = data["x_range"][:] 
 y_range = data["y_range"][:]
@@ -55,8 +77,8 @@ function coarsen(X::AbstractArray; factor = 100)
 end
 map_source = zlevels
 map_source[map_source .< 0.0] .= 0.0
-const spline_2d=Spline2D(coarsen(lon), coarsen(lat), reverse(coarsen(map_source), dims=2);kx=3, ky=3, s=0.0)
-
+#const spline_2d=Spline2D(coarsen(lon), coarsen(lat), reverse(coarsen(map_source), dims=2);kx=3, ky=3, s=0.0)
+const spline_2d=Spline2D(lon, lat, reverse(map_source, dims=2);kx=3, ky=3, s=0.0)
 
 """
   earth_orography(λ,Φ)
@@ -71,6 +93,6 @@ sea-ice surface information.
 function earth_orography(coords)
   λ, ϕ = coords.long, coords.lat # Unpack longitude
   FT = eltype(λ)
-  zₛ = spline_2d(λ,ϕ)/2
+  zₛ = spline_2d(λ,ϕ)
   return FT(zₛ)
 end
