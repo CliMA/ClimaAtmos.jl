@@ -8,6 +8,8 @@ using Thermodynamics
 
 const TD = Thermodynamics
 
+using ClimaCore.Utilities: half
+
 include("schur_complement_W.jl")
 include("hyperdiffusion.jl")
 
@@ -110,6 +112,8 @@ get_cache(Y, params, upwinding_mode, dt) = merge(
 
 function default_cache(Y, params, upwinding_mode)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
+    ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
+    z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = FT(Planet.Omega(params))
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
@@ -154,6 +158,7 @@ function default_cache(Y, params, upwinding_mode)
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
+        z_sfc,
         T_sfc,
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,

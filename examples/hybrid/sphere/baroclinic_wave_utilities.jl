@@ -549,6 +549,7 @@ function vertical_diffusion_boundary_layer_cache(
         Cd,
         Ch,
         diffuse_momentum,
+        z_bottom,
     )
 end
 
@@ -610,7 +611,7 @@ end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
-    (; ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (;
         flux_coefficients,
         dif_flux_uₕ,
@@ -619,6 +620,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         Cd,
         Ch,
         diffuse_momentum,
+        z_bottom,
         params,
     ) = p
 
@@ -629,13 +631,18 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
     @. ᶠK_E = eddy_diffusivity_coefficient(norm(ᶠv_a), ᶠz_a, ᶠinterp(ᶜp))
 
+    # TODO: Revisit z_surface construction when "space is not same instance" error is dealt with
+    ᶜz_field = Fields.coordinate_field(Y.c).z
+    ᶜz_interior = Fields.field_values(Fields.level(ᶜz_field, 1))
+    z_surface = Fields.field_values(z_sfc)
+
     flux_coefficients .=
         constant_T_saturated_surface_coefs.(
             T_sfc,
             Spaces.level(ᶜts, 1),
             Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-            Spaces.level(Fields.coordinate_field(Y.c).z, 1),
-            FT(0), # TODO: get actual value of z_sfc
+            Fields.Field(ᶜz_interior, axes(z_bottom)),
+            Fields.Field(z_surface, axes(z_bottom)),
             Cd,
             Ch,
             params,
