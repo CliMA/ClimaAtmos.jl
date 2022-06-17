@@ -418,7 +418,7 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     Δθ_z = FT(10)
     T_min = FT(200)
 
-    @. ᶜσ = ᶜp / p_sfc
+    @. ᶜσ = ᶜp ./ p_sfc
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
         (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
