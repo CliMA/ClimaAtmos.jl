@@ -44,7 +44,13 @@ const TC = TurbulenceConvection
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils
 TCU = TurbulenceConvectionUtils
-namelist = turbconv == "edmf" ? TCU.NameList.default_namelist("Bomex") : nothing
+namelist = if turbconv == "edmf"
+    nl = TCU.NameList.default_namelist("Bomex")
+    nl["set_src_seed"] = true
+    nl
+else
+    nothing
+end
 
 include("parameter_set.jl")
 # TODO: unify parsed_args and namelist
