@@ -34,6 +34,7 @@ OrdinaryDiffEq = "5.64.0"
 StaticArrays = "1.4"
 Thermodynamics = "0.8"
 UnPack = "1"
+julia = "1.7"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
