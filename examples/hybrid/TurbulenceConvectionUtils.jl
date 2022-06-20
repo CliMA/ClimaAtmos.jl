@@ -46,12 +46,10 @@ end
 function get_edmf_cache(Y, namelist, param_set)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     case = Cases.get_case(namelist)
-    forcing = Cases.ForcingBase(
-        case,
-        param_set;
-        Cases.forcing_kwargs(case, namelist)...,
-    )
-    radiation = Cases.RadiationBase(case)
+    FT = CC.Spaces.undertype(axes(Y.c))
+    forcing =
+        Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
+    radiation = Cases.RadiationBase(case, FT)
     surf_ref_state = Cases.surface_ref_state(case, param_set, namelist)
     surf_params =
         Cases.surface_params(case, surf_ref_state, param_set; Ri_bulk_crit)
@@ -72,7 +70,6 @@ function get_edmf_cache(Y, namelist, param_set)
     else
         error("Invalid precip_name $(precip_name)")
     end
-    FT = CC.Spaces.undertype(axes(Y.c))
     edmf = TC.EDMFModel(FT, namelist, precip_model)
     @info "EDMFModel: \n$(summary(edmf))"
     return (;
