@@ -472,10 +472,12 @@ function make_save_to_disk_func(output_dir, p)
                 ᶠw = Y.f.w
 
                 (; params) = p
+                thermo_params = CAP.thermodynamics_params(params)
+                cm_params = CAP.microphysics_params(params)
                 # kinetic energy
                 global_ᶜK = @. norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
                 global_ᶜΦ =
-                    FT(Planet.grav(params)) .* Fields.coordinate_field(Y.c).z
+                    FT(CAP.grav(params)) .* Fields.coordinate_field(Y.c).z
 
                 # pressure, temperature, potential temperature
                 if :ρθ in propertynames(Y.c)
@@ -491,9 +493,9 @@ function make_save_to_disk_func(output_dir, p)
                 elseif :ρe_int in propertynames(Y.c)
                     global_ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
                 end
-                global_ᶜp = @. TD.air_pressure(params, global_ᶜts)
-                global_ᶜT = @. TD.air_temperature(params, global_ᶜts)
-                global_ᶜθ = @. TD.dry_pottemp(params, global_ᶜts)
+                global_ᶜp = @. TD.air_pressure(thermo_params, global_ᶜts)
+                global_ᶜT = @. TD.air_temperature(thermo_params, global_ᶜts)
+                global_ᶜθ = @. TD.dry_pottemp(thermo_params, global_ᶜts)
 
                 # vorticity 
                 global_curl_uh = @. curlₕ(Y.c.uₕ)
@@ -601,22 +603,23 @@ function make_save_to_disk_func(output_dir, p)
 
                 # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
                 if :ρq_tot in propertynames(Y.c)
-                    global_ᶜq = @. TD.PhasePartition(params, global_ᶜts)
+                    global_ᶜq = @. TD.PhasePartition(thermo_params, global_ᶜts)
                     global_ᶜcloud_liquid = @. global_ᶜq.liq
                     global_ᶜcloud_ice = @. global_ᶜq.ice
                     global_ᶜwatervapor =
                         @. TD.vapor_specific_humidity(global_ᶜq)
-                    global_ᶜRH = @. TD.relative_humidity(params, global_ᶜts)
+                    global_ᶜRH =
+                        @. TD.relative_humidity(thermo_params, global_ᶜts)
 
                     # precipitation
                     global_ᶜS_ρq_tot =
                         @. Y.c.ρ * CM.Microphysics0M.remove_precipitation(
-                            params,
-                            TD.PhasePartition(params, global_ᶜts),
+                            cm_params,
+                            TD.PhasePartition(thermo_params, global_ᶜts),
                         )
                     global_col_integrated_precip =
                         vertical∫_col(global_ᶜS_ρq_tot) ./
-                        FT(Planet.ρ_cloud_liq(params))
+                        FT(CAP.ρ_cloud_liq(params))
 
                     moist_diagnostic = (;
                         cloud_liquid = global_ᶜcloud_liquid,
@@ -674,9 +677,9 @@ function make_save_to_disk_func(output_dir, p)
             elseif :ρe_int in propertynames(Y.c)
                 @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
             end
-            @. ᶜp = TD.air_pressure(params, ᶜts)
-            ᶜT = @. TD.air_temperature(params, ᶜts)
-            ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+            ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+            ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
             # vorticity 
             curl_uh = @. curlₕ(Y.c.uₕ)
@@ -693,20 +696,20 @@ function make_save_to_disk_func(output_dir, p)
 
             # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
             if :ρq_tot in propertynames(Y.c)
-                ᶜq = @. TD.PhasePartition(params, ᶜts)
+                ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
                 ᶜcloud_liquid = @. ᶜq.liq
                 ᶜcloud_ice = @. ᶜq.ice
                 ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
-                ᶜRH = @. TD.relative_humidity(params, ᶜts)
+                ᶜRH = @. TD.relative_humidity(thermo_params, ᶜts)
 
                 # precipitation
                 @. ᶜS_ρq_tot =
                     Y.c.ρ * CM.Microphysics0M.remove_precipitation(
-                        params,
-                        TD.PhasePartition(params, ᶜts),
+                        cm_params,
+                        TD.PhasePartition(thermo_params, ᶜts),
                     )
                 col_integrated_precip =
-                    vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
+                    vertical∫_col(ᶜS_ρq_tot) ./ FT(CAP.ρ_cloud_liq(params))
 
                 moist_diagnostic = (;
                     cloud_liquid = ᶜcloud_liquid,

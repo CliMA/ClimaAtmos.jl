@@ -16,10 +16,10 @@
 """
 function init_1d_ekman_column(::Type{FT}, params) where {FT}
     # physics parameters
-    p_0::FT = CLIMAParameters.Planet.MSLP(params)
-    grav::FT = CLIMAParameters.Planet.grav(params)
-    R_d::FT = CLIMAParameters.Planet.R_d(params)
-    cp_d::FT = CLIMAParameters.Planet.cp_d(params)
+    p_0::FT = CAP.MSLP(params)
+    grav::FT = CAP.grav(params)
+    R_d::FT = CAP.R_d(params)
+    cp_d::FT = CAP.cp_d(params)
 
     # initial condition specific parameters
     T_surf = FT(300)

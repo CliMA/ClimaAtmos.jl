@@ -1,7 +1,3 @@
-if !haskey(ENV, "BUILDKITE")
-    import Pkg
-    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
-end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
@@ -10,7 +6,6 @@ using UnPack
 
 using ClimaCoreVTK
 using ClimaCore: Geometry
-using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_rising_bubble
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
@@ -19,8 +14,9 @@ using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
 # Set up parameters
-struct Bubble3DParameters <: CLIMAParameters.AbstractEarthParameterSet end
-CLIMAParameters.Planet.Omega(::Bubble3DParameters) = 0.0 # Bubble isn't rotating
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
+
 
 function run_3d_rising_bubble(
     ::Type{FT};
@@ -32,7 +28,8 @@ function run_3d_rising_bubble(
     test_mode = :regression,
 ) where {FT}
 
-    params = Bubble3DParameters()
+    # Bubble isn't rotating
+    params = create_climaatmos_parameter_set(FT, (; Omega = 0.0))
 
     domain = HybridBox(
         FT,
@@ -132,9 +129,9 @@ function run_3d_rising_bubble(
             u = simulation.integrator.u
 
             @test minimum(parent(u.thermodynamics.ρe_tot)) ≈ current_min atol =
-                1e-2
+                0.05
             @test maximum(parent(u.thermodynamics.ρe_tot)) ≈ current_max atol =
-                1e-2
+                0.05
             # perform regression check
             u = simulation.integrator.u
             ∫ρ_e = sum(u.base.ρ)
@@ -145,7 +142,7 @@ function run_3d_rising_bubble(
             Δρq_tot = (∫ρq_tot_e - ∫ρq_tot_0) ./ ∫ρq_tot_0 * 100
             if FT == Float32
                 @test abs(Δρ) < 3e-5
-                @test abs(Δρe_tot) < 1.5e-5
+                @test abs(Δρe_tot) < 5e-5
                 @test abs(Δρq_tot) < 1e-3
             else
                 @test abs(Δρ) < 1e-12
