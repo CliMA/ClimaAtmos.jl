@@ -417,6 +417,10 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     end
     Δθ_z = FT(10)
     T_min = FT(200)
+  
+    p_int_size = size(parent(ᶜp))
+    p_sfc = reshape(parent(p_sfc), (1, p_int_size[2:end]...))
+    parent(ᶜσ) .= parent(ᶜp) ./ parent(p_sfc)
 
     @. ᶜσ = ᶜp ./ p_sfc
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
