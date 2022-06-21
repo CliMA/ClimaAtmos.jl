@@ -117,5 +117,11 @@ steps:
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_third/*"
         agents:
           slurm_cpus_per_task: 8
+      
+      - label: ":computer: held suarez (ρe_tot) third order dt400"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --dt 400secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_third_dt400 --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_third_dt400/*"
+        agents:
+          slurm_cpus_per_task: 8
 
 
