@@ -17,6 +17,8 @@ turbconv = parsed_args["turbconv"]
 h_elem = parsed_args["h_elem"]
 z_elem = Int(parsed_args["z_elem"])
 z_max = FT(parsed_args["z_max"])
+dz_bottom = FT(parsed_args["dz_bottom"])
+dz_top = FT(parsed_args["dz_top"])
 κ₄ = parsed_args["kappa_4"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
 viscous_sponge = parsed_args["viscous_sponge"]
@@ -222,7 +224,7 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = Meshes.GeneralizedExponentialStretching(FT(500), FT(5000))
+    z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
@@ -235,7 +237,7 @@ elseif parsed_args["config"] == "column" # single column
     )
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
     z_stretch = if parsed_args["z_stretch"]
-        Meshes.GeneralizedExponentialStretching(FT(100), FT(10000))
+        Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
     else
         Meshes.Uniform()
     end

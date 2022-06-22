@@ -116,6 +116,14 @@ function parse_commandline()
         help = "Stretch grid in z-direction. [`true` (default), `false`]"
         arg_type = Bool
         default = true
+        "--dz_bottom"
+        help = "Model bottom grid depth. Default: 500m"
+        arg_type = Float64
+        default = Float64(500)
+        "--dz_top"
+        help = "Model top grid depth. Default: 5000m"
+        arg_type = Float64
+        default = Float64(5000)
         "--kappa_4"
         help = "Hyperdiffusion parameter"
         arg_type = Float64
