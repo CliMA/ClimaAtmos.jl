@@ -354,16 +354,106 @@ function make_save_to_disk_func(output_dir, p)
                 (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
                 data_global_dif_flux_uₕ = DataLayouts.gather(
                     comms_ctx,
-                    Fields.field_values(p.dif_flux_uₕ),
+                    Fields.field_values(dif_flux_uₕ),
                 )
                 data_global_dif_flux_energy = DataLayouts.gather(
                     comms_ctx,
-                    Fields.field_values(p.dif_flux_energy),
+                    Fields.field_values(dif_flux_energy),
                 )
                 data_global_dif_flux_ρq_tot = DataLayouts.gather(
                     comms_ctx,
-                    Fields.field_values(p.dif_flux_ρq_tot),
+                    Fields.field_values(dif_flux_ρq_tot),
                 )
+            end
+
+            if !isnothing(radiation_model())
+                (;
+                    face_lw_flux_dn,
+                    face_lw_flux_up,
+                    face_sw_flux_dn,
+                    face_sw_flux_up,
+                ) = p.rrtmgp_model
+                data_global_face_lw_flux_dn = DataLayouts.gather(
+                    comms_ctx,
+                    Fields.field_values(
+                        RRTMGPI.array2field(
+                            FT.(face_lw_flux_dn),
+                            axes(integrator.u.f),
+                        ),
+                    ),
+                )
+                data_global_face_lw_flux_up = DataLayouts.gather(
+                    comms_ctx,
+                    Fields.field_values(
+                        RRTMGPI.array2field(
+                            FT.(face_lw_flux_up),
+                            axes(integrator.u.f),
+                        ),
+                    ),
+                )
+                data_global_face_sw_flux_dn = DataLayouts.gather(
+                    comms_ctx,
+                    Fields.field_values(
+                        RRTMGPI.array2field(
+                            FT.(face_sw_flux_dn),
+                            axes(integrator.u.f),
+                        ),
+                    ),
+                )
+                data_global_face_sw_flux_up = DataLayouts.gather(
+                    comms_ctx,
+                    Fields.field_values(
+                        RRTMGPI.array2field(
+                            FT.(face_sw_flux_up),
+                            axes(integrator.u.f),
+                        ),
+                    ),
+                )
+                if radiation_model() isa
+                   RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+                    (;
+                        face_clear_lw_flux_dn,
+                        face_clear_lw_flux_up,
+                        face_clear_sw_flux_dn,
+                        face_clear_sw_flux_up,
+                    ) = p.rrtmgp_model
+                    data_global_face_clear_lw_flux_dn = DataLayouts.gather(
+                        comms_ctx,
+                        Fields.field_values(
+                            RRTMGPI.array2field(
+                                FT.(face_clear_lw_flux_dn),
+                                axes(integrator.u.f),
+                            ),
+                        ),
+                    )
+                    data_global_face_clear_lw_flux_up = DataLayouts.gather(
+                        comms_ctx,
+                        Fields.field_values(
+                            RRTMGPI.array2field(
+                                FT.(face_clear_lw_flux_up),
+                                axes(integrator.u.f),
+                            ),
+                        ),
+                    )
+                    data_global_face_clear_sw_flux_dn = DataLayouts.gather(
+                        comms_ctx,
+                        Fields.field_values(
+                            RRTMGPI.array2field(
+                                FT.(face_clear_sw_flux_dn),
+                                axes(integrator.u.f),
+                            ),
+                        ),
+                    )
+                    data_global_face_clear_sw_flux_up = DataLayouts.gather(
+                        comms_ctx,
+                        Fields.field_values(
+                            RRTMGPI.array2field(
+                                FT.(face_clear_sw_flux_up),
+                                axes(integrator.u.f),
+                            ),
+                        ),
+                    )
+                end
             end
 
             if ClimaComms.iamroot(comms_ctx)
@@ -444,6 +534,61 @@ function make_save_to_disk_func(output_dir, p)
                     vert_diff_diagnostic = NamedTuple()
                 end
 
+                if !isnothing(radiation_model())
+                    ᶠz_field = Fields.coordinate_field(Y.f).z
+
+                    # make sure datatype is correct
+                    global_face_lw_flux_dn = similar(ᶠz_field)
+                    global_face_lw_flux_up = similar(ᶠz_field)
+                    global_face_sw_flux_dn = similar(ᶠz_field)
+                    global_face_sw_flux_up = similar(ᶠz_field)
+                    # assign values from the gathered
+                    Fields.field_values(global_face_lw_flux_dn) .=
+                        data_global_face_lw_flux_dn
+                    Fields.field_values(global_face_lw_flux_up) .=
+                        data_global_face_lw_flux_up
+                    Fields.field_values(global_face_sw_flux_dn) .=
+                        data_global_face_sw_flux_dn
+                    Fields.field_values(global_face_sw_flux_up) .=
+                        data_global_face_sw_flux_up
+                    rad_diagnostic = (;
+                        lw_flux_down = global_face_lw_flux_dn,
+                        lw_flux_up = global_face_lw_flux_up,
+                        sw_flux_down = global_face_sw_flux_dn,
+                        sw_flux_up = global_face_sw_flux_up,
+                    )
+                    if radiation_model() isa
+                       RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+
+                        # make sure datatype is correct 
+                        global_face_clear_lw_flux_dn = similar(ᶠz_field)
+                        global_face_clear_lw_flux_up = similar(ᶠz_field)
+                        global_face_clear_sw_flux_dn = similar(ᶠz_field)
+                        global_face_clear_sw_flux_up = similar(ᶠz_field)
+
+                        # assign values from the gathered
+                        Fields.field_values(global_face_clear_lw_flux_dn) .=
+                            data_global_face_clear_lw_flux_dn
+                        Fields.field_values(global_face_clear_lw_flux_up) .=
+                            data_global_face_clear_lw_flux_up
+                        Fields.field_values(global_face_clear_sw_flux_dn) .=
+                            data_global_face_clear_sw_flux_dn
+                        Fields.field_values(global_face_clear_sw_flux_up) .=
+                            data_global_face_clear_sw_flux_up
+                        rad_clear_diagnostic = (;
+                            clear_lw_flux_down = global_face_clear_lw_flux_dn,
+                            clear_lw_flux_up = global_face_clear_lw_flux_up,
+                            clear_sw_flux_down = global_face_clear_sw_flux_dn,
+                            clear_sw_flux_up = global_face_clear_sw_flux_up,
+                        )
+                    else
+                        rad_clear_diagnostic = NamedTuple()
+                    end
+                else
+                    rad_diagnostic = NamedTuple()
+                    rad_clear_diagnostic = NamedTuple()
+                end
+
                 dry_diagnostic = (;
                     pressure = global_ᶜp,
                     temperature = global_ᶜT,
@@ -487,8 +632,8 @@ function make_save_to_disk_func(output_dir, p)
                     dry_diagnostic,
                     moist_diagnostic,
                     vert_diff_diagnostic,
-                    # rad_diagnostic,
-                    # rad_clear_diagnostic,
+                    rad_diagnostic,
+                    rad_clear_diagnostic,
                 )
 
                 day = floor(Int, integrator.t / (60 * 60 * 24))
