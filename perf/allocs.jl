@@ -17,6 +17,10 @@ dirs_to_monitor = [
     pkgdir(OrdinaryDiffEq),
     pkgdir(DiffEqOperators),
 ]
+@info "`dirs_to_monitor` = $dirs_to_monitor"
+filter!(x -> x isa String, dirs_to_monitor)
+@info "`dirs_to_monitor` (post filter) = $dirs_to_monitor"
+dirs_to_monitor = String.(dirs_to_monitor)
 
 #! format: off
 

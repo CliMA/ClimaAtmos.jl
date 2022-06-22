@@ -8,6 +8,8 @@ using Thermodynamics
 
 const TD = Thermodynamics
 
+using ClimaCore.Utilities: half
+
 include("schur_complement_W.jl")
 include("hyperdiffusion.jl")
 
@@ -110,6 +112,8 @@ get_cache(Y, params, upwinding_mode, dt) = merge(
 
 function default_cache(Y, params, upwinding_mode)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
+    ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
+    z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = FT(Planet.Omega(params))
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
@@ -132,6 +136,17 @@ function default_cache(Y, params, upwinding_mode)
     else
         ts_type = TD.PhaseDry{FT}
     end
+    ghost_buffer = (
+        c = Spaces.create_ghost_buffer(Y.c),
+        f = Spaces.create_ghost_buffer(Y.f),
+        χ = Spaces.create_ghost_buffer(Y.c.ρ), # for hyperdiffusion
+        χw = Spaces.create_ghost_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
+        χuₕ = Spaces.create_ghost_buffer(Y.c.uₕ), # for hyperdiffusion
+    )
+    (:ρq_tot in propertynames(Y.c)) && (
+        ghost_buffer =
+            (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
+    )
     return (;
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
@@ -143,6 +158,7 @@ function default_cache(Y, params, upwinding_mode)
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
+        z_sfc,
         T_sfc,
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
@@ -152,13 +168,7 @@ function default_cache(Y, params, upwinding_mode)
         ᶠupwind_product = upwinding_mode == :first_order ? ᶠupwind_product1 :
                           upwinding_mode == :third_order ? ᶠupwind_product3 :
                           nothing,
-        ghost_buffer = (
-            c = Spaces.create_ghost_buffer(Y.c),
-            f = Spaces.create_ghost_buffer(Y.f),
-            χ = Spaces.create_ghost_buffer(Y.c.ρ), # for hyperdiffusion
-            χw = Spaces.create_ghost_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
-            χuₕ = Spaces.create_ghost_buffer(Y.c.uₕ), # for hyperdiffusion
-        ),
+        ghost_buffer = ghost_buffer,
     )
 end
 

@@ -196,3 +196,53 @@ function job_id_from_parsed_args(defaults::Dict, parsed_args)
     warn && @warn "Truncated job ID:$s may not be unique due to use of Real"
     return s
 end
+
+
+"""
+    print_repl_script(str::String)
+
+Generate a block of code to run a particular
+buildkite job given the `command:` string.
+
+Example:
+
+"""
+function print_repl_script(str)
+    s = str
+    ib = """"""
+    ib *= """\n"""
+    ib *= """using Revise; include("examples/hybrid/cli_options.jl");\n"""
+    ib *= """\n"""
+    ib *= """(s, parsed_args) = parse_commandline();\n"""
+    s = last(split(s, ".jl"))
+    s = strip(s)
+    parsed_args_list = split(s, " ")
+    @assert iseven(length(parsed_args_list))
+    parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
+        Pair(parsed_args_list[i], parsed_args_list[i + 1])
+    end
+    function is_string(val)
+        if val == "true" || val == "false"
+            return false
+        else
+            for T in (Int, Float32, Float64)
+                try
+                    parse(T, val)
+                    return false
+                catch
+                end
+            end
+        end
+        return true
+    end
+    for (flag, val) in parsed_arg_pairs
+        if is_string(val)
+            ib *= "parsed_args[\"$(replace(flag, "--" => ""))\"] = \"$val\";\n"
+        else
+            ib *= "parsed_args[\"$(replace(flag, "--" => ""))\"] = $val;\n"
+        end
+    end
+    ib *= """\n"""
+    ib *= """include("examples/hybrid/driver.jl")\n"""
+    println(ib)
+end
