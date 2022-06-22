@@ -221,6 +221,23 @@ steps:
         slurm_tasks_per_node: 27
         slurm_mem: 128GB
 
+    - label: ":computer: MPI monitor step! - (1) process"
+      command:
+        - "module load cuda/11.3 nsight-systems/2022.2.1"
+        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=monitor_step/report.%q{NPROCS} mpiexec julia --color=yes --project=perf perf/nvtx.jl --job_id monitor_step --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14"
+      artifact_paths:
+        - "monitor_step/scaling_data_1_processes.jld2"
+        - "monitor_step/report.1.nsys-rep"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 1
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 1
+        slurm_mem: 64GB
+
   - wait
 
   - label: ":computer: scaling plots (low-resolution simulations)"
