@@ -139,7 +139,7 @@ and the ``\frac{1}{\rho} \nabla_v p + \nabla_v(\Phi + K)`` term as
 with the latter treated implicitly.
 
 !!! todo
-    In the presence of topography, ``\boldsymbol{u}_v`` at the boundary should be defined such that ``\boldsymbol{u}^v = 0``. Since ``\boldsymbol{u}_h`` is defined at cell centers, this requires some extrapolation procedure. Note that due to how the other boundary conditions are applied, this choice should only affect computation of kinetic energy. In the case of free-slip boundary conditions, we may choose to apply `Extrapolate()` boundary conditions to the covariant velocity components \boldsymbol{u}_h, and compute the covariant component \boldsymbol{u}_v such that the contravariant velocity \boldsymbol{u}^{v} is zero. In the case of no-slip boundary conditions, the tangential velocity components \boldsymbol{u}_h are set to zero.  
+    In the presence of topography, ``\boldsymbol{u}_v`` at the boundary should be defined such that ``\boldsymbol{u}^v = 0``. Since ``\boldsymbol{u}_h`` is defined at cell centers, this requires some extrapolation procedure. Note that due to how the other boundary conditions are applied, this choice should only affect computation of kinetic energy. In the case of free-slip boundary conditions, we may choose to apply `Extrapolate()` boundary conditions to the covariant velocity components ``\boldsymbol{u}_h``, and compute the covariant component ``\boldsymbol{u}_v`` such that the contravariant velocity ``\boldsymbol{u}^{v}`` is zero. In the case of no-slip boundary conditions, the tangential velocity components ``\boldsymbol{u}_h`` are set to zero.  
 
 
 ### Total energy
