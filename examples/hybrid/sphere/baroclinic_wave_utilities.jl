@@ -514,6 +514,7 @@ function vertical_diffusion_boundary_layer_cache(
     Cd = FT(0.0044),
     Ch = FT(0.0044),
     diffuse_momentum = true,
+    coupled = false,
 )
     ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
@@ -561,6 +562,7 @@ function vertical_diffusion_boundary_layer_cache(
         Cd,
         Ch,
         diffuse_momentum,
+        coupled,
         z_bottom,
     )
 end
@@ -638,6 +640,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         Cd,
         Ch,
         diffuse_momentum,
+        coupled,
         z_bottom,
         params,
     ) = p
@@ -655,31 +658,38 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜz_interior = Fields.field_values(Fields.level(ᶜz_field, 1))
     z_surface = Fields.field_values(z_sfc)
 
-    flux_coefficients .=
-        constant_T_saturated_surface_coefs.(
-            T_sfc,
-            Spaces.level(ᶜts, 1),
-            Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-            Fields.Field(ᶜz_interior, axes(z_bottom)),
-            Fields.Field(z_surface, axes(z_bottom)),
-            Cd,
-            Ch,
-            params,
-        )
+    if !coupled
+        flux_coefficients .=
+            constant_T_saturated_surface_coefs.(
+                T_sfc,
+                Spaces.level(ᶜts, 1),
+                Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
+                Fields.Field(ᶜz_interior, axes(z_bottom)),
+                Fields.Field(z_surface, axes(z_bottom)),
+                Cd,
+                Ch,
+                params,
+            )
+    end
 
     if diffuse_momentum
-        (; ρτxz, ρτyz) =
-            get_momentum_fluxes.(params, Cd, flux_coefficients, nothing)
-        u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
-        normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
-        ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
-        parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
-            parent(
-                Geometry.Contravariant3Vector.(normal) .⊗
-                Geometry.Covariant12Vector.(
-                    Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
-                ),
-            )
+        if !coupled
+            (; ρτxz, ρτyz) =
+                get_momentum_fluxes.(params, Cd, flux_coefficients, nothing)
+            u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
+            normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
+            ρ_1 = Fields.Field(
+                Fields.field_values(Fields.level(Y.c.ρ, 1)),
+                u_space,
+            ) # TODO: delete when "space not the same instance" error is dealt with
+            parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
+                parent(
+                    Geometry.Contravariant3Vector.(normal) .⊗
+                    Geometry.Covariant12Vector.(
+                        Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
+                    ),
+                )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(
                 Geometry.Contravariant3Vector(FT(0)) ⊗
@@ -691,19 +701,21 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     end
 
     if :ρe_tot in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            SF.sensible_heat_flux(
-                surf_flux_params,
-                Ch,
-                flux_coefficients,
-                nothing,
-            ) + SF.latent_heat_flux(
-                surf_flux_params,
-                Ch,
-                flux_coefficients,
-                nothing,
-            ),
-        )
+        if !coupled
+            @. dif_flux_energy = Geometry.WVector(
+                SF.sensible_heat_flux(
+                    surf_flux_params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ) + SF.latent_heat_flux(
+                    surf_flux_params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ),
+            )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_energy),
@@ -711,14 +723,21 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρe_tot +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(
-                surf_flux_params,
-                Ch,
-                flux_coefficients,
-                nothing,
-            ),
-        )
+        if !coupled
+            @. dif_flux_energy = Geometry.WVector(
+                sensible_heat_flux_ρe_int(
+                    params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ) + SF.latent_heat_flux(
+                    surf_flux_params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ),
+            )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_energy),
@@ -728,9 +747,11 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     end
 
     if :ρq_tot in propertynames(Y.c)
-        @. dif_flux_ρq_tot = Geometry.WVector(
-            SF.evaporation(flux_coefficients, surf_flux_params, Ch),
-        )
+        if !coupled
+            @. dif_flux_ρq_tot = Geometry.WVector(
+                SF.evaporation(flux_coefficients, surf_flux_params, Ch),
+            )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_ρq_tot),

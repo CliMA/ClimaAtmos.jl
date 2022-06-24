@@ -12,6 +12,7 @@ idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
+coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
 turbconv = parsed_args["turbconv"]
 h_elem = parsed_args["h_elem"]
@@ -124,7 +125,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
         idealized_clouds,
     ),
     vert_diff ?
-    vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum) :
+    vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum, coupled) :
     NamedTuple(),
     (;
         tendency_knobs = (;

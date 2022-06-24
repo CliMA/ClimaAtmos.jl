@@ -40,6 +40,10 @@ function parse_commandline()
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--coupled"
+        help = "Coupled simulation [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
