@@ -216,12 +216,26 @@ Example:
 
 """
 function print_repl_script(str)
-    s = str
     ib = """"""
     ib *= """\n"""
     ib *= """using Revise; include("examples/hybrid/cli_options.jl");\n"""
     ib *= """\n"""
     ib *= """(s, parsed_args) = parse_commandline();\n"""
+    parsed_args = parsed_args_from_command_line_flags(str)
+    for (flag, val) in parsed_args
+        if val isa AbstractString
+            ib *= "parsed_args[\"$flag\"] = \"$val\";\n"
+        else
+            ib *= "parsed_args[\"$flag\"] = $val;\n"
+        end
+    end
+    ib *= """\n"""
+    ib *= """include("examples/hybrid/driver.jl")\n"""
+    println(ib)
+end
+
+function parsed_args_from_command_line_flags(str, parsed_args = Dict())
+    s = str
     s = last(split(s, ".jl"))
     s = strip(s)
     parsed_args_list = split(s, " ")
@@ -229,28 +243,17 @@ function print_repl_script(str)
     parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
         Pair(parsed_args_list[i], parsed_args_list[i + 1])
     end
-    function is_string(val)
-        if val == "true" || val == "false"
-            return false
-        else
-            for T in (Int, Float32, Float64)
-                try
-                    parse(T, val)
-                    return false
-                catch
-                end
+    function parse_arg(val)
+        for T in (Bool, Int, Float32, Float64)
+            try
+                return parse(T, val)
+            catch
             end
         end
-        return true
+        return val # string
     end
     for (flag, val) in parsed_arg_pairs
-        if is_string(val)
-            ib *= "parsed_args[\"$(replace(flag, "--" => ""))\"] = \"$val\";\n"
-        else
-            ib *= "parsed_args[\"$(replace(flag, "--" => ""))\"] = $val;\n"
-        end
+        parsed_args[replace(flag, "--" => "")] = parse_arg(val)
     end
-    ib *= """\n"""
-    ib *= """include("examples/hybrid/driver.jl")\n"""
-    println(ib)
+    return parsed_args
 end
