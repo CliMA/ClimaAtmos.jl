@@ -465,6 +465,12 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
     @. Yₜ.c.ρ += ᶜS_ρq_tot
 
+    # update precip in cache for coupler's use
+    # TODO: clean up p. => @.
+    p.col_integrated_precip .=
+        vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
+
+    # liquid fraction
     @. ᶜλ = TD.liquid_fraction(params, ᶜts)
 
     if :ρe_tot in propertynames(Y.c)
@@ -482,9 +488,7 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
             )
     end
 
-    # update precip in cache for coupler's use
-    col_integrated_precip =
-        vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
+
 end
 
 # Vertical diffusion boundary layer parameterization
