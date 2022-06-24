@@ -1,7 +1,3 @@
-if !haskey(ENV, "BUILDKITE")
-    import Pkg
-    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
-end
 using Test
 
 using OrdinaryDiffEq: SSPRK33, CallbackSet
@@ -9,7 +5,6 @@ using ClimaCorePlots, Plots
 using UnPack
 using DiffEqCallbacks
 
-using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_2d_dry_bubble
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
@@ -19,7 +14,9 @@ using ClimaAtmos.Callbacks
 using ClimaAtmos.Simulations
 
 # Set up parameters
-struct Bubble2DParameters <: CLIMAParameters.AbstractEarthParameterSet end
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
+
 
 """
     PNGOutput{M, I} <: AbstractCallback
@@ -82,7 +79,7 @@ function run_2d_dry_bubble(
     thermo_mode = :ρθ,
     moisture_mode = :dry,
 ) where {FT}
-    params = Bubble2DParameters()
+    params = create_climaatmos_parameter_set(FT)
 
     domain = HybridPlane(
         FT,

@@ -1,7 +1,3 @@
-if !haskey(ENV, "BUILDKITE")
-    import Pkg
-    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
-end
 using Test
 
 import ArgParse
@@ -10,7 +6,6 @@ using OrdinaryDiffEq: SSPRK33, CallbackSet, DiscreteCallback
 using ClimaCorePlots, Plots
 using UnPack
 
-using CLIMAParameters
 using ClimaCore: Geometry, Fields
 using ClimaAtmos.Utils.InitialConditions: init_1d_ekman_column
 using ClimaAtmos.Domains
@@ -21,15 +16,8 @@ using ClimaAtmos.Callbacks
 using ClimaAtmos.Simulations
 
 # Set up parameters
-Base.@kwdef struct EkmanParameters{FT} <:
-                   CLIMAParameters.AbstractEarthParameterSet
-    Cd::FT = 0.01 / (2e2 / 30) # drag coefficients
-    # Ch::FT = 0.01 / (2e2 / 30)
-    # T_surf::FT = 300 # surface temperature
-    f::FT = 5e-5 # Coriolis parameters
-    ν::FT = 0.01 # diffusivity
-    uh_g = Geometry.UVVector(FT(1.0), FT(0.0))
-end
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
 
 function run_1d_ekman_column(
     ::Type{FT};
@@ -39,7 +27,8 @@ function run_1d_ekman_column(
     callbacks = (),
     test_mode = :validation,
 ) where {FT}
-    params = EkmanParameters{FT}()
+    ν = FT(0.01)
+    params = create_climaatmos_parameter_set(FT)
 
     domain = Column(FT, zlim = (0.0, 2e2), nelements = nelements)
 
@@ -61,7 +50,7 @@ function run_1d_ekman_column(
     model = SingleColumnModel(
         domain = domain,
         thermodynamics = PotentialTemperature(),
-        vertical_diffusion = ConstantViscosity(ν = params.ν),
+        vertical_diffusion = ConstantViscosity(ν = ν),
         boundary_conditions = nothing, #boundary_conditions,
         parameters = params,
     )
@@ -70,7 +59,7 @@ function run_1d_ekman_column(
         domain = domain,
         base = AnelasticAdvectiveForm(),
         thermodynamics = PotentialTemperature(),
-        vertical_diffusion = ConstantViscosity(ν = params.ν),
+        vertical_diffusion = ConstantViscosity(ν = ν),
         boundary_conditions = nothing, #boundary_conditions,
         parameters = params,
     )
@@ -130,8 +119,8 @@ function run_1d_ekman_column(
 
         # plot final state
         function ekman_plot(Y, params; title = "", size = (1024, 600))
-            ug = parent(params.uh_g)[1]
-            vg = parent(params.uh_g)[2]
+            ug = parent(CAP.uh_g(params))[1]
+            vg = parent(CAP.uh_g(params))[2]
 
             d = sqrt(2.0 * 0.01 / 5e-5)
             z_centers = parent(Fields.coordinate_field(axes(Y.ρ)))

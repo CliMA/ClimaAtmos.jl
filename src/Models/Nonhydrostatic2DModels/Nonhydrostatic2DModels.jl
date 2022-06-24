@@ -1,8 +1,8 @@
 module Nonhydrostatic2DModels
 
+import ...Parameters as CAP
 using StaticArrays
 using UnPack
-using CLIMAParameters
 using Thermodynamics
 using CloudMicrophysics
 using ClimaCore: Geometry, Spaces, Fields, Operators

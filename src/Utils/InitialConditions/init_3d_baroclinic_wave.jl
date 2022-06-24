@@ -12,13 +12,13 @@ function init_3d_baroclinic_wave(
     isbalanced = false,
 ) where {FT}
     # physics parameters
-    R::FT = CLIMAParameters.Planet.planet_radius(params)
-    Ω::FT = CLIMAParameters.Planet.Omega(params)
-    p_0::FT = CLIMAParameters.Planet.MSLP(params)
-    cv_d::FT = CLIMAParameters.Planet.cv_d(params)
-    R_d::FT = CLIMAParameters.Planet.R_d(params)
-    T_tri::FT = CLIMAParameters.Planet.T_triple(params)
-    g::FT = CLIMAParameters.Planet.grav(params)
+    R::FT = CAP.planet_radius(params)
+    Ω::FT = CAP.Omega(params)
+    p_0::FT = CAP.MSLP(params)
+    cv_d::FT = CAP.cv_d(params)
+    R_d::FT = CAP.R_d(params)
+    T_tri::FT = CAP.T_triple(params)
+    g::FT = CAP.grav(params)
 
     # initial condition specific parameters
     k::FT = 3.0

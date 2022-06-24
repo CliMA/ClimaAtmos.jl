@@ -1,9 +1,9 @@
 module Nonhydrostatic3DModels
 
+import ...Parameters as CAP
 using LinearAlgebra
 using StaticArrays
 using UnPack
-using CLIMAParameters
 using Thermodynamics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗

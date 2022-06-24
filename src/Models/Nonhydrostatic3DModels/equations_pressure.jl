@@ -11,10 +11,14 @@ end
     params,
     FT,
 )
+    thermo_params = CAP.thermodynamics_params(params)
     ρ = Y.base.ρ
     ρθ = Y.thermodynamics.ρθ
 
-    p = @. TD.air_pressure(params, TD.PhaseDry_ρθ(params, ρ, ρθ / ρ))
+    p = @. TD.air_pressure(
+        thermo_params,
+        TD.PhaseDry_ρθ(thermo_params, ρ, ρθ / ρ),
+    )
 
     return p
 end
@@ -28,11 +32,12 @@ end
     params,
     FT,
 )
+    thermo_params = CAP.thermodynamics_params(params)
     ρ = Y.base.ρ
     ρe_int = Y.thermodynamics.ρe_int
 
     e_int = @. ρe_int / ρ
-    p = TD.air_pressure.(Ref(params), TD.PhaseDry.(Ref(params), e_int, ρ))
+    p = TD.air_pressure.(thermo_params, TD.PhaseDry.(thermo_params, e_int, ρ))
 
     return p
 end
@@ -50,6 +55,7 @@ end
     uh = Y.base.uh
     w = Y.base.w
     ρe_tot = Y.thermodynamics.ρe_tot
+    thermo_params = CAP.thermodynamics_params(params)
 
     interp_f2c = Operators.InterpolateF2C()
 
@@ -59,7 +65,7 @@ end
     Φ = calculate_gravitational_potential(Y, Ya, params, FT)
 
     e_int = @. ρe_tot / ρ - Φ - norm(uvw)^2 / 2
-    p = TD.air_pressure.(Ref(params), TD.PhaseDry.(Ref(params), e_int, ρ))
+    p = TD.air_pressure.(thermo_params, TD.PhaseDry.(thermo_params, e_int, ρ))
 
     return p
 end
@@ -73,6 +79,7 @@ end
     params,
     FT,
 )
+    thermo_params = CAP.thermodynamics_params(params)
     ρ = Y.base.ρ
     uh = Y.base.uh
     w = Y.base.w
@@ -91,8 +98,8 @@ end
     # saturation adjustment
     p =
         TD.air_pressure.(
-            Ref(params),
-            TD.PhaseEquil_ρeq.(Ref(params), ρ, e_int, q_tot),
+            thermo_params,
+            TD.PhaseEquil_ρeq.(thermo_params, ρ, e_int, q_tot),
         )
 
     return p

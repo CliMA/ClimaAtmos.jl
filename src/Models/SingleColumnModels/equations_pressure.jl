@@ -11,10 +11,14 @@ end
     params,
     FT,
 )
+    thermo_params = CAP.thermodynamics_params(params)
     ρ = Y.base.ρ
     ρθ = Y.thermodynamics.ρθ
 
-    p = @. TD.air_pressure(params, TD.PhaseDry_ρθ(params, ρ, ρθ / ρ))
+    p = @. TD.air_pressure(
+        thermo_params,
+        TD.PhaseDry_ρθ(thermo_params, ρ, ρθ / ρ),
+    )
 
     return p
 end

@@ -2,7 +2,7 @@ module InitialConditions
 
 using UnPack
 
-using CLIMAParameters
+import ...Parameters as CAP
 using ClimaCore: Geometry, Spaces, Fields
 using ClimaAtmos: Models
 
