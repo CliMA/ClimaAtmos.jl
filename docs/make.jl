@@ -1,8 +1,11 @@
-if joinpath(@__DIR__, "..") ∉ LOAD_PATH
-    push!(LOAD_PATH, joinpath(@__DIR__, ".."))
-end
 using Documenter
+using Documenter: doctest
 using ClimaAtmos
+using Base.CoreLogging
+
+disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
+doctest(ClimaAtmos)
+disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
 makedocs(
     modules = [ClimaAtmos],
