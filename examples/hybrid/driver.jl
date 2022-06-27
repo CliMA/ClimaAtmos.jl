@@ -664,6 +664,7 @@ function make_save_to_disk_func(output_dir, p)
                 (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
             end
             thermo_params = CAP.thermodynamics_params(params)
+            cm_params = CAP.microphysics_params(params)
 
             ᶜuₕ = Y.c.uₕ
             ᶠw = Y.f.w
