@@ -5,6 +5,7 @@ end
 
 include("classify_case.jl")
 include("utilities.jl")
+include("nvtx.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
@@ -69,7 +70,6 @@ turbconv_model() = turbconv_model(FT, parsed_args, namelist)
 diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
 using Colors
-using NVTX
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
@@ -498,7 +498,7 @@ function make_save_to_disk_func(output_dir, p)
                 global_ᶜT = @. TD.air_temperature(thermo_params, global_ᶜts)
                 global_ᶜθ = @. TD.dry_pottemp(thermo_params, global_ᶜts)
 
-                # vorticity 
+                # vorticity
                 global_curl_uh = @. curlₕ(Y.c.uₕ)
                 global_ᶜvort = Geometry.WVector.(global_curl_uh)
                 Spaces.weighted_dss!(global_ᶜvort)
@@ -565,7 +565,7 @@ function make_save_to_disk_func(output_dir, p)
                     if radiation_model() isa
                        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
 
-                        # make sure datatype is correct 
+                        # make sure datatype is correct
                         global_face_clear_lw_flux_dn = similar(ᶠz_field)
                         global_face_clear_lw_flux_up = similar(ᶠz_field)
                         global_face_clear_sw_flux_dn = similar(ᶠz_field)
@@ -684,7 +684,7 @@ function make_save_to_disk_func(output_dir, p)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
-            # vorticity 
+            # vorticity
             curl_uh = @. curlₕ(Y.c.uₕ)
             ᶜvort = Geometry.WVector.(curl_uh)
             Spaces.weighted_dss!(ᶜvort)
@@ -825,19 +825,14 @@ save_to_disk_func = make_save_to_disk_func(output_dir, p)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
-    NVTX.isactive() && (
-        dss_dss_callback = NVTX.range_start(;
-            message = "dss callback",
-            color = colorant"yellow",
-        )
-    )
-    Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-    Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-    Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
-    NVTX.isactive() && NVTX.range_end(dss_dss_callback)
+    @nvtx "dss callback" color = colorant"yellow" begin
+        Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+    end
 end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
