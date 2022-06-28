@@ -138,6 +138,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     (; enable_default_remaining_tendency = isnothing(turbconv_model())),
     !isnothing(turbconv_model()) ?
     (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
+    (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
 )
 
 additional_tendency!(Yₜ, Y, p, t) = begin
@@ -191,6 +192,26 @@ include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 ode_algorithm = getproperty(OrdinaryDiffEq, Symbol(parsed_args["ode_algo"]))
 
+condition_every_iter(u, t, integrator) = true
+function affect_filter!(Y::ClimaCore.Fields.FieldVector)
+    @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
+    return nothing
+end
+function affect_filter!(integrator)
+    (; apply_moisture_filter) = integrator.p
+    affect_filter!(integrator.u)
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional `∑tendencies!` call, which is required
+    # to support supplying a continuous representation of the
+    # solution.
+    OrdinaryDiffEq.u_modified!(integrator, false)
+end
+callback_filters = OrdinaryDiffEq.DiscreteCallback(
+    condition_every_iter,
+    affect_filter!;
+    save_positions = (false, false),
+)
+
 additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
     dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
@@ -204,6 +225,9 @@ additional_callbacks = if !isnothing(radiation_model())
     )
 else
     ()
+end
+if moisture_model() isa EquilMoistModel && parsed_args["apply_moisture_filter"]
+    additional_callbacks = (additional_callbacks..., callback_filters)
 end
 
 import ClimaCore: enable_threading
