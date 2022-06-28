@@ -5,11 +5,12 @@ const SF = SurfaceFluxes
 const CCG = ClimaCore.Geometry
 const TC = TurbulenceConvection
 const CM = CloudMicrophysics
+import ClimaAtmos.Parameters as CAP
 
 include("../staggered_nonhydrostatic_model.jl")
 
 baroclinic_wave_mesh(; params, h_elem) =
-    cubed_sphere_mesh(; radius = FT(Planet.planet_radius(params)), h_elem)
+    cubed_sphere_mesh(; radius = FT(CAP.planet_radius(params)), h_elem)
 
 ##
 ## Initial conditions
@@ -56,24 +57,26 @@ function center_initial_condition_column(
     moisture_model,
     turbconv_model,
 )
+    thermo_params = CAP.thermodynamics_params(params)
     z = local_geometry.coordinates.z
     FT = eltype(z)
 
-    R_d = FT(Planet.R_d(params))
-    MSLP = FT(Planet.MSLP(params))
-    grav = FT(Planet.grav(params))
+    R_d = FT(CAP.R_d(params))
+    MSLP = FT(CAP.MSLP(params))
+    grav = FT(CAP.grav(params))
 
     T = FT(300)
     p = MSLP * exp(-z * grav / (R_d * T))
     ρ = p / (R_d * T)
-    ts = TD.PhaseDry_ρp(params, ρ, p)
+    ts = TD.PhaseDry_ρp(thermo_params, ρ, p)
 
     if energy_form isa PotentialTemperature
-        𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+        𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(thermo_params, ts))
     elseif energy_form isa TotalEnergy
-        𝔼_kwarg = (; ρe_tot = ρ * (TD.internal_energy(params, ts) + grav * z))
+        𝔼_kwarg =
+            (; ρe_tot = ρ * (TD.internal_energy(thermo_params, ts) + grav * z))
     elseif energy_form isa InternalEnergy
-        𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+        𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(thermo_params, ts))
     end
 
     tc_kwargs = if turbconv_model isa Nothing
@@ -102,18 +105,19 @@ function center_initial_condition_baroclinic_wave(
     is_balanced_flow = false,
 )
 
+    thermo_params = CAP.thermodynamics_params(params)
     # Coordinates
     z = local_geometry.coordinates.z
     ϕ = local_geometry.coordinates.lat
     λ = local_geometry.coordinates.long
     FT = eltype(z)
 
-    # Constants from CLIMAParameters
-    R_d = FT(Planet.R_d(params))
-    MSLP = FT(Planet.MSLP(params))
-    grav = FT(Planet.grav(params))
-    Ω = FT(Planet.Omega(params))
-    R = FT(Planet.planet_radius(params))
+    # Constants from ClimaAtmos.Parameters
+    R_d = FT(CAP.R_d(params))
+    MSLP = FT(CAP.MSLP(params))
+    grav = FT(CAP.grav(params))
+    Ω = FT(CAP.Omega(params))
+    R = FT(CAP.planet_radius(params))
 
     # Constants required for dry initial conditions
     k = 3
@@ -189,20 +193,21 @@ function center_initial_condition_baroclinic_wave(
             q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
     end
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
-    # T = T_v * (1 + q_tot) / (1 + q_tot * Planet.molmass_ratio(params))
+    # T = T_v * (1 + q_tot) / (1 + q_tot * CAP.molmass_ratio(params))
     # This is the actual formula, which would be consistent with TD.
 
     # Initial values computed from the thermodynamic state
-    ts = TD.PhaseEquil_pTq(params, p, T, q_tot)
-    ρ = TD.air_density(params, ts)
+    ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot)
+    ρ = TD.air_density(thermo_params, ts)
     if energy_form isa PotentialTemperature
-        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(thermo_params, ts))
     elseif energy_form isa TotalEnergy
         K = norm_sqr(uₕ_local) / 2
-        ᶜ𝔼_kwarg =
-            (; ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z))
+        ᶜ𝔼_kwarg = (;
+            ρe_tot = ρ * (TD.internal_energy(thermo_params, ts) + K + grav * z)
+        )
     elseif energy_form isa InternalEnergy
-        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(thermo_params, ts))
     end
     if moisture_model isa DryModel
         moisture_kwargs = NamedTuple()
@@ -211,8 +216,8 @@ function center_initial_condition_baroclinic_wave(
     elseif moisture_model isa NonEquilMoistModel
         moisture_kwargs = (;
             ρq_tot = ρ * q_tot,
-            ρq_liq = ρ * TD.liquid_specific_humidity(params, ts),
-            ρq_ice = ρ * TD.ice_specific_humidity(params, ts),
+            ρq_liq = ρ * TD.liquid_specific_humidity(thermo_params, ts),
+            ρq_ice = ρ * TD.ice_specific_humidity(thermo_params, ts),
         )
     end
     # TODO: Include ability to handle nonzero initial cloud condensate
@@ -240,21 +245,22 @@ function center_initial_condition_sphere(
     turbconv_model;
 )
 
+    thermo_params = CAP.thermodynamics_params(params)
     # Coordinates
     z = local_geometry.coordinates.z
     FT = eltype(z)
 
-    # Constants from CLIMAParameters
-    grav = FT(Planet.grav(params))
+    # Constants from ClimaAtmos.Parameters
+    grav = FT(CAP.grav(params))
 
     # Initial temperature and pressure
     temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
-        params,
+        thermo_params,
         FT(290),
         FT(220),
         FT(8e3),
     )
-    T, p = temp_profile(params, z)
+    T, p = temp_profile(thermo_params, z)
     T += rand(FT) * FT(0.1) * (z < 5000)
 
     # Initial velocity
@@ -267,16 +273,17 @@ function center_initial_condition_sphere(
     q_tot = FT(0)
 
     # Initial values computed from the thermodynamic state
-    ρ = TD.air_density(params, T, p)
-    ts = TD.PhaseEquil_ρTq(params, ρ, T, q_tot)
+    ρ = TD.air_density(thermo_params, T, p)
+    ts = TD.PhaseEquil_ρTq(thermo_params, ρ, T, q_tot)
     if energy_form isa PotentialTemperature
-        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(thermo_params, ts))
     elseif energy_form isa TotalEnergy
         K = norm_sqr(uₕ_local) / 2
-        ᶜ𝔼_kwarg =
-            (; ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z))
+        ᶜ𝔼_kwarg = (;
+            ρe_tot = ρ * (TD.internal_energy(thermo_params, ts) + K + grav * z)
+        )
     elseif energy_form isa InternalEnergy
-        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(thermo_params, ts))
     end
     if moisture_model isa DryModel
         moisture_kwargs = NamedTuple()
@@ -285,8 +292,8 @@ function center_initial_condition_sphere(
     elseif moisture_model isa NonEquilMoistModel
         moisture_kwargs = (;
             ρq_tot = ρ * q_tot,
-            ρq_liq = ρ * TD.liquid_specific_humidity(params, ts),
-            ρq_ice = ρ * TD.ice_specific_humidity(params, ts),
+            ρq_liq = ρ * TD.liquid_specific_humidity(thermo_params, ts),
+            ρq_ice = ρ * TD.ice_specific_humidity(thermo_params, ts),
         )
     end
     # TODO: Include ability to handle nonzero initial cloud condensate
@@ -381,11 +388,11 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
 function held_suarez_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
-    R_d = FT(Planet.R_d(params))
-    κ_d = FT(Planet.kappa_d(params))
-    cv_d = FT(Planet.cv_d(params))
-    day = FT(Planet.day(params))
-    MSLP = FT(Planet.MSLP(params))
+    R_d = FT(CAP.R_d(params))
+    κ_d = FT(CAP.kappa_d(params))
+    cv_d = FT(CAP.cv_d(params))
+    day = FT(CAP.day(params))
+    MSLP = FT(CAP.MSLP(params))
 
     σ_b = FT(7 / 10)
     k_a = 1 / (40 * day)
@@ -456,35 +463,40 @@ end
 
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, col_integrated_precip, params) = p # assume ᶜts has been updated
-
+    thermo_params = CAP.thermodynamics_params(params)
+    cm_params = CAP.microphysics_params(params)
     @. ᶜS_ρq_tot =
         Y.c.ρ * CM.Microphysics0M.remove_precipitation(
-            params,
-            TD.PhasePartition(params, ᶜts),
+            cm_params,
+            TD.PhasePartition(thermo_params, ᶜts),
         )
     @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
     @. Yₜ.c.ρ += ᶜS_ρq_tot
 
-    @. ᶜλ = TD.liquid_fraction(params, ᶜts)
+    # update precip in cache for coupler's use
+    # TODO: clean up p. => @.
+    p.col_integrated_precip .=
+        vertical∫_col(ᶜS_ρq_tot) ./ FT(CAP.ρ_cloud_liq(params))
+
+    # liquid fraction
+    @. ᶜλ = TD.liquid_fraction(thermo_params, ᶜts)
 
     if :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot +=
             ᶜS_ρq_tot * (
-                ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
-                (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts) +
+                ᶜλ * TD.internal_energy_liquid(thermo_params, ᶜts) +
+                (1 - ᶜλ) * TD.internal_energy_ice(thermo_params, ᶜts) +
                 ᶜΦ
             )
     elseif :ρe_int in propertynames(Y.c)
         @. Yₜ.c.ρe_int +=
             ᶜS_ρq_tot * (
-                ᶜλ * TD.internal_energy_liquid(params, ᶜts) +
-                (1 - ᶜλ) * TD.internal_energy_ice(params, ᶜts)
+                ᶜλ * TD.internal_energy_liquid(thermo_params, ᶜts) +
+                (1 - ᶜλ) * TD.internal_energy_ice(thermo_params, ᶜts)
             )
     end
 
-    # update precip in cache for coupler's use
-    col_integrated_precip =
-        vertical∫_col(ᶜS_ρq_tot) ./ FT(Planet.ρ_cloud_liq(params))
+
 end
 
 # Vertical diffusion boundary layer parameterization
@@ -502,6 +514,7 @@ function vertical_diffusion_boundary_layer_cache(
     Cd = FT(0.0044),
     Ch = FT(0.0044),
     diffuse_momentum = true,
+    coupled = false,
 )
     ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
@@ -549,6 +562,7 @@ function vertical_diffusion_boundary_layer_cache(
         Cd,
         Ch,
         diffuse_momentum,
+        coupled,
         z_bottom,
     )
 end
@@ -571,13 +585,15 @@ function constant_T_saturated_surface_coefs(
     Ch,
     params,
 )
-    T_int = TD.air_temperature(params, ts_int)
-    Rm_int = TD.gas_constant_air(params, ts_int)
+    thermo_params = CAP.thermodynamics_params(params)
+    T_int = TD.air_temperature(thermo_params, ts_int)
+    Rm_int = TD.gas_constant_air(thermo_params, ts_int)
     ρ_sfc =
-        TD.air_density(params, ts_int) *
-        (T_sfc / T_int)^(TD.cv_m(params, ts_int) / Rm_int)
-    q_sfc = TD.q_vap_saturation_generic(params, T_sfc, ρ_sfc, TD.Liquid())
-    ts_sfc = TD.PhaseEquil_ρTq(params, ρ_sfc, T_sfc, q_sfc)
+        TD.air_density(thermo_params, ts_int) *
+        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
+    q_sfc =
+        TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+    ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
     return SF.Coefficients{FT}(;
         state_in = SF.InteriorValues(z_int, (uₕ_int.u, uₕ_int.v), ts_int),
         state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
@@ -591,21 +607,25 @@ end
 # This is the same as SF.sensible_heat_flux, but without the Φ term.
 # TODO: Move this to SurfaceFluxes.jl.
 function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
-    cp_d::FT = Planet.cp_d(param_set)
-    R_d::FT = Planet.R_d(param_set)
-    T_0::FT = Planet.T_0(param_set)
-    cp_m = TD.cp_m(param_set, SF.ts_in(sc))
-    ρ_sfc = TD.air_density(param_set, SF.ts_sfc(sc))
-    T_in = TD.air_temperature(param_set, SF.ts_in(sc))
-    T_sfc = TD.air_temperature(param_set, SF.ts_sfc(sc))
+    thermo_params = CAP.thermodynamics_params(param_set)
+    surf_flux_params = CAP.surface_fluxes_params(param_set)
+    cp_d::FT = CAP.cp_d(param_set)
+    R_d::FT = CAP.R_d(param_set)
+    T_0::FT = CAP.T_0(param_set)
+    cp_m = TD.cp_m(thermo_params, SF.ts_in(sc))
+    ρ_sfc = TD.air_density(thermo_params, SF.ts_sfc(sc))
+    T_in = TD.air_temperature(thermo_params, SF.ts_in(sc))
+    T_sfc = TD.air_temperature(thermo_params, SF.ts_sfc(sc))
     ΔT = T_in - T_sfc
     hd_sfc = cp_d * (T_sfc - T_0) + R_d * T_0
-    E = SF.evaporation(sc, param_set, Ch)
+    E = SF.evaporation(sc, surf_flux_params, Ch)
     return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
 end
 
 function get_momentum_fluxes(params, Cd, flux_coefficients, nothing)
-    ρτxz, ρτyz = SF.momentum_fluxes(params, Cd, flux_coefficients, nothing)
+    surf_flux_params = CAP.surface_fluxes_params(params)
+    ρτxz, ρτyz =
+        SF.momentum_fluxes(surf_flux_params, Cd, flux_coefficients, nothing)
     return (; ρτxz = ρτxz, ρτyz = ρτyz)
 end
 
@@ -620,9 +640,11 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         Cd,
         Ch,
         diffuse_momentum,
+        coupled,
         z_bottom,
         params,
     ) = p
+    surf_flux_params = CAP.surface_fluxes_params(params)
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -636,31 +658,38 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜz_interior = Fields.field_values(Fields.level(ᶜz_field, 1))
     z_surface = Fields.field_values(z_sfc)
 
-    flux_coefficients .=
-        constant_T_saturated_surface_coefs.(
-            T_sfc,
-            Spaces.level(ᶜts, 1),
-            Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-            Fields.Field(ᶜz_interior, axes(z_bottom)),
-            Fields.Field(z_surface, axes(z_bottom)),
-            Cd,
-            Ch,
-            params,
-        )
+    if !coupled
+        flux_coefficients .=
+            constant_T_saturated_surface_coefs.(
+                T_sfc,
+                Spaces.level(ᶜts, 1),
+                Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
+                Fields.Field(ᶜz_interior, axes(z_bottom)),
+                Fields.Field(z_surface, axes(z_bottom)),
+                Cd,
+                Ch,
+                params,
+            )
+    end
 
     if diffuse_momentum
-        (; ρτxz, ρτyz) =
-            get_momentum_fluxes.(params, Cd, flux_coefficients, nothing)
-        u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
-        normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
-        ρ_1 = Fields.Field(Fields.field_values(Fields.level(Y.c.ρ, 1)), u_space) # TODO: delete when "space not the same instance" error is dealt with
-        parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
-            parent(
-                Geometry.Contravariant3Vector.(normal) .⊗
-                Geometry.Covariant12Vector.(
-                    Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
-                ),
-            )
+        if !coupled
+            (; ρτxz, ρτyz) =
+                get_momentum_fluxes.(params, Cd, flux_coefficients, nothing)
+            u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
+            normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
+            ρ_1 = Fields.Field(
+                Fields.field_values(Fields.level(Y.c.ρ, 1)),
+                u_space,
+            ) # TODO: delete when "space not the same instance" error is dealt with
+            parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
+                parent(
+                    Geometry.Contravariant3Vector.(normal) .⊗
+                    Geometry.Covariant12Vector.(
+                        Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
+                    ),
+                )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(
                 Geometry.Contravariant3Vector(FT(0)) ⊗
@@ -672,10 +701,21 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     end
 
     if :ρe_tot in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            SF.sensible_heat_flux(params, Ch, flux_coefficients, nothing) +
-            SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-        )
+        if !coupled
+            @. dif_flux_energy = Geometry.WVector(
+                SF.sensible_heat_flux(
+                    surf_flux_params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ) + SF.latent_heat_flux(
+                    surf_flux_params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ),
+            )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_energy),
@@ -683,9 +723,21 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρe_tot +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     elseif :ρe_int in propertynames(Y.c)
-        @. dif_flux_energy = Geometry.WVector(
-            sensible_heat_flux_ρe_int(params, Ch, flux_coefficients, nothing) + SF.latent_heat_flux(params, Ch, flux_coefficients, nothing),
-        )
+        if !coupled
+            @. dif_flux_energy = Geometry.WVector(
+                sensible_heat_flux_ρe_int(
+                    params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ) + SF.latent_heat_flux(
+                    surf_flux_params,
+                    Ch,
+                    flux_coefficients,
+                    nothing,
+                ),
+            )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_energy),
@@ -695,8 +747,11 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     end
 
     if :ρq_tot in propertynames(Y.c)
-        @. dif_flux_ρq_tot =
-            Geometry.WVector(SF.evaporation(flux_coefficients, params, Ch))
+        if !coupled
+            @. dif_flux_ρq_tot = Geometry.WVector(
+                SF.evaporation(flux_coefficients, surf_flux_params, Ch),
+            )
+        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_ρq_tot),

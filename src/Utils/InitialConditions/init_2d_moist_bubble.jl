@@ -19,15 +19,16 @@ function init_2d_moist_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     θ_b::FT = 300.0
     θ_c::FT = 0.5
     q_tot_c::FT = 1e-3
+    thermo_params = CAP.thermodynamics_params(params)
 
     # initial phase partition (specific humidity)
     q = TD.PhasePartition(q_tot_c, FT(0.0), FT(0.0))
     # physics parameters
-    p_0::FT = CLIMAParameters.Planet.MSLP(params)
-    cp_m::FT = TD.cp_m(params, q)
-    cv_m::FT = TD.cv_m(params, q)
-    R_m::FT = TD.gas_constant_air(params, q)
-    g::FT = CLIMAParameters.Planet.grav(params)
+    p_0::FT = CAP.MSLP(params)
+    cp_m::FT = TD.cp_m(thermo_params, q)
+    cv_m::FT = TD.cv_m(thermo_params, q)
+    R_m::FT = TD.gas_constant_air(thermo_params, q)
+    g::FT = CAP.grav(params)
 
     # auxiliary quantities
     # potential temperature perturbation
@@ -78,7 +79,7 @@ function init_2d_moist_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     # prognostic quantities
     # density
     ρ(local_geometry) =
-        TD.air_density(params, T(local_geometry), p(local_geometry), q)
+        TD.air_density(thermo_params, T(local_geometry), p(local_geometry), q)
 
     # potential temperature density
     ρθ(local_geometry) = ρ(local_geometry) * θ(local_geometry)

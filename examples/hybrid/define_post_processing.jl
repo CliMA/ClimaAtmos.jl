@@ -153,6 +153,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params) = p
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
+    thermo_params = CAP.thermodynamics_params(params)
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -161,8 +162,8 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        @. ᶜp = TD.air_pressure(params, ᶜts)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
@@ -280,6 +281,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
+    thermo_params = CAP.thermodynamics_params(params)
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -292,8 +294,8 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        @. ᶜp = TD.air_pressure(params, ᶜts)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
@@ -412,6 +414,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
+    thermo_params = CAP.thermodynamics_params(params)
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -428,13 +431,13 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜw_phy = ᶜinterp.(ᶠw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        @. ᶜp = TD.air_pressure(params, ᶜts)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
-        ᶜq = @. TD.PhasePartition(params, ᶜts)
+        ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
         ᶜcloudwater = @. TD.condensate(ᶜq) # @. ᶜq.liq + ᶜq.ice
         ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
 
-        ᶜT = @. TD.air_temperature(params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
@@ -687,6 +690,7 @@ calc_zonalave_variance(x) = calc_zonalave_timeave((x .- mean(x, dims = 4)) .^ 2)
 
 function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
 
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
@@ -727,7 +731,7 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
         ᶜθ = Y.c.ρθ ./ Y.c.ρ
         # temperature
         @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         # zonal wind
         ᶜuₕ = Y.c.uₕ
         ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
@@ -856,6 +860,7 @@ end
 
 function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params, ᶜK, ᶜΦ) = p
+    thermo_params = CAP.thermodynamics_params(params)
 
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
@@ -900,8 +905,8 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+        ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
         # assigning to nc obj
         nc_θ[:, i] = ᶜθ
@@ -1027,6 +1032,7 @@ end
 
 function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
 
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
@@ -1065,8 +1071,8 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
 
         # temperature
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+        ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
         # zonal wind
         ᶜuₕ = Y.c.uₕ
@@ -1200,6 +1206,7 @@ end
 
 function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params, ᶜK, ᶜΦ) = p
+    thermo_params = CAP.thermodynamics_params(params)
 
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
@@ -1245,8 +1252,8 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        ᶜT = @. TD.air_temperature(params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(params, ᶜts)
+        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+        ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
         # qt
         ᶜqt = Y.c.ρq_tot ./ Y.c.ρ
@@ -1392,6 +1399,8 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
 end
 
 function custom_postprocessing(sol, output_dir)
+    # TODO: remove closure over params
+    thermo_params = CAP.thermodynamics_params(params)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
     n = length(sol.u)
     #! format: off
@@ -1414,7 +1423,7 @@ function custom_postprocessing(sol, output_dir)
         if :ρθ in propertynames(Y.c)
             ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
         elseif :ρe_tot in propertynames(Y.c)
-            grav = FT(Planet.grav(params))
+            grav = FT(CAP.grav(params))
             ᶜK = @. norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
             ᶜΦ = grav .* Fields.coordinate_field(Y.c).z
             ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
@@ -1422,7 +1431,7 @@ function custom_postprocessing(sol, output_dir)
             ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end
         plot(
-            vec(TD.air_temperature.(params, ᶜts)),
+            vec(TD.air_temperature.(thermo_params, ᶜts)),
             vec(Fields.coordinate_field(Y.c).z ./ 1000);
             xlabel = "T [K]",
             ylabel = "z [km]",

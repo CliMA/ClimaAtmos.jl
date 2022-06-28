@@ -16,8 +16,8 @@ function rhs_base_model!(
     FT,
 )
     # relevant parameters
-    Ω::FT = CLIMAParameters.Planet.Omega(params)
-    g::FT = CLIMAParameters.Planet.grav(params)
+    Ω::FT = CAP.Omega(params)
+    g::FT = CAP.grav(params)
     κ₄::FT = hyperdiffusivity
 
     # operators

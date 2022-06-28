@@ -1,15 +1,11 @@
-if !haskey(ENV, "BUILDKITE")
-    import Pkg
-    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
-end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
 using ClimaCorePlots, Plots
 using UnPack
 
+import ClimaAtmos.Parameters as CAP
 using ClimaCore: Geometry
-using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
@@ -18,7 +14,8 @@ using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
 # Set up parameters
-struct BalancedFlowParameters <: CLIMAParameters.AbstractEarthParameterSet end
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
 
 function run_3d_balanced_flow(
     ::Type{FT};
@@ -29,11 +26,11 @@ function run_3d_balanced_flow(
     callbacks = (),
     test_mode = :regression,
 ) where {FT}
-    params = BalancedFlowParameters()
+    params = create_climaatmos_parameter_set(FT)
 
     domain = SphericalShell(
         FT,
-        radius = CLIMAParameters.Planet.planet_radius(params),
+        radius = CAP.planet_radius(params),
         height = FT(30.0e3),
         nelements = nelements,
         npolynomial = npolynomial,

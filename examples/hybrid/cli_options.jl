@@ -40,6 +40,10 @@ function parse_commandline()
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--coupled"
+        help = "Coupled simulation [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
@@ -216,41 +220,44 @@ Example:
 
 """
 function print_repl_script(str)
-    s = str
     ib = """"""
     ib *= """\n"""
     ib *= """using Revise; include("examples/hybrid/cli_options.jl");\n"""
     ib *= """\n"""
     ib *= """(s, parsed_args) = parse_commandline();\n"""
-    s = last(split(s, ".jl"))
-    s = strip(s)
-    parsed_args_list = split(s, " ")
-    @assert iseven(length(parsed_args_list))
-    parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
-        Pair(parsed_args_list[i], parsed_args_list[i + 1])
-    end
-    function is_string(val)
-        if val == "true" || val == "false"
-            return false
+    parsed_args = parsed_args_from_command_line_flags(str)
+    for (flag, val) in parsed_args
+        if val isa AbstractString
+            ib *= "parsed_args[\"$flag\"] = \"$val\";\n"
         else
-            for T in (Int, Float32, Float64)
-                try
-                    parse(T, val)
-                    return false
-                catch
-                end
-            end
-        end
-        return true
-    end
-    for (flag, val) in parsed_arg_pairs
-        if is_string(val)
-            ib *= "parsed_args[\"$(replace(flag, "--" => ""))\"] = \"$val\";\n"
-        else
-            ib *= "parsed_args[\"$(replace(flag, "--" => ""))\"] = $val;\n"
+            ib *= "parsed_args[\"$flag\"] = $val;\n"
         end
     end
     ib *= """\n"""
     ib *= """include("examples/hybrid/driver.jl")\n"""
     println(ib)
+end
+
+function parsed_args_from_command_line_flags(str, parsed_args = Dict())
+    s = str
+    s = last(split(s, ".jl"))
+    s = strip(s)
+    parsed_args_list = split(s, " ")
+    @assert iseven(length(parsed_args_list))
+    parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
+        Pair(parsed_args_list[i], strip(parsed_args_list[i + 1], '\"'))
+    end
+    function parse_arg(val)
+        for T in (Bool, Int, Float32, Float64)
+            try
+                return parse(T, val)
+            catch
+            end
+        end
+        return val # string
+    end
+    for (flag, val) in parsed_arg_pairs
+        parsed_args[replace(flag, "--" => "")] = parse_arg(val)
+    end
+    return parsed_args
 end

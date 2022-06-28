@@ -1,6 +1,7 @@
 module Models
 
 using ClimaCore: Geometry, Spaces
+import ..Parameters as CAP
 
 export AbstractModel,
     AbstractSingleColumnModel,

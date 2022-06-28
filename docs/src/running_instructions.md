@@ -17,18 +17,19 @@ We create a `Simulation` object which contains information about the `model` con
 Here we "unwrap" one of the conventional benchmarks (3D baroclinic wave) to present an example of a simulation assembled in the Julia REPL. Modules are loaded when necessary.  
 
 - Set up parameters and get the initial conditions
-```
-julia> using CLIMAParameters
-julia> using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
-julia> struct DryBaroclinicWaveParameters <: CLIMAParameters.AbstractEarthParameterSet end
-julia> params = DryBaroclinicWaveParameters();
-julia> FT = Float64;
+```julia
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
+params = create_climaatmos_parameter_set(Float64)
+
+using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
 ```
 - Set up the problem domain, assume we want 6 horizontal of polynomial order 3, and 10 vertical elements. ClimaAtmos is tested with `Float32`, `Float64`; if something doesn't work in `Float32` please raise an issue! 
 ```
-julia> using ClimaAtmos.Domains 
+julia> import ClimaAtmos.Parameters as CAP
+julia> using ClimaAtmos.Domains
 julia> domain = SphericalShell(FT, 
-                               radius = CLIMAParameters.Planet.planet_radius(params), 
+                               radius = CAP.planet_radius(params), 
                                height = FT(30.0e3), 
                                nelements = (6,10),
                                npolynomial = 3)

@@ -25,8 +25,8 @@ function rhs_base_model!(
 
     # experiment specif parameters
     # TODO: given lat in params, f = @. Geometry.Contravariant3Vector(Geometry.WVector(2*Ω*params.lat,)) 
-    f = params.f
-    uh_g = params.uh_g
+    f = CAP.f(params)
+    uh_g = CAP.uh_g(params)
 
     # # gather boundary conditions:
     # TODO: need to unpack outside rhs function and only pass in base bc
@@ -100,8 +100,8 @@ function rhs_base_model!(
 
     # experiment specif parameters
     # TODO: given lat in params, f = @. Geometry.Contravariant3Vector(Geometry.WVector(2*Ω*params.lat,)) 
-    f = params.f
-    uh_g = params.uh_g
+    f = CAP.f(params)
+    uh_g = CAP.uh_g(params)
 
     # density
     # anelastic

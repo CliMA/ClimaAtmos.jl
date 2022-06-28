@@ -17,11 +17,11 @@
 """
 function init_2d_dry_bubble(::Type{FT}, params; thermovar = :ρθ) where {FT}
     # physics parameters
-    p_0::FT = CLIMAParameters.Planet.MSLP(params)
-    cp_d::FT = CLIMAParameters.Planet.cp_d(params)
-    cv_d::FT = CLIMAParameters.Planet.cv_d(params)
-    R_d::FT = CLIMAParameters.Planet.R_d(params)
-    g::FT = CLIMAParameters.Planet.grav(params)
+    p_0::FT = CAP.MSLP(params)
+    cp_d::FT = CAP.cp_d(params)
+    cv_d::FT = CAP.cv_d(params)
+    R_d::FT = CAP.R_d(params)
+    g::FT = CAP.grav(params)
 
     # initial condition specific parameters
     x_c::FT = 0.0
