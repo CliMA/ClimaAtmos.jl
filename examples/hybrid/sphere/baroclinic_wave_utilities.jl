@@ -315,8 +315,8 @@ end
 function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
+    ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (10 * dt), FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (10 * dt), FT(0))
     zmax = maximum(ᶠz)
     ᶜβ_rayleigh =
         @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
@@ -378,13 +378,44 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
 )
 
 function held_suarez_tendency!(Yₜ, Y, p, t)
-    (; ᶜp, ᶜp_sfc, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+    (;z_sfc, T_sfc, ᶜΦ, ᶜK, ᶜts, ᶜp, ᶜp_sfc, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+
+    z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
 
     R_d = FT(Planet.R_d(params))
     κ_d = FT(Planet.kappa_d(params))
     cv_d = FT(Planet.cv_d(params))
     day = FT(Planet.day(params))
     MSLP = FT(Planet.MSLP(params))
+    
+    if :ρθ in propertynames(Y.c)
+        ts_int = Spaces.level(thermo_state_ρθ.(Y.c.ρθ, Y.c, params), 1)
+    elseif :ρe_tot in propertynames(Y.c)
+        ts_int = Spaces.level(thermo_state_ρe.(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params),1)
+    elseif :ρe_int in propertynames(Y.c)
+        ts_int = Spaces.level(thermo_state_ρe_int.(Y.c.ρe_int, Y.c, params),1)
+    end
+    
+    # Get c, cast on cellcenter for space consistency
+    # ZFIELD 
+    z_field = Fields.coordinate_field(Y.c).z
+    ᶜz_interior = Fields.field_values(Spaces.level(z_field,1))
+    ᶠz_surface = Fields.field_values(z_sfc)
+    z_space = axes(ᶜz_interior)
+    Δz_local = Fields.Field(ᶜz_interior,axes(z_bottom)) .- Fields.Field(ᶠz_surface, axes(z_bottom))
+    zsfc = Fields.Field(ᶠz_surface, axes(z_bottom))
+    # ZFIELD 
+
+    grav = FT(Planet.grav(params))
+    psurface = @.  MSLP * exp(-grav * zsfc/ R_d / 300)
+
+
+    T_int = @. TD.air_temperature(params, ts_int)
+    Rm_int = @. TD.gas_constant_air(params,ts_int)
+    ρ_sfc = @. TD.air_density(params, ts_int) * (T_sfc / T_int)^(TD.cv_m(params, ts_int)/ Rm_int)
+    q_sfc = @. TD.q_vap_saturation_generic(params, T_sfc, ρ_sfc, TD.Liquid())
+    ts_sfc = @. TD.PhaseEquil_ρTq(params, ρ_sfc, T_sfc, q_sfc)
+    p_sfc = @. TD.air_pressure(params, ts_sfc)
 
     σ_b = FT(7 / 10)
     k_a = 1 / (40 * day)
@@ -400,16 +431,21 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     Δθ_z = FT(10)
     T_min = FT(200)
 
-    @. ᶜσ = ᶜp / MSLP
-    @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
+    σ_p = similar(ᶜσ)
+    ˢp_int = size(parent(ᶜp))
+    ˢp_sfc = reshape(parent(p_sfc), (1, ˢp_int[2:end]...))
+    ˢp_sfc = reshape(parent(psurface), (1, ˢp_int[2:end]...))
+    parent(σ_p) .= parent(ᶜp) ./ parent(ˢp_sfc)
+    
+    @. ᶜheight_factor = max(0, (σ_p - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
         (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
         Y.c.ρ *
         ( # ᶜT - ᶜT_equil
             ᶜp / (Y.c.ρ * R_d) - max(
                 T_min,
-                (T_equator - ΔT_y * sin(ᶜφ)^2 - Δθ_z * log(ᶜσ) * cos(ᶜφ)^2) *
-                ᶜσ^κ_d,
+                (T_equator - ΔT_y * sin(ᶜφ)^2 - Δθ_z * log(σ_p) * cos(ᶜφ)^2) *
+                σ_p^κ_d,
             )
         )
 

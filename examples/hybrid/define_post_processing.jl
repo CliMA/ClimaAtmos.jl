@@ -191,7 +191,6 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         # defines variables for pressure, temperature, and vorticity
         nc_p = defVar(nc, "pres", FT, cspace, ("time",))
         nc_T = defVar(nc, "T", FT, cspace, ("time",))
-        nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
 
         nc_time[1] = FT(day * 24 * 3600)
         nc_p[:, 1] = ᶜp
@@ -225,10 +224,10 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
             datafile_latlon,
             datafile_cc,
             weightfile,
-            ["pres", "T", "vort"],
+            ["pres", "T", "vort", "alt"],
         )
 
-        rm(remap_tmpdir, recursive = true)
+        #rm(remap_tmpdir, recursive = true)
     end
 
     # create plots as in the paper
@@ -241,6 +240,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         p = ncdata["pres"][:]
         T = ncdata["T"][:]
         vort = ncdata["vort"][:] * FT(1e5)
+        alt = ncdata["alt"][:]
         close(ncdata)
         latidx = findall(x -> x >= 0, lat)
         lonidx = findall(x -> 0 <= x <= 240, lon)
@@ -249,7 +249,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
-            color = :bluesreds,
+            color = :balance,
             title = "pressure (1500m) day " * string(day),
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
@@ -258,7 +258,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
-            color = :bluesreds,
+            color = :balance,
             levels = 220:10:310,
             title = "temperature (1500m) day " * string(day),
         )
@@ -273,14 +273,14 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         )
         png(plot_ω, output_dir * "/bw-vorticity-day" * string(day) * ".png")
 
-        rm(datafile_latlon)
+        #rm(datafile_latlon)
     end
 
 end
 
 function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-    days = [1,10,20,30,40,50,60,70,80,90,100]
+    days = [1,2,3,4,5,6,7,8,9,10]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -322,12 +322,14 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         nc_p = defVar(nc, "pres", FT, cspace, ("time",))
         nc_T = defVar(nc, "T", FT, cspace, ("time",))
         nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
+        nc_alt = defVar(nc, "alt", FT, cspace)
 
         nc_time[1] = FT(day * 24 * 3600)
         nc_p[:, 1] = ᶜp
         nc_T[:, 1] = ᶜT
         nc_ω[:, 1] = ᶜvort
-
+        nc_alt[:] = Fields.coordinate_field(cspace).z
+        
         close(nc)
 
         # write out our cubed sphere mesh
@@ -355,7 +357,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             datafile_latlon,
             datafile_cc,
             weightfile,
-            ["pres", "T", "vort"],
+            ["pres", "T", "vort", "alt"],
         )
 
      #   rm(remap_tmpdir, recursive = true)
@@ -371,17 +373,27 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         p = ncdata["pres"][:]
         T = ncdata["T"][:]
         vort = ncdata["vort"][:] * FT(1e5)
+        alt = ncdata["alt"][:]
 
         #latidx = findall(x -> x >= 0, lat)
         #lonidx = findall(x -> 0 <= x <= 240, lon)
         latidx = findall(x -> -90 <= x <= 90, lat)
         lonidx = findall(x -> 0 <= x <= 360, lon)
         
+        plot_alt = contourf(
+            lon[lonidx],
+            lat[latidx],
+            alt[lonidx, latidx, 1]',
+            color = :balance,
+            title = "altitude " * string(day),
+        )
+        png(plot_alt, output_dir * "/bw-pressure-day" * string(day) * ".png")
+        
         plot_p = contourf(
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
-            color = :bluesreds,
+            color = :balance,
             title = "pressure day " * string(day),
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
@@ -390,7 +402,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
-            color = :bluesreds,
+            color = :balance,
             levels = 220:10:310,
             title = "temperature day " * string(day),
         )
@@ -413,7 +425,7 @@ end
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
-    days = [1,10,20,30,40,50,60,70,80,90,100]
+    days = [1,2,3,4,5,6,7,8,9,10]
 
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
@@ -425,9 +437,10 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
-        ᶠw_phy = Geometry.WVector.(ᶠw)
-        ᶜw_phy = ᶜinterp.(ᶠw_phy)
+        cw = @. ᶜinterp(ᶠw)
+        cuvw = @. C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+        ᶜuₕ_phy = @. Geometry.project(Geometry.UVAxis(), cuvw)
+        ᶜw_phy  = @. Geometry.project(Geometry.WAxis(), cuvw)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
         @. ᶜp = TD.air_pressure(params, ᶜts)
@@ -525,7 +538,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             ],
         )
 
-        rm(remap_tmpdir, recursive = true)
+ #       rm(remap_tmpdir, recursive = true)
     end
 
     # create plots as in the reference
@@ -558,7 +571,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
-            color = :bluesreds,
+            color = :balance,
             title = "pressure (1500m) day " * string(day),
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
@@ -567,7 +580,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
-            color = :bluesreds,
+            color = :balance,
             levels = 220:10:310,
             title = "temperature (1500m) day " * string(day),
         )
@@ -677,7 +690,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             output_dir * "/bw-vert_intg_water_vapor-day" * string(day) * ".png",
         )
 
-        rm(datafile_latlon)
+        #rm(datafile_latlon)
     end
 
 end
@@ -771,7 +784,7 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    #rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
@@ -1111,7 +1124,7 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    #rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
@@ -1241,7 +1254,10 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
 
         # zonal wind
         ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+        cw = @. ᶜinterp(Y.f.w)
+        cuvw = @. C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+        ᶜuₕ_phy = @. Geometry.project(Geometry.UVAxis(), cuvw)
+        ᶜw_phy  = @. Geometry.project(Geometry.WAxis(), cuvw)
 
         # temperature
         ᶠw = Y.f.w
@@ -1291,7 +1307,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u", "qt"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    #rm(remap_tmpdir, recursive = true)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
