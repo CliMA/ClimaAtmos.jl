@@ -35,11 +35,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (1) process"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_low_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_low_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 1 low enable)"
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe/scaling_data_1_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe/report.1.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_1/scaling_data_1_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_1/report.1.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 1
@@ -52,11 +51,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (2) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_low_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_low_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 2 low enable)"
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe/scaling_data_2_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe/report.2.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_2/scaling_data_2_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_2/report.2.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 2
@@ -69,11 +67,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (3) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_low_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_low_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 3 low enable)" 
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe/scaling_data_3_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe/report.3.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_3/scaling_data_3_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_3/report.3.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 3
@@ -86,11 +83,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (6) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_low_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_low_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 6 low enable)"
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe/scaling_data_6_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe/report.6.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_6/scaling_data_6_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_6/report.6.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 6
@@ -103,11 +99,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (24) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_low_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_low_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 24 low enable)"
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe/scaling_data_24_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe/report.24.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_24/scaling_data_24_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_24/report.24.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 24
@@ -123,11 +118,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (1) process"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_high_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_high_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 1 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe/scaling_data_1_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe/report.1.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_1/scaling_data_1_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_1/report.1.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 1
@@ -140,11 +134,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (2) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_high_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_high_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 2 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe/scaling_data_2_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe/report.2.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_2/scaling_data_2_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_2/report.2.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 2
@@ -157,11 +150,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (3) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_high_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_high_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 3 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe/scaling_data_3_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe/report.3.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_3/scaling_data_3_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_3/report.3.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 3
@@ -174,11 +166,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (6) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_high_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_high_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 6 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe/scaling_data_6_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe/report.6.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_6/scaling_data_6_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_6/report.6.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 6
@@ -191,11 +182,10 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (24) processes"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
-        - "nsys profile --trace=nvtx,mpi --mpi-impl=mpich --output=sphere_held_suarez_high_res_rhoe/report.%q{NPROCS} mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_high_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 24 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe/scaling_data_24_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe/report.24.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_24/scaling_data_24_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_24/report.24.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 24
@@ -208,9 +198,9 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (54) processes"
       command:
-        - "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_held_suarez_high_res_rhoe --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 54 high disable)" 
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe/scaling_data_54_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_54/scaling_data_54_processes.jld2"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
         NPROCS: 54
@@ -228,9 +218,9 @@ steps:
     command:
       - "julia --color=yes --project=examples examples/hybrid/plot_scaling_results.jl --job_id sphere_held_suarez_low_res_rhoe"
     artifact_paths:
-      - "sphere_held_suarez_low_res_rhoe/low-resolution_sypd.png"
-      - "sphere_held_suarez_low_res_rhoe/low-resolution_Scaling.png"
-      - "sphere_held_suarez_low_res_rhoe/low-resolution_Scaling_efficiency.png"
+      - "low-resolution_sypd.png"
+      - "low-resolution_Scaling.png"
+      - "low-resolution_Scaling_efficiency.png"
     agents:
       config: cpu
       queue: central
@@ -242,9 +232,9 @@ steps:
     command:
       - "julia --color=yes --project=examples examples/hybrid/plot_scaling_results.jl --job_id sphere_held_suarez_high_res_rhoe"
     artifact_paths:
-      - "sphere_held_suarez_high_res_rhoe/high-resolution_sypd.png"
-      - "sphere_held_suarez_high_res_rhoe/high-resolution_Scaling.png"
-      - "sphere_held_suarez_high_res_rhoe/high-resolution_Scaling_efficiency.png"
+      - "high-resolution_sypd.png"
+      - "high-resolution_Scaling.png"
+      - "high-resolution_Scaling_efficiency.png"
     agents:
       config: cpu
       queue: central
