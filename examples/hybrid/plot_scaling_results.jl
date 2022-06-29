@@ -8,19 +8,17 @@ if !(@isdefined parsed_args)
 end
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
-job_id = if isnothing(parsed_args["job_id"])
-    job_id_from_parsed_args(s, parsed_args)
-else
+job_id =
+    isnothing(parsed_args["job_id"]) ? job_id_from_parsed_args(s, parsed_args) :
     parsed_args["job_id"]
-end
 
-output_dir = parse_arg(parsed_args, "output_dir", job_id)
+output_dir = "./"
 # Note
 # Low-resolution simulation is integrated for 10 days
 # High-resolution simulation is integrated for 1 hour
 
 # tempest scaling data
-if occursin("low", output_dir)
+if occursin("low", job_id)
     # low-resolution (integration time = 10 days, on Caltech central cluster)
     nprocs_tempest = [1, 2, 3, 6, 24]
     walltime_tempest = [74.41848, 34.43472, 23.22432, 11.83896, 3.60936]
@@ -54,16 +52,22 @@ scaling_efficiency_tempest =
         100 * (walltime_tempest[1] ./ nprocs_tempest) ./ walltime_tempest,
         digits = 1,
     )
-#--------------------
-I = Int
-FT = Float64
+
+I, FT = Int, Float64
 
 nprocs = I[]
 walltime = FT[]
 
-for filename in readdir(output_dir)
-    if occursin("scaling_data_", filename)
-        dict = load(joinpath(output_dir, filename))
+for foldername in readdir(output_dir)
+    if occursin(job_id, foldername)
+        nprocs_string = split(foldername, "_")[end]
+        dict = load(
+            joinpath(
+                output_dir,
+                foldername,
+                "scaling_data_$(nprocs_string)_processes.jld2",
+            ),
+        )
         push!(nprocs, I(dict["nprocs"]))
         push!(walltime, FT(dict["walltime"]))
     end
@@ -110,7 +114,7 @@ Plots.png(
     ),
     figpath,
 )
-linkfig(relpath(figpath, joinpath(@__DIR__, "../..")), "SYPD")
+linkfig(relpath(figpath, joinpath(@__DIR__, "../")), "SYPD")
 
 figpath = joinpath(output_dir, resolution * "_" * "Scaling.png")
 
@@ -134,7 +138,7 @@ Plots.png(
     figpath,
 )
 
-linkfig(relpath(figpath, joinpath(@__DIR__, "../..")), "Scaling Data")
+linkfig(relpath(figpath, joinpath(@__DIR__, "../")), "Scaling Data")
 
 figpath = joinpath(output_dir, resolution * "_" * "Scaling_efficiency.png")
 
@@ -173,4 +177,4 @@ Plots.png(
     figpath,
 )
 
-linkfig(relpath(figpath, joinpath(@__DIR__, "../..")), "Scaling Efficiency")
+linkfig(relpath(figpath, joinpath(@__DIR__, "../")), "Scaling Efficiency")
