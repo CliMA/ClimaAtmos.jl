@@ -43,11 +43,9 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 include("types.jl")
 
-import TurbulenceConvection
-const TC = TurbulenceConvection
+import TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
-import .TurbulenceConvectionUtils
-TCU = TurbulenceConvectionUtils
+import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
     nl = TCU.NameList.default_namelist("Bomex")
     nl["set_src_seed"] = true
@@ -81,8 +79,7 @@ using ClimaCore
 import Random
 Random.seed!(1234)
 include(joinpath("..", "RRTMGPInterface.jl"))
-import .RRTMGPInterface
-RRTMGPI = RRTMGPInterface
+import .RRTMGPInterface as RRTMGPI
 
 !isnothing(radiation_model()) && include("radiation_utilities.jl")
 
@@ -210,7 +207,8 @@ else
 end
 
 import ClimaCore: enable_threading
-enable_threading() = parsed_args["enable_threading"]
+const enable_clima_core_threading = parsed_args["enable_threading"]
+enable_threading() = enable_clima_core_threading
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
 # bytes required to store an element from Y.c or Y.f (or, really, from any Field
