@@ -193,6 +193,8 @@ function default_cache(Y, params, upwinding_mode)
 end
 
 function implicit_tendency!(Yₜ, Y, p, t)
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
     @nvtx "implicit tendency" color = colorant"yellow" begin
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
@@ -393,7 +395,8 @@ Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} 
     T(axes(T), S(one(T′)))
 
 function Wfact!(W, Y, p, dtγ, t)
-
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = W
     ᶜρ = Y.c.ρ
