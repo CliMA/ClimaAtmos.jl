@@ -420,6 +420,7 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
   
     p_int_size = size(parent(ᶜp))
     p_sfc = reshape(parent(p_sfc), (1, p_int_size[2:end]...))
+    # Compute σ as a function of surface pressure which may vary with elevation
     parent(ᶜσ) .= parent(ᶜp) ./ parent(p_sfc)
 
     @. ᶜσ = ᶜp ./ p_sfc
