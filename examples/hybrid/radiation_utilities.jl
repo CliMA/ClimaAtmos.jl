@@ -1,3 +1,4 @@
+import ClimaAtmos.Parameters as CAP
 using Statistics: mean
 using Dierckx: Spline1D
 using Dates: Second, DateTime
@@ -13,6 +14,8 @@ function rrtmgp_model_cache(
     idealized_h2o = false,
     idealized_clouds = false,
 )
+    rrtmgp_params = CAP.rrtmgp_params(params)
+    thermo_params = CAP.thermodynamics_params(params)
     if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
         error("idealized_h2o can't be used with $radiation_mode")
     end
@@ -54,12 +57,12 @@ function rrtmgp_model_cache(
         if :ρθ in propertynames(Y.c)
             ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
         elseif :ρe_tot in propertynames(Y.c)
-            ᶜΦ = FT(Planet.grav(params)) .* Fields.coordinate_field(Y.c).z
+            ᶜΦ = FT(CAP.grav(params)) .* Fields.coordinate_field(Y.c).z
             ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, 0, ᶜΦ, params)
         elseif :ρe_int in propertynames(Y.c)
             ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
         end
-        ᶜp = @. TD.air_pressure(params, ᶜts)
+        ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
         center_volume_mixing_ratio_o3 =
             RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
 
@@ -149,7 +152,7 @@ function rrtmgp_model_cache(
     end
 
     rrtmgp_model = RRTMGPI.RRTMGPModel(
-        params;
+        rrtmgp_params;
         FT = Float64,
         ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
@@ -196,6 +199,8 @@ function rrtmgp_model_callback!(integrator)
     (; ᶜK, ᶜΦ, ᶜts, T_sfc, params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, rrtmgp_model) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    insolation_params = CAP.insolation_params(params)
 
     rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
@@ -209,8 +214,8 @@ function rrtmgp_model_callback!(integrator)
     elseif :ρe_int in propertynames(Y.c)
         @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
     end
-    @. ᶜp = TD.air_pressure(params, ᶜts)
-    @. ᶜT = TD.air_temperature(params, ᶜts)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
     if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
         ᶜvmr_h2o = RRTMGPI.array2field(
@@ -228,7 +233,8 @@ function rrtmgp_model_callback!(integrator)
 
             # temporarily store ᶜq_tot in ᶜvmr_h2o
             ᶜq_tot = ᶜvmr_h2o
-            @. ᶜq_tot = max_relative_humidity * TD.q_vap_saturation(params, ᶜts)
+            @. ᶜq_tot =
+                max_relative_humidity * TD.q_vap_saturation(thermo_params, ᶜts)
 
             # filter ᶜq_tot so that it is monotonically decreasing with z
             for i in 2:Spaces.nlevels(axes(ᶜq_tot))
@@ -241,8 +247,8 @@ function rrtmgp_model_callback!(integrator)
             @. ᶜvmr_h2o = TD.shum_to_mixing_ratio(ᶜq_tot, ᶜq_tot)
         else
             @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
-                params,
-                TD.PhasePartition(params, ᶜts),
+                thermo_params,
+                TD.PhasePartition(thermo_params, ᶜts),
             )
         end
     end
@@ -250,8 +256,8 @@ function rrtmgp_model_callback!(integrator)
     if !idealized_insolation
         date_time = DateTime(2022) + Second(round(Int, t)) # t secs into 2022
         max_zenith_angle = FT(π) / 2 - eps(FT)
-        irradiance = FT(Planet.tot_solar_irrad(params))
-        au = FT(astro_unit())
+        irradiance = FT(CAP.tot_solar_irrad(params))
+        au = FT(CAP.astro_unit(params))
 
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -267,7 +273,7 @@ function rrtmgp_model_callback!(integrator)
                 date_time,
                 Float64(bottom_coords.long),
                 Float64(bottom_coords.lat),
-                params,
+                insolation_params,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
             @. solar_zenith_angle =
                 min(first(insolation_tuple), max_zenith_angle)
@@ -275,8 +281,12 @@ function rrtmgp_model_callback!(integrator)
                 irradiance * (au / last(insolation_tuple))^2
         else
             # assume that the latitude and longitude are both 0 for flat space
-            insolation_tuple =
-                instantaneous_zenith_angle(date_time, 0.0, 0.0, params)
+            insolation_tuple = instantaneous_zenith_angle(
+                date_time,
+                0.0,
+                0.0,
+                insolation_params,
+            )
             rrtmgp_model.solar_zenith_angle .=
                 min(first(insolation_tuple), max_zenith_angle)
             rrtmgp_model.weighted_irradiance .=
@@ -302,9 +312,11 @@ function rrtmgp_model_callback!(integrator)
             axes(Y.c),
         )
         # multiply by 1000 to convert from kg/m^2 to g/m^2
-        @. ᶜlwp = 1000 * Y.c.ρ * TD.liquid_specific_humidity(params, ᶜts) * ᶜΔz
-        @. ᶜiwp = 1000 * Y.c.ρ * TD.ice_specific_humidity(params, ᶜts) * ᶜΔz
-        @. ᶜmask = TD.has_condensate(params, ᶜts)
+        @. ᶜlwp =
+            1000 * Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts) * ᶜΔz
+        @. ᶜiwp =
+            1000 * Y.c.ρ * TD.ice_specific_humidity(thermo_params, ᶜts) * ᶜΔz
+        @. ᶜmask = TD.has_condensate(thermo_params, ᶜts)
     end
 
     RRTMGPI.update_fluxes!(rrtmgp_model)

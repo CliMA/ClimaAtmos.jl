@@ -3,7 +3,6 @@ module RRTMGPInterface
 using Pkg
 using NCDatasets
 using RRTMGP
-using CLIMAParameters: AbstractEarthParameterSet, Planet
 using ClimaCore: DataLayouts, Spaces, Fields
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
@@ -103,8 +102,7 @@ Constructs an `NCDataset` from the `RRTMGP.jl` artifact stored in
 """
 function rrtmgp_artifact(subfolder, file_name)
     artifact_name = "RRTMGPReferenceData"
-    artifacts_file =
-        joinpath(dirname(dirname(pathof(RRTMGP))), "Artifacts.toml")
+    artifacts_file = joinpath(pkgdir(RRTMGP), "test", "Artifacts.toml")
     data_folder = joinpath(
         Pkg.Artifacts.ensure_artifact_installed(artifact_name, artifacts_file),
         artifact_name,
@@ -294,8 +292,8 @@ function extrap!(::BestFit, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺
 end
 function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
     FT = eltype(p)
-    cₚ = FT(Planet.cp_d(params))
-    R = FT(Planet.R_d(params))
+    cₚ = FT(RRTMGP.Parameters.cp_d(params))
+    R = FT(RRTMGP.Parameters.R_d(params))
     @. T = Tₛ
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
@@ -314,9 +312,9 @@ function extrap!(
     params,
 )
     FT = eltype(p)
-    g = FT(Planet.grav(params))
-    cₚ = FT(Planet.cp_d(params))
-    R = FT(Planet.R_d(params))
+    g = FT(RRTMGP.Parameters.grav(params))
+    cₚ = FT(RRTMGP.Parameters.cp_d(params))
+    R = FT(RRTMGP.Parameters.R_d(params))
     @. T = T⁺ + g / cₚ * (z⁺ - z)
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
@@ -480,7 +478,7 @@ array.
     - `face_z`: z-coordinate in m at cell faces
 """
 function RRTMGPModel(
-    params::AbstractEarthParameterSet;
+    params::RRTMGP.Parameters.ARP;
     FT::Type{<:AbstractFloat} = Float64,
     DA::Type{<:AbstractArray} = RRTMGP.Device.array_type(),
     ncol::Int,
@@ -602,8 +600,14 @@ function RRTMGPModel(
             end
         end
 
-        src_lw =
-            RRTMGP.Sources.source_func_longwave(FT, ncol, nlay, op_symbol, DA)
+        src_lw = RRTMGP.Sources.source_func_longwave(
+            params,
+            FT,
+            ncol,
+            nlay,
+            op_symbol,
+            DA,
+        )
         flux_lw = RRTMGP.Fluxes.FluxLW(ncol, nlay, FT, DA)
         fluxb_lw =
             radiation_mode isa GrayRadiation ? nothing :

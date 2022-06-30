@@ -1,15 +1,11 @@
-if !haskey(ENV, "BUILDKITE")
-    import Pkg
-    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
-end
 using Test
 
 using OrdinaryDiffEq: SSPRK33
 using ClimaCorePlots, Plots
 using UnPack
 
+import ClimaAtmos.Parameters as CAP
 using ClimaCore: Geometry
-using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_3d_solid_body_rotation
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
@@ -17,8 +13,8 @@ using ClimaAtmos.Models
 using ClimaAtmos.Models.Nonhydrostatic3DModels
 using ClimaAtmos.Simulations
 
-# Set up parameters
-struct SolidBodyRotationParameters <: CLIMAParameters.AbstractEarthParameterSet end
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
 
 function run_3d_solid_body_rotation(
     ::Type{FT};
@@ -29,11 +25,11 @@ function run_3d_solid_body_rotation(
     callbacks = (),
     test_mode = :regression,
 ) where {FT}
-    params = SolidBodyRotationParameters()
+    params = create_climaatmos_parameter_set(FT)
 
     domain = SphericalShell(
         FT,
-        radius = CLIMAParameters.Planet.planet_radius(params),
+        radius = CAP.planet_radius(params),
         height = FT(30.0e3),
         nelements = nelements,
         npolynomial = npolynomial,
@@ -66,8 +62,8 @@ function run_3d_solid_body_rotation(
         end
         current_w_max = 0.21114581947634953
 
-        @test (abs.(uh_phy |> parent) |> maximum) ≈ current_uh_max rtol = 1e-3
-        @test (abs.(w_phy |> parent) |> maximum) ≈ current_w_max rtol = 1e-3
+        @test (abs.(uh_phy |> parent) |> maximum) ≈ current_uh_max rtol = 0.05
+        @test (abs.(w_phy |> parent) |> maximum) ≈ current_w_max rtol = 0.05
     elseif test_mode == :validation
         simulation = Simulation(model, stepper, dt = dt, tspan = (0.0, 3600))
         @unpack ρ, uh, w, ρe_tot = init_3d_solid_body_rotation(FT, params)

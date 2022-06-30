@@ -1,4 +1,4 @@
-using ClimaCore: Geometry, Domains, Meshes, Topologies, Spaces
+using ClimaCore: Geometry, Domains, Meshes, Topologies, Spaces, Hypsography
 
 function periodic_line_mesh(; x_max, x_elem)
     domain = Domains.IntervalDomain(
@@ -51,7 +51,13 @@ function make_horizontal_space(mesh, quad, comms_ctx)
     return space
 end
 
-function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+function make_hybrid_spaces(
+    h_space,
+    z_max,
+    z_elem,
+    z_stretch;
+    surface_warp = nothing,
+)
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
         Geometry.ZPoint(z_max);
@@ -59,9 +65,21 @@ function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
-    z_topology = Topologies.IntervalTopology(z_mesh)
-    z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
-    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
+    if surface_warp == nothing
+        z_topology = Topologies.IntervalTopology(z_mesh)
+        z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
+        center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
+        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
+    else
+        z_surface = surface_warp.(Fields.coordinate_field(h_space))
+        z_face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
+        face_space = Spaces.ExtrudedFiniteDifferenceSpace(
+            h_space,
+            z_face_space,
+            Hypsography.LinearAdaption(),
+            z_surface,
+        )
+        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(face_space)
+    end
     return center_space, face_space
 end

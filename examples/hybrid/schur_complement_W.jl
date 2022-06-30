@@ -161,119 +161,132 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
         (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
         dtγ = dtγ_ref[]
 
-        # Compute Schur complement
+        @nvtx "linsolve" color = colorant"lime" begin
 
-        # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
-        # than 2 diagonals per Jacobian block.
-        FT = eltype(eltype(S))
-        I = Ref(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
-        if Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
-            str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
-                block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
-                be set to 0 for the Schur complement computation. Consider \
-                changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
-            @warn str maxlog = 1
-            @. S = dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
-        else
-            @. S =
-                dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) +
-                dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶜ𝔼ₜ∂ᶠ𝕄) +
-                dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
-        end
+            # Compute Schur complement
 
-        # Compute xᶠ𝕄
+            # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
+            # than 2 diagonals per Jacobian block.
+            FT = eltype(eltype(S))
+            I = Ref(
+                Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))),
+            )
+            if Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
+                str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
+                    block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
+                    be set to 0 for the Schur complement computation. Consider \
+                    changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
+                @warn str maxlog = 1
+                @. S = dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+            else
+                @. S =
+                    dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) +
+                    dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶜ𝔼ₜ∂ᶠ𝕄) +
+                    dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+            end
 
-        xᶜρ = x.c.ρ
-        bᶜρ = b.c.ρ
-        ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
-        xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
-        bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
-        ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
-        xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
-        bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
-        ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
-        xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
-        bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
+            # Compute xᶠ𝕄
 
-        @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
+            xᶜρ = x.c.ρ
+            bᶜρ = b.c.ρ
+            ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
+            xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
+            bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
+            ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
+            xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
+            bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
+            ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
+            xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
+            bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
 
-        # TODO: Do this with stencil_solve!.
-        Ni, Nj, _, _, Nh = size(Spaces.local_geometry_data(axes(xᶜρ)))
-        for h in 1:Nh, j in 1:Nj, i in 1:Ni
-            xᶠ𝕄_column_view = parent(Spaces.column(xᶠ𝕄, i, j, h))
-            S_column = Spaces.column(S, i, j, h)
-            @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
-            S_column_array.d .= parent(S_column.coefs.:2)
-            @views S_column_array.du .= parent(S_column.coefs.:3)[1:(end - 1)]
-            ldiv!(lu!(S_column_array), xᶠ𝕄_column_view)
-        end
+            @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
 
-        # Compute remaining components of x
-
-        @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
-        @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
-        @. xᶜ𝕄 = -bᶜ𝕄
-        for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
-            xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
-            bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
-            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
-            @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
-        end
-
-        # Verify correctness (if needed)
-
-        if A.test && Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) == (-half, half)
-            Ni, Nj, _, Nv, Nh = size(Fields.field_values(x.c))
-            Nᶜf = DataLayouts.typesize(FT, eltype(x.c))
-            J_col = zeros(FT, Nv * Nᶜf + Nv + 1, Nv * Nᶜf + Nv + 1)
+            # TODO: Do this with stencil_solve!.
+            Ni, Nj, _, _, Nh = size(Spaces.local_geometry_data(axes(xᶜρ)))
             for h in 1:Nh, j in 1:Nj, i in 1:Ni
-                x_col = Fields.FieldVector(;
-                    c = Spaces.column(x.c, i, j, h),
-                    f = Spaces.column(x.f, i, j, h),
-                )
-                b_col = Fields.FieldVector(;
-                    c = Spaces.column(b.c, i, j, h),
-                    f = Spaces.column(b.f, i, j, h),
-                )
-                ᶜρ_position = findfirst(isequal(:ρ), propertynames(x.c))
-                ᶜρ_offset =
-                    DataLayouts.fieldtypeoffset(FT, eltype(x.c), ᶜρ_position)
-                ᶜρ_indices = (Nv * ᶜρ_offset + 1):(Nv * (ᶜρ_offset + 1))
-                ᶜ𝔼_position = findfirst(is_energy_var, propertynames(x.c))
-                ᶜ𝔼_offset =
-                    DataLayouts.fieldtypeoffset(FT, eltype(x.c), ᶜ𝔼_position)
-                ᶜ𝔼_indices = (Nv * ᶜ𝔼_offset + 1):(Nv * (ᶜ𝔼_offset + 1))
-                ᶠ𝕄_indices = (Nv * Nᶜf + 1):(Nv * (Nᶜf + 1) + 1)
-                J_col[ᶜρ_indices, ᶠ𝕄_indices] .=
-                    matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                J_col[ᶜ𝔼_indices, ᶠ𝕄_indices] .=
-                    matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                J_col[ᶠ𝕄_indices, ᶜρ_indices] .=
-                    matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(x.c), i, j, h)
-                J_col[ᶠ𝕄_indices, ᶜ𝔼_indices] .=
-                    matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(x.c), i, j, h)
-                J_col[ᶠ𝕄_indices, ᶠ𝕄_indices] .=
-                    matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                for ᶜ𝕋_position in findall(is_tracer_var, propertynames(x.c))
-                    ᶜ𝕋_offset = DataLayouts.fieldtypeoffset(
+                xᶠ𝕄_column_view = parent(Spaces.column(xᶠ𝕄, i, j, h))
+                S_column = Spaces.column(S, i, j, h)
+                @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
+                S_column_array.d .= parent(S_column.coefs.:2)
+                @views S_column_array.du .=
+                    parent(S_column.coefs.:3)[1:(end - 1)]
+                ldiv!(lu!(S_column_array), xᶠ𝕄_column_view)
+            end
+
+            # Compute remaining components of x
+
+            @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
+            @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
+            @. xᶜ𝕄 = -bᶜ𝕄
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
+                xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
+                bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
+            end
+
+            # Verify correctness (if needed)
+
+            if A.test && Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) == (-half, half)
+                Ni, Nj, _, Nv, Nh = size(Fields.field_values(x.c))
+                Nᶜf = DataLayouts.typesize(FT, eltype(x.c))
+                J_col = zeros(FT, Nv * Nᶜf + Nv + 1, Nv * Nᶜf + Nv + 1)
+                for h in 1:Nh, j in 1:Nj, i in 1:Ni
+                    x_col = Fields.FieldVector(;
+                        c = Spaces.column(x.c, i, j, h),
+                        f = Spaces.column(x.f, i, j, h),
+                    )
+                    b_col = Fields.FieldVector(;
+                        c = Spaces.column(b.c, i, j, h),
+                        f = Spaces.column(b.f, i, j, h),
+                    )
+                    ᶜρ_position = findfirst(isequal(:ρ), propertynames(x.c))
+                    ᶜρ_offset = DataLayouts.fieldtypeoffset(
                         FT,
                         eltype(x.c),
-                        ᶜ𝕋_position,
+                        ᶜρ_position,
                     )
-                    ᶜ𝕋_indices = (Nv * ᶜ𝕋_offset + 1):(Nv * (ᶜ𝕋_offset + 1))
-                    ᶜ𝕋_name = propertynames(x.c)[ᶜ𝕋_position]
-                    ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
-                    J_col[ᶜ𝕋_indices, ᶠ𝕄_indices] .=
-                        matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
+                    ᶜρ_indices = (Nv * ᶜρ_offset + 1):(Nv * (ᶜρ_offset + 1))
+                    ᶜ𝔼_position = findfirst(is_energy_var, propertynames(x.c))
+                    ᶜ𝔼_offset = DataLayouts.fieldtypeoffset(
+                        FT,
+                        eltype(x.c),
+                        ᶜ𝔼_position,
+                    )
+                    ᶜ𝔼_indices = (Nv * ᶜ𝔼_offset + 1):(Nv * (ᶜ𝔼_offset + 1))
+                    ᶠ𝕄_indices = (Nv * Nᶜf + 1):(Nv * (Nᶜf + 1) + 1)
+                    J_col[ᶜρ_indices, ᶠ𝕄_indices] .=
+                        matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(x.f), i, j, h)
+                    J_col[ᶜ𝔼_indices, ᶠ𝕄_indices] .=
+                        matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
+                    J_col[ᶠ𝕄_indices, ᶜρ_indices] .=
+                        matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(x.c), i, j, h)
+                    J_col[ᶠ𝕄_indices, ᶜ𝔼_indices] .=
+                        matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(x.c), i, j, h)
+                    J_col[ᶠ𝕄_indices, ᶠ𝕄_indices] .=
+                        matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
+                    for ᶜ𝕋_position in
+                        findall(is_tracer_var, propertynames(x.c))
+                        ᶜ𝕋_offset = DataLayouts.fieldtypeoffset(
+                            FT,
+                            eltype(x.c),
+                            ᶜ𝕋_position,
+                        )
+                        ᶜ𝕋_indices = (Nv * ᶜ𝕋_offset + 1):(Nv * (ᶜ𝕋_offset + 1))
+                        ᶜ𝕋_name = propertynames(x.c)[ᶜ𝕋_position]
+                        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                        J_col[ᶜ𝕋_indices, ᶠ𝕄_indices] .=
+                            matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
+                    end
+                    @assert (-LinearAlgebra.I + dtγ * J_col) * x_col ≈ b_col
                 end
-                @assert (-LinearAlgebra.I + dtγ * J_col) * x_col ≈ b_col
             end
-        end
 
-        # Apply transform (if needed)
+            # Apply transform (if needed)
 
-        if A.transform
-            x .*= dtγ
+            if A.transform
+                x .*= dtγ
+            end
         end
     end
 end

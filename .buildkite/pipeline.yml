@@ -104,19 +104,19 @@ steps:
     steps:
 
       - label: ":computer: single column radiative equilibrium gray"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_gray"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_gray"
         artifact_paths: "sphere_single_column_radiative_equilibrium_gray/*"
 
       - label: ":computer: single column radiative equilibrium clearsky"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky"
         artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky/*"
       
       - label: ":computer: single column radiative equilibrium clearsky varying insolation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_insolation false --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky_insolation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_insolation false --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky_insolation"
         artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky_insolation/*"
 
       - label: ":computer: single column radiative equilibrium allsky idealized clouds"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_allsky_idealized_clouds"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_allsky_idealized_clouds"
         artifact_paths: "sphere_single_column_radiative_equilibrium_allsky_idealized_clouds/*"
 
   - group: "MPI Examples"
@@ -130,8 +130,20 @@ steps:
         agents:
           slurm_ntasks: 2
 
+      - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 5days"
+        artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
   - group: "Sphere Examples"
     steps:
+
+      - label: ":computer: baroclinic wave (ρe_tot) IMEXEuler"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 2days --dt 60secs --ode_algo IMEXEuler --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64"
@@ -162,7 +174,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
       
       - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 200secs --t_end 5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 150secs --t_end 3.75days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
 
   - group: "Milestones"

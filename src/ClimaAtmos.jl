@@ -1,5 +1,8 @@
 module ClimaAtmos
 
+include("Parameters.jl")
+import .Parameters
+
 include("Domains/Domains.jl")
 include("BoundaryConditions/BoundaryConditions.jl")
 include("Models/Models.jl")

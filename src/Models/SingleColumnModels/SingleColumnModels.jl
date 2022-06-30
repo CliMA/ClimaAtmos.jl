@@ -1,9 +1,9 @@
 module SingleColumnModels
 
+import ...Parameters as CAP
 using LinearAlgebra
 using StaticArrays
 import UnPack
-import CLIMAParameters
 using Thermodynamics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗

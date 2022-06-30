@@ -1,7 +1,3 @@
-if !haskey(ENV, "BUILDKITE")
-    import Pkg
-    Pkg.develop(Pkg.PackageSpec(; path = dirname(dirname(@__DIR__))))
-end
 using Test
 
 using OrdinaryDiffEq: SSPRK33, CallbackSet
@@ -9,7 +5,6 @@ using ClimaCorePlots, Plots
 using UnPack
 using DiffEqCallbacks
 
-using CLIMAParameters
 using ClimaAtmos.Utils.InitialConditions: init_2d_precipitating_bubble
 using ClimaAtmos.Domains
 using ClimaAtmos.BoundaryConditions
@@ -19,7 +14,9 @@ using ClimaAtmos.Callbacks
 using ClimaAtmos.Simulations
 
 # Set up parameters
-struct Bubble2DParameters <: CLIMAParameters.AbstractEarthParameterSet end
+import ClimaAtmos
+include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
+
 
 """
     PNGOutput{M, I} <: AbstractCallback
@@ -144,7 +141,7 @@ function run_2d_precipitating_bubble(
     callbacks = (),
     test_mode = :regression,
 ) where {FT}
-    params = Bubble2DParameters()
+    params = create_climaatmos_parameter_set(FT)
 
     domain = HybridPlane(
         FT,
@@ -220,9 +217,9 @@ function run_2d_precipitating_bubble(
         end
 
         @test minimum(parent(u_end.thermodynamics.ρe_tot)) ≈ current_min atol =
-            0.01
+            0.05
         @test maximum(parent(u_end.thermodynamics.ρe_tot)) ≈ current_max atol =
-            0.01
+            0.05
 
         # conservation check
         Δρ = (∫ρ_e - ∫ρ_0) ./ ∫ρ_0 * 100

@@ -23,6 +23,7 @@
     hyperdiffusivity,
     FT,
 )
+    cm_params = CAP.microphysics_params(params)
     # parameters
     κ₄ = hyperdiffusivity
 
@@ -58,12 +59,12 @@
     # auxiliary variables
     v_rai = @. Geometry.WVector(
         interp_c2f(
-            CM1M.terminal_velocity(params, CMCT.RainType(), ρ, ρq_rai / ρ),
+            CM1M.terminal_velocity(cm_params, CMCT.RainType(), ρ, ρq_rai / ρ),
         ) * FT(-1),
     )
     v_sno = @. Geometry.WVector(
         interp_c2f(
-            CM1M.terminal_velocity(params, CMCT.SnowType(), ρ, ρq_sno / ρ),
+            CM1M.terminal_velocity(cm_params, CMCT.SnowType(), ρ, ρq_sno / ρ),
         ) * FT(-1),
     )
     uvw_rai = @. Geometry.Covariant123Vector(ρuh / ρ) +

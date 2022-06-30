@@ -34,8 +34,8 @@ end
     ν = vert_diffusion_style.ν
 
     # experiment specific parameters
-    uh_g = params.uh_g
-    Cd = params.Cd
+    uh_g = CAP.uh_g(params)
+    Cd = CAP.Cd(params)
 
     # base components
     ρ = Y.base.ρ
@@ -126,8 +126,8 @@ end
     ν = vert_diffusion_style.ν
 
     # experiment specific parameters
-    uh_g = params.uh_g
-    Cd = params.Cd
+    uh_g = CAP.uh_g(params)
+    Cd = CAP.Cd(params)
 
     # base components
     ρ = Y.base.ρ

@@ -40,6 +40,10 @@ function parse_commandline()
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--coupled"
+        help = "Coupled simulation [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
@@ -116,6 +120,14 @@ function parse_commandline()
         help = "Stretch grid in z-direction. [`true` (default), `false`]"
         arg_type = Bool
         default = true
+        "--dz_bottom"
+        help = "Model bottom grid depth. Default: 500m"
+        arg_type = Float64
+        default = Float64(500)
+        "--dz_top"
+        help = "Model top grid depth. Default: 5000m"
+        arg_type = Float64
+        default = Float64(5000)
         "--kappa_4"
         help = "Hyperdiffusion parameter"
         arg_type = Float64
@@ -140,6 +152,10 @@ function parse_commandline()
         help = "Viscous sponge coefficient"
         arg_type = Float64
         default = Float64(1e6)
+        "--apply_moisture_filter"
+        help = "Apply filter to moisture"
+        arg_type = Bool
+        default = false
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
@@ -195,4 +211,57 @@ function job_id_from_parsed_args(defaults::Dict, parsed_args)
     s = strip(s, '_')
     warn && @warn "Truncated job ID:$s may not be unique due to use of Real"
     return s
+end
+
+
+"""
+    print_repl_script(str::String)
+
+Generate a block of code to run a particular
+buildkite job given the `command:` string.
+
+Example:
+
+"""
+function print_repl_script(str)
+    ib = """"""
+    ib *= """\n"""
+    ib *= """using Revise; include("examples/hybrid/cli_options.jl");\n"""
+    ib *= """\n"""
+    ib *= """(s, parsed_args) = parse_commandline();\n"""
+    parsed_args = parsed_args_from_command_line_flags(str)
+    for (flag, val) in parsed_args
+        if val isa AbstractString
+            ib *= "parsed_args[\"$flag\"] = \"$val\";\n"
+        else
+            ib *= "parsed_args[\"$flag\"] = $val;\n"
+        end
+    end
+    ib *= """\n"""
+    ib *= """include("examples/hybrid/driver.jl")\n"""
+    println(ib)
+end
+
+function parsed_args_from_command_line_flags(str, parsed_args = Dict())
+    s = str
+    s = last(split(s, ".jl"))
+    s = strip(s)
+    parsed_args_list = split(s, " ")
+    @assert iseven(length(parsed_args_list))
+    parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
+        Pair(parsed_args_list[i], strip(parsed_args_list[i + 1], '\"'))
+    end
+    function parse_arg(val)
+        for T in (Bool, Int, Float32, Float64)
+            try
+                return parse(T, val)
+            catch
+            end
+        end
+        return val # string
+    end
+    for (flag, val) in parsed_arg_pairs
+        parsed_args[replace(flag, "--" => "")] = parse_arg(val)
+    end
+    return parsed_args
 end
