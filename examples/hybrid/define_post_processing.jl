@@ -161,7 +161,7 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         iu = findall(x -> x == day * 24 * 3600, sol.t)[1]
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
-        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
@@ -293,7 +293,7 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
@@ -430,7 +430,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶠw_phy = Geometry.WVector.(ᶠw)
         ᶜw_phy = ᶜinterp.(ᶠw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
         ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
@@ -730,7 +730,7 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
         # potential temperature
         ᶜθ = Y.c.ρθ ./ Y.c.ρ
         # temperature
-        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         # zonal wind
         ᶜuₕ = Y.c.uₕ
@@ -904,7 +904,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         # temperature
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -1070,7 +1070,7 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
         Y = sol.u[iu]
 
         # temperature
-        @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -1251,7 +1251,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         # temperature
         ᶠw = Y.f.w
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -1420,16 +1420,7 @@ function custom_postprocessing(sol, output_dir)
     )
 
     anim = @animate for Y in sol.u
-        if :ρθ in propertynames(Y.c)
-            ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe_tot in propertynames(Y.c)
-            grav = FT(CAP.grav(params))
-            ᶜK = @. norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
-            ᶜΦ = grav .* Fields.coordinate_field(Y.c).z
-            ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        elseif :ρe_int in propertynames(Y.c)
-            ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-        end
+        ᶜts = thermo_state(Y, params, ᶜinterp)
         plot(
             vec(TD.air_temperature.(thermo_params, ᶜts)),
             vec(Fields.coordinate_field(Y.c).z ./ 1000);
