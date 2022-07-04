@@ -174,7 +174,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
       
       - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 200secs --t_end 5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 150secs --t_end 3.75days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
 
   - group: "Milestones"

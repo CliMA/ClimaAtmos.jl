@@ -5,6 +5,7 @@ end
 
 include("classify_case.jl")
 include("utilities.jl")
+include("nvtx.jl")
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
@@ -42,11 +43,9 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 include("types.jl")
 
-import TurbulenceConvection
-const TC = TurbulenceConvection
+import TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
-import .TurbulenceConvectionUtils
-TCU = TurbulenceConvectionUtils
+import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
     nl = TCU.NameList.default_namelist("Bomex")
     nl["set_src_seed"] = true
@@ -69,7 +68,6 @@ turbconv_model() = turbconv_model(FT, parsed_args, namelist)
 diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
 
 using Colors
-using NVTX
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
@@ -81,8 +79,7 @@ using ClimaCore
 import Random
 Random.seed!(1234)
 include(joinpath("..", "RRTMGPInterface.jl"))
-import .RRTMGPInterface
-RRTMGPI = RRTMGPInterface
+import .RRTMGPInterface as RRTMGPI
 
 !isnothing(radiation_model()) && include("radiation_utilities.jl")
 
@@ -141,6 +138,7 @@ additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
     (; enable_default_remaining_tendency = isnothing(turbconv_model())),
     !isnothing(turbconv_model()) ?
     (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
+    (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
 )
 
 additional_tendency!(Yₜ, Y, p, t) = begin
@@ -194,6 +192,26 @@ include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
 ode_algorithm = getproperty(OrdinaryDiffEq, Symbol(parsed_args["ode_algo"]))
 
+condition_every_iter(u, t, integrator) = true
+function affect_filter!(Y::ClimaCore.Fields.FieldVector)
+    @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
+    return nothing
+end
+function affect_filter!(integrator)
+    (; apply_moisture_filter) = integrator.p
+    affect_filter!(integrator.u)
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional `∑tendencies!` call, which is required
+    # to support supplying a continuous representation of the
+    # solution.
+    OrdinaryDiffEq.u_modified!(integrator, false)
+end
+callback_filters = OrdinaryDiffEq.DiscreteCallback(
+    condition_every_iter,
+    affect_filter!;
+    save_positions = (false, false),
+)
+
 additional_callbacks = if !isnothing(radiation_model())
     # TODO: better if-else criteria?
     dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
@@ -208,9 +226,13 @@ additional_callbacks = if !isnothing(radiation_model())
 else
     ()
 end
+if moisture_model() isa EquilMoistModel && parsed_args["apply_moisture_filter"]
+    additional_callbacks = (additional_callbacks..., callback_filters)
+end
 
 import ClimaCore: enable_threading
-enable_threading() = parsed_args["enable_threading"]
+const enable_clima_core_threading = parsed_args["enable_threading"]
+enable_threading() = enable_clima_core_threading
 
 # TODO: When is_distributed is true, automatically compute the maximum number of
 # bytes required to store an element from Y.c or Y.f (or, really, from any Field
@@ -498,7 +520,7 @@ function make_save_to_disk_func(output_dir, p)
                 global_ᶜT = @. TD.air_temperature(thermo_params, global_ᶜts)
                 global_ᶜθ = @. TD.dry_pottemp(thermo_params, global_ᶜts)
 
-                # vorticity 
+                # vorticity
                 global_curl_uh = @. curlₕ(Y.c.uₕ)
                 global_ᶜvort = Geometry.WVector.(global_curl_uh)
                 Spaces.weighted_dss!(global_ᶜvort)
@@ -565,7 +587,7 @@ function make_save_to_disk_func(output_dir, p)
                     if radiation_model() isa
                        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
 
-                        # make sure datatype is correct 
+                        # make sure datatype is correct
                         global_face_clear_lw_flux_dn = similar(ᶠz_field)
                         global_face_clear_lw_flux_up = similar(ᶠz_field)
                         global_face_clear_sw_flux_dn = similar(ᶠz_field)
@@ -684,7 +706,7 @@ function make_save_to_disk_func(output_dir, p)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
-            # vorticity 
+            # vorticity
             curl_uh = @. curlₕ(Y.c.uₕ)
             ᶜvort = Geometry.WVector.(curl_uh)
             Spaces.weighted_dss!(ᶜvort)
@@ -825,19 +847,14 @@ save_to_disk_func = make_save_to_disk_func(output_dir, p)
 
 dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
     p = integrator.p
-    NVTX.isactive() && (
-        dss_dss_callback = NVTX.range_start(;
-            message = "dss callback",
-            color = colorant"yellow",
-        )
-    )
-    Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-    Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-    Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
-    NVTX.isactive() && NVTX.range_end(dss_dss_callback)
+    @nvtx "dss callback" color = colorant"yellow" begin
+        Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+    end
 end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
