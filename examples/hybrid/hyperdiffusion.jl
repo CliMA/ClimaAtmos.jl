@@ -70,10 +70,12 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
         end
 
         is_3d_pt && (@. ᶜχuₕ =
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
-                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
+                Geometry.Covariant12Axis(),
+                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
             ))
-        is_2d_pt && (@. ᶜχuₕ = Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜuₕ))))
+        is_2d_pt && (@. ᶜχuₕ =
+            Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ))))
 
         @nvtx "dss_hyperdiffusion_tendency" color = colorant"green" begin
             Spaces.weighted_dss_start!(ᶜχ, ghost_buffer.χ)
