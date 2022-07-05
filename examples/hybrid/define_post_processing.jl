@@ -285,7 +285,8 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
     for day in days
-        iu = findall(x -> x == day * 24 * 3600, sol.t)[1]
+        iu = findall(x -> x == day * 24 *  3600, sol.t)[1]
+        #iu = findall(x -> x == day * 24 *  3600, sol.t)[1]
         Y = sol.u[iu]
 
         # compute pressure, temperature, vorticity

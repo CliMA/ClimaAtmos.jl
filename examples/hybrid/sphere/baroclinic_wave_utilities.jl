@@ -49,6 +49,81 @@ function face_initial_condition(local_geometry, params, turbconv_model)
     (; w = Geometry.Covariant3Vector(FT(0)), tc_kwargs...)
 end
 
+function center_initial_condition_baroclinic_wave_static(
+    local_geometry,
+    params,
+    energy_form,
+    moisture_model,
+    turbconv_model;
+)
+
+    # Coordinates
+    z = local_geometry.coordinates.z
+    ϕ = local_geometry.coordinates.lat
+    λ = local_geometry.coordinates.long
+    FT = eltype(z)
+
+    # Constants from ClimaAtmos.Parameters
+    grav = FT(Planet.grav(params))
+
+    # Initial temperature and pressure
+    temp_profile = TD.TemperatureProfiles.DecayingTemperatureProfile{FT}(
+        params,
+        FT(300),
+        FT(300),
+    )
+    T, p = temp_profile(params, z)
+
+    # Initial velocity
+    u = FT(20) * cosd(ϕ)
+    v = FT(0)
+    uₕ_local = Geometry.UVVector(u, v)
+    uₕ = Geometry.Covariant12Vector(uₕ_local, local_geometry)
+
+    # Initial moisture
+    q_tot = FT(0)
+
+    # Initial values computed from the thermodynamic state
+    ρ = TD.air_density(params, T, p)
+    ts = TD.PhaseEquil_ρTq(params, ρ, T, q_tot)
+    if energy_form isa PotentialTemperature
+        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(params, ts))
+    elseif energy_form isa TotalEnergy
+        K = norm_sqr(uₕ_local) / 2
+        ᶜ𝔼_kwarg = (;
+            ρe_tot = ρ * (TD.internal_energy(params, ts) + K + grav * z)
+        )
+    elseif energy_form isa InternalEnergy
+        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(params, ts))
+    end
+    if moisture_model isa DryModel
+        moisture_kwargs = NamedTuple()
+    elseif moisture_model isa EquilMoistModel
+        moisture_kwargs = (; ρq_tot = ρ * q_tot)
+    elseif moisture_model isa NonEquilMoistModel
+        moisture_kwargs = (;
+            ρq_tot = ρ * q_tot,
+            ρq_liq = ρ * TD.liquid_specific_humidity(thermo_params, ts),
+            ρq_ice = ρ * TD.ice_specific_humidity(thermo_params, ts),
+        )
+    end
+    # TODO: Include ability to handle nonzero initial cloud condensate
+
+    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
+    tc_kwargs = if turbconv_model isa Nothing
+        NamedTuple()
+    elseif turbconv_model isa TC.EDMFModel
+        (;
+            ρθ_liq_ice = FT(0),
+            ρq_tot = FT(0),
+            u = FT(0),
+            v = FT(0),
+            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
+        )
+    end
+    return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
+end
+
 function center_initial_condition_column(
     local_geometry,
     params,
@@ -409,7 +484,6 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     grav = FT(Planet.grav(params))
     psurface = @.  MSLP * exp(-grav * zsfc/ R_d / 300)
 
-
     T_int = @. TD.air_temperature(params, ts_int)
     Rm_int = @. TD.gas_constant_air(params,ts_int)
     ρ_sfc = @. TD.air_density(params, ts_int) * (T_sfc / T_int)^(TD.cv_m(params, ts_int)/ Rm_int)
@@ -435,7 +509,9 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     ˢp_int = size(parent(ᶜp))
     ˢp_sfc = reshape(parent(p_sfc), (1, ˢp_int[2:end]...))
     ˢp_sfc = reshape(parent(psurface), (1, ˢp_int[2:end]...))
-    parent(σ_p) .= parent(ᶜp) ./ parent(ˢp_sfc)
+    parent(ᶜσ) .= parent(ᶜp) ./ parent(ˢp_sfc)
+    #parent(σ_p) .= parent(ᶜp) ./ parent(ˢp_sfc)
+    parent(σ_p) .= parent(ᶜσ)
     
     @. ᶜheight_factor = max(0, (σ_p - σ_b) / (1 - σ_b))
     @. ᶜΔρT =

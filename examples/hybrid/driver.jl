@@ -226,6 +226,10 @@ elseif topography == "Bell"
     warp_fn = smooth_peak
 elseif topography == "LiftSurface"
     warp_fn = lift_surface
+elseif topography == "Schar"
+    warp_fn = schar_orography
+elseif topography == "NoOrography"
+    warp_fn = no_orography
 end
 
 center_space, face_space = if parsed_args["config"] == "sphere"

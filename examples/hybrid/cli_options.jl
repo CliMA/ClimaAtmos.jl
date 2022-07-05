@@ -137,9 +137,9 @@ function parse_commandline()
         arg_type = Float64
         default = Float64(1e6)
         "--topography"
-        help = "Surface warping type [`DCMIP200`, `Earth`, `Bell`] "
+        help = "Surface warping type [`DCMIP200`, `Earth`, `Bell`, `Schar`, `NoOrography`] "
         arg_type = String
-        default = "nothing"
+        default = "NoOrography"
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

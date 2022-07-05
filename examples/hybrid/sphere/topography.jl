@@ -61,7 +61,7 @@ surface subject to warping consistent with the
 DCMIP 2-0-0.
 """
 function dcmip200_orography(coords)
-  λ, ϕ = coords.long, coords.lat # Unpack longitude, latitude (degrees # Unpack longitude, latitude (degrees # Unpack longitude, latitude (degrees # Unpack longitude, latitude (degrees))))
+  λ, ϕ = coords.long, coords.lat 
   FT = eltype(λ)
   ϕₘ = FT(0) # degrees (equator)
   λₘ = FT(3/2 * 180)  # degrees
@@ -75,6 +75,18 @@ function dcmip200_orography(coords)
     zₛ = @. FT(0)
   end
   return zₛ
+end
+
+function schar_orography(coords)
+    λ = coords.long
+    FT = eltype(λ)
+    return FT(0)
+end
+
+function no_orography(coords)
+    λ = coords.long
+    FT = eltype(λ)
+    return FT(0)
 end
 
 function lift_surface(coords)
