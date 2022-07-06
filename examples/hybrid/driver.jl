@@ -15,6 +15,7 @@ idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
 coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
+disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
 h_elem = parsed_args["h_elem"]
 z_elem = Int(parsed_args["z_elem"])
@@ -104,7 +105,12 @@ test_implicit_solver = false # makes solver extremely slow when set to `true`
 
 # TODO: flip order so that NamedTuple() is fallback.
 additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
-    hyperdiffusion_cache(Y; κ₄ = FT(κ₄), use_tempest_mode),
+    hyperdiffusion_cache(
+        Y;
+        κ₄ = FT(κ₄),
+        use_tempest_mode,
+        disable_qt_hyperdiffusion,
+    ),
     rayleigh_sponge ?
     rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
     NamedTuple(),
