@@ -33,7 +33,7 @@ using ArgParse
 import StaticArrays
 const SA = StaticArrays
 
-include(joinpath(@__DIR__, "..", "integration_tests", "artifact_funcs.jl"))
+include(joinpath(@__DIR__, "artifact_funcs.jl"))
 
 import Random
 

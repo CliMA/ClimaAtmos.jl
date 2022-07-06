@@ -2,7 +2,7 @@
 ##### Fields
 #####
 
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection as TC
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
 import ClimaCore.Geometry: ⊗

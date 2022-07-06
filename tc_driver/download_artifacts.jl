@@ -1,4 +1,4 @@
-include(joinpath(@__DIR__, "..", "integration_tests", "artifact_funcs.jl"))
+include(joinpath(@__DIR__, "artifact_funcs.jl"))
 
 # Trigger download if data doesn't exist locally
 function trigger_download(lazy_download = true)

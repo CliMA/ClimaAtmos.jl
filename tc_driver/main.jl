@@ -6,7 +6,8 @@ Logging.global_logger(TerminalLoggers.TerminalLogger())
 import UnPack
 import JSON
 import ArgParse
-import TurbulenceConvection
+import ClimaAtmos
+import ClimaAtmos.TurbulenceConvection
 
 import CloudMicrophysics as CM
 import CloudMicrophysics.MicrophysicsNonEq as CMNe
@@ -20,16 +21,16 @@ import OrdinaryDiffEq as ODE
 import StochasticDiffEq as SDE
 import StaticArrays: SVector
 
-const tc_dir = pkgdir(TurbulenceConvection)
+const ca_dir = pkgdir(ClimaAtmos)
 
-include(joinpath(tc_dir, "driver", "NetCDFIO.jl"))
-include(joinpath(tc_dir, "driver", "initial_conditions.jl"))
-include(joinpath(tc_dir, "driver", "compute_diagnostics.jl"))
-include(joinpath(tc_dir, "driver", "parameter_set.jl"))
-include(joinpath(tc_dir, "driver", "Cases.jl"))
-include(joinpath(tc_dir, "driver", "dycore.jl"))
-include(joinpath(tc_dir, "driver", "TimeStepping.jl"))
-include(joinpath(tc_dir, "driver", "Surface.jl"))
+include(joinpath(tc_dir, "tc_driver", "NetCDFIO.jl"))
+include(joinpath(tc_dir, "tc_driver", "initial_conditions.jl"))
+include(joinpath(tc_dir, "tc_driver", "compute_diagnostics.jl"))
+include(joinpath(tc_dir, "tc_driver", "parameter_set.jl"))
+include(joinpath(tc_dir, "tc_driver", "Cases.jl"))
+include(joinpath(tc_dir, "tc_driver", "dycore.jl"))
+include(joinpath(tc_dir, "tc_driver", "TimeStepping.jl"))
+include(joinpath(tc_dir, "tc_driver", "Surface.jl"))
 import .Cases
 
 import DiffEqNoiseProcess

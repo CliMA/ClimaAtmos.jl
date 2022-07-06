@@ -1,10 +1,10 @@
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection as TC
 import CLIMAParameters as CP
 import CloudMicrophysics as CM
 import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
 import Thermodynamics as TD
-import TurbulenceConvection.Parameters as TCP
+import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 
 #! format: off
 function create_parameter_set(namelist, toml_dict_default::CP.AbstractTOMLDict, FTD = CP.float_type(toml_dict_default))

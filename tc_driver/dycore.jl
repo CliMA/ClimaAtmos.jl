@@ -2,8 +2,8 @@ import UnPack
 import LinearAlgebra as LA
 import LinearAlgebra: ×
 
-import TurbulenceConvection as TC
-import TurbulenceConvection.Parameters as TCP
+import ClimaAtmos.TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
 import Thermodynamics as TD
 import ClimaCore as CC

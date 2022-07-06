@@ -1,7 +1,7 @@
 import NCDatasets
 const NC = NCDatasets
 import JSON
-import TurbulenceConvection
+import ClimaAtmos.TurbulenceConvection
 const TC = TurbulenceConvection
 
 # TODO: remove `vars` hack that avoids https://github.com/Alexander-Barth/NCDatasets.jl/issues/135

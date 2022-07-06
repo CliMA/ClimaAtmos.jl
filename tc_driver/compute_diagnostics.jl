@@ -7,7 +7,7 @@ const CC = ClimaCore
 const CCO = CC.Operators
 
 import CLIMAParameters as CP
-import TurbulenceConvection.Parameters as TCP
+import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
 
 """ Purely diagnostic fields for the host model """
