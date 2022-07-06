@@ -1,6 +1,7 @@
 module TurbulenceConvectionUtils
 
 using LinearAlgebra, StaticArrays
+import ClimaAtmos
 import ClimaAtmos.Parameters as CAP
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
