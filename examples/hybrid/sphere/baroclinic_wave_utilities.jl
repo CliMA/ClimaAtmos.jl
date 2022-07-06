@@ -386,13 +386,18 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
 )
 
 function held_suarez_tendency!(Yₜ, Y, p, t)
-    (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+    (; T_sfc, z_sfc, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
     cv_d = FT(CAP.cv_d(params))
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
+    grav = FT(CAP.grav(params))
+
+    z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
+    z_surface = Fields.Field(Fields.field_values(z_sfc), axes(z_bottom))
+    p_sfc = @. MSLP * exp(-grav * z_surface / R_d / T_sfc)
 
     σ_b = FT(7 / 10)
     k_a = 1 / (40 * day)
@@ -408,7 +413,10 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     Δθ_z = FT(10)
     T_min = FT(200)
 
-    @. ᶜσ = ᶜp / MSLP
+    p_int_size = size(parent(ᶜp))
+    p_sfc = reshape(parent(p_sfc), (1, p_int_size[2:end]...))
+    parent(ᶜσ) .= parent(ᶜp) ./ parent(p_sfc)
+
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
         (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
