@@ -14,8 +14,8 @@ function non_dimensional_groups(εδ_model, εδ_model_vars)
     Π_norm = εδ_params(εδ_model).Π_norm
     Π₁ = (εδ_model_vars.zc_i * Δb) / (Δw^2 + εδ_model_vars.wstar^2) / Π_norm[1]
     Π₂ =
-        (εδ_model_vars.tke_gm - εδ_model_vars.a_en * εδ_model_vars.tke_en) / (εδ_model_vars.tke_gm + eps(FT)) /
-        Π_norm[2]
+        (εδ_model_vars.tke_gm - εδ_model_vars.a_en * εδ_model_vars.tke_en) /
+        (εδ_model_vars.tke_gm + eps(FT)) / Π_norm[2]
     Π₃ = √(εδ_model_vars.a_up) / Π_norm[3]
     Π₄ = (εδ_model_vars.RH_up - εδ_model_vars.RH_en) / Π_norm[4]
     Π₅ = εδ_model_vars.zc_i / εδ_model_vars.H_up / Π_norm[5]
@@ -40,14 +40,17 @@ function non_dimensional_function(εδ_model::MDEntr, εδ_model_vars)
     μ_0 = εδ_params(εδ_model).μ_0
     β = εδ_params(εδ_model).β
     χ = εδ_params(εδ_model).χ
-    c_δ = if !TD.has_condensate(εδ_model_vars.q_cond_up + εδ_model_vars.q_cond_en)
-        FT(0)
-    else
-        εδ_model.params.c_δ
-    end
+    c_δ =
+        if !TD.has_condensate(εδ_model_vars.q_cond_up + εδ_model_vars.q_cond_en)
+            FT(0)
+        else
+            εδ_model.params.c_δ
+        end
 
     Δb = εδ_model_vars.b_up - εδ_model_vars.b_en
-    μ_ij = (χ - εδ_model_vars.a_up / (εδ_model_vars.a_up + εδ_model_vars.a_en)) * Δb / Δw
+    μ_ij =
+        (χ - εδ_model_vars.a_up / (εδ_model_vars.a_up + εδ_model_vars.a_en)) *
+        Δb / Δw
     exp_arg = μ_ij / μ_0
     D_ε = 1 / (1 + exp(-exp_arg))
     D_δ = 1 / (1 + exp(exp_arg))
@@ -102,7 +105,9 @@ function non_dimensional_function!(
     )# 3rd dense layer
 
     if expected_n_params != n_params
-        error("Incorrect number of parameters ($n_params) for requested FNO architecture ($expected_n_params)!")
+        error(
+            "Incorrect number of parameters ($n_params) for requested FNO architecture ($expected_n_params)!",
+        )
     end
 
     trafo = OF.FourierTransform(modes = (modes,), even = even)
@@ -120,7 +125,9 @@ function non_dimensional_function!(
             p[:] .= c_fno[index:(index + len_p - 1)]
             index += len_p
         elseif eltype(p) <: Complex
-            p[:] .= c_fno[index:(index + len_p - 1)] + c_fno[(index + len_p):(index + len_p * 2 - 1)] * im
+            p[:] .=
+                c_fno[index:(index + len_p - 1)] +
+                c_fno[(index + len_p):(index + len_p * 2 - 1)] * im
             index += len_p * 2
         else
             error("Bad eltype in Flux params")
@@ -138,17 +145,20 @@ end
     Count number of parameters in fully-connected NN model given Array specifying architecture following
         the pattern: [#inputs, #neurons in L1, #neurons in L2, ...., #outputs]. Equal to the number of weights + biases.
 """
-num_params_from_arc(nn_arc::AbstractArray{Int}) = num_weights_from_arc(nn_arc) + num_biases_from_arc(nn_arc)
+num_params_from_arc(nn_arc::AbstractArray{Int}) =
+    num_weights_from_arc(nn_arc) + num_biases_from_arc(nn_arc)
 
 """
     Count number of weights in fully-connected NN architecture.
 """
-num_weights_from_arc(nn_arc::AbstractArray{Int}) = sum(i -> nn_arc[i] * nn_arc[i + 1], 1:(length(nn_arc) - 1))
+num_weights_from_arc(nn_arc::AbstractArray{Int}) =
+    sum(i -> nn_arc[i] * nn_arc[i + 1], 1:(length(nn_arc) - 1))
 
 """
     Count number of biases in fully-connected NN architecture.
 """
-num_biases_from_arc(nn_arc::AbstractArray{Int}) = sum(i -> nn_arc[i + 1], 1:(length(nn_arc) - 1))
+num_biases_from_arc(nn_arc::AbstractArray{Int}) =
+    sum(i -> nn_arc[i + 1], 1:(length(nn_arc) - 1))
 
 
 """
@@ -183,7 +193,9 @@ function construct_fully_connected_nn(
         n_params_vect = length(params)
     end
     if n_params_nn != n_params_vect
-        error("Incorrect number of parameters ($n_params_vect) for requested NN architecture ($n_params_nn)!")
+        error(
+            "Incorrect number of parameters ($n_params_vect) for requested NN architecture ($n_params_nn)!",
+        )
     end
 
     layers = []
@@ -202,7 +214,11 @@ function construct_fully_connected_nn(
         end
 
         layer = Flux.Dense(
-            reshape(params[parameters_i:(parameters_i + layer_num_weights - 1)], arc[layer_i + 1], arc[layer_i]),
+            reshape(
+                params[parameters_i:(parameters_i + layer_num_weights - 1)],
+                arc[layer_i + 1],
+                arc[layer_i],
+            ),
             nn_biases,
             activation_function,
         )
@@ -236,7 +252,11 @@ function non_dimensional_function!(
     # neural network architecture
     nn_arc = εδ_model.nn_arc
     c_nn_params = εδ_model.c_nn_params
-    nn_model = construct_fully_connected_nn(nn_arc, c_nn_params; biases_bool = εδ_model.biases_bool)
+    nn_model = construct_fully_connected_nn(
+        nn_arc,
+        c_nn_params;
+        biases_bool = εδ_model.biases_bool,
+    )
     output = nn_model(Π_groups')
     nondim_ε .= output[1, :]
     nondim_δ .= output[2, :]
@@ -257,7 +277,11 @@ function non_dimensional_function(εδ_model::NNEntr, εδ_model_vars)
 
     nondim_groups = collect(non_dimensional_groups(εδ_model, εδ_model_vars))
     # neural network architecture
-    nn_model = construct_fully_connected_nn(nn_arc, c_nn_params; biases_bool = εδ_model.biases_bool)
+    nn_model = construct_fully_connected_nn(
+        nn_arc,
+        c_nn_params;
+        biases_bool = εδ_model.biases_bool,
+    )
 
     nondim_ε, nondim_δ = nn_model(nondim_groups)
     return nondim_ε, nondim_δ
@@ -276,8 +300,16 @@ function non_dimensional_function(εδ_model::LinearEntr, εδ_model_vars)
     nondim_groups = collect(non_dimensional_groups(εδ_model, εδ_model_vars))
     # Linear closure
     lin_arc = (length(nondim_groups), 1)  # (#inputs, #outputs)
-    lin_model_ε = Flux.Dense(reshape(c_linear[1:6], lin_arc[2], lin_arc[1]), [c_linear[7]], Flux.relu)
-    lin_model_δ = Flux.Dense(reshape(c_linear[8:13], lin_arc[2], lin_arc[1]), [c_linear[14]], Flux.relu)
+    lin_model_ε = Flux.Dense(
+        reshape(c_linear[1:6], lin_arc[2], lin_arc[1]),
+        [c_linear[7]],
+        Flux.relu,
+    )
+    lin_model_δ = Flux.Dense(
+        reshape(c_linear[8:13], lin_arc[2], lin_arc[1]),
+        [c_linear[14]],
+        Flux.relu,
+    )
 
     nondim_ε = lin_model_ε(nondim_groups)[1]
     nondim_δ = lin_model_δ(nondim_groups)[1]
@@ -292,7 +324,10 @@ Uses a Random Feature model to predict the non-dimensional components of dynamic
  - `εδ_model`       :: RFEntr - basic RF entrainment closure
  - `εδ_model_vars`  :: structure containing variables
 """
-function non_dimensional_function(εδ_model::RFEntr{d, m}, εδ_model_vars) where {d, m}
+function non_dimensional_function(
+    εδ_model::RFEntr{d, m},
+    εδ_model_vars,
+) where {d, m}
     # d inputs, p=2 outputs, m random features
     nondim_groups = non_dimensional_groups(εδ_model, εδ_model_vars)
 
@@ -303,8 +338,14 @@ function non_dimensional_function(εδ_model::RFEntr{d, m}, εδ_model_vars) whe
     # Random Features
     scale_x_entr = (c_rf_opt[1, (m + 2):(m + d + 1)] .^ 2) .* nondim_groups
     scale_x_detr = (c_rf_opt[2, (m + 2):(m + d + 1)] .^ 2) .* nondim_groups
-    f_entr = c_rf_opt[1, m + 1]^2 * sqrt(2) * cos.(c_rf_fix[1, :, 2:(d + 1)] * scale_x_entr + c_rf_fix[1, :, 1])
-    f_detr = c_rf_opt[2, m + 1]^2 * sqrt(2) * cos.(c_rf_fix[2, :, 2:(d + 1)] * scale_x_detr + c_rf_fix[2, :, 1])
+    f_entr =
+        c_rf_opt[1, m + 1]^2 *
+        sqrt(2) *
+        cos.(c_rf_fix[1, :, 2:(d + 1)] * scale_x_entr + c_rf_fix[1, :, 1])
+    f_detr =
+        c_rf_opt[2, m + 1]^2 *
+        sqrt(2) *
+        cos.(c_rf_fix[2, :, 2:(d + 1)] * scale_x_detr + c_rf_fix[2, :, 1])
 
     # Square output for nonnegativity for prediction
     nondim_ε = sum(c_rf_opt[1, 1:m] .* f_entr) / sqrt(m)
@@ -322,7 +363,10 @@ Arguments:
  - `εδ_model_vars`  :: structure containing variables
  - `εδ_model`       :: LogNormalScalingProcess - Stochastic lognormal scaling
 """
-function non_dimensional_function(εδ_model::LogNormalScalingProcess, εδ_model_vars)
+function non_dimensional_function(
+    εδ_model::LogNormalScalingProcess,
+    εδ_model_vars,
+)
     FT = eltype(εδ_model_vars.q_cond_up)
     # model parameters
     mean_model = εδ_model.mean_model
@@ -331,7 +375,8 @@ function non_dimensional_function(εδ_model::LogNormalScalingProcess, εδ_mode
     δ_σ² = c_gen_stoch[2]
 
     # Mean model closure
-    ε_mean_nondim, δ_mean_nondim = non_dimensional_function(εδ_model, εδ_model_vars, mean_model)
+    ε_mean_nondim, δ_mean_nondim =
+        non_dimensional_function(εδ_model, εδ_model_vars, mean_model)
 
     # lognormal scaling
     nondim_ε = ε_mean_nondim * lognormal_sampler(FT(1), ε_σ²)
@@ -357,7 +402,10 @@ Arguments:
  - `εδ_model_vars`  :: structure containing variables
  - `εδ_model`       :: NoisyRelaxationProcess - A noisy relaxation process closure
 """
-function non_dimensional_function(εδ_model::NoisyRelaxationProcess, εδ_model_vars)
+function non_dimensional_function(
+    εδ_model::NoisyRelaxationProcess,
+    εδ_model_vars,
+)
     # model parameters
     mean_model = εδ_model.mean_model
     c_gen_stoch = εδ_model.c_gen_stoch
@@ -367,7 +415,8 @@ function non_dimensional_function(εδ_model::NoisyRelaxationProcess, εδ_model
     δ_λ = c_gen_stoch[4]
 
     # Mean model closure
-    ε_mean_nondim, δ_mean_nondim = non_dimensional_function(mean_model, εδ_model_vars)
+    ε_mean_nondim, δ_mean_nondim =
+        non_dimensional_function(mean_model, εδ_model_vars)
 
     # noisy relaxation process
     ε_u0 = εδ_model_vars.ε_nondim
@@ -389,11 +438,24 @@ reversion λ and the long-term mean μ, in addition to the variance σ² as is u
 
 To ensure non-negativity, the solution is passed through a relu filter.
 """
-function noisy_relaxation_process(μ::FT, λ::FT, σ²::FT, u0::FT, Δt::FT)::FT where {FT}
+function noisy_relaxation_process(
+    μ::FT,
+    λ::FT,
+    σ²::FT,
+    u0::FT,
+    Δt::FT,
+)::FT where {FT}
     f(u, p, t) = λ * (μ - u)        # mean-reverting process
     g(u, p, t) = √(2λ * μ * σ²)     # noise fluctuation
     tspan = (FT(0), Δt)
-    prob = SDE.SDEProblem(f, g, u0, tspan; save_start = false, saveat = last(tspan))
+    prob = SDE.SDEProblem(
+        f,
+        g,
+        u0,
+        tspan;
+        save_start = false,
+        saveat = last(tspan),
+    )
     sol = SDE.solve(prob, SDE.SOSRI())
     return Flux.relu(sol.u[end])
 end

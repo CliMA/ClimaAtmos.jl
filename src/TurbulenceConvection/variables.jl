@@ -5,7 +5,8 @@ import ClimaCore.Geometry: ⊗
 
 # Helpers for adding empty thermodynamic state fields:
 thermo_state(FT, ::EquilibriumMoisture) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
-thermo_state(FT, ::NonEquilibriumMoisture) = TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
+thermo_state(FT, ::NonEquilibriumMoisture) =
+    TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
 
 ##### Auxiliary fields
 
@@ -96,7 +97,10 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             qt_tendency_precip_formation = FT(0),
             cent_aux_vars_edmf_bulk_moisture(FT, edmf.moisture_model)...,
         ),
-        up = ntuple(i -> cent_aux_vars_up(FT, local_geometry, edmf), Val(n_updrafts(edmf))),
+        up = ntuple(
+            i -> cent_aux_vars_up(FT, local_geometry, edmf),
+            Val(n_updrafts(edmf)),
+        ),
         en = (;
             ts = thermo_state(FT, edmf.moisture_model),
             w = FT(0),
@@ -124,7 +128,13 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             qt_tendency_precip_formation = FT(0),
             cent_aux_vars_edmf_en_moisture(FT, edmf.moisture_model)...,
             unsat = (; q_tot = FT(0), θ_dry = FT(0), θ_virt = FT(0)),
-            sat = (; T = FT(0), q_vap = FT(0), q_tot = FT(0), θ_dry = FT(0), θ_liq_ice = FT(0)),
+            sat = (;
+                T = FT(0),
+                q_vap = FT(0),
+                q_tot = FT(0),
+                θ_dry = FT(0),
+                θ_liq_ice = FT(0),
+            ),
             Hvar_rain_dt = FT(0),
             QTvar_rain_dt = FT(0),
             HQTcov_rain_dt = FT(0),
@@ -200,7 +210,10 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         ρ_ae_KH = FT(0),
         ρ_ae_K = FT(0),
         en = (; w = FT(0)),
-        up = ntuple(i -> face_aux_vars_up(FT, local_geometry), Val(n_updrafts(edmf))),
+        up = ntuple(
+            i -> face_aux_vars_up(FT, local_geometry),
+            Val(n_updrafts(edmf)),
+        ),
         massflux = FT(0),
         massflux_h = FT(0),
         massflux_qt = FT(0),
@@ -208,7 +221,8 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         diffusive_flux_h = FT(0),
         diffusive_flux_qt = FT(0),
         face_aux_vars_edmf_moisture(FT, edmf.moisture_model)...,
-        diffusive_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗ CCG.Covariant12Vector(FT(0), FT(0)),
+        diffusive_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
+                            CCG.Covariant12Vector(FT(0), FT(0)),
     )
 )
 
@@ -229,7 +243,12 @@ cent_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
 
 # Face only
 face_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
-    turbconv = (; nh_pressure = FT(0), nh_pressure_adv = FT(0), nh_pressure_drag = FT(0), nh_pressure_b = FT(0)),
+    turbconv = (;
+        nh_pressure = FT(0),
+        nh_pressure_adv = FT(0),
+        nh_pressure_drag = FT(0),
+        nh_pressure_b = FT(0),
+    ),
     precip = (; rain_flux = FT(0), snow_flux = FT(0)),
 )
 
@@ -253,11 +272,18 @@ single_value_per_col_diagnostic_vars_edmf(FT, edmf) = (;
 ##### Prognostic fields
 
 # Center only
-cent_prognostic_vars_up_noisy_relaxation(::Type{FT}, ::PrognosticNoisyRelaxationProcess) where {FT} =
-    (; ε_nondim = FT(0), δ_nondim = FT(0))
-cent_prognostic_vars_up_noisy_relaxation(::Type{FT}, _) where {FT} = NamedTuple()
-cent_prognostic_vars_up_moisture(::Type{FT}, ::EquilibriumMoisture) where {FT} = NamedTuple()
-cent_prognostic_vars_up_moisture(::Type{FT}, ::NonEquilibriumMoisture) where {FT} = (; ρaq_liq = FT(0), ρaq_ice = FT(0))
+cent_prognostic_vars_up_noisy_relaxation(
+    ::Type{FT},
+    ::PrognosticNoisyRelaxationProcess,
+) where {FT} = (; ε_nondim = FT(0), δ_nondim = FT(0))
+cent_prognostic_vars_up_noisy_relaxation(::Type{FT}, _) where {FT} =
+    NamedTuple()
+cent_prognostic_vars_up_moisture(::Type{FT}, ::EquilibriumMoisture) where {FT} =
+    NamedTuple()
+cent_prognostic_vars_up_moisture(
+    ::Type{FT},
+    ::NonEquilibriumMoisture,
+) where {FT} = (; ρaq_liq = FT(0), ρaq_ice = FT(0))
 cent_prognostic_vars_up(::Type{FT}, edmf) where {FT} = (;
     ρarea = FT(0),
     ρaθ_liq_ice = FT(0),
@@ -266,15 +292,25 @@ cent_prognostic_vars_up(::Type{FT}, edmf) where {FT} = (;
     cent_prognostic_vars_up_moisture(FT, edmf.moisture_model)...,
 )
 
-cent_prognostic_vars_en(::Type{FT}, edmf) where {FT} =
-    (; ρatke = FT(0), cent_prognostic_vars_en_thermo(FT, edmf.thermo_covariance_model)...)
-cent_prognostic_vars_en_thermo(::Type{FT}, ::DiagnosticThermoCovariances) where {FT} = NamedTuple()
-cent_prognostic_vars_en_thermo(::Type{FT}, ::PrognosticThermoCovariances) where {FT} =
-    (; ρaHvar = FT(0), ρaQTvar = FT(0), ρaHQTcov = FT(0))
+cent_prognostic_vars_en(::Type{FT}, edmf) where {FT} = (;
+    ρatke = FT(0),
+    cent_prognostic_vars_en_thermo(FT, edmf.thermo_covariance_model)...,
+)
+cent_prognostic_vars_en_thermo(
+    ::Type{FT},
+    ::DiagnosticThermoCovariances,
+) where {FT} = NamedTuple()
+cent_prognostic_vars_en_thermo(
+    ::Type{FT},
+    ::PrognosticThermoCovariances,
+) where {FT} = (; ρaHvar = FT(0), ρaQTvar = FT(0), ρaHQTcov = FT(0))
 cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
     turbconv = (;
         en = cent_prognostic_vars_en(FT, edmf),
-        up = ntuple(i -> cent_prognostic_vars_up(FT, edmf), Val(n_updrafts(edmf))),
+        up = ntuple(
+            i -> cent_prognostic_vars_up(FT, edmf),
+            Val(n_updrafts(edmf)),
+        ),
         pr = (; q_rai = FT(0), q_sno = FT(0)),
     )
 )
@@ -282,5 +318,11 @@ cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
 
 # Face only
 face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; ρaw = FT(0))
-face_prognostic_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} =
-    (; turbconv = (; up = ntuple(i -> face_prognostic_vars_up(FT, local_geometry), Val(n_updrafts(edmf)))))
+face_prognostic_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
+    turbconv = (;
+        up = ntuple(
+            i -> face_prognostic_vars_up(FT, local_geometry),
+            Val(n_updrafts(edmf)),
+        )
+    )
+)

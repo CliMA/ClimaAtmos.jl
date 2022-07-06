@@ -22,7 +22,11 @@ end
 # lambert_2_over_e(::Type{FT}) where {FT} = FT(LambertW.lambertw(FT(2) / FT(MathConstants.e)))
 lambert_2_over_e(::Type{FT}) where {FT} = FT(0.46305551336554884) # since we can evaluate
 
-function lamb_smooth_minimum(l::SA.SVector, lower_bound::FT, upper_bound::FT) where {FT}
+function lamb_smooth_minimum(
+    l::SA.SVector,
+    lower_bound::FT,
+    upper_bound::FT,
+) where {FT}
     x_min = minimum(l)
     λ_0 = max(x_min * lower_bound / lambert_2_over_e(FT), upper_bound)
 
@@ -32,7 +36,8 @@ function lamb_smooth_minimum(l::SA.SVector, lower_bound::FT, upper_bound::FT) wh
     return smin
 end
 
-mean_nc_data(data, group, var, imin, imax) = StatsBase.mean(data.group[group][var][:][:, imin:imax], dims = 2)[:]
+mean_nc_data(data, group, var, imin, imax) =
+    StatsBase.mean(data.group[group][var][:][:, imin:imax], dims = 2)[:]
 
 #= Simple linear interpolation function, wrapping Dierckx =#
 function pyinterp(x, xp, fp)
@@ -84,20 +89,28 @@ The following cfsites are available across listed models, months,
 and experiments.
 """
 function get_LES_library()
-    LES_library = Dict("HadGEM2-A" => Dict(), "CNRM-CM5" => Dict(), "CNRM-CM6-1" => Dict())
+    LES_library = Dict(
+        "HadGEM2-A" => Dict(),
+        "CNRM-CM5" => Dict(),
+        "CNRM-CM6-1" => Dict(),
+    )
     Shen_et_al_sites = collect(2:15)
     append!(Shen_et_al_sites, collect(17:23))
-    Shen_et_al_deep_convection_sites = (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100)
+    Shen_et_al_deep_convection_sites =
+        (collect(30:33)..., collect(66:70)..., 82, 92, 94, 96, 99, 100)
     append!(Shen_et_al_sites, Shen_et_al_deep_convection_sites)
 
     LES_library["HadGEM2-A"]["10"] = Dict()
-    LES_library["HadGEM2-A"]["10"]["cfsite_numbers"] = setdiff(Shen_et_al_sites, [94, 100])
+    LES_library["HadGEM2-A"]["10"]["cfsite_numbers"] =
+        setdiff(Shen_et_al_sites, [94, 100])
     LES_library["HadGEM2-A"]["07"] = Dict()
     LES_library["HadGEM2-A"]["07"]["cfsite_numbers"] = Shen_et_al_sites
     LES_library["HadGEM2-A"]["04"] = Dict()
-    LES_library["HadGEM2-A"]["04"]["cfsite_numbers"] = setdiff(Shen_et_al_sites, [15, 17, 18, 32, 92, 94])
+    LES_library["HadGEM2-A"]["04"]["cfsite_numbers"] =
+        setdiff(Shen_et_al_sites, [15, 17, 18, 32, 92, 94])
     LES_library["HadGEM2-A"]["01"] = Dict()
-    LES_library["HadGEM2-A"]["01"]["cfsite_numbers"] = setdiff(Shen_et_al_sites, [15, 17, 18, 19, 20])
+    LES_library["HadGEM2-A"]["01"]["cfsite_numbers"] =
+        setdiff(Shen_et_al_sites, [15, 17, 18, 19, 20])
 
     for month in ["01", "04", "07", "10"]
         LES_library["HadGEM2-A"][month]["experiments"] = ["amip", "amip4K"]
@@ -108,11 +121,12 @@ function get_LES_library()
         LES_library_full["HadGEM2-A"][month]["cfsite_numbers"] = Dict()
         for cfsite_number in LES_library["HadGEM2-A"][month]["cfsite_numbers"]
             cfsite_number_str = string(cfsite_number, pad = 2)
-            LES_library_full["HadGEM2-A"][month]["cfsite_numbers"][cfsite_number_str] = if cfsite_number >= 30
-                "deep"
-            else
-                "shallow"
-            end
+            LES_library_full["HadGEM2-A"][month]["cfsite_numbers"][cfsite_number_str] =
+                if cfsite_number >= 30
+                    "deep"
+                else
+                    "shallow"
+                end
         end
     end
     return LES_library_full
@@ -147,6 +161,7 @@ function valid_lespath(les_path)
     LES_library = get_LES_library()
     @assert forcing_model in keys(LES_library)
     @assert month in keys(LES_library[forcing_model])
-    @assert cfsite_number in keys(LES_library[forcing_model][month]["cfsite_numbers"])
+    @assert cfsite_number in
+            keys(LES_library[forcing_model][month]["cfsite_numbers"])
     @assert experiment in LES_library[forcing_model][month]["experiments"]
 end

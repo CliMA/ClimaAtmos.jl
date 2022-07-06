@@ -56,7 +56,8 @@ struct Grid{FT, NZ, CS, FS, SC, SF}
     end
 end
 
-Grid(mesh::CC.Meshes.IntervalMesh) = Grid(CC.Spaces.CenterFiniteDifferenceSpace(mesh))
+Grid(mesh::CC.Meshes.IntervalMesh) =
+    Grid(CC.Spaces.CenterFiniteDifferenceSpace(mesh))
 
 function Grid(Δz::FT, nz::Int) where {FT <: AbstractFloat}
     z₀, z₁ = FT(0), FT(nz * Δz)
@@ -116,22 +117,37 @@ n_start(::FaceIndices{Nstart}) where {Nstart} = Nstart
 n_stop(::CenterIndices{Nstart, Nstop}) where {Nstart, Nstop} = Nstop
 n_stop(::FaceIndices{Nstart, Nstop}) where {Nstart, Nstop} = Nstop
 
-Base.getindex(ci::CenterIndices, i::Int) = Cent(Base.getindex(n_start(ci):n_stop(ci), i))
-Base.getindex(fi::FaceIndices, i::Int) = CCO.PlusHalf(Base.getindex(n_start(fi):n_stop(fi), i))
+Base.getindex(ci::CenterIndices, i::Int) =
+    Cent(Base.getindex(n_start(ci):n_stop(ci), i))
+Base.getindex(fi::FaceIndices, i::Int) =
+    CCO.PlusHalf(Base.getindex(n_start(fi):n_stop(fi), i))
 
-Base.length(::FaceIndices{Nstart, Nstop}) where {Nstart, Nstop} = Nstop - Nstart + 1
-Base.length(::CenterIndices{Nstart, Nstop}) where {Nstart, Nstop} = Nstop - Nstart + 1
+Base.length(::FaceIndices{Nstart, Nstop}) where {Nstart, Nstop} =
+    Nstop - Nstart + 1
+Base.length(::CenterIndices{Nstart, Nstop}) where {Nstart, Nstop} =
+    Nstop - Nstart + 1
 
-Base.iterate(fi::CenterIndices{Nstart, Nstop}, state = Nstart) where {Nstart, Nstop} =
-    state > Nstop ? nothing : (Cent(state), state + 1)
+Base.iterate(
+    fi::CenterIndices{Nstart, Nstop},
+    state = Nstart,
+) where {Nstart, Nstop} = state > Nstop ? nothing : (Cent(state), state + 1)
 
-Base.iterate(fi::FaceIndices{Nstart, Nstop}, state = Nstart) where {Nstart, Nstop} =
+Base.iterate(
+    fi::FaceIndices{Nstart, Nstop},
+    state = Nstart,
+) where {Nstart, Nstop} =
     state > Nstop ? nothing : (CCO.PlusHalf(state), state + 1)
 
-Base.iterate(fi::Base.Iterators.Reverse{T}, state = Nstop) where {Nstart, Nstop, T <: CenterIndices{Nstart, Nstop}} =
+Base.iterate(
+    fi::Base.Iterators.Reverse{T},
+    state = Nstop,
+) where {Nstart, Nstop, T <: CenterIndices{Nstart, Nstop}} =
     state < Nstart ? nothing : (Cent(state), state - 1)
 
-Base.iterate(fi::Base.Iterators.Reverse{T}, state = Nstop) where {Nstart, Nstop, T <: FaceIndices{Nstart, Nstop}} =
+Base.iterate(
+    fi::Base.Iterators.Reverse{T},
+    state = Nstop,
+) where {Nstart, Nstop, T <: FaceIndices{Nstart, Nstop}} =
     state < Nstart ? nothing : (CCO.PlusHalf(state), state - 1)
 
 face_space(grid::Grid) = grid.fs
@@ -157,8 +173,10 @@ function findlast_center(f::Function, grid::Grid)
     k = findlast(f, RI)
     return RI[isnothing(k) ? kc_top_of_atmos(grid).i : k]
 end
-z_findfirst_center(f::F, grid::Grid) where {F} = grid.zc[findfirst_center(f, grid)].z
-z_findlast_center(f::F, grid::Grid) where {F} = grid.zc[findlast_center(f, grid)].z
+z_findfirst_center(f::F, grid::Grid) where {F} =
+    grid.zc[findfirst_center(f, grid)].z
+z_findlast_center(f::F, grid::Grid) where {F} =
+    grid.zc[findlast_center(f, grid)].z
 
 function findfirst_face(f::F, grid::Grid) where {F}
     RI = real_face_indices(grid)
@@ -170,7 +188,8 @@ function findlast_face(f::F, grid::Grid) where {F}
     k = findlast(f, RI)
     return RI[isnothing(k) ? kf_top_of_atmos(grid).i : k]
 end
-z_findfirst_face(f::F, grid::Grid) where {F} = grid.zf[findfirst_face(f, grid)].z
+z_findfirst_face(f::F, grid::Grid) where {F} =
+    grid.zf[findfirst_face(f, grid)].z
 z_findlast_face(f::F, grid::Grid) where {F} = grid.zf[findlast_face(f, grid)].z
 
 
@@ -188,15 +207,22 @@ struct ColumnIterator{Nh, Nj, Ni}
     end
 end
 
-Base.iterate(iter::ColumnIterator{Nh, Nj, Ni}, state = (1, 1, 1)) where {Nh, Nj, Ni} =
-    Iterators.product(1:Ni, 1:Nj, 1:Nh)
+Base.iterate(
+    iter::ColumnIterator{Nh, Nj, Ni},
+    state = (1, 1, 1),
+) where {Nh, Nj, Ni} = Iterators.product(1:Ni, 1:Nj, 1:Nh)
 
-iterate_columns(space::CC.Spaces.AbstractSpace) = Base.iterate(ColumnIterator(space))
+iterate_columns(space::CC.Spaces.AbstractSpace) =
+    Base.iterate(ColumnIterator(space))
 
-Base.length(::ColumnIterator{Nh, Nj, Ni}) where {Nh, Nj, Ni} = prod((Nh, Nj, Ni))
+Base.length(::ColumnIterator{Nh, Nj, Ni}) where {Nh, Nj, Ni} =
+    prod((Nh, Nj, Ni))
 
 
-const ColumnIteratorTypes = Union{CC.Fields.ExtrudedFiniteDifferenceField, CC.Fields.FiniteDifferenceField}
+const ColumnIteratorTypes = Union{
+    CC.Fields.ExtrudedFiniteDifferenceField,
+    CC.Fields.FiniteDifferenceField,
+}
 
 """
     iterate_columns(::ExtrudedFiniteDifferenceField)
@@ -213,4 +239,5 @@ end
 iterate_columns(field::ColumnIteratorTypes) = iterate_columns(axes(field))
 
 number_of_columns(field::ColumnIteratorTypes) = number_of_columns(axes(field))
-number_of_columns(space::CC.Spaces.AbstractSpace) = length(ColumnIterator(space))
+number_of_columns(space::CC.Spaces.AbstractSpace) =
+    length(ColumnIterator(space))

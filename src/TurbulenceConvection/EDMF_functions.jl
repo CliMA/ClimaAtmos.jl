@@ -6,7 +6,9 @@ function update_cloud_frac(edmf::EDMFModel, grid::Grid, state::State)
     aux_en = center_aux_environment(state)
     a_up_bulk = aux_bulk.area
     @inbounds for k in real_center_indices(grid) # update grid-mean cloud fraction and cloud cover
-        aux_gm.cloud_fraction[k] = aux_en.area[k] * aux_en.cloud_fraction[k] + a_up_bulk[k] * aux_bulk.cloud_fraction[k]
+        aux_gm.cloud_fraction[k] =
+            aux_en.area[k] * aux_en.cloud_fraction[k] +
+            a_up_bulk[k] * aux_bulk.cloud_fraction[k]
     end
 end
 
@@ -22,14 +24,41 @@ function compute_turbconv_tendencies!(
     compute_en_tendencies!(edmf, grid, state, param_set, Val(:tke), Val(:ρatke))
 
     if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        compute_en_tendencies!(edmf, grid, state, param_set, Val(:Hvar), Val(:ρaHvar))
-        compute_en_tendencies!(edmf, grid, state, param_set, Val(:QTvar), Val(:ρaQTvar))
-        compute_en_tendencies!(edmf, grid, state, param_set, Val(:HQTcov), Val(:ρaHQTcov))
+        compute_en_tendencies!(
+            edmf,
+            grid,
+            state,
+            param_set,
+            Val(:Hvar),
+            Val(:ρaHvar),
+        )
+        compute_en_tendencies!(
+            edmf,
+            grid,
+            state,
+            param_set,
+            Val(:QTvar),
+            Val(:ρaQTvar),
+        )
+        compute_en_tendencies!(
+            edmf,
+            grid,
+            state,
+            param_set,
+            Val(:HQTcov),
+            Val(:ρaHQTcov),
+        )
     end
 
     return nothing
 end
-function compute_sgs_flux!(edmf::EDMFModel, grid::Grid, state::State, surf::SurfaceBase, param_set::APS)
+function compute_sgs_flux!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    surf::SurfaceBase,
+    param_set::APS,
+)
     N_up = n_updrafts(edmf)
     tendencies_gm = center_tendencies_grid_mean(state)
     FT = float_type(state)
@@ -64,7 +93,10 @@ function compute_sgs_flux!(edmf::EDMFModel, grid::Grid, state::State, surf::Surf
     q_tot_en = aux_en.q_tot
     a_en_bcs = a_en_boundary_conditions(surf, edmf)
     Ifae = CCO.InterpolateC2F(; a_en_bcs...)
-    If = CCO.InterpolateC2F(; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
+    If = CCO.InterpolateC2F(;
+        bottom = CCO.SetValue(FT(0)),
+        top = CCO.SetValue(FT(0)),
+    )
     Ic = CCO.InterpolateF2C()
 
     # compute total enthalpies
@@ -73,8 +105,16 @@ function compute_sgs_flux!(edmf::EDMFModel, grid::Grid, state::State, surf::Surf
     @. h_tot_gm = total_enthalpy(param_set, prog_gm.ρe_tot / ρ_c, ts_gm)
     # Compute the mass flux and associated scalar fluxes
     @. massflux = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm))
-    @. massflux_h = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm)) * (If(aux_en.h_tot) - If(h_tot_gm))
-    @. massflux_qt = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm)) * (If(q_tot_en) - If(q_tot_gm))
+    @. massflux_h =
+        ρ_f *
+        Ifae(a_en) *
+        (w_en - toscalar(w_gm)) *
+        (If(aux_en.h_tot) - If(h_tot_gm))
+    @. massflux_qt =
+        ρ_f *
+        Ifae(a_en) *
+        (w_en - toscalar(w_gm)) *
+        (If(q_tot_en) - If(q_tot_gm))
     @inbounds for i in 1:N_up
         aux_up_f_i = aux_up_f[i]
         aux_up_i = aux_up[i]
@@ -85,8 +125,18 @@ function compute_sgs_flux!(edmf::EDMFModel, grid::Grid, state::State, surf::Surf
         q_tot_up = aux_up_i.q_tot
         h_tot_up = aux_up_i.h_tot
         @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - toscalar(w_gm))
-        @. massflux_h += ρ_f * (Ifau(a_up) * (w_up_i - toscalar(w_gm)) * (If(h_tot_up) - If(h_tot_gm)))
-        @. massflux_qt += ρ_f * (Ifau(a_up) * (w_up_i - toscalar(w_gm)) * (If(q_tot_up) - If(q_tot_gm)))
+        @. massflux_h +=
+            ρ_f * (
+                Ifau(a_up) *
+                (w_up_i - toscalar(w_gm)) *
+                (If(h_tot_up) - If(h_tot_gm))
+            )
+        @. massflux_qt +=
+            ρ_f * (
+                Ifau(a_up) *
+                (w_up_i - toscalar(w_gm)) *
+                (If(q_tot_up) - If(q_tot_gm))
+            )
     end
 
     if edmf.moisture_model isa NonEquilibriumMoisture
@@ -167,7 +217,13 @@ function compute_sgs_flux!(edmf::EDMFModel, grid::Grid, state::State, surf::Surf
     return nothing
 end
 
-function compute_diffusive_fluxes(edmf::EDMFModel, grid::Grid, state::State, surf::SurfaceBase, param_set::APS)
+function compute_diffusive_fluxes(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    surf::SurfaceBase,
+    param_set::APS,
+)
     FT = float_type(state)
     aux_bulk = center_aux_bulk(state)
     aux_tc_f = face_aux_turbconv(state)
@@ -189,8 +245,14 @@ function compute_diffusive_fluxes(edmf::EDMFModel, grid::Grid, state::State, sur
     kc_toa = kc_top_of_atmos(grid)
     kf_surf = kf_surface(grid)
     prog_gm = center_prog_grid_mean(state)
-    IfKH = CCO.InterpolateC2F(; bottom = CCO.SetValue(aeKH[kc_surf]), top = CCO.SetValue(aeKH[kc_toa]))
-    IfKM = CCO.InterpolateC2F(; bottom = CCO.SetValue(aeKM[kc_surf]), top = CCO.SetValue(aeKM[kc_toa]))
+    IfKH = CCO.InterpolateC2F(;
+        bottom = CCO.SetValue(aeKH[kc_surf]),
+        top = CCO.SetValue(aeKH[kc_toa]),
+    )
+    IfKM = CCO.InterpolateC2F(;
+        bottom = CCO.SetValue(aeKM[kc_surf]),
+        top = CCO.SetValue(aeKM[kc_toa]),
+    )
     Ic = CCO.InterpolateF2C()
 
     @. aux_tc_f.ρ_ae_KH = IfKH(aeKH) * ρ_f
@@ -203,8 +265,14 @@ function compute_diffusive_fluxes(edmf::EDMFModel, grid::Grid, state::State, sur
 
     aeKMuₕ_bc = CCG.UVVector(aeKMu_bc, aeKMv_bc)
 
-    ∇q_tot_en = CCO.DivergenceC2F(; bottom = CCO.SetDivergence(aeKHq_tot_bc), top = CCO.SetDivergence(FT(0)))
-    ∇h_tot_en = CCO.DivergenceC2F(; bottom = CCO.SetDivergence(aeKHh_tot_bc), top = CCO.SetDivergence(FT(0)))
+    ∇q_tot_en = CCO.DivergenceC2F(;
+        bottom = CCO.SetDivergence(aeKHq_tot_bc),
+        top = CCO.SetDivergence(FT(0)),
+    )
+    ∇h_tot_en = CCO.DivergenceC2F(;
+        bottom = CCO.SetDivergence(aeKHh_tot_bc),
+        top = CCO.SetDivergence(FT(0)),
+    )
     # CCG.Covariant3Vector(FT(1)) ⊗ CCG.Covariant12Vector(FT(aeKMu_bc),FT(aeKMv_bc))
     local_geometry_surf = CC.Fields.local_geometry_field(axes(ρ_f))[kf_surf]
     wvec = CC.Geometry.WVector
@@ -214,29 +282,47 @@ function compute_diffusive_fluxes(edmf::EDMFModel, grid::Grid, state::State, sur
             CCG.Covariant12Vector(aeKMuₕ_bc, local_geometry_surf),
         ),
         top = CCO.SetGradient(
-            CCG.Covariant3Vector(wvec(FT(0)), local_geometry_surf) ⊗ CCG.Covariant12Vector(FT(0), FT(0)),
+            CCG.Covariant3Vector(wvec(FT(0)), local_geometry_surf) ⊗
+            CCG.Covariant12Vector(FT(0), FT(0)),
         ),
     )
 
-    @. aux_tc_f.diffusive_flux_qt = -aux_tc_f.ρ_ae_KH * ∇q_tot_en(wvec(aux_en.q_tot))
-    @. aux_tc_f.diffusive_flux_h = -aux_tc_f.ρ_ae_KH * ∇h_tot_en(wvec(aux_en.h_tot))
+    @. aux_tc_f.diffusive_flux_qt =
+        -aux_tc_f.ρ_ae_KH * ∇q_tot_en(wvec(aux_en.q_tot))
+    @. aux_tc_f.diffusive_flux_h =
+        -aux_tc_f.ρ_ae_KH * ∇h_tot_en(wvec(aux_en.h_tot))
     @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * ∇uₕ_gm(prog_gm_uₕ)
 
     if edmf.moisture_model isa NonEquilibriumMoisture
         aeKHq_liq_bc = FT(0)
         aeKHq_ice_bc = FT(0)
 
-        ∇q_liq_en = CCO.DivergenceC2F(; bottom = CCO.SetDivergence(aeKHq_liq_bc), top = CCO.SetDivergence(FT(0)))
-        ∇q_ice_en = CCO.DivergenceC2F(; bottom = CCO.SetDivergence(aeKHq_ice_bc), top = CCO.SetDivergence(FT(0)))
+        ∇q_liq_en = CCO.DivergenceC2F(;
+            bottom = CCO.SetDivergence(aeKHq_liq_bc),
+            top = CCO.SetDivergence(FT(0)),
+        )
+        ∇q_ice_en = CCO.DivergenceC2F(;
+            bottom = CCO.SetDivergence(aeKHq_ice_bc),
+            top = CCO.SetDivergence(FT(0)),
+        )
 
-        @. aux_tc_f.diffusive_flux_ql = -aux_tc_f.ρ_ae_KH * ∇q_liq_en(wvec(aux_en.q_liq))
-        @. aux_tc_f.diffusive_flux_qi = -aux_tc_f.ρ_ae_KH * ∇q_ice_en(wvec(aux_en.q_ice))
+        @. aux_tc_f.diffusive_flux_ql =
+            -aux_tc_f.ρ_ae_KH * ∇q_liq_en(wvec(aux_en.q_liq))
+        @. aux_tc_f.diffusive_flux_qi =
+            -aux_tc_f.ρ_ae_KH * ∇q_ice_en(wvec(aux_en.q_ice))
     end
 
     return nothing
 end
 
-function affect_filter!(edmf::EDMFModel, grid::Grid, state::State, param_set::APS, surf::SurfaceBase, t::Real)
+function affect_filter!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    param_set::APS,
+    surf::SurfaceBase,
+    t::Real,
+)
     prog_en = center_prog_environment(state)
     aux_en = center_aux_environment(state)
     ###
@@ -250,14 +336,26 @@ function affect_filter!(edmf::EDMFModel, grid::Grid, state::State, param_set::AP
         if edmf.thermo_covariance_model isa PrognosticThermoCovariances
             prog_en.ρaHvar[k] = max(prog_en.ρaHvar[k], 0.0)
             prog_en.ρaQTvar[k] = max(prog_en.ρaQTvar[k], 0.0)
-            prog_en.ρaHQTcov[k] = max(prog_en.ρaHQTcov[k], -sqrt(prog_en.ρaHvar[k] * prog_en.ρaQTvar[k]))
-            prog_en.ρaHQTcov[k] = min(prog_en.ρaHQTcov[k], sqrt(prog_en.ρaHvar[k] * prog_en.ρaQTvar[k]))
+            prog_en.ρaHQTcov[k] = max(
+                prog_en.ρaHQTcov[k],
+                -sqrt(prog_en.ρaHvar[k] * prog_en.ρaQTvar[k]),
+            )
+            prog_en.ρaHQTcov[k] = min(
+                prog_en.ρaHQTcov[k],
+                sqrt(prog_en.ρaHvar[k] * prog_en.ρaQTvar[k]),
+            )
         end
     end
     return nothing
 end
 
-function set_edmf_surface_bc(edmf::EDMFModel, grid::Grid, state::State, surf::SurfaceBase, param_set::APS)
+function set_edmf_surface_bc(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    surf::SurfaceBase,
+    param_set::APS,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     FT = float_type(state)
     N_up = n_updrafts(edmf)
@@ -300,11 +398,19 @@ function set_edmf_surface_bc(edmf::EDMFModel, grid::Grid, state::State, surf::Su
     ρLL = prog_gm.ρ[kc_surf]
     ρ_ae = ρ_c[kc_surf] * ae_surf
     mix_len_params = mixing_length_params(edmf)
-    prog_en.ρatke[kc_surf] = ρ_ae * get_surface_tke(mix_len_params, surf.ustar, zLL, surf.obukhov_length)
+    prog_en.ρatke[kc_surf] =
+        ρ_ae *
+        get_surface_tke(mix_len_params, surf.ustar, zLL, surf.obukhov_length)
     if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        prog_en.ρaHvar[kc_surf] = ρ_ae * get_surface_variance(flux1 / ρLL, flux1 / ρLL, ustar, zLL, oblength)
-        prog_en.ρaQTvar[kc_surf] = ρ_ae * get_surface_variance(flux2 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
-        prog_en.ρaHQTcov[kc_surf] = ρ_ae * get_surface_variance(flux1 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
+        prog_en.ρaHvar[kc_surf] =
+            ρ_ae *
+            get_surface_variance(flux1 / ρLL, flux1 / ρLL, ustar, zLL, oblength)
+        prog_en.ρaQTvar[kc_surf] =
+            ρ_ae *
+            get_surface_variance(flux2 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
+        prog_en.ρaHQTcov[kc_surf] =
+            ρ_ae *
+            get_surface_variance(flux1 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
     end
     return nothing
 end
@@ -337,7 +443,11 @@ function a_en_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel)
     return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
 end
 
-function area_surface_bc(surf::SurfaceBase{FT}, edmf::EDMFModel, i::Int)::FT where {FT}
+function area_surface_bc(
+    surf::SurfaceBase{FT},
+    edmf::EDMFModel,
+    i::Int,
+)::FT where {FT}
     N_up = n_updrafts(edmf)
     return surf.bflux > 0 ? edmf.surface_area / N_up : FT(0)
 end
@@ -346,7 +456,10 @@ function w_surface_bc(::SurfaceBase{FT})::FT where {FT}
     return FT(0)
 end
 function uₕ_bcs()
-    return CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
+    return CCO.InterpolateC2F(
+        bottom = CCO.Extrapolate(),
+        top = CCO.Extrapolate(),
+    )
 end
 function θ_surface_bc(
     surf::SurfaceBase{FT},
@@ -370,12 +483,28 @@ function θ_surface_bc(
     a_total = edmf.surface_area
     a_ = area_surface_bc(surf, edmf, i)
     ρθ_liq_ice_flux = surf.shf / c_p # assuming no ql,qi flux
-    h_var = get_surface_variance(ρθ_liq_ice_flux / ρLL, ρθ_liq_ice_flux / ρLL, ustar, zLL, oblength)
-    surface_scalar_coeff =
-        percentile_bounds_mean_norm(1 - a_total + (i - 1) * a_, 1 - a_total + i * a_, 1000, set_src_seed)
+    h_var = get_surface_variance(
+        ρθ_liq_ice_flux / ρLL,
+        ρθ_liq_ice_flux / ρLL,
+        ustar,
+        zLL,
+        oblength,
+    )
+    surface_scalar_coeff = percentile_bounds_mean_norm(
+        1 - a_total + (i - 1) * a_,
+        1 - a_total + i * a_,
+        1000,
+        set_src_seed,
+    )
     return aux_gm.θ_liq_ice[kc_surf] + surface_scalar_coeff * sqrt(h_var)
 end
-function q_surface_bc(surf::SurfaceBase{FT}, grid::Grid, state::State, edmf::EDMFModel, i::Int)::FT where {FT}
+function q_surface_bc(
+    surf::SurfaceBase{FT},
+    grid::Grid,
+    state::State,
+    edmf::EDMFModel,
+    i::Int,
+)::FT where {FT}
     aux_gm = center_aux_grid_mean(state)
     prog_gm = center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
@@ -386,9 +515,19 @@ function q_surface_bc(surf::SurfaceBase{FT}, grid::Grid, state::State, edmf::EDM
     a_ = area_surface_bc(surf, edmf, i)
     UnPack.@unpack ustar, zLL, oblength, ρLL = surface_helper(surf, grid, state)
     ρq_tot_flux = surf.ρq_tot_flux
-    qt_var = get_surface_variance(ρq_tot_flux / ρLL, ρq_tot_flux / ρLL, ustar, zLL, oblength)
-    surface_scalar_coeff =
-        percentile_bounds_mean_norm(1 - a_total + (i - 1) * a_, 1 - a_total + i * a_, 1000, set_src_seed)
+    qt_var = get_surface_variance(
+        ρq_tot_flux / ρLL,
+        ρq_tot_flux / ρLL,
+        ustar,
+        zLL,
+        oblength,
+    )
+    surface_scalar_coeff = percentile_bounds_mean_norm(
+        1 - a_total + (i - 1) * a_,
+        1 - a_total + i * a_,
+        1000,
+        set_src_seed,
+    )
     return aux_gm.q_tot[kc_surf] + surface_scalar_coeff * sqrt(qt_var)
 end
 function ql_surface_bc(surf::SurfaceBase{FT})::FT where {FT}
@@ -431,26 +570,49 @@ function get_GMV_CoVar(
     area_en = aux_en_c.area
 
     Icd = is_tke ? CCO.InterpolateF2C() : x -> x
-    @. gmv_covar = tke_factor * area_en * Icd(ϕ_en - to_scalar(ϕ_gm)) * Icd(ψ_en - to_scalar(ψ_gm)) + area_en * covar_e
+    @. gmv_covar =
+        tke_factor *
+        area_en *
+        Icd(ϕ_en - to_scalar(ϕ_gm)) *
+        Icd(ψ_en - to_scalar(ψ_gm)) + area_en * covar_e
     @inbounds for i in 1:N_up
         ϕ_up = getproperty(aux_up[i], ϕ_sym)
         ψ_up = getproperty(aux_up[i], ψ_sym)
-        @. gmv_covar += tke_factor * aux_up_c[i].area * Icd(ϕ_up - to_scalar(ϕ_gm)) * Icd(ψ_up - to_scalar(ψ_gm))
+        @. gmv_covar +=
+            tke_factor *
+            aux_up_c[i].area *
+            Icd(ϕ_up - to_scalar(ϕ_gm)) *
+            Icd(ψ_up - to_scalar(ψ_gm))
     end
     return nothing
 end
 
-function compute_updraft_top(grid::Grid{FT}, state::State, i::Int)::FT where {FT}
+function compute_updraft_top(
+    grid::Grid{FT},
+    state::State,
+    i::Int,
+)::FT where {FT}
     aux_up = center_aux_updrafts(state)
     return z_findlast_center(k -> aux_up[i].area[k] > 1e-3, grid)
 end
 
-function compute_plume_scale_height(grid::Grid, state::State, H_up_min::FT, i::Int)::FT where {FT}
+function compute_plume_scale_height(
+    grid::Grid,
+    state::State,
+    H_up_min::FT,
+    i::Int,
+)::FT where {FT}
     updraft_top::FT = compute_updraft_top(grid, state, i)
     return max(updraft_top, H_up_min)
 end
 
-function compute_up_stoch_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param_set::APS, surf::SurfaceBase)
+function compute_up_stoch_tendencies!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    param_set::APS,
+    surf::SurfaceBase,
+)
     N_up = n_updrafts(edmf)
 
     aux_up = center_aux_updrafts(state)
@@ -474,7 +636,13 @@ function compute_up_stoch_tendencies!(edmf::EDMFModel, grid::Grid, state::State,
 end
 
 
-function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param_set::APS, surf::SurfaceBase)
+function compute_up_tendencies!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    param_set::APS,
+    surf::SurfaceBase,
+)
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
@@ -500,12 +668,16 @@ function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param
         @. aux_up_i.detr_turb_dyn = aux_up_i.detr_sc + aux_up_i.frac_turb_entr
     end
 
-    UB = CCO.UpwindBiasedProductC2F(bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
+    UB = CCO.UpwindBiasedProductC2F(
+        bottom = CCO.SetValue(FT(0)),
+        top = CCO.SetValue(FT(0)),
+    )
     Ic = CCO.InterpolateF2C()
 
     wvec = CC.Geometry.WVector
     ∇c = CCO.DivergenceF2C()
-    w_bcs = (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
+    w_bcs =
+        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(FT(0)))
 
     # Solve for updraft area fraction
@@ -519,7 +691,8 @@ function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param
         θ_liq_ice_up = aux_up_i.θ_liq_ice
         entr_turb_dyn = aux_up_i.entr_turb_dyn
         detr_turb_dyn = aux_up_i.detr_turb_dyn
-        θ_liq_ice_tendency_precip_formation = aux_up_i.θ_liq_ice_tendency_precip_formation
+        θ_liq_ice_tendency_precip_formation =
+            aux_up_i.θ_liq_ice_tendency_precip_formation
         qt_tendency_precip_formation = aux_up_i.qt_tendency_precip_formation
 
         ρarea = prog_up[i].ρarea
@@ -531,15 +704,21 @@ function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea =
-            -∇c(wvec(LBF(Ic(w_up) * ρarea))) + (ρarea * Ic(w_up) * entr_turb_dyn) - (ρarea * Ic(w_up) * detr_turb_dyn)
+            -∇c(wvec(LBF(Ic(w_up) * ρarea))) +
+            (ρarea * Ic(w_up) * entr_turb_dyn) -
+            (ρarea * Ic(w_up) * detr_turb_dyn)
 
         @. tends_ρaθ_liq_ice =
-            -∇c(wvec(LBF(Ic(w_up) * ρaθ_liq_ice))) + (ρarea * Ic(w_up) * entr_turb_dyn * θ_liq_ice_en) -
-            (ρaθ_liq_ice * Ic(w_up) * detr_turb_dyn) + (ρ_c * θ_liq_ice_tendency_precip_formation)
+            -∇c(wvec(LBF(Ic(w_up) * ρaθ_liq_ice))) +
+            (ρarea * Ic(w_up) * entr_turb_dyn * θ_liq_ice_en) -
+            (ρaθ_liq_ice * Ic(w_up) * detr_turb_dyn) +
+            (ρ_c * θ_liq_ice_tendency_precip_formation)
 
         @. tends_ρaq_tot =
-            -∇c(wvec(LBF(Ic(w_up) * ρaq_tot))) + (ρarea * Ic(w_up) * entr_turb_dyn * q_tot_en) -
-            (ρaq_tot * Ic(w_up) * detr_turb_dyn) + (ρ_c * qt_tendency_precip_formation)
+            -∇c(wvec(LBF(Ic(w_up) * ρaq_tot))) +
+            (ρarea * Ic(w_up) * entr_turb_dyn * q_tot_en) -
+            (ρaq_tot * Ic(w_up) * detr_turb_dyn) +
+            (ρ_c * qt_tendency_precip_formation)
 
         if edmf.moisture_model isa NonEquilibriumMoisture
 
@@ -560,12 +739,16 @@ function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param
             tends_ρaq_ice = tendencies_up[i].ρaq_ice
 
             @. tends_ρaq_liq =
-                -∇c(wvec(LBF(Ic(w_up) * ρaq_liq))) + (ρarea * Ic(w_up) * entr_turb_dyn * q_liq_en) -
-                (ρaq_liq * Ic(w_up) * detr_turb_dyn) + (ρ_c * (ql_tendency_precip_formation + ql_tendency_noneq))
+                -∇c(wvec(LBF(Ic(w_up) * ρaq_liq))) +
+                (ρarea * Ic(w_up) * entr_turb_dyn * q_liq_en) -
+                (ρaq_liq * Ic(w_up) * detr_turb_dyn) +
+                (ρ_c * (ql_tendency_precip_formation + ql_tendency_noneq))
 
             @. tends_ρaq_ice =
-                -∇c(wvec(LBF(Ic(w_up) * ρaq_ice))) + (ρarea * Ic(w_up) * entr_turb_dyn * q_ice_en) -
-                (ρaq_ice * Ic(w_up) * detr_turb_dyn) + (ρ_c * (qi_tendency_precip_formation + qi_tendency_noneq))
+                -∇c(wvec(LBF(Ic(w_up) * ρaq_ice))) +
+                (ρarea * Ic(w_up) * entr_turb_dyn * q_ice_en) -
+                (ρaq_ice * Ic(w_up) * detr_turb_dyn) +
+                (ρ_c * (qi_tendency_precip_formation + qi_tendency_noneq))
 
             tends_ρaq_liq[kc_surf] = 0
             tends_ρaq_ice[kc_surf] = 0
@@ -597,7 +780,8 @@ function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
-    adv_bcs = (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
+    adv_bcs =
+        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
     ∇f = CCO.DivergenceC2F(; adv_bcs...)
 
@@ -615,14 +799,23 @@ function compute_up_tendencies!(edmf::EDMFModel, grid::Grid, state::State, param
         buoy = aux_up[i].buoy
 
         @. tends_ρaw = -(∇f(wvec(LBC(ρaw * w_up))))
-        @. tends_ρaw += (ρaw * (I0f(entr_w) * w_en - I0f(detr_w) * w_up)) + (ρ_f * Iaf(a_up) * I0f(buoy)) + nh_pressure
+        @. tends_ρaw +=
+            (ρaw * (I0f(entr_w) * w_en - I0f(detr_w) * w_up)) +
+            (ρ_f * Iaf(a_up) * I0f(buoy)) +
+            nh_pressure
         tends_ρaw[kf_surf] = 0
     end
 
     return nothing
 end
 
-function filter_updraft_vars(edmf::EDMFModel, grid::Grid, state::State, surf::SurfaceBase, param_set::APS)
+function filter_updraft_vars(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    surf::SurfaceBase,
+    param_set::APS,
+)
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
@@ -663,7 +856,8 @@ function filter_updraft_vars(edmf::EDMFModel, grid::Grid, state::State, surf::Su
         @. prog_up_f[i].ρaw = max.(prog_up_f[i].ρaw, 0)
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
-        @. prog_up_f[i].ρaw = Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].ρaw
+        @. prog_up_f[i].ρaw =
+            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].ρaw
     end
 
     @inbounds for k in real_center_indices(grid)
@@ -697,9 +891,12 @@ function filter_updraft_vars(edmf::EDMFModel, grid::Grid, state::State, surf::Su
 
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
-        @. prog_up[i].ρarea = ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρarea)
-        @. prog_up[i].ρaθ_liq_ice = ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
-        @. prog_up[i].ρaq_tot = ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_tot)
+        @. prog_up[i].ρarea =
+            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρarea)
+        @. prog_up[i].ρaθ_liq_ice =
+            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
+        @. prog_up[i].ρaq_tot =
+            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_tot)
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
         a_surf = area_surface_bc(surf, edmf, i)
@@ -709,8 +906,10 @@ function filter_updraft_vars(edmf::EDMFModel, grid::Grid, state::State, surf::Su
     end
     if edmf.moisture_model isa NonEquilibriumMoisture
         @inbounds for i in 1:N_up
-            @. prog_up[i].ρaq_liq = ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_liq)
-            @. prog_up[i].ρaq_ice = ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_ice)
+            @. prog_up[i].ρaq_liq =
+                ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_liq)
+            @. prog_up[i].ρaq_ice =
+                ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_ice)
             ql_surf = ql_surface_bc(surf)
             qi_surf = qi_surface_bc(surf)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf
@@ -764,7 +963,13 @@ function compute_covariance_shear(
         @. shear = ρ_c * area_en * k_eddy * Shear²
     else
         ∇c = CCO.GradientF2C()
-        @. shear = 2 * ρ_c * area_en * k_eddy * LA.dot(∇c(If(ϕ_en)), k̂) * LA.dot(∇c(If(ψ_en)), k̂)
+        @. shear =
+            2 *
+            ρ_c *
+            area_en *
+            k_eddy *
+            LA.dot(∇c(If(ϕ_en)), k̂) *
+            LA.dot(∇c(If(ψ_en)), k̂)
     end
     return nothing
 end
@@ -798,7 +1003,12 @@ function compute_covariance_interdomain_src(
         ϕ_up = getproperty(prog_up[i], ϕ_sym)
         ψ_up = getproperty(prog_up[i], ψ_sym)
         a_up = aux_up[i].area
-        @. interdomain += tke_factor * a_up * (1 - a_up) * (Ic(ϕ_up) - Ic(ϕ_en)) * (Ic(ψ_up) - Ic(ψ_en))
+        @. interdomain +=
+            tke_factor *
+            a_up *
+            (1 - a_up) *
+            (Ic(ϕ_up) - Ic(ϕ_en)) *
+            (Ic(ψ_up) - Ic(ψ_en))
     end
     return nothing
 end
@@ -858,20 +1068,36 @@ function compute_covariance_entr(
         a_up = aux_up_i.area
 
         @. entr_gain +=
-            Int(a_up > min_area) *
-            (tke_factor * ρ_c * a_up * abs(Ic(w_up)) * detr_sc * (Idc(ϕ_up) - Idc(ϕ_en)) * (Idc(ψ_up) - Idc(ψ_en))) + (
+            Int(a_up > min_area) * (
+                tke_factor *
+                ρ_c *
+                a_up *
+                abs(Ic(w_up)) *
+                detr_sc *
+                (Idc(ϕ_up) - Idc(ϕ_en)) *
+                (Idc(ψ_up) - Idc(ψ_en))
+            ) + (
                 tke_factor *
                 ρ_c *
                 a_up *
                 abs(Ic(w_up)) *
                 eps_turb *
                 (
-                    (Idc(ϕ_en) - Idc(to_scalar(ϕ_gm))) * (Idc(ψ_up) - Idc(ψ_en)) +
-                    (Idc(ψ_en) - Idc(to_scalar(ψ_gm))) * (Idc(ϕ_up) - Idc(ϕ_en))
+                    (Idc(ϕ_en) - Idc(to_scalar(ϕ_gm))) *
+                    (Idc(ψ_up) - Idc(ψ_en)) +
+                    (Idc(ψ_en) - Idc(to_scalar(ψ_gm))) *
+                    (Idc(ϕ_up) - Idc(ϕ_en))
                 )
             )
 
-        @. detr_loss += Int(a_up > min_area) * tke_factor * ρ_c * a_up * abs(Ic(w_up)) * (entr_sc + eps_turb) * covar
+        @. detr_loss +=
+            Int(a_up > min_area) *
+            tke_factor *
+            ρ_c *
+            a_up *
+            abs(Ic(w_up)) *
+            (entr_sc + eps_turb) *
+            covar
 
     end
 
@@ -900,7 +1126,9 @@ function compute_covariance_dissipation(
     tke_en = aux_en.tke
     mixing_length = aux_tc.mixing_length
 
-    @. dissipation = ρ_c * area_en * covar * max(tke_en, 0)^FT(0.5) / max(mixing_length, FT(1.0e-3)) * c_d
+    @. dissipation =
+        ρ_c * area_en * covar * max(tke_en, 0)^FT(0.5) /
+        max(mixing_length, FT(1.0e-3)) * c_d
     return nothing
 end
 
@@ -955,8 +1183,12 @@ function compute_en_tendencies!(
     rain_src = aux_covar.rain_src
 
     wvec = CC.Geometry.WVector
-    aeK_bcs = (; bottom = CCO.SetValue(aeK[kc_surf]), top = CCO.SetValue(aeK[kc_toa]))
-    prog_bcs = (; bottom = CCO.SetGradient(wvec(FT(0))), top = CCO.SetGradient(wvec(FT(0))))
+    aeK_bcs =
+        (; bottom = CCO.SetValue(aeK[kc_surf]), top = CCO.SetValue(aeK[kc_toa]))
+    prog_bcs = (;
+        bottom = CCO.SetGradient(wvec(FT(0))),
+        top = CCO.SetGradient(wvec(FT(0))),
+    )
 
     If = CCO.InterpolateC2F(; aeK_bcs...)
     ∇f = CCO.GradientC2F(; prog_bcs...)
@@ -978,14 +1210,15 @@ function compute_en_tendencies!(
         a_up = aux_up[i].area
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
-        @. D_env += Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
+        @. D_env +=
+            Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
     end
 
     RB = CCO.RightBiasedC2F(; top = CCO.SetValue(FT(0)))
     @. tend_covar =
         press + buoy + shear + entr_gain + rain_src - D_env * covar -
-        (c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1)) * prog_covar - ∇c(wvec(RB(prog_covar * Ic(w_en_f)))) +
-        ∇c(ρ_f * If(aeK) * ∇f(covar))
+        (c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1)) * prog_covar -
+        ∇c(wvec(RB(prog_covar * Ic(w_en_f)))) + ∇c(ρ_f * If(aeK) * ∇f(covar))
 
     return nothing
 end
@@ -1038,12 +1271,16 @@ function update_diagnostic_covariances!(
         a_up = aux_up[i].area
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
-        @. D_env += Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
+        @. D_env +=
+            Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
     end
 
     @. covar =
-        (shear + entr_gain + rain_src) /
-        max(D_env + ρ_c * area_en * c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1), covar_lim)
+        (shear + entr_gain + rain_src) / max(
+            D_env +
+            ρ_c * area_en * c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1),
+            covar_lim,
+        )
     return nothing
 end
 
@@ -1106,7 +1343,9 @@ function GMV_third_m(
         @. ϕ_up_cubed += a_up * Ic(var_up)^3
     end
 
-    @. gm_third_m = ϕ_up_cubed + area_en * (Ic(var_en)^3 + 3 * Ic(var_en) * ϕ_en_cov) - ϕ_gm^3 - 3 * ϕ_gm_cov * ϕ_gm
+    @. gm_third_m =
+        ϕ_up_cubed + area_en * (Ic(var_en)^3 + 3 * Ic(var_en) * ϕ_en_cov) -
+        ϕ_gm^3 - 3 * ϕ_gm_cov * ϕ_gm
 
     gm_third_m[kc_surf] = 0
     return nothing

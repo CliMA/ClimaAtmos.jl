@@ -1,4 +1,8 @@
-function mixing_length(mix_len_params, param_set, ml_model::MinDisspLen{FT}) where {FT}
+function mixing_length(
+    mix_len_params,
+    param_set,
+    ml_model::MinDisspLen{FT},
+) where {FT}
     c_m = mix_len_params.c_m
     c_d = mix_len_params.c_d
     smin_ub = mix_len_params.smin_ub
@@ -31,7 +35,11 @@ function mixing_length(mix_len_params, param_set, ml_model::MinDisspLen{FT}) whe
     b_exch = ml_model.b_exch
 
     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -b_exch * b_exch
-        l_TKE = max(-b_exch / 2 / a_pd + sqrt(b_exch * b_exch + 4 * a_pd * c_neg) / 2 / a_pd, 0)
+        l_TKE = max(
+            -b_exch / 2 / a_pd +
+            sqrt(b_exch * b_exch + 4 * a_pd * c_neg) / 2 / a_pd,
+            0,
+        )
     elseif abs(a_pd) < eps(FT) && abs(b_exch) > eps(FT)
         l_TKE = c_neg / b_exch
     else

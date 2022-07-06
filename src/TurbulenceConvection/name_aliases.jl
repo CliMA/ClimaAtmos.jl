@@ -16,7 +16,8 @@ function name_aliases()
         "updraft_area" => ("updraft_fraction",),
         "updraft_thetal" => ("updraft_thetali",),
         "thetal_mean" => ("thetali_mean", "theta_mean"),
-        "total_flux_h" => ("resolved_z_flux_thetali", "resolved_z_flux_theta"),
+        "total_flux_h" =>
+            ("resolved_z_flux_thetali", "resolved_z_flux_theta"),
         "total_flux_qt" => ("resolved_z_flux_qt", "qt_flux_z"),
         "u_mean" => ("u_translational_mean",),
         "v_mean" => ("v_translational_mean",),

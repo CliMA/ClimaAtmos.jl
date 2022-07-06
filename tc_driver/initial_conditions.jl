@@ -4,7 +4,15 @@ const APS = TCP.AbstractTurbulenceConvectionParameters
 
 import Thermodynamics as TD
 
-function initialize_edmf(edmf::TC.EDMFModel, grid::TC.Grid, state::TC.State, surf_params, param_set::APS, t::Real, case)
+function initialize_edmf(
+    edmf::TC.EDMFModel,
+    grid::TC.Grid,
+    state::TC.State,
+    surf_params,
+    param_set::APS,
+    t::Real,
+    case,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     initialize_covariance(edmf, grid, state)
     aux_gm = TC.center_aux_grid_mean(state)
@@ -20,7 +28,11 @@ function initialize_edmf(edmf::TC.EDMFModel, grid::TC.Grid, state::TC.State, sur
     return
 end
 
-function initialize_covariance(edmf::TC.EDMFModel, grid::TC.Grid, state::TC.State)
+function initialize_covariance(
+    edmf::TC.EDMFModel,
+    grid::TC.Grid,
+    state::TC.State,
+)
 
     kc_surf = TC.kc_surface(grid)
     aux_gm = TC.center_aux_grid_mean(state)
@@ -131,7 +143,8 @@ function initialize_updrafts_DryBubble(edmf, grid, state)
                 # for now temperature is provided as diagnostics from LES
                 aux_up[i].T[k] = prof_T(z)
                 prog_up[i].ρarea[k] = ρ_0_c[k] * aux_up[i].area[k]
-                prog_up[i].ρaθ_liq_ice[k] = prog_up[i].ρarea[k] * aux_up[i].θ_liq_ice[k]
+                prog_up[i].ρaθ_liq_ice[k] =
+                    prog_up[i].ρarea[k] * aux_up[i].θ_liq_ice[k]
                 prog_up[i].ρaq_tot[k] = prog_up[i].ρarea[k] * aux_up[i].q_tot[k]
             else
                 aux_up[i].area[k] = 0.0

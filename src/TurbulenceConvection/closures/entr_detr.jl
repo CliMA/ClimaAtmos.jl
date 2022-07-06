@@ -1,6 +1,12 @@
 #### Entrainment-Detrainment kernels
 
-function compute_turbulent_entrainment(c_γ::FT, a_up::FT, w_up::FT, tke::FT, H_up::FT) where {FT}
+function compute_turbulent_entrainment(
+    c_γ::FT,
+    a_up::FT,
+    w_up::FT,
+    tke::FT,
+    H_up::FT,
+) where {FT}
 
     ε_turb = if w_up * a_up > 0
         2 * c_γ * sqrt(max(tke, 0)) / (w_up * H_up)
@@ -11,7 +17,14 @@ function compute_turbulent_entrainment(c_γ::FT, a_up::FT, w_up::FT, tke::FT, H_
     return ε_turb
 end
 
-function compute_inverse_timescale(εδ_model, b_up::FT, b_en::FT, w_up::FT, w_en::FT, tke::FT) where {FT}
+function compute_inverse_timescale(
+    εδ_model,
+    b_up::FT,
+    b_en::FT,
+    w_up::FT,
+    w_en::FT,
+    tke::FT,
+) where {FT}
     Δb = b_up - b_en
     Δw = get_Δw(εδ_model, w_up, w_en)
     c_λ = εδ_params(εδ_model).c_λ
@@ -102,10 +115,19 @@ Parameters:
  - `ε_nondim`       :: nondimensional fractional entrainment
  - `δ_nondim`       :: nondimensional fractional detrainment
 """
-function εδ_dyn(εδ_model, εδ_vars, entr_dim_scale, detr_dim_scale, ε_nondim, δ_nondim)
+function εδ_dyn(
+    εδ_model,
+    εδ_vars,
+    entr_dim_scale,
+    detr_dim_scale,
+    ε_nondim,
+    δ_nondim,
+)
     FT = eltype(εδ_vars.q_cond_up)
-    ε_dim_scale = entrainment_inv_length_scale(εδ_model, εδ_vars, entr_dim_scale)
-    δ_dim_scale = entrainment_inv_length_scale(εδ_model, εδ_vars, detr_dim_scale)
+    ε_dim_scale =
+        entrainment_inv_length_scale(εδ_model, εδ_vars, entr_dim_scale)
+    δ_dim_scale =
+        entrainment_inv_length_scale(εδ_model, εδ_vars, detr_dim_scale)
 
     area_limiter = max_area_limiter(εδ_model, εδ_vars.max_area, εδ_vars.a_up)
 
@@ -136,11 +158,23 @@ function entr_detr(εδ_model, εδ_vars, entr_dim_scale, detr_dim_scale)
 
     # fractional entrainment / detrainment
     ε_nondim, δ_nondim = non_dimensional_function(εδ_model, εδ_vars)
-    ε_dyn, δ_dyn = εδ_dyn(εδ_model, εδ_vars, entr_dim_scale, detr_dim_scale, ε_nondim, δ_nondim)
+    ε_dyn, δ_dyn = εδ_dyn(
+        εδ_model,
+        εδ_vars,
+        entr_dim_scale,
+        detr_dim_scale,
+        ε_nondim,
+        δ_nondim,
+    )
 
     # turbulent entrainment
-    ε_turb =
-        compute_turbulent_entrainment(εδ_params(εδ_model).c_γ, εδ_vars.a_up, εδ_vars.w_up, εδ_vars.tke_en, εδ_vars.H_up)
+    ε_turb = compute_turbulent_entrainment(
+        εδ_params(εδ_model).c_γ,
+        εδ_vars.a_up,
+        εδ_vars.w_up,
+        εδ_vars.tke_en,
+        εδ_vars.H_up,
+    )
 
     return EntrDetr{FT}(ε_dyn, δ_dyn, ε_turb, ε_nondim, δ_nondim)
 end
@@ -194,8 +228,20 @@ function compute_entr_detr!(
         @inbounds for k in real_center_indices(grid)
             # entrainment
 
-            q_cond_up = TD.condensate(TD.PhasePartition(aux_up[i].q_tot[k], aux_up[i].q_liq[k], aux_up[i].q_ice[k]))
-            q_cond_en = TD.condensate(TD.PhasePartition(aux_en.q_tot[k], aux_en.q_liq[k], aux_en.q_ice[k]))
+            q_cond_up = TD.condensate(
+                TD.PhasePartition(
+                    aux_up[i].q_tot[k],
+                    aux_up[i].q_liq[k],
+                    aux_up[i].q_ice[k],
+                ),
+            )
+            q_cond_en = TD.condensate(
+                TD.PhasePartition(
+                    aux_en.q_tot[k],
+                    aux_en.q_liq[k],
+                    aux_en.q_ice[k],
+                ),
+            )
 
             if aux_up[i].area[k] > 0.0
                 εδ_model_vars = (;
@@ -227,15 +273,32 @@ function compute_entr_detr!(
                 # update fractional and turbulent entr/detr
                 if εδ_closure isa PrognosticNoisyRelaxationProcess
                     # fractional dynamical entrainment from prognostic state
-                    ε_nondim, δ_nondim = prog_up[i].ε_nondim[k], prog_up[i].δ_nondim[k]
+                    ε_nondim, δ_nondim =
+                        prog_up[i].ε_nondim[k], prog_up[i].δ_nondim[k]
                     mean_model = εδ_closure.mean_model
-                    ε_dyn, δ_dyn =
-                        εδ_dyn(mean_model, εδ_model_vars, edmf.entr_dim_scale, edmf.detr_dim_scale, ε_nondim, δ_nondim)
+                    ε_dyn, δ_dyn = εδ_dyn(
+                        mean_model,
+                        εδ_model_vars,
+                        edmf.entr_dim_scale,
+                        edmf.detr_dim_scale,
+                        ε_nondim,
+                        δ_nondim,
+                    )
                     # turbulent & mean nondimensional entrainment
-                    er = entr_detr(mean_model, εδ_model_vars, edmf.entr_dim_scale, edmf.detr_dim_scale)
+                    er = entr_detr(
+                        mean_model,
+                        εδ_model_vars,
+                        edmf.entr_dim_scale,
+                        edmf.detr_dim_scale,
+                    )
                 else
                     # fractional, turbulent & nondimensional entrainment
-                    er = entr_detr(εδ_closure, εδ_model_vars, edmf.entr_dim_scale, edmf.detr_dim_scale)
+                    er = entr_detr(
+                        εδ_closure,
+                        εδ_model_vars,
+                        edmf.entr_dim_scale,
+                        edmf.detr_dim_scale,
+                    )
                     ε_dyn, δ_dyn = er.ε_dyn, er.δ_dyn
                 end
                 aux_up[i].entr_sc[k] = ε_dyn
@@ -305,8 +368,20 @@ function compute_entr_detr!(
         @inbounds for k in real_center_indices(grid)
             # entrainment
 
-            q_cond_up = TD.condensate(TD.PhasePartition(aux_up[i].q_tot[k], aux_up[i].q_liq[k], aux_up[i].q_ice[k]))
-            q_cond_en = TD.condensate(TD.PhasePartition(aux_en.q_tot[k], aux_en.q_liq[k], aux_en.q_ice[k]))
+            q_cond_up = TD.condensate(
+                TD.PhasePartition(
+                    aux_up[i].q_tot[k],
+                    aux_up[i].q_liq[k],
+                    aux_up[i].q_ice[k],
+                ),
+            )
+            q_cond_en = TD.condensate(
+                TD.PhasePartition(
+                    aux_en.q_tot[k],
+                    aux_en.q_liq[k],
+                    aux_en.q_ice[k],
+                ),
+            )
 
             if aux_up[i].area[k] > 0.0
                 εδ_model_vars = (;
@@ -380,19 +455,25 @@ function compute_entr_detr!(
                 FT(grid.zc[k].z),
                 edmf.detr_dim_scale,
             )
-            area_limiter = max_area_limiter(εδ_model, max_area, aux_up[i].area[k])
-            MdMdz_ε, MdMdz_δ = get_MdMdz(m_entr_detr[k], ∇m_entr_detr[k]) .* c_div
+            area_limiter =
+                max_area_limiter(εδ_model, max_area, aux_up[i].area[k])
+            MdMdz_ε, MdMdz_δ =
+                get_MdMdz(m_entr_detr[k], ∇m_entr_detr[k]) .* c_div
 
             aux_up[i].entr_sc[k] = ε_dim_scale * aux_up[i].ε_nondim[k] + MdMdz_ε
-            aux_up[i].detr_sc[k] = δ_dim_scale * (aux_up[i].δ_nondim[k] + area_limiter) + MdMdz_δ
+            aux_up[i].detr_sc[k] =
+                δ_dim_scale * (aux_up[i].δ_nondim[k] + area_limiter) + MdMdz_δ
             aux_up[i].frac_turb_entr[k] = ε_turb
         end
 
-        @. aux_up[i].ε_nondim = ifelse(aux_up[i].area > 0, aux_up[i].ε_nondim, 0)
-        @. aux_up[i].δ_nondim = ifelse(aux_up[i].area > 0, aux_up[i].δ_nondim, 0)
+        @. aux_up[i].ε_nondim =
+            ifelse(aux_up[i].area > 0, aux_up[i].ε_nondim, 0)
+        @. aux_up[i].δ_nondim =
+            ifelse(aux_up[i].area > 0, aux_up[i].δ_nondim, 0)
         @. aux_up[i].entr_sc = ifelse(aux_up[i].area > 0, aux_up[i].entr_sc, 0)
         @. aux_up[i].detr_sc = ifelse(aux_up[i].area > 0, aux_up[i].detr_sc, 0)
-        @. aux_up[i].frac_turb_entr = ifelse(aux_up[i].area > 0, aux_up[i].frac_turb_entr, 0)
+        @. aux_up[i].frac_turb_entr =
+            ifelse(aux_up[i].area > 0, aux_up[i].frac_turb_entr, 0)
 
     end
 end

@@ -99,7 +99,11 @@ struct RFEntr{d, m, P, A, B} <: AbstractEntrDetrModel
         m = size(c_rf_fix, 2)
         c_rf_opt = reshape(c_rf_opt, 2, m + 1 + d) # 2 x (m + 1 + d), learn
         c_rf_opt = SA.SArray{Tuple{size(c_rf_opt)...}}(c_rf_opt)
-        return new{d, m, P, typeof(c_rf_fix), typeof(c_rf_opt)}(params, c_rf_fix, c_rf_opt)
+        return new{d, m, P, typeof(c_rf_fix), typeof(c_rf_opt)}(
+            params,
+            c_rf_fix,
+            c_rf_opt,
+        )
     end
 end
 
@@ -112,7 +116,8 @@ Base.@kwdef struct LogNormalScalingProcess{MT, T} <: AbstractNoisyEntrDetrModel
     c_gen_stoch::T
 end
 
-Base.@kwdef struct PrognosticNoisyRelaxationProcess{MT, T} <: AbstractNoisyEntrDetrModel
+Base.@kwdef struct PrognosticNoisyRelaxationProcess{MT, T} <:
+                   AbstractNoisyEntrDetrModel
     mean_model::MT
     c_gen_stoch::T
 end
@@ -176,7 +181,11 @@ Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
     "density"
     ρ::FT
 end
-function EnvBuoyGrad(::EBG; t_sat::FT, bg_kwargs...) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+function EnvBuoyGrad(
+    ::EBG;
+    t_sat::FT,
+    bg_kwargs...,
+) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
     return EnvBuoyGrad{FT, EBG}(; t_sat, bg_kwargs...)
 end
 
@@ -277,8 +286,18 @@ struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
     a::A
     w::W
     function SGSQuadrature(::Type{FT}, namelist) where {FT}
-        N = parse_namelist(namelist, "thermodynamics", "quadrature_order"; default = 3)
-        quadrature_name = parse_namelist(namelist, "thermodynamics", "quadrature_type"; default = "log-normal")
+        N = parse_namelist(
+            namelist,
+            "thermodynamics",
+            "quadrature_order";
+            default = 3,
+        )
+        quadrature_name = parse_namelist(
+            namelist,
+            "thermodynamics",
+            "quadrature_type";
+            default = "log-normal",
+        )
         quadrature_type = if quadrature_name == "log-normal"
             LogNormalQuad()
         elseif quadrature_name == "gaussian"
@@ -305,7 +324,14 @@ abstract type AbstractSurfaceParameters{FT <: Real} end
 
 const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
 
-Base.@kwdef struct FixedSurfaceFlux{FT, FVT <: FrictionVelocityType, TS, QS, SHF, LHF} <: AbstractSurfaceParameters{FT}
+Base.@kwdef struct FixedSurfaceFlux{
+    FT,
+    FVT <: FrictionVelocityType,
+    TS,
+    QS,
+    SHF,
+    LHF,
+} <: AbstractSurfaceParameters{FT}
     zrough::FT = FT(0)
     Tsurface::TS = FT(0)
     qsurface::QS = FT(0)
@@ -330,10 +356,17 @@ function FixedSurfaceFlux(
     QS = typeof(qsurface)
     SHF = typeof(shf)
     LHF = typeof(lhf)
-    return FixedSurfaceFlux{FT, FVT, TS, QS, SHF, LHF}(; Tsurface, qsurface, shf, lhf, kwargs...)
+    return FixedSurfaceFlux{FT, FVT, TS, QS, SHF, LHF}(;
+        Tsurface,
+        qsurface,
+        shf,
+        lhf,
+        kwargs...,
+    )
 end
 
-Base.@kwdef struct FixedSurfaceCoeffs{FT, TS, QS, CH, CM} <: AbstractSurfaceParameters{FT}
+Base.@kwdef struct FixedSurfaceCoeffs{FT, TS, QS, CH, CM} <:
+                   AbstractSurfaceParameters{FT}
     zrough::FT = FT(0)
     Tsurface::TS = FT(0)
     qsurface::QS = FT(0)
@@ -354,10 +387,17 @@ function FixedSurfaceCoeffs(
     QS = typeof(qsurface)
     CH = typeof(ch)
     CM = typeof(cm)
-    return FixedSurfaceCoeffs{FT, TS, QS, CH, CM}(; Tsurface, qsurface, ch, cm, kwargs...)
+    return FixedSurfaceCoeffs{FT, TS, QS, CH, CM}(;
+        Tsurface,
+        qsurface,
+        ch,
+        cm,
+        kwargs...,
+    )
 end
 
-Base.@kwdef struct MoninObukhovSurface{FT, TS, QS} <: AbstractSurfaceParameters{FT}
+Base.@kwdef struct MoninObukhovSurface{FT, TS, QS} <:
+                   AbstractSurfaceParameters{FT}
     zrough::FT = FT(0)
     Tsurface::TS = FT(0)
     qsurface::QS = FT(0)
@@ -379,10 +419,14 @@ float_or_func(s::Function, t::Real) = s(t)
 float_or_func(s::Dierckx.Spline1D, t::Real) = s(t)
 float_or_func(s::Real, t::Real) = s
 
-surface_temperature(s::AbstractSurfaceParameters, t::Real = 0) = float_or_func(s.Tsurface, t)
-surface_q_tot(s::AbstractSurfaceParameters, t::Real = 0) = float_or_func(s.qsurface, t)
-sensible_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) = float_or_func(s.shf, t)
-latent_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) = float_or_func(s.lhf, t)
+surface_temperature(s::AbstractSurfaceParameters, t::Real = 0) =
+    float_or_func(s.Tsurface, t)
+surface_q_tot(s::AbstractSurfaceParameters, t::Real = 0) =
+    float_or_func(s.qsurface, t)
+sensible_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
+    float_or_func(s.shf, t)
+latent_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
+    float_or_func(s.lhf, t)
 
 fixed_ustar(::FixedSurfaceFlux{FT, FixedFrictionVelocity}) where {FT} = true
 fixed_ustar(::FixedSurfaceFlux{FT, VariableFrictionVelocity}) where {FT} = false
@@ -404,7 +448,22 @@ Base.@kwdef struct SurfaceBase{FT}
     wstar::FT = 0
 end
 
-struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC, EDS, DDS, EPG}
+struct EDMFModel{
+    N_up,
+    FT,
+    MM,
+    TCM,
+    PM,
+    PFM,
+    ENT,
+    EBGC,
+    MLP,
+    PMP,
+    EC,
+    EDS,
+    DDS,
+    EPG,
+}
     surface_area::FT
     max_area::FT
     minimum_area::FT
@@ -426,7 +485,13 @@ end
 function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
 
     # Set the number of updrafts (1)
-    n_updrafts = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "updraft_number"; default = 1)
+    n_updrafts = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "updraft_number";
+        default = 1,
+    )
     set_src_seed::Bool = namelist["set_src_seed"]
 
     pressure_func_drag_str = parse_namelist(
@@ -438,51 +503,106 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         valid_options = ["normalmode", "normalmode_signdf"],
     )
 
-    surface_area = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "surface_area"; default = 0.1)
-    max_area = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "max_area"; default = 0.9)
-    minimum_area = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "min_area"; default = 1e-5)
+    surface_area = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "surface_area";
+        default = 0.1,
+    )
+    max_area = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "max_area";
+        default = 0.9,
+    )
+    minimum_area = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "min_area";
+        default = 1e-5,
+    )
 
-    moisture_model_name = parse_namelist(namelist, "thermodynamics", "moisture_model"; default = "equilibrium")
+    moisture_model_name = parse_namelist(
+        namelist,
+        "thermodynamics",
+        "moisture_model";
+        default = "equilibrium",
+    )
 
     moisture_model = if moisture_model_name == "equilibrium"
         EquilibriumMoisture()
     elseif moisture_model_name == "nonequilibrium"
         NonEquilibriumMoisture()
     else
-        error("Something went wrong. Invalid moisture model: '$moisture_model_name'")
+        error(
+            "Something went wrong. Invalid moisture model: '$moisture_model_name'",
+        )
     end
 
-    thermo_covariance_model_name =
-        parse_namelist(namelist, "thermodynamics", "thermo_covariance_model"; default = "prognostic")
+    thermo_covariance_model_name = parse_namelist(
+        namelist,
+        "thermodynamics",
+        "thermo_covariance_model";
+        default = "prognostic",
+    )
 
     thermo_covariance_model = if thermo_covariance_model_name == "prognostic"
         PrognosticThermoCovariances()
     elseif thermo_covariance_model_name == "diagnostic"
-        covar_lim = parse_namelist(namelist, "thermodynamics", "diagnostic_covar_limiter")
+        covar_lim = parse_namelist(
+            namelist,
+            "thermodynamics",
+            "diagnostic_covar_limiter",
+        )
         DiagnosticThermoCovariances(covar_lim)
     else
-        error("Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'")
+        error(
+            "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
+        )
     end
 
-    precip_fraction_model_name =
-        parse_namelist(namelist, "microphysics", "precip_fraction_model"; default = "prescribed")
+    precip_fraction_model_name = parse_namelist(
+        namelist,
+        "microphysics",
+        "precip_fraction_model";
+        default = "prescribed",
+    )
 
     precip_fraction_model = if precip_fraction_model_name == "prescribed"
-        prescribed_precip_frac_value =
-            parse_namelist(namelist, "microphysics", "prescribed_precip_frac_value"; default = 1.0)
+        prescribed_precip_frac_value = parse_namelist(
+            namelist,
+            "microphysics",
+            "prescribed_precip_frac_value";
+            default = 1.0,
+        )
         PrescribedPrecipFraction(prescribed_precip_frac_value)
     elseif precip_fraction_model_name == "cloud_cover"
-        precip_fraction_limiter = parse_namelist(namelist, "microphysics", "precip_fraction_limiter"; default = 0.3)
+        precip_fraction_limiter = parse_namelist(
+            namelist,
+            "microphysics",
+            "precip_fraction_limiter";
+            default = 0.3,
+        )
         DiagnosticPrecipFraction(precip_fraction_limiter)
     else
-        error("Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`")
+        error(
+            "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
+        )
     end
 
     # Create the environment variable class (major diagnostic and prognostic variables)
 
     # Create the class for environment thermodynamics and buoyancy gradient computation
-    en_sgs_name =
-        parse_namelist(namelist, "thermodynamics", "sgs"; default = "mean", valid_options = ["mean", "quadrature"])
+    en_sgs_name = parse_namelist(
+        namelist,
+        "thermodynamics",
+        "sgs";
+        default = "mean",
+        valid_options = ["mean", "quadrature"],
+    )
     en_thermo = if en_sgs_name == "mean"
         SGSMean()
     elseif en_sgs_name == "quadrature"
@@ -495,10 +615,14 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
     elseif en_sgs_name == "quadrature"
         BuoyGradQuadratures()
     else
-        error("Something went wrong. Invalid environmental buoyancy gradient closure type '$en_sgs_name'")
+        error(
+            "Something went wrong. Invalid environmental buoyancy gradient closure type '$en_sgs_name'",
+        )
     end
     if moisture_model_name == "nonequilibrium" && en_thermo == "quadrature"
-        error("SGS quadratures are not yet implemented for non-equilibrium moisture. Please use the option: mean.")
+        error(
+            "SGS quadratures are not yet implemented for non-equilibrium moisture. Please use the option: mean.",
+        )
     end
 
     # entr closure
@@ -521,7 +645,14 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         "EDMF_PrognosticTKE",
         "entrainment";
         default = "moisture_deficit",
-        valid_options = ["moisture_deficit", "NN", "NN_nonlocal", "FNO", "Linear", "RF"],
+        valid_options = [
+            "moisture_deficit",
+            "NN",
+            "NN_nonlocal",
+            "FNO",
+            "Linear",
+            "RF",
+        ],
     )
 
     nn_biases = parse_namelist(
@@ -533,46 +664,186 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         valid_options = [true, false],
     )
 
-    c_div =
-        parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "entrainment_massflux_div_factor"; default = 0.0)
-    w_min = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "min_upd_velocity")
-    c_ε = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "entrainment_factor")
-    μ_0 = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "entrainment_scale")
-    β = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "sorting_power")
-    χ = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "updraft_mixing_frac")
-    c_λ = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "entrainment_smin_tke_coeff")
-    γ_lim = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "area_limiter_scale")
-    β_lim = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "area_limiter_power")
-    c_γ = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "turbulent_entrainment_factor")
-    c_δ = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "detrainment_factor")
-    Π_norm = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "pi_norm_consts")
+    c_div = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "entrainment_massflux_div_factor";
+        default = 0.0,
+    )
+    w_min = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "min_upd_velocity",
+    )
+    c_ε = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "entrainment_factor",
+    )
+    μ_0 = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "entrainment_scale",
+    )
+    β = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "sorting_power",
+    )
+    χ = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "updraft_mixing_frac",
+    )
+    c_λ = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "entrainment_smin_tke_coeff",
+    )
+    γ_lim = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "area_limiter_scale",
+    )
+    β_lim = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "area_limiter_power",
+    )
+    c_γ = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "turbulent_entrainment_factor",
+    )
+    c_δ = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "detrainment_factor",
+    )
+    Π_norm = parse_namelist(
+        namelist,
+        "turbulence",
+        "EDMF_PrognosticTKE",
+        "pi_norm_consts",
+    )
     Π_norm = SA.SVector{length(Π_norm), FT}(Π_norm)
 
-    εδ_params = εδModelParams{FT, typeof(Π_norm)}(; c_div, w_min, c_ε, μ_0, β, χ, c_λ, γ_lim, β_lim, c_γ, c_δ, Π_norm)
+    εδ_params = εδModelParams{FT, typeof(Π_norm)}(;
+        c_div,
+        w_min,
+        c_ε,
+        μ_0,
+        β,
+        χ,
+        c_λ,
+        γ_lim,
+        β_lim,
+        c_γ,
+        c_δ,
+        Π_norm,
+    )
 
-    entr_pi_subset = Tuple(parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "entr_pi_subset"))
+    entr_pi_subset = Tuple(
+        parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "entr_pi_subset",
+        ),
+    )
 
     mean_entr_closure = if entr_type == "moisture_deficit"
         MDEntr(; params = εδ_params)
     elseif entr_type == "NN"
-        c_nn_params = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "nn_ent_params")
-        nn_arc = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "nn_arc")
-        NNEntr(; params = εδ_params, biases_bool = nn_biases, c_nn_params, nn_arc)
+        c_nn_params = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "nn_ent_params",
+        )
+        nn_arc = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "nn_arc",
+        )
+        NNEntr(;
+            params = εδ_params,
+            biases_bool = nn_biases,
+            c_nn_params,
+            nn_arc,
+        )
     elseif entr_type == "NN_nonlocal"
-        c_nn_params = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "nn_ent_params")
-        nn_arc = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "nn_arc")
-        NNEntrNonlocal(; params = εδ_params, biases_bool = nn_biases, c_nn_params, nn_arc)
+        c_nn_params = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "nn_ent_params",
+        )
+        nn_arc = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "nn_arc",
+        )
+        NNEntrNonlocal(;
+            params = εδ_params,
+            biases_bool = nn_biases,
+            c_nn_params,
+            nn_arc,
+        )
     elseif entr_type == "FNO"
-        w_fno = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "fno_ent_width")
-        nm_fno = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "fno_ent_n_modes")
-        c_fno = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "fno_ent_params")
+        w_fno = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "fno_ent_width",
+        )
+        nm_fno = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "fno_ent_n_modes",
+        )
+        c_fno = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "fno_ent_params",
+        )
         FNOEntr(; params = εδ_params, w_fno, nm_fno, c_fno)
     elseif entr_type == "Linear"
-        c_linear = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "linear_ent_params")
+        c_linear = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "linear_ent_params",
+        )
         LinearEntr(; params = εδ_params, c_linear)
     elseif entr_type == "RF"
-        c_rf_fix = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "rf_fix_ent_params")
-        c_rf_opt = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "rf_opt_ent_params")
+        c_rf_fix = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "rf_fix_ent_params",
+        )
+        c_rf_opt = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "rf_opt_ent_params",
+        )
         RFEntr(εδ_params, c_rf_fix, c_rf_opt, length(entr_pi_subset))
     else
         error("Something went wrong. Invalid entrainment type '$entr_type'")
@@ -580,22 +851,49 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
 
     # Overwrite `entr_closure` if a noisy relaxation process is used
     entr_closure = if stoch_entr_type == "noisy_relaxation_process"
-        c_gen_stoch = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "general_stochastic_ent_params")
+        c_gen_stoch = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "general_stochastic_ent_params",
+        )
         NoisyRelaxationProcess(; mean_model = mean_entr_closure, c_gen_stoch)
     elseif stoch_entr_type == "lognormal_scaling"
-        c_gen_stoch = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "general_stochastic_ent_params")
+        c_gen_stoch = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "general_stochastic_ent_params",
+        )
         LogNormalScalingProcess(; mean_model = mean_entr_closure, c_gen_stoch)
     elseif stoch_entr_type == "deterministic"
         mean_entr_closure
     elseif stoch_entr_type == "prognostic_noisy_relaxation_process"
-        c_gen_stoch = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "general_stochastic_ent_params")
-        PrognosticNoisyRelaxationProcess(; mean_model = mean_entr_closure, c_gen_stoch)
+        c_gen_stoch = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "general_stochastic_ent_params",
+        )
+        PrognosticNoisyRelaxationProcess(;
+            mean_model = mean_entr_closure,
+            c_gen_stoch,
+        )
     else
-        error("Something went wrong. Invalid stochastic entrainment type '$stoch_entr_type'")
+        error(
+            "Something went wrong. Invalid stochastic entrainment type '$stoch_entr_type'",
+        )
     end
 
     # minimum updraft top to avoid zero division in pressure drag and turb-entr
-    H_up_min = FT(parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "min_updraft_top"))
+    H_up_min = FT(
+        parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "min_updraft_top",
+        ),
+    )
 
     entr_dim_scale = parse_namelist(
         namelist,
@@ -607,22 +905,89 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
     )
 
     pressure_model_params = PressureModelParams{FT}(;
-        α_b = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "pressure_normalmode_buoy_coeff1"),
-        α_a = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "pressure_normalmode_adv_coeff"),
-        α_d = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "pressure_normalmode_drag_coeff"),
+        α_b = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "pressure_normalmode_buoy_coeff1",
+        ),
+        α_a = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "pressure_normalmode_adv_coeff",
+        ),
+        α_d = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "pressure_normalmode_drag_coeff",
+        ),
     )
 
     mixing_length_params = MixingLengthParams{FT}(;
-        ω_pr = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "Prandtl_number_scale"),
-        c_m = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "tke_ed_coeff"),
-        c_d = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "tke_diss_coeff"),
-        c_b = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "static_stab_coeff"; default = 0.4), # this is here due to a value error in CliMAParmameters.j,
-        κ_star² = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "tke_surf_scale"),
-        Pr_n = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "Prandtl_number_0"),
-        Ri_c = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "Ri_crit"),
-        smin_ub = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "smin_ub"),
-        smin_rm = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "smin_rm"),
-        l_max = parse_namelist(namelist, "turbulence", "EDMF_PrognosticTKE", "l_max"; default = 1.0e6),
+        ω_pr = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "Prandtl_number_scale",
+        ),
+        c_m = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "tke_ed_coeff",
+        ),
+        c_d = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "tke_diss_coeff",
+        ),
+        c_b = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "static_stab_coeff";
+            default = 0.4,
+        ), # this is here due to a value error in CliMAParmameters.j,
+        κ_star² = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "tke_surf_scale",
+        ),
+        Pr_n = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "Prandtl_number_0",
+        ),
+        Ri_c = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "Ri_crit",
+        ),
+        smin_ub = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "smin_ub",
+        ),
+        smin_rm = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "smin_rm",
+        ),
+        l_max = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "l_max";
+            default = 1.0e6,
+        ),
     )
 
     entr_dim_scale = if entr_dim_scale == "buoy_vel"
@@ -632,7 +997,9 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
     elseif entr_dim_scale == "none"
         InvMeterEntrDimScale()
     else
-        error("Something went wrong. Invalid entrainment dimension scale '$entr_dim_scale'")
+        error(
+            "Something went wrong. Invalid entrainment dimension scale '$entr_dim_scale'",
+        )
     end
 
     detr_dim_scale = parse_namelist(
@@ -651,7 +1018,9 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
     elseif detr_dim_scale == "none"
         InvMeterEntrDimScale()
     else
-        error("Something went wrong. Invalid entrainment dimension scale '$detr_dim_scale'")
+        error(
+            "Something went wrong. Invalid entrainment dimension scale '$detr_dim_scale'",
+        )
     end
 
     EDS = typeof(entr_dim_scale)
@@ -666,7 +1035,22 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
     EPG = typeof(entr_pi_subset)
     MLP = typeof(mixing_length_params)
     PMP = typeof(pressure_model_params)
-    return EDMFModel{n_updrafts, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC, EDS, DDS, EPG}(
+    return EDMFModel{
+        n_updrafts,
+        FT,
+        MM,
+        TCM,
+        PM,
+        PFM,
+        ENT,
+        EBGC,
+        MLP,
+        PMP,
+        EC,
+        EDS,
+        DDS,
+        EPG,
+    }(
         surface_area,
         max_area,
         minimum_area,
@@ -758,9 +1142,14 @@ function column_state(prog, aux, tendencies, inds...)
     aux_face_column = CC.column(aux.face, inds...)
     tends_cent_column = CC.column(tendencies.cent, inds...)
     tends_face_column = CC.column(tendencies.face, inds...)
-    prog_column = CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
-    aux_column = CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
-    tends_column = CC.Fields.FieldVector(cent = tends_cent_column, face = tends_face_column)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    tends_column = CC.Fields.FieldVector(
+        cent = tends_cent_column,
+        face = tends_face_column,
+    )
 
     return State(prog_column, aux_column, tends_column)
 end
@@ -770,8 +1159,10 @@ function column_prog_aux(prog, aux, inds...)
     prog_face_column = CC.column(prog.face, inds...)
     aux_cent_column = CC.column(aux.cent, inds...)
     aux_face_column = CC.column(aux.face, inds...)
-    prog_column = CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
-    aux_column = CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
 
     return State(prog_column, aux_column, nothing)
 end
@@ -780,7 +1171,11 @@ function column_diagnostics(diagnostics, inds...)
     diag_cent_column = CC.column(diagnostics.cent, inds...)
     diag_face_column = CC.column(diagnostics.face, inds...)
     diag_svpc_column = CC.column(diagnostics.svpc, inds...)
-    return CC.Fields.FieldVector(cent = diag_cent_column, face = diag_face_column, svpc = diag_svpc_column)
+    return CC.Fields.FieldVector(
+        cent = diag_cent_column,
+        face = diag_face_column,
+        svpc = diag_svpc_column,
+    )
 end
 
 

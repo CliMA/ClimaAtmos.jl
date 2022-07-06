@@ -10,7 +10,8 @@ function nc_fileinfo(namelist)
 
     uuid = string(namelist["meta"]["uuid"])
     simname = namelist["meta"]["simname"]
-    outpath = joinpath(namelist["output"]["output_root"], "Output.$simname.$uuid")
+    outpath =
+        joinpath(namelist["output"]["output_root"], "Output.$simname.$uuid")
     @info "Output folder: `$outpath`"
     mkpath(outpath)
 
@@ -34,7 +35,12 @@ end
 
 # Convenience backward compatible outer constructor
 function NetCDFIO_Stats(nc_filename, frequency, grid::TC.Grid)
-    NetCDFIO_Stats(; nc_filename, frequency, z_faces = vec(grid.zf.z), z_centers = vec(grid.zc.z))
+    NetCDFIO_Stats(;
+        nc_filename,
+        frequency,
+        z_faces = vec(grid.zf.z),
+        z_centers = vec(grid.zc.z),
+    )
 end
 
 function NetCDFIO_Stats(; nc_filename, frequency, z_faces, z_centers)
@@ -72,7 +78,14 @@ function NetCDFIO_Stats(; nc_filename, frequency, z_faces, z_centers)
         NC.defVar(ts_grp, "t", FT, ("t",))
     end
     vars = Dict{String, Any}()
-    return NetCDFIO_Stats{FT}(root_grp, profiles_grp, ts_grp, frequency, nc_filename, vars)
+    return NetCDFIO_Stats{FT}(
+        root_grp,
+        profiles_grp,
+        ts_grp,
+        frequency,
+        nc_filename,
+        vars,
+    )
 end
 
 
@@ -101,7 +114,13 @@ end
 ##### Generic field
 #####
 
-function add_field(ds, var_name::String, dims, group, ::Type{FT}) where {FT <: AbstractFloat}
+function add_field(
+    ds,
+    var_name::String,
+    dims,
+    group,
+    ::Type{FT},
+) where {FT <: AbstractFloat}
     profile_grp = ds.group[group]
     new_var = NC.defVar(profile_grp, var_name, FT, dims)
     return nothing
@@ -126,7 +145,8 @@ write_field(
     var_name::String,
     data::T,
     group,
-) where {FT <: ForwardDiff.Dual, T <: AbstractArray{FT}} = write_field(self, var_name, ForwardDiff.value.(data), group)
+) where {FT <: ForwardDiff.Dual, T <: AbstractArray{FT}} =
+    write_field(self, var_name, ForwardDiff.value.(data), group)
 function write_field(
     self::NetCDFIO_Stats,
     var_name::String,
@@ -141,7 +161,12 @@ function write_field(
     # @inbounds var[end, :] = data :: T
 end
 
-add_write_field(ds, var_name::String, data::T, args...) where {FT <: ForwardDiff.Dual, T <: AbstractArray{FT}} =
+add_write_field(
+    ds,
+    var_name::String,
+    data::T,
+    args...,
+) where {FT <: ForwardDiff.Dual, T <: AbstractArray{FT}} =
     add_write_field(ds, var_name, ForwardDiff.value.(data), args...)
 function add_write_field(
     ds,
@@ -157,8 +182,13 @@ function add_write_field(
     return nothing
 end
 
-write_ts(self, var_name, data::ForwardDiff.Dual) = write_ts(self, var_name, ForwardDiff.value(data))
-function write_ts(self::NetCDFIO_Stats, var_name::String, data::FT) where {FT <: AbstractFloat}
+write_ts(self, var_name, data::ForwardDiff.Dual) =
+    write_ts(self, var_name, ForwardDiff.value(data))
+function write_ts(
+    self::NetCDFIO_Stats,
+    var_name::String,
+    data::FT,
+) where {FT <: AbstractFloat}
     # Hack to avoid https://github.com/Alexander-Barth/NCDatasets.jl/issues/135
     @inbounds self.vars["timeseries"][var_name][end] = data::FT
     # Ideally, we remove self.vars and use:
@@ -166,8 +196,12 @@ function write_ts(self::NetCDFIO_Stats, var_name::String, data::FT) where {FT <:
     # @inbounds var[end+1] = data :: FT
 end
 
-write_simulation_time(self, t::ForwardDiff.Dual) = write_simulation_time(self, ForwardDiff.value(t))
-function write_simulation_time(self::NetCDFIO_Stats, t::FT) where {FT <: AbstractFloat}
+write_simulation_time(self, t::ForwardDiff.Dual) =
+    write_simulation_time(self, ForwardDiff.value(t))
+function write_simulation_time(
+    self::NetCDFIO_Stats,
+    t::FT,
+) where {FT <: AbstractFloat}
     # # Write to profiles group
     profile_t = self.profiles_grp["t"]
     @inbounds profile_t[end + 1] = t::FT

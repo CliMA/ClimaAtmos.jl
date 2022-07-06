@@ -4,7 +4,13 @@ initialize(self::RadiationBase{RadiationNone}, grid, state) = nothing
 """
 see eq. 3 in Stevens et. al. 2005 DYCOMS paper
 """
-function update_radiation(self::RadiationBase{RadiationDYCOMS_RF01}, grid, state, t::Real, param_set)
+function update_radiation(
+    self::RadiationBase{RadiationDYCOMS_RF01},
+    grid,
+    state,
+    t::Real,
+    param_set,
+)
     cp_d = TCP.cp_d(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
@@ -19,7 +25,10 @@ function update_radiation(self::RadiationBase{RadiationDYCOMS_RF01}, grid, state
     ρ_i = FT(0)
     kc_surf = TC.kc_surface(grid)
     q_tot_surf = aux_gm.q_tot[kc_surf]
-    If = CCO.InterpolateC2F(; bottom = CCO.SetValue(q_tot_surf), top = CCO.Extrapolate())
+    If = CCO.InterpolateC2F(;
+        bottom = CCO.SetValue(q_tot_surf),
+        top = CCO.Extrapolate(),
+    )
     @. q_tot_f .= If(aux_gm.q_tot)
     @inbounds for k in TC.real_face_indices(grid)
         if (q_tot_f[k] < 8.0 / 1000)
@@ -56,7 +65,12 @@ function update_radiation(self::RadiationBase{RadiationDYCOMS_RF01}, grid, state
     @inbounds for k in TC.real_face_indices(grid)
         if grid.zf[k].z > zi
             cbrt_z = cbrt(grid.zf[k].z - zi)
-            aux_gm_f.f_rad[k] += ρ_i * cp_d * self.divergence * self.alpha_z * (cbrt_z^4 / 4 + zi * cbrt_z)
+            aux_gm_f.f_rad[k] +=
+                ρ_i *
+                cp_d *
+                self.divergence *
+                self.alpha_z *
+                (cbrt_z^4 / 4 + zi * cbrt_z)
         end
     end
 
@@ -67,7 +81,12 @@ function update_radiation(self::RadiationBase{RadiationDYCOMS_RF01}, grid, state
     return
 end
 
-function initialize(self::RadiationBase{RadiationLES}, grid, state, LESDat::LESData)
+function initialize(
+    self::RadiationBase{RadiationLES},
+    grid,
+    state,
+    LESDat::LESData,
+)
     # load from LES
     aux_gm = TC.center_aux_grid_mean(state)
     dTdt = NC.Dataset(LESDat.les_filename, "r") do data
@@ -95,7 +114,13 @@ function initialize(self::RadiationBase{RadiationTRMM_LBA}, grid, state)
     return nothing
 end
 
-function update_radiation(self::RadiationBase{RadiationTRMM_LBA}, grid, state, t::Real, param_set)
+function update_radiation(
+    self::RadiationBase{RadiationTRMM_LBA},
+    grid,
+    state,
+    t::Real,
+    param_set,
+)
     aux_gm = TC.center_aux_grid_mean(state)
     rad = APL.TRMM_LBA_radiation(eltype(grid))
     @inbounds for k in real_center_indices(grid)

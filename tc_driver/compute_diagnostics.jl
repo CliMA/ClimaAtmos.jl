@@ -18,8 +18,10 @@ center_diagnostics_turbconv(state) = diagnostics(state, TC.CentField()).turbconv
 face_diagnostics_turbconv(state) = diagnostics(state, TC.FaceField()).turbconv
 face_diagnostics_precip(state) = diagnostics(state, TC.FaceField()).precip
 
-svpc_diagnostics_grid_mean(state) = diagnostics(state, TC.SingleValuePerColumn())
-svpc_diagnostics_turbconv(state) = diagnostics(state, TC.SingleValuePerColumn()).turbconv
+svpc_diagnostics_grid_mean(state) =
+    diagnostics(state, TC.SingleValuePerColumn())
+svpc_diagnostics_turbconv(state) =
+    diagnostics(state, TC.SingleValuePerColumn()).turbconv
 
 #=
     io_dictionary_diagnostics()
@@ -56,7 +58,14 @@ function io_dictionary_diagnostics()
 end
 #! format: on
 
-function io(surf::TC.SurfaceBase, surf_params, grid, state, Stats::NetCDFIO_Stats, t::Real)
+function io(
+    surf::TC.SurfaceBase,
+    surf_params,
+    grid,
+    state,
+    Stats::NetCDFIO_Stats,
+    t::Real,
+)
     write_ts(Stats, "Tsurface", TC.surface_temperature(surf_params, t))
     write_ts(Stats, "shf", surf.shf)
     write_ts(Stats, "lhf", surf.lhf)
@@ -65,7 +74,12 @@ function io(surf::TC.SurfaceBase, surf_params, grid, state, Stats::NetCDFIO_Stat
 end
 function io(io_dict::Dict, Stats::NetCDFIO_Stats, state)
     for var in keys(io_dict)
-        write_field(Stats, var, vec(io_dict[var].field(state)), io_dict[var].group)
+        write_field(
+            Stats,
+            var,
+            vec(io_dict[var].field(state)),
+            io_dict[var].group,
+        )
     end
 end
 
@@ -83,7 +97,13 @@ function initialize_io(nc_filename, FT, io_dicts::Dict...)
     NC.Dataset(nc_filename, "a") do ds
         for io_dict in io_dicts
             for var_name in keys(io_dict)
-                add_field(ds, var_name, io_dict[var_name].dims, io_dict[var_name].group, FT)
+                add_field(
+                    ds,
+                    var_name,
+                    io_dict[var_name].dims,
+                    io_dict[var_name].group,
+                    FT,
+                )
             end
         end
     end
@@ -144,11 +164,12 @@ function compute_diagnostics!(
     @inbounds for k in TC.real_center_indices(grid)
         @inbounds for i in 1:N_up
             aux_up[i].s[k] = if aux_up[i].area[k] > 0.0
-                thermo_args = if edmf.moisture_model isa TC.EquilibriumMoisture
-                    ()
-                elseif edmf.moisture_model isa TC.NonEquilibriumMoisture
-                    (aux_up[i].q_liq[k], aux_up[i].q_ice[k])
-                end
+                thermo_args =
+                    if edmf.moisture_model isa TC.EquilibriumMoisture
+                        ()
+                    elseif edmf.moisture_model isa TC.NonEquilibriumMoisture
+                        (aux_up[i].q_liq[k], aux_up[i].q_ice[k])
+                    end
                 ts_up = TC.thermo_state_pθq(
                     param_set,
                     p_c[k],
@@ -167,7 +188,8 @@ function compute_diagnostics!(
     wvec = CC.Geometry.WVector
     m_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     # ∇0_bcs = (; bottom = CCO.SetDivergence(wvec(FT(0))), top = CCO.SetDivergence(wvec(FT(0))))
-    ∇0_bcs = (; bottom = CCO.SetDivergence(FT(0)), top = CCO.SetDivergence(FT(0)))
+    ∇0_bcs =
+        (; bottom = CCO.SetDivergence(FT(0)), top = CCO.SetDivergence(FT(0)))
     If = CCO.InterpolateC2F(; m_bcs...)
     ∇f = CCO.DivergenceC2F(; ∇0_bcs...)
     massflux_s = aux_gm_f.massflux_s
@@ -203,7 +225,8 @@ function compute_diagnostics!(
                 if TD.has_condensate(aux_up[i].q_liq[k] + aux_up[i].q_ice[k])
                     cloud_base_up[i] = min(cloud_base_up[i], grid.zc[k].z)
                     cloud_top_up[i] = max(cloud_top_up[i], grid.zc[k].z)
-                    cloud_cover_up[i] = max(cloud_cover_up[i], aux_up[i].area[k])
+                    cloud_cover_up[i] =
+                        max(cloud_cover_up[i], aux_up[i].area[k])
                 end
             end
         end
@@ -223,10 +246,12 @@ function compute_diagnostics!(
     cloud_base_en = TC.zc_toa(grid).z
     cloud_cover_en = FT(0)
     @inbounds for k in TC.real_center_indices(grid)
-        if TD.has_condensate(aux_en.q_liq[k] + aux_en.q_ice[k]) && aux_en.area[k] > 1e-6
+        if TD.has_condensate(aux_en.q_liq[k] + aux_en.q_ice[k]) &&
+           aux_en.area[k] > 1e-6
             cloud_base_en = min(cloud_base_en, grid.zc[k].z)
             cloud_top_en = max(cloud_top_en, grid.zc[k].z)
-            cloud_cover_en = max(cloud_cover_en, aux_en.area[k] * aux_en.cloud_fraction[k])
+            cloud_cover_en =
+                max(cloud_cover_en, aux_en.area[k] * aux_en.cloud_fraction[k])
         end
     end
     # Assuming amximum overlap in environmental clouds
@@ -268,12 +293,18 @@ function compute_diagnostics!(
         if a_up_bulk_k > 0.0
             @inbounds for i in 1:N_up
                 aux_up_i = aux_up[i]
-                diag_tc.entr_sc[k] += aux_up_i.area[k] * aux_up_i.entr_sc[k] / a_up_bulk_k
-                diag_tc.ε_nondim[k] += aux_up_i.area[k] * aux_up_i.ε_nondim[k] / a_up_bulk_k
-                diag_tc.detr_sc[k] += aux_up_i.area[k] * aux_up_i.detr_sc[k] / a_up_bulk_k
-                diag_tc.δ_nondim[k] += aux_up_i.area[k] * aux_up_i.δ_nondim[k] / a_up_bulk_k
-                diag_tc.asp_ratio[k] += aux_up_i.area[k] * aux_up_i.asp_ratio[k] / a_up_bulk_k
-                diag_tc.frac_turb_entr[k] += aux_up_i.area[k] * aux_up_i.frac_turb_entr[k] / a_up_bulk_k
+                diag_tc.entr_sc[k] +=
+                    aux_up_i.area[k] * aux_up_i.entr_sc[k] / a_up_bulk_k
+                diag_tc.ε_nondim[k] +=
+                    aux_up_i.area[k] * aux_up_i.ε_nondim[k] / a_up_bulk_k
+                diag_tc.detr_sc[k] +=
+                    aux_up_i.area[k] * aux_up_i.detr_sc[k] / a_up_bulk_k
+                diag_tc.δ_nondim[k] +=
+                    aux_up_i.area[k] * aux_up_i.δ_nondim[k] / a_up_bulk_k
+                diag_tc.asp_ratio[k] +=
+                    aux_up_i.area[k] * aux_up_i.asp_ratio[k] / a_up_bulk_k
+                diag_tc.frac_turb_entr[k] +=
+                    aux_up_i.area[k] * aux_up_i.frac_turb_entr[k] / a_up_bulk_k
             end
         end
     end
@@ -294,24 +325,72 @@ function compute_diagnostics!(
             diag_tc_f.nh_pressure_adv[k] = 0
             diag_tc_f.nh_pressure_drag[k] = 0
             if a_up_bulk_f[k] > 0.0
-                diag_tc_f.nh_pressure[k] += a_up_f[k] * aux_up_f[i].nh_pressure[k] / a_up_bulk_f[k]
-                diag_tc_f.nh_pressure_b[k] += a_up_f[k] * aux_up_f[i].nh_pressure_b[k] / a_up_bulk_f[k]
-                diag_tc_f.nh_pressure_adv[k] += a_up_f[k] * aux_up_f[i].nh_pressure_adv[k] / a_up_bulk_f[k]
-                diag_tc_f.nh_pressure_drag[k] += a_up_f[k] * aux_up_f[i].nh_pressure_drag[k] / a_up_bulk_f[k]
+                diag_tc_f.nh_pressure[k] +=
+                    a_up_f[k] * aux_up_f[i].nh_pressure[k] / a_up_bulk_f[k]
+                diag_tc_f.nh_pressure_b[k] +=
+                    a_up_f[k] * aux_up_f[i].nh_pressure_b[k] / a_up_bulk_f[k]
+                diag_tc_f.nh_pressure_adv[k] +=
+                    a_up_f[k] * aux_up_f[i].nh_pressure_adv[k] / a_up_bulk_f[k]
+                diag_tc_f.nh_pressure_drag[k] +=
+                    a_up_f[k] * aux_up_f[i].nh_pressure_drag[k] / a_up_bulk_f[k]
             end
         end
     end
-    @. diag_tc_f_precip.rain_flux = RB_precip(ρ_c * prog_pr.q_rai * aux_tc.term_vel_rain)
-    @. diag_tc_f_precip.snow_flux = RB_precip(ρ_c * prog_pr.q_sno * aux_tc.term_vel_snow)
+    @. diag_tc_f_precip.rain_flux =
+        RB_precip(ρ_c * prog_pr.q_rai * aux_tc.term_vel_rain)
+    @. diag_tc_f_precip.snow_flux =
+        RB_precip(ρ_c * prog_pr.q_sno * aux_tc.term_vel_snow)
 
-    TC.GMV_third_m(edmf, grid, state, Val(:Hvar), Val(:θ_liq_ice), Val(:H_third_m))
-    TC.GMV_third_m(edmf, grid, state, Val(:QTvar), Val(:q_tot), Val(:QT_third_m))
+    TC.GMV_third_m(
+        edmf,
+        grid,
+        state,
+        Val(:Hvar),
+        Val(:θ_liq_ice),
+        Val(:H_third_m),
+    )
+    TC.GMV_third_m(
+        edmf,
+        grid,
+        state,
+        Val(:QTvar),
+        Val(:q_tot),
+        Val(:QT_third_m),
+    )
     TC.GMV_third_m(edmf, grid, state, Val(:tke), Val(:w), Val(:W_third_m))
 
-    TC.compute_covariance_interdomain_src(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
-    TC.compute_covariance_interdomain_src(edmf, grid, state, Val(:Hvar), Val(:θ_liq_ice), Val(:θ_liq_ice))
-    TC.compute_covariance_interdomain_src(edmf, grid, state, Val(:QTvar), Val(:q_tot), Val(:q_tot))
-    TC.compute_covariance_interdomain_src(edmf, grid, state, Val(:HQTcov), Val(:θ_liq_ice), Val(:q_tot))
+    TC.compute_covariance_interdomain_src(
+        edmf,
+        grid,
+        state,
+        Val(:tke),
+        Val(:w),
+        Val(:w),
+    )
+    TC.compute_covariance_interdomain_src(
+        edmf,
+        grid,
+        state,
+        Val(:Hvar),
+        Val(:θ_liq_ice),
+        Val(:θ_liq_ice),
+    )
+    TC.compute_covariance_interdomain_src(
+        edmf,
+        grid,
+        state,
+        Val(:QTvar),
+        Val(:q_tot),
+        Val(:q_tot),
+    )
+    TC.compute_covariance_interdomain_src(
+        edmf,
+        grid,
+        state,
+        Val(:HQTcov),
+        Val(:θ_liq_ice),
+        Val(:q_tot),
+    )
 
     TC.update_cloud_frac(edmf, grid, state)
 
@@ -322,13 +401,27 @@ function compute_diagnostics!(
     ρ_cloud_liq = TCP.ρ_cloud_liq(param_set)
     if (precip_model isa TC.Clima0M)
         f =
-            (aux_en.qt_tendency_precip_formation .+ aux_bulk.qt_tendency_precip_formation) .* ρ_c ./ ρ_cloud_liq .*
-            FT(3.6) .* 1e6
+            (
+                aux_en.qt_tendency_precip_formation .+
+                aux_bulk.qt_tendency_precip_formation
+            ) .* ρ_c ./ ρ_cloud_liq .* FT(3.6) .* 1e6
         diag_svpc.cutoff_precipitation_rate[cent] = sum(f)
     end
 
-    lwp = sum(i -> sum(ρ_c .* aux_up[i].q_liq .* aux_up[i].area .* (aux_up[i].area .> 1e-3)), 1:N_up)
-    iwp = sum(i -> sum(ρ_c .* aux_up[i].q_ice .* aux_up[i].area .* (aux_up[i].area .> 1e-3)), 1:N_up)
+    lwp = sum(
+        i -> sum(
+            ρ_c .* aux_up[i].q_liq .* aux_up[i].area .*
+            (aux_up[i].area .> 1e-3),
+        ),
+        1:N_up,
+    )
+    iwp = sum(
+        i -> sum(
+            ρ_c .* aux_up[i].q_ice .* aux_up[i].area .*
+            (aux_up[i].area .> 1e-3),
+        ),
+        1:N_up,
+    )
 
     plume_scale_height = map(1:N_up) do i
         TC.compute_plume_scale_height(grid, state, edmf.H_up_min, i)

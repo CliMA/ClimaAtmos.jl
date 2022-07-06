@@ -3,12 +3,18 @@
 
 Computes diagnostic precipitation fraction
 """
-compute_precip_fraction(edmf::EDMFModel, state::State) = compute_precip_fraction(edmf.precip_fraction_model, state)
+compute_precip_fraction(edmf::EDMFModel, state::State) =
+    compute_precip_fraction(edmf.precip_fraction_model, state)
 
-compute_precip_fraction(precip_fraction_model::PrescribedPrecipFraction, ::State) =
-    precip_fraction_model.prescribed_precip_frac_value
+compute_precip_fraction(
+    precip_fraction_model::PrescribedPrecipFraction,
+    ::State,
+) = precip_fraction_model.prescribed_precip_frac_value
 
-function compute_precip_fraction(precip_fraction_model::DiagnosticPrecipFraction, state::State)
+function compute_precip_fraction(
+    precip_fraction_model::DiagnosticPrecipFraction,
+    state::State,
+)
     aux_gm = center_aux_grid_mean(state)
     maxcf = maximum(aux_gm.cloud_fraction)
     return max(maxcf, precip_fraction_model.precip_fraction_limiter)
@@ -57,8 +63,10 @@ function compute_precipitation_advection_tendencies(
     wvec = CC.Geometry.WVector
 
     # TODO - some positivity limiters are needed
-    @. aux_tc.qr_tendency_advection = ∇(wvec(RB(ρ_c * q_rai * term_vel_rain))) / ρ_c# * precip_fraction
-    @. aux_tc.qs_tendency_advection = ∇(wvec(RB(ρ_c * q_sno * term_vel_snow))) / ρ_c# * precip_fraction
+    @. aux_tc.qr_tendency_advection =
+        ∇(wvec(RB(ρ_c * q_rai * term_vel_rain))) / ρ_c# * precip_fraction
+    @. aux_tc.qs_tendency_advection =
+        ∇(wvec(RB(ρ_c * q_sno * term_vel_snow))) / ρ_c# * precip_fraction
 
     @. tendencies_pr.q_rai += aux_tc.qr_tendency_advection
     @. tendencies_pr.q_sno += aux_tc.qs_tendency_advection
@@ -133,10 +141,33 @@ function compute_precipitation_sink_tendencies(
         # TODO - when using adaptive timestepping we are limiting the source terms
         #        with the previous timestep dt
         S_qr_evap =
-            -min(qr / Δt, -α_evp * CM1.evaporation_sublimation(microphys_params, rain_type, q, qr, ρ, T_gm)) *
+            -min(
+                qr / Δt,
+                -α_evp * CM1.evaporation_sublimation(
+                    microphys_params,
+                    rain_type,
+                    q,
+                    qr,
+                    ρ,
+                    T_gm,
+                ),
+            ) * precip_fraction
+        S_qs_melt =
+            -min(
+                qs / Δt,
+                α_melt * CM1.snow_melt(microphys_params, qs, ρ, T_gm),
+            ) * precip_fraction
+        tmp =
+            α_dep_sub *
+            CM1.evaporation_sublimation(
+                microphys_params,
+                snow_type,
+                q,
+                qs,
+                ρ,
+                T_gm,
+            ) *
             precip_fraction
-        S_qs_melt = -min(qs / Δt, α_melt * CM1.snow_melt(microphys_params, qs, ρ, T_gm)) * precip_fraction
-        tmp = α_dep_sub * CM1.evaporation_sublimation(microphys_params, snow_type, q, qs, ρ, T_gm) * precip_fraction
         if tmp > 0
             S_qs_sub_dep = min(qv / Δt, tmp)
         else
@@ -151,7 +182,8 @@ function compute_precipitation_sink_tendencies(
         tendencies_pr.q_sno[k] += S_qs_sub_dep + S_qs_melt
 
         aux_tc.qt_tendency_precip_sinks[k] = -S_qr_evap - S_qs_sub_dep
-        aux_tc.e_tot_tendency_precip_sinks[k] = -S_qr_evap * (I_l + Φ) - S_qs_sub_dep * (I_i + Φ) + S_qs_melt * L_f
+        aux_tc.e_tot_tendency_precip_sinks[k] =
+            -S_qr_evap * (I_l + Φ) - S_qs_sub_dep * (I_i + Φ) + S_qs_melt * L_f
     end
     return nothing
 end

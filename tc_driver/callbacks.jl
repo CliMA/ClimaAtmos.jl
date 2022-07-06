@@ -12,8 +12,16 @@ end
 condition_every_iter(u, t, integrator) = true
 
 function affect_io!(integrator)
-    UnPack.@unpack edmf, calibrate_io, precip_model, aux, io_nt, diagnostics, surf_params, param_set, Stats, skip_io =
-        integrator.p
+    UnPack.@unpack edmf,
+    calibrate_io,
+    precip_model,
+    aux,
+    io_nt,
+    diagnostics,
+    surf_params,
+    param_set,
+    Stats,
+    skip_io = integrator.p
     skip_io && return nothing
     t = integrator.t
     prog = integrator.u
@@ -31,7 +39,18 @@ function affect_io!(integrator)
         diag_col = TC.column_diagnostics(diagnostics, inds...)
 
         # TODO: is this the best location to call diagnostics?
-        compute_diagnostics!(edmf, precip_model, param_set, grid, state, diag_col, stats, surf_params, t, calibrate_io)
+        compute_diagnostics!(
+            edmf,
+            precip_model,
+            param_set,
+            grid,
+            state,
+            diag_col,
+            stats,
+            surf_params,
+            t,
+            calibrate_io,
+        )
 
         cent = TC.Cent(1)
         diag_svpc = svpc_diagnostics_grid_mean(diag_col)
@@ -42,10 +61,26 @@ function affect_io!(integrator)
         write_ts(stats, "swp_mean", diag_svpc.swp_mean[cent])
 
         if !calibrate_io
-            write_ts(stats, "updraft_cloud_cover", diag_tc_svpc.updraft_cloud_cover[cent])
-            write_ts(stats, "updraft_cloud_base", diag_tc_svpc.updraft_cloud_base[cent])
-            write_ts(stats, "updraft_cloud_top", diag_tc_svpc.updraft_cloud_top[cent])
-            write_ts(stats, "env_cloud_cover", diag_tc_svpc.env_cloud_cover[cent])
+            write_ts(
+                stats,
+                "updraft_cloud_cover",
+                diag_tc_svpc.updraft_cloud_cover[cent],
+            )
+            write_ts(
+                stats,
+                "updraft_cloud_base",
+                diag_tc_svpc.updraft_cloud_base[cent],
+            )
+            write_ts(
+                stats,
+                "updraft_cloud_top",
+                diag_tc_svpc.updraft_cloud_top[cent],
+            )
+            write_ts(
+                stats,
+                "env_cloud_cover",
+                diag_tc_svpc.env_cloud_cover[cent],
+            )
             write_ts(stats, "env_cloud_base", diag_tc_svpc.env_cloud_base[cent])
             write_ts(stats, "env_cloud_top", diag_tc_svpc.env_cloud_top[cent])
             write_ts(stats, "env_lwp", diag_tc_svpc.env_lwp[cent])
@@ -54,8 +89,16 @@ function affect_io!(integrator)
             write_ts(stats, "updraft_lwp", diag_tc_svpc.updraft_lwp[cent])
             write_ts(stats, "updraft_iwp", diag_tc_svpc.updraft_iwp[cent])
 
-            write_ts(stats, "cutoff_precipitation_rate", diag_svpc.cutoff_precipitation_rate[cent])
-            write_ts(stats, "cloud_cover_mean", diag_svpc.cloud_cover_mean[cent])
+            write_ts(
+                stats,
+                "cutoff_precipitation_rate",
+                diag_svpc.cutoff_precipitation_rate[cent],
+            )
+            write_ts(
+                stats,
+                "cloud_cover_mean",
+                diag_svpc.cloud_cover_mean[cent],
+            )
             write_ts(stats, "cloud_base_mean", diag_svpc.cloud_base_mean[cent])
             write_ts(stats, "cloud_top_mean", diag_svpc.cloud_top_mean[cent])
         end
@@ -97,7 +140,12 @@ function adaptive_dt!(integrator)
     ODE.u_modified!(integrator, false)
 end
 
-function compute_dt_max(state::TC.State, edmf::TC.EDMFModel, dt_max::FT, CFL_limit::FT) where {FT <: Real}
+function compute_dt_max(
+    state::TC.State,
+    edmf::TC.EDMFModel,
+    dt_max::FT,
+    CFL_limit::FT,
+) where {FT <: Real}
     grid = TC.Grid(state)
 
     prog_gm = TC.center_prog_grid_mean(state)
@@ -122,7 +170,8 @@ function compute_dt_max(state::TC.State, edmf::TC.EDMFModel, dt_max::FT, CFL_lim
     @inbounds for k in TC.real_face_indices(grid)
         TC.is_surface_face(grid, k) && continue
         @inbounds for i in 1:N_up
-            dt_max = min(dt_max, CFL_limit * Δzf[k] / (abs(aux_up_f[i].w[k]) + ε))
+            dt_max =
+                min(dt_max, CFL_limit * Δzf[k] / (abs(aux_up_f[i].w[k]) + ε))
         end
         dt_max = min(dt_max, CFL_limit * Δzf[k] / (abs(aux_en_f.w[k]) + ε))
     end
@@ -182,7 +231,8 @@ function monitor_cfl!(integrator)
                 CFL_in_rain = Δt / Δz[k] * term_vel_rain[k + 1]
                 CFL_in_snow = Δt / Δz[k] * term_vel_snow[k + 1]
             end
-            if max(CFL_in_rain, CFL_in_snow, CFL_out_rain, CFL_out_snow) > CFL_limit
+            if max(CFL_in_rain, CFL_in_snow, CFL_out_rain, CFL_out_snow) >
+               CFL_limit
                 error("Time step is too large for rain fall velocity!")
             end
         end

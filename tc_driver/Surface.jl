@@ -31,7 +31,14 @@ function get_surface(
     ts_in = aux_gm.ts[kc_surf]
     scheme = SF.FVScheme()
 
-    bflux = SF.compute_buoyancy_flux(surf_flux_params, shf, lhf, ts_in, ts_sfc, scheme)
+    bflux = SF.compute_buoyancy_flux(
+        surf_flux_params,
+        shf,
+        lhf,
+        ts_in,
+        ts_sfc,
+        scheme,
+    )
     zi = TC.get_inversion(grid, state, param_set, Ri_bulk_crit)
     convective_vel = TC.get_wstar(bflux, zi) # yair here zi in TRMM should be adjusted
 
@@ -109,7 +116,14 @@ function get_surface(
     u_in = SA.SVector{2, FT}(uₕ_gm_surf.u, uₕ_gm_surf.v)
     vals_sfc = SF.SurfaceValues(z_sfc, u_sfc, ts_sfc)
     vals_int = SF.InteriorValues(z_in, u_in, ts_in)
-    sc = SF.Coefficients{FT}(state_in = vals_int, state_sfc = vals_sfc, Cd = cm, Ch = ch, z0m = zrough, z0b = zrough)
+    sc = SF.Coefficients{FT}(
+        state_in = vals_int,
+        state_sfc = vals_sfc,
+        Cd = cm,
+        Ch = ch,
+        z0m = zrough,
+        z0b = zrough,
+    )
     result = SF.surface_conditions(surf_flux_params, sc, scheme)
     lhf = result.lhf
     shf = result.shf
@@ -168,7 +182,12 @@ function get_surface(
     u_in = SA.SVector{2, FT}(uₕ_gm_surf.u, uₕ_gm_surf.v)
     vals_sfc = SF.SurfaceValues(z_sfc, u_sfc, ts_sfc)
     vals_int = SF.InteriorValues(z_in, u_in, ts_in)
-    sc = SF.ValuesOnly{FT}(state_in = vals_int, state_sfc = vals_sfc, z0m = zrough, z0b = zrough)
+    sc = SF.ValuesOnly{FT}(
+        state_in = vals_int,
+        state_sfc = vals_sfc,
+        z0m = zrough,
+        z0b = zrough,
+    )
     result = SF.surface_conditions(surf_flux_params, sc, scheme)
     lhf = result.lhf
     shf = result.shf

@@ -190,23 +190,30 @@ get_radiation_type(::TRMM_LBA) = RadiationTRMM_LBA
 
 large_scale_divergence(::Union{DYCOMS_RF01, DYCOMS_RF02}) = 3.75e-6
 
-RadiationBase(case::AbstractCaseType, FT) = RadiationBase{Cases.get_radiation_type(case), FT}()
+RadiationBase(case::AbstractCaseType, FT) =
+    RadiationBase{Cases.get_radiation_type(case), FT}()
 
-forcing_kwargs(::AbstractCaseType, namelist) = (; coriolis_param = namelist["forcing"]["coriolis"])
-forcing_kwargs(case::DYCOMS_RF01, namelist) = (; divergence = large_scale_divergence(case))
-forcing_kwargs(case::DYCOMS_RF02, namelist) = (; divergence = large_scale_divergence(case))
+forcing_kwargs(::AbstractCaseType, namelist) =
+    (; coriolis_param = namelist["forcing"]["coriolis"])
+forcing_kwargs(case::DYCOMS_RF01, namelist) =
+    (; divergence = large_scale_divergence(case))
+forcing_kwargs(case::DYCOMS_RF02, namelist) =
+    (; divergence = large_scale_divergence(case))
 les_data_kwarg(::AbstractCaseType, namelist) = ()
 
-ForcingBase(case::AbstractCaseType, FT; kwargs...) = ForcingBase{get_forcing_type(case), FT}(; kwargs...)
+ForcingBase(case::AbstractCaseType, FT; kwargs...) =
+    ForcingBase{get_forcing_type(case), FT}(; kwargs...)
 
 #####
 ##### Default case behavior:
 #####
 
-initialize_radiation(::AbstractCaseType, radiation, grid, state, param_set) = nothing
+initialize_radiation(::AbstractCaseType, radiation, grid, state, param_set) =
+    nothing
 
 update_forcing(::AbstractCaseType, grid, state, t::Real, param_set) = nothing
-initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) = initialize(forcing, grid, state)
+initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) =
+    initialize(forcing, grid, state)
 
 #####
 ##### Soares
@@ -271,7 +278,13 @@ function surface_ref_state(::Nieuwstadt, param_set::APS, namelist)
     qtg::FT = 0.0
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
-function initialize_profiles(::Nieuwstadt, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::Nieuwstadt,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
@@ -291,7 +304,12 @@ function initialize_profiles(::Nieuwstadt, grid::Grid, param_set, state; kwargs.
     end
 end
 
-function surface_params(case::Nieuwstadt, surf_ref_state, param_set; Ri_bulk_crit)
+function surface_params(
+    case::Nieuwstadt,
+    surf_ref_state,
+    param_set;
+    Ri_bulk_crit,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_state)
     ρ_f_surf = TD.air_density(thermo_params, surf_ref_state)
@@ -404,7 +422,13 @@ function surface_ref_state(::life_cycle_Tan2018, param_set::APS, namelist)
     qtg::FT = 0.02245   #Total water mixing ratio at surface
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
-function initialize_profiles(::life_cycle_Tan2018, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::life_cycle_Tan2018,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
@@ -426,7 +450,12 @@ function initialize_profiles(::life_cycle_Tan2018, grid::Grid, param_set, state;
     end
 end
 
-function surface_params(case::life_cycle_Tan2018, surf_ref_state, param_set; Ri_bulk_crit)
+function surface_params(
+    case::life_cycle_Tan2018,
+    surf_ref_state,
+    param_set;
+    Ri_bulk_crit,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_state)
     ρ_f_surf = TD.air_density(thermo_params, surf_ref_state)
@@ -451,7 +480,13 @@ function surface_params(case::life_cycle_Tan2018, surf_ref_state, param_set; Ri_
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-function initialize_forcing(::life_cycle_Tan2018, forcing, grid::Grid, state, param_set)
+function initialize_forcing(
+    ::life_cycle_Tan2018,
+    forcing,
+    grid::Grid,
+    state,
+    param_set,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
@@ -523,7 +558,12 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
     @inbounds for k in real_center_indices(grid)
         # Thermo state field cache is not yet
         # defined, so we can't use it yet.
-        ts = TD.PhaseEquil_pθq(thermo_params, p[k], aux_gm.θ_liq_ice[k], aux_gm.q_tot[k])
+        ts = TD.PhaseEquil_pθq(
+            thermo_params,
+            p[k],
+            aux_gm.θ_liq_ice[k],
+            aux_gm.q_tot[k],
+        )
         aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
     end
     zi = FT(0.6) * get_inversion(grid, state, param_set, FT(0.2))
@@ -603,7 +643,13 @@ function surface_ref_state(::TRMM_LBA, param_set::APS, namelist)
     qtg = (1 / molmass_ratio) * pvg / (Pg - pvg) #Total water mixing ratio at surface
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
-function initialize_profiles(::TRMM_LBA, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::TRMM_LBA,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
@@ -630,14 +676,23 @@ function initialize_profiles(::TRMM_LBA, grid::Grid, param_set, state; kwargs...
 
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
-        pv_star = TD.saturation_vapor_pressure(thermo_params, aux_gm.T[k], TD.Liquid())
+        pv_star = TD.saturation_vapor_pressure(
+            thermo_params,
+            aux_gm.T[k],
+            TD.Liquid(),
+        )
         # eq. 37 in pressel et al and the def of RH
         RH = prof_RH(z)
         denom = (prof_p(z) - pv_star + (1 / molmass_ratio) * pv_star * RH / 100)
         qv_star = pv_star * (1 / molmass_ratio) / denom
         aux_gm.q_tot[k] = qv_star * RH / 100
         phase_part = TD.PhasePartition(aux_gm.q_tot[k], FT(0), FT(0)) # initial state is not saturated
-        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(thermo_params, aux_gm.T[k], p[k], phase_part)
+        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
+            thermo_params,
+            aux_gm.T[k],
+            p[k],
+            phase_part,
+        )
         aux_gm.tke[k] = prof_tke(z)
     end
 end
@@ -652,15 +707,37 @@ function surface_params(case::TRMM_LBA, surf_ref_state, param_set; Ri_bulk_crit)
     ts = TD.PhaseEquil_pθq(thermo_params, p_f_surf, θ_surface, qsurface)
     Tsurface = TD.air_temperature(thermo_params, ts)
     ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
-    lhf = t -> 554 * max(0, cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)))^FT(1.3)
-    shf = t -> 270 * max(0, cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)))^FT(1.5)
-    kwargs = (; Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit, zero_uv_fluxes = true)
+    lhf =
+        t ->
+            554 *
+            max(
+                0,
+                cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)),
+            )^FT(1.3)
+    shf =
+        t ->
+            270 *
+            max(
+                0,
+                cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)),
+            )^FT(1.5)
+    kwargs = (;
+        Tsurface,
+        qsurface,
+        shf,
+        lhf,
+        ustar,
+        Ri_bulk_crit,
+        zero_uv_fluxes = true,
+    )
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-RadiationBase(case::TRMM_LBA, FT) = RadiationBase{Cases.get_radiation_type(case), FT}()
+RadiationBase(case::TRMM_LBA, FT) =
+    RadiationBase{Cases.get_radiation_type(case), FT}()
 
-initialize_radiation(::TRMM_LBA, radiation, grid::Grid, state, param_set) = initialize(radiation, grid, state)
+initialize_radiation(::TRMM_LBA, radiation, grid::Grid, state, param_set) =
+    initialize(radiation, grid, state)
 
 #####
 ##### ARM_SGP
@@ -699,7 +776,12 @@ function initialize_profiles(::ARM_SGP, grid::Grid, param_set, state; kwargs...)
         Π = TD.exner_given_pressure(thermo_params, p[k], phase_part)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.T[k] = prof_θ_liq_ice(z) * Π
-        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(thermo_params, aux_gm.T[k], p[k], phase_part)
+        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
+            thermo_params,
+            aux_gm.T[k],
+            p[k],
+            phase_part,
+        )
         aux_gm.tke[k] = prof_tke(z)
     end
 end
@@ -720,7 +802,15 @@ function surface_params(case::ARM_SGP, surf_ref_state, param_set; Ri_bulk_crit)
     shf = Dierckx.Spline1D(t_Sur_in, SH; k = 1)
     lhf = Dierckx.Spline1D(t_Sur_in, LH; k = 1)
 
-    kwargs = (; Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit, zero_uv_fluxes = true)
+    kwargs = (;
+        Tsurface,
+        qsurface,
+        shf,
+        lhf,
+        ustar,
+        Ri_bulk_crit,
+        zero_uv_fluxes = true,
+    )
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
@@ -760,7 +850,13 @@ function surface_ref_state(::GATE_III, param_set::APS, namelist)
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
 
-function initialize_profiles(::GATE_III, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::GATE_III,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     thermo_params = TCP.thermodynamics_params(param_set)
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
@@ -776,7 +872,8 @@ function initialize_profiles(::GATE_III, grid::Grid, param_set, state; kwargs...
         z = grid.zc[k].z
         aux_gm.q_tot[k] = APL.GATE_III_q_tot(FT)(z)
         aux_gm.T[k] = APL.GATE_III_T(FT)(z)
-        ts = TD.PhaseEquil_pTq(thermo_params, p[k], aux_gm.T[k], aux_gm.q_tot[k])
+        ts =
+            TD.PhaseEquil_pTq(thermo_params, p[k], aux_gm.T[k], aux_gm.q_tot[k])
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
         aux_gm.tke[k] = APL.GATE_III_tke(FT)(z)
     end
@@ -825,7 +922,13 @@ function surface_ref_state(::DYCOMS_RF01, param_set::APS, namelist)
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
 
-function initialize_profiles(::DYCOMS_RF01, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::DYCOMS_RF01,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
@@ -848,7 +951,12 @@ function initialize_profiles(::DYCOMS_RF01, grid::Grid, param_set, state; kwargs
     end
 end
 
-function surface_params(case::DYCOMS_RF01, surf_ref_state, param_set; Ri_bulk_crit)
+function surface_params(
+    case::DYCOMS_RF01,
+    surf_ref_state,
+    param_set;
+    Ri_bulk_crit,
+)
     FT = eltype(surf_ref_state)
     zrough::FT = 1.0e-4
     ustar::FT = 0.28 # just to initialize grid mean covariances
@@ -862,7 +970,13 @@ function surface_params(case::DYCOMS_RF01, surf_ref_state, param_set; Ri_bulk_cr
     return TC.FixedSurfaceFlux(FT, TC.VariableFrictionVelocity; kwargs...)
 end
 
-function initialize_forcing(::DYCOMS_RF01, forcing, grid::Grid, state, param_set)
+function initialize_forcing(
+    ::DYCOMS_RF01,
+    forcing,
+    grid::Grid,
+    state,
+    param_set,
+)
     aux_gm = TC.center_aux_grid_mean(state)
     FT = TC.float_type(state)
 
@@ -890,7 +1004,13 @@ function RadiationBase(case::DYCOMS_RF01, FT)
     )
 end
 
-function initialize_radiation(::DYCOMS_RF01, radiation, grid::Grid, state, param_set)
+function initialize_radiation(
+    ::DYCOMS_RF01,
+    radiation,
+    grid::Grid,
+    state,
+    param_set,
+)
     aux_gm = TC.center_aux_grid_mean(state)
 
     # no large-scale drying
@@ -916,7 +1036,13 @@ function surface_ref_state(::DYCOMS_RF02, param_set::APS, namelist)
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
 
-function initialize_profiles(::DYCOMS_RF02, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::DYCOMS_RF02,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
@@ -939,7 +1065,12 @@ function initialize_profiles(::DYCOMS_RF02, grid::Grid, param_set, state; kwargs
     end
 end
 
-function surface_params(case::DYCOMS_RF02, surf_ref_state, param_set; Ri_bulk_crit)
+function surface_params(
+    case::DYCOMS_RF02,
+    surf_ref_state,
+    param_set;
+    Ri_bulk_crit,
+)
     FT = eltype(surf_ref_state)
     zrough::FT = 1.0e-4  #TODO - not needed?
     ustar::FT = 0.25
@@ -952,7 +1083,13 @@ function surface_params(case::DYCOMS_RF02, surf_ref_state, param_set; Ri_bulk_cr
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-function initialize_forcing(::DYCOMS_RF02, forcing, grid::Grid, state, param_set)
+function initialize_forcing(
+    ::DYCOMS_RF02,
+    forcing,
+    grid::Grid,
+    state,
+    param_set,
+)
     FT = TC.float_type(state)
     # the same as in DYCOMS_RF01
     aux_gm = TC.center_aux_grid_mean(state)
@@ -981,7 +1118,13 @@ function RadiationBase(case::DYCOMS_RF02, FT)
     )
 end
 
-function initialize_radiation(::DYCOMS_RF02, radiation, grid::Grid, state, param_set)
+function initialize_radiation(
+    ::DYCOMS_RF02,
+    radiation,
+    grid::Grid,
+    state,
+    param_set,
+)
     # the same as in DYCOMS_RF01
     aux_gm = TC.center_aux_grid_mean(state)
 
@@ -1063,7 +1206,13 @@ function surface_ref_state(::DryBubble, param_set::APS, namelist)
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
 
-function initialize_profiles(::DryBubble, grid::Grid, param_set, state; kwargs...)
+function initialize_profiles(
+    ::DryBubble,
+    grid::Grid,
+    param_set,
+    state;
+    kwargs...,
+)
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
@@ -1084,7 +1233,12 @@ function initialize_profiles(::DryBubble, grid::Grid, param_set, state; kwargs..
     parent(aux_gm.HQTcov) .= 0
 end
 
-function surface_params(case::DryBubble, surf_ref_state, param_set; Ri_bulk_crit)
+function surface_params(
+    case::DryBubble,
+    surf_ref_state,
+    param_set;
+    Ri_bulk_crit,
+)
     FT = eltype(surf_ref_state)
     Tsurface::FT = 300.0
     qsurface::FT = 0.0
@@ -1103,9 +1257,14 @@ end
 function forcing_kwargs(::LES_driven_SCM, namelist)
     coriolis_param = namelist["forcing"]["coriolis"]
     les_filename = namelist["meta"]["lesfile"]
-    cfsite_number, forcing_model, month, experiment = TC.parse_les_path(les_filename)
+    cfsite_number, forcing_model, month, experiment =
+        TC.parse_les_path(les_filename)
     LES_library = TC.get_LES_library()
-    les_type = LES_library[forcing_model][string(month, pad = 2)]["cfsite_numbers"][string(cfsite_number, pad = 2)]
+    les_type =
+        LES_library[forcing_model][string(month, pad = 2)]["cfsite_numbers"][string(
+            cfsite_number,
+            pad = 2,
+        )]
     if les_type == "shallow"
         wind_nudge_τᵣ = 6.0 * 3600.0
         scalar_nudge_zᵢ = 3000.0
@@ -1118,7 +1277,13 @@ function forcing_kwargs(::LES_driven_SCM, namelist)
         scalar_nudge_τᵣ = 2.0 * 3600.0
     end
 
-    return (; wind_nudge_τᵣ, scalar_nudge_zᵢ, scalar_nudge_zᵣ, scalar_nudge_τᵣ, coriolis_param)
+    return (;
+        wind_nudge_τᵣ,
+        scalar_nudge_zᵢ,
+        scalar_nudge_zᵣ,
+        scalar_nudge_τᵣ,
+        coriolis_param,
+    )
 end
 
 function les_data_kwarg(::LES_driven_SCM, namelist)
@@ -1129,11 +1294,18 @@ function les_data_kwarg(::LES_driven_SCM, namelist)
         t_interval_from_end_s = namelist["t_interval_from_end_s"]
         t_from_end_s = t .- t[end]
         # find inds within time interval
-        time_interval_bool = findall(>(-t_interval_from_end_s), t_from_end_s)
+        time_interval_bool =
+            findall(>(-t_interval_from_end_s), t_from_end_s)
         imin = time_interval_bool[1]
         imax = time_interval_bool[end]
 
-        LESData(imin, imax, les_filename, t_interval_from_end_s, namelist["initial_condition_averaging_window_s"])
+        LESData(
+            imin,
+            imax,
+            les_filename,
+            t_interval_from_end_s,
+            namelist["initial_condition_averaging_window_s"],
+        )
     end
     return (; LESDat)
 end
@@ -1156,7 +1328,13 @@ function surface_ref_state(::LES_driven_SCM, param_set::APS, namelist)
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
 
-function initialize_profiles(::LES_driven_SCM, grid::Grid, param_set, state; LESDat)
+function initialize_profiles(
+    ::LES_driven_SCM,
+    grid::Grid,
+    param_set,
+    state;
+    LESDat,
+)
 
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
@@ -1176,7 +1354,11 @@ function initialize_profiles(::LES_driven_SCM, grid::Grid, param_set, state; LES
         imax = time_interval_bool[end]
         zc_les = Array(TC.get_nc_data(data, "zc"))
 
-        getvar(var) = pyinterp(vec(grid.zc.z), zc_les, TC.mean_nc_data(data, "profiles", var, imin, imax))
+        getvar(var) = pyinterp(
+            vec(grid.zc.z),
+            zc_les,
+            TC.mean_nc_data(data, "profiles", var, imin, imax),
+        )
 
         θ_liq_ice_gm = getvar("thetali_mean")
         q_tot_gm = getvar("qt_mean")
@@ -1207,20 +1389,42 @@ function initialize_profiles(::LES_driven_SCM, grid::Grid, param_set, state; LES
     end
 end
 
-function surface_params(case::LES_driven_SCM, surf_ref_state, param_set; Ri_bulk_crit, LESDat)
+function surface_params(
+    case::LES_driven_SCM,
+    surf_ref_state,
+    param_set;
+    Ri_bulk_crit,
+    LESDat,
+)
     FT = eltype(surf_ref_state)
     nt = NC.Dataset(LESDat.les_filename, "r") do data
         imin = LESDat.imin
         imax = LESDat.imax
 
         zrough = FT(1.0e-4)
-        Tsurface = Statistics.mean(data.group["timeseries"]["surface_temperature"][:][imin:imax], dims = 1)[1]
+        Tsurface = Statistics.mean(
+            data.group["timeseries"]["surface_temperature"][:][imin:imax],
+            dims = 1,
+        )[1]
         # get surface value of q
-        mean_qt_prof = Statistics.mean(data.group["profiles"]["qt_mean"][:][:, imin:imax], dims = 2)[:]
+        mean_qt_prof = Statistics.mean(
+            data.group["profiles"]["qt_mean"][:][:, imin:imax],
+            dims = 2,
+        )[:]
         # TODO: this will need to be changed if/when we don't prescribe surface fluxes
         qsurface = FT(0)
-        lhf = FT(Statistics.mean(data.group["timeseries"]["lhf_surface_mean"][:][imin:imax], dims = 1)[1])
-        shf = FT(Statistics.mean(data.group["timeseries"]["shf_surface_mean"][:][imin:imax], dims = 1)[1])
+        lhf = FT(
+            Statistics.mean(
+                data.group["timeseries"]["lhf_surface_mean"][:][imin:imax],
+                dims = 1,
+            )[1],
+        )
+        shf = FT(
+            Statistics.mean(
+                data.group["timeseries"]["shf_surface_mean"][:][imin:imax],
+                dims = 1,
+            )[1],
+        )
         (; zrough, Tsurface, qsurface, lhf, shf)
     end
     UnPack.@unpack zrough, Tsurface, qsurface, lhf, shf = nt
@@ -1230,10 +1434,22 @@ function surface_params(case::LES_driven_SCM, surf_ref_state, param_set; Ri_bulk
     return TC.FixedSurfaceFlux(FT, TC.VariableFrictionVelocity; kwargs...)
 end
 
-initialize_forcing(::LES_driven_SCM, forcing, grid::Grid, state, param_set; LESDat) =
-    initialize(forcing, grid, state, LESDat)
+initialize_forcing(
+    ::LES_driven_SCM,
+    forcing,
+    grid::Grid,
+    state,
+    param_set;
+    LESDat,
+) = initialize(forcing, grid, state, LESDat)
 
-initialize_radiation(::LES_driven_SCM, radiation, grid::Grid, state, param_set; LESDat) =
-    initialize(radiation, grid, state, LESDat)
+initialize_radiation(
+    ::LES_driven_SCM,
+    radiation,
+    grid::Grid,
+    state,
+    param_set;
+    LESDat,
+) = initialize(radiation, grid, state, LESDat)
 
 end # module Cases

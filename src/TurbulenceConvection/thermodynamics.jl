@@ -1,11 +1,23 @@
-function thermo_state_pθq(param_set::APS, p::FT, θ_liq_ice::FT, q_tot::FT) where {FT}
+function thermo_state_pθq(
+    param_set::APS,
+    p::FT,
+    θ_liq_ice::FT,
+    q_tot::FT,
+) where {FT}
     # config = (50, 1e-3, RootSolvers.RegulaFalsiMethod)
     # config = (50, 1e-3, RootSolvers.NewtonMethodAD)
     config = ()
     thermo_params = TCP.thermodynamics_params(param_set)
     return TD.PhaseEquil_pθq(thermo_params, p, θ_liq_ice, q_tot, config...)
 end
-function thermo_state_pθq(param_set::APS, p::FT, θ_liq_ice::FT, q_tot::FT, q_liq::FT, q_ice::FT) where {FT}
+function thermo_state_pθq(
+    param_set::APS,
+    p::FT,
+    θ_liq_ice::FT,
+    q_tot::FT,
+    q_liq::FT,
+    q_ice::FT,
+) where {FT}
     config = ()
     q = TD.PhasePartition(q_tot, q_liq, q_ice)
     thermo_params = TCP.thermodynamics_params(param_set)
@@ -13,7 +25,12 @@ function thermo_state_pθq(param_set::APS, p::FT, θ_liq_ice::FT, q_tot::FT, q_l
 end
 
 
-function thermo_state_peq(param_set::APS, p::FT, e_int::FT, q_tot::FT) where {FT}
+function thermo_state_peq(
+    param_set::APS,
+    p::FT,
+    e_int::FT,
+    q_tot::FT,
+) where {FT}
     # config = (50, 1e-3, RootSolvers.RegulaFalsiMethod)
     # config = (50, 1e-3, RootSolvers.NewtonMethodAD)
     config = ()
@@ -21,7 +38,14 @@ function thermo_state_peq(param_set::APS, p::FT, e_int::FT, q_tot::FT) where {FT
     return TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot, config...)
 end
 
-function thermo_state_peq(param_set::APS, p::FT, e_int::FT, q_tot::FT, q_liq::FT, q_ice::FT) where {FT}
+function thermo_state_peq(
+    param_set::APS,
+    p::FT,
+    e_int::FT,
+    q_tot::FT,
+    q_liq::FT,
+    q_ice::FT,
+) where {FT}
     config = ()
     q = TD.PhasePartition(q_tot, q_liq, q_ice)
     thermo_params = TCP.thermodynamics_params(param_set)
@@ -34,7 +58,14 @@ function thermo_state_phq(param_set::APS, p::FT, h::FT, q_tot::FT) where {FT}
     return TD.PhaseEquil_phq(thermo_params, p, h, q_tot, config...)
 end
 
-function thermo_state_phq(param_set::APS, p::FT, h::FT, q_tot::FT, q_liq::FT, q_ice::FT) where {FT}
+function thermo_state_phq(
+    param_set::APS,
+    p::FT,
+    h::FT,
+    q_tot::FT,
+    q_liq::FT,
+    q_ice::FT,
+) where {FT}
     config = ()
     q = TD.PhasePartition(q_tot, q_liq, q_ice)
     thermo_params = TCP.thermodynamics_params(param_set)

@@ -7,7 +7,11 @@ function initialize(::ForcingBase{ForcingLES}, grid, state, LESDat::LESData)
         imax = LESDat.imax
 
         zc_les = Array(TC.get_nc_data(data, "zc"))
-        getvar(var) = TC.pyinterp(vec(grid.zc.z), zc_les, TC.mean_nc_data(data, "profiles", var, imin, imax))
+        getvar(var) = TC.pyinterp(
+            vec(grid.zc.z),
+            zc_les,
+            TC.mean_nc_data(data, "profiles", var, imin, imax),
+        )
 
         dTdt_hadv = getvar("dtdt_hadv")
         T_nudge = getvar("temperature_mean")
@@ -18,7 +22,17 @@ function initialize(::ForcingBase{ForcingLES}, grid, state, LESDat::LESData)
         subsidence = getvar("ls_subsidence")
         u_nudge = getvar("u_mean")
         v_nudge = getvar("v_mean")
-        (; dTdt_hadv, T_nudge, dTdt_fluc, dqtdt_hadv, qt_nudge, dqtdt_fluc, subsidence, u_nudge, v_nudge)
+        (;
+            dTdt_hadv,
+            T_nudge,
+            dTdt_fluc,
+            dqtdt_hadv,
+            qt_nudge,
+            dqtdt_fluc,
+            subsidence,
+            u_nudge,
+            v_nudge,
+        )
     end
     for k in TC.real_center_indices(grid)
         aux_gm.dTdt_hadv[k] = nt.dTdt_hadv[k]

@@ -66,11 +66,14 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     e_kin = FT(0),
     h_tot = FT(0),
 )
-cent_aux_vars(FT, local_geometry, edmf) =
-    (; cent_aux_vars_gm(FT, local_geometry, edmf)..., TC.cent_aux_vars_edmf(FT, local_geometry, edmf)...)
+cent_aux_vars(FT, local_geometry, edmf) = (;
+    cent_aux_vars_gm(FT, local_geometry, edmf)...,
+    TC.cent_aux_vars_edmf(FT, local_geometry, edmf)...,
+)
 
 # Face only
-face_aux_vars_gm_moisture(FT, ::TC.NonEquilibriumMoisture) = (; sgs_flux_q_liq = FT(0), sgs_flux_q_ice = FT(0))
+face_aux_vars_gm_moisture(FT, ::TC.NonEquilibriumMoisture) =
+    (; sgs_flux_q_liq = FT(0), sgs_flux_q_ice = FT(0))
 face_aux_vars_gm_moisture(FT, ::TC.EquilibriumMoisture) = NamedTuple()
 face_aux_vars_gm(FT, local_geometry, edmf) = (;
     massflux_s = FT(0),
@@ -80,24 +83,31 @@ face_aux_vars_gm(FT, local_geometry, edmf) = (;
     sgs_flux_h_tot = FT(0),
     sgs_flux_q_tot = FT(0),
     face_aux_vars_gm_moisture(FT, edmf.moisture_model)...,
-    sgs_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗ CCG.Covariant12Vector(FT(0), FT(0)),
+    sgs_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
+                  CCG.Covariant12Vector(FT(0), FT(0)),
     p = FT(0),
     ρ = FT(0),
 )
-face_aux_vars(FT, local_geometry, edmf) =
-    (; face_aux_vars_gm(FT, local_geometry, edmf)..., TC.face_aux_vars_edmf(FT, local_geometry, edmf)...)
+face_aux_vars(FT, local_geometry, edmf) = (;
+    face_aux_vars_gm(FT, local_geometry, edmf)...,
+    TC.face_aux_vars_edmf(FT, local_geometry, edmf)...,
+)
 
 ##### Diagnostic fields
 
 # Center only
 cent_diagnostic_vars_gm(FT, local_geometry) = NamedTuple()
-cent_diagnostic_vars(FT, local_geometry, edmf) =
-    (; cent_diagnostic_vars_gm(FT, local_geometry)..., TC.cent_diagnostic_vars_edmf(FT, local_geometry, edmf)...)
+cent_diagnostic_vars(FT, local_geometry, edmf) = (;
+    cent_diagnostic_vars_gm(FT, local_geometry)...,
+    TC.cent_diagnostic_vars_edmf(FT, local_geometry, edmf)...,
+)
 
 # Face only
 face_diagnostic_vars_gm(FT, local_geometry) = NamedTuple()
-face_diagnostic_vars(FT, local_geometry, edmf) =
-    (; face_diagnostic_vars_gm(FT, local_geometry)..., TC.face_diagnostic_vars_edmf(FT, local_geometry, edmf)...)
+face_diagnostic_vars(FT, local_geometry, edmf) = (;
+    face_diagnostic_vars_gm(FT, local_geometry)...,
+    TC.face_diagnostic_vars_edmf(FT, local_geometry, edmf)...,
+)
 
 # Single value per column diagnostic variables
 single_value_per_col_diagnostic_vars_gm(FT) = (;
@@ -115,16 +125,26 @@ single_value_per_col_diagnostic_vars_gm(FT) = (;
     cloud_top_mean = FT(0),
     cloud_cover_mean = FT(0),
 )
-single_value_per_col_diagnostic_vars(FT, edmf) =
-    (; single_value_per_col_diagnostic_vars_gm(FT)..., TC.single_value_per_col_diagnostic_vars_edmf(FT, edmf)...)
+single_value_per_col_diagnostic_vars(FT, edmf) = (;
+    single_value_per_col_diagnostic_vars_gm(FT)...,
+    TC.single_value_per_col_diagnostic_vars_edmf(FT, edmf)...,
+)
 
 ##### Prognostic fields
 
 # Center only
-cent_prognostic_vars(::Type{FT}, local_geometry, edmf) where {FT} =
-    (; cent_prognostic_vars_gm(FT, local_geometry, edmf)..., TC.cent_prognostic_vars_edmf(FT, edmf)...)
-cent_prognostic_vars_gm_moisture(::Type{FT}, ::TC.NonEquilibriumMoisture) where {FT} = (; q_liq = FT(0), q_ice = FT(0))
-cent_prognostic_vars_gm_moisture(::Type{FT}, ::TC.EquilibriumMoisture) where {FT} = NamedTuple()
+cent_prognostic_vars(::Type{FT}, local_geometry, edmf) where {FT} = (;
+    cent_prognostic_vars_gm(FT, local_geometry, edmf)...,
+    TC.cent_prognostic_vars_edmf(FT, edmf)...,
+)
+cent_prognostic_vars_gm_moisture(
+    ::Type{FT},
+    ::TC.NonEquilibriumMoisture,
+) where {FT} = (; q_liq = FT(0), q_ice = FT(0))
+cent_prognostic_vars_gm_moisture(
+    ::Type{FT},
+    ::TC.EquilibriumMoisture,
+) where {FT} = NamedTuple()
 cent_prognostic_vars_gm(::Type{FT}, local_geometry, edmf) where {FT} = (;
     ρ = FT(0),
     uₕ = CCG.Covariant12Vector(CCG.UVVector(FT(0), FT(0)), local_geometry),
@@ -134,7 +154,9 @@ cent_prognostic_vars_gm(::Type{FT}, local_geometry, edmf) where {FT} = (;
 )
 
 # Face only
-face_prognostic_vars(::Type{FT}, local_geometry, edmf) where {FT} =
-    (; w = CCG.Covariant3Vector(FT(0)), TC.face_prognostic_vars_edmf(FT, local_geometry, edmf)...)
+face_prognostic_vars(::Type{FT}, local_geometry, edmf) where {FT} = (;
+    w = CCG.Covariant3Vector(FT(0)),
+    TC.face_prognostic_vars_edmf(FT, local_geometry, edmf)...,
+)
 
 # TC.face_prognostic_vars_edmf(FT, edmf) = (;) # could also use this for empty model

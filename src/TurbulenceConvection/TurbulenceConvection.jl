@@ -35,7 +35,12 @@ const APS = TCP.AbstractTurbulenceConvectionParameters
 
 up_sum(vals::AbstractArray) = reshape(sum(vals; dims = 1), size(vals, 2))
 
-function parse_namelist(namelist, keys...; default = nothing, valid_options = nothing)
+function parse_namelist(
+    namelist,
+    keys...;
+    default = nothing,
+    valid_options = nothing,
+)
     param = namelist
     for k in keys
         if haskey(param, k)
@@ -45,7 +50,9 @@ function parse_namelist(namelist, keys...; default = nothing, valid_options = no
             end
         else
             if default == nothing
-                error("No default value given for parameter (`$(join(keys, ", "))`).")
+                error(
+                    "No default value given for parameter (`$(join(keys, ", "))`).",
+                )
             else
                 @info "Using default value, $default, for parameter (`$(join(keys, ", "))`)."
                 return default

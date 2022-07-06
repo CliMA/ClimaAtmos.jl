@@ -35,14 +35,33 @@ import .Cases
 
 import DiffEqNoiseProcess
 import Random
-function DiffEqNoiseProcess.wiener_randn!(rng::Random.AbstractRNG, rand_vec::CC.Fields.FieldVector)
+function DiffEqNoiseProcess.wiener_randn!(
+    rng::Random.AbstractRNG,
+    rand_vec::CC.Fields.FieldVector,
+)
     # TODO: fix this hack. ClimaCore's axes(::FieldVector) cannot
     #       return a space (since it has multiple spaces)
     parent(rand_vec.cent) .= Random.randn.()
     parent(rand_vec.face) .= Random.randn.()
 end
 
-struct Simulation1d{IONT, P, A, C, F, R, SM, EDMF, PM, D, TIMESTEPPING, STATS, PS, SRS, LESDK}
+struct Simulation1d{
+    IONT,
+    P,
+    A,
+    C,
+    F,
+    R,
+    SM,
+    EDMF,
+    PM,
+    D,
+    TIMESTEPPING,
+    STATS,
+    PS,
+    SRS,
+    LESDK,
+}
     io_nt::IONT
     prog::P
     aux::A
@@ -84,7 +103,9 @@ function Simulation1d(namelist)
 
     FT = namelist["float_type"] == "Float32" ? Float32 : Float64
     # This is used for testing Duals
-    FTD = namelist["test_duals"] ? typeof(ForwardDiff.Dual{Nothing}(FT(1), FT(0))) : FT
+    FTD =
+        namelist["test_duals"] ?
+        typeof(ForwardDiff.Dual{Nothing}(FT(1), FT(0))) : FT
 
     toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
     # TODO: the namelist should override whatever
@@ -130,16 +151,23 @@ function Simulation1d(namelist)
     end
     N_up = TC.n_updrafts(edmf)
 
-    cent_prog_fields = TC.FieldFromNamedTuple(cspace, cent_prognostic_vars, FT, edmf)
-    face_prog_fields = TC.FieldFromNamedTuple(fspace, face_prognostic_vars, FT, edmf)
+    cent_prog_fields =
+        TC.FieldFromNamedTuple(cspace, cent_prognostic_vars, FT, edmf)
+    face_prog_fields =
+        TC.FieldFromNamedTuple(fspace, face_prognostic_vars, FT, edmf)
     aux_cent_fields = TC.FieldFromNamedTuple(cspace, cent_aux_vars, FT, edmf)
     aux_face_fields = TC.FieldFromNamedTuple(fspace, face_aux_vars, FT, edmf)
-    diagnostic_cent_fields = TC.FieldFromNamedTuple(cspace, cent_diagnostic_vars, FT, edmf)
-    diagnostic_face_fields = TC.FieldFromNamedTuple(fspace, face_diagnostic_vars, FT, edmf)
-    diagnostics_single_value_per_col =
-        TC.FieldFromNamedTuple(svpc_space, single_value_per_col_diagnostic_vars(FT, edmf))
+    diagnostic_cent_fields =
+        TC.FieldFromNamedTuple(cspace, cent_diagnostic_vars, FT, edmf)
+    diagnostic_face_fields =
+        TC.FieldFromNamedTuple(fspace, face_diagnostic_vars, FT, edmf)
+    diagnostics_single_value_per_col = TC.FieldFromNamedTuple(
+        svpc_space,
+        single_value_per_col_diagnostic_vars(FT, edmf),
+    )
 
-    prog = CC.Fields.FieldVector(cent = cent_prog_fields, face = face_prog_fields)
+    prog =
+        CC.Fields.FieldVector(cent = cent_prog_fields, face = face_prog_fields)
     aux = CC.Fields.FieldVector(cent = aux_cent_fields, face = aux_face_fields)
     diagnostics = CC.Fields.FieldVector(;
         cent = diagnostic_cent_fields,
@@ -180,17 +208,25 @@ function Simulation1d(namelist)
     case = Cases.get_case(namelist)
     surf_ref_state = Cases.surface_ref_state(case, param_set, namelist)
 
-    forcing = Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
+    forcing =
+        Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
 
     radiation = Cases.RadiationBase(case, FT)
     TS = TimeStepping(FT, namelist)
 
     Ri_bulk_crit::FTD = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     les_data_kwarg = Cases.les_data_kwarg(case, namelist)
-    surf_params = Cases.surface_params(case, surf_ref_state, param_set; Ri_bulk_crit = Ri_bulk_crit, les_data_kwarg...)
+    surf_params = Cases.surface_params(
+        case,
+        surf_ref_state,
+        param_set;
+        Ri_bulk_crit = Ri_bulk_crit,
+        les_data_kwarg...,
+    )
 
     calibrate_io = namelist["stats_io"]["calibrate_io"]
-    aux_dict = calibrate_io ? TC.io_dictionary_aux_calibrate() : TC.io_dictionary_aux()
+    aux_dict =
+        calibrate_io ? TC.io_dictionary_aux_calibrate() : TC.io_dictionary_aux()
     diagnostics_dict = calibrate_io ? Dict() : io_dictionary_diagnostics()
 
     io_nt = (; aux = aux_dict, diagnostics = diagnostics_dict)
@@ -223,8 +259,25 @@ end
 function initialize(sim::Simulation1d)
     TC = TurbulenceConvection
 
-    (; prog, aux, edmf, case, forcing, radiation, surf_params, param_set, surf_ref_state) = sim
-    (; les_data_kwarg, skip_io, Stats, io_nt, diagnostics, truncate_stack_trace) = sim
+    (;
+        prog,
+        aux,
+        edmf,
+        case,
+        forcing,
+        radiation,
+        surf_params,
+        param_set,
+        surf_ref_state,
+    ) = sim
+    (;
+        les_data_kwarg,
+        skip_io,
+        Stats,
+        io_nt,
+        diagnostics,
+        truncate_stack_trace,
+    ) = sim
 
     ts_gm = ["Tsurface", "shf", "lhf", "ustar", "wstar", "lwp_mean", "iwp_mean"]
     ts_edmf = [
@@ -260,22 +313,71 @@ function initialize(sim::Simulation1d)
             stats = Stats[inds...]
             NC.Dataset(stats.nc_filename, "a") do ds
                 group = "reference"
-                add_write_field(ds, "ρ_f", vec(TC.face_aux_grid_mean(state).ρ), group, ("zf",))
-                add_write_field(ds, "ρ_c", vec(TC.center_prog_grid_mean(state).ρ), group, ("zc",))
-                add_write_field(ds, "p_f", vec(TC.face_aux_grid_mean(state).p), group, ("zf",))
-                add_write_field(ds, "p_c", vec(TC.center_aux_grid_mean(state).p), group, ("zc",))
+                add_write_field(
+                    ds,
+                    "ρ_f",
+                    vec(TC.face_aux_grid_mean(state).ρ),
+                    group,
+                    ("zf",),
+                )
+                add_write_field(
+                    ds,
+                    "ρ_c",
+                    vec(TC.center_prog_grid_mean(state).ρ),
+                    group,
+                    ("zc",),
+                )
+                add_write_field(
+                    ds,
+                    "p_f",
+                    vec(TC.face_aux_grid_mean(state).p),
+                    group,
+                    ("zf",),
+                )
+                add_write_field(
+                    ds,
+                    "p_c",
+                    vec(TC.center_aux_grid_mean(state).p),
+                    group,
+                    ("zc",),
+                )
             end
         end
-        Cases.initialize_profiles(case, grid, param_set, state; les_data_kwarg...)
+        Cases.initialize_profiles(
+            case,
+            grid,
+            param_set,
+            state;
+            les_data_kwarg...,
+        )
         set_thermo_state_pθq!(state, grid, edmf.moisture_model, param_set)
         set_grid_mean_from_thermo_state!(param_set, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, param_set)
-        Cases.initialize_forcing(case, forcing, grid, state, param_set; les_data_kwarg...)
-        Cases.initialize_radiation(case, radiation, grid, state, param_set; les_data_kwarg...)
+        Cases.initialize_forcing(
+            case,
+            forcing,
+            grid,
+            state,
+            param_set;
+            les_data_kwarg...,
+        )
+        Cases.initialize_radiation(
+            case,
+            radiation,
+            grid,
+            state,
+            param_set;
+            les_data_kwarg...,
+        )
         initialize_edmf(edmf, grid, state, surf_params, param_set, t, case)
         if !skip_io
             stats = Stats[inds...]
-            initialize_io(stats.nc_filename, eltype(grid), io_nt.aux, io_nt.diagnostics)
+            initialize_io(
+                stats.nc_filename,
+                eltype(grid),
+                io_nt.aux,
+                io_nt.diagnostics,
+            )
             initialize_io(stats.nc_filename, eltype(grid), ts_list)
         end
     end
@@ -291,7 +393,8 @@ function initialize(sim::Simulation1d)
         if truncate_stack_trace
             @warn "IO during initialization failed."
         else
-            @warn "IO during initialization failed." exception = (e, catch_backtrace())
+            @warn "IO during initialization failed." exception =
+                (e, catch_backtrace())
         end
         return (integrator, :simulation_crashed)
     finally
@@ -331,27 +434,64 @@ function solve_args(sim::Simulation1d)
         dt_min = sim.dt_min,
     )
 
-    callback_io = ODE.DiscreteCallback(condition_io, affect_io!; save_positions = (false, false))
+    callback_io = ODE.DiscreteCallback(
+        condition_io,
+        affect_io!;
+        save_positions = (false, false),
+    )
     callback_io = sim.skip_io ? () : (callback_io,)
-    callback_cfl = ODE.DiscreteCallback(condition_every_iter, monitor_cfl!; save_positions = (false, false))
+    callback_cfl = ODE.DiscreteCallback(
+        condition_every_iter,
+        monitor_cfl!;
+        save_positions = (false, false),
+    )
     callback_cfl = sim.precip_model isa TC.Clima1M ? (callback_cfl,) : ()
-    callback_dtmax = ODE.DiscreteCallback(condition_every_iter, dt_max!; save_positions = (false, false))
-    callback_filters = ODE.DiscreteCallback(condition_every_iter, affect_filter!; save_positions = (false, false))
-    callback_adapt_dt = ODE.DiscreteCallback(condition_every_iter, adaptive_dt!; save_positions = (false, false))
+    callback_dtmax = ODE.DiscreteCallback(
+        condition_every_iter,
+        dt_max!;
+        save_positions = (false, false),
+    )
+    callback_filters = ODE.DiscreteCallback(
+        condition_every_iter,
+        affect_filter!;
+        save_positions = (false, false),
+    )
+    callback_adapt_dt = ODE.DiscreteCallback(
+        condition_every_iter,
+        adaptive_dt!;
+        save_positions = (false, false),
+    )
     callback_adapt_dt = sim.adapt_dt ? (callback_adapt_dt,) : ()
-    if sim.edmf.entr_closure isa TC.PrognosticNoisyRelaxationProcess && sim.adapt_dt
-        @warn("The prognostic noisy relaxation process currently uses a Euler-Maruyama time stepping method,
-              which does not support adaptive time stepping. Adaptive time stepping disabled.")
+    if sim.edmf.entr_closure isa TC.PrognosticNoisyRelaxationProcess &&
+       sim.adapt_dt
+        @warn(
+            "The prognostic noisy relaxation process currently uses a Euler-Maruyama time stepping method,
+            which does not support adaptive time stepping. Adaptive time stepping disabled."
+        )
         callback_adapt_dt = ()
     end
 
-    callbacks = ODE.CallbackSet(callback_adapt_dt..., callback_dtmax, callback_cfl..., callback_filters, callback_io...)
+    callbacks = ODE.CallbackSet(
+        callback_adapt_dt...,
+        callback_dtmax,
+        callback_cfl...,
+        callback_filters,
+        callback_io...,
+    )
 
     if sim.edmf.entr_closure isa TC.PrognosticNoisyRelaxationProcess
-        prob = SDE.SDEProblem(∑tendencies!, ∑stoch_tendencies!, prog, t_span, params; dt = sim.TS.dt)
+        prob = SDE.SDEProblem(
+            ∑tendencies!,
+            ∑stoch_tendencies!,
+            prog,
+            t_span,
+            params;
+            dt = sim.TS.dt,
+        )
         alg = SDE.EM()
     else
-        prob = ODE.ODEProblem(∑tendencies!, prog, t_span, params; dt = sim.TS.dt)
+        prob =
+            ODE.ODEProblem(∑tendencies!, prog, t_span, params; dt = sim.TS.dt)
         alg = ODE.Euler()
     end
 

@@ -27,7 +27,8 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
 
     Ifc = CCO.InterpolateF2C()
     wvec = CC.Geometry.WVector
-    w_bcs = (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
+    w_bcs =
+        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     ∇ = CCO.DivergenceC2F(; w_bcs...)
     aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
@@ -53,7 +54,10 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
         H_up = plume_scale_height[i]
         w_en = aux_en_f.w
 
-        b_bcs = (; bottom = CCO.SetValue(b_up[kc_surf]), top = CCO.SetValue(b_up[kc_toa]))
+        b_bcs = (;
+            bottom = CCO.SetValue(b_up[kc_surf]),
+            top = CCO.SetValue(b_up[kc_toa]),
+        )
         a_bcs = a_up_boundary_conditions(surf, edmf, i)
         Ifb = CCO.InterpolateC2F(; b_bcs...)
         Ifa = CCO.InterpolateC2F(; a_bcs...)
@@ -63,10 +67,27 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
         nh_press_drag = aux_up_f[i].nh_pressure_drag
         nh_pressure = aux_up_f[i].nh_pressure
 
-        @. nh_press_buoy = Int(Ifa(a_up) > 0) * -α_b / (1 + α₂_asp_ratio²) * ρ_f * Ifa(a_up) * Ifb(b_up)
-        @. nh_press_adv = Int(Ifa(a_up) > 0) * ρ_f * Ifa(a_up) * α_a * w_up * ∇(wvec(Ifc(w_up)))
+        @. nh_press_buoy =
+            Int(Ifa(a_up) > 0) * -α_b / (1 + α₂_asp_ratio²) *
+            ρ_f *
+            Ifa(a_up) *
+            Ifb(b_up)
+        @. nh_press_adv =
+            Int(Ifa(a_up) > 0) *
+            ρ_f *
+            Ifa(a_up) *
+            α_a *
+            w_up *
+            ∇(wvec(Ifc(w_up)))
         # drag as w_dif and account for downdrafts
-        @. nh_press_drag = Int(Ifa(a_up) > 0) * -1 * ρ_f * Ifa(a_up) * α_d * (w_up - w_en) * abs(w_up - w_en) / H_up
+        @. nh_press_drag =
+            Int(Ifa(a_up) > 0) *
+            -1 *
+            ρ_f *
+            Ifa(a_up) *
+            α_d *
+            (w_up - w_en) *
+            abs(w_up - w_en) / H_up
         @. nh_pressure = nh_press_buoy + nh_press_adv + nh_press_drag
     end
     return nothing

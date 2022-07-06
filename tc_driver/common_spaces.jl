@@ -2,13 +2,25 @@ import ClimaCore
 const CC = ClimaCore
 
 function periodic_line_mesh(; x_max, x_elem)
-    domain = CC.Domains.IntervalDomain(CCG.XPoint(zero(x_max)), CCG.XPoint(x_max); periodic = true)
+    domain = CC.Domains.IntervalDomain(
+        CCG.XPoint(zero(x_max)),
+        CCG.XPoint(x_max);
+        periodic = true,
+    )
     return CC.Meshes.IntervalMesh(domain; nelems = x_elem)
 end
 
 function periodic_rectangle_mesh(; x_max, y_max, x_elem, y_elem)
-    x_domain = CC.Domains.IntervalDomain(CCG.XPoint(zero(x_max)), CCG.XPoint(x_max); periodic = true)
-    y_domain = CC.Domains.IntervalDomain(CCG.YPoint(zero(y_max)), CCG.YPoint(y_max); periodic = true)
+    x_domain = CC.Domains.IntervalDomain(
+        CCG.XPoint(zero(x_max)),
+        CCG.XPoint(x_max);
+        periodic = true,
+    )
+    y_domain = CC.Domains.IntervalDomain(
+        CCG.YPoint(zero(y_max)),
+        CCG.YPoint(y_max);
+        periodic = true,
+    )
     domain = CC.Domains.RectangleDomain(x_domain, y_domain)
     return CC.Meshes.RectilinearMesh(domain, x_elem, y_elem)
 end
@@ -32,7 +44,11 @@ end
 
 function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     FT = eltype(z_max)
-    z_domain = CC.Domains.IntervalDomain(CCG.ZPoint(zero(z_max)), CCG.ZPoint(z_max); boundary_tags = (:bottom, :top))
+    z_domain = CC.Domains.IntervalDomain(
+        CCG.ZPoint(zero(z_max)),
+        CCG.ZPoint(z_max);
+        boundary_tags = (:bottom, :top),
+    )
     z_mesh = CC.Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
     z_topology = CC.Topologies.IntervalTopology(z_mesh)
@@ -40,8 +56,11 @@ function make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     center_space = CC.Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
     face_space = CC.Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
 
-    svpc_domain =
-        CC.Domains.IntervalDomain(CC.Geometry.ZPoint{FT}(0), CC.Geometry.ZPoint{FT}(1), boundary_tags = (:bottom, :top))
+    svpc_domain = CC.Domains.IntervalDomain(
+        CC.Geometry.ZPoint{FT}(0),
+        CC.Geometry.ZPoint{FT}(1),
+        boundary_tags = (:bottom, :top),
+    )
     svpc_mesh = CC.Meshes.IntervalMesh(svpc_domain, nelems = 1)
     svpc_space = CC.Spaces.CenterFiniteDifferenceSpace(svpc_mesh)
 
@@ -50,7 +69,8 @@ end
 
 function construct_mesh(namelist; FT = Float64)
 
-    truncated_gcm_mesh = TC.parse_namelist(namelist, "grid", "stretch", "flag"; default = false)
+    truncated_gcm_mesh =
+        TC.parse_namelist(namelist, "grid", "stretch", "flag"; default = false)
 
     if Cases.get_case(namelist) == Cases.LES_driven_SCM()
         Δz = get(namelist["grid"], "dz", nothing)
@@ -82,18 +102,28 @@ function get_spaces(namelist, param_set, FT)
     center_space, face_space, svpc_space = if namelist["config"] == "sphere"
         h_elem = 1
         quad = CC.Spaces.Quadratures.GLL{2}()
-        horizontal_mesh = cubed_sphere_mesh(; radius = FT(TCP.planet_radius(param_set)), h_elem)
+        horizontal_mesh = cubed_sphere_mesh(;
+            radius = FT(TCP.planet_radius(param_set)),
+            h_elem,
+        )
         h_space = make_horizontal_space(horizontal_mesh, quad)
         (; z_stretch, z_max, z_elem) = construct_mesh(namelist; FT = FT)
-        center_space, face_space, svpc_space = make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        center_space, face_space, svpc_space =
+            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
         center_space, face_space, svpc_space
     elseif namelist["config"] == "column" # single column (default)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
         quad = CC.Spaces.Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(; x_max = Δx, y_max = Δx, x_elem = 1, y_elem = 1)
+        horizontal_mesh = periodic_rectangle_mesh(;
+            x_max = Δx,
+            y_max = Δx,
+            x_elem = 1,
+            y_elem = 1,
+        )
         h_space = make_horizontal_space(horizontal_mesh, quad)
         (; z_stretch, z_max, z_elem) = construct_mesh(namelist; FT = FT)
-        center_space, face_space, svpc_space = make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        center_space, face_space, svpc_space =
+            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
         center_space, face_space, svpc_space
     end
     # if truncated_gcm_mesh
