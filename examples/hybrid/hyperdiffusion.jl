@@ -3,6 +3,7 @@ hyperdiffusion_cache(
     κ₄ = FT(0),
     divergence_damping_factor = FT(1),
     use_tempest_mode = false,
+    disable_qt_hyperdiffusion = false,
 ) =
     (:ρq_tot in propertynames(Y.c)) ?
     merge(
@@ -13,6 +14,7 @@ hyperdiffusion_cache(
             κ₄,
             divergence_damping_factor,
             use_tempest_mode,
+            disable_qt_hyperdiffusion,
         ),
         use_tempest_mode ? (; ᶠχw_data = similar(Y.F, FT)) : NamedTuple(),
     ) :
@@ -23,6 +25,7 @@ hyperdiffusion_cache(
             κ₄,
             divergence_damping_factor,
             use_tempest_mode,
+            disable_qt_hyperdiffusion,
         ),
         use_tempest_mode ? (; ᶠχw_data = similar(Y.F, FT)) : NamedTuple(),
     )
@@ -37,9 +40,15 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
-        (; ghost_buffer, κ₄, divergence_damping_factor, use_tempest_mode) = p
+        (;
+            ghost_buffer,
+            κ₄,
+            divergence_damping_factor,
+            use_tempest_mode,
+            disable_qt_hyperdiffusion,
+        ) = p
         point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-        is_ρq_tot = :ρq_tot in propertynames(Y.c)
+        is_ρq_tot = :ρq_tot in propertynames(Y.c) && !disable_qt_hyperdiffusion
         is_2d_pt = point_type <: Geometry.Abstract2DPoint
         is_3d_pt = !is_2d_pt
 
