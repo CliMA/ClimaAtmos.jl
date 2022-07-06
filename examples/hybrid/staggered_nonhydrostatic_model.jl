@@ -327,7 +327,146 @@ Base.one(::T) where {T <: Geometry.AxisTensor} = one(T)
 Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} =
     T(axes(T), S(one(T′)))
 
-function Wfact!(W, Y, p, dtγ, t)
+# :ρe_tot in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+function Wfact_special!(W, Y, p, dtγ, t)
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
+    (; flags, dtγ_ref) = W
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = W
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params, ᶠupwind_product) = p
+    @nvtx "Wfact!" color = colorant"green" begin
+        thermo_params = CAP.thermodynamics_params(params)
+
+        R_d = FT(CAP.R_d(params))
+        κ_d = FT(CAP.kappa_d(params))
+        cv_d = FT(CAP.cv_d(params))
+        T_tri = FT(CAP.T_triple(params))
+        MSLP = FT(CAP.MSLP(params))
+
+        dtγ_ref[] = dtγ
+
+        # If we let ᶠw_data = ᶠw.components.data.:1 and ᶠw_unit = one.(ᶠw), then
+        # ᶠw == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠw.
+        ᶠw_data = ᶠw.components.data.:1
+
+        # If ∂(ᶜarg)/∂(ᶠw_data) = 0, then
+        # ∂(ᶠupwind_product(ᶠw, ᶜarg))/∂(ᶠw_data) =
+        #     ᶠupwind_product(ᶠw + εw, arg) / to_scalar(ᶠw + εw).
+        # The εw is only necessary in case w = 0.
+        εw = Ref(Geometry.Covariant3Vector(eps(FT)))
+        to_scalar(vector) = vector.u₃
+
+        to_scalar_coefs(vector_coefs) =
+            map(vector_coef -> vector_coef.u₃, vector_coefs)
+
+
+        Fields.bycolumn(axes(Y.c)) do colidx
+            @. ∂ᶜK∂ᶠw_data[colidx] =
+                ᶜinterp(ᶠw_data[colidx]) *
+                norm_sqr(one(ᶜinterp(ᶠw[colidx]))) *
+                ᶜinterp_stencil(one(ᶠw_data[colidx]))
+            @. ∂ᶜρₜ∂ᶠ𝕄[colidx] =
+                -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρ[colidx]) * one(ᶠw[colidx])))
+
+            # elseif :ρe_tot in propertynames(Y.c)
+            ᶜρe = Y.c.ρe_tot
+            @. ᶜK[colidx] =
+                norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+            @. ᶜts[colidx] = thermo_state_ρe(
+                Y.c.ρe_tot[colidx],
+                Y.c[colidx],
+                ᶜK[colidx],
+                ᶜΦ[colidx],
+                params,
+            )
+            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+
+            if isnothing(ᶠupwind_product)
+                #         elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
+                #             # same as above, but we approximate ∂(ᶜp)/∂(ᶜK) = 0, so that
+                #             # ∂ᶜ𝔼ₜ∂ᶠ𝕄 has 3 diagonals instead of 5
+                @. ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx] = -(ᶜdivᵥ_stencil(
+                    ᶠinterp(ᶜρe[colidx] + ᶜp[colidx]) * one(ᶠw[colidx]),
+                ))
+            else
+                #         if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
+                @. ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx] = -(ᶜdivᵥ_stencil(
+                    ᶠinterp(ᶜρ[colidx]) * ᶠupwind_product(
+                        ᶠw[colidx] + εw,
+                        (ᶜρe[colidx] + ᶜp[colidx]) / ᶜρ[colidx],
+                    ) / to_scalar(ᶠw[colidx] + εw),
+                ))
+            end
+            # elseif :ρe_tot in propertynames(Y.c)
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ(ᶜK + ᶜΦ)
+            # ∂(ᶠwₜ)/∂(ᶜρe) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe)
+            # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
+            # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe) = ᶠgradᵥ_stencil(R_d / cv_d)
+            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) *
+                ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe[colidx])),
+            )
+
+
+            # if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ(ᶜK + ᶜΦ)
+            # ∂(ᶠwₜ)/∂(ᶜρ) =
+            #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) +
+            #     ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
+            # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
+            # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) =
+            #     ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri))
+            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
+            # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
+            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
+                    R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
+                ) +
+                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                ᶠinterp_stencil(one(ᶜρ[colidx])),
+            )
+
+            # elseif :ρe_tot in propertynames(Y.c)
+            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
+                compose(
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(-(ᶜρ[colidx] * R_d / cv_d)) +
+                    -1 * ᶠgradᵥ_stencil(one(ᶜK[colidx])),
+                    ∂ᶜK∂ᶠw_data[colidx],
+                ),
+            )
+
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                if isnothing(ᶠupwind_product)
+                    # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜ𝕋) * ᶠw)
+                    # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋) * ᶠw_unit)
+                    @. ∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx] =
+                        -(ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋[colidx]) * one(ᶠw[colidx])))
+                else
+                    # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw, ᶜ𝕋 / ᶜρ))
+                    # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) =
+                    #     -ᶜdivᵥ_stencil(
+                    #         ᶠinterp(ᶜρ) * ∂(ᶠupwind_product(ᶠw, ᶜ𝕋 / ᶜρ))/∂(ᶠw_data),
+                    #     )
+                    @. ∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx] = -(ᶜdivᵥ_stencil(
+                        ᶠinterp(ᶜρ[colidx]) * ᶠupwind_product(
+                            ᶠw[colidx] + εw,
+                            ᶜ𝕋[colidx] / ᶜρ[colidx],
+                        ) / to_scalar(ᶠw[colidx] + εw),
+                    ))
+                end
+            end
+        end
+    end
+end
+
+
+function Wfact_generic!(W, Y, p, dtγ, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
