@@ -30,7 +30,7 @@ steps:
 
   - wait
 
-  - group: "Core Long runs"
+  - group: "Core Long runs (central difference)"
 
     steps:
 
@@ -42,21 +42,9 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_tot) third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --dt 350secs --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_third/*"
-        agents:
-          slurm_cpus_per_task: 8
-
       - label: ":computer: held suarez (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 6hours --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist filter"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 400secs --apply_moisture_filter true --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_filter --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equil_filter/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -83,6 +71,34 @@ steps:
         artifact_paths: "longrun_hs_rhoeint/*"
         agents:
           slurm_cpus_per_task: 8
+  
+  - group: "Core Long runs (third-order upwinding)"
+
+    steps:
+
+      - label: ":computer: held suarez (ρe_tot) third order"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --dt 350secs --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_third/*"
+        agents:
+          slurm_cpus_per_task: 8
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist third order"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 150secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_third/*"
+        agents:
+          slurm_cpus_per_task: 8
+      
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation third order"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --vert_diff true --moist equil --rad gray --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_third/*"
+        agents:
+          slurm_cpus_per_task: 8
+      
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation third order"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --vert_diff true --moist equil --rad clearsky --microphy 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 150secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_clearsky_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_third/*"
+        agents:
+          slurm_cpus_per_task: 8
 
   - group: "Experimental Long runs"
 
@@ -106,45 +122,45 @@ steps:
         agents:
           slurm_cpus_per_task: 8
       
-      - label: ":computer: held suarez (ρe_tot) equilmoist third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 150secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equil_third/*"
-        agents:
-          slurm_cpus_per_task: 8
-      
       - label: ":computer: held suarez (ρe_tot) equilmoist third order sponge"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 150secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third_sponge --dt_save_to_sol 6hours --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_third_sponge/*"
         agents:
           slurm_cpus_per_task: 8
           
-      - label: ":computer: held suarez (ρe_tot) equilmoist third order"
+      - label: ":computer: held suarez (ρe_tot) equilmoist third order dt 100"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 100secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third_dt100 --dt_save_to_sol 6hours --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_third_dt100/*"
         agents:
           slurm_cpus_per_task: 8
-          
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --vert_diff true --moist equil --rad gray --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_third/*"
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist third order float64"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --FLOAT_TYPE Float64 --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 150secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third_ft64 --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_third_ft64/*"
         agents:
           slurm_cpus_per_task: 8
       
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --vert_diff true --moist equil --rad clearsky --microphy 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 150secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_clearsky_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_third/*"
+      - label: ":computer: held suarez (ρe_tot) equilmoist float64"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --FLOAT_TYPE Float64 --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil_ft64 --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_ft64/*"
         agents:
           slurm_cpus_per_task: 8
       
-      - label: ":computer: held suarez (ρe_tot) equilmoist dt250"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil_dt250 --dt_save_to_sol 6hours --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equil_dt250/*"
+      - label: ":computer: held suarez (ρe_tot) equilmoist filter"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 400secs --apply_moisture_filter true --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_filter --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_filter/*"
         agents:
           slurm_cpus_per_task: 8
       
       - label: ":computer: held suarez (ρe_tot) equilmoist noqthyper"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 400secs --disable_qt_hyperdiffusion true --t_end 1000days --fps 30 --job_id longrun_hs_rhoe_equil_noqthyper --dt_save_to_sol 6hours --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_noqthyper/*"
+        agents:
+          slurm_cpus_per_task: 8
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist third order noqthyper"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --disable_qt_hyperdiffusion true --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_noqthyper_third --dt_save_to_sol 6hours --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_noqthyper_third/*"
         agents:
           slurm_cpus_per_task: 8
 
