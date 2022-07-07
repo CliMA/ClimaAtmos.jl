@@ -6,6 +6,9 @@ end
 include("classify_case.jl")
 include("utilities.jl")
 include("nvtx.jl")
+
+parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
+
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
@@ -43,8 +46,12 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
 
+include(joinpath("..", "RRTMGPInterface.jl"))
+import .RRTMGPInterface as RRTMGPI
+
 include("types.jl")
 
+import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
@@ -60,14 +67,10 @@ include("parameter_set.jl")
 # TODO: unify parsed_args and namelist
 params = create_parameter_set(FT, parsed_args, namelist)
 
-moisture_model() = moisture_model(parsed_args)
-energy_form() = energy_form(parsed_args)
-radiation_model() = radiation_model(parsed_args)
-microphysics_model() = microphysics_model(parsed_args)
-forcing_type() = forcing_type(parsed_args)
-turbconv_model() = turbconv_model(FT, parsed_args, namelist)
+model_spec = get_model_spec(FT, parsed_args, namelist)
+numerics = get_numerics(parsed_args)
 
-diffuse_momentum = vert_diff && !(forcing_type() isa HeldSuarezForcing)
+diffuse_momentum = vert_diff && !(model_spec.forcing_type isa HeldSuarezForcing)
 
 using Colors
 using OrdinaryDiffEq
@@ -80,16 +83,8 @@ using ClimaCore
 
 import Random
 Random.seed!(1234)
-include(joinpath("..", "RRTMGPInterface.jl"))
-import .RRTMGPInterface as RRTMGPI
 
-!isnothing(radiation_model()) && include("radiation_utilities.jl")
-
-parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
-
-
-upwinding_mode() = Symbol(parse_arg(parsed_args, "upwinding", "third_order"))
-@assert upwinding_mode() in (:none, :first_order, :third_order)
+!isnothing(model_spec.radiation_model) && include("radiation_utilities.jl")
 
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -97,7 +92,7 @@ jacobi_flags(::InternalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::PotentialTemperature) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobian_flags = jacobi_flags(energy_form())
+jacobian_flags = jacobi_flags(model_spec.energy_form)
 max_newton_iters = 2 # only required by ODE algorithms that use Newton's method
 newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
 show_progress_bar = isinteractive()
@@ -105,52 +100,64 @@ additional_solver_kwargs = () # e.g., abstol and reltol
 test_implicit_solver = false # makes solver extremely slow when set to `true`
 
 # TODO: flip order so that NamedTuple() is fallback.
-additional_cache(Y, params, dt; use_tempest_mode = false) = merge(
-    hyperdiffusion_cache(
-        Y;
-        κ₄ = FT(κ₄),
-        use_tempest_mode,
-        disable_qt_hyperdiffusion,
-    ),
-    rayleigh_sponge ?
-    rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
-    NamedTuple(),
-    viscous_sponge ?
-    viscous_sponge_cache(Y; zd_viscous = FT(zd_viscous), κ₂ = FT(κ₂_sponge)) : NamedTuple(),
-    microphysics_cache(Y, microphysics_model()),
-    forcing_cache(Y, forcing_type()),
-    isnothing(radiation_model()) ? NamedTuple() :
-    rrtmgp_model_cache(
-        Y,
-        params,
-        radiation_model();
-        idealized_insolation,
-        idealized_h2o,
-        idealized_clouds,
-    ),
-    vert_diff ?
-    vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum, coupled) :
-    NamedTuple(),
-    (;
-        tendency_knobs = (;
-            hs_forcing = forcing_type() isa HeldSuarezForcing,
-            microphy_0M = microphysics_model() isa Microphysics0Moment,
-            rad_flux = !isnothing(radiation_model()),
-            vert_diff,
-            hyperdiff,
-            has_turbconv = !isnothing(turbconv_model()),
-        )
-    ),
-    (; Δt = dt),
-    (; enable_default_remaining_tendency = isnothing(turbconv_model())),
-    !isnothing(turbconv_model()) ?
-    (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
-    (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
-)
+function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
+    FT = typeof(dt)
+    (; microphysics_model, forcing_type, radiation_model, turbconv_model) =
+        model_spec
+    return merge(
+        hyperdiffusion_cache(
+            Y;
+            κ₄ = FT(κ₄),
+            use_tempest_mode,
+            disable_qt_hyperdiffusion,
+        ),
+        rayleigh_sponge ?
+        rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
+        NamedTuple(),
+        viscous_sponge ?
+        viscous_sponge_cache(
+            Y;
+            zd_viscous = FT(zd_viscous),
+            κ₂ = FT(κ₂_sponge),
+        ) : NamedTuple(),
+        microphysics_cache(Y, microphysics_model),
+        forcing_cache(Y, forcing_type),
+        isnothing(radiation_model) ? NamedTuple() :
+        rrtmgp_model_cache(
+            Y,
+            params,
+            radiation_model;
+            idealized_insolation,
+            idealized_h2o,
+            idealized_clouds,
+        ),
+        vert_diff ?
+        vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum, coupled) :
+        NamedTuple(),
+        (;
+            tendency_knobs = (;
+                hs_forcing = forcing_type isa HeldSuarezForcing,
+                microphy_0M = microphysics_model isa Microphysics0Moment,
+                rad_flux = !isnothing(radiation_model),
+                vert_diff,
+                rayleigh_sponge,
+                viscous_sponge,
+                hyperdiff,
+                has_turbconv = !isnothing(turbconv_model),
+            )
+        ),
+        (; Δt = dt),
+        (; enable_default_remaining_tendency = isnothing(turbconv_model)),
+        !isnothing(turbconv_model) ?
+        (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
+        (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
+    )
+end
 
-additional_tendency!(Yₜ, Y, p, t) = begin
+function additional_tendency!(Yₜ, Y, p, t)
     (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
     (; microphy_0M, hyperdiff, has_turbconv) = p.tendency_knobs
+    (; rayleigh_sponge, viscous_sponge) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
     rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
@@ -219,7 +226,7 @@ callback_filters = OrdinaryDiffEq.DiscreteCallback(
     save_positions = (false, false),
 )
 
-additional_callbacks = if !isnothing(radiation_model())
+additional_callbacks = if !isnothing(model_spec.radiation_model)
     # TODO: better if-else criteria?
     dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
     (
@@ -233,7 +240,8 @@ additional_callbacks = if !isnothing(radiation_model())
 else
     ()
 end
-if moisture_model() isa EquilMoistModel && parsed_args["apply_moisture_filter"]
+if model_spec.moisture_model isa EquilMoistModel &&
+   parsed_args["apply_moisture_filter"]
     additional_callbacks = (additional_callbacks..., callback_filters)
 end
 
@@ -274,12 +282,6 @@ elseif parsed_args["config"] == "column" # single column
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 end
 
-models = (;
-    moisture_model = moisture_model(),
-    energy_form = energy_form(),
-    turbconv_model = turbconv_model(),
-)
-
 if haskey(ENV, "RESTART_FILE")
     restart_file_name = ENV["RESTART_FILE"]
     if is_distributed
@@ -314,11 +316,11 @@ else
         center_space,
         face_space,
         params,
-        models,
+        model_spec,
     )
 end
 
-p = get_cache(Y, params, upwinding_mode(), dt)
+p = get_cache(Y, params, model_spec, numerics, dt)
 if parsed_args["turbconv"] == "edmf"
     TCU.init_tc!(Y, p, params, namelist)
 end
@@ -405,7 +407,7 @@ function make_save_to_disk_func(output_dir, p)
                 )
             end
 
-            if !isnothing(radiation_model())
+            if !isnothing(model_spec.radiation_model)
                 (;
                     face_lw_flux_dn,
                     face_lw_flux_up,
@@ -448,7 +450,7 @@ function make_save_to_disk_func(output_dir, p)
                         ),
                     ),
                 )
-                if radiation_model() isa
+                if model_spec.radiation_model isa
                    RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
                     (;
                         face_clear_lw_flux_dn,
@@ -561,7 +563,7 @@ function make_save_to_disk_func(output_dir, p)
                     vert_diff_diagnostic = NamedTuple()
                 end
 
-                if !isnothing(radiation_model())
+                if !isnothing(model_spec.radiation_model)
                     ᶠz_field = Fields.coordinate_field(Y.f).z
 
                     # make sure datatype is correct
@@ -584,7 +586,7 @@ function make_save_to_disk_func(output_dir, p)
                         sw_flux_down = global_face_sw_flux_dn,
                         sw_flux_up = global_face_sw_flux_up,
                     )
-                    if radiation_model() isa
+                    if model_spec.radiation_model isa
                        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
 
                         # make sure datatype is correct
@@ -752,7 +754,7 @@ function make_save_to_disk_func(output_dir, p)
                 vert_diff_diagnostic = NamedTuple()
             end
 
-            if !isnothing(radiation_model())
+            if !isnothing(model_spec.radiation_model)
                 (;
                     face_lw_flux_dn,
                     face_lw_flux_up,
@@ -777,7 +779,7 @@ function make_save_to_disk_func(output_dir, p)
                         axes(Y.f),
                     ),
                 )
-                if radiation_model() isa
+                if model_spec.radiation_model isa
                    RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
                     (;
                         face_clear_lw_flux_dn,
@@ -947,12 +949,13 @@ include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !is_distributed
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
-        paperplots_baro_wave(sol, output_dir, p, FT(90), FT(180))
+        paperplots_baro_wave(model_spec, sol, output_dir, p, FT(90), FT(180))
     elseif is_column_radiative_equilibrium(parsed_args)
         custom_postprocessing(sol, output_dir)
     elseif is_column_edmf(parsed_args)
         postprocessing_edmf(sol, output_dir, fps)
-    elseif forcing_type() isa HeldSuarezForcing && t_end >= (3600 * 24 * 400)
+    elseif model_spec.forcing_type isa HeldSuarezForcing &&
+           t_end >= (3600 * 24 * 400)
         paperplots_held_suarez(sol, output_dir, p, FT(90), FT(180))
     else
         postprocessing(sol, output_dir, fps)

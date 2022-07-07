@@ -91,3 +91,30 @@ Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
 Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
 Base.broadcastable(x::AbstractForcing) = Ref(x)
+
+
+function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
+
+    model_spec = (;
+        moisture_model = moisture_model(parsed_args),
+        energy_form = energy_form(parsed_args),
+        radiation_model = radiation_model(parsed_args),
+        microphysics_model = microphysics_model(parsed_args),
+        forcing_type = forcing_type(parsed_args),
+        turbconv_model = turbconv_model(FT, parsed_args, namelist),
+    )
+
+    return model_spec
+end
+
+function get_numerics(parsed_args)
+
+    numerics = (;
+        upwinding_mode = Symbol(
+            parse_arg(parsed_args, "upwinding", "third_order"),
+        )
+    )
+    @assert numerics.upwinding_mode in (:none, :first_order, :third_order)
+
+    return numerics
+end

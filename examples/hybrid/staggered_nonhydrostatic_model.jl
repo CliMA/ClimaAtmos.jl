@@ -73,21 +73,22 @@ const C123 = Geometry.Covariant123Vector
 
 include("thermo_state.jl")
 
-get_cache(Y, params, upwinding_mode, dt) = merge(
-    default_cache(Y, params, upwinding_mode),
-    additional_cache(Y, params, dt),
+get_cache(Y, params, model_spec, numerics, dt) = merge(
+    default_cache(Y, params, numerics),
+    additional_cache(Y, params, model_spec, dt),
 )
 
-function default_cache(Y, params, upwinding_mode)
+function default_cache(Y, params, numerics)
+    (; upwinding_mode) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
-        Ω = FT(CAP.Omega(params))
+        Ω = CAP.Omega(params)
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
         lat_sfc = Fields.level(ᶜcoord.lat, 1)
     else
-        f = FT(CAP.f_plane_coriolis_frequency(params))
+        f = CAP.f_plane_coriolis_frequency(params)
         ᶜf = map(_ -> f, ᶜcoord)
         lat_sfc = map(_ -> FT(0), Fields.level(ᶜcoord, 1))
     end
@@ -108,7 +109,7 @@ function default_cache(Y, params, upwinding_mode)
     return (;
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
-        ᶜΦ = FT(CAP.grav(params)) .* ᶜcoord.z,
+        ᶜΦ = CAP.grav(params) .* ᶜcoord.z,
         ᶜts = similar(Y.c, ts_type),
         ᶜp = similar(Y.c, FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
