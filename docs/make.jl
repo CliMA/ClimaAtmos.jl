@@ -27,6 +27,7 @@ makedocs(
         "Equations" => "equations.md",
         "REPL scripts" => "repl_scripts.md",
         "Command line arguments" => "cl_args.md",
+        "API" => "api.md",
     ],
 )
 
