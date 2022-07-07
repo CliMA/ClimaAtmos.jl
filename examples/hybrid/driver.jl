@@ -17,6 +17,7 @@ coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
+case_name = parsed_args["turbconv_case"]
 h_elem = parsed_args["h_elem"]
 z_elem = Int(parsed_args["z_elem"])
 z_max = FT(parsed_args["z_max"])
@@ -48,7 +49,7 @@ import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
-    nl = TCU.NameList.default_namelist("Bomex")
+    nl = TCU.NameList.default_namelist(case_name)
     nl["set_src_seed"] = true
     nl
 else
