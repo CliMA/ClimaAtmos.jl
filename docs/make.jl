@@ -12,6 +12,7 @@ makedocs(
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
     strict = true,
+    checkdocs = :exports,
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
