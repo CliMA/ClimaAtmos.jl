@@ -64,7 +64,7 @@ function parse_commandline()
         arg_type = Bool
         default = false
         "--rad"
-        help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
+        help = "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
         arg_type = String
         "--energy_name"
         help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
