@@ -21,20 +21,32 @@ catch err
 end
 
 OrdinaryDiffEq.step!(integrator) # compile first
-X = similar(Y)
+X = similar(integrator.u)
 
 println("Wfact")
-@time Wfact!(W, Y, p, dt, zero(dt));
-@time Wfact!(W, Y, p, dt, zero(dt));
+@time integrator.f.f1.Wfact(
+    integrator.cache.W,
+    integrator.u,
+    integrator.p,
+    integrator.dt,
+    integrator.t,
+);
+@time integrator.f.f1.Wfact(
+    integrator.cache.W,
+    integrator.u,
+    integrator.p,
+    integrator.dt,
+    integrator.t,
+);
 println("linsolve")
-@time integrator.cache.linsolve(X, W, Y);
-@time integrator.cache.linsolve(X, W, Y);
+@time integrator.cache.linsolve(X, integrator.cache.W, integrator.u);
+@time integrator.cache.linsolve(X, integrator.cache.W, integrator.u);
 println("implicit_tendency!")
-@time implicit_tendency!(X, Y, p, zero(dt));
-@time implicit_tendency!(X, Y, p, zero(dt));
+@time implicit_tendency!(X, integrator.u, integrator.p, integrator.t);
+@time implicit_tendency!(X, integrator.u, integrator.p, integrator.t);
 println("remaining_tendency!")
-@time remaining_tendency!(X, Y, p, zero(dt));
-@time remaining_tendency!(X, Y, p, zero(dt));
+@time remaining_tendency!(X, integrator.u, integrator.p, integrator.t);
+@time remaining_tendency!(X, integrator.u, integrator.p, integrator.t);
 
 
 
