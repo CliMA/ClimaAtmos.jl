@@ -3,7 +3,7 @@ using SurfaceFluxes
 using CloudMicrophysics
 const SF = SurfaceFluxes
 const CCG = ClimaCore.Geometry
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection as TC
 const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 

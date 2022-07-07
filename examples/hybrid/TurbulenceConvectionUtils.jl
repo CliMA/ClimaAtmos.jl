@@ -1,29 +1,30 @@
 module TurbulenceConvectionUtils
 
 using LinearAlgebra, StaticArrays
+import ClimaAtmos
 import ClimaAtmos.Parameters as CAP
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
 import ClimaCore.Operators as CCO
 import ClimaCore.Geometry: ⊗
 import OrdinaryDiffEq as ODE
-import TurbulenceConvection
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection
+import ClimaAtmos.TurbulenceConvection as TC
 
 import UnPack
 import Logging
 import TerminalLoggers
 Logging.global_logger(TerminalLoggers.TerminalLogger())
 
-const tc_dir = pkgdir(TC)
+const ca_dir = pkgdir(ClimaAtmos)
 
-include(joinpath(tc_dir, "driver", "Cases.jl"))
+include(joinpath(ca_dir, "tc_driver", "Cases.jl"))
 import .Cases
 
-include(joinpath(tc_dir, "driver", "dycore.jl"))
-include(joinpath(tc_dir, "driver", "Surface.jl"))
-include(joinpath(tc_dir, "driver", "initial_conditions.jl"))
-include(joinpath(tc_dir, "driver", "generate_namelist.jl"))
+include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
+include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
+include(joinpath(ca_dir, "tc_driver", "initial_conditions.jl"))
+include(joinpath(ca_dir, "tc_driver", "generate_namelist.jl"))
 import .NameList
 
 function get_aux(edmf, Y, ::Type{FT}) where {FT}

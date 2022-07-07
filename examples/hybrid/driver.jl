@@ -44,7 +44,7 @@ dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 include("types.jl")
 
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
