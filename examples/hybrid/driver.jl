@@ -506,23 +506,9 @@ function make_save_to_disk_func(output_dir, p)
                 cm_params = CAP.microphysics_params(params)
                 # kinetic energy
                 global_ᶜK = @. norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-                global_ᶜΦ =
-                    FT(CAP.grav(params)) .* Fields.coordinate_field(Y.c).z
 
                 # pressure, temperature, potential temperature
-                if :ρθ in propertynames(Y.c)
-                    global_ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-                elseif :ρe_tot in propertynames(Y.c)
-                    global_ᶜts = @. thermo_state_ρe(
-                        Y.c.ρe_tot,
-                        Y.c,
-                        global_ᶜK,
-                        global_ᶜΦ,
-                        params,
-                    )
-                elseif :ρe_int in propertynames(Y.c)
-                    global_ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-                end
+                global_ᶜts = thermo_state(Y, params, ᶜinterp, global_ᶜK)
                 global_ᶜp = @. TD.air_pressure(thermo_params, global_ᶜts)
                 global_ᶜT = @. TD.air_temperature(thermo_params, global_ᶜts)
                 global_ᶜθ = @. TD.dry_pottemp(thermo_params, global_ᶜts)
@@ -697,18 +683,11 @@ function make_save_to_disk_func(output_dir, p)
 
             ᶜuₕ = Y.c.uₕ
             ᶠw = Y.f.w
-
-            # kinetic energy
+            # kinetic
             @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
 
-            # pressure, temperature, potential temperature
-            if :ρθ in propertynames(Y.c)
-                @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-            elseif :ρe_tot in propertynames(Y.c)
-                @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-            elseif :ρe_int in propertynames(Y.c)
-                @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-            end
+            # thermo state
+            thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
             @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
