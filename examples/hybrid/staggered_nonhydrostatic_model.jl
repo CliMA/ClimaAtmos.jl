@@ -375,12 +375,13 @@ function Wfact_special!(W, Y, p, dtγ, t)
             ᶜρe = Y.c.ρe_tot
             @. ᶜK[colidx] =
                 norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
-            @. ᶜts[colidx] = thermo_state_ρe(
-                Y.c.ρe_tot[colidx],
+            thermo_state!(
+                ᶜts[colidx],
                 Y.c[colidx],
-                ᶜK[colidx],
-                ᶜΦ[colidx],
                 params,
+                ᶜinterp,
+                ᶜK[colidx],
+                ᶠw[colidx],
             )
             @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
