@@ -57,7 +57,7 @@ function thermo_state!(ᶜts, Y::Fields.FieldVector, params, ᶜinterp, K = noth
             C123 = Geometry.Covariant123Vector
             K = @. norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
         end
-        z = Fields.local_geometry_field(Yc).coordinates.z
+        z = Fields.coordinate_field(Yc).z
         thermo_state_ρe_tot!(ᶜts, Yc, thermo_params, moisture_model, z, K)
     elseif energy_model isa InternalEnergy
         thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model)

@@ -54,14 +54,7 @@ function rrtmgp_model_cache(
         # kinetic energy to 0 when computing the pressure using total energy)
         pressure2ozone =
             Spline1D(input_center_pressure, input_center_volume_mixing_ratio_o3)
-        if :ρθ in propertynames(Y.c)
-            ᶜts = @. thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        elseif :ρe_tot in propertynames(Y.c)
-            ᶜΦ = FT(CAP.grav(params)) .* Fields.coordinate_field(Y.c).z
-            ᶜts = @. thermo_state_ρe(Y.c.ρe_tot, Y.c, 0, ᶜΦ, params)
-        elseif :ρe_int in propertynames(Y.c)
-            ᶜts = @. thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-        end
+        ᶜts = thermo_state(Y, params, ᶜinterp, 0)
         ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
         center_volume_mixing_ratio_o3 =
             RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
