@@ -313,19 +313,15 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
 
     # Energy conservation
 
+    thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     if :ρθ in propertynames(Y.c)
-        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
         @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
     elseif :ρe_tot in propertynames(Y.c)
-        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
     elseif :ρe_int in propertynames(Y.c)
-        @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         if point_type <: Geometry.Abstract3DPoint
             @. Yₜ.c.ρe_int -=
                 divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
@@ -439,10 +435,12 @@ function Wfact!(W, Y, p, dtγ, t)
         # ∂(ᶜρₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜρ) * ᶠw_unit)
         @. ∂ᶜρₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρ) * one(ᶠw)))
 
+        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+
         if :ρθ in propertynames(Y.c)
             ᶜρθ = Y.c.ρθ
-            @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
             if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
                 error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρθ")
@@ -465,9 +463,6 @@ function Wfact!(W, Y, p, dtγ, t)
             end
         elseif :ρe_tot in propertynames(Y.c)
             ᶜρe = Y.c.ρe_tot
-            @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
             if isnothing(ᶠupwind_product)
                 if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
@@ -523,8 +518,6 @@ function Wfact!(W, Y, p, dtγ, t)
             end
         elseif :ρe_int in propertynames(Y.c)
             ᶜρe_int = Y.c.ρe_int
-            @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
             if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
                 error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")
