@@ -47,6 +47,9 @@ function parse_commandline()
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
+        "--turbconv_case"
+        help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
+        arg_type = String
         "--hyperdiff"
         help = "Hyperdiffusion [`true` (default), `false`]"
         arg_type = Bool
