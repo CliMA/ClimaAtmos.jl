@@ -115,7 +115,13 @@ function compute_ref_state!(
 end
 
 
-function set_thermo_state_peq!(state, grid, moisture_model, param_set)
+function set_thermo_state_peq!(
+    state,
+    grid,
+    moisture_model,
+    compressibility_model,
+    param_set,
+)
     Ic = CCO.InterpolateF2C()
     thermo_params = TCP.thermodynamics_params(param_set)
     ts_gm = TC.center_aux_grid_mean(state).ts
@@ -140,13 +146,22 @@ function set_thermo_state_peq!(state, grid, moisture_model, param_set)
         end
         e_pot = TC.geopotential(param_set, grid.zc.z[k])
         e_int = prog_gm.ρe_tot[k] / ρ_c[k] - aux_gm.e_kin[k] - e_pot
-        ts_gm[k] = TC.thermo_state_peq(
-            param_set,
-            p_c[k],
-            e_int,
-            prog_gm.ρq_tot[k] / ρ_c[k],
-            thermo_args...,
-        )
+        if compressibility_model isa TC.CompressibleFluid
+            ts_gm[k] = TD.PhaseEquil_ρeq(
+                thermo_params,
+                ρ_c[k],
+                e_int,
+                prog_gm.ρq_tot[k] / ρ_c[k],
+            )
+        elseif compressibility_model isa TC.AnelasticFluid
+            ts_gm[k] = TC.thermo_state_peq(
+                param_set,
+                aux_gm.p[k],
+                e_int,
+                prog_gm.ρq_tot[k] / ρ_c[k],
+                thermo_args...,
+            )
+        end
     end
     return nothing
 end
@@ -216,6 +231,7 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
         aux_gm.h_tot[k] =
             TC.total_enthalpy(param_set, prog_gm.ρe_tot[k] / ρ_c[k], ts)
+        aux_gm.p[k] = TD.air_pressure(thermo_params, ts)
     end
     return
 end
@@ -265,7 +281,13 @@ function ∑tendencies!(
         state = TC.column_state(prog, aux, tendencies, inds...)
         grid = TC.Grid(state)
 
-        set_thermo_state_peq!(state, grid, edmf.moisture_model, param_set)
+        set_thermo_state_peq!(
+            state,
+            grid,
+            edmf.moisture_model,
+            edmf.compressibility_model,
+            param_set,
+        )
         assign_thermo_aux!(state, grid, edmf.moisture_model, param_set)
 
         aux_gm = TC.center_aux_grid_mean(state)

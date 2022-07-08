@@ -256,6 +256,10 @@ abstract type AbstractMoistureModel end
 struct EquilibriumMoisture <: AbstractMoistureModel end
 struct NonEquilibriumMoisture <: AbstractMoistureModel end
 
+abstract type AbstractCompressibilityModel end
+struct CompressibleFluid <: AbstractCompressibilityModel end
+struct AnelasticFluid <: AbstractCompressibilityModel end
+
 abstract type AbstractCovarianceModel end
 struct PrognosticThermoCovariances <: AbstractCovarianceModel end
 struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
@@ -452,6 +456,7 @@ struct EDMFModel{
     N_up,
     FT,
     MM,
+    CM,
     TCM,
     PM,
     PFM,
@@ -468,6 +473,7 @@ struct EDMFModel{
     max_area::FT
     minimum_area::FT
     moisture_model::MM
+    compressibility_model::CM
     thermo_covariance_model::TCM
     precip_model::PM
     precip_fraction_model::PFM
@@ -524,6 +530,23 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         "min_area";
         default = 1e-5,
     )
+
+    compressibility_model_name = parse_namelist(
+        namelist,
+        "thermodynamics",
+        "compressibility_model";
+        default = "anelastic",
+    )
+
+    compressibility_model = if compressibility_model_name == "anelastic"
+        AnelasticFluid()
+    elseif moisture_model_name == "compressible"
+        CompressibleFluid()
+    else
+        error(
+            "Something went wrong. Invalid compressibility model: '$compressibility_model_name'",
+        )
+    end
 
     moisture_model_name = parse_namelist(
         namelist,
@@ -1027,6 +1050,7 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
     DDS = typeof(detr_dim_scale)
     EC = typeof(entr_closure)
     MM = typeof(moisture_model)
+    CM = typeof(compressibility_model)
     TCM = typeof(thermo_covariance_model)
     PM = typeof(precip_model)
     PFM = typeof(precip_fraction_model)
@@ -1039,6 +1063,7 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         n_updrafts,
         FT,
         MM,
+        CM,
         TCM,
         PM,
         PFM,
@@ -1055,6 +1080,7 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         max_area,
         minimum_area,
         moisture_model,
+        compressibility_model,
         thermo_covariance_model,
         precip_model,
         precip_fraction_model,

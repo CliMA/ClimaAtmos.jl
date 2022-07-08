@@ -170,7 +170,13 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
         state = tc_column_state(Y, aux, Yₜ, inds...)
         grid = TC.Grid(state)
 
-        set_thermo_state_peq!(state, grid, edmf.moisture_model, tc_params)
+        set_thermo_state_peq!(
+            state,
+            grid,
+            edmf.moisture_model,
+            edmf.compressibility_model,
+            tc_params,
+        )
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
         aux_gm = TC.center_aux_grid_mean(state)
