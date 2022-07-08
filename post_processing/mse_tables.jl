@@ -98,12 +98,7 @@ all_best_mse["edmf_gabls"][(:c, :ρ)] = 0.0
 all_best_mse["edmf_gabls"][(:c, :ρe_tot)] = 0.0
 all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["edmf_gabls"][(:c, :ρq_tot)] = 0.0
 all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0.0
-all_best_mse["edmf_gabls"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
-all_best_mse["edmf_gabls"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
-all_best_mse["edmf_gabls"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_gabls"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0
 #
 #! format: on
 #################################
