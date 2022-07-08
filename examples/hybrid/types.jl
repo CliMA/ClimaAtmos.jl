@@ -3,6 +3,10 @@ struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
 struct NonEquilMoistModel <: AbstractMoistureModel end
 
+abstract type AbstractCompressibilityModel end
+struct CompressibleFluid <: AbstractCompressibilityModel end
+struct AnelasticFluid <: AbstractCompressibilityModel end
+
 function moisture_model(parsed_args)
     moisture_name = parsed_args["moist"]
     @assert moisture_name in ("dry", "equil", "nonequil")
