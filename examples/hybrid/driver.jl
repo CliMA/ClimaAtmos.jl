@@ -21,6 +21,7 @@ hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
 case_name = parsed_args["turbconv_case"]
+dft_remaining_tend = parsed_args["dft_remaining_tend"]
 κ₄ = parsed_args["kappa_4"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
 viscous_sponge = parsed_args["viscous_sponge"]
@@ -145,7 +146,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             )
         ),
         (; Δt = dt),
-        (; enable_default_remaining_tendency = isnothing(turbconv_model)),
+        (; enable_default_remaining_tendency = dft_remaining_tend),
         !isnothing(turbconv_model) ?
         (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
         (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),

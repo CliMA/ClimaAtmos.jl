@@ -308,6 +308,8 @@ function default_namelist(
         namelist = Nieuwstadt(namelist_defaults)
     elseif case_name == "Bomex"
         namelist = Bomex(namelist_defaults)
+    elseif case_name == "Compressible_Bomex"
+        namelist = Compressible_Bomex(namelist_defaults)
     elseif case_name == "life_cycle_Tan2018"
         namelist = life_cycle_Tan2018(namelist_defaults)
     elseif case_name == "Rico"
@@ -381,6 +383,28 @@ function Bomex(namelist_defaults)
 
     namelist["time_stepping"]["t_max"] = 21600.0
     namelist["time_stepping"]["dt_min"] = 6.0
+
+    namelist["meta"]["simname"] = "Bomex"
+    namelist["meta"]["casename"] = "Bomex"
+
+    return namelist
+end
+
+function Compressible_Bomex(namelist_defaults)
+
+    namelist = deepcopy(namelist_defaults)
+    namelist["meta"]["casename"] = "Bomex"
+
+    namelist["grid"]["nz"] = 60
+    namelist["grid"]["dz"] = 50.0
+
+    namelist["forcing"]["coriolis"] = 0.376e-4
+    namelist["thermodynamics"]["compressibility_model"] = "compressible"
+
+    namelist["time_stepping"]["t_max"] = 100.0
+    namelist["time_stepping"]["dt_max"] = 0.01
+    namelist["time_stepping"]["dt_min"] = 0.0001
+    namelist["time_stepping"]["adapt_dt"] = false
 
     namelist["meta"]["simname"] = "Bomex"
     namelist["meta"]["casename"] = "Bomex"

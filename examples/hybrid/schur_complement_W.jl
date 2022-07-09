@@ -10,8 +10,12 @@ const apply = Operators.ApplyStencil()
 # variables with 𝕋.
 is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρe_int)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
-is_tracer_var(symbol) =
-    !(symbol == :ρ || is_energy_var(symbol) || is_momentum_var(symbol))
+is_tracer_var(symbol) = !(
+    symbol == :ρ ||
+    is_energy_var(symbol) ||
+    is_momentum_var(symbol) ||
+    symbol == :turbconv
+)
 
 struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
     # whether this struct is used to compute Wfact_t or Wfact

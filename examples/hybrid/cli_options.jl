@@ -50,6 +50,10 @@ function parse_commandline()
         "--turbconv_case"
         help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
         arg_type = String
+        "--dft_remaining_tend"
+        help = "Add enable default remaining tendency to make the model compressible [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--hyperdiff"
         help = "Hyperdiffusion [`true` (default), `false`]"
         arg_type = Bool
