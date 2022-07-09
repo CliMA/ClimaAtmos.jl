@@ -73,12 +73,12 @@ const C123 = Geometry.Covariant123Vector
 
 include("thermo_state.jl")
 
-get_cache(Y, params, model_spec, numerics, dt) = merge(
-    default_cache(Y, params, numerics),
+get_cache(Y, params, model_spec, numerics, simulation, dt) = merge(
+    default_cache(Y, params, numerics, simulation),
     additional_cache(Y, params, model_spec, dt),
 )
 
-function default_cache(Y, params, numerics)
+function default_cache(Y, params, numerics, simulation)
     (; upwinding_mode) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -107,6 +107,7 @@ function default_cache(Y, params, numerics)
             (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
     )
     return (;
+        simulation,
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜΦ = CAP.grav(params) .* ᶜcoord.z,
