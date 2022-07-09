@@ -255,7 +255,11 @@ center_space, face_space = if parsed_args["config"] == "sphere"
     quad = Spaces.Quadratures.GLL{5}()
     horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
     h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+    z_stretch = if parsed_args["z_stretch"]
+        Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+    else
+        Meshes.Uniform()
+    end
     make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 elseif parsed_args["config"] == "column" # single column
     Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
