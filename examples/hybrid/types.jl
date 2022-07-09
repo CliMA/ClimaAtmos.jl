@@ -122,3 +122,10 @@ function get_numerics(parsed_args)
 
     return numerics
 end
+
+function get_simulation(parsed_args)
+
+    sim = (; is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"))
+
+    return sim
+end
