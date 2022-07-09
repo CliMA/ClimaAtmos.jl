@@ -948,7 +948,8 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         datafile_latlon,
         datafile_cc,
         weightfile,
-        ["PotentialTemperature", "T", "u"],
+        ["PotentialTemperature", "T", "u"];
+        verbose = true,
     )
 
     # rm(remap_tmpdir, recursive = true)
