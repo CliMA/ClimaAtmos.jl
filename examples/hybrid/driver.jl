@@ -69,7 +69,7 @@ params = create_parameter_set(FT, parsed_args, namelist)
 
 model_spec = get_model_spec(FT, parsed_args, namelist)
 numerics = get_numerics(parsed_args)
-simulation = get_simulation(parsed_args)
+simulation = get_simulation(s, parsed_args)
 
 diffuse_momentum = vert_diff && !(model_spec.forcing_type isa HeldSuarezForcing)
 
@@ -206,22 +206,22 @@ include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
-ode_algorithm = getproperty(OrdinaryDiffEq, Symbol(parsed_args["ode_algo"]))
-
 condition_every_iter(u, t, integrator) = true
-function affect_filter!(Y::ClimaCore.Fields.FieldVector)
+
+function affect_filter!(Y::Fields.FieldVector)
     @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
     return nothing
 end
+
 function affect_filter!(integrator)
     (; apply_moisture_filter) = integrator.p
     affect_filter!(integrator.u)
     # We're lying to OrdinaryDiffEq.jl, in order to avoid
-    # paying for an additional `∑tendencies!` call, which is required
-    # to support supplying a continuous representation of the
-    # solution.
+    # paying for an additional tendency call, which is required
+    # to support supplying a continuous representation of the solution.
     OrdinaryDiffEq.u_modified!(integrator, false)
 end
+
 callback_filters = OrdinaryDiffEq.DiscreteCallback(
     condition_every_iter,
     affect_filter!;
@@ -327,6 +327,8 @@ for key in keys(p.tendency_knobs)
     @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
 end
 
+ode_algorithm = getproperty(OrdinaryDiffEq, Symbol(parsed_args["ode_algo"]))
+
 ode_algorithm_type =
     ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
 if ode_algorithm_type <: Union{
@@ -359,16 +361,6 @@ if ode_algorithm_type <: Union{
 else
     jac_kwargs = alg_kwargs = ()
 end
-
-job_id = if isnothing(parsed_args["job_id"])
-    job_id_from_parsed_args(s, parsed_args)
-else
-    parsed_args["job_id"]
-end
-default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-output_dir = parse_arg(parsed_args, "output_dir", default_output)
-@info "Output directory: `$output_dir`"
-mkpath(output_dir)
 
 include("callbacks.jl")
 
@@ -421,7 +413,7 @@ integrator = OrdinaryDiffEq.init(
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
 end
-@info "Running job:`$job_id`"
+@info "Running job:`$(simulation.job_id)`"
 if simulation.is_distributed
     OrdinaryDiffEq.step!(integrator)
     ClimaComms.barrier(comms_ctx)
@@ -465,8 +457,10 @@ if simulation.is_distributed # replace sol.u on the root processor with the glob
     if ClimaComms.iamroot(comms_ctx)
         sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
         println("walltime = $walltime (seconds)")
-        scaling_file =
-            joinpath(output_dir, "scaling_data_$(nprocs)_processes.jld2")
+        scaling_file = joinpath(
+            simulation.output_dir,
+            "scaling_data_$(nprocs)_processes.jld2",
+        )
         println("writing performance data to $scaling_file")
         jldsave(scaling_file; nprocs, walltime)
     end
@@ -478,25 +472,33 @@ import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 include(joinpath(@__DIR__, "define_post_processing.jl"))
-if !simulation.is_distributed
+if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
-        paperplots_baro_wave(model_spec, sol, output_dir, p, FT(90), FT(180))
+        paperplots_baro_wave(
+            model_spec,
+            sol,
+            simulation.output_dir,
+            p,
+            FT(90),
+            FT(180),
+        )
     elseif is_column_radiative_equilibrium(parsed_args)
-        custom_postprocessing(sol, output_dir)
+        custom_postprocessing(sol, simulation.output_dir)
     elseif is_column_edmf(parsed_args)
-        postprocessing_edmf(sol, output_dir, fps)
+        postprocessing_edmf(sol, simulation.output_dir, fps)
     elseif model_spec.forcing_type isa HeldSuarezForcing &&
            t_end >= (3600 * 24 * 400)
-        paperplots_held_suarez(sol, output_dir, p, FT(90), FT(180))
+        paperplots_held_suarez(sol, simulation.output_dir, p, FT(90), FT(180))
     else
-        postprocessing(sol, output_dir, fps)
+        postprocessing(sol, simulation.output_dir, fps)
     end
 end
 
 if !simulation.is_distributed || ClimaComms.iamroot(comms_ctx)
     include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
 
+    job_id = simulation.job_id
     Y_last = sol.u[end]
     # This is helpful for starting up new tables
     @info "Job-specific MSE table format:"
@@ -513,7 +515,7 @@ if !simulation.is_distributed || ClimaComms.iamroot(comms_ctx)
             joinpath(@__DIR__, "..", "..", "post_processing", "compute_mse.jl"),
         )
 
-        ds_filename_computed = joinpath(output_dir, "prog_state.nc")
+        ds_filename_computed = joinpath(simulation.output_dir, "prog_state.nc")
 
         function process_name(s::AbstractString)
             # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
@@ -532,7 +534,8 @@ if !simulation.is_distributed || ClimaComms.iamroot(comms_ctx)
             varname,
         )
 
-        computed_mse_filename = joinpath(output_dir, "computed_mse.json")
+        computed_mse_filename =
+            joinpath(simulation.output_dir, "computed_mse.json")
 
         open(computed_mse_filename, "w") do io
             JSON.print(io, computed_mse)
