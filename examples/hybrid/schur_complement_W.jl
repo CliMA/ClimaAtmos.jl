@@ -164,78 +164,67 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
         @nvtx "linsolve" color = colorant"lime" begin
 
             # Compute Schur complement
-            Fields.bycolumn(axes(x.c)) do colidx
 
-                # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
-                # than 2 diagonals per Jacobian block.
-                FT = eltype(eltype(S))
-                I = Ref(
-                    Operators.StencilCoefs{-1, 1}((
-                        zero(FT),
-                        one(FT),
-                        zero(FT),
-                    )),
-                )
-                if Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
-                    str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
-                        block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
-                        be set to 0 for the Schur complement computation. Consider \
-                        changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
-                    @warn str maxlog = 1
-                    @. S[colidx] =
-                        dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                        dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
-                else
-                    @. S[colidx] =
-                        dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                        dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx]) +
-                        dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
-                end
+            # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
+            # than 2 diagonals per Jacobian block.
+            FT = eltype(eltype(S))
+            I = Ref(
+                Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))),
+            )
+            if Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
+                str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
+                    block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
+                    be set to 0 for the Schur complement computation. Consider \
+                    changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
+                @warn str maxlog = 1
+                @. S = dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+            else
+                @. S =
+                    dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) +
+                    dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶜ𝔼ₜ∂ᶠ𝕄) +
+                    dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+            end
 
-                # Compute xᶠ𝕄
+            # Compute xᶠ𝕄
 
-                xᶜρ = x.c.ρ
-                bᶜρ = b.c.ρ
-                ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
-                xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
-                bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
-                ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
-                xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
-                bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
-                ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
-                xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
-                bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
+            xᶜρ = x.c.ρ
+            bᶜρ = b.c.ρ
+            ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
+            xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
+            bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
+            ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
+            xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
+            bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
+            ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
+            xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
+            bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
 
-                @. xᶠ𝕄[colidx] =
-                    bᶠ𝕄[colidx] +
-                    dtγ * (
-                        apply(∂ᶠ𝕄ₜ∂ᶜρ[colidx], bᶜρ[colidx]) +
-                        apply(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], bᶜ𝔼[colidx])
-                    )
+            @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
 
-                xᶠ𝕄_column_view = parent(xᶠ𝕄[colidx])
-                S_column = S[colidx]
+            # TODO: Do this with stencil_solve!.
+            Ni, Nj, _, _, Nh = size(Spaces.local_geometry_data(axes(xᶜρ)))
+            for h in 1:Nh, j in 1:Nj, i in 1:Ni
+                xᶠ𝕄_column_view = parent(Spaces.column(xᶠ𝕄, i, j, h))
+                S_column = Spaces.column(S, i, j, h)
                 @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
                 S_column_array.d .= parent(S_column.coefs.:2)
                 @views S_column_array.du .=
                     parent(S_column.coefs.:3)[1:(end - 1)]
                 ldiv!(lu!(S_column_array), xᶠ𝕄_column_view)
-
-                # Compute remaining components of x
-
-                @. xᶜρ[colidx] =
-                    -bᶜρ[colidx] + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-                @. xᶜ𝔼[colidx] =
-                    -bᶜ𝔼[colidx] + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-                @. xᶜ𝕄[colidx] = -bᶜ𝕄[colidx]
-                for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
-                    xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
-                    bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
-                    ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
-                    @. xᶜ𝕋[colidx] =
-                        -bᶜ𝕋[colidx] + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-                end
             end
+
+            # Compute remaining components of x
+
+            @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
+            @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
+            @. xᶜ𝕄 = -bᶜ𝕄
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
+                xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
+                bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
+            end
+
             # Verify correctness (if needed)
 
             if A.test && Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) == (-half, half)
