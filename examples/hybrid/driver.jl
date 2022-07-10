@@ -503,7 +503,7 @@ if parsed_args["regression_test"]
             @__DIR__,
             "..",
             "..",
-            "post_processing",
+            "regression_tests",
             "regression_tests.jl",
         ),
     )
