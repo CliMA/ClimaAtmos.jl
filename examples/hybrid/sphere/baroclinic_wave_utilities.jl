@@ -9,9 +9,6 @@ import ClimaAtmos.Parameters as CAP
 
 include("../staggered_nonhydrostatic_model.jl")
 
-baroclinic_wave_mesh(; params, h_elem) =
-    cubed_sphere_mesh(; radius = FT(CAP.planet_radius(params)), h_elem)
-
 ##
 ## Initial conditions
 ##
