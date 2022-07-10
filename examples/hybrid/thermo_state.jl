@@ -1,5 +1,6 @@
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
+import ClimaCore.Spaces as Spaces
 
 function thermo_state_type(Yc::Fields.Field, ::Type{FT}) where {FT}
     pns = propertynames(Yc)
@@ -36,26 +37,36 @@ function get_energy_model(Yc::Fields.Field)
     end
 end
 
+thermo_state!(ᶜts, Y::Fields.FieldVector, params, ᶜinterp, K = nothing) =
+    thermo_state!(ᶜts, Y.c, params, ᶜinterp, K, Y.f.w)
+
 #=
 
-    thermo_state!(ᶜts, Y, params, ᶜinterp)
+    thermo_state!(ᶜts, wf, params, ᶜinterp[, K, wf])
 
 Populate the thermodynamic state, `ᶜts`, given
-`FieldVector` `Y` and parameters `params`. Interpolation
+`Field` `Yc` and parameters `params`. Interpolation
 `ᶜinterp` is used to interpolate vertical velocity
 when computing kinetic energy (assuming it's not given)
 when using the total energy formulation.
 =#
-function thermo_state!(ᶜts, Y::Fields.FieldVector, params, ᶜinterp, K = nothing)
+function thermo_state!(
+    ᶜts,
+    Yc::Fields.Field,
+    params,
+    ᶜinterp,
+    K = nothing,
+    wf = nothing,
+)
     # Sometimes we want to zero out kinetic energy
-    Yc = Y.c
     moisture_model = get_moisture_model(Yc)
     energy_model = get_energy_model(Yc)
     thermo_params = CAP.thermodynamics_params(params)
     if energy_model isa TotalEnergy
         if isnothing(K)
+            @assert !isnothing(wf)
             C123 = Geometry.Covariant123Vector
-            K = @. norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+            K = @. norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(wf))) / 2
         end
         z = Fields.local_geometry_field(Yc).coordinates.z
         thermo_state_ρe_tot!(ᶜts, Yc, thermo_params, moisture_model, z, K)
@@ -69,11 +80,20 @@ function thermo_state!(ᶜts, Y::Fields.FieldVector, params, ᶜinterp, K = noth
     return nothing
 end
 
-function thermo_state(Y::Fields.FieldVector, params, ᶜinterp, K = nothing)
-    FT = eltype(Y)
-    ts_type = thermo_state_type(Y.c, FT)
-    ts = similar(Y.c, ts_type)
-    thermo_state!(ts, Y, params, ᶜinterp, K)
+thermo_state(Y::Fields.FieldVector, params, ᶜinterp, K = nothing) =
+    thermo_state(Y.c, params, ᶜinterp, K, Y.f.w)
+
+function thermo_state(
+    Yc::Fields.Field,
+    params,
+    ᶜinterp,
+    K = nothing,
+    wf = nothing,
+)
+    FT = Spaces.undertype(axes(Yc))
+    ts_type = thermo_state_type(Yc, FT)
+    ts = similar(Yc, ts_type)
+    thermo_state!(ts, Yc, params, ᶜinterp, K, wf)
     return ts
 end
 

@@ -17,6 +17,7 @@ coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
+case_name = parsed_args["turbconv_case"]
 h_elem = parsed_args["h_elem"]
 z_elem = Int(parsed_args["z_elem"])
 z_max = FT(parsed_args["z_max"])
@@ -48,7 +49,7 @@ import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
-    nl = TCU.NameList.default_namelist("Bomex")
+    nl = TCU.NameList.default_namelist(case_name)
     nl["set_src_seed"] = true
     nl
 else
@@ -335,6 +336,13 @@ if ode_algorithm_type <: Union{
 }
     use_transform = !(ode_algorithm_type in (Rosenbrock23, Rosenbrock32))
     W = SchurComplementW(Y, use_transform, jacobian_flags, test_implicit_solver)
+    if :ρe_tot in propertynames(Y.c) &&
+       W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
+       W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+        Wfact! = Wfact_special!
+    else
+        Wfact! = Wfact_generic!
+    end
     jac_kwargs =
         use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
         (; jac_prototype = W, Wfact = Wfact!)
