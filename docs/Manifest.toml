@@ -16,9 +16,9 @@ version = "1.2.1"
 
 [[deps.Accessors]]
 deps = ["Compat", "CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "LinearAlgebra", "MacroTools", "Requires", "Test"]
-git-tree-sha1 = "63117898045d6d9e5acbdb517e3808a23aa26436"
+git-tree-sha1 = "829d0f8c58316a8ac6f40f064423adfebf21108c"
 uuid = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
-version = "0.1.14"
+version = "0.1.17"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
@@ -379,9 +379,9 @@ version = "0.8.6"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
-git-tree-sha1 = "f7809f532671564e48cd81627ddcfb1ba670f87d"
+git-tree-sha1 = "e4967ebb9dce1328d582200b03bcc44c69372312"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.27.19"
+version = "0.27.20"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -618,10 +618,10 @@ uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 version = "0.13.6"
 
 [[deps.IntervalSets]]
-deps = ["Dates", "Statistics"]
-git-tree-sha1 = "ad841eddfb05f6d9be0bff1fa48dcae32f134a2d"
+deps = ["Dates", "Random", "Statistics"]
+git-tree-sha1 = "57af5939800bce15980bddd2426912c4f83012d8"
 uuid = "8197267c-284f-5f27-9208-e0e47529a953"
-version = "0.6.2"
+version = "0.7.1"
 
 [[deps.InverseFunctions]]
 deps = ["Test"]
@@ -1125,9 +1125,9 @@ version = "0.6.33"
 
 [[deps.SciMLBase]]
 deps = ["ArrayInterfaceCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "RecipesBase", "RecursiveArrayTools", "StaticArraysCore", "Statistics", "Tables", "TreeViews"]
-git-tree-sha1 = "3243a883fa422a0a5cfe2d3b6ea6287fc396018f"
+git-tree-sha1 = "55f38a183d472deb6893bdc3a962a13ea10c60e4"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.42.2"
+version = "1.42.4"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1282,9 +1282,9 @@ version = "1.0.1"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "64d0bb54626e3b898dc73087e39fd89820b6322f"
+git-tree-sha1 = "72c84f7322bf3f03ed648b2ca6b491e1d74b087f"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.9.0"
+version = "0.9.1"
 
 [[deps.ThreadingUtilities]]
 deps = ["ManualMemory"]
