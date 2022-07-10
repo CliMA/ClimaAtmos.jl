@@ -22,20 +22,19 @@ function init_state(
     center_space,
     face_space,
     params,
-    model_spec,
+    models,
 )
-    (; energy_form, moisture_model, turbconv_model) = model_spec
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     c =
         center_initial_condition.(
             ᶜlocal_geometry,
             params,
-            energy_form,
-            moisture_model,
-            turbconv_model,
+            models.energy_form,
+            models.moisture_model,
+            models.turbconv_model,
         )
-    f = face_initial_condition.(ᶠlocal_geometry, params, turbconv_model)
+    f = face_initial_condition.(ᶠlocal_geometry, params, models.turbconv_model)
     Y = Fields.FieldVector(; c, f)
     return Y
 end

@@ -47,9 +47,6 @@ function parse_commandline()
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
-        "--turbconv_case"
-        help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
-        arg_type = String
         "--hyperdiff"
         help = "Hyperdiffusion [`true` (default), `false`]"
         arg_type = Bool
@@ -67,7 +64,7 @@ function parse_commandline()
         arg_type = Bool
         default = false
         "--rad"
-        help = "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
+        help = "Radiation model [`clearsky`, `gray`, `allsky`] (default: no radiation)"
         arg_type = String
         "--energy_name"
         help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
@@ -107,10 +104,6 @@ function parse_commandline()
         help = "Frames per second for animations"
         arg_type = Int
         default = 5
-        "--post_process"
-        help = "Post process [`true` (default), `false`]"
-        arg_type = Bool
-        default = true
         "--h_elem"
         help = "number of elements per edge on a cubed sphere"
         arg_type = Int
@@ -269,49 +262,10 @@ function parsed_args_from_command_line_flags(str, parsed_args = Dict())
             catch
             end
         end
-        return String(val) # string
+        return val # string
     end
     for (flag, val) in parsed_arg_pairs
         parsed_args[replace(flag, "--" => "")] = parse_arg(val)
     end
     return parsed_args
-end
-
-"""
-    parsed_args_per_job_id()
-    parsed_args_per_job_id(buildkite_yaml)
-
-A dict of `parsed_args` to run the ClimaAtmos driver
-whose keys are the `job_id`s from buildkite yaml.
-
-# Example
-
-To run the `sphere_aquaplanet_rhoe_equilmoist_allsky`
-buildkite job from the standard buildkite pipeline, use:
-```
-using Revise; include("examples/hybrid/cli_options.jl");
-dict = parsed_args_per_job_id();
-parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
-include("examples/hybrid/driver.jl")
-```
-"""
-function parsed_args_per_job_id()
-    ca_dir = joinpath(@__DIR__, "..", "..")
-    buildkite_yaml = joinpath(ca_dir, ".buildkite", "pipeline.yml")
-    parsed_args_per_job_id(buildkite_yaml)
-end
-
-function parsed_args_per_job_id(buildkite_yaml)
-    buildkite_commands = readlines(buildkite_yaml)
-    filter!(x -> occursin("driver.jl", x), buildkite_commands)
-
-    @assert length(buildkite_commands) > 0 # sanity check
-    result = Dict()
-    for bkcs in buildkite_commands
-        (s, default_parsed_args) = parse_commandline()
-        job_id = first(split(last(split(bkcs, "--job_id ")), " "))
-        result[job_id] =
-            parsed_args_from_command_line_flags(bkcs, default_parsed_args)
-    end
-    return result
 end

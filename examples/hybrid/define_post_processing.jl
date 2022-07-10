@@ -125,11 +125,8 @@ end
 
 # Dispatcher:
 # baroclinic wave
-paperplots_baro_wave(model_spec, args...) = paperplots_baro_wave(
-    model_spec.energy_form,
-    model_spec.moisture_model,
-    args...,
-)
+paperplots_baro_wave(args...) =
+    paperplots_baro_wave(energy_form(), moisture_model(), args...)
 
 paperplots_baro_wave(::PotentialTemperature, ::DryModel, args...) =
     paperplots_baro_wave_ρθ(args...)
@@ -139,11 +136,8 @@ paperplots_baro_wave(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_baro_wave_ρe(args...)
 
 # held-suarez
-paperplots_held_suarez(model_spec, args...) = paperplots_held_suarez(
-    model_spec.energy_form,
-    model_spec.moisture_model,
-    args...,
-)
+paperplots_held_suarez(args...) =
+    paperplots_held_suarez(energy_form(), moisture_model(), args...)
 
 paperplots_held_suarez(::PotentialTemperature, ::DryModel, args...) =
     paperplots_dry_held_suarez_ρθ(args...)
@@ -948,8 +942,7 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         datafile_latlon,
         datafile_cc,
         weightfile,
-        ["PotentialTemperature", "T", "u"];
-        verbose = true,
+        ["PotentialTemperature", "T", "u"],
     )
 
     # rm(remap_tmpdir, recursive = true)
