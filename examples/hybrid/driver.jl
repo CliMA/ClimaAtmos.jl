@@ -496,52 +496,21 @@ if !simulation.is_distributed && parsed_args["post_process"]
     end
 end
 
-if !simulation.is_distributed || ClimaComms.iamroot(comms_ctx)
-    include(joinpath(@__DIR__, "..", "..", "post_processing", "mse_tables.jl"))
-
-    job_id = simulation.job_id
-    Y_last = sol.u[end]
-    # This is helpful for starting up new tables
-    @info "Job-specific MSE table format:"
-    println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
-    for prop_chain in Fields.property_chains(Y_last)
-        println("all_best_mse[\"$job_id\"][$prop_chain] = 0.0")
-    end
-    if parsed_args["regression_test"]
-
-        # Extract best mse for this job:
-        best_mse = all_best_mse[job_id]
-
-        include(
-            joinpath(@__DIR__, "..", "..", "post_processing", "compute_mse.jl"),
-        )
-
-        ds_filename_computed = joinpath(simulation.output_dir, "prog_state.nc")
-
-        function process_name(s::AbstractString)
-            # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
-            s = replace(s, "components_data_" => "")
-            s = replace(s, "ₕ" => "_h")
-            s = replace(s, "ρ" => "rho")
-            return s
-        end
-        varname(pc::Tuple) = process_name(join(pc, "_"))
-
-        export_nc(Y_last; nc_filename = ds_filename_computed, varname)
-        computed_mse = regression_test(;
-            job_id,
-            reference_mse = best_mse,
-            ds_filename_computed,
-            varname,
-        )
-
-        computed_mse_filename =
-            joinpath(simulation.output_dir, "computed_mse.json")
-
-        open(computed_mse_filename, "w") do io
-            JSON.print(io, computed_mse)
-        end
-        NCRegressionTests.test_mse(computed_mse, best_mse)
-    end
-
+if parsed_args["regression_test"]
+    # Test results against main branch
+    include(
+        joinpath(
+            @__DIR__,
+            "..",
+            "..",
+            "post_processing",
+            "regression_tests.jl",
+        ),
+    )
+    perform_regression_tests(
+        simulation.job_id,
+        sol.u[end],
+        all_best_mse,
+        simulation.output_dir,
+    )
 end
