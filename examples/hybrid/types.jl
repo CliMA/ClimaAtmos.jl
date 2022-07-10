@@ -123,9 +123,23 @@ function get_numerics(parsed_args)
     return numerics
 end
 
-function get_simulation(parsed_args)
+function get_simulation(s, parsed_args)
 
-    sim = (; is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"))
+    job_id = if isnothing(parsed_args["job_id"])
+        job_id_from_parsed_args(s, parsed_args)
+    else
+        parsed_args["job_id"]
+    end
+    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+    output_dir = parse_arg(parsed_args, "output_dir", default_output)
+    @info "Output directory: `$output_dir`"
+    mkpath(output_dir)
+
+    sim = (;
+        is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
+        output_dir,
+        job_id,
+    )
 
     return sim
 end

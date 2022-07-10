@@ -107,6 +107,10 @@ function parse_commandline()
         help = "Frames per second for animations"
         arg_type = Int
         default = 5
+        "--post_process"
+        help = "Post process [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
         "--h_elem"
         help = "number of elements per edge on a cubed sphere"
         arg_type = Int

@@ -103,9 +103,7 @@ function save_to_disk_func_distributed(integrator)
             c = Fields.Field(global_Y_c, global_center_space),
             f = Fields.Field(global_Y_f, global_face_space),
         )
-    end
 
-    if ClimaComms.iamroot(comms_ctx)
         Y = global_u
 
         ᶜuₕ = Y.c.uₕ
