@@ -1,38 +1,40 @@
-hyperdiffusion_cache(
-    Y;
-    κ₄ = FT(0),
-    divergence_damping_factor = FT(1),
-    use_tempest_mode = false,
-    disable_qt_hyperdiffusion = false,
-) =
-    (:ρq_tot in propertynames(Y.c)) ?
-    merge(
-        (;
-            ᶜχ = similar(Y.c, FT),
-            ᶜχρq_tot = similar(Y.c, FT),
-            ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
-            κ₄,
-            divergence_damping_factor,
-            use_tempest_mode,
-            disable_qt_hyperdiffusion,
-        ),
-        use_tempest_mode ? (; ᶠχw_data = similar(Y.F, FT)) : NamedTuple(),
-    ) :
-    merge(
-        (;
-            ᶜχ = similar(Y.c, FT),
-            ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
-            κ₄,
-            divergence_damping_factor,
-            use_tempest_mode,
-            disable_qt_hyperdiffusion,
-        ),
-        use_tempest_mode ? (; ᶠχw_data = similar(Y.F, FT)) : NamedTuple(),
+function hyperdiffusion_cache(
+    Y,
+    ::Type{FT};
+    κ₄::FT = FT(0),
+    divergence_damping_factor::FT = FT(1),
+    use_tempest_mode::Bool = false,
+    disable_qt_hyperdiffusion::Bool = false,
+) where {FT}
+    moist_kwargs = if (:ρq_tot in propertynames(Y.c))
+        (; ᶜχρq_tot = similar(Y.c, FT))
+    else
+        NamedTuple()
+    end
+    tempest_kwargs = if use_tempest_mode
+        (; ᶠχw_data = similar(Y.f, FT))
+    else
+        NamedTuple()
+    end
+
+    return (;
+        ᶜχ = similar(Y.c, FT),
+        moist_kwargs...,
+        ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
+        κ₄,
+        divergence_damping_factor,
+        use_tempest_mode,
+        disable_qt_hyperdiffusion,
+        tempest_kwargs...,
     )
+end
 
 function hyperdiffusion_tendency!(Yₜ, Y, P, t)
-    return P.use_tempest_mode ? hyperdiffusion_tendency_tempest!(Yₜ, Y, P, t) :
-           hyperdiffusion_tendency_clima!(Yₜ, Y, P, t)
+    if P.use_tempest_mode
+        hyperdiffusion_tendency_tempest!(Yₜ, Y, P, t)
+    else
+        hyperdiffusion_tendency_clima!(Yₜ, Y, P, t)
+    end
 end
 
 function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
