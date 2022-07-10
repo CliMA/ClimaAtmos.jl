@@ -341,7 +341,7 @@ if ode_algorithm_type <: Union{
     if :ρe_tot in propertynames(Y.c) &&
        W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
        W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-        Wfact! = Wfact_special!
+        Wfact! = Wfact_generic!
     else
         Wfact! = Wfact_generic!
     end
