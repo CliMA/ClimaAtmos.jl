@@ -108,7 +108,8 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         model_spec
     return merge(
         hyperdiffusion_cache(
-            Y;
+            Y,
+            FT;
             κ₄ = FT(κ₄),
             use_tempest_mode,
             disable_qt_hyperdiffusion,
