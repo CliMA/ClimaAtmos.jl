@@ -69,7 +69,7 @@ params = create_parameter_set(FT, parsed_args, namelist)
 
 model_spec = get_model_spec(FT, parsed_args, namelist)
 numerics = get_numerics(parsed_args)
-simulation = get_simulation(s, parsed_args)
+simulation = get_simulation(parsed_args)
 
 diffuse_momentum = vert_diff && !(model_spec.forcing_type isa HeldSuarezForcing)
 
