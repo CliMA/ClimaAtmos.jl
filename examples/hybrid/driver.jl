@@ -354,6 +354,8 @@ else
 end
 callback =
     CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)
+tspan = (t_start, t_end)
+@info "tspan = `$tspan`"
 
 problem = if parsed_args["split_ode"]
     SplitODEProblem(
@@ -364,11 +366,11 @@ problem = if parsed_args["split_ode"]
         ),
         remaining_tendency!,
         Y,
-        (t_start, t_end),
+        tspan,
         p,
     )
 else
-    OrdinaryDiffEq.ODEProblem(remaining_tendency!, Y, (t_start, t_end), p)
+    OrdinaryDiffEq.ODEProblem(remaining_tendency!, Y, tspan, p)
 end
 integrator = OrdinaryDiffEq.init(
     problem,
