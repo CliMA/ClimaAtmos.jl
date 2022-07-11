@@ -21,11 +21,6 @@ hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
 case_name = parsed_args["turbconv_case"]
-h_elem = parsed_args["h_elem"]
-z_elem = Int(parsed_args["z_elem"])
-z_max = FT(parsed_args["z_max"])
-dz_bottom = FT(parsed_args["dz_bottom"])
-dz_top = FT(parsed_args["dz_top"])
 κ₄ = parsed_args["kappa_4"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
 viscous_sponge = parsed_args["viscous_sponge"]
@@ -252,33 +247,7 @@ import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
 
-center_space, face_space = if parsed_args["config"] == "sphere"
-    quad = Spaces.Quadratures.GLL{5}()
-    horizontal_mesh = baroclinic_wave_mesh(; params, h_elem = h_elem)
-    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = if parsed_args["z_stretch"]
-        Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
-    else
-        Meshes.Uniform()
-    end
-    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
-elseif parsed_args["config"] == "column" # single column
-    Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-    quad = Spaces.Quadratures.GL{1}()
-    horizontal_mesh = periodic_rectangle_mesh(;
-        x_max = Δx,
-        y_max = Δx,
-        x_elem = 1,
-        y_elem = 1,
-    )
-    h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-    z_stretch = if parsed_args["z_stretch"]
-        Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
-    else
-        Meshes.Uniform()
-    end
-    make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
-end
+spaces = get_spaces(parsed_args, params, comms_ctx)
 
 if haskey(ENV, "RESTART_FILE")
     restart_file_name = ENV["RESTART_FILE"]
@@ -292,13 +261,10 @@ if haskey(ENV, "RESTART_FILE")
     close(restart_data)
     ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
     ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
-    # TODO:   quad, horizontal_mesh, z_stretch,
-    #         z_max, z_elem should be taken from Y.
-    #         when restarting
 else
     t_start = FT(0)
-    ᶜlocal_geometry = Fields.local_geometry_field(center_space)
-    ᶠlocal_geometry = Fields.local_geometry_field(face_space)
+    ᶜlocal_geometry = Fields.local_geometry_field(spaces.center_space)
+    ᶠlocal_geometry = Fields.local_geometry_field(spaces.face_space)
 
     center_initial_condition = if is_baro_wave(parsed_args)
         center_initial_condition_baroclinic_wave
@@ -311,8 +277,8 @@ else
     Y = init_state(
         center_initial_condition,
         face_initial_condition,
-        center_space,
-        face_space,
+        spaces.center_space,
+        spaces.face_space,
         params,
         model_spec,
     )
@@ -424,47 +390,8 @@ else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
 
-if simulation.is_distributed # replace sol.u on the root processor with the global sol.u
-    if ClimaComms.iamroot(comms_ctx)
-        global_h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
-        global_center_space, global_face_space =
-            make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
-        global_Y_c_type = Fields.Field{
-            typeof(Fields.field_values(Y.c)),
-            typeof(global_center_space),
-        }
-        global_Y_f_type = Fields.Field{
-            typeof(Fields.field_values(Y.f)),
-            typeof(global_face_space),
-        }
-        global_Y_type = Fields.FieldVector{
-            FT,
-            NamedTuple{(:c, :f), Tuple{global_Y_c_type, global_Y_f_type}},
-        }
-        global_sol_u = similar(sol.u, global_Y_type)
-    end
-    for i in 1:length(sol.u)
-        global_Y_c =
-            DataLayouts.gather(comms_ctx, Fields.field_values(sol.u[i].c))
-        global_Y_f =
-            DataLayouts.gather(comms_ctx, Fields.field_values(sol.u[i].f))
-        if ClimaComms.iamroot(comms_ctx)
-            global_sol_u[i] = Fields.FieldVector(
-                c = Fields.Field(global_Y_c, global_center_space),
-                f = Fields.Field(global_Y_f, global_face_space),
-            )
-        end
-    end
-    if ClimaComms.iamroot(comms_ctx)
-        sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
-        println("walltime = $walltime (seconds)")
-        scaling_file = joinpath(
-            simulation.output_dir,
-            "scaling_data_$(nprocs)_processes.jld2",
-        )
-        println("writing performance data to $scaling_file")
-        jldsave(scaling_file; nprocs, walltime)
-    end
+if simulation.is_distributed
+    export_scaling_file(sol, simulation.output_dir, walltime, comms_ctx, nprocs)
 end
 
 import JSON

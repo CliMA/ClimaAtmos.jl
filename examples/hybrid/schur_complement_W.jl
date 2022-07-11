@@ -33,7 +33,7 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
 
     # cache for the Schur complement linear solve
     S::S
-    S_column_array::A
+    S_column_arrays::A
 
     # whether to test the Jacobian and linear solver
     test::Bool
@@ -68,11 +68,13 @@ function SchurComplementW(Y, transform, flags, test = false)
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
-    S_column_array = Tridiagonal(
-        Array{FT}(undef, N - 1),
-        Array{FT}(undef, N),
-        Array{FT}(undef, N - 1),
-    )
+    S_column_arrays = [
+        Tridiagonal(
+            Array{FT}(undef, N - 1),
+            Array{FT}(undef, N),
+            Array{FT}(undef, N - 1),
+        ) for _ in 1:Threads.nthreads()
+    ]
 
     SchurComplementW{
         typeof(flags),
@@ -83,7 +85,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         typeof(∂ᶠ𝕄ₜ∂ᶠ𝕄),
         typeof(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple),
         typeof(S),
-        typeof(S_column_array),
+        typeof(S_column_arrays),
     }(
         transform,
         flags,
@@ -95,7 +97,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         ∂ᶠ𝕄ₜ∂ᶠ𝕄,
         ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple,
         S,
-        S_column_array,
+        S_column_arrays,
         test,
     )
 end
@@ -157,7 +159,7 @@ the large -I block in A.
 =#
 function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
     function _linsolve!(x, A, b, update_matrix = false; kwargs...)
-        (; dtγ_ref, S, S_column_array) = A
+        (; dtγ_ref, S, S_column_arrays) = A
         (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
         dtγ = dtγ_ref[]
 
@@ -215,6 +217,7 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
 
                 xᶠ𝕄_column_view = parent(xᶠ𝕄[colidx])
                 S_column = S[colidx]
+                S_column_array = S_column_arrays[Threads.threadid()]
                 @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
                 S_column_array.d .= parent(S_column.coefs.:2)
                 @views S_column_array.du .=

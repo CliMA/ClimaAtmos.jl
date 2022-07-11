@@ -28,6 +28,8 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     turbconv_params::TCP
 end
 
+Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
+
 rrtmgp_params(ps::ACAP) = ps.rrtmgp_params
 thermodynamics_params(ps::ACAP) = ps.thermodynamics_params
 surface_fluxes_params(ps::ACAP) = ps.surfacefluxes_params

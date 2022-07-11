@@ -144,3 +144,44 @@ function get_simulation(parsed_args)
 
     return sim
 end
+
+function get_spaces(parsed_args, params, comms_ctx)
+
+    FT = eltype(params)
+    z_elem = Int(parsed_args["z_elem"])
+    z_max = FT(parsed_args["z_max"])
+    dz_bottom = FT(parsed_args["dz_bottom"])
+    dz_top = FT(parsed_args["dz_top"])
+
+    h_elem = parsed_args["h_elem"]
+    radius = CAP.planet_radius(params)
+    center_space, face_space = if parsed_args["config"] == "sphere"
+        quad = Spaces.Quadratures.GLL{5}()
+        horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+        z_stretch = if parsed_args["z_stretch"]
+            Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+        else
+            Meshes.Uniform()
+        end
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+    elseif parsed_args["config"] == "column" # single column
+        FT = eltype(params)
+        Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
+        quad = Spaces.Quadratures.GL{1}()
+        horizontal_mesh = periodic_rectangle_mesh(;
+            x_max = Δx,
+            y_max = Δx,
+            x_elem = 1,
+            y_elem = 1,
+        )
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+        z_stretch = if parsed_args["z_stretch"]
+            Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+        else
+            Meshes.Uniform()
+        end
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+    end
+    return (; center_space, face_space)
+end
