@@ -20,7 +20,7 @@ Regression tests are performed at the end of `examples/hybrid/driver.jl`, after 
 
 After these steps are performed at the end of the driver, additional jobs are run:
 
- 1) Print `computed_mse` for all jobs to make updating `post_processing/mse_tables.jl` easy
+ 1) Print `computed_mse` for all jobs to make updating `regression_tests/mse_tables.jl` easy
  2) If we're on the staging branch (all tests have passed, and the PR is effectively merging), move the `NCDataset`s from the scratch directory onto the dedicated folder on the Caltech Central cluster.
 
 ## How to merge pull requests (PR) that get approved but *fail* regression tests
@@ -29,7 +29,7 @@ To "approve" PRs, authors can:
  - Click the *Print new mse tables* buildkite job
  - Click the *Running commands* entry in the *Log* tab
  - Copy this output until `-- DO NOT COPY --`
- - Paste these contents into `post_processing/mse_tables.jl`
+ - Paste these contents into `regression_tests/mse_tables.jl`
  - Add, commit, and push these changes and the updated PR should pass the regression test.
 
 ## How regression tests *break*
@@ -53,7 +53,7 @@ If your PR is breaking the regression test due to one of the following reasons:
  - A new regression test was added
  - Grid resolution has changed
 
-Then you can merge your PR by copying the new reference counter, printed in the `Print new reference counter` job, and pasting that into `post_processing/ref_counter.jl` in your PR.
+Then you can merge your PR by copying the new reference counter, printed in the `Print new reference counter` job, and pasting that into `regression_tests/ref_counter.jl` in your PR.
 
 **Please be warned:** updating the counter effectively bypasses the regression tests and updates the dataset that CI compares future PRs against (to the datasets exported in the PR). So, if you are the PR author, please review the output results before merging.
 
@@ -101,10 +101,10 @@ ref_counter.jl       commit            commit
 Work-flow procedure:
  1) We start off with a self reference: print a new reference
     counter in the `print new reference counter` job.
- 2) (PR author) copy-paste counter into `post_processing/ref_counter.jl`
+ 2) (PR author) copy-paste counter into `regression_tests/ref_counter.jl`
  3) Upon next CI run, before performing CI test,
     we check if the counter indicates a self-reference by
-    checking if `post_processing/ref_counter.jl` in the PR
+    checking if `regression_tests/ref_counter.jl` in the PR
     matches (e.g.,) `aRsVoY/ref_counter.jl` in the last
     merged commit (on central). If yes, then it's a self
     reference, if not, then we look-up the dataset based
