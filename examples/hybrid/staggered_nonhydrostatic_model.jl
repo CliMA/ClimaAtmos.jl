@@ -133,24 +133,38 @@ function default_cache(Y, params, spaces, numerics, simulation)
     )
 end
 
+# Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
+# allocation because the cache is stored separately from Y, which means that
+# similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
+function implicit_cache_vars(
+    Y::Fields.FieldVector{T},
+    p,
+) where {T <: AbstractFloat}
+    (; ᶜK, ᶜts, ᶜp) = p
+    return (; ᶜK, ᶜts, ᶜp)
+end
+function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
+    ᶜρ = Y.c.ρ
+    ᶜK = similar(ᶜρ)
+    ᶜts = similar(ᶜρ, eltype(p.ts).name.wrapper{eltype(ᶜρ)})
+    ᶜp = similar(ᶜρ)
+    return (; ᶜK, ᶜts, ᶜp)
+end
+
 
 function implicit_tendency!(Yₜ, Y, p, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜΦ, params, ᶠupwind_product) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
+    # allocation because the cache is stored separately from Y, which means that
+    # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
+    (; ᶜK, ᶜts, ᶜp) = implicit_cache_vars(Y, p)
     @nvtx "implicit tendency" color = colorant"yellow" begin
-        ᶜρ = Y.c.ρ
-        ᶜuₕ = Y.c.uₕ
-        ᶠw = Y.f.w
-        (; ᶜK, ᶜΦ, ᶜts, ᶜp, params, ᶠupwind_product) = p
-        thermo_params = CAP.thermodynamics_params(params)
-        # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
-        # allocation because the cache is stored separately from Y, which means that
-        # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
-        if eltype(Y) <: Dual
-            ᶜK = similar(ᶜρ)
-            ᶜts = similar(ᶜρ, eltype(ᶜts).name.wrapper{eltype(ᶜρ)})
-            ᶜp = similar(ᶜρ)
-        end
         Fields.bycolumn(axes(Y.c)) do colidx
 
             @. ᶜK[colidx] =
