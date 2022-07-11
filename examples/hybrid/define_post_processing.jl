@@ -149,8 +149,11 @@ paperplots_held_suarez(::PotentialTemperature, ::DryModel, args...) =
     paperplots_dry_held_suarez_ρθ(args...)
 paperplots_held_suarez(::TotalEnergy, ::DryModel, args...) =
     paperplots_dry_held_suarez_ρe(args...)
-paperplots_held_suarez(::InternalEnergy, ::DryModel, args...) =
-    paperplots_dry_held_suarez_ρe_int(args...)
+paperplots_held_suarez(
+    ::InternalEnergy,
+    ::Union{DryModel, EquilMoistModel},
+    args...,
+) = paperplots_dry_held_suarez_ρe_int(args...)
 paperplots_held_suarez(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_held_suarez_ρe(args...)
 
