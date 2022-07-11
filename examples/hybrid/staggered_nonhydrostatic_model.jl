@@ -133,6 +133,90 @@ function default_cache(Y, params, spaces, numerics, simulation)
     )
 end
 
+
+function implicit_tendency!(Yₜ, Y, p, t)
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
+    @nvtx "implicit tendency" color = colorant"yellow" begin
+        ᶜρ = Y.c.ρ
+        ᶜuₕ = Y.c.uₕ
+        ᶠw = Y.f.w
+        (; ᶜK, ᶜΦ, ᶜts, ᶜp, params, ᶠupwind_product) = p
+        thermo_params = CAP.thermodynamics_params(params)
+        # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
+        # allocation because the cache is stored separately from Y, which means that
+        # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
+        if eltype(Y) <: Dual
+            ᶜK = similar(ᶜρ)
+            ᶜts = similar(ᶜρ, eltype(ᶜts).name.wrapper{eltype(ᶜρ)})
+            ᶜp = similar(ᶜρ)
+        end
+        Fields.bycolumn(axes(Y.c)) do colidx
+
+            @. ᶜK[colidx] =
+                norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+
+            @. Yₜ.c.ρ[colidx] = -(ᶜdivᵥ(ᶠinterp(ᶜρ[colidx]) * ᶠw[colidx]))
+
+            thermo_state!(
+                ᶜts[colidx],
+                Y.c[colidx],
+                params,
+                ᶜinterp,
+                ᶜK[colidx],
+                Y.f.w[colidx],
+            )
+            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            if isnothing(ᶠupwind_product)
+                @. Yₜ.c.ρe_tot[colidx] = -(ᶜdivᵥ(
+                    ᶠinterp(Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶠw[colidx],
+                ))
+            else
+                @. Yₜ.c.ρe_tot[colidx] = -(ᶜdivᵥ(
+                    ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product(
+                        ᶠw[colidx],
+                        (Y.c.ρe_tot[colidx] + ᶜp[colidx]) / Y.c.ρ[colidx],
+                    ),
+                ))
+            end
+
+            # TODO: Add flux correction to the Jacobian
+            # @. Yₜ.c.ρ += ᶜFC(ᶠw, ᶜρ)
+            # if :ρθ in propertynames(Y.c)
+            #     @. Yₜ.c.ρθ += ᶜFC(ᶠw, ᶜρθ)
+            # elseif :ρe_tot in propertynames(Y.c)
+            #     @. Yₜ.c.ρe_tot += ᶜFC(ᶠw, ᶜρe)
+            # elseif :ρe_int in propertynames(Y.c)
+            #     @. Yₜ.c.ρe_int += ᶜFC(ᶠw, ᶜρe_int)
+            # end
+
+            Yₜ.c.uₕ[colidx] .= Ref(zero(eltype(Yₜ.c.uₕ)))
+
+            @. Yₜ.f.w[colidx] = -(
+                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) +
+                ᶠgradᵥ(ᶜK[colidx] + ᶜΦ[colidx])
+            )
+
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+                if isnothing(ᶠupwind_product)
+                    @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(ᶠinterp(ᶜ𝕋[colidx]) * ᶠw[colidx]))
+                else
+                    @. ᶜ𝕋ₜ = -(ᶜdivᵥ(
+                        ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product(
+                            ᶠw[colidx],
+                            ᶜ𝕋[colidx] / Y.c.ρ[colidx],
+                        ),
+                    ))
+                end
+            end
+        end
+    end
+    return Yₜ
+end
+
+#=
 function implicit_tendency!(Yₜ, Y, p, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
@@ -222,7 +306,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
     end
     return Yₜ
 end
-
+=#
 function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         (; enable_default_remaining_tendency) = p
