@@ -10,4 +10,6 @@ include("Callbacks/Callbacks.jl")
 include("Simulations/Simulations.jl")
 include("Utils/Utils.jl")
 
+include("TurbulenceConvection/TurbulenceConvection.jl")
+
 end # module

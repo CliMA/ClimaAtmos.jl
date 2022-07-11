@@ -2,6 +2,9 @@ import OrderedCollections
 import JSON
 
 # Get cases from JobIDs in mse_tables file:
+include(joinpath(@__DIR__, "self_reference_or_path.jl"))
+self_reference = self_reference_or_path() == :self_reference
+
 all_lines = readlines(joinpath(@__DIR__, "mse_tables.jl"))
 lines = deepcopy(all_lines)
 filter!(x -> occursin("] = OrderedCollections", x), lines)
@@ -43,6 +46,7 @@ for job_id in keys(computed_mse)
                 "all_best_mse[\"$job_id\"][$(var)] = \"$(computed_mse[job_id][var])\"",
             )
         else
+            self_reference && (computed_mse[job_id][var] .= 0)
             println(
                 "all_best_mse[\"$job_id\"][$(var)] = $(computed_mse[job_id][var])",
             )
@@ -55,6 +59,14 @@ println("#! format: on")
 println("#################################")
 println("#################################")
 println("#################################")
+
+if self_reference
+    @warn string(
+        "The printed `all_best_mse` values have",
+        "been set to zero, due to self-reference,",
+        "for copy-paste convenience.",
+    )
+end
 
 # Cleanup
 for job_id in job_ids

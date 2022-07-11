@@ -3,6 +3,10 @@ struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
 struct NonEquilMoistModel <: AbstractMoistureModel end
 
+abstract type AbstractCompressibilityModel end
+struct CompressibleFluid <: AbstractCompressibilityModel end
+struct AnelasticFluid <: AbstractCompressibilityModel end
+
 function moisture_model(parsed_args)
     moisture_name = parsed_args["moist"]
     @assert moisture_name in ("dry", "equil", "nonequil")
@@ -91,3 +95,52 @@ Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
 Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
 Base.broadcastable(x::AbstractForcing) = Ref(x)
+
+
+function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
+
+    model_spec = (;
+        moisture_model = moisture_model(parsed_args),
+        energy_form = energy_form(parsed_args),
+        radiation_model = radiation_model(parsed_args),
+        microphysics_model = microphysics_model(parsed_args),
+        forcing_type = forcing_type(parsed_args),
+        turbconv_model = turbconv_model(FT, parsed_args, namelist),
+    )
+
+    return model_spec
+end
+
+function get_numerics(parsed_args)
+
+    numerics = (;
+        upwinding_mode = Symbol(
+            parse_arg(parsed_args, "upwinding", "third_order"),
+        )
+    )
+    @assert numerics.upwinding_mode in (:none, :first_order, :third_order)
+
+    return numerics
+end
+
+function get_simulation(parsed_args)
+
+    job_id = if isnothing(parsed_args["job_id"])
+        (s, default_parsed_args) = parse_commandline()
+        job_id_from_parsed_args(s, parsed_args)
+    else
+        parsed_args["job_id"]
+    end
+    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+    output_dir = parse_arg(parsed_args, "output_dir", default_output)
+    @info "Output directory: `$output_dir`"
+    mkpath(output_dir)
+
+    sim = (;
+        is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
+        output_dir,
+        job_id,
+    )
+
+    return sim
+end

@@ -24,6 +24,7 @@ end
 
 if !isempty(get(ENV, "CI_PERF_CPUPROFILE", ""))
 
+    (; output_dir, job_id) = simulation
     import ChromeProfileFormat
     output_path = output_dir
     cpufile = job_id * ".cpuprofile"

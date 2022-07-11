@@ -4,11 +4,6 @@ on:
     types:
       - created
   workflow_dispatch:
-    inputs:
-      lookback:
-        default: 3
-permissions:
-  contents: write
 jobs:
   TagBot:
     if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
@@ -18,3 +13,55 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
+          changelog: |
+            ## {{ package }} {{ version }}
+            {% if previous_release %}
+            [Diff since {{ previous_release }}]({{ compare_url }})
+            {% endif %}
+            {% if custom %}
+            {{ custom }}
+            {% endif %}
+            ### 📢 API Changes:
+            {% if issues %}
+            {% for issue in issues if 'API' in issue.labels %}
+            - {{ issue.title }} (#{{ issue.number }})
+            {% endfor %}
+            {% endif %}
+            {% if pulls %}
+            {% for pull in pulls if 'API' in pull.labels %}
+            - {{ pull.title }} (#{{ pull.number }}) (@{{ pull.author.username }})
+            {% endfor %}
+            {% endif %}
+            ### 🚀 Features
+            {% if issues %}
+            {% for issue in issues if 'enhancement' in issue.labels or 'feature' in issue.labels %}
+            - {{ issue.title }} (#{{ issue.number }})
+            {% endfor %}
+            {% endif %}
+            {% if pulls %}
+            {% for pull in pulls if 'enhancement' in pull.labels or 'feature' in pull.labels %}
+            - {{ pull.title }} (#{{ pull.number }}) (@{{ pull.author.username }})
+            {% endfor %}
+            {% endif %}
+            ### 📑 Documentation
+            {% if issues %}
+            {% for issue in issues if 'documentation' in issue.labels %}
+            - {{ issue.title }} (#{{ issue.number }})
+            {% endfor %}
+            {% endif %}
+            {% if pulls %}
+            {% for pull in pulls if 'documentation' in pull.labels %}
+            - {{ pull.title }} (#{{ pull.number }}) (@{{ pull.author.username }})
+            {% endfor %}
+            {% endif %}
+            ### 🐛 Fixes
+            {% if issues %}
+            {% for issue in issues if 'bug' in issue.labels or 'bugfix' in issue.labels %}
+            - {{ issue.title }} (#{{ issue.number }})
+            {% endfor %}
+            {% endif %}
+            {% if pulls %}
+            {% for pull in pulls if 'bug' in pull.labels or 'bugfix' in pull.labels %}
+            - {{ pull.title }} (#{{ pull.number }}) (@{{ pull.author.username }})
+            {% endfor %}
+            {% endif %}

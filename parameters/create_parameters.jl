@@ -1,4 +1,4 @@
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection as TC
 import CLIMAParameters as CP
 import RRTMGP.Parameters as RP
 import CloudMicrophysics as CM
@@ -7,7 +7,7 @@ import ClimaAtmos.Parameters as CAP
 import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
 import Thermodynamics as TD
-import TurbulenceConvection.Parameters as TCP
+import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 
 # TODO: move to corresponding packages
 Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = Ref(ps)
