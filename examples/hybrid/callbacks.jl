@@ -231,15 +231,24 @@ function save_to_disk_func_distributed(integrator)
                     cm_params,
                     TD.PhasePartition(thermo_params, global_ᶜts),
                 )
-            global_col_integrated_precip =
-                vertical∫_col(global_ᶜS_ρq_tot) ./ FT(CAP.ρ_cloud_liq(params))
+
+            # rain vs snow
+            global_ᶜ3d_rain =
+                @. ifelse(global_ᶜT >= FT(273.15), global_ᶜS_ρq_tot, FT(0))
+            global_ᶜ3d_snow =
+                @. ifelse(global_ᶜT < FT(273.15), global_ᶜS_ρq_tot, FT(0))
+            global_col_integrated_rain =
+                vertical∫_col(global_ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
+            global_col_integrated_snow =
+                vertical∫_col(global_ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
 
             moist_diagnostic = (;
                 cloud_liquid = global_ᶜcloud_liquid,
                 cloud_ice = global_ᶜcloud_ice,
                 water_vapor = global_ᶜwatervapor,
                 precipitation_removal = global_ᶜS_ρq_tot,
-                column_integrated_precip = global_col_integrated_precip,
+                column_integrated_rain = global_col_integrated_rain,
+                column_integrated_snow = global_col_integrated_snow,
                 relative_humidity = global_ᶜRH,
             )
         else
@@ -269,7 +278,7 @@ function save_to_disk_func_serial(integrator)
     Y = u
 
     if :ρq_tot in propertynames(Y.c)
-        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, col_integrated_precip, ᶜK, ᶜΦ) = p
+        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
     else
         (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
     end
@@ -314,15 +323,22 @@ function save_to_disk_func_serial(integrator)
                 cm_params,
                 TD.PhasePartition(thermo_params, ᶜts),
             )
-        col_integrated_precip =
-            vertical∫_col(ᶜS_ρq_tot) ./ FT(CAP.ρ_cloud_liq(params))
+
+        # rain vs snow
+        ᶜ3d_rain = @. ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
+        ᶜ3d_snow = @. ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
+        col_integrated_rain =
+            vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
+        col_integrated_snow =
+            vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
 
         moist_diagnostic = (;
             cloud_liquid = ᶜcloud_liquid,
             cloud_ice = ᶜcloud_ice,
             water_vapor = ᶜwatervapor,
             precipitation_removal = ᶜS_ρq_tot,
-            column_integrated_precip = col_integrated_precip,
+            column_integrated_rain = col_integrated_rain,
+            column_integrated_snow = col_integrated_snow,
             relative_humidity = ᶜRH,
         )
     else
