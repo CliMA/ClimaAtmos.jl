@@ -123,9 +123,10 @@ function get_numerics(parsed_args)
     return numerics
 end
 
-function get_simulation(s, parsed_args)
+function get_simulation(parsed_args)
 
     job_id = if isnothing(parsed_args["job_id"])
+        (s, default_parsed_args) = parse_commandline()
         job_id_from_parsed_args(s, parsed_args)
     else
         parsed_args["job_id"]
