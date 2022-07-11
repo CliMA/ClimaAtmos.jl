@@ -71,91 +71,30 @@ const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
 
 const C123 = Geometry.Covariant123Vector
 
-partition(Yc) =
-    TD.PhasePartition(Yc.ρq_tot / Yc.ρ, Yc.ρq_liq / Yc.ρ, Yc.ρq_ice / Yc.ρ)
-function thermo_state_ρθ(ρθ, Yc, params) # Note: θ is liquid-ice potential temp
-    thermo_params = CAP.thermodynamics_params(params)
-    if (
-        :ρq_liq in propertynames(Yc) &&
-        :ρq_ice in propertynames(Yc) &&
-        :ρq_tot in propertynames(Yc)
-    )
-        return TD.PhaseNonEquil_ρθq(
-            thermo_params,
-            Yc.ρ,
-            ρθ / Yc.ρ,
-            partition(Yc),
-        )
-    elseif :ρq_tot in propertynames(Yc)
-        return TD.PhaseEquil_ρθq(
-            thermo_params,
-            Yc.ρ,
-            ρθ / Yc.ρ,
-            Yc.ρq_tot / Yc.ρ,
-        )
-    else
-        return TD.PhaseDry_ρθ(thermo_params, Yc.ρ, ρθ / Yc.ρ)
-    end
-end
-function thermo_state_ρe_int(ρe_int, Yc, params)
-    thermo_params = CAP.thermodynamics_params(params)
+include("thermo_state.jl")
 
-    if (
-        :ρq_liq in propertynames(Yc) &&
-        :ρq_ice in propertynames(Yc) &&
-        :ρq_tot in propertynames(Yc)
-    )
-        return TD.PhaseNonEquil(
-            thermo_params,
-            ρe_int / Yc.ρ,
-            Yc.ρ,
-            partition(Yc),
-        )
-    elseif :ρq_tot in propertynames(Yc)
-        return TD.PhaseEquil_ρeq(
-            thermo_params,
-            Yc.ρ,
-            ρe_int / Yc.ρ,
-            Yc.ρq_tot / Yc.ρ,
-        )
-    else
-        return TD.PhaseDry(thermo_params, ρe_int / Yc.ρ, Yc.ρ)
-    end
-end
-thermo_state_ρe(ρe_tot, Yc, K, Φ, params) =
-    thermo_state_ρe_int(ρe_tot - Yc.ρ * (K + Φ), Yc, params)
-
-get_cache(Y, params, upwinding_mode, dt) = merge(
-    default_cache(Y, params, upwinding_mode),
-    additional_cache(Y, params, dt),
+get_cache(Y, params, model_spec, numerics, simulation, dt) = merge(
+    default_cache(Y, params, numerics, simulation),
+    additional_cache(Y, params, model_spec, dt),
 )
 
-function default_cache(Y, params, upwinding_mode)
+function default_cache(Y, params, numerics, simulation)
+    (; upwinding_mode) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
-        Ω = FT(CAP.Omega(params))
+        Ω = CAP.Omega(params)
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
         lat_sfc = Fields.level(ᶜcoord.lat, 1)
     else
-        f = FT(CAP.f_plane_coriolis_frequency(params))
+        f = CAP.f_plane_coriolis_frequency(params)
         ᶜf = map(_ -> f, ᶜcoord)
         lat_sfc = map(_ -> FT(0), Fields.level(ᶜcoord, 1))
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
-    if (
-        :ρq_liq in propertynames(Y.c) &&
-        :ρq_ice in propertynames(Y.c) &&
-        :ρq_tot in propertynames(Y.c)
-    )
-        ts_type = TD.PhaseNonEquil{FT}
-    elseif :ρq_tot in propertynames(Y.c)
-        ts_type = TD.PhaseEquil{FT}
-    else
-        ts_type = TD.PhaseDry{FT}
-    end
+    ts_type = thermo_state_type(Y.c, FT)
     ghost_buffer = (
         c = Spaces.create_ghost_buffer(Y.c),
         f = Spaces.create_ghost_buffer(Y.f),
@@ -168,9 +107,10 @@ function default_cache(Y, params, upwinding_mode)
             (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
     )
     return (;
+        simulation,
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
-        ᶜΦ = FT(CAP.grav(params)) .* ᶜcoord.z,
+        ᶜΦ = CAP.grav(params) .* ᶜcoord.z,
         ᶜts = similar(Y.c, ts_type),
         ᶜp = similar(Y.c, FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
@@ -214,9 +154,9 @@ function implicit_tendency!(Yₜ, Y, p, t)
 
         @. Yₜ.c.ρ = -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠw))
 
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         if :ρθ in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
             if isnothing(ᶠupwind_product)
                 @. Yₜ.c.ρθ = -(ᶜdivᵥ(ᶠinterp(Y.c.ρθ) * ᶠw))
             else
@@ -225,8 +165,6 @@ function implicit_tendency!(Yₜ, Y, p, t)
                 ))
             end
         elseif :ρe_tot in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
             if isnothing(ᶠupwind_product)
                 @. Yₜ.c.ρe_tot = -(ᶜdivᵥ(ᶠinterp(Y.c.ρe_tot + ᶜp) * ᶠw))
             else
@@ -236,8 +174,6 @@ function implicit_tendency!(Yₜ, Y, p, t)
                 ))
             end
         elseif :ρe_int in propertynames(Y.c)
-            @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
             if isnothing(ᶠupwind_product)
                 @. Yₜ.c.ρe_int = -(
                     ᶜdivᵥ(ᶠinterp(Y.c.ρe_int + ᶜp) * ᶠw) - ᶜinterp(
@@ -324,19 +260,15 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
 
     # Energy conservation
 
+    thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     if :ρθ in propertynames(Y.c)
-        @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
         @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
     elseif :ρe_tot in propertynames(Y.c)
-        @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
         @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
     elseif :ρe_int in propertynames(Y.c)
-        @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         if point_type <: Geometry.Abstract3DPoint
             @. Yₜ.c.ρe_int -=
                 divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
@@ -397,7 +329,147 @@ Base.one(::T) where {T <: Geometry.AxisTensor} = one(T)
 Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} =
     T(axes(T), S(one(T′)))
 
-function Wfact!(W, Y, p, dtγ, t)
+# :ρe_tot in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+function Wfact_special!(W, Y, p, dtγ, t)
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
+    (; flags, dtγ_ref) = W
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = W
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params, ᶠupwind_product) = p
+    @nvtx "Wfact!" color = colorant"green" begin
+        thermo_params = CAP.thermodynamics_params(params)
+
+        R_d = FT(CAP.R_d(params))
+        κ_d = FT(CAP.kappa_d(params))
+        cv_d = FT(CAP.cv_d(params))
+        T_tri = FT(CAP.T_triple(params))
+        MSLP = FT(CAP.MSLP(params))
+
+        dtγ_ref[] = dtγ
+
+        # If we let ᶠw_data = ᶠw.components.data.:1 and ᶠw_unit = one.(ᶠw), then
+        # ᶠw == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠw.
+        ᶠw_data = ᶠw.components.data.:1
+
+        # If ∂(ᶜarg)/∂(ᶠw_data) = 0, then
+        # ∂(ᶠupwind_product(ᶠw, ᶜarg))/∂(ᶠw_data) =
+        #     ᶠupwind_product(ᶠw + εw, arg) / to_scalar(ᶠw + εw).
+        # The εw is only necessary in case w = 0.
+        εw = Ref(Geometry.Covariant3Vector(eps(FT)))
+        to_scalar(vector) = vector.u₃
+
+        to_scalar_coefs(vector_coefs) =
+            map(vector_coef -> vector_coef.u₃, vector_coefs)
+
+
+        Fields.bycolumn(axes(Y.c)) do colidx
+            @. ∂ᶜK∂ᶠw_data[colidx] =
+                ᶜinterp(ᶠw_data[colidx]) *
+                norm_sqr(one(ᶜinterp(ᶠw[colidx]))) *
+                ᶜinterp_stencil(one(ᶠw_data[colidx]))
+            @. ∂ᶜρₜ∂ᶠ𝕄[colidx] =
+                -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρ[colidx]) * one(ᶠw[colidx])))
+
+            # elseif :ρe_tot in propertynames(Y.c)
+            ᶜρe = Y.c.ρe_tot
+            @. ᶜK[colidx] =
+                norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+            thermo_state!(
+                ᶜts[colidx],
+                Y.c[colidx],
+                params,
+                ᶜinterp,
+                ᶜK[colidx],
+                ᶠw[colidx],
+            )
+            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+
+            if isnothing(ᶠupwind_product)
+                #         elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
+                #             # same as above, but we approximate ∂(ᶜp)/∂(ᶜK) = 0, so that
+                #             # ∂ᶜ𝔼ₜ∂ᶠ𝕄 has 3 diagonals instead of 5
+                @. ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx] = -(ᶜdivᵥ_stencil(
+                    ᶠinterp(ᶜρe[colidx] + ᶜp[colidx]) * one(ᶠw[colidx]),
+                ))
+            else
+                #         if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
+                @. ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx] = -(ᶜdivᵥ_stencil(
+                    ᶠinterp(ᶜρ[colidx]) * ᶠupwind_product(
+                        ᶠw[colidx] + εw,
+                        (ᶜρe[colidx] + ᶜp[colidx]) / ᶜρ[colidx],
+                    ) / to_scalar(ᶠw[colidx] + εw),
+                ))
+            end
+            # elseif :ρe_tot in propertynames(Y.c)
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ(ᶜK + ᶜΦ)
+            # ∂(ᶠwₜ)/∂(ᶜρe) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe)
+            # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
+            # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe) = ᶠgradᵥ_stencil(R_d / cv_d)
+            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) *
+                ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe[colidx])),
+            )
+
+
+            # if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ(ᶜK + ᶜΦ)
+            # ∂(ᶠwₜ)/∂(ᶜρ) =
+            #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) +
+            #     ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
+            # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
+            # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) =
+            #     ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri))
+            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
+            # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
+            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
+                    R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
+                ) +
+                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                ᶠinterp_stencil(one(ᶜρ[colidx])),
+            )
+
+            # elseif :ρe_tot in propertynames(Y.c)
+            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
+                compose(
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(-(ᶜρ[colidx] * R_d / cv_d)) +
+                    -1 * ᶠgradᵥ_stencil(one(ᶜK[colidx])),
+                    ∂ᶜK∂ᶠw_data[colidx],
+                ),
+            )
+
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                if isnothing(ᶠupwind_product)
+                    # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜ𝕋) * ᶠw)
+                    # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋) * ᶠw_unit)
+                    @. ∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx] =
+                        -(ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋[colidx]) * one(ᶠw[colidx])))
+                else
+                    # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind_product(ᶠw, ᶜ𝕋 / ᶜρ))
+                    # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) =
+                    #     -ᶜdivᵥ_stencil(
+                    #         ᶠinterp(ᶜρ) * ∂(ᶠupwind_product(ᶠw, ᶜ𝕋 / ᶜρ))/∂(ᶠw_data),
+                    #     )
+                    @. ∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx] = -(ᶜdivᵥ_stencil(
+                        ᶠinterp(ᶜρ[colidx]) * ᶠupwind_product(
+                            ᶠw[colidx] + εw,
+                            ᶜ𝕋[colidx] / ᶜρ[colidx],
+                        ) / to_scalar(ᶠw[colidx] + εw),
+                    ))
+                end
+            end
+        end
+    end
+end
+
+
+function Wfact_generic!(W, Y, p, dtγ, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
@@ -450,10 +522,12 @@ function Wfact!(W, Y, p, dtγ, t)
         # ∂(ᶜρₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜρ) * ᶠw_unit)
         @. ∂ᶜρₜ∂ᶠ𝕄 = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρ) * one(ᶠw)))
 
+        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+
         if :ρθ in propertynames(Y.c)
             ᶜρθ = Y.c.ρθ
-            @. ᶜts = thermo_state_ρθ(Y.c.ρθ, Y.c, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
             if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
                 error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρθ")
@@ -476,9 +550,6 @@ function Wfact!(W, Y, p, dtγ, t)
             end
         elseif :ρe_tot in propertynames(Y.c)
             ᶜρe = Y.c.ρe_tot
-            @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-            @. ᶜts = thermo_state_ρe(Y.c.ρe_tot, Y.c, ᶜK, ᶜΦ, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
             if isnothing(ᶠupwind_product)
                 if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
@@ -534,8 +605,6 @@ function Wfact!(W, Y, p, dtγ, t)
             end
         elseif :ρe_int in propertynames(Y.c)
             ᶜρe_int = Y.c.ρe_int
-            @. ᶜts = thermo_state_ρe_int(Y.c.ρe_int, Y.c, params)
-            @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
             if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
                 error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")

@@ -3,7 +3,7 @@ using SurfaceFluxes
 using CloudMicrophysics
 const SF = SurfaceFluxes
 const CCG = ClimaCore.Geometry
-import TurbulenceConvection as TC
+import ClimaAtmos.TurbulenceConvection as TC
 const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
@@ -22,19 +22,20 @@ function init_state(
     center_space,
     face_space,
     params,
-    models,
+    model_spec,
 )
+    (; energy_form, moisture_model, turbconv_model) = model_spec
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     c =
         center_initial_condition.(
             ᶜlocal_geometry,
             params,
-            models.energy_form,
-            models.moisture_model,
-            models.turbconv_model,
+            energy_form,
+            moisture_model,
+            turbconv_model,
         )
-    f = face_initial_condition.(ᶠlocal_geometry, params, models.turbconv_model)
+    f = face_initial_condition.(ᶠlocal_geometry, params, turbconv_model)
     Y = Fields.FieldVector(; c, f)
     return Y
 end
@@ -386,13 +387,18 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
 )
 
 function held_suarez_tendency!(Yₜ, Y, p, t)
-    (; ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+    (; T_sfc, z_sfc, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
     cv_d = FT(CAP.cv_d(params))
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
+    grav = FT(CAP.grav(params))
+
+    z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
+    z_surface = Fields.Field(Fields.field_values(z_sfc), axes(z_bottom))
+    p_sfc = @. MSLP * exp(-grav * z_surface / R_d / T_sfc)
 
     σ_b = FT(7 / 10)
     k_a = 1 / (40 * day)
@@ -408,7 +414,10 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
     Δθ_z = FT(10)
     T_min = FT(200)
 
-    @. ᶜσ = ᶜp / MSLP
+    p_int_size = size(parent(ᶜp))
+    p_sfc = reshape(parent(p_sfc), (1, p_int_size[2:end]...))
+    parent(ᶜσ) .= parent(ᶜp) ./ parent(p_sfc)
+
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
         (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
