@@ -61,3 +61,17 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
     end
     return nothing
 end
+
+function verify_callbacks(t)
+    if length(t) ≠ length(unique(t))
+        @show length(t)
+        @show length(unique(t))
+        error(
+            string(
+                "Saving duplicate solutions at the same time.",
+                "Please change the callbacks to not save ",
+                "duplicate solutions at the same timestep.",
+            ),
+        )
+    end
+end
