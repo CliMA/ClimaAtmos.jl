@@ -345,7 +345,12 @@ end
 save_to_disk_callback = if dt_save_to_disk == Inf
     nothing
 else
-    PeriodicCallback(save_to_disk_func, dt_save_to_disk; initial_affect = true)
+    PeriodicCallback(
+        save_to_disk_func,
+        dt_save_to_disk;
+        initial_affect = true,
+        save_positions = (false, false),
+    )
 end
 callback =
     CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)
@@ -389,6 +394,8 @@ if simulation.is_distributed
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
+
+verify_callbacks(sol.t)
 
 if simulation.is_distributed
     export_scaling_file(sol, simulation.output_dir, walltime, comms_ctx, nprocs)
