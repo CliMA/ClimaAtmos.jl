@@ -152,7 +152,7 @@ function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
 end
 
 
-function implicit_tendency!(Yₜ, Y, p, t)
+function implicit_tendency_special!(Yₜ, Y, p, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     ᶜρ = Y.c.ρ
@@ -230,8 +230,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
-#=
-function implicit_tendency!(Yₜ, Y, p, t)
+function implicit_tendency_generic!(Yₜ, Y, p, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     @nvtx "implicit tendency" color = colorant"yellow" begin
@@ -320,7 +319,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
     end
     return Yₜ
 end
-=#
+
 function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         (; enable_default_remaining_tendency) = p

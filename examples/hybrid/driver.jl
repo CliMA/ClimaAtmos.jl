@@ -324,6 +324,11 @@ callback =
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
 
+if :ρe_tot in propertynames(Y.c)
+    implicit_tendency! = implicit_tendency_special!
+else
+    implicit_tendency! = implicit_tendency_generic!
+end
 problem = if parsed_args["split_ode"]
     SplitODEProblem(
         ODEFunction(
