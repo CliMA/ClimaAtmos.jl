@@ -123,6 +123,15 @@ function postprocessing(sol, output_dir, fps)
     profile_animation(sol, output_dir, fps)
 end
 
+function safe_index(ius, t)
+    iu = if isempty(ius)
+        @warn "Cound not find desired time for plotting, falling back on last day."
+        length(t)
+    else
+        first(ius)
+    end
+end
+
 # Dispatcher:
 # baroclinic wave
 paperplots_baro_wave(model_spec, args...) = paperplots_baro_wave(
@@ -167,7 +176,8 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
     for day in days
-        iu = findall(x -> x == day * 24 * 3600, sol.t)[1]
+        ius = findall(x -> x == day * 24 * 3600, sol.t)
+        iu = safe_index(ius, sol.t)
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
         thermo_state!(ᶜts, Y, params, ᶜinterp)
@@ -295,7 +305,8 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
     for day in days
-        iu = findall(x -> x == day * 24 * 3600, sol.t)[1]
+        ius = findall(x -> x == day * 24 * 3600, sol.t)
+        iu = safe_index(ius, sol.t)
         Y = sol.u[iu]
 
         # compute pressure, temperature, vorticity
@@ -428,7 +439,8 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
     for day in days
-        iu = findall(x -> x == day * 24 * 3600, sol.t)[1]
+        ius = findall(x -> x == day * 24 * 3600, sol.t)
+        iu = safe_index(ius, sol.t)
         Y = sol.u[iu]
 
         # compute pressure, temperature, vorticity
@@ -727,15 +739,10 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
     nc_T = defVar(nc, "T", FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
 
-    unique_time = unique(sol.t) # for some reason, if time of save to solution coincides with time of save to disk, a duplicate copy is saved in sol
-
     # save raw data
-    for i in 1:length(unique_time)
-        nc_time[i] = unique_time[i]
-
-        iu = findall(x -> x == unique_time[i], sol.t)[1]
-        Y = sol.u[iu]
-
+    for i in 1:length(sol.t)
+        nc_time[i] = sol.t[i]
+        Y = sol.u[i]
         # potential temperature
         ᶜθ = Y.c.ρθ ./ Y.c.ρ
         # temperature
@@ -897,14 +904,10 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     nc_T = defVar(nc, "T", FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
 
-    unique_time = unique(sol.t) # for some reason, if time of save to solution coincides with time of save to disk, a duplicate copy is saved in sol
-
     # save raw data
-    for i in 1:length(unique_time)
-        nc_time[i] = unique_time[i]
-
-        iu = findall(x -> x == unique_time[i], sol.t)[1]
-        Y = sol.u[iu]
+    for i in 1:length(sol.t)
+        nc_time[i] = sol.t[i]
+        Y = sol.u[i]
 
         # zonal wind
         ᶜuₕ = Y.c.uₕ
@@ -1070,14 +1073,10 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
     nc_T = defVar(nc, "T", FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
 
-    unique_time = unique(sol.t) # for some reason, if time of save to solution coincides with time of save to disk, a duplicate copy is saved in sol
-
     # save raw data
-    for i in 1:length(unique_time)
-        nc_time[i] = unique_time[i]
-
-        iu = findall(x -> x == unique_time[i], sol.t)[1]
-        Y = sol.u[iu]
+    for i in 1:length(sol.t)
+        nc_time[i] = sol.t[i]
+        Y = sol.u[i]
 
         # temperature
         thermo_state!(ᶜts, Y, params, ᶜinterp)
@@ -1245,14 +1244,10 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
     nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
 
-    unique_time = unique(sol.t) # for some reason, if time of save to solution coincides with time of save to disk, a duplicate copy is saved in sol
-
     # save raw data
-    for i in 1:length(unique_time)
-        nc_time[i] = unique_time[i]
-
-        iu = findall(x -> x == unique_time[i], sol.t)[1]
-        Y = sol.u[iu]
+    for i in 1:length(sol.t)
+        nc_time[i] = sol.t[i]
+        Y = sol.u[i]
 
         # zonal wind
         ᶜuₕ = Y.c.uₕ
