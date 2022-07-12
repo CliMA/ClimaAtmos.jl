@@ -443,7 +443,8 @@ microphysics_cache(Y, ::Nothing) = NamedTuple()
 microphysics_cache(Y, ::Microphysics0Moment) = (
     ᶜS_ρq_tot = similar(Y.c, FT),
     ᶜλ = similar(Y.c, FT),
-    col_integrated_precip = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
+    col_integrated_rain = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
+    col_integrated_snow = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
 )
 
 vertical∫_col(field::ClimaCore.Fields.CenterExtrudedFiniteDifferenceField) =
@@ -468,7 +469,15 @@ function vertical∫_col(
 end
 
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
-    (; ᶜts, ᶜΦ, ᶜS_ρq_tot, ᶜλ, col_integrated_precip, params) = p # assume ᶜts has been updated
+    (;
+        ᶜts,
+        ᶜΦ,
+        ᶜS_ρq_tot,
+        ᶜλ,
+        col_integrated_rain,
+        col_integrated_snow,
+        params,
+    ) = p # assume ᶜts has been updated
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
     @. ᶜS_ρq_tot =
@@ -480,9 +489,15 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ += ᶜS_ρq_tot
 
     # update precip in cache for coupler's use
-    # TODO: clean up p. => @.
-    p.col_integrated_precip .=
-        vertical∫_col(ᶜS_ρq_tot) ./ FT(CAP.ρ_cloud_liq(params))
+    # 3d rain and snow 
+    ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+    ᶜ3d_rain = @. ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
+    ᶜ3d_snow = @. ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
+
+    col_integrated_rain .=
+        vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
+    col_integrated_snow .=
+        vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
 
     # liquid fraction
     @. ᶜλ = TD.liquid_fraction(thermo_params, ᶜts)
