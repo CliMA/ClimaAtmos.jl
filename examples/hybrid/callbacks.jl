@@ -14,7 +14,13 @@ end
 function save_to_disk_func_distributed(integrator)
     (; t, u, p) = integrator
     (; output_dir) = p.simulation
+    (; horizontal_mesh, quad, z_max, z_elem, z_stretch) = p.spaces
 
+    if ClimaComms.iamroot(comms_ctx)
+        global_h_space = make_horizontal_space(horizontal_mesh, quad, nothing)
+        global_center_space, global_face_space =
+            make_hybrid_spaces(global_h_space, z_max, z_elem, z_stretch)
+    end
     global_Y_c = DL.gather(comms_ctx, Fields.field_values(u.c))
     global_Y_f = DL.gather(comms_ctx, Fields.field_values(u.f))
 
@@ -95,10 +101,12 @@ function save_to_disk_func_distributed(integrator)
 
     if ClimaComms.iamroot(comms_ctx)
         global_u = Fields.FieldVector(
-            c = Fields.Field(global_Y_c, axes(u.c)),
-            f = Fields.Field(global_Y_f, axes(u.f)),
+            c = Fields.Field(global_Y_c, global_center_space),
+            f = Fields.Field(global_Y_f, global_face_space),
         )
+    end
 
+    if ClimaComms.iamroot(comms_ctx)
         Y = global_u
 
         ᶜuₕ = Y.c.uₕ

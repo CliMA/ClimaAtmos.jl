@@ -184,6 +184,15 @@ steps:
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --t_end 2hours --job_id test_io --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
         artifact_paths: "test_io/*"
 
+
+      - label: ":computer: MPI io test"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id test_mpi_io --t_end 2hours --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
+        artifact_paths: "test_mpi_io/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
   - group: "Milestones"
     steps:
 

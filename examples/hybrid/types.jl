@@ -183,5 +183,13 @@ function get_spaces(parsed_args, params, comms_ctx)
         end
         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     end
-    return (; center_space, face_space)
+    return (;
+        center_space,
+        face_space,
+        horizontal_mesh,
+        quad,
+        z_max,
+        z_elem,
+        z_stretch,
+    )
 end
