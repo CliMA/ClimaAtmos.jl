@@ -62,33 +62,14 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
         Ifb = CCO.InterpolateC2F(; b_bcs...)
         Ifa = CCO.InterpolateC2F(; a_bcs...)
 
-        nh_press_buoy = aux_up_f[i].nh_pressure_b
-        nh_press_adv = aux_up_f[i].nh_pressure_adv
-        nh_press_drag = aux_up_f[i].nh_pressure_drag
         nh_pressure = aux_up_f[i].nh_pressure
 
-        @. nh_press_buoy =
-            Int(Ifa(a_up) > 0) * -α_b / (1 + α₂_asp_ratio²) *
-            ρ_f *
-            Ifa(a_up) *
-            Ifb(b_up)
-        @. nh_press_adv =
-            Int(Ifa(a_up) > 0) *
-            ρ_f *
-            Ifa(a_up) *
-            α_a *
-            w_up *
-            ∇(wvec(Ifc(w_up)))
-        # drag as w_dif and account for downdrafts
-        @. nh_press_drag =
-            Int(Ifa(a_up) > 0) *
-            -1 *
-            ρ_f *
-            Ifa(a_up) *
-            α_d *
-            (w_up - w_en) *
-            abs(w_up - w_en) / H_up
-        @. nh_pressure = nh_press_buoy + nh_press_adv + nh_press_drag
+        @. nh_pressure =
+            ρ_f * (
+                -α_b * Ifa(a_up) * Ifb(b_up) +
+                Ifa(a_up) * α_a * w_up * ∇(wvec(Ifc(w_up))) -
+                α_d * Ifa(a_up) * (w_up - w_en) * abs(w_up - w_en) / H_up
+            )
     end
     return nothing
 end

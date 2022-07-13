@@ -187,14 +187,8 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 )
 
 # Face only
-face_aux_vars_up(FT, local_geometry) = (;
-    w = FT(0),
-    nh_pressure = FT(0),
-    nh_pressure_b = FT(0),
-    nh_pressure_adv = FT(0),
-    nh_pressure_drag = FT(0),
-    massflux = FT(0),
-)
+face_aux_vars_up(FT, local_geometry) =
+    (; w = FT(0), nh_pressure = FT(0), massflux = FT(0))
 face_aux_vars_edmf_moisture(FT, ::NonEquilibriumMoisture) = (;
     massflux_en = FT(0), # TODO: is this the right place for this?
     massflux_ql = FT(0),
@@ -243,12 +237,7 @@ cent_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
 
 # Face only
 face_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
-    turbconv = (;
-        nh_pressure = FT(0),
-        nh_pressure_adv = FT(0),
-        nh_pressure_drag = FT(0),
-        nh_pressure_b = FT(0),
-    ),
+    turbconv = (; nh_pressure = FT(0)),
     precip = (; rain_flux = FT(0), snow_flux = FT(0)),
 )
 
