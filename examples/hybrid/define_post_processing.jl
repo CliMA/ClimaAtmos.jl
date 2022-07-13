@@ -201,22 +201,21 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
         ### create an nc file to store raw cg data
         # create data
         datafile_cc = remap_tmpdir * "/bw-raw_day" * string(day) * ".nc"
-        nc = NCDataset(datafile_cc, "c")
-        # defines the appropriate dimensions and variables for a space coordinate
-        def_space_coord(nc, cspace, type = "cgll")
-        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-        nc_time = def_time_coord(nc)
-        # defines variables for pressure, temperature, and vorticity
-        nc_p = defVar(nc, "pres", FT, cspace, ("time",))
-        nc_T = defVar(nc, "T", FT, cspace, ("time",))
-        nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
+        NCDataset(datafile_cc, "c") do nc
+            # defines the appropriate dimensions and variables for a space coordinate
+            def_space_coord(nc, cspace, type = "cgll")
+            # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+            nc_time = def_time_coord(nc)
+            # defines variables for pressure, temperature, and vorticity
+            nc_p = defVar(nc, "pres", FT, cspace, ("time",))
+            nc_T = defVar(nc, "T", FT, cspace, ("time",))
+            nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
 
-        nc_time[1] = FT(day * 24 * 3600)
-        nc_p[:, 1] = ᶜp
-        nc_T[:, 1] = ᶜT
-        nc_ω[:, 1] = ᶜvort
-
-        close(nc)
+            nc_time[1] = FT(day * 24 * 3600)
+            nc_p[:, 1] = ᶜp
+            nc_T[:, 1] = ᶜT
+            nc_ω[:, 1] = ᶜvort
+        end
 
         # write out our cubed sphere mesh
         meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -252,14 +251,17 @@ function paperplots_baro_wave_ρθ(sol, output_dir, p, nlat, nlon)
     # create plots as in the paper
     for day in days
         datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
-        ncdata = NCDataset(datafile_latlon, "r")
-        lon = ncdata["lon"][:]
-        lat = ncdata["lat"][:]
+        nt = NCDataset(datafile_latlon, "r") do nc
+            lon = nc["lon"][:]
+            lat = nc["lat"][:]
 
-        p = ncdata["pres"][:]
-        T = ncdata["T"][:]
-        vort = ncdata["vort"][:] * FT(1e5)
-        close(ncdata)
+            p = nc["pres"][:]
+            T = nc["T"][:]
+            vort = nc["vort"][:] * FT(1e5)
+            (; lon, lat, p, T, vort)
+        end
+        (; lon, lat, p, T, vort) = nt
+
         latidx = findall(x -> x >= 0, lat)
         lonidx = findall(x -> 0 <= x <= 240, lon)
 
@@ -334,22 +336,22 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ### create an nc file to store raw cg data
         # create data
         datafile_cc = remap_tmpdir * "/bw-raw_day" * string(day) * ".nc"
-        nc = NCDataset(datafile_cc, "c")
-        # defines the appropriate dimensions and variables for a space coordinate
-        def_space_coord(nc, cspace, type = "cgll")
-        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-        nc_time = def_time_coord(nc)
-        # defines variables for pressure, temperature, and vorticity
-        nc_p = defVar(nc, "pres", FT, cspace, ("time",))
-        nc_T = defVar(nc, "T", FT, cspace, ("time",))
-        nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
+        NCDataset(datafile_cc, "c") do nc
+            # defines the appropriate dimensions and variables for a space coordinate
+            def_space_coord(nc, cspace, type = "cgll")
+            # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+            nc_time = def_time_coord(nc)
+            # defines variables for pressure, temperature, and vorticity
+            nc_p = defVar(nc, "pres", FT, cspace, ("time",))
+            nc_T = defVar(nc, "T", FT, cspace, ("time",))
+            nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
 
-        nc_time[1] = FT(day * 24 * 3600)
-        nc_p[:, 1] = ᶜp
-        nc_T[:, 1] = ᶜT
-        nc_ω[:, 1] = ᶜvort
+            nc_time[1] = FT(day * 24 * 3600)
+            nc_p[:, 1] = ᶜp
+            nc_T[:, 1] = ᶜT
+            nc_ω[:, 1] = ᶜvort
 
-        close(nc)
+        end
 
         # write out our cubed sphere mesh
         meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -385,13 +387,15 @@ function paperplots_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     # create plots as in the paper
     for day in days
         datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
-        ncdata = NCDataset(datafile_latlon, "r")
-        lon = ncdata["lon"][:]
-        lat = ncdata["lat"][:]
-
-        p = ncdata["pres"][:]
-        T = ncdata["T"][:]
-        vort = ncdata["vort"][:] * FT(1e5)
+        nt = NCDataset(datafile_latlon, "r") do nc
+            lon = nc["lon"][:]
+            lat = nc["lat"][:]
+            p = nc["pres"][:]
+            T = nc["T"][:]
+            vort = nc["vort"][:] * FT(1e5)
+            (; lon, lat, p, T, vort)
+        end
+        (; lon, lat, p, T, vort) = nt
 
         latidx = findall(x -> x >= 0, lat)
         lonidx = findall(x -> 0 <= x <= 240, lon)
@@ -477,36 +481,36 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ### create an nc file to store raw cg data
         # create data
         datafile_cc = remap_tmpdir * "/bw-raw_day" * string(day) * ".nc"
-        nc = NCDataset(datafile_cc, "c")
-        # defines the appropriate dimensions and variables for a space coordinate
-        def_space_coord(nc, cspace, type = "cgll")
-        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-        nc_time = def_time_coord(nc)
-        # defines variables for pressure, temperature, and vorticity
-        nc_p = defVar(nc, "pres", FT, cspace, ("time",))
-        nc_T = defVar(nc, "T", FT, cspace, ("time",))
-        nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
-        nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
-        nc_w = defVar(nc, "w", FT, cspace, ("time",))
-        nc_ρ = defVar(nc, "rho", FT, cspace, ("time",))
-        nc_cloudwater = defVar(nc, "cloud_water", FT, cspace, ("time",))
-        nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
-        nc_u = defVar(nc, "u", FT, cspace, ("time",))
-        nc_v = defVar(nc, "v", FT, cspace, ("time",))
+        NCDataset(datafile_cc, "c") do nc
+            # defines the appropriate dimensions and variables for a space coordinate
+            def_space_coord(nc, cspace, type = "cgll")
+            # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+            nc_time = def_time_coord(nc)
+            # defines variables for pressure, temperature, and vorticity
+            nc_p = defVar(nc, "pres", FT, cspace, ("time",))
+            nc_T = defVar(nc, "T", FT, cspace, ("time",))
+            nc_ω = defVar(nc, "vort", FT, cspace, ("time",))
+            nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+            nc_w = defVar(nc, "w", FT, cspace, ("time",))
+            nc_ρ = defVar(nc, "rho", FT, cspace, ("time",))
+            nc_cloudwater = defVar(nc, "cloud_water", FT, cspace, ("time",))
+            nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
+            nc_u = defVar(nc, "u", FT, cspace, ("time",))
+            nc_v = defVar(nc, "v", FT, cspace, ("time",))
 
-        nc_time[1] = FT(day * 24 * 3600)
-        nc_p[:, 1] = ᶜp
-        nc_T[:, 1] = ᶜT
-        nc_ω[:, 1] = ᶜvort
-        nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
-        nc_w[:, 1] = ᶜw_phy
-        nc_ρ[:, 1] = ᶜρ
-        nc_cloudwater[:, 1] = ᶜcloudwater
-        nc_watervapor[:, 1] = ᶜwatervapor
-        nc_u[:, 1] = ᶜuₕ_phy.components.data.:1
-        nc_v[:, 1] = ᶜuₕ_phy.components.data.:2
+            nc_time[1] = FT(day * 24 * 3600)
+            nc_p[:, 1] = ᶜp
+            nc_T[:, 1] = ᶜT
+            nc_ω[:, 1] = ᶜvort
+            nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
+            nc_w[:, 1] = ᶜw_phy
+            nc_ρ[:, 1] = ᶜρ
+            nc_cloudwater[:, 1] = ᶜcloudwater
+            nc_watervapor[:, 1] = ᶜwatervapor
+            nc_u[:, 1] = ᶜuₕ_phy.components.data.:1
+            nc_v[:, 1] = ᶜuₕ_phy.components.data.:2
 
-        close(nc)
+        end
 
         # write out our cubed sphere mesh
         meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -553,20 +557,23 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     # create plots as in the reference
     for day in days
         datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
-        ncdata = NCDataset(datafile_latlon, "r")
-        lon = ncdata["lon"][:]
-        lat = ncdata["lat"][:]
-
-        p = ncdata["pres"][:]
-        T = ncdata["T"][:]
-        vort = ncdata["vort"][:] * FT(1e5)
-        qt = ncdata["qt"][:] * FT(1e3)
-        cloud_water = ncdata["cloud_water"][:] * FT(1e3)
-        water_vapor = ncdata["water_vapor"][:] * FT(1e3)
-        rho = ncdata["rho"][:]
-        w = ncdata["w"][:]
-        u = ncdata["u"][:]
-        v = ncdata["v"][:]
+        nt = NCDataset(datafile_latlon, "r") do nc
+            lon = nc["lon"][:]
+            lat = nc["lat"][:]
+            p = nc["pres"][:]
+            T = nc["T"][:]
+            vort = nc["vort"][:] * FT(1e5)
+            qt = nc["qt"][:] * FT(1e3)
+            cloud_water = nc["cloud_water"][:] * FT(1e3)
+            water_vapor = nc["water_vapor"][:] * FT(1e3)
+            rho = nc["rho"][:]
+            w = nc["w"][:]
+            u = nc["u"][:]
+            v = nc["v"][:]
+            (; lon, lat, p, T, vort, qt, cloud_water, water_vapor, rho, w, u, v)
+        end
+        (; lon, lat, p, T, vort, qt, cloud_water, water_vapor, rho, w, u, v) =
+            nt
 
         vert_intg_cloud_water =
             sum(cloud_water .* rho, dims = 3) ./ sum(rho, dims = 3)
@@ -729,36 +736,36 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
     # create an nc file to store raw cg data
     # create data
     datafile_cc = remap_tmpdir * "/hs-raw.nc"
-    nc = NCDataset(datafile_cc, "c")
-    # defines the appropriate dimensions and variables for a space coordinate
-    def_space_coord(nc, cspace, type = "cgll")
-    # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-    nc_time = def_time_coord(nc)
-    # defines variables for pressure, temperature, and vorticity
-    nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
-    nc_T = defVar(nc, "T", FT, cspace, ("time",))
-    nc_u = defVar(nc, "u", FT, cspace, ("time",))
+    NCDataset(datafile_cc, "c") do nc
+        # defines the appropriate dimensions and variables for a space coordinate
+        def_space_coord(nc, cspace, type = "cgll")
+        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+        nc_time = def_time_coord(nc)
+        # defines variables for pressure, temperature, and vorticity
+        nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
+        nc_T = defVar(nc, "T", FT, cspace, ("time",))
+        nc_u = defVar(nc, "u", FT, cspace, ("time",))
 
-    # save raw data
-    for i in 1:length(sol.t)
-        nc_time[i] = sol.t[i]
-        Y = sol.u[i]
-        # potential temperature
-        ᶜθ = Y.c.ρθ ./ Y.c.ρ
-        # temperature
-        thermo_state!(ᶜts, Y, params, ᶜinterp)
-        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-        # zonal wind
-        ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+        # save raw data
+        for i in 1:length(sol.t)
+            nc_time[i] = sol.t[i]
+            Y = sol.u[i]
+            # potential temperature
+            ᶜθ = Y.c.ρθ ./ Y.c.ρ
+            # temperature
+            thermo_state!(ᶜts, Y, params, ᶜinterp)
+            ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+            # zonal wind
+            ᶜuₕ = Y.c.uₕ
+            ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
-        # assigning to nc obj
-        nc_θ[:, i] = ᶜθ
-        nc_T[:, i] = ᶜT
-        nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+            # assigning to nc obj
+            nc_θ[:, i] = ᶜθ
+            nc_T[:, i] = ᶜT
+            nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+        end
+
     end
-
-    close(nc)
 
     ### write out our cubed sphere mesh
     meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -793,14 +800,16 @@ function paperplots_dry_held_suarez_ρθ(sol, output_dir, p, nlat, nlon)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
-    ncdata = NCDataset(datafile_latlon, "r")
-    lat = ncdata["lat"][:]
-    z = ncdata["z"][:]
-    time = ncdata["time"][:]
-
-    T = ncdata["T"][:, :, :, time .> 3600 * 24 * 200]
-    θ = ncdata["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-    u = ncdata["u"][:, :, :, time .> 3600 * 24 * 200]
+    nt = NCDataset(datafile_latlon, "r") do nc
+        lat = nc["lat"][:]
+        z = nc["z"][:]
+        time = nc["time"][:]
+        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
+        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
+        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
+        (; lat, z, time, T, θ, u)
+    end
+    (; lat, z, time, T, θ, u) = nt
 
     u_timeave_zonalave = calc_zonalave_timeave(u)
     T_timeave_zonalave = calc_zonalave_timeave(T)
@@ -894,39 +903,39 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     # create an nc file to store raw cg data
     # create data
     datafile_cc = remap_tmpdir * "/hs-raw.nc"
-    nc = NCDataset(datafile_cc, "c")
-    # defines the appropriate dimensions and variables for a space coordinate
-    def_space_coord(nc, cspace, type = "cgll")
-    # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-    nc_time = def_time_coord(nc)
-    # defines variables for pressure, temperature, and vorticity
-    nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
-    nc_T = defVar(nc, "T", FT, cspace, ("time",))
-    nc_u = defVar(nc, "u", FT, cspace, ("time",))
+    NCDataset(datafile_cc, "c") do nc
+        # defines the appropriate dimensions and variables for a space coordinate
+        def_space_coord(nc, cspace, type = "cgll")
+        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+        nc_time = def_time_coord(nc)
+        # defines variables for pressure, temperature, and vorticity
+        nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
+        nc_T = defVar(nc, "T", FT, cspace, ("time",))
+        nc_u = defVar(nc, "u", FT, cspace, ("time",))
 
-    # save raw data
-    for i in 1:length(sol.t)
-        nc_time[i] = sol.t[i]
-        Y = sol.u[i]
+        # save raw data
+        for i in 1:length(sol.t)
+            nc_time[i] = sol.t[i]
+            Y = sol.u[i]
 
-        # zonal wind
-        ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+            # zonal wind
+            ᶜuₕ = Y.c.uₕ
+            ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
-        # temperature
-        ᶠw = Y.f.w
-        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
-        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
+            # temperature
+            ᶠw = Y.f.w
+            @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+            thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+            ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+            ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
-        # assigning to nc obj
-        nc_θ[:, i] = ᶜθ
-        nc_T[:, i] = ᶜT
-        nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+            # assigning to nc obj
+            nc_θ[:, i] = ᶜθ
+            nc_T[:, i] = ᶜT
+            nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+        end
+
     end
-
-    close(nc)
 
     ### write out our cubed sphere mesh
     meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -962,14 +971,16 @@ function paperplots_dry_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
-    ncdata = NCDataset(datafile_latlon, "r")
-    lat = ncdata["lat"][:]
-    z = ncdata["z"][:]
-    time = ncdata["time"][:]
-
-    T = ncdata["T"][:, :, :, time .> 3600 * 24 * 200]
-    θ = ncdata["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-    u = ncdata["u"][:, :, :, time .> 3600 * 24 * 200]
+    nt = NCDataset(datafile_latlon, "r") do nc
+        lat = nc["lat"][:]
+        z = nc["z"][:]
+        time = nc["time"][:]
+        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
+        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
+        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
+        (; lat, z, time, T, θ, u)
+    end
+    (; lat, z, time, T, θ, u) = nt
 
     u_timeave_zonalave = calc_zonalave_timeave(u)
     T_timeave_zonalave = calc_zonalave_timeave(T)
@@ -1063,37 +1074,37 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
     # create an nc file to store raw cg data
     # create data
     datafile_cc = remap_tmpdir * "/hs-raw.nc"
-    nc = NCDataset(datafile_cc, "c")
-    # defines the appropriate dimensions and variables for a space coordinate
-    def_space_coord(nc, cspace, type = "cgll")
-    # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-    nc_time = def_time_coord(nc)
-    # defines variables for pressure, temperature, and vorticity
-    nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
-    nc_T = defVar(nc, "T", FT, cspace, ("time",))
-    nc_u = defVar(nc, "u", FT, cspace, ("time",))
+    NCDataset(datafile_cc, "c") do nc
+        # defines the appropriate dimensions and variables for a space coordinate
+        def_space_coord(nc, cspace, type = "cgll")
+        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+        nc_time = def_time_coord(nc)
+        # defines variables for pressure, temperature, and vorticity
+        nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
+        nc_T = defVar(nc, "T", FT, cspace, ("time",))
+        nc_u = defVar(nc, "u", FT, cspace, ("time",))
 
-    # save raw data
-    for i in 1:length(sol.t)
-        nc_time[i] = sol.t[i]
-        Y = sol.u[i]
+        # save raw data
+        for i in 1:length(sol.t)
+            nc_time[i] = sol.t[i]
+            Y = sol.u[i]
 
-        # temperature
-        thermo_state!(ᶜts, Y, params, ᶜinterp)
-        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
+            # temperature
+            thermo_state!(ᶜts, Y, params, ᶜinterp)
+            ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+            ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
-        # zonal wind
-        ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+            # zonal wind
+            ᶜuₕ = Y.c.uₕ
+            ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
-        # assigning to nc obj
-        nc_θ[:, i] = ᶜθ
-        nc_T[:, i] = ᶜT
-        nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+            # assigning to nc obj
+            nc_θ[:, i] = ᶜθ
+            nc_T[:, i] = ᶜT
+            nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+        end
+
     end
-
-    close(nc)
 
     ### write out our cubed sphere mesh
     meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -1128,14 +1139,16 @@ function paperplots_dry_held_suarez_ρe_int(sol, output_dir, p, nlat, nlon)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
-    ncdata = NCDataset(datafile_latlon, "r")
-    lat = ncdata["lat"][:]
-    z = ncdata["z"][:]
-    time = ncdata["time"][:]
-
-    T = ncdata["T"][:, :, :, time .> 3600 * 24 * 200]
-    θ = ncdata["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-    u = ncdata["u"][:, :, :, time .> 3600 * 24 * 200]
+    nt = NCDataset(datafile_latlon, "r") do nc
+        lat = nc["lat"][:]
+        z = nc["z"][:]
+        time = nc["time"][:]
+        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
+        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
+        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
+        (; lat, z, time, T, θ, u)
+    end
+    (; lat, z, time, T, θ, u) = nt
 
     u_timeave_zonalave = calc_zonalave_timeave(u)
     T_timeave_zonalave = calc_zonalave_timeave(T)
@@ -1233,44 +1246,44 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     # create an nc file to store raw cg data
     # create data
     datafile_cc = remap_tmpdir * "/hs-raw.nc"
-    nc = NCDataset(datafile_cc, "c")
-    # defines the appropriate dimensions and variables for a space coordinate
-    def_space_coord(nc, cspace, type = "cgll")
-    # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-    nc_time = def_time_coord(nc)
-    # defines variables for pressure, temperature, and vorticity
-    nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
-    nc_T = defVar(nc, "T", FT, cspace, ("time",))
-    nc_u = defVar(nc, "u", FT, cspace, ("time",))
-    nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+    NCDataset(datafile_cc, "c") do nc
+        # defines the appropriate dimensions and variables for a space coordinate
+        def_space_coord(nc, cspace, type = "cgll")
+        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
+        nc_time = def_time_coord(nc)
+        # defines variables for pressure, temperature, and vorticity
+        nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
+        nc_T = defVar(nc, "T", FT, cspace, ("time",))
+        nc_u = defVar(nc, "u", FT, cspace, ("time",))
+        nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
 
-    # save raw data
-    for i in 1:length(sol.t)
-        nc_time[i] = sol.t[i]
-        Y = sol.u[i]
+        # save raw data
+        for i in 1:length(sol.t)
+            nc_time[i] = sol.t[i]
+            Y = sol.u[i]
 
-        # zonal wind
-        ᶜuₕ = Y.c.uₕ
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
+            # zonal wind
+            ᶜuₕ = Y.c.uₕ
+            ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
-        # temperature
-        ᶠw = Y.f.w
-        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
-        ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-        ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
+            # temperature
+            ᶠw = Y.f.w
+            @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+            thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+            ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
+            ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
-        # qt
-        ᶜqt = Y.c.ρq_tot ./ Y.c.ρ
+            # qt
+            ᶜqt = Y.c.ρq_tot ./ Y.c.ρ
 
-        # assigning to nc obj
-        nc_θ[:, i] = ᶜθ
-        nc_T[:, i] = ᶜT
-        nc_u[:, i] = ᶜuₕ_phy.components.data.:1
-        nc_qt[:, i] = ᶜqt
+            # assigning to nc obj
+            nc_θ[:, i] = ᶜθ
+            nc_T[:, i] = ᶜT
+            nc_u[:, i] = ᶜuₕ_phy.components.data.:1
+            nc_qt[:, i] = ᶜqt
+        end
+
     end
-
-    close(nc)
 
     ### write out our cubed sphere mesh
     meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
@@ -1305,15 +1318,17 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
-    ncdata = NCDataset(datafile_latlon, "r")
-    lat = ncdata["lat"][:]
-    z = ncdata["z"][:]
-    time = ncdata["time"][:]
-
-    T = ncdata["T"][:, :, :, time .> 3600 * 24 * 200]
-    θ = ncdata["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-    u = ncdata["u"][:, :, :, time .> 3600 * 24 * 200]
-    qt = ncdata["qt"][:, :, :, time .> 3600 * 24 * 200]
+    nt = NCDataset(datafile_latlon, "r") do nc
+        lat = nc["lat"][:]
+        z = nc["z"][:]
+        time = nc["time"][:]
+        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
+        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
+        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
+        qt = nc["qt"][:, :, :, time .> 3600 * 24 * 200]
+        (; lat, z, time, T, θ, u, qt)
+    end
+    (; lat, z, time, T, θ, u, qt) = nt
 
     u_timeave_zonalave = calc_zonalave_timeave(u)
     T_timeave_zonalave = calc_zonalave_timeave(T)
