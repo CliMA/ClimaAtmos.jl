@@ -227,7 +227,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
                 if isnothing(ᶠupwind_product)
                     @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(ᶠinterp(ᶜ𝕋[colidx]) * ᶠw[colidx]))
                 else
-                    @. ᶜ𝕋ₜ = -(ᶜdivᵥ(
+                    @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(
                         ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product(
                             ᶠw[colidx],
                             ᶜ𝕋[colidx] / Y.c.ρ[colidx],
