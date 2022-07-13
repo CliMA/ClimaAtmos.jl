@@ -536,7 +536,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
                 -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
                     R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
                 ) +
-                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                ᶠgradᵥ(ᶜp[colidx]) / abs2(ᶠinterp(ᶜρ[colidx])) *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
 
