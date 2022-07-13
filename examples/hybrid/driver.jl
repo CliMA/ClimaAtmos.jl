@@ -178,18 +178,17 @@ if simulation.is_distributed
         error("ENV[\"CLIMACORE_DISTRIBUTED\"] only supports the \"MPI\" option")
     end
     const pid, nprocs = ClimaComms.init(comms_ctx)
-    atexit() do
-        logger_stream = ClimaComms.iamroot(comms_ctx) ? stderr : devnull
-        global_logger(global_logger(ConsoleLogger(logger_stream, Logging.Info)))
-    end
+    logger_stream = ClimaComms.iamroot(comms_ctx) ? stderr : devnull
+    prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
     @info "Setting up distributed run on $nprocs \
         processor$(nprocs == 1 ? "" : "s")"
 else
     const comms_ctx = nothing
     using TerminalLoggers: TerminalLogger
-    atexit() do
-        global_logger(global_logger(TerminalLogger()))
-    end
+    prev_logger = global_logger(TerminalLogger())
+end
+atexit() do
+    global_logger(prev_logger)
 end
 using OrdinaryDiffEq
 using DiffEqCallbacks
