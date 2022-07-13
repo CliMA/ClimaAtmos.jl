@@ -133,7 +133,6 @@ function get_simulation(parsed_args)
     end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     output_dir = parse_arg(parsed_args, "output_dir", default_output)
-    @info "Output directory: `$output_dir`"
     mkpath(output_dir)
 
     sim = (;
