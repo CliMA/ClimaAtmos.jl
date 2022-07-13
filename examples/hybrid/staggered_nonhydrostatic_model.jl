@@ -151,17 +151,6 @@ function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
     return (; ᶜK, ᶜts, ᶜp)
 end
 
-import Thermodynamics
-Base.Broadcast.broadcastable(
-    ps::Thermodynamics.Parameters.ThermodynamicsParameters,
-) = ps
-Base.Broadcast.axes(ps::Thermodynamics.Parameters.ThermodynamicsParameters) = ()
-Base.ndims(::Type{<:Thermodynamics.Parameters.ThermodynamicsParameters}) = 0
-Base.getindex(
-    ps::Thermodynamics.Parameters.ThermodynamicsParameters,
-    ::CartesianIndex{0},
-) = ps
-
 function implicit_tendency_special!(Yₜ, Y, p, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
