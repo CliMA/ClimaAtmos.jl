@@ -41,9 +41,6 @@ function io_dictionary_diagnostics()
     DT = NamedTuple{(:dims, :group, :field), Tuple{Tuple{String, String}, String, Any}}
     io_dict = Dict{String, DT}(
         "nh_pressure" => (; dims = ("zf", "t"), group = "profiles", field = state -> face_diagnostics_turbconv(state).nh_pressure),
-        "nh_pressure_adv" => (; dims = ("zf", "t"), group = "profiles", field = state -> face_diagnostics_turbconv(state).nh_pressure_adv,),
-        "nh_pressure_drag" => (; dims = ("zf", "t"), group = "profiles", field = state -> face_diagnostics_turbconv(state).nh_pressure_drag,),
-        "nh_pressure_b" => (; dims = ("zf", "t"), group = "profiles", field = state -> face_diagnostics_turbconv(state).nh_pressure_b,),
         "turbulent_entrainment" => (; dims = ("zc", "t"), group = "profiles", field = state -> center_diagnostics_turbconv(state).frac_turb_entr,),
         "entrainment_sc" => (; dims = ("zc", "t"), group = "profiles", field = state -> center_diagnostics_turbconv(state).entr_sc),
         "nondim_entrainment_sc" => (; dims = ("zc", "t"), group = "profiles", field = state -> center_diagnostics_turbconv(state).ε_nondim),
@@ -321,18 +318,9 @@ function compute_diagnostics!(
         a_up_f = @. Ifaup(aux_up[i].area)
         @inbounds for k in TC.real_face_indices(grid)
             diag_tc_f.nh_pressure[k] = 0
-            diag_tc_f.nh_pressure_b[k] = 0
-            diag_tc_f.nh_pressure_adv[k] = 0
-            diag_tc_f.nh_pressure_drag[k] = 0
             if a_up_bulk_f[k] > 0.0
                 diag_tc_f.nh_pressure[k] +=
                     a_up_f[k] * aux_up_f[i].nh_pressure[k] / a_up_bulk_f[k]
-                diag_tc_f.nh_pressure_b[k] +=
-                    a_up_f[k] * aux_up_f[i].nh_pressure_b[k] / a_up_bulk_f[k]
-                diag_tc_f.nh_pressure_adv[k] +=
-                    a_up_f[k] * aux_up_f[i].nh_pressure_adv[k] / a_up_bulk_f[k]
-                diag_tc_f.nh_pressure_drag[k] +=
-                    a_up_f[k] * aux_up_f[i].nh_pressure_drag[k] / a_up_bulk_f[k]
             end
         end
     end
