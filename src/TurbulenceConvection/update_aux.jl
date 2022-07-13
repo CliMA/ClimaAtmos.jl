@@ -361,7 +361,7 @@ function update_aux!(
     to_scalar(vector) = vector.u₃
     @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
-        @. aux_en_f.w -= Ifb(aux_up[i].area) * aux_up_f[i].w / Ifb(aux_en.area)
+        @. aux_en_f.w -= Ifb(aux_up[i].area) * aux_up_f[i].w / (1 - Ifb(aux_bulk.area))
     end
 
     #####
@@ -612,11 +612,6 @@ function update_aux!(
         Val(:θ_liq_ice),
         Val(:q_tot),
     )
-    compute_covariance_dissipation(edmf, grid, state, Val(:tke), param_set)
-    compute_covariance_dissipation(edmf, grid, state, Val(:Hvar), param_set)
-    compute_covariance_dissipation(edmf, grid, state, Val(:QTvar), param_set)
-    compute_covariance_dissipation(edmf, grid, state, Val(:HQTcov), param_set)
-
     # TODO defined again in compute_covariance_shear and compute_covaraince
     @inbounds for k in real_center_indices(grid)
         aux_en_2m.tke.rain_src[k] = 0

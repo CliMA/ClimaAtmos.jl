@@ -179,18 +179,17 @@ if simulation.is_distributed
         error("ENV[\"CLIMACORE_DISTRIBUTED\"] only supports the \"MPI\" option")
     end
     const pid, nprocs = ClimaComms.init(comms_ctx)
-    atexit() do
-        logger_stream = ClimaComms.iamroot(comms_ctx) ? stderr : devnull
-        global_logger(global_logger(ConsoleLogger(logger_stream, Logging.Info)))
-    end
+    logger_stream = ClimaComms.iamroot(comms_ctx) ? stderr : devnull
+    prev_logger = global_logger(ConsoleLogger(logger_stream, Logging.Info))
     @info "Setting up distributed run on $nprocs \
         processor$(nprocs == 1 ? "" : "s")"
 else
     const comms_ctx = nothing
     using TerminalLoggers: TerminalLogger
-    atexit() do
-        global_logger(global_logger(TerminalLogger()))
-    end
+    prev_logger = global_logger(TerminalLogger())
+end
+atexit() do
+    global_logger(prev_logger)
 end
 using OrdinaryDiffEq
 using DiffEqCallbacks
@@ -250,47 +249,15 @@ enable_threading() = enable_clima_core_threading
 
 spaces = get_spaces(parsed_args, params, comms_ctx)
 
-if haskey(ENV, "RESTART_FILE")
-    restart_file_name = ENV["RESTART_FILE"]
-    if simulation.is_distributed
-        restart_file_name =
-            split(restart_file_name, ".jld2")[1] * "_pid$pid.jld2"
-    end
-    restart_data = jldopen(restart_file_name)
-    t_start = restart_data["t"]
-    Y = restart_data["Y"]
-    close(restart_data)
-    ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
-    ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
-else
-    t_start = FT(0)
-    ᶜlocal_geometry = Fields.local_geometry_field(spaces.center_space)
-    ᶠlocal_geometry = Fields.local_geometry_field(spaces.face_space)
+(Y, t_start) = get_state(simulation, parsed_args, spaces, params, model_spec)
 
-    center_initial_condition = if is_baro_wave(parsed_args)
-        center_initial_condition_baroclinic_wave
-    elseif parsed_args["config"] == "sphere"
-        center_initial_condition_sphere
-    elseif parsed_args["config"] == "column"
-        center_initial_condition_column
-    end
-
-    Y = init_state(
-        center_initial_condition,
-        face_initial_condition,
-        spaces.center_space,
-        spaces.face_space,
-        params,
-        model_spec,
-    )
-end
-
-p = get_cache(Y, params, model_spec, numerics, simulation, dt)
+p = get_cache(Y, params, spaces, model_spec, numerics, simulation, dt)
 if parsed_args["turbconv"] == "edmf"
     TCU.init_tc!(Y, p, params, namelist)
 end
 
 # Print tendencies:
+@info "Output directory: `$(simulation.output_dir)`"
 for key in keys(p.tendency_knobs)
     @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
 end
@@ -355,6 +322,8 @@ else
 end
 callback =
     CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)
+tspan = (t_start, t_end)
+@info "tspan = `$tspan`"
 
 problem = if parsed_args["split_ode"]
     SplitODEProblem(
@@ -365,11 +334,11 @@ problem = if parsed_args["split_ode"]
         ),
         remaining_tendency!,
         Y,
-        (t_start, t_end),
+        tspan,
         p,
     )
 else
-    OrdinaryDiffEq.ODEProblem(remaining_tendency!, Y, (t_start, t_end), p)
+    OrdinaryDiffEq.ODEProblem(remaining_tendency!, Y, tspan, p)
 end
 integrator = OrdinaryDiffEq.init(
     problem,

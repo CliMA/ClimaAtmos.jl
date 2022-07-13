@@ -133,12 +133,12 @@ function get_simulation(parsed_args)
     end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     output_dir = parse_arg(parsed_args, "output_dir", default_output)
-    @info "Output directory: `$output_dir`"
     mkpath(output_dir)
 
     sim = (;
         is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
         output_dir,
+        restart = haskey(ENV, "RESTART_FILE"),
         job_id,
     )
 
@@ -183,5 +183,61 @@ function get_spaces(parsed_args, params, comms_ctx)
         end
         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     end
-    return (; center_space, face_space)
+    return (;
+        center_space,
+        face_space,
+        horizontal_mesh,
+        quad,
+        z_max,
+        z_elem,
+        z_stretch,
+    )
+end
+
+# get_state(simulation, parsed_args, spaces, params, model_spec)
+function get_state(simulation, args...)
+    if simulation.restart
+        return get_state_restart(simulation.is_distributed)
+    else
+        return get_state_fresh_start(args...)
+    end
+end
+
+function get_state_restart(is_distributed)
+    @assert haskey(ENV, "RESTART_FILE")
+    restart_file_name = if is_distributed
+        split(ENV["RESTART_FILE"], ".jld2")[1] * "_pid$pid.jld2"
+    else
+        ENV["RESTART_FILE"]
+    end
+    local Y, t_start
+    JLD2.jldopen(restart_file_name) do data
+        Y = data["Y"]
+        t_start = data["t"]
+    end
+    return (Y, t_start)
+end
+
+function get_state_fresh_start(parsed_args, spaces, params, model_spec)
+    (; center_space, face_space) = spaces
+    FT = eltype(params)
+    t_start = FT(0)
+
+    center_initial_condition = if is_baro_wave(parsed_args)
+        center_initial_condition_baroclinic_wave
+    elseif parsed_args["config"] == "sphere"
+        center_initial_condition_sphere
+    elseif parsed_args["config"] == "column"
+        center_initial_condition_column
+    end
+
+    Y = init_state(
+        center_initial_condition,
+        face_initial_condition,
+        center_space,
+        face_space,
+        params,
+        model_spec,
+    )
+    return (Y, t_start)
 end
