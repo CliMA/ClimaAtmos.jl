@@ -163,7 +163,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
     # allocation because the cache is stored separately from Y, which means that
     # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
     (; ᶜK, ᶜts, ᶜp) = implicit_cache_vars(Y, p)
-    @nvtx "implicit tendency" color = colorant"yellow" begin
+    @nvtx "implicit tendency special" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
 
             @. ᶜK[colidx] =
