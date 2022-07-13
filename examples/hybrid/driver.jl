@@ -289,6 +289,7 @@ if parsed_args["turbconv"] == "edmf"
 end
 
 # Print tendencies:
+@info "Output directory: `$(simulation.output_dir)`"
 for key in keys(p.tendency_knobs)
     @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
 end
