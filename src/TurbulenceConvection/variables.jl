@@ -12,7 +12,6 @@ thermo_state(FT, ::NonEquilibriumMoisture) =
 
 # Center only
 cent_aux_vars_en_2m(FT) = (;
-    dissipation = FT(0),
     shear = FT(0),
     entr_gain = FT(0),
     detr_loss = FT(0),

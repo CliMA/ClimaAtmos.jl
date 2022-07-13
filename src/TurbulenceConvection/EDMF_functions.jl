@@ -1104,34 +1104,6 @@ function compute_covariance_entr(
     return nothing
 end
 
-function compute_covariance_dissipation(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_sym},
-    param_set::APS,
-) where {covar_sym}
-    FT = float_type(state)
-    c_d = mixing_length_params(edmf).c_d
-    aux_tc = center_aux_turbconv(state)
-    prog_en = center_prog_environment(state)
-    prog_gm = center_prog_grid_mean(state)
-    aux_en = center_aux_environment(state)
-    ρ_c = prog_gm.ρ
-    aux_en_2m = center_aux_environment_2m(state)
-    aux_covar = getproperty(aux_en_2m, covar_sym)
-    covar = getproperty(aux_en, covar_sym)
-    dissipation = aux_covar.dissipation
-    area_en = aux_en.area
-    tke_en = aux_en.tke
-    mixing_length = aux_tc.mixing_length
-
-    @. dissipation =
-        ρ_c * area_en * covar * max(tke_en, 0)^FT(0.5) /
-        max(mixing_length, FT(1.0e-3)) * c_d
-    return nothing
-end
-
 function compute_en_tendencies!(
     edmf::EDMFModel,
     grid::Grid,
