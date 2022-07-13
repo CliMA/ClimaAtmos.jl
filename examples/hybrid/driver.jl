@@ -248,40 +248,7 @@ enable_threading() = enable_clima_core_threading
 
 spaces = get_spaces(parsed_args, params, comms_ctx)
 
-if haskey(ENV, "RESTART_FILE")
-    restart_file_name = ENV["RESTART_FILE"]
-    if simulation.is_distributed
-        restart_file_name =
-            split(restart_file_name, ".jld2")[1] * "_pid$pid.jld2"
-    end
-    restart_data = jldopen(restart_file_name)
-    t_start = restart_data["t"]
-    Y = restart_data["Y"]
-    close(restart_data)
-    ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
-    ᶠlocal_geometry = Fields.local_geometry_field(Y.f)
-else
-    t_start = FT(0)
-    ᶜlocal_geometry = Fields.local_geometry_field(spaces.center_space)
-    ᶠlocal_geometry = Fields.local_geometry_field(spaces.face_space)
-
-    center_initial_condition = if is_baro_wave(parsed_args)
-        center_initial_condition_baroclinic_wave
-    elseif parsed_args["config"] == "sphere"
-        center_initial_condition_sphere
-    elseif parsed_args["config"] == "column"
-        center_initial_condition_column
-    end
-
-    Y = init_state(
-        center_initial_condition,
-        face_initial_condition,
-        spaces.center_space,
-        spaces.face_space,
-        params,
-        model_spec,
-    )
-end
+(Y, t_start) = get_state(simulation, parsed_args, spaces, params, model_spec)
 
 p = get_cache(Y, params, spaces, model_spec, numerics, simulation, dt)
 if parsed_args["turbconv"] == "edmf"
