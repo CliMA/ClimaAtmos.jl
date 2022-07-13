@@ -540,7 +540,7 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
 
     compressibility_model = if compressibility_model_name == "anelastic"
         AnelasticFluid()
-    elseif moisture_model_name == "compressible"
+    elseif compressibility_model_name == "compressible"
         CompressibleFluid()
     else
         error(

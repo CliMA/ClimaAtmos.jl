@@ -86,6 +86,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             θ_liq_ice = FT(0),
             e_tot = FT(0),
             h_tot = FT(0),
+            e_kin = FT(0),
             RH = FT(0),
             buoy = FT(0),
             q_tot = FT(0),

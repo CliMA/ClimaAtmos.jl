@@ -224,7 +224,7 @@ steps:
         artifact_paths: "edmf_bomex/*"
 
       - label: ":computer: Single column EDMF Bomex compressible"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode true --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex_compressible --dt 6secs --t_end 6hours --regression_test true --dft_remaining_tend true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Compressible_Bomex --split_ode true --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex_compressible --dt 6secs --t_end 6hours --regression_test true --dft_remaining_tend true"
         artifact_paths: "edmf_bomex_compressible/*"
 
       - label: ":computer: Single column EDMF DYCOMS_RF01"
@@ -238,6 +238,10 @@ steps:
       - label: ":computer: Single column EDMF GABLS"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 6hours --regression_test true"
         artifact_paths: "edmf_gabls/*"
+
+      - label: ":computer: Single column EDMF GABLS compressible"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls_compressible --dt 0.1secs --t_end 0.1hours --regression_test true --dft_remaining_tend true --rayleigh_sponge true"
+        artifact_paths: "edmf_gabls_compressible/*"
 
   - group: "Performance"
     steps:
