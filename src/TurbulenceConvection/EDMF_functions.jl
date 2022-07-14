@@ -768,7 +768,6 @@ function compute_up_tendencies!(
             @. tends_ε_nondim = ε_λ * (mean_entr - ε_nondim)
             @. tends_δ_nondim = δ_λ * (mean_detr - δ_nondim)
         end
-
         tends_ρarea[kc_surf] = 0
         tends_ρaθ_liq_ice[kc_surf] = 0
         tends_ρaq_tot[kc_surf] = 0
