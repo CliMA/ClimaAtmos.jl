@@ -131,6 +131,7 @@ function compute_diagnostics!(
     FT = TC.float_type(state)
     N_up = TC.n_updrafts(edmf)
     aux_gm = TC.center_aux_grid_mean(state)
+    aux_gm_f = TC.face_aux_grid_mean(state)
     aux_en = TC.center_aux_environment(state)
     aux_up = TC.center_aux_updrafts(state)
     aux_up_f = TC.face_aux_updrafts(state)
@@ -149,6 +150,7 @@ function compute_diagnostics!(
     diag_tc_f_precip = face_diagnostics_precip(diagnostics)
     ρ_c = prog_gm.ρ
     p_c = aux_gm.p
+    ρ_f = aux_gm_f.p
 
     diag_tc_svpc = svpc_diagnostics_turbconv(diagnostics)
     diag_svpc = svpc_diagnostics_grid_mean(diagnostics)
@@ -189,9 +191,13 @@ function compute_diagnostics!(
         (; bottom = CCO.SetDivergence(FT(0)), top = CCO.SetDivergence(FT(0)))
     If = CCO.InterpolateC2F(; m_bcs...)
     ∇f = CCO.DivergenceC2F(; ∇0_bcs...)
+    IfKH = CCO.InterpolateC2F(;
+        bottom = CCO.SetValue(FT(0)),
+        top = CCO.SetValue(FT(0)),
+    )
     massflux_s = aux_gm_f.massflux_s
     parent(massflux_s) .= 0
-    @. aux_gm_f.diffusive_flux_s = -aux_tc_f.ρ_ae_KH * ∇f(wvec(aux_en.s))
+    @. aux_gm_f.diffusive_flux_s = -IfKH(aeKH) * ρ_f * ∇f(wvec(aux_en.s))
     @inbounds for i in 1:N_up
         @. massflux_s += aux_up_f[i].massflux * (If(aux_up[i].s) - If(aux_en.s))
     end

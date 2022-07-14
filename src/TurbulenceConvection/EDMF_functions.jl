@@ -250,27 +250,17 @@ function compute_diffusive_fluxes(
         top = CCO.SetValue(aeKH[kc_toa]),
     )
     IfKM = CCO.InterpolateC2F(;
-        bottom = CCO.SetValue(aeKM[kc_surf]),
-        top = CCO.SetValue(aeKM[kc_toa]),
+        bottom = CCO.SetValue(FT(0)),
+        top = CCO.SetValue(FT(0)),
     )
     Ic = CCO.InterpolateF2C()
 
-    @. aux_tc_f.ρ_ae_KH = IfKH(aeKH) * ρ_f
-    @. aux_tc_f.ρ_ae_KM = IfKM(aeKM) * ρ_f
-
-    aeKHq_tot_bc = -surf.ρq_tot_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KH[kf_surf]
-    aeKHh_tot_bc = -surf.ρe_tot_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KH[kf_surf]
-    aeKMu_bc = -surf.ρu_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
-    aeKMv_bc = -surf.ρv_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
-
-    aeKMuₕ_bc = CCG.UVVector(aeKMu_bc, aeKMv_bc)
-
     ∇q_tot_en = CCO.DivergenceC2F(;
-        bottom = CCO.SetDivergence(aeKHq_tot_bc),
+        bottom = CCO.SetDivergence(FT(0)),
         top = CCO.SetDivergence(FT(0)),
     )
     ∇h_tot_en = CCO.DivergenceC2F(;
-        bottom = CCO.SetDivergence(aeKHh_tot_bc),
+        bottom = CCO.SetDivergence(FT(0)),
         top = CCO.SetDivergence(FT(0)),
     )
     # CCG.Covariant3Vector(FT(1)) ⊗ CCG.Covariant12Vector(FT(aeKMu_bc),FT(aeKMv_bc))
@@ -279,7 +269,10 @@ function compute_diffusive_fluxes(
     ∇uₕ_gm = CCO.GradientC2F(;
         bottom = CCO.SetGradient(
             CCG.Covariant3Vector(wvec(FT(1)), local_geometry_surf) ⊗
-            CCG.Covariant12Vector(aeKMuₕ_bc, local_geometry_surf),
+            CCG.Covariant12Vector(
+                CCG.UVVector(FT(0), FT(0)),
+                local_geometry_surf,
+            ),
         ),
         top = CCO.SetGradient(
             CCG.Covariant3Vector(wvec(FT(0)), local_geometry_surf) ⊗
@@ -288,10 +281,10 @@ function compute_diffusive_fluxes(
     )
 
     @. aux_tc_f.diffusive_flux_qt =
-        -aux_tc_f.ρ_ae_KH * ∇q_tot_en(wvec(aux_en.q_tot))
+        -IfKH(aeKH) * ρ_f * ∇q_tot_en(wvec(aux_en.q_tot))
     @. aux_tc_f.diffusive_flux_h =
-        -aux_tc_f.ρ_ae_KH * ∇h_tot_en(wvec(aux_en.h_tot))
-    @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * ∇uₕ_gm(prog_gm_uₕ)
+        -IfKH(aeKH) * ρ_f * ∇h_tot_en(wvec(aux_en.h_tot))
+    @. aux_tc_f.diffusive_flux_uₕ = -IfKM(aeKM) * ρ_f * ∇uₕ_gm(prog_gm_uₕ)
 
     if edmf.moisture_model isa NonEquilibriumMoisture
         aeKHq_liq_bc = FT(0)
@@ -307,9 +300,9 @@ function compute_diffusive_fluxes(
         )
 
         @. aux_tc_f.diffusive_flux_ql =
-            -aux_tc_f.ρ_ae_KH * ∇q_liq_en(wvec(aux_en.q_liq))
+            -IfKH(aeKH) * ρ_f * ∇q_liq_en(wvec(aux_en.q_liq))
         @. aux_tc_f.diffusive_flux_qi =
-            -aux_tc_f.ρ_ae_KH * ∇q_ice_en(wvec(aux_en.q_ice))
+            -IfKH(aeKH) * ρ_f * ∇q_ice_en(wvec(aux_en.q_ice))
     end
 
     return nothing
