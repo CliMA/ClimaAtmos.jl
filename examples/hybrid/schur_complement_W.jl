@@ -172,7 +172,7 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
                 # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
                 # than 2 diagonals per Jacobian block.
                 FT = eltype(eltype(S))
-                I = ConstRef(
+                I = Ref(
                     Operators.StencilCoefs{-1, 1}((
                         zero(FT),
                         one(FT),
