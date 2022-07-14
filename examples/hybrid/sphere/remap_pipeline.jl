@@ -93,10 +93,12 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_cloudliq = defVar(nc, "cloud_liquid", FT, cspace, ("time",))
         nc_cloudice = defVar(nc, "cloud_ice", FT, cspace, ("time",))
         nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
-        nc_precipitation_3d =
-            defVar(nc, "precipitation_3d", FT, cspace, ("time",))
-        nc_precipitation_2d =
-            defVar(nc, "precipitation_2d", FT, hspace, ("time",))
+        nc_precipitation_removal =
+            defVar(nc, "precipitation_removal", FT, cspace, ("time",))
+        nc_column_integrated_rain =
+            defVar(nc, "column_integrated_rain", FT, hspace, ("time",))
+        nc_column_integrated_snow =
+            defVar(nc, "column_integrated_snow", FT, hspace, ("time",))
     end
     # define surface flux variables
     if :sfc_flux_energy in propertynames(diag)
@@ -160,8 +162,9 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         nc_cloudliq[:, 1] = diag.cloud_liquid
         nc_cloudice[:, 1] = diag.cloud_ice
         nc_watervapor[:, 1] = diag.water_vapor
-        nc_precipitation_3d[:, 1] = diag.precipitation_3d
-        nc_precipitation_2d[:, 1] = diag.precipitation_2d
+        nc_precipitation_removal[:, 1] = diag.precipitation_removal
+        nc_column_integrated_rain[:, 1] = diag.column_integrated_rain
+        nc_column_integrated_snow[:, 1] = diag.column_integrated_snow
     end
 
     if :sfc_flux_energy in propertynames(diag)
@@ -233,8 +236,9 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
             "cloud_ice",
             "cloud_liquid",
             "water_vapor",
-            "precipitation_3d",
-            "precipitation_2d",
+            "precipitation_removal",
+            "column_integrated_rain",
+            "column_integrated_snow",
         ]
     else
         moist_variables = String[]
