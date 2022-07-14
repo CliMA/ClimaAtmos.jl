@@ -162,11 +162,8 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         diffusive_tendency_qt = FT(0),
         cent_aux_vars_edmf_moisture(FT, edmf.moisture_model)...,
         prandtl_nvec = FT(0),
-        # Added by Ignacio : Length scheme in use (mls), and smooth min effect (ml_ratio)
         # Variable Prandtl number initialized as neutral value.
-        mls = FT(0),
         b_exch = FT(0),
-        ml_ratio = FT(0),
         w_up_c = FT(0),
         w_en_c = FT(0),
         Shear² = FT(0),
@@ -176,7 +173,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         ∂θv∂z_unsat = FT(0),
         ∂qt∂z_sat = FT(0),
         ∂θl∂z_sat = FT(0),
-        l_entdet = FT(0),
         ϕ_gm = FT(0), # temporary for grid-mean variables
         ϕ_gm_cov = FT(0), # temporary for grid-mean covariance variables
         ϕ_en_cov = FT(0), # temporary for environmental covariance variables
