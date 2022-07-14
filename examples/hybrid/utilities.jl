@@ -1,3 +1,6 @@
+time_to_seconds(t::Number) =
+    t == Inf ? t : error("Uncaught case in computing time from given string.")
+
 function time_to_seconds(s::String)
     factor = Dict(
         "secs" => 1,

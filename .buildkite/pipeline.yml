@@ -225,6 +225,21 @@ steps:
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
 
 
+  - group: "Performance targets"
+    steps:
+
+      # TODO: add/exercise edmf code
+      - label: ":computer: Unthreaded performance target"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        artifact_paths: "perf_target_unthreaded/*"
+
+      - label: ":computer: Threaded performance target"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        artifact_paths: "perf_target_threaded/*"
+        agents:
+          slurm_nodes: 1
+          slurm_tasks_per_node: 8
+
   - group: "TurbulenceConvection"
     steps:
 

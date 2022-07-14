@@ -295,21 +295,22 @@ parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
 include("examples/hybrid/driver.jl")
 ```
 """
-function parsed_args_per_job_id()
+function parsed_args_per_job_id(; trigger = "driver.jl")
     ca_dir = joinpath(@__DIR__, "..", "..")
     buildkite_yaml = joinpath(ca_dir, ".buildkite", "pipeline.yml")
-    parsed_args_per_job_id(buildkite_yaml)
+    parsed_args_per_job_id(buildkite_yaml; trigger)
 end
 
-function parsed_args_per_job_id(buildkite_yaml)
+function parsed_args_per_job_id(buildkite_yaml; trigger = "driver.jl")
     buildkite_commands = readlines(buildkite_yaml)
-    filter!(x -> occursin("driver.jl", x), buildkite_commands)
+    filter!(x -> occursin(trigger, x), buildkite_commands)
 
     @assert length(buildkite_commands) > 0 # sanity check
     result = Dict()
     for bkcs in buildkite_commands
         (s, default_parsed_args) = parse_commandline()
         job_id = first(split(last(split(bkcs, "--job_id ")), " "))
+        job_id = strip(job_id, '\"')
         result[job_id] =
             parsed_args_from_command_line_flags(bkcs, default_parsed_args)
     end

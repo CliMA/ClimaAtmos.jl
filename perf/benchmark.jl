@@ -1,18 +1,11 @@
-example_dir = joinpath(dirname(@__DIR__), "examples")
-
-include("../examples/hybrid/cli_options.jl");
-
-(s, parsed_args) = parse_commandline();
-parsed_args["z_elem"] = 25;
-parsed_args["h_elem"] = 12;
-parsed_args["enable_threading"] = false
-
+ca_dir = joinpath(dirname(@__DIR__));
+include(joinpath(ca_dir, "examples", "hybrid", "cli_options.jl"));
 
 ENV["CI_PERF_SKIP_RUN"] = true # we only need haskey(ENV, "CI_PERF_SKIP_RUN") == true
 
-filename = joinpath(example_dir, "hybrid", "driver.jl")
+filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
 
-try
+try # capture integrator
     include(filename)
 catch err
     if err.error !== :exit_profile
@@ -20,37 +13,29 @@ catch err
     end
 end
 
-OrdinaryDiffEq.step!(integrator) # compile first
+import OrdinaryDiffEq as ODE
+ODE.step!(integrator) # compile first
 X = similar(integrator.u)
 
-println("Wfact")
-@time integrator.f.f1.Wfact(
-    integrator.cache.W,
-    integrator.u,
-    integrator.p,
-    integrator.dt,
-    integrator.t,
-);
-@time integrator.f.f1.Wfact(
-    integrator.cache.W,
-    integrator.u,
-    integrator.p,
-    integrator.dt,
-    integrator.t,
-);
-println("linsolve")
-@time integrator.cache.linsolve(X, integrator.cache.W, integrator.u);
-@time integrator.cache.linsolve(X, integrator.cache.W, integrator.u);
-println("implicit_tendency!")
-@time implicit_tendency!(X, integrator.u, integrator.p, integrator.t);
-@time implicit_tendency!(X, integrator.u, integrator.p, integrator.t);
-println("remaining_tendency!")
-@time remaining_tendency!(X, integrator.u, integrator.p, integrator.t);
-@time remaining_tendency!(X, integrator.u, integrator.p, integrator.t);
+(; cache, u, p, dt, t) = integrator
+(; W) = cache
 
+include("benchmark_utils.jl")
 
+import OrderedCollections
+trials = OrderedCollections.OrderedDict()
+#! format: off
+trials["Wfact"] = get_trial(integrator.f.f1.Wfact, (W, u, p, dt, t), "Wfact");
+trials["linsolve"] = get_trial(integrator.cache.linsolve, (X, W, u), "linsolve");
+trials["implicit_tendency!"] = get_trial(implicit_tendency!, (X, u, p, t), "implicit_tendency!");
+trials["remaining_tendency!"] = get_trial(remaining_tendency!, (X, u, p, t), "remaining_tendency!");
+trials["default_remaining_tendency!"] = get_trial(default_remaining_tendency!, (X, u, p, t), "default_remaining_tendency!");
+trials["hyperdiffusion_tendency!"] = get_trial(hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
+trials["step!"] = get_trial(ODE.step!, (integrator, ), "step!");
+#! format: on
 
-#import BenchmarkTools
-#trial = BenchmarkTools.@benchmark OrdinaryDiffEq.step!($integrator)
-#show(stdout, MIME("text/plain"), trial)
-#println()
+summary = OrderedCollections.OrderedDict()
+for k in keys(trials)
+    summary[k] = get_summary(trials[k])
+end
+tabulate_summary(summary)
