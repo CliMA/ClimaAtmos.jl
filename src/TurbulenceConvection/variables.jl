@@ -52,7 +52,6 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     frac_turb_entr = FT(0),
     entr_turb_dyn = FT(0),
     detr_turb_dyn = FT(0),
-    asp_ratio = FT(0),
     Π_groups = ntuple(i -> FT(0), n_Π_groups(edmf)),
 )
 cent_aux_vars_edmf_bulk_moisture(FT, ::NonEquilibriumMoisture) = (;
@@ -224,7 +223,6 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 # Center only
 cent_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
     turbconv = (;
-        asp_ratio = FT(0),
         entr_sc = FT(0),
         ε_nondim = FT(0),
         detr_sc = FT(0),
