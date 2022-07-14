@@ -252,7 +252,7 @@ function ode_config(Y, parsed_args, model_spec)
     # TODO: add max_newton_iters, newton_κ, test_implicit_solver to parsed_args?
     max_newton_iters = 2 # only required by ODE algorithms that use Newton's method
     newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
-    test_implicit_solver = false
+    test_implicit_solver = false # makes solver extremely slow when set to `true`
     jacobian_flags = jacobi_flags(model_spec.energy_form)
     ode_algorithm = getproperty(ODE, Symbol(parsed_args["ode_algo"]))
 
@@ -299,4 +299,40 @@ function ode_config(Y, parsed_args, model_spec)
         jac_kwargs = alg_kwargs = ()
     end
     return (; jac_kwargs, alg_kwargs, ode_algorithm)
+end
+
+function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
+    (; dt) = p.simulation
+    FT = eltype(tspan)
+    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    show_progress_bar = isinteractive()
+    additional_solver_kwargs = () # e.g., abstol and reltol
+
+    problem = if parsed_args["split_ode"]
+        ODE.SplitODEProblem(
+            ODE.ODEFunction(
+                implicit_tendency!;
+                jac_kwargs...,
+                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
+            ),
+            remaining_tendency!,
+            Y,
+            tspan,
+            p,
+        )
+    else
+        ODE.ODEProblem(remaining_tendency!, Y, tspan, p)
+    end
+    integrator = ODE.init(
+        problem,
+        ode_algorithm(; alg_kwargs...);
+        saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
+        callback = callback,
+        dt = dt,
+        adaptive = false,
+        progress = show_progress_bar,
+        progress_steps = isinteractive() ? 1 : 1000,
+        additional_solver_kwargs...,
+    )
+    return integrator
 end

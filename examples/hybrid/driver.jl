@@ -28,7 +28,6 @@ zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
@@ -87,12 +86,6 @@ jacobi_flags(::InternalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::PotentialTemperature) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobian_flags = jacobi_flags(model_spec.energy_form)
-max_newton_iters = 2 # only required by ODE algorithms that use Newton's method
-newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
-show_progress_bar = isinteractive()
-additional_solver_kwargs = () # e.g., abstol and reltol
-test_implicit_solver = false # makes solver extremely slow when set to `true`
 
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
@@ -227,32 +220,7 @@ callback = get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
 
-problem = if parsed_args["split_ode"]
-    SplitODEProblem(
-        ODEFunction(
-            implicit_tendency!;
-            jac_kwargs...,
-            tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
-        ),
-        remaining_tendency!,
-        Y,
-        tspan,
-        p,
-    )
-else
-    OrdinaryDiffEq.ODEProblem(remaining_tendency!, Y, tspan, p)
-end
-integrator = OrdinaryDiffEq.init(
-    problem,
-    ode_algorithm(; alg_kwargs...);
-    saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
-    callback = callback,
-    dt = simulation.dt,
-    adaptive = false,
-    progress = show_progress_bar,
-    progress_steps = isinteractive() ? 1 : 1000,
-    additional_solver_kwargs...,
-)
+integrator = get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
