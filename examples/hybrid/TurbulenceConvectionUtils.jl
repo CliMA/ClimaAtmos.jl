@@ -163,7 +163,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
         precip_model,
     ) = edmf_cache
     tc_params = CAP.turbconv_params(param_set)
-    thermo_params = CAP.thermodynamics_params(param_set)
 
     # TODO: write iterator for this
     for inds in TC.iterate_columns(Y.c)
@@ -180,8 +179,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
         aux_gm = TC.center_aux_grid_mean(state)
-
-        @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, aux_gm.ts)
 
         surf = get_surface(surf_params, grid, state, t, tc_params)
 
