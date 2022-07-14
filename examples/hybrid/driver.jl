@@ -210,6 +210,7 @@ include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
+
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading

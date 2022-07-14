@@ -172,6 +172,15 @@ function get_spaces(parsed_args, params, comms_ctx)
     z_max = FT(parsed_args["z_max"])
     dz_bottom = FT(parsed_args["dz_bottom"])
     dz_top = FT(parsed_args["dz_top"])
+    topography = parsed_args["topography"]
+
+    if topography == "DCMIP200"
+        warp_function = topography_dcmip200
+    elseif topography == "NoWarp"
+        warp_function = nothing
+    end
+    @assert topography in ("NoWarp", "DCMIP200")
+    @info "topography = `$topography`"
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
@@ -185,7 +194,17 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        if warp_function == nothing
+            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        else
+            make_hybrid_spaces(
+                h_space,
+                z_max,
+                z_elem,
+                z_stretch,
+                surface_warp = warp_function,
+            )
+        end
     elseif parsed_args["config"] == "column" # single column
         FT = eltype(params)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
