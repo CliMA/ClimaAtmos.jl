@@ -8,6 +8,7 @@ const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
 include("../staggered_nonhydrostatic_model.jl")
+include("./topography.jl")
 
 ##
 ## Initial conditions

@@ -146,7 +146,7 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
     return sim
 end
 
-function get_spaces(parsed_args, params, comms_ctx)
+function get_spaces(parsed_args, params, warp_function, comms_ctx)
 
     FT = eltype(params)
     z_elem = Int(parsed_args["z_elem"])
@@ -165,7 +165,13 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(
+            h_space,
+            z_max,
+            z_elem,
+            z_stretch,
+            surface_warp = warp_function,
+        )
     elseif parsed_args["config"] == "column" # single column
         FT = eltype(params)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
