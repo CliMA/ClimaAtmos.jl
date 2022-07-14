@@ -54,6 +54,9 @@ function update_aux!(
     ##### center variables
     #####
     C123 = CCG.Covariant123Vector
+    @. aux_en.e_kin =
+        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
+
     @inbounds for i in 1:N_up
         @. aux_up[i].e_kin =
             LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_up_f[i].w)))) / 2
@@ -120,13 +123,11 @@ function update_aux!(
                 aux_bulk.q_tot[k] += a_k * aux_up[i].q_tot[k] / a_bulk_k
                 aux_bulk.θ_liq_ice[k] += a_k * aux_up[i].θ_liq_ice[k] / a_bulk_k
                 aux_bulk.h_tot[k] += a_k * aux_up[i].h_tot[k] / a_bulk_k
-                aux_bulk.e_kin[k] += a_k * aux_up[i].e_kin[k] / a_bulk_k
             end
         else
             aux_bulk.q_tot[k] = aux_gm.q_tot[k]
             aux_bulk.θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
             aux_bulk.h_tot[k] = aux_gm.h_tot[k]
-            aux_bulk.e_kin[k] = aux_gm.e_kin[k]
         end
         if edmf.moisture_model isa NonEquilibriumMoisture
             aux_bulk.q_liq[k] = 0
@@ -160,7 +161,6 @@ function update_aux!(
         aux_en.q_tot[k] =
             max(val1 * aux_gm.q_tot[k] - val2 * aux_bulk.q_tot[k], 0) #Yair - this is here to prevent negative QT
         aux_en.h_tot[k] = val1 * aux_gm.h_tot[k] - val2 * aux_bulk.h_tot[k]
-        aux_en.e_kin[k] = val1 * aux_gm.e_kin[k] - val2 * aux_bulk.e_kin[k]
         if edmf.moisture_model isa NonEquilibriumMoisture
             aux_en.q_liq[k] =
                 max(val1 * prog_gm.q_liq[k] - val2 * aux_bulk.q_liq[k], 0)
@@ -361,7 +361,8 @@ function update_aux!(
     to_scalar(vector) = vector.u₃
     @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
-        @. aux_en_f.w -= Ifb(aux_up[i].area) * aux_up_f[i].w / (1 - Ifb(aux_bulk.area))
+        @. aux_en_f.w -=
+            Ifb(aux_up[i].area) * aux_up_f[i].w / (1 - Ifb(aux_bulk.area))
     end
 
     #####
