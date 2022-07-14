@@ -8,7 +8,7 @@ import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
 import Thermodynamics as TD
 import ClimaAtmos.TurbulenceConvection.Parameters as TCP
-
+import ClimaCore
 
 ClimaCore.Operators.getidx(
     scalar::ConstRef,
