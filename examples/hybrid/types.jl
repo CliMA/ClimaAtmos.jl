@@ -123,7 +123,7 @@ function get_numerics(parsed_args)
     return numerics
 end
 
-function get_simulation(parsed_args)
+function get_simulation(::Type{FT}, parsed_args) where {FT}
 
     job_id = if isnothing(parsed_args["job_id"])
         (s, default_parsed_args) = parse_commandline()
@@ -140,6 +140,7 @@ function get_simulation(parsed_args)
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
+        dt = FT(time_to_seconds(parsed_args["dt"])),
     )
 
     return sim
@@ -240,4 +241,104 @@ function get_state_fresh_start(parsed_args, spaces, params, model_spec)
         model_spec,
     )
     return (Y, t_start)
+end
+
+import OrdinaryDiffEq as ODE
+#=
+(; jac_kwargs, alg_kwargs, ode_algorithm) =
+    ode_config(Y, parsed_args, model_spec)
+=#
+function ode_config(Y, parsed_args, model_spec)
+    # TODO: add max_newton_iters, newton_κ, test_implicit_solver to parsed_args?
+    max_newton_iters = 2 # only required by ODE algorithms that use Newton's method
+    newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
+    test_implicit_solver = false # makes solver extremely slow when set to `true`
+    jacobian_flags = jacobi_flags(model_spec.energy_form)
+    ode_algorithm = getproperty(ODE, Symbol(parsed_args["ode_algo"]))
+
+    ode_algorithm_type =
+        ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
+    if ode_algorithm_type <: Union{
+        ODE.OrdinaryDiffEqImplicitAlgorithm,
+        ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
+    }
+        use_transform =
+            !(ode_algorithm_type in (ODE.Rosenbrock23, ODE.Rosenbrock32))
+        W = SchurComplementW(
+            Y,
+            use_transform,
+            jacobian_flags,
+            test_implicit_solver,
+        )
+        Wfact! =
+            if :ρe_tot in propertynames(Y.c) &&
+               W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
+               W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+                Wfact_special!
+            else
+                Wfact_generic!
+            end
+        jac_kwargs =
+            use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
+            (; jac_prototype = W, Wfact = Wfact!)
+
+        alg_kwargs = (; linsolve = linsolve!)
+        if ode_algorithm_type <: Union{
+            ODE.OrdinaryDiffEqNewtonAlgorithm,
+            ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
+        }
+            alg_kwargs = (;
+                alg_kwargs...,
+                nlsolve = ODE.NLNewton(;
+                    κ = newton_κ,
+                    max_iter = max_newton_iters,
+                ),
+            )
+        end
+    else
+        jac_kwargs = alg_kwargs = ()
+    end
+    return (; jac_kwargs, alg_kwargs, ode_algorithm)
+end
+
+function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
+    (; dt) = p.simulation
+    FT = eltype(tspan)
+    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    show_progress_bar = isinteractive()
+    additional_solver_kwargs = () # e.g., abstol and reltol
+
+    if :ρe_tot in propertynames(Y.c)
+        implicit_tendency! = implicit_tendency_special!
+    else
+        implicit_tendency! = implicit_tendency_generic!
+    end
+
+    problem = if parsed_args["split_ode"]
+        ODE.SplitODEProblem(
+            ODE.ODEFunction(
+                implicit_tendency!;
+                jac_kwargs...,
+                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
+            ),
+            remaining_tendency!,
+            Y,
+            tspan,
+            p,
+        )
+    else
+        ODE.ODEProblem(remaining_tendency!, Y, tspan, p)
+    end
+    integrator = ODE.init(
+        problem,
+        ode_algorithm(; alg_kwargs...);
+        saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
+        callback = callback,
+        dt = dt,
+        adaptive = false,
+        progress = show_progress_bar,
+        progress_steps = isinteractive() ? 1 : 1000,
+        additional_solver_kwargs...,
+    )
+    return integrator
 end

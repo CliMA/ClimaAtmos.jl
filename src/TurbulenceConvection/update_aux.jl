@@ -22,6 +22,7 @@ function update_aux!(
     obukhov_length = surf.obukhov_length
     FT = float_type(state)
     prog_gm = center_prog_grid_mean(state)
+    prog_gm_f = face_prog_grid_mean(state)
     aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
     aux_en = center_aux_environment(state)
@@ -357,9 +358,12 @@ function update_aux!(
             FT(0),
         )
     end
-    # Assuming w_gm = 0!
-    @. aux_en_f.w =
-        -Ifb(aux_bulk.area) / (1 - Ifb(aux_bulk.area)) * aux_tc_f.bulk.w
+    to_scalar(vector) = vector.u₃
+    @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
+    @inbounds for i in 1:N_up
+        @. aux_en_f.w -=
+            Ifb(aux_up[i].area) * aux_up_f[i].w / (1 - Ifb(aux_bulk.area))
+    end
 
     #####
     #####  diagnose_GMV_moments

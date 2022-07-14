@@ -73,9 +73,9 @@ const C123 = Geometry.Covariant123Vector
 
 include("thermo_state.jl")
 
-get_cache(Y, params, spaces, model_spec, numerics, simulation, dt) = merge(
+get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
     default_cache(Y, params, spaces, numerics, simulation),
-    additional_cache(Y, params, model_spec, dt),
+    additional_cache(Y, params, model_spec, simulation.dt),
 )
 
 function default_cache(Y, params, spaces, numerics, simulation)
