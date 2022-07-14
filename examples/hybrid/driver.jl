@@ -28,9 +28,7 @@ zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt = FT(time_to_seconds(parsed_args["dt"]))
 dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
@@ -64,7 +62,7 @@ params = create_parameter_set(FT, parsed_args, namelist)
 
 model_spec = get_model_spec(FT, parsed_args, namelist)
 numerics = get_numerics(parsed_args)
-simulation = get_simulation(parsed_args)
+simulation = get_simulation(FT, parsed_args)
 
 diffuse_momentum = vert_diff && !(model_spec.forcing_type isa HeldSuarezForcing)
 
@@ -201,47 +199,6 @@ include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
-condition_every_iter(u, t, integrator) = true
-
-function affect_filter!(Y::Fields.FieldVector)
-    @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
-    return nothing
-end
-
-function affect_filter!(integrator)
-    (; apply_moisture_filter) = integrator.p
-    affect_filter!(integrator.u)
-    # We're lying to OrdinaryDiffEq.jl, in order to avoid
-    # paying for an additional tendency call, which is required
-    # to support supplying a continuous representation of the solution.
-    OrdinaryDiffEq.u_modified!(integrator, false)
-end
-
-callback_filters = OrdinaryDiffEq.DiscreteCallback(
-    condition_every_iter,
-    affect_filter!;
-    save_positions = (false, false),
-)
-
-additional_callbacks = if !isnothing(model_spec.radiation_model)
-    # TODO: better if-else criteria?
-    dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
-    (
-        PeriodicCallback(
-            rrtmgp_model_callback!,
-            dt_rad; # update RRTMGPModel every dt_rad
-            initial_affect = true, # run callback at t = 0
-            save_positions = (false, false), # do not save Y before and after callback
-        ),
-    )
-else
-    ()
-end
-if model_spec.moisture_model isa EquilMoistModel &&
-   parsed_args["apply_moisture_filter"]
-    additional_callbacks = (additional_callbacks..., callback_filters)
-end
-
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
@@ -250,7 +207,7 @@ spaces = get_spaces(parsed_args, params, comms_ctx)
 
 (Y, t_start) = get_state(simulation, parsed_args, spaces, params, model_spec)
 
-p = get_cache(Y, params, spaces, model_spec, numerics, simulation, dt)
+p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
 if parsed_args["turbconv"] == "edmf"
     TCU.init_tc!(Y, p, params, namelist)
 end
@@ -266,29 +223,7 @@ end
 
 include("callbacks.jl")
 
-dss_callback = FunctionCallingCallback(func_start = true) do Y, t, integrator
-    p = integrator.p
-    @nvtx "dss callback" color = colorant"yellow" begin
-        Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-        Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-        Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
-    end
-end
-save_to_disk_callback = if dt_save_to_disk == Inf
-    nothing
-else
-    PeriodicCallback(
-        save_to_disk_func,
-        dt_save_to_disk;
-        initial_affect = true,
-        save_positions = (false, false),
-    )
-end
-callback =
-    CallbackSet(dss_callback, save_to_disk_callback, additional_callbacks...)
+callback = get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
 
@@ -312,7 +247,7 @@ integrator = OrdinaryDiffEq.init(
     ode_algorithm(; alg_kwargs...);
     saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
     callback = callback,
-    dt = dt,
+    dt = simulation.dt,
     adaptive = false,
     progress = show_progress_bar,
     progress_steps = isinteractive() ? 1 : 1000,

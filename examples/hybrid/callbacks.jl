@@ -1,6 +1,85 @@
 import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
+import OrdinaryDiffEq as ODE
+
+function get_callbacks(parsed_args, simulation, model_spec, params)
+    FT = eltype(params)
+    (; dt) = simulation
+
+    callback_filters = ODE.DiscreteCallback(
+        condition_every_iter,
+        affect_filter!;
+        save_positions = (false, false),
+    )
+
+    additional_callbacks = if !isnothing(model_spec.radiation_model)
+        # TODO: better if-else criteria?
+        dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
+        (
+            PeriodicCallback(
+                rrtmgp_model_callback!,
+                dt_rad; # update RRTMGPModel every dt_rad
+                initial_affect = true, # run callback at t = 0
+                save_positions = (false, false), # do not save Y before and after callback
+            ),
+        )
+    else
+        ()
+    end
+    if model_spec.moisture_model isa EquilMoistModel &&
+       parsed_args["apply_moisture_filter"]
+        additional_callbacks = (additional_callbacks..., callback_filters)
+    end
+
+    dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
+
+    dss_callback =
+        FunctionCallingCallback(func_start = true) do Y, t, integrator
+            p = integrator.p
+            @nvtx "dss callback" color = colorant"yellow" begin
+                Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
+                Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
+                Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
+                Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+                Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
+                Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+            end
+        end
+    save_to_disk_callback = if dt_save_to_disk == Inf
+        nothing
+    else
+        PeriodicCallback(
+            save_to_disk_func,
+            dt_save_to_disk;
+            initial_affect = true,
+            save_positions = (false, false),
+        )
+    end
+    return CallbackSet(
+        dss_callback,
+        save_to_disk_callback,
+        additional_callbacks...,
+    )
+end
+
+
+condition_every_iter(u, t, integrator) = true
+
+function affect_filter!(Y::Fields.FieldVector)
+    @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
+    return nothing
+end
+
+function affect_filter!(integrator)
+    (; apply_moisture_filter) = integrator.p
+    affect_filter!(integrator.u)
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional tendency call, which is required
+    # to support supplying a continuous representation of the solution.
+    ODE.u_modified!(integrator, false)
+end
+
 
 function save_to_disk_func(integrator)
     if integrator.p.simulation.is_distributed
