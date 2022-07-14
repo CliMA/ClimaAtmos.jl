@@ -272,10 +272,8 @@ function ∑tendencies!(
     UnPack.@unpack surf_params, radiation, forcing, aux, TS = params
 
     thermo_params = TCP.thermodynamics_params(param_set)
-    tends_face = tendencies.face
-    tends_cent = tendencies.cent
-    parent(tends_face) .= 0
-    parent(tends_cent) .= 0
+    parent(tendencies.face) .= 0
+    parent(tendencies.cent) .= 0
 
     for inds in TC.iterate_columns(prog.cent)
         state = TC.column_state(prog, aux, tendencies, inds...)
@@ -539,26 +537,15 @@ function compute_gm_tendencies!(
         end
     end
     TC.compute_sgs_flux!(edmf, grid, state, surf, param_set)
-    sgs_flux_h_tot = aux_gm_f.sgs_flux_h_tot
-    sgs_flux_q_tot = aux_gm_f.sgs_flux_q_tot
-    sgs_flux_uₕ = aux_gm_f.sgs_flux_uₕ
-    tends_ρe_tot = tendencies_gm.ρe_tot
-    tends_ρq_tot = tendencies_gm.ρq_tot
-    tends_uₕ = TC.tendencies_grid_mean_uₕ(state)
 
     ∇sgs = CCO.DivergenceF2C()
-    @. tends_ρe_tot += -∇sgs(wvec(sgs_flux_h_tot))
-    @. tends_ρq_tot += -∇sgs(wvec(sgs_flux_q_tot))
-    @. tends_uₕ += -∇sgs(sgs_flux_uₕ) / ρ_c
+    @. tendencies_gm.ρe_tot += -∇sgs(wvec(aux_gm_f.sgs_flux_h_tot))
+    @. tendencies_gm.ρq_tot += -∇sgs(wvec(aux_gm_f.sgs_flux_q_tot))
+    @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
 
     if edmf.moisture_model isa TC.NonEquilibriumMoisture
-        sgs_flux_q_liq = aux_gm_f.sgs_flux_q_liq
-        sgs_flux_q_ice = aux_gm_f.sgs_flux_q_ice
-
-        tends_q_liq = tendencies_gm.q_liq
-        tends_q_ice = tendencies_gm.q_ice
-        @. tends_q_liq += -∇sgs(wvec(sgs_flux_q_liq)) / ρ_c
-        @. tends_q_ice += -∇sgs(wvec(sgs_flux_q_ice)) / ρ_c
+        @. tendencies_gm.q_liq += -∇sgs(wvec(aux_gm_f.sgs_flux_q_liq)) / ρ_c
+        @. tendencies_gm.q_ice += -∇sgs(wvec(aux_gm_f.sgs_flux_q_ice)) / ρ_c
     end
 
     return nothing
