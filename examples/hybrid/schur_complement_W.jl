@@ -158,13 +158,6 @@ Note: The matrix S = A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I is th
 the large -I block in A.
 =#
 
-ClimaCore.Operators.getidx(
-    scalar::ConstRef,
-    loc::ClimaCore.Operators.Location,
-    idx,
-    hidx,
-) = scalar[]
-
 function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
     function _linsolve!(x, A, b, update_matrix = false; kwargs...)
         (; dtγ_ref, S, S_column_arrays) = A

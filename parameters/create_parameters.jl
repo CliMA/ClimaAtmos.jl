@@ -9,6 +9,13 @@ import SurfaceFluxes.UniversalFunctions as UF
 import Thermodynamics as TD
 import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 
+
+ClimaCore.Operators.getidx(
+    scalar::ConstRef,
+    loc::ClimaCore.Operators.Location,
+    idx,
+    hidx,
+) = scalar[]
 struct ConstRef{T} <: AbstractArray{T, 0}
     val::T
 end
@@ -16,9 +23,12 @@ Base.getindex(c::ConstRef) = c.val
 Base.size(c::ConstRef) = ()
 
 # TODO: move to corresponding packages
+# disable for now as causing problems
+#=
 Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = ConstRef(ps)
 Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = ConstRef(ps)
 Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = ConstRef(ps)
+=#
 
 function override_climaatmos_defaults(
     defaults::NamedTuple,

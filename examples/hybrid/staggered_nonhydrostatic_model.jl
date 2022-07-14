@@ -203,7 +203,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
             #     @. Yₜ.c.ρe_int += ᶜFC(ᶠw, ᶜρe_int)
             # end
 
-            Yₜ.c.uₕ[colidx] .= ConstRef(zero(eltype(Yₜ.c.uₕ)))
+            Yₜ.c.uₕ[colidx] .= Ref(zero(eltype(Yₜ.c.uₕ)))
 
             @. Yₜ.f.w[colidx] = -(
                 ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) +
