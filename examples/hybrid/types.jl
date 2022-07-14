@@ -123,7 +123,7 @@ function get_numerics(parsed_args)
     return numerics
 end
 
-function get_simulation(parsed_args)
+function get_simulation(::Type{FT}, parsed_args) where {FT}
 
     job_id = if isnothing(parsed_args["job_id"])
         (s, default_parsed_args) = parse_commandline()
@@ -140,6 +140,7 @@ function get_simulation(parsed_args)
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
+        dt = FT(time_to_seconds(parsed_args["dt"])),
     )
 
     return sim
