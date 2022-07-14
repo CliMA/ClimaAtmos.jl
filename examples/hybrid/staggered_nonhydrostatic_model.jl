@@ -163,6 +163,10 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
     # allocation because the cache is stored separately from Y, which means that
     # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
     (; ᶜK, ᶜts, ᶜp) = implicit_cache_vars(Y, p)
+
+    ref_thermo_params = Ref(thermo_params)
+    ref_zuₕ = Ref(zero(eltype(Yₜ.c.uₕ)))
+
     @nvtx "implicit tendency special" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
 
@@ -179,7 +183,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
                 ᶜK[colidx],
                 Y.f.w[colidx],
             )
-            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
             if isnothing(ᶠupwind_product)
                 @. Yₜ.c.ρe_tot[colidx] = -(ᶜdivᵥ(
                     ᶠinterp(Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶠw[colidx],
@@ -203,7 +207,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
             #     @. Yₜ.c.ρe_int += ᶜFC(ᶠw, ᶜρe_int)
             # end
 
-            Yₜ.c.uₕ[colidx] .= Ref(zero(eltype(Yₜ.c.uₕ)))
+            Yₜ.c.uₕ[colidx] .= ref_zuₕ
 
             @. Yₜ.f.w[colidx] = -(
                 ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) +
@@ -461,7 +465,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
         to_scalar_coefs(vector_coefs) =
             map(vector_coef -> vector_coef.u₃, vector_coefs)
 
-
+        ref_thermo_params = Ref(thermo_params)
         Fields.bycolumn(axes(Y.c)) do colidx
             @. ∂ᶜK∂ᶠw_data[colidx] =
                 ᶜinterp(ᶠw_data[colidx]) *
@@ -482,7 +486,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
                 ᶜK[colidx],
                 ᶠw[colidx],
             )
-            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
 
             if isnothing(ᶠupwind_product)
                 #         elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
