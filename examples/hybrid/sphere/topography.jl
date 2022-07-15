@@ -1,6 +1,5 @@
 using NCDatasets
 using Dierckx
-using Interpolations
 
 """
     topography_nowarp(λ,ϕ)
