@@ -68,13 +68,6 @@ cent_aux_vars_edmf_en_moisture(FT, ::NonEquilibriumMoisture) = (;
     qi_tendency_noneq = FT(0),
 )
 cent_aux_vars_edmf_en_moisture(FT, ::EquilibriumMoisture) = NamedTuple()
-cent_aux_vars_edmf_moisture(FT, ::NonEquilibriumMoisture) = (;
-    massflux_tendency_ql = FT(0),
-    massflux_tendency_qi = FT(0),
-    diffusive_tendency_ql = FT(0),
-    diffusive_tendency_qi = FT(0),
-)
-cent_aux_vars_edmf_moisture(FT, ::EquilibriumMoisture) = NamedTuple()
 cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         ϕ_temporary = FT(0),
@@ -153,11 +146,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         KM = FT(0),
         KH = FT(0),
         mixing_length = FT(0),
-        massflux_tendency_h = FT(0),
-        massflux_tendency_qt = FT(0),
-        diffusive_tendency_h = FT(0),
-        diffusive_tendency_qt = FT(0),
-        cent_aux_vars_edmf_moisture(FT, edmf.moisture_model)...,
         prandtl_nvec = FT(0),
         # Variable Prandtl number initialized as neutral value.
         b_exch = FT(0),
