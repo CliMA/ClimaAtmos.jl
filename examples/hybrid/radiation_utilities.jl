@@ -1,7 +1,7 @@
 import ClimaAtmos.Parameters as CAP
 using Statistics: mean
 using Dierckx: Spline1D
-using Dates: Second, DateTime
+using Dates: Second
 using Insolation: instantaneous_zenith_angle
 
 function rrtmgp_model_cache(
@@ -241,7 +241,7 @@ function rrtmgp_model_callback!(integrator)
     end
 
     if !idealized_insolation
-        date_time = DateTime(2022) + Second(round(Int, t)) # t secs into 2022
+        current_datetime = p.simulation.start_date + Second(round(Int, t)) # current time
         max_zenith_angle = FT(π) / 2 - eps(FT)
         irradiance = FT(CAP.tot_solar_irrad(params))
         au = FT(CAP.astro_unit(params))
@@ -257,7 +257,7 @@ function rrtmgp_model_callback!(integrator)
                 axes(bottom_coords),
             )
             @. insolation_tuple = instantaneous_zenith_angle(
-                date_time,
+                current_datetime,
                 Float64(bottom_coords.long),
                 Float64(bottom_coords.lat),
                 insolation_params,
@@ -269,7 +269,7 @@ function rrtmgp_model_callback!(integrator)
         else
             # assume that the latitude and longitude are both 0 for flat space
             insolation_tuple = instantaneous_zenith_angle(
-                date_time,
+                current_datetime,
                 0.0,
                 0.0,
                 insolation_params,
