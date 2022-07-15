@@ -114,19 +114,16 @@ function update_aux!(
         #####
         aux_bulk.q_tot[k] = 0
         aux_bulk.h_tot[k] = 0
-        aux_bulk.θ_liq_ice[k] = 0
         aux_bulk.area[k] = sum(i -> aux_up[i].area[k], 1:N_up)
         if aux_bulk.area[k] > 0
             @inbounds for i in 1:N_up
                 a_k = aux_up[i].area[k]
                 a_bulk_k = aux_bulk.area[k]
                 aux_bulk.q_tot[k] += a_k * aux_up[i].q_tot[k] / a_bulk_k
-                aux_bulk.θ_liq_ice[k] += a_k * aux_up[i].θ_liq_ice[k] / a_bulk_k
                 aux_bulk.h_tot[k] += a_k * aux_up[i].h_tot[k] / a_bulk_k
             end
         else
             aux_bulk.q_tot[k] = aux_gm.q_tot[k]
-            aux_bulk.θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
             aux_bulk.h_tot[k] = aux_gm.h_tot[k]
         end
         if edmf.moisture_model isa NonEquilibriumMoisture
@@ -279,7 +276,6 @@ function update_aux!(
         aux_bulk.q_liq[k] = 0
         aux_bulk.q_ice[k] = 0
         aux_bulk.T[k] = 0
-        aux_bulk.RH[k] = 0
         aux_bulk.buoy[k] = 0
         if a_bulk_c > 0
             @inbounds for i in 1:N_up
@@ -288,12 +284,10 @@ function update_aux!(
                 aux_bulk.q_ice[k] +=
                     aux_up[i].area[k] * aux_up[i].q_ice[k] / a_bulk_c
                 aux_bulk.T[k] += aux_up[i].area[k] * aux_up[i].T[k] / a_bulk_c
-                aux_bulk.RH[k] += aux_up[i].area[k] * aux_up[i].RH[k] / a_bulk_c
                 aux_bulk.buoy[k] +=
                     aux_up[i].area[k] * aux_up[i].buoy[k] / a_bulk_c
             end
         else
-            aux_bulk.RH[k] = aux_en.RH[k]
             aux_bulk.T[k] = aux_en.T[k]
         end
 
@@ -540,12 +534,10 @@ function update_aux!(
             b_exch = b_exch[k],
         )
 
-        ml = mixing_length(mix_len_params, param_set, ml_model)
-        aux_tc.mls[k] = ml.min_len_ind
-        aux_tc.mixing_length[k] = ml.mixing_length
-        aux_tc.ml_ratio[k] = ml.ml_ratio
+        aux_tc.mixing_length[k] =
+            mixing_length(mix_len_params, param_set, ml_model)
 
-        KM[k] = c_m * ml.mixing_length * sqrt(max(aux_en.tke[k], 0))
+        KM[k] = c_m * aux_tc.mixing_length[k] * sqrt(max(aux_en.tke[k], 0))
         KH[k] = KM[k] / aux_tc.prandtl_nvec[k]
 
         aux_en_2m.tke.buoy[k] = -aux_en.area[k] * ρ_c[k] * KH[k] * bg.∂b∂z

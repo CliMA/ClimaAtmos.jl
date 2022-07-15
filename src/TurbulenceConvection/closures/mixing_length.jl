@@ -62,8 +62,6 @@ function mixing_length(
     )
 
     # get soft minimum
-    min_len, min_len_ind = findmin(l)
     mix_len = lamb_smooth_minimum(l, smin_ub, smin_rm)
-    ml_ratio = mix_len / min_len
-    return MixLen(min_len_ind, mix_len, ml_ratio)
+    return mix_len
 end

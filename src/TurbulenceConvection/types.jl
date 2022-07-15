@@ -189,20 +189,6 @@ function EnvBuoyGrad(
     return EnvBuoyGrad{FT, EBG}(; t_sat, bg_kwargs...)
 end
 
-"""
-    MixLen
-
-$(DocStringExtensions.FIELDS)
-"""
-Base.@kwdef struct MixLen{FT}
-    "minimum length number"
-    min_len_ind::Int
-    "mixing length"
-    mixing_length::FT
-    "length ratio"
-    ml_ratio::FT
-end
-
 Base.@kwdef struct MixingLengthParams{FT}
     ω_pr::FT # cospectral budget factor for turbulent Prandtl number
     c_m::FT # tke diffusivity coefficient

@@ -1189,8 +1189,9 @@ function compute_en_tendencies!(
     RB = CCO.RightBiasedC2F(; top = CCO.SetValue(FT(0)))
     @. tend_covar =
         press + buoy + shear + entr_gain + rain_src - D_env * covar -
-        (c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1)) * prog_covar -
-        ∇c(wvec(RB(prog_covar * Ic(w_en_f)))) + ∇c(ρ_f * If(aeK) * ∇f(covar))
+        (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) *
+        prog_covar - ∇c(wvec(RB(prog_covar * Ic(w_en_f)))) +
+        ∇c(ρ_f * If(aeK) * ∇f(covar))
 
     return nothing
 end
