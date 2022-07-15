@@ -540,12 +540,10 @@ function update_aux!(
             b_exch = b_exch[k],
         )
 
-        ml = mixing_length(mix_len_params, param_set, ml_model)
-        aux_tc.mls[k] = ml.min_len_ind
-        aux_tc.mixing_length[k] = ml.mixing_length
-        aux_tc.ml_ratio[k] = ml.ml_ratio
+        aux_tc.mixing_length[k] =
+            mixing_length(mix_len_params, param_set, ml_model)
 
-        KM[k] = c_m * ml.mixing_length * sqrt(max(aux_en.tke[k], 0))
+        KM[k] = c_m * aux_tc.mixing_length[k] * sqrt(max(aux_en.tke[k], 0))
         KH[k] = KM[k] / aux_tc.prandtl_nvec[k]
 
         aux_en_2m.tke.buoy[k] = -aux_en.area[k] * ρ_c[k] * KH[k] * bg.∂b∂z
