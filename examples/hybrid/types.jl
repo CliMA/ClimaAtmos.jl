@@ -246,7 +246,7 @@ end
 
 import OrdinaryDiffEq as ODE
 #=
-(; jac_kwargs, alg_kwargs, ode_algorithm) =
+(; jac_kwargs, alg_kwargs, ode_algorithm, use_clima_time_steppers) =
     ode_config(Y, parsed_args, model_spec)
 =#
 function ode_config(Y, parsed_args, model_spec)
@@ -306,10 +306,19 @@ function ode_config(Y, parsed_args, model_spec)
     else
         jac_kwargs = alg_kwargs = ()
     end
-    return (; jac_kwargs, alg_kwargs, ode_algorithm)
+    use_clima_time_steppers = ode_algorithm_type <: ClimaTimeSteppers.DistributedODEAlgorithm
+    return (; jac_kwargs, alg_kwargs, ode_algorithm, use_clima_time_steppers)
 end
 
-function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
+function get_integrator(
+    parsed_args,
+    Y,
+    p,
+    tspan,
+    jac_kwargs,
+    callback,
+    use_clima_time_steppers,
+)
     (; dt) = p.simulation
     FT = eltype(tspan)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -317,7 +326,7 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
     additional_solver_kwargs = () # e.g., abstol and reltol
 
     problem = if parsed_args["split_ode"]
-        remaining_func = ode_algorithm_type <: ClimaTimeSteppers.ARSAlgorithm ?
+        remaining_func = use_clima_time_steppers ?
             ForwardEulerODEFunction(remaining_tendency_step!) :
             remaining_tendency!
         ODE.SplitODEProblem(
@@ -332,7 +341,7 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
             p,
         )
     else
-        func = ode_algorithm_type <: ClimaTimeSteppers.DistributedODEAlgorithm ?
+        func = use_clima_time_steppers ?
             ForwardEulerODEFunction(total_tendency_step!) :
             remaining_tendency! # <- why doesn't this include the implicit tendency???
         ODE.ODEProblem(func, Y, tspan, p)

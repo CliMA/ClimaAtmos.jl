@@ -214,7 +214,7 @@ for key in keys(p.tendency_knobs)
     @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
 end
 
-(; jac_kwargs, alg_kwargs, ode_algorithm) =
+(; jac_kwargs, alg_kwargs, ode_algorithm, use_clima_time_steppers) =
     ode_config(Y, parsed_args, model_spec)
 
 include("callbacks.jl")
@@ -223,7 +223,7 @@ callback = get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
 
-integrator = get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
+integrator = get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback, use_clima_time_steppers)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
