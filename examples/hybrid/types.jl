@@ -116,7 +116,8 @@ function get_numerics(parsed_args)
     numerics = (;
         upwinding_mode = Symbol(
             parse_arg(parsed_args, "upwinding", "third_order"),
-        )
+        ),
+        apply_limiter = parsed_args["apply_limiter"],
     )
     @assert numerics.upwinding_mode in (:none, :first_order, :third_order)
 
@@ -254,16 +255,23 @@ function ode_config(Y, parsed_args, model_spec)
     newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
     test_implicit_solver = false # makes solver extremely slow when set to `true`
     jacobian_flags = jacobi_flags(model_spec.energy_form)
-    ode_algorithm = getproperty(ODE, Symbol(parsed_args["ode_algo"]))
+    alg_symbol = Symbol(parsed_args["ode_algo"])
+    ode_algorithm = hasproperty(ClimaTimeSteppers, alg_symbol) ?
+        getproperty(ClimaTimeSteppers, alg_symbol) :
+        getproperty(ODE, alg_symbol)
 
     ode_algorithm_type =
         ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
     if ode_algorithm_type <: Union{
         ODE.OrdinaryDiffEqImplicitAlgorithm,
         ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
-    }
-        use_transform =
-            !(ode_algorithm_type in (ODE.Rosenbrock23, ODE.Rosenbrock32))
+    } || "linsolve" in split(methods(ode_algorithm_type)[1].slot_syms, "\0") # awful hack for ClimaTimeSteppers
+        untransformed_algs = (
+            ODE.Rosenbrock23,
+            ODE.Rosenbrock32,
+            ClimaTimeSteppers.DistributedODEAlgorithm
+        )
+        use_transform = !(any(ode_algorithm_type .<: untransformed_algs))
         W = SchurComplementW(
             Y,
             use_transform,
@@ -272,8 +280,8 @@ function ode_config(Y, parsed_args, model_spec)
         )
         Wfact! =
             if :ρe_tot in propertynames(Y.c) &&
-               W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
-               W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+                W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
+                W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
                 Wfact_special!
             else
                 Wfact_generic!
@@ -309,19 +317,25 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
     additional_solver_kwargs = () # e.g., abstol and reltol
 
     problem = if parsed_args["split_ode"]
+        remaining_func = ode_algorithm_type <: ClimaTimeSteppers.ARSAlgorithm ?
+            ForwardEulerODEFunction(remaining_tendency_step!) :
+            remaining_tendency!
         ODE.SplitODEProblem(
             ODE.ODEFunction(
                 implicit_tendency!;
                 jac_kwargs...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
             ),
-            remaining_tendency!,
+            remaining_func,
             Y,
             tspan,
             p,
         )
     else
-        ODE.ODEProblem(remaining_tendency!, Y, tspan, p)
+        func = ode_algorithm_type <: ClimaTimeSteppers.DistributedODEAlgorithm ?
+            ForwardEulerODEFunction(total_tendency_step!) :
+            remaining_tendency! # <- why doesn't this include the implicit tendency???
+        ODE.ODEProblem(func, Y, tspan, p)
     end
     integrator = ODE.init(
         problem,

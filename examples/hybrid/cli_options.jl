@@ -167,6 +167,10 @@ function parse_commandline()
         help = "Disable the hyperdiffusion of specific humidity [`true`, `false` (default)] (TODO: reconcile this with ρe_tot or remove if instability fixed with limiters)"
         arg_type = Bool
         default = false
+        "--apply_limiter"
+        help = "(Bool) apply a limiter to every tracer"
+        arg_type = Bool
+        default = true
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

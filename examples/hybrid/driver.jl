@@ -11,6 +11,7 @@ parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
+apply_limiter = parsed_args["apply_limiter"]
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
@@ -29,6 +30,7 @@ zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 
+@assert apply_limiter in (true, false)
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
 @assert idealized_clouds in (true, false)
@@ -136,7 +138,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             )
         ),
         (; Δt = dt),
-        (; enable_default_remaining_tendency = isnothing(turbconv_model)),
+        (; enable_horizontal_advection_tendency = isnothing(turbconv_model)),
         !isnothing(turbconv_model) ?
         (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
         (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
@@ -181,13 +183,14 @@ end
 atexit() do
     global_logger(prev_logger)
 end
-using OrdinaryDiffEq
+using OrdinaryDiffEq, ClimaTimeSteppers
 using DiffEqCallbacks
 using JLD2
 
 parsed_args["trunc_stack_traces"] && include("truncate_stack_traces.jl")
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
+include("../clima_timesteppers_bug_fixes.jl")
 include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))

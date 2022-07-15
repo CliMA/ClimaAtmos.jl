@@ -1,7 +1,7 @@
 using LinearAlgebra: ×, norm, norm_sqr, dot
 
 import ClimaAtmos.Parameters as CAP
-using ClimaCore: Operators, Fields
+using ClimaCore: Operators, Fields, Limiters
 
 using ClimaCore.Geometry: ⊗
 
@@ -79,7 +79,7 @@ get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
 )
 
 function default_cache(Y, params, spaces, numerics, simulation)
-    (; upwinding_mode) = numerics
+    (; upwinding_mode, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     z_sfc = Fields.level(ᶠcoord.z, half)
@@ -106,9 +106,19 @@ function default_cache(Y, params, spaces, numerics, simulation)
         ghost_buffer =
             (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
     )
+    if apply_limiter
+        tracers = filter(is_tracer_var, propertynames(Y.c))
+        make_limiter = ᶜ𝕋_name ->
+            Limiters.QuasiMonotoneLimiter(getproperty(Y.c, ᶜ𝕋_name), Y.c.ρ)
+        limiters = NamedTuple{tracers}(map(make_limiter, tracers))
+    else
+        limiters = NamedTuple()
+    end
     return (;
         simulation,
         spaces,
+        Y1ₜ = similar(Y), # TODO: only allocate this for ClimaTimeSteppers
+        limiters, # and also this
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜΦ = CAP.grav(params) .* ᶜcoord.z,
@@ -225,10 +235,11 @@ end
 
 function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
-        (; enable_default_remaining_tendency) = p
+        (; enable_horizontal_advection_tendency) = p
         Yₜ .= zero(eltype(Yₜ))
-        if enable_default_remaining_tendency
-            default_remaining_tendency!(Yₜ, Y, p, t)
+        if enable_horizontal_advection_tendency
+            horizontal_advection_tendency!(Yₜ, Y, p, t)
+            explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         additional_tendency!(Yₜ, Y, p, t)
         @nvtx "dss_remaining_tendency" color = colorant"blue" begin
@@ -243,7 +254,78 @@ function remaining_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
-function default_remaining_tendency!(Yₜ, Y, p, t)
+function remaining_tendency_step!(Y2, Y1, p, t, dtγ)
+    @nvtx "remaining tendency step" color = colorant"yellow" begin
+        # @info "t = $t" # progress bars are not implemented in ClimaTimeSteppers
+        (; Y1ₜ, enable_horizontal_advection_tendency, limiters) = p
+        Y1ₜ .= zero(eltype(Y1ₜ))
+        if enable_horizontal_advection_tendency
+            horizontal_advection_tendency!(Y1ₜ, Y1, p, t)
+            if length(limiters) > 0
+                @. Y2 += dtγ * Y1ₜ
+                for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y1.c))
+                    𝕋_limiter = getproperty(limiters, ᶜ𝕋_name)
+                    ᶜ𝕋1 = getproperty(Y1.c, ᶜ𝕋_name)
+                    ᶜ𝕋2 = getproperty(Y2.c, ᶜ𝕋_name)
+                    Limiters.compute_bounds!(𝕋_limiter, ᶜ𝕋1, Y1.c.ρ)
+                    Limiters.apply_limiter!(ᶜ𝕋2, Y2.c.ρ, 𝕋_limiter)
+                end
+                Y1ₜ .= zero(eltype(Y1ₜ))
+            end
+            explicit_vertical_advection_tendency!(Y1ₜ, Y1, p, t)
+        end
+        additional_tendency!(Y1ₜ, Y1, p, t)
+        @. Y2 += dtγ * Y1ₜ
+        @nvtx "dss_remaining_tendency_step" color = colorant"blue" begin
+            Spaces.weighted_dss_start!(Y2.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_start!(Y2.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_internal!(Y2.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_internal!(Y2.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_ghost!(Y2.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_ghost!(Y2.f, p.ghost_buffer.f)
+        end
+    end
+    return Y2
+end
+
+function total_tendency_step!(Y2, Y1, p, t, dtγ)
+    @nvtx "total tendency step" color = colorant"yellow" begin
+        # @info "t = $t" # progress bars are not implemented in ClimaTimeSteppers
+        (; Y1ₜ, enable_horizontal_advection_tendency, limiters) = p
+        Y1ₜ .= zero(eltype(Y1ₜ))
+        if enable_horizontal_advection_tendency
+            horizontal_advection_tendency!(Y1ₜ, Y1, p, t)
+            if length(limiters) > 0
+                @. Y2 += dtγ * Y1ₜ
+                for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y1.c))
+                    𝕋_limiter = getproperty(limiters, ᶜ𝕋_name)
+                    ᶜ𝕋1 = getproperty(Y1.c, ᶜ𝕋_name)
+                    ᶜ𝕋2 = getproperty(Y2.c, ᶜ𝕋_name)
+                    Limiters.compute_bounds!(𝕋_limiter, ᶜ𝕋1, Y1.c.ρ)
+                    Limiters.apply_limiter!(ᶜ𝕋2, Y2.c.ρ, 𝕋_limiter)
+                end
+                Y1ₜ .= zero(eltype(Y1ₜ))
+            end
+            explicit_vertical_advection_tendency!(Y1ₜ, Y1, p, t)
+        end
+        additional_tendency!(Y1ₜ, Y1, p, t)
+        @. Y2 += dtγ * Y1ₜ
+        implicit_tendency!(Y1ₜ, Y1, p, t) # sets Y1ₜ instead of incrementing it
+        @. Y2 += dtγ * Y1ₜ
+        @nvtx "dss_total_tendency_step" color = colorant"blue" begin
+            Spaces.weighted_dss_start!(Y2.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_start!(Y2.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_internal!(Y2.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_internal!(Y2.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_ghost!(Y2.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_ghost!(Y2.f, p.ghost_buffer.f)
+        end
+    end
+    return Y2
+end
+
+# Part of horizontal advection tendency computed before limiters
+function horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -257,7 +339,6 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     # Mass conservation
 
     @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
 
     # Energy conservation
 
@@ -265,10 +346,8 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
-        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
     elseif :ρe_int in propertynames(Y.c)
         if point_type <: Geometry.Abstract3DPoint
             @. Yₜ.c.ρe_int -=
@@ -279,9 +358,41 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
                 divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
                 dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
         end
-        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
         # or, equivalently,
         # @. Yₜ.c.ρe_int -= divₕ(Y.c.ρe_int * ᶜuvw) + ᶜp * divₕ(ᶜuvw)
+    end
+
+    # Tracer conservation
+
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+        ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+        ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+        @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
+    end
+end
+
+# Part of horizontal advection tendency computed after limiters
+function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, params) = p
+    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
+    thermo_params = CAP.thermodynamics_params(params)
+
+    # Mass conservation
+
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
+
+    # Energy conservation
+
+    if :ρθ in propertynames(Y.c)
+        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
+    elseif :ρe_int in propertynames(Y.c)
+        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
+        # or, equivalently,
         # @. Yₜ.c.ρe_int -=
         #     ᶜdivᵥ(ᶠinterp(Y.c.ρe_int * ᶜuₕ)) + ᶜp * ᶜdivᵥ(ᶠinterp(ᶜuₕ))
     end
@@ -320,7 +431,6 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
         ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
-        @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
         @. ᶜ𝕋ₜ -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋 * ᶜuₕ))
     end
 end
