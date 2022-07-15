@@ -284,6 +284,9 @@ steps:
   - label: ":robot_face: Print new reference counter"
     command: "julia --color=yes --project=examples regression_tests/print_new_ref_counter.jl"
 
+  - label: ":bar_chart: Tabulate performance summary"
+    command: "julia --color=yes --project=perf perf/tabulate_perf_summary.jl"
+
   - wait
 
   - label: ":robot_face: Move main results"
