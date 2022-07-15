@@ -365,8 +365,9 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t)
     end
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (
-                      wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(Geometry.Covariant12Axis(), 
-                      wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
+                Geometry.Covariant12Axis(),
+                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
             )
         )
     @. Yₜ.f.w.components.data.:1 +=
