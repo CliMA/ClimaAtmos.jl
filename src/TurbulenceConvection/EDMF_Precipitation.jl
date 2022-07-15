@@ -49,9 +49,6 @@ function compute_precipitation_advection_tendencies(
     # helper to calculate the rain velocity
     # TODO: assuming w_gm = 0
     # TODO: verify translation
-    term_vel_rain = aux_tc.term_vel_rain
-    term_vel_snow = aux_tc.term_vel_snow
-
     precip_fraction = compute_precip_fraction(edmf, state)
 
     q_rai = prog_pr.q_rai #./ precip_fraction
@@ -64,9 +61,9 @@ function compute_precipitation_advection_tendencies(
 
     # TODO - some positivity limiters are needed
     @. aux_tc.qr_tendency_advection =
-        ∇(wvec(RB(ρ_c * q_rai * term_vel_rain))) / ρ_c# * precip_fraction
+        ∇(wvec(RB(ρ_c * q_rai * aux_tc.term_vel_rain))) / ρ_c# * precip_fraction
     @. aux_tc.qs_tendency_advection =
-        ∇(wvec(RB(ρ_c * q_sno * term_vel_snow))) / ρ_c# * precip_fraction
+        ∇(wvec(RB(ρ_c * q_sno * aux_tc.term_vel_snow))) / ρ_c# * precip_fraction
 
     @. tendencies_pr.q_rai += aux_tc.qr_tendency_advection
     @. tendencies_pr.q_sno += aux_tc.qs_tendency_advection
@@ -102,7 +99,6 @@ function compute_precipitation_sink_tendencies(
     prog_pr = center_prog_precipitation(state)
     ρ_c = prog_gm.ρ
     tendencies_pr = center_tendencies_precipitation(state)
-    ts_gm = aux_gm.ts
 
     precip_fraction = compute_precip_fraction(edmf, state)
 
@@ -113,7 +109,7 @@ function compute_precipitation_sink_tendencies(
         q_tot_gm = aux_gm.q_tot[k]
         T_gm = aux_gm.T[k]
         # When we fuse loops, this should hopefully disappear
-        ts = ts_gm[k]
+        ts = aux_gm.ts[k]
         q = TD.PhasePartition(thermo_params, ts)
         qv = TD.vapor_specific_humidity(thermo_params, ts)
 
