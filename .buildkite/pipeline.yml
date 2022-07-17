@@ -173,10 +173,6 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --energy_name rhoe_int --forcing held_suarez --moist equil --microphy 0M --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 100secs --t_end 1days"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
-
   - group: "Configs"
     steps:
 
