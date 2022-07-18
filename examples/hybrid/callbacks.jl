@@ -12,6 +12,13 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
         affect_filter!;
         save_positions = (false, false),
     )
+    tc_callbacks = ODE.DiscreteCallback(
+        condition_every_iter,
+        turb_conv_affect_filter!;
+        save_positions = (false, false),
+    )
+
+    additional_callbacks = ()
 
     additional_callbacks = if !isnothing(model_spec.radiation_model)
         # TODO: better if-else criteria?
@@ -27,8 +34,12 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         ()
     end
+
+    if !isnothing(model_spec.turbconv_model)
+        additional_callbacks = (additional_callbacks..., tc_callbacks...)
+    end
     if model_spec.moisture_model isa EquilMoistModel &&
-       parsed_args["apply_moisture_filter"]
+        parsed_args["apply_moisture_filter"]
         additional_callbacks = (additional_callbacks..., callback_filters)
     end
 
@@ -80,6 +91,33 @@ function affect_filter!(integrator)
     ODE.u_modified!(integrator, false)
 end
 
+function turb_conv_affect_filter!(integrator)
+    # UnPack.@unpack edmf, param_set, aux, case, surf_params = integrator.p
+    (; edmf_cache, Δt) = p
+    (;
+        edmf,
+        param_set,
+        aux,
+        case,
+        surf_params,
+    ) = edmf_cache
+    println("turb_conv_affect_filter")
+    t = integrator.t
+    prog = integrator.u
+
+    for inds in TC.iterate_columns(prog.cent)
+        state = TC.column_prog_aux(prog, aux, inds...)
+        grid = TC.Grid(state)
+        surf = get_surface(surf_params, grid, state, t, param_set)
+        TC.affect_filter!(edmf, grid, state, param_set, surf, t)
+    end
+
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional `∑tendencies!` call, which is required
+    # to support supplying a continuous representation of the
+    # solution.
+    ODE.u_modified!(integrator, false)
+end
 
 function save_to_disk_func(integrator)
     if integrator.p.simulation.is_distributed

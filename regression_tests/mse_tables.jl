@@ -69,6 +69,18 @@ all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.00115775
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0010896237336891917
 all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0004393743293610541
 #
+all_best_mse["compressible_edmf_bomex"] = OrderedCollections.OrderedDict()
+all_best_mse["compressible_edmf_bomex"][(:c, :ρ)] = 0.0
+all_best_mse["compressible_edmf_bomex"][(:c, :ρe_tot)] = 3.5770314733967734e-5
+all_best_mse["compressible_edmf_bomex"][(:c, :uₕ, :components, :data, 1)] = 1.969619536436527e-5
+all_best_mse["compressible_edmf_bomex"][(:c, :uₕ, :components, :data, 2)] = 9.427961755172214e-5
+all_best_mse["compressible_edmf_bomex"][(:c, :ρq_tot)] = 0.00026599536798665633
+all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :en, :ρatke)] = 0.01711767741221038
+all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0011562315756006149
+all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0011577528963136136
+all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0010896237336891917
+all_best_mse["compressible_edmf_bomex"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0004393743293610541
+#
 all_best_mse["edmf_dycoms_rf01"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρ)] = 0.0
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρe_tot)] = 8.084738282518901e-13
