@@ -96,7 +96,7 @@ summaries["This PR"] = combine_PRs_performance_benchmarks(ca_dir)
 function get_metric(summaries, commit, job_id, func, metric, has_func)
     # If function names have changed, then this will break, so lets
     # gracefully handle this case and throw a warning later.
-    return has_func[func] ? summaries[commit][job_id][func][metric] : 0
+    return has_func[func * commit] ? summaries[commit][job_id][func][metric] : 0
 end
 
 function metric_name(metric)
@@ -130,7 +130,7 @@ function tabulate_summaries(summaries, job_id, metric_tup)
 
     for commit in commits
         for func in funcs
-            has_func[func] = haskey(summaries[commit][job_id], func)
+            has_func[func * commit] = haskey(summaries[commit][job_id], func)
         end
     end
 
