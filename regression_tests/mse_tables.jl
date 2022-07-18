@@ -100,6 +100,13 @@ all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0.0
 #
+all_best_mse["compressible_edmf_gabls"] = OrderedCollections.OrderedDict()
+all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 0.0
+all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 0.0
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0.0
+#
 #! format: on
 #################################
 #################################
