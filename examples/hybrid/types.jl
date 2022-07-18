@@ -234,13 +234,31 @@ function get_spaces(parsed_args, params, comms_ctx)
     )
 end
 
-# get_state(simulation, parsed_args, spaces, params, model_spec)
-function get_state(simulation, args...)
-    if simulation.restart
-        return get_state_restart(simulation.is_distributed)
+function get_spaces_restart(Y, parsed_args, ::Type{FT}) where {FT}
+    dz_bottom = FT(parsed_args["dz_bottom"])
+    dz_top = FT(parsed_args["dz_top"])
+    z_stretch = if parsed_args["z_stretch"]
+        Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
     else
-        return get_state_fresh_start(args...)
+        Meshes.Uniform()
     end
+    center_space = axes(Y.c)
+    face_space = axes(Y.f)
+    hspace = Spaces.horizontal_space(center_space)
+    horizontal_mesh = hspace.topology.mesh
+    quad = horizontal_mesh.ne + 1
+    vertical_mesh = center_space.vertical_topology.mesh
+    z_max = vertical_mesh.domain.coord_max.z
+    z_elem = length(vertical_mesh.faces) - 1
+    return (;
+        center_space,
+        face_space,
+        horizontal_mesh,
+        quad,
+        z_max,
+        z_elem,
+        z_stretch,
+    )
 end
 
 function get_state_restart(is_distributed)
@@ -250,6 +268,8 @@ function get_state_restart(is_distributed)
     else
         ENV["RESTART_FILE"]
     end
+    @show readdir(dirname(ENV["RESTART_FILE"]))
+    @show readdir(dirname(restart_file_name))
     local Y, t_start
     JLD2.jldopen(restart_file_name) do data
         Y = data["Y"]
