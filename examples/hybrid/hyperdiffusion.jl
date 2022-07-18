@@ -103,8 +103,14 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
             @. Yₜ.c.uₕ -=
                 κ₄ * (
                     divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                    Geometry.Covariant12Vector(
-                        wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜχuₕ))),
+                    Geometry.project(
+                        Geometry.Covariant12Axis(),
+                        wcurlₕ(
+                            Geometry.project(
+                                Geometry.Covariant3Axis(),
+                                curlₕ(ᶜχuₕ),
+                            ),
+                        ),
                     )
                 )
         elseif is_2d_pt

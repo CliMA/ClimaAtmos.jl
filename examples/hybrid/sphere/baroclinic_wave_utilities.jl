@@ -8,6 +8,7 @@ const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
 include("../staggered_nonhydrostatic_model.jl")
+include("./topography.jl")
 
 ##
 ## Initial conditions
@@ -364,8 +365,9 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t)
     end
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
-                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
+            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
+                Geometry.Covariant12Axis(),
+                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
             )
         )
     @. Yₜ.f.w.components.data.:1 +=

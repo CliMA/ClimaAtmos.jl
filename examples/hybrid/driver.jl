@@ -28,6 +28,8 @@ zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
+dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+topography = parsed_args["topography"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
@@ -37,6 +39,7 @@ t_end = FT(time_to_seconds(parsed_args["t_end"]))
 @assert parsed_args["config"] in ("sphere", "column")
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
+@assert topography in ("NoWarp", "Earth", "DCMIP200")
 
 include(joinpath("..", "RRTMGPInterface.jl"))
 import .RRTMGPInterface as RRTMGPI
@@ -195,11 +198,18 @@ include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
 
+if topography == "DCMIP200"
+    warp_function = topography_dcmip200
+elseif topography == "NoWarp"
+    warp_function = topography_nowarp
+end
+
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
 
-spaces = get_spaces(parsed_args, params, comms_ctx)
+spaces = get_spaces(parsed_args, params, warp_function, comms_ctx)
+@info "topography = `$topography`"
 
 (Y, t_start) = get_state(simulation, parsed_args, spaces, params, model_spec)
 
