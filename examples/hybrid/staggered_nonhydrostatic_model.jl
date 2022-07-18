@@ -79,7 +79,7 @@ get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
 )
 
 function default_cache(Y, params, spaces, numerics, simulation)
-    (; upwinding_mode) = numerics
+    (; upwinding_mode, upwinding_mode_moisture) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     z_sfc = Fields.level(ᶠcoord.z, half)
@@ -128,6 +128,9 @@ function default_cache(Y, params, spaces, numerics, simulation)
         params,
         ᶠupwind_product = upwinding_mode == :first_order ? ᶠupwind_product1 :
                           upwinding_mode == :third_order ? ᶠupwind_product3 :
+                          nothing,
+        ᶠupwind_product_moisture = upwinding_mode_moisture == :first_order ? ᶠupwind_product1 :
+                          upwinding_mode_moisture == :third_order ? ᶠupwind_product3 :
                           nothing,
         ghost_buffer = ghost_buffer,
     )
@@ -212,11 +215,11 @@ function implicit_tendency!(Yₜ, Y, p, t)
         for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
             ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
             ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
-            if isnothing(ᶠupwind_product)
+            if isnothing(ᶠupwind_product_moisture)
                 @. ᶜ𝕋ₜ = -(ᶜdivᵥ(ᶠinterp(ᶜ𝕋) * ᶠw))
             else
                 @. ᶜ𝕋ₜ =
-                    -(ᶜdivᵥ(ᶠinterp(Y.c.ρ) * ᶠupwind_product(ᶠw, ᶜ𝕋 / Y.c.ρ)))
+                    -(ᶜdivᵥ(ᶠinterp(Y.c.ρ) * ᶠupwind_product_moisture(ᶠw, ᶜ𝕋 / Y.c.ρ)))
             end
         end
     end

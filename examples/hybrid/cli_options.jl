@@ -77,6 +77,10 @@ function parse_commandline()
         help = "Upwinding mode [`none` (default), `first_order` , `third_order`]"
         arg_type = String
         default = "none"
+        "--upwinding_moisture"
+        help = "Upwinding mode [`none` (default), `first_order` , `third_order`]"
+        arg_type = String
+        default = "none"
         "--ode_algo"
         help = "ODE algorithm [`Rosenbrock23` (default), `Euler`]"
         arg_type = String

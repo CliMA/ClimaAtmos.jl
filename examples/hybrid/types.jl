@@ -117,7 +117,10 @@ function get_numerics(parsed_args)
 
     numerics = (;
         upwinding_mode = Symbol(
-            parse_arg(parsed_args, "upwinding", "third_order"),
+            parse_arg(parsed_args, "upwinding", "none"),
+        ),
+        upwinding_mode_moisture = Symbol(
+            parse_arg(parsed_args, "upwinding_moisture", "third_order"),
         )
     )
     @assert numerics.upwinding_mode in (:none, :first_order, :third_order)
