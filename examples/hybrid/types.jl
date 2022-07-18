@@ -1,3 +1,5 @@
+using Dates: DateTime, @dateformat_str
+
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
@@ -141,6 +143,7 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
         dt = FT(time_to_seconds(parsed_args["dt"])),
+        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
     )
 
     return sim

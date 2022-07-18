@@ -185,7 +185,10 @@ using OrdinaryDiffEq
 using DiffEqCallbacks
 using JLD2
 
-parsed_args["trunc_stack_traces"] && include("truncate_stack_traces.jl")
+import ClimaCore
+if parsed_args["trunc_stack_traces"]
+    ClimaCore.Fields.truncate_printing_field_types() = true
+end
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")

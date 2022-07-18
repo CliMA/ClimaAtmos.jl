@@ -166,14 +166,6 @@ function compute_sgs_flux!(
     massflux_h[kf_surf] = 0
     massflux_qt[kf_surf] = 0
 
-    massflux_tendency_h = aux_tc.massflux_tendency_h
-    massflux_tendency_qt = aux_tc.massflux_tendency_qt
-    # Compute the  mass flux tendencies
-    # Adjust the values of the grid mean variables
-    # Prepare the output
-    @. massflux_tendency_h = -∇c(wvec(massflux_h)) / ρ_c
-    @. massflux_tendency_qt = -∇c(wvec(massflux_qt)) / ρ_c
-
     diffusive_flux_h = aux_tc_f.diffusive_flux_h
     diffusive_flux_qt = aux_tc_f.diffusive_flux_qt
     diffusive_flux_uₕ = aux_tc_f.diffusive_flux_uₕ
@@ -195,12 +187,6 @@ function compute_sgs_flux!(
         CCG.Covariant12Vector(CCG.UVVector(surf.ρu_flux, surf.ρv_flux), lg_surf)
 
     if edmf.moisture_model isa NonEquilibriumMoisture
-        massflux_tendency_ql = aux_tc.massflux_tendency_ql
-        massflux_tendency_qi = aux_tc.massflux_tendency_qi
-
-        @. massflux_tendency_ql = -∇c(wvec(massflux_ql)) / ρ_c
-        @. massflux_tendency_qi = -∇c(wvec(massflux_qi)) / ρ_c
-
         diffusive_flux_ql = aux_tc_f.diffusive_flux_ql
         diffusive_flux_qi = aux_tc_f.diffusive_flux_qi
 
@@ -768,7 +754,6 @@ function compute_up_tendencies!(
             @. tends_ε_nondim = ε_λ * (mean_entr - ε_nondim)
             @. tends_δ_nondim = δ_λ * (mean_detr - δ_nondim)
         end
-
         tends_ρarea[kc_surf] = 0
         tends_ρaθ_liq_ice[kc_surf] = 0
         tends_ρaq_tot[kc_surf] = 0

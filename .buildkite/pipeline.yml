@@ -173,10 +173,6 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --energy_name rhoe_int --forcing held_suarez --moist equil --microphy 0M --job_id sphere_held_suarez_rhoe_int_equilmoist --regression_test true --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_held_suarez_rhoe_int_equilmoist/*"
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 100secs --t_end 1days"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
-
   - group: "Configs"
     steps:
 
@@ -237,8 +233,9 @@ steps:
         command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_threaded/*"
         agents:
-          slurm_nodes: 1
-          slurm_tasks_per_node: 8
+          slurm_ntasks: 8
+          slurm_ntasks_per_node: 8
+
 
   - group: "TurbulenceConvection"
     steps:
