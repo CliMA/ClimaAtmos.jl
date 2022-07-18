@@ -157,12 +157,13 @@ Given xᶠ𝕄, we can use (1), (2), (3), and (4) to get xᶜρ, xᶜ𝔼, xᶜ�
 Note: The matrix S = A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I is the "Schur complement" of
 the large -I block in A.
 =#
+
 function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
     function _linsolve!(x, A, b, update_matrix = false; kwargs...)
         (; dtγ_ref, S, S_column_arrays) = A
         (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
         dtγ = dtγ_ref[]
-
+        dtγ² = dtγ^2
         @nvtx "linsolve" color = colorant"lime" begin
 
             # Compute Schur complement
@@ -189,8 +190,8 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
                         dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
                 else
                     @. S[colidx] =
-                        dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                        dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx]) +
+                        dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
+                        dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx]) +
                         dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
                 end
 

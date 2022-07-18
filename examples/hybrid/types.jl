@@ -311,6 +311,12 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
     show_progress_bar = isinteractive()
     additional_solver_kwargs = () # e.g., abstol and reltol
 
+    if :ρe_tot in propertynames(Y.c)
+        implicit_tendency! = implicit_tendency_special!
+    else
+        implicit_tendency! = implicit_tendency_generic!
+    end
+
     problem = if parsed_args["split_ode"]
         ODE.SplitODEProblem(
             ODE.ODEFunction(
