@@ -241,20 +241,24 @@ steps:
     steps:
 
       - label: ":computer: Single column EDMF Bomex"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_bomex/*"
 
       - label: ":computer: Single column EDMF DYCOMS_RF01"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_dycoms_rf01/*"
 
       - label: ":computer: Single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_trmm/*"
 
       - label: ":computer: Single column EDMF GABLS"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 6hours --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_gabls/*"
+
+      - label: ":computer: Compressible Single column EDMF GABLS"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true"
+        artifact_paths: "compressible_edmf_gabls/*"
 
   - group: "Performance"
     steps:

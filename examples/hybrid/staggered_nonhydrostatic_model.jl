@@ -325,9 +325,9 @@ end
 
 function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
-        (; enable_default_remaining_tendency) = p
         Yₜ .= zero(eltype(Yₜ))
-        if enable_default_remaining_tendency
+        (; enable_anelastic_dycore) = p
+        if !(enable_anelastic_dycore)
             default_remaining_tendency!(Yₜ, Y, p, t)
         end
         additional_tendency!(Yₜ, Y, p, t)

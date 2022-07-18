@@ -108,6 +108,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
         microphysics_model = microphysics_model(parsed_args),
         forcing_type = forcing_type(parsed_args),
         turbconv_model = turbconv_model(FT, parsed_args, namelist),
+        anelastic_dycore = parsed_args["anelastic_dycore"],
     )
 
     return model_spec
