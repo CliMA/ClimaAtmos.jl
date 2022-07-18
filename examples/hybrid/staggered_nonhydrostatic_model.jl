@@ -143,7 +143,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
-        (; ᶜK, ᶜΦ, ᶜts, ᶜp, params, ᶠupwind_product) = p
+        (; ᶜK, ᶜΦ, ᶜts, ᶜp, params, ᶠupwind_product, ᶠupwind_product_moisture) = p
         thermo_params = CAP.thermodynamics_params(params)
         # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
         # allocation because the cache is stored separately from Y, which means that
