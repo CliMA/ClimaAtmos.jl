@@ -103,10 +103,14 @@ Base.broadcastable(x::AbstractForcing) = Ref(x)
 
 
 function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
+    # should this live in the radiation model?
+    idealized_h2o = parsed_args["idealized_h2o"]
+    @assert idealized_h2o in (true, false)
 
     model_spec = (;
         moisture_model = moisture_model(parsed_args),
         energy_form = energy_form(parsed_args),
+        idealized_h2o,
         radiation_model = radiation_model(parsed_args),
         microphysics_model = microphysics_model(parsed_args),
         forcing_type = forcing_type(parsed_args),
