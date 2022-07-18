@@ -171,6 +171,10 @@ function parse_commandline()
         help = "Start date of the simulation"
         arg_type = String
         default = "19790101"
+        "--dt_save_restart"
+        help = "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+        arg_type = String
+        default = "Inf"
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
