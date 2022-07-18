@@ -191,6 +191,10 @@ function parse_commandline()
         help = "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`]"
         arg_type = String
         default = "NoWarp"
+        "--dt_save_restart"
+        help = "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+        arg_type = String
+        default = "Inf"
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

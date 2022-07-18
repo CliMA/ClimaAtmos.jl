@@ -50,6 +50,7 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     end
 
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
+    dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
 
     dss_cb = DEQ.FunctionCallingCallback(dss_callback, func_start = true)
     save_to_disk_callback = if dt_save_to_disk == Inf
@@ -62,13 +63,24 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
             save_positions = (false, false),
         )
     end
+    save_restart_callback = if dt_save_restart == Inf
+        nothing
+    else
+        DEQ.PeriodicCallback(
+            save_restart_func,
+            dt_save_restart;
+            initial_affect = true,
+            save_positions = (false, false),
+        )
+    end
+
     return ODE.CallbackSet(
         dss_cb,
-        save_to_disk_callback,
+        saveto_disk_callback,
+        save_restart_callback,
         additional_callbacks...,
     )
 end
-
 
 condition_every_iter(u, t, integrator) = true
 
@@ -127,6 +139,18 @@ function save_to_disk_func(integrator)
     else
         save_to_disk_func_serial(integrator)
     end
+end
+
+function save_restart_func(integrator)
+    day = floor(Int, integrator.t / (60 * 60 * 24))
+    sec = Int(mod(integrator.t, 3600 * 24))
+    @info "Saving prognostic variables to JLD2 RESTART file on day $day"
+    suffix = integrator.p.simulation.is_distributed ? "_pid$pid.jld2" : ".jld2"
+    restart_dir = joinpath(p.simulation.output_dir, "restart", "day$day.$sec")
+    mkpath(restart_dir)
+    restart_file = joinpath(restart_dir, "day$day.$sec$suffix")
+    jldsave(restart_file; t = integrator.t, Y = integrator.u)
+    return nothing
 end
 
 # TODO: remove closures
