@@ -39,3 +39,13 @@ for k in keys(trials)
     summary[k] = get_summary(trials[k])
 end
 tabulate_summary(summary)
+
+if get(ENV, "BUILDKITE", "") == "true"
+    # Export summary
+    import JSON
+    job_id = parsed_args["job_id"]
+    path = ca_dir
+    open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
+        JSON.print(io, summary)
+    end
+end
