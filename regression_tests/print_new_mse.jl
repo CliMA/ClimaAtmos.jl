@@ -46,7 +46,7 @@ for job_id in keys(computed_mse)
                 "all_best_mse[\"$job_id\"][$(var)] = \"$(computed_mse[job_id][var])\"",
             )
         else
-            self_reference && (computed_mse[job_id][var] .= 0)
+            self_reference && (computed_mse[job_id][var] = 0)
             println(
                 "all_best_mse[\"$job_id\"][$(var)] = $(computed_mse[job_id][var])",
             )
