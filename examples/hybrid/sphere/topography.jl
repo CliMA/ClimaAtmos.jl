@@ -12,14 +12,14 @@ function topography_nowarp(coords)
 end
 
 """
-    topography_dcmip(λ,ϕ)
+    topography_dcmip200(λ,ϕ)
 λ = longitude (degrees)
 ϕ = latitude (degrees)
 Given horizontal coordinates in lon-lat coordinates,
 compute and return the local elevation of the surface
 consistent with the test problem DCMIP-2-0-0.
 """
-function topography_dcmip(coords)
+function topography_dcmip200(coords)
     λ, ϕ = coords.long, coords.lat
     FT = eltype(λ)
     ϕₘ = FT(0) # degrees (equator)
