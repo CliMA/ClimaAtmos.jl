@@ -4,6 +4,23 @@ import ClimaCoreTempestRemap as CCTR
 
 include("self_reference_or_path.jl")
 
+import CCTR: def_space_coord
+function def_space_coord(
+    nc::NCDataset,
+    space::Spaces.ExtrudedFiniteDifferenceSpace{S};
+    type = "dgll",
+) where {S <: Spaces.Staggering}
+    hvar = def_space_coord(nc, space.horizontal_space; type = type)
+    vertical_topology =
+        space.vertical_topology isa
+        ClimaCore.Hypsography.TerrainWarpedIntervalTopology ?
+        space.vertical_topology.topology : space.vertical_topology
+    vvar =
+        def_space_coord(nc, Spaces.FiniteDifferenceSpace{S}(vertical_topology))
+    (hvar..., vvar...)
+end
+
+
 """
     regression_test(;
         job_id,
