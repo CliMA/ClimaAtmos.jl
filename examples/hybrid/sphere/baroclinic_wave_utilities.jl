@@ -424,8 +424,10 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
         ( # ᶜT - ᶜT_equil
             ᶜp / (Y.c.ρ * R_d) - max(
                 T_min,
-                (T_equator - ΔT_y * sin(ᶜφ)^2 - Δθ_z * log(ᶜp / MSLP) * cos(ᶜφ)^2) *
-                ᶜσ^κ_d,
+                (
+                    T_equator - ΔT_y * sin(ᶜφ)^2 -
+                    Δθ_z * log(ᶜp / MSLP) * cos(ᶜφ)^2
+                ) * ᶜσ^κ_d,
             )
         )
 
