@@ -2,6 +2,8 @@
 space_string(::Spaces.FaceExtrudedFiniteDifferenceSpace) = "(Face field)"
 space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
 
+import ClimaCoreTempestRemap: def_space_coord
+
 function def_space_coord(
     nc::NCDataset,
     space::Spaces.ExtrudedFiniteDifferenceSpace{S};
