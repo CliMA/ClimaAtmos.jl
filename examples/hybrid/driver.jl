@@ -222,7 +222,6 @@ include("callbacks.jl")
 callback = get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
-
 integrator = get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
