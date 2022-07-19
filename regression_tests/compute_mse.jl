@@ -4,7 +4,7 @@ import ClimaCoreTempestRemap as CCTR
 
 include("self_reference_or_path.jl")
 
-import CCTR: def_space_coord
+import ClimaCoreTempestRemap: def_space_coord
 function def_space_coord(
     nc::NCDataset,
     space::Spaces.ExtrudedFiniteDifferenceSpace{S};
