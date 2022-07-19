@@ -343,6 +343,90 @@ function remaining_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
+function compute_K!(ᶜK, ᶜuvw)
+    @. ᶜK = norm_sqr(ᶜuvw) / 2
+end
+
+function compute_ᶜuvw!(ᶜuvw, ᶜuₕ, ᶠw)
+    @. ᶜuvw = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+end
+
+function add_div1!(Yₜ, ᶜρ, ᶜuvw)
+    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
+end
+function add_div2!(Yₜ, ᶜρ, ᶜuₕ)
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
+end
+
+function add_div3!(Yₜ, ᶜp, ᶜuvw)
+    @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
+end
+
+function add_div4!(Yₜ, Y, ᶜp, ᶜuₕ)
+    @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
+end
+
+function compute_press!(ᶜp, thermo_params, ᶜts)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+end
+
+function curl1!(ᶜω³, ᶜuₕ)
+    @. ᶜω³ = curlₕ(ᶜuₕ)
+end
+
+function curl2!(ᶠω¹², ᶠw)
+    @. ᶠω¹² = curlₕ(ᶠw)
+end
+
+function curl3!(ᶜω³)
+    ᶜω³ .= Ref(zero(eltype(ᶜω³)))
+end
+
+function curl4!(ᶠω¹², ᶠw)
+    @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
+end
+
+function curl5!(ᶠω¹², ᶜuₕ)
+    @. ᶠω¹² += ᶠcurlᵥ(ᶜuₕ)
+end
+
+function projection_1!(ᶠu¹², ᶜuvw)
+    @. ᶠu¹² = Geometry.project(Geometry.Contravariant12Axis(), ᶠinterp(ᶜuvw))
+end
+
+function projection_2!(ᶠu³, ᶜuₕ, ᶠw)
+    @. ᶠu³ = Geometry.project(
+        Geometry.Contravariant3Axis(),
+        C123(ᶠinterp(ᶜuₕ)) + C123(ᶠw),
+    )
+end
+
+function projection_3!(Yₜ, ᶠω¹², ᶠu³, ᶜf, ᶜω³, ᶜuvw)
+    @. Yₜ.c.uₕ -=
+        ᶜinterp(ᶠω¹² × ᶠu³) +
+        (ᶜf + ᶜω³) × (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw))
+end
+
+function point_1!(Yₜ, ᶜp, ᶜρ, ᶜK, ᶜΦ)
+    @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+end
+
+function point_2!(Yₜ, ᶜp, ᶜρ, ᶜK, ᶜΦ)
+    @. Yₜ.c.uₕ -= Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+end
+
+function cross_1!(Yₜ, ᶠω¹², ᶠu¹²)
+    @. Yₜ.f.w -= ᶠω¹² × ᶠu¹²
+end
+
+function tracer_1!(ᶜ𝕋ₜ, ᶜ𝕋, ᶜuvw)
+    @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
+end
+
+function tracer_2!(ᶜ𝕋ₜ, ᶜ𝕋, ᶜuₕ)
+    @. ᶜ𝕋ₜ -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋 * ᶜuₕ))
+end
+
 function default_remaining_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
@@ -351,77 +435,49 @@ function default_remaining_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
     thermo_params = CAP.thermodynamics_params(params)
 
-    @. ᶜuvw = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
-    @. ᶜK = norm_sqr(ᶜuvw) / 2
+    compute_ᶜuvw!(ᶜuvw, ᶜuₕ, ᶠw)
+    compute_K!(ᶜK, ᶜuvw)
 
     # Mass conservation
 
-    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
+    add_div1!(Yₜ, ᶜρ, ᶜuvw)
+    add_div2!(Yₜ, ᶜρ, ᶜuₕ)
 
     # Energy conservation
 
     thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
-        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
-    elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
-    elseif :ρe_int in propertynames(Y.c)
-        if point_type <: Geometry.Abstract3DPoint
-            @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
-                dot(gradₕ(ᶜp), Geometry.Contravariant12Vector(ᶜuₕ))
-        else
-            @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
-                dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
-        end
-        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
-        # or, equivalently,
-        # @. Yₜ.c.ρe_int -= divₕ(Y.c.ρe_int * ᶜuvw) + ᶜp * divₕ(ᶜuvw)
-        # @. Yₜ.c.ρe_int -=
-        #     ᶜdivᵥ(ᶠinterp(Y.c.ρe_int * ᶜuₕ)) + ᶜp * ᶜdivᵥ(ᶠinterp(ᶜuₕ))
-    end
-
+    compute_press!(ᶜp, thermo_params, ᶜts)
+    add_div3!(Yₜ, ᶜp, ᶜuvw)
+    add_div4!(Yₜ, Y, ᶜp, ᶜuₕ)
     # Momentum conservation
 
     if point_type <: Geometry.Abstract3DPoint
-        @. ᶜω³ = curlₕ(ᶜuₕ)
-        @. ᶠω¹² = curlₕ(ᶠw)
+        curl1!(ᶜω³, ᶜuₕ)
+        curl2!(ᶠω¹², ᶠw)
     elseif point_type <: Geometry.Abstract2DPoint
-        ᶜω³ .= Ref(zero(eltype(ᶜω³)))
-        @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
+        curl3!(ᶜω³)
+        curl4!(ᶠω¹², ᶠw)
     end
-    @. ᶠω¹² += ᶠcurlᵥ(ᶜuₕ)
+    curl5!(ᶠω¹², ᶜuₕ)
+    projection_1!(ᶠu¹², ᶜuvw)
+    projection_2!(ᶠu³, ᶜuₕ, ᶠw)
+    projection_3!(Yₜ, ᶠω¹², ᶠu³, ᶜf, ᶜω³, ᶜuvw)
 
-    @. ᶠu¹² = Geometry.project(Geometry.Contravariant12Axis(), ᶠinterp(ᶜuvw))
-    @. ᶠu³ = Geometry.project(
-        Geometry.Contravariant3Axis(),
-        C123(ᶠinterp(ᶜuₕ)) + C123(ᶠw),
-    )
-
-    @. Yₜ.c.uₕ -=
-        ᶜinterp(ᶠω¹² × ᶠu³) +
-        (ᶜf + ᶜω³) × (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw))
     if point_type <: Geometry.Abstract3DPoint
-        @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+        point_1!(Yₜ, ᶜp, ᶜρ, ᶜK, ᶜΦ)
     elseif point_type <: Geometry.Abstract2DPoint
-        @. Yₜ.c.uₕ -=
-            Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+        point_2!(Yₜ, ᶜp, ᶜρ, ᶜK, ᶜΦ)
     end
 
-    @. Yₜ.f.w -= ᶠω¹² × ᶠu¹²
+    cross_1!(Yₜ, ᶠω¹², ᶠu¹²)
 
     # Tracer conservation
 
     for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
         ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
-        @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
-        @. ᶜ𝕋ₜ -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋 * ᶜuₕ))
+        tracer_1!(ᶜ𝕋ₜ, ᶜ𝕋, ᶜuvw)
+        tracer_2!(ᶜ𝕋ₜ, ᶜ𝕋, ᶜuₕ)
     end
 end
 
