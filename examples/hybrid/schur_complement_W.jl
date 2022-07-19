@@ -10,8 +10,13 @@ const apply = Operators.ApplyStencil()
 # variables with 𝕋.
 is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρe_int)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
-is_tracer_var(symbol) =
-    !(symbol == :ρ || is_energy_var(symbol) || is_momentum_var(symbol))
+is_edmf_var(symbol) = symbol in (:turbconv,)
+is_tracer_var(symbol) = !(
+    symbol == :ρ ||
+    is_energy_var(symbol) ||
+    is_momentum_var(symbol) ||
+    is_edmf_var(symbol)
+)
 
 struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
     # whether this struct is used to compute Wfact_t or Wfact
@@ -44,7 +49,6 @@ function SchurComplementW(Y, transform, flags, test = false)
     @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
     @assert length(filter(is_momentum_var, propertynames(Y.c))) == 1
     @assert length(filter(is_momentum_var, propertynames(Y.f))) == 1
-    @assert length(propertynames(Y.f)) == 1
 
     FT = eltype(Y)
     dtγ_ref = Ref(zero(FT))
@@ -238,6 +242,16 @@ function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
                     ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
                     @. xᶜ𝕋[colidx] =
                         -bᶜ𝕋[colidx] + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
+                end
+                for var_name in filter(is_edmf_var, propertynames(x.c))
+                    xᶜ𝕋 = getproperty(x.c, var_name)
+                    bᶜ𝕋 = getproperty(b.c, var_name)
+                    @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
+                end
+                for var_name in filter(is_edmf_var, propertynames(x.f))
+                    xᶜ𝕋 = getproperty(x.f, var_name)
+                    bᶜ𝕋 = getproperty(b.f, var_name)
+                    @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
                 end
             end
             # Verify correctness (if needed)
