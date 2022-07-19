@@ -94,11 +94,10 @@ perf_hist_paths = performance_history_paths()
 summaries = load_old_summaries(perf_hist_paths)
 summaries["This PR"] = combine_PRs_performance_benchmarks(ca_dir)
 
-function get_metric(summaries, commit, job_id, func, metric, has_func)
-    # If function names have changed, then this will break, so lets
-    # gracefully handle this case and throw a warning later.
-    return has_func[func * commit] ? summaries[commit][job_id][func][metric] : 0
-end
+# If function names have changed, then this will break, so lets
+# gracefully handle this case and throw a warning later.
+get_metric(summaries, commit, job_id, func, metric, has_func) =
+    has_func[func * commit] ? summaries[commit][job_id][func][metric] : "NA"
 
 function metric_name(metric)
     metric_name_map =
@@ -112,44 +111,10 @@ end
 
 import PrettyTables
 
-function tabulate_summaries(summaries, job_id, metric_tup)
-    # These functions should match with those in
-    # the `trials` `Dict` in `perf/benchmark.jl`.
-    funcs = [
-        "Wfact",
-        "linsolve",
-        "implicit_tendency!",
-        "remaining_tendency!",
-        "default_remaining_tendency!",
-        "hyperdiffusion_tendency!",
-        "step!",
-    ]
+function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
     metric = first(metric_tup)
     metric_val = last(metric_tup)
     commits = collect(keys(summaries))
-    has_func = OrderedCollections.OrderedDict()
-
-    for commit in commits
-        for func in funcs
-            has_func[func * commit] = haskey(summaries[commit][job_id], func)
-        end
-    end
-
-    if !all(values(has_func))
-        # We can't just throw an error without tracking function
-        # names, which seems complicated and brittle. Instead, we
-        # warn that function names have changed. This means that
-        # we'll have gaps in our perfromance reports if we don't
-        # keep function names up to date, but fixing this should
-        # be trivial and smooth since nothing other than fixing
-        # the function names is required.
-        @show has_func
-        @warn string(
-            "Perf metrics missing function keys.",
-            "It seems that function names have been changed,",
-            "and the performance script needs updated.",
-        )
-    end
 
     data_history = map(commits) do commit
         map(funcs) do func
@@ -219,9 +184,56 @@ metric_tups = [
     ("t_mean", "t_mean_val"),
 ]
 
+# These functions should match with those in
+# the `trials` `Dict` in `perf/benchmark.jl`.
+funcs = [
+    "Wfact",
+    "linsolve",
+    "implicit_tendency!",
+    "remaining_tendency!",
+    "default_remaining_tendency!",
+    "hyperdiffusion_tendency!",
+    "step!",
+]
+
+function compute_has_func(summaries, funcs)
+    has_func = OrderedCollections.OrderedDict()
+    for job_id in collect(keys(summaries["This PR"]))
+        for commit in collect(keys(summaries))
+            for func in funcs
+                has_func[func * commit] =
+                    haskey(summaries[commit][job_id], func)
+            end
+        end
+    end
+
+    if !all(values(has_func))
+        # We can't just throw an error without tracking function
+        # names, which seems complicated and brittle. Instead, we
+        # warn that function names have changed. This means that
+        # we'll have gaps in our perfromance reports if we don't
+        # keep function names up to date, but fixing this should
+        # be trivial and smooth since nothing other than fixing
+        # the function names is required.
+        @info "Missing functions:"
+        for key in keys(has_func)
+            has_func[key] && continue
+            @info "   has_func[$key] = $(has_func[key])"
+        end
+        @warn string(
+            "Perf metrics missing function keys.",
+            "It seems that function names have been changed,",
+            "and the performance script needs updated.",
+        )
+    end
+    return has_func
+end
+
+has_func = compute_has_func(summaries, funcs)
+
 for job_id in collect(keys(summaries["This PR"]))
     @info "##################################### Perf summary for job `$job_id`"
     for metric_tup in metric_tups
-        tabulate_summaries(summaries, job_id, metric_tup)
+        tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
     end
 end
