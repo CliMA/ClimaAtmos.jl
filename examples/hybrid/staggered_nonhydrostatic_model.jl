@@ -80,17 +80,6 @@ get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
 
 function default_cache(Y, params, spaces, numerics, simulation)
     (; upwinding_mode) = numerics
-
-    default_remaining_tendency! = if enable_default_remaining_tendencies
-        if :ρe_tot in propertynames(Y.c)
-            default_remaining_tendency_special!
-        else
-            default_remaining_tendency_generic!
-        end
-    else
-        (Yₜ, Y, p, t) -> nothing
-    end
-
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     z_sfc = Fields.level(ᶠcoord.z, half)
@@ -119,7 +108,6 @@ function default_cache(Y, params, spaces, numerics, simulation)
     )
     return (;
         simulation,
-        default_remaining_tendency!,
         spaces,
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
