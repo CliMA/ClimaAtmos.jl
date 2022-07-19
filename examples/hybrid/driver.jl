@@ -147,7 +147,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             )
         ),
         (; Δt = dt),
-        default_remaining_tendency!,
+        (; default_remaining_tendency!),
         !isnothing(turbconv_model) ?
         (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
         (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
