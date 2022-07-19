@@ -70,7 +70,8 @@ function load_old_summaries(paths)
         file = joinpath(path, "perf_benchmarks.json")
         isfile(file) || continue
         jfile = JSON.parsefile(file; dicttype = OrderedCollections.OrderedDict)
-        summaries[path] = jfile
+        commit = last(split(path, "climaatmos-main/"))
+        summaries[commit] = jfile
     end
     return summaries
 end
