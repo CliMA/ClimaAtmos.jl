@@ -1,7 +1,11 @@
 import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
+import ClimaCore as CC
 import OrdinaryDiffEq as ODE
+const ca_dir = pkgdir(ClimaAtmos)
+import ClimaAtmos.Parameters as CAP
+include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
 
 function get_callbacks(parsed_args, simulation, model_spec, params)
     FT = eltype(params)
@@ -12,6 +16,13 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
         affect_filter!;
         save_positions = (false, false),
     )
+    tc_callbacks = ODE.DiscreteCallback(
+        condition_every_iter,
+        turb_conv_affect_filter!;
+        save_positions = (false, false),
+    )
+
+    additional_callbacks = ()
 
     additional_callbacks = if !isnothing(model_spec.radiation_model)
         # TODO: better if-else criteria?
@@ -27,8 +38,12 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         ()
     end
+
+    if !isnothing(model_spec.turbconv_model)
+        additional_callbacks = (additional_callbacks..., tc_callbacks)
+    end
     if model_spec.moisture_model isa EquilMoistModel &&
-       parsed_args["apply_moisture_filter"]
+        parsed_args["apply_moisture_filter"]
         additional_callbacks = (additional_callbacks..., callback_filters)
     end
 
@@ -80,6 +95,47 @@ function affect_filter!(integrator)
     ODE.u_modified!(integrator, false)
 end
 
+function turb_conv_affect_filter!(integrator)
+    (; edmf_cache, Δt) = p
+    (;
+        edmf,
+        param_set,
+        aux,
+        case,
+        surf_params,
+    ) = edmf_cache
+    t = integrator.t
+    Y = integrator.u
+    tc_params = CAP.turbconv_params(param_set)
+
+    for inds in TC.iterate_columns(Y.c)
+        # passing Y twice and I am not sure how to pass Yₜ
+        state = tc_column_state(Y, aux, nothing, inds...)
+        grid = TC.Grid(state)
+        surf = get_surface(surf_params, grid, state, t, tc_params)
+        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+    end
+
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional `∑tendencies!` call, which is required
+    # to support supplying a continuous representation of the
+    # solution.
+    ODE.u_modified!(integrator, false)
+end
+
+# this is copied from TC Utils for now
+function tc_column_state(prog, aux, tendencies, inds...)
+    prog_cent_column = CC.column(prog.c, inds...)
+    prog_face_column = CC.column(prog.f, inds...)
+    aux_cent_column = CC.column(aux.cent, inds...)
+    aux_face_column = CC.column(aux.face, inds...)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+
+    return TC.State(prog_column, aux_column, nothing)
+end
 
 function save_to_disk_func(integrator)
     if integrator.p.simulation.is_distributed

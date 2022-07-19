@@ -113,25 +113,25 @@ function affect_io!(integrator)
     ODE.u_modified!(integrator, false) # We're legitamately not mutating `u` (the state vector)
 end
 
-function affect_filter!(integrator)
-    UnPack.@unpack edmf, param_set, aux, case, surf_params = integrator.p
-    t = integrator.t
-    prog = integrator.u
-    prog = integrator.u
+# function affect_filter!(integrator)
+#     UnPack.@unpack edmf, param_set, aux, case, surf_params = integrator.p
+#     t = integrator.t
+#     prog = integrator.u
+#     prog = integrator.u
 
-    for inds in TC.iterate_columns(prog.cent)
-        state = TC.column_prog_aux(prog, aux, inds...)
-        grid = TC.Grid(state)
-        surf = get_surface(surf_params, grid, state, t, param_set)
-        TC.affect_filter!(edmf, grid, state, param_set, surf, t)
-    end
+#     for inds in TC.iterate_columns(prog.cent)
+#         state = TC.column_prog_aux(prog, aux, inds...)
+#         grid = TC.Grid(state)
+#         surf = get_surface(surf_params, grid, state, t, param_set)
+#         TC.affect_filter!(edmf, grid, state, param_set, surf, t)
+#     end
 
-    # We're lying to OrdinaryDiffEq.jl, in order to avoid
-    # paying for an additional `∑tendencies!` call, which is required
-    # to support supplying a continuous representation of the
-    # solution.
-    ODE.u_modified!(integrator, false)
-end
+#     # We're lying to OrdinaryDiffEq.jl, in order to avoid
+#     # paying for an additional `∑tendencies!` call, which is required
+#     # to support supplying a continuous representation of the
+#     # solution.
+#     ODE.u_modified!(integrator, false)
+# end
 
 function adaptive_dt!(integrator)
     UnPack.@unpack edmf, TS, dt_min = integrator.p
