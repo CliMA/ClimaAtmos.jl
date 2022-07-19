@@ -1,7 +1,11 @@
 import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
+import ClimaCore as CC
 import OrdinaryDiffEq as ODE
+const ca_dir = pkgdir(ClimaAtmos)
+import ClimaAtmos.Parameters as CAP
+include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
 
 function get_callbacks(parsed_args, simulation, model_spec, params)
     FT = eltype(params)
@@ -36,7 +40,7 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     end
 
     if !isnothing(model_spec.turbconv_model)
-        additional_callbacks = (additional_callbacks..., tc_callbacks...)
+        additional_callbacks = (additional_callbacks..., tc_callbacks)
     end
     if model_spec.moisture_model isa EquilMoistModel &&
         parsed_args["apply_moisture_filter"]
@@ -92,7 +96,6 @@ function affect_filter!(integrator)
 end
 
 function turb_conv_affect_filter!(integrator)
-    # UnPack.@unpack edmf, param_set, aux, case, surf_params = integrator.p
     (; edmf_cache, Δt) = p
     (;
         edmf,
@@ -101,15 +104,16 @@ function turb_conv_affect_filter!(integrator)
         case,
         surf_params,
     ) = edmf_cache
-    println("turb_conv_affect_filter")
     t = integrator.t
-    prog = integrator.u
+    Y = integrator.u
+    tc_params = CAP.turbconv_params(param_set)
 
-    for inds in TC.iterate_columns(prog.cent)
-        state = TC.column_prog_aux(prog, aux, inds...)
+    for inds in TC.iterate_columns(Y.c)
+        # passing Y twice and I am not sure how to pass Yₜ
+        state = tc_column_state(Y, aux, nothing, inds...)
         grid = TC.Grid(state)
-        surf = get_surface(surf_params, grid, state, t, param_set)
-        TC.affect_filter!(edmf, grid, state, param_set, surf, t)
+        surf = get_surface(surf_params, grid, state, t, tc_params)
+        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
     end
 
     # We're lying to OrdinaryDiffEq.jl, in order to avoid
@@ -117,6 +121,20 @@ function turb_conv_affect_filter!(integrator)
     # to support supplying a continuous representation of the
     # solution.
     ODE.u_modified!(integrator, false)
+end
+
+# this is copied from TC Utils for now
+function tc_column_state(prog, aux, tendencies, inds...)
+    prog_cent_column = CC.column(prog.c, inds...)
+    prog_face_column = CC.column(prog.f, inds...)
+    aux_cent_column = CC.column(aux.cent, inds...)
+    aux_face_column = CC.column(aux.face, inds...)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+
+    return TC.State(prog_column, aux_column, nothing)
 end
 
 function save_to_disk_func(integrator)
