@@ -333,9 +333,10 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
-        ᶠw_phy = Geometry.WVector.(ᶠw)
-        ᶜw_phy = ᶜinterp.(ᶠw_phy)
+        ᶜuvw_phy = @. C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+        ᶜuₕ_phy = @. Geometry.project(Geometry.UVAxis(), ᶜuvw_phy)
+        ᶜw_phy = @. Geometry.project(Geometry.WAxis(), ᶜuvw_phy)
+        ᶠw_phy = ᶠinterp.(ᶜw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
