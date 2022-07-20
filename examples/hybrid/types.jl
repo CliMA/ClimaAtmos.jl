@@ -29,6 +29,10 @@ struct InternalEnergy <: AbstractEnergyFormulation end
 function energy_form(parsed_args)
     energy_name = parse_arg(parsed_args, "energy_name", "rhoe")
     @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")
+    vert_diff = parsed_args["vert_diff"]
+    if vert_diff
+        @assert energy_name == "rhoe"
+    end
     return if energy_name == "rhoe"
         TotalEnergy()
     elseif energy_name == "rhoe_int"
@@ -37,7 +41,6 @@ function energy_form(parsed_args)
         PotentialTemperature()
     end
 end
-
 
 function radiation_model(parsed_args)
     radiation_name = parsed_args["rad"]
