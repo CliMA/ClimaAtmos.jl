@@ -109,6 +109,18 @@ end
 ##### Tables approach
 #####
 
+compute_percent_change(this_PR::Number, main::Number) =
+    (this_PR - main) / main * 100
+
+compute_percent_change(this_PR::Number, main::String) =
+    (@assert main == "NA"; "NA")
+
+compute_percent_change(this_PR::String, main::Number) =
+    (@assert this_PR == "NA"; "NA")
+
+compute_percent_change(this_PR::String, main::String) =
+    (@assert this_PR == "NA"; @assert main == "NA"; "NA")
+
 import PrettyTables
 
 function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
@@ -136,7 +148,7 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
         this_PR = map(funcs) do func
             get_metric(summaries, commits[end], job_id, func, metric_val, has_func)
         end
-        percent_change = (this_PR .- main) ./ main .* 100
+        percent_change = compute_percent_change.(this_PR, main)
     else
         percent_change = map(funcs) do func
             "Insufficient data for percent change"
