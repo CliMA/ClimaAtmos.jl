@@ -198,19 +198,19 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:1st order upwind, Stretching = none)"
-      command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture first_order"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture first_order --z_stretch false"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:3rd order upwind, Stretching = none)"
-      command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture third_order"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_thirdorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture third_order --z_stretch false"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:1st order upwind, Stretching = genexp)"
-      command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture first_order --z_stretch true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder_stretched --regression_test true --dt 300secs --t_end 6days --upwinding_moisture first_order --z_stretch true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:3rd order upwind, Stretching = genexp)"
-      command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture third_order --z_stretch true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_thirdorder_stretched --regression_test true --dt 300secs --t_end 6days --upwinding_moisture third_order --z_stretch true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_tot)"
