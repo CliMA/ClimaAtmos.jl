@@ -198,19 +198,19 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:1st order upwind, Stretching = none)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture first_order --z_stretch false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder --regression_test true --dt 300secs --t_end 10days --upwinding_moisture first_order --z_stretch false"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_firstorder/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:3rd order upwind, Stretching = none)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_thirdorder --regression_test true --dt 300secs --t_end 6days --upwinding_moisture third_order --z_stretch false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_thirdorder --regression_test true --dt 300secs --t_end 10days --upwinding_moisture third_order --z_stretch false"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_thirdorder/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:1st order upwind, Stretching = genexp)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder_stretched --regression_test true --dt 300secs --t_end 6days --upwinding_moisture first_order --z_stretch true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_firstorder_stretched --regression_test true --dt 300secs --t_end 10days --upwinding_moisture first_order --z_stretch true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_firstorder_stretched/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:3rd order upwind, Stretching = genexp)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_thirdorder_stretched --regression_test true --dt 300secs --t_end 6days --upwinding_moisture third_order --z_stretch true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_thirdorder_stretched --regression_test true --dt 300secs --t_end 10days --upwinding_moisture third_order --z_stretch true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_thirdorder_stretched/*"
 
       - label: ":computer: held suarez (ρe_tot)"
@@ -222,23 +222,23 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 3days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 6days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
       
       - label: ":computer: held suarez (ρe_tot) equilmoist (3rd order upwinding) and stretched vertical mesh"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_thirdorder_stretched --regression_test true --dt 200secs --t_end 3days --upwinding none --upwinding_moisture third_order"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_thirdorder_stretched --regression_test true --dt 200secs --t_end 6days --upwinding none --upwinding_moisture third_order"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_thirdorder_stretched/*"
       
       - label: ":computer: held suarez (ρe_tot) equilmoist (1st order upwinding) and stretched vertical mesh" 
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_firstorder_stretched --regression_test true --dt 200secs --t_end 3days --upwinding none --upwinding_moisture first_order"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_firstorder_stretched --regression_test true --dt 200secs --t_end 6days --upwinding none --upwinding_moisture first_order"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_firstorder_stretched/*"
       
       - label: ":computer: held suarez (ρe_tot) equilmoist (3rd order upwinding) and uniform vertical mesh"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_thirdorder_uniform --regression_test true --dt 200secs --t_end 3days --upwinding none --upwinding_moisture third_order --z_stretch false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_thirdorder_uniform --regression_test true --dt 200secs --t_end 6days --upwinding none --upwinding_moisture third_order --z_stretch false"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_thirdorder_uniform/*"
       
       - label: ":computer: held suarez (ρe_tot) equilmoist (1st order upwinding) and uniform vertical mesh" 
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_firstorder_uniform --regression_test true --dt 200secs --t_end 3days --upwinding none --upwinding_moisture first_order --z_stretch false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_firstorder_uniform --regression_test true --dt 200secs --t_end 6days --upwinding none --upwinding_moisture first_order --z_stretch false"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_firstorder_uniform/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
