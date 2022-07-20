@@ -16,6 +16,7 @@ idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
+surface_scheme = parsed_args["surface_scheme"]
 coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
@@ -33,6 +34,7 @@ t_end = FT(time_to_seconds(parsed_args["t_end"]))
 @assert idealized_h2o in (true, false)
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
+@assert surface_scheme in ("bulk", "monin_obukhov")
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
 @assert rayleigh_sponge in (true, false)
@@ -132,8 +134,12 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             idealized_clouds,
         ),
         vert_diff ?
-        vertical_diffusion_boundary_layer_cache(Y; diffuse_momentum, coupled) :
-        NamedTuple(),
+        vertical_diffusion_boundary_layer_cache(
+            Y;
+            surface_scheme,
+            diffuse_momentum,
+            coupled,
+        ) : NamedTuple(),
         (;
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,

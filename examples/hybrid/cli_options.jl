@@ -40,6 +40,10 @@ function parse_commandline()
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--surface_scheme"
+        help = "Surface flux scheme [`bulk` (default), `monin_obukhov`]"
+        arg_type = String
+        default = "bulk"
         "--coupled"
         help = "Coupled simulation [`false` (default), `true`]"
         arg_type = Bool
