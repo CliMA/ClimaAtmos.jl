@@ -326,11 +326,10 @@ end
 function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        (; enable_anelastic_dycore) = p
-        if !(enable_anelastic_dycore)
-            default_remaining_tendency!(Yₜ, Y, p, t)
+        p.default_remaining_tendency!(Yₜ, Y, p, t)
+        @nvtx "additional_tendency!" color = colorant"orange" begin
+            additional_tendency!(Yₜ, Y, p, t)
         end
-        additional_tendency!(Yₜ, Y, p, t)
         @nvtx "dss_remaining_tendency" color = colorant"blue" begin
             Spaces.weighted_dss_start!(Yₜ.c, p.ghost_buffer.c)
             Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
@@ -343,7 +342,101 @@ function remaining_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
-function default_remaining_tendency!(Yₜ, Y, p, t)
+function default_remaining_tendency_special!(Yₜ, Y, p, t)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, params) = p
+    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
+    thermo_params = CAP.thermodynamics_params(params)
+
+    # precomputed quantities
+    @nvtx "precomputed quantities" color = colorant"orange" begin
+        Fields.bycolumn(axes(Y.c)) do colidx
+            @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
+            @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
+            # Energy conservation
+            thermo_state!(
+                ᶜts[colidx],
+                Y.c[colidx],
+                params,
+                ᶜinterp,
+                ᶜK[colidx],
+                Y.f.w[colidx],
+            )
+            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            @. ᶠu¹²[colidx] = Geometry.project(
+                Geometry.Contravariant12Axis(),
+                ᶠinterp(ᶜuvw[colidx]),
+            )
+            @. ᶠu³[colidx] = Geometry.project(
+                Geometry.Contravariant3Axis(),
+                C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
+            )
+        end
+    end
+
+
+    ### horizontal
+    @nvtx "horizontal" color = colorant"orange" begin
+        # Mass conservation
+        @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
+
+        # Energy conservation
+        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
+
+
+        if point_type <: Geometry.Abstract3DPoint
+            @. ᶜω³ = curlₕ(ᶜuₕ)
+            @. ᶠω¹² = curlₕ(ᶠw)
+        elseif point_type <: Geometry.Abstract2DPoint
+            ᶜω³ .= Ref(zero(eltype(ᶜω³)))
+            @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
+        end
+        if point_type <: Geometry.Abstract3DPoint
+            @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+        elseif point_type <: Geometry.Abstract2DPoint
+            @. Yₜ.c.uₕ -=
+                Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+        end
+
+        for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+            ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+            ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+            @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
+        end
+    end
+
+    ### vertical
+    @nvtx "vertical" color = colorant"orange" begin
+        Fields.bycolumn(axes(Y.c)) do colidx
+
+            # Mass conservation
+            @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
+
+            # Energy conservation
+            @. Yₜ.c.ρe_tot[colidx] -=
+                ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
+
+            # Momentum conservation
+            @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+                (ᶜf[colidx] + ᶜω³[colidx]) ×
+                (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
+            @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx]
+
+            # Tracer conservation
+
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+                @. ᶜ𝕋ₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋[colidx] * ᶜuₕ[colidx]))
+            end
+        end
+    end
+end
+function default_remaining_tendency_generic!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
