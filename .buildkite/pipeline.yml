@@ -190,11 +190,11 @@ steps:
     steps:
 
       - label: ":computer: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --regression_test true --t_end 10days"
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 300secs --t_end 6days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 300secs --t_end 10days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist (Moisture:1st order upwind, Stretching = none)"
