@@ -474,7 +474,7 @@ struct EDMFModel{
     set_src_seed::Bool
     H_up_min::FT # minimum updraft top to avoid zero division in pressure drag and turb-entr
 end
-function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
+function EDMFModel(::Type{FT}, namelist, precip_model, parsed_args) where {FT}
 
     # Set the number of updrafts (1)
     n_updrafts = parse_namelist(
@@ -517,21 +517,10 @@ function EDMFModel(::Type{FT}, namelist, precip_model) where {FT}
         default = 1e-5,
     )
 
-    compressibility_model_name = parse_namelist(
-        namelist,
-        "thermodynamics",
-        "compressibility_model";
-        default = "anelastic",
-    )
-
-    compressibility_model = if compressibility_model_name == "anelastic"
+    compressibility_model = if parsed_args["anelastic_dycore"]
         AnelasticFluid()
-    elseif moisture_model_name == "compressible"
-        CompressibleFluid()
     else
-        error(
-            "Something went wrong. Invalid compressibility model: '$compressibility_model_name'",
-        )
+        CompressibleFluid()
     end
 
     moisture_model_name = parse_namelist(

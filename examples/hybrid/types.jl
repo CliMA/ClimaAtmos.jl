@@ -90,7 +90,7 @@ function turbconv_model(FT, parsed_args, namelist)
     precip_model = nothing
     @assert turbconv in (nothing, "edmf")
     return if turbconv == "edmf"
-        TC.EDMFModel(FT, namelist, precip_model)
+        TC.EDMFModel(FT, namelist, precip_model, parsed_args)
     else
         nothing
     end

@@ -93,11 +93,11 @@ all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0
 all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0
 #
 all_best_mse["compressible_edmf_gabls"] = OrderedCollections.OrderedDict()
-all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 0
-all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 0
-all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0
-all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0
-all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0
+all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 1.6390613051800642e-6
+all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 0.0031630681326508666
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.01389681637681255
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0.05172358041815495
+all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0.0405813343865931
 #
 #! format: on
 #################################

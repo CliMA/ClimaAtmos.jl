@@ -158,7 +158,6 @@ function default_namelist(
 
     namelist_defaults["thermodynamics"] = Dict()
     namelist_defaults["thermodynamics"]["moisture_model"] = "equilibrium" #"nonequilibrium"
-    namelist_defaults["thermodynamics"]["compressibility_model"] = "anelastic" #"anelastic" or "compressible"
     namelist_defaults["thermodynamics"]["thermo_covariance_model"] = "diagnostic" #"prognostic" or "diagnostic"
     namelist_defaults["thermodynamics"]["diagnostic_covar_limiter"] = 1e-3 # this controls the magnitude of the spike in covariance
     namelist_defaults["thermodynamics"]["sgs"] = "mean" # "quadrature" or "mean"
