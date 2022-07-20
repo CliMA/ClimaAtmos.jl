@@ -31,6 +31,9 @@ if haskey(ENV, "BUILDKITE_COMMIT") && haskey(ENV, "BUILDKITE_BRANCH")
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl")
         ref_counter_file_main = joinpath(path, "ref_counter.jl")
         mv(ref_counter_file_PR, ref_counter_file_main; force = true)
+        perf_benchmarks_PR = joinpath(dirname(@__DIR__), "perf_benchmarks.json")
+        perf_benchmarks_main = joinpath(path, "perf_benchmarks.json")
+        mv(perf_benchmarks_PR, perf_benchmarks_main; force = true)
         @info "readdir(): $(readdir(path))"
     end
 else

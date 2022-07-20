@@ -29,6 +29,10 @@ struct InternalEnergy <: AbstractEnergyFormulation end
 function energy_form(parsed_args)
     energy_name = parse_arg(parsed_args, "energy_name", "rhoe")
     @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")
+    vert_diff = parsed_args["vert_diff"]
+    if vert_diff
+        @assert energy_name == "rhoe"
+    end
     return if energy_name == "rhoe"
         TotalEnergy()
     elseif energy_name == "rhoe_int"
@@ -37,7 +41,6 @@ function energy_form(parsed_args)
         PotentialTemperature()
     end
 end
-
 
 function radiation_model(parsed_args)
     radiation_name = parsed_args["rad"]
@@ -108,6 +111,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
         microphysics_model = microphysics_model(parsed_args),
         forcing_type = forcing_type(parsed_args),
         turbconv_model = turbconv_model(FT, parsed_args, namelist),
+        anelastic_dycore = parsed_args["anelastic_dycore"],
     )
 
     return model_spec
@@ -313,6 +317,12 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
     show_progress_bar = isinteractive()
     additional_solver_kwargs = () # e.g., abstol and reltol
+
+    if :ρe_tot in propertynames(Y.c)
+        implicit_tendency! = implicit_tendency_special!
+    else
+        implicit_tendency! = implicit_tendency_generic!
+    end
 
     problem = if parsed_args["split_ode"]
         ODE.SplitODEProblem(

@@ -9,10 +9,12 @@ import BenchmarkTools
 get_summary(trial) = (;
     # Using some BenchmarkTools internals :/
     mem = BenchmarkTools.prettymemory(trial.memory),
+    mem_val = trial.memory,
     nalloc = trial.allocs,
     t_min = BenchmarkTools.prettytime(minimum(trial.times)),
     t_max = BenchmarkTools.prettytime(maximum(trial.times)),
     t_mean = BenchmarkTools.prettytime(StatsBase.mean(trial.times)),
+    t_mean_val = StatsBase.mean(trial.times),
     t_med = BenchmarkTools.prettytime(StatsBase.median(trial.times)),
     n_samples = length(trial),
 )

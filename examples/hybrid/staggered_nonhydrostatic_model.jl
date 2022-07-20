@@ -136,7 +136,107 @@ function default_cache(Y, params, spaces, numerics, simulation)
     )
 end
 
-function implicit_tendency!(Yₜ, Y, p, t)
+# Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
+# allocation because the cache is stored separately from Y, which means that
+# similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
+function implicit_cache_vars(
+    Y::Fields.FieldVector{T},
+    p,
+) where {T <: AbstractFloat}
+    (; ᶜK, ᶜts, ᶜp) = p
+    return (; ᶜK, ᶜts, ᶜp)
+end
+function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
+    ᶜρ = Y.c.ρ
+    ᶜK = similar(ᶜρ)
+    ᶜts = similar(ᶜρ, eltype(p.ts).name.wrapper{eltype(ᶜρ)})
+    ᶜp = similar(ᶜρ)
+    return (; ᶜK, ᶜts, ᶜp)
+end
+
+function implicit_tendency_special!(Yₜ, Y, p, t)
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜΦ, params, ᶠupwind_product) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
+    # allocation because the cache is stored separately from Y, which means that
+    # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
+    (; ᶜK, ᶜts, ᶜp) = implicit_cache_vars(Y, p)
+
+    ref_thermo_params = Ref(thermo_params)
+    ref_zuₕ = Ref(zero(eltype(Yₜ.c.uₕ)))
+
+    @nvtx "implicit tendency special" color = colorant"yellow" begin
+        Fields.bycolumn(axes(Y.c)) do colidx
+
+            @. ᶜK[colidx] =
+                norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+
+            @. Yₜ.c.ρ[colidx] = -(ᶜdivᵥ(ᶠinterp(ᶜρ[colidx]) * ᶠw[colidx]))
+
+            thermo_state!(
+                ᶜts[colidx],
+                Y.c[colidx],
+                params,
+                ᶜinterp,
+                ᶜK[colidx],
+                Y.f.w[colidx],
+            )
+            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
+            if isnothing(ᶠupwind_product)
+                @. Yₜ.c.ρe_tot[colidx] = -(ᶜdivᵥ(
+                    ᶠinterp(Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶠw[colidx],
+                ))
+            else
+                @. Yₜ.c.ρe_tot[colidx] = -(ᶜdivᵥ(
+                    ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product(
+                        ᶠw[colidx],
+                        (Y.c.ρe_tot[colidx] + ᶜp[colidx]) / Y.c.ρ[colidx],
+                    ),
+                ))
+            end
+
+            # TODO: Add flux correction to the Jacobian
+            # @. Yₜ.c.ρ += ᶜFC(ᶠw, ᶜρ)
+            # if :ρθ in propertynames(Y.c)
+            #     @. Yₜ.c.ρθ += ᶜFC(ᶠw, ᶜρθ)
+            # elseif :ρe_tot in propertynames(Y.c)
+            #     @. Yₜ.c.ρe_tot += ᶜFC(ᶠw, ᶜρe)
+            # elseif :ρe_int in propertynames(Y.c)
+            #     @. Yₜ.c.ρe_int += ᶜFC(ᶠw, ᶜρe_int)
+            # end
+
+            Yₜ.c.uₕ[colidx] .= ref_zuₕ
+
+            @. Yₜ.f.w[colidx] = -(
+                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) +
+                ᶠgradᵥ(ᶜK[colidx] + ᶜΦ[colidx])
+            )
+
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+                if isnothing(ᶠupwind_product)
+                    @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(ᶠinterp(ᶜ𝕋[colidx]) * ᶠw[colidx]))
+                else
+                    @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(
+                        ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product(
+                            ᶠw[colidx],
+                            ᶜ𝕋[colidx] / Y.c.ρ[colidx],
+                        ),
+                    ))
+                end
+            end
+        end
+    end
+    return Yₜ
+end
+
+function implicit_tendency_generic!(Yₜ, Y, p, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     @nvtx "implicit tendency" color = colorant"yellow" begin
@@ -228,12 +328,11 @@ end
 
 function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
-        (; enable_default_remaining_tendency) = p
         Yₜ .= zero(eltype(Yₜ))
-        if enable_default_remaining_tendency
-            default_remaining_tendency!(Yₜ, Y, p, t)
+        p.default_remaining_tendency!(Yₜ, Y, p, t)
+        @nvtx "additional_tendency!" color = colorant"orange" begin
+            additional_tendency!(Yₜ, Y, p, t)
         end
-        additional_tendency!(Yₜ, Y, p, t)
         @nvtx "dss_remaining_tendency" color = colorant"blue" begin
             Spaces.weighted_dss_start!(Yₜ.c, p.ghost_buffer.c)
             Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
@@ -246,7 +345,101 @@ function remaining_tendency!(Yₜ, Y, p, t)
     return Yₜ
 end
 
-function default_remaining_tendency!(Yₜ, Y, p, t)
+function default_remaining_tendency_special!(Yₜ, Y, p, t)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, params) = p
+    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
+    thermo_params = CAP.thermodynamics_params(params)
+
+    # precomputed quantities
+    @nvtx "precomputed quantities" color = colorant"orange" begin
+        Fields.bycolumn(axes(Y.c)) do colidx
+            @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
+            @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
+            # Energy conservation
+            thermo_state!(
+                ᶜts[colidx],
+                Y.c[colidx],
+                params,
+                ᶜinterp,
+                ᶜK[colidx],
+                Y.f.w[colidx],
+            )
+            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            @. ᶠu¹²[colidx] = Geometry.project(
+                Geometry.Contravariant12Axis(),
+                ᶠinterp(ᶜuvw[colidx]),
+            )
+            @. ᶠu³[colidx] = Geometry.project(
+                Geometry.Contravariant3Axis(),
+                C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
+            )
+        end
+    end
+
+
+    ### horizontal
+    @nvtx "horizontal" color = colorant"orange" begin
+        # Mass conservation
+        @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
+
+        # Energy conservation
+        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
+
+
+        if point_type <: Geometry.Abstract3DPoint
+            @. ᶜω³ = curlₕ(ᶜuₕ)
+            @. ᶠω¹² = curlₕ(ᶠw)
+        elseif point_type <: Geometry.Abstract2DPoint
+            ᶜω³ .= Ref(zero(eltype(ᶜω³)))
+            @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
+        end
+        if point_type <: Geometry.Abstract3DPoint
+            @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+        elseif point_type <: Geometry.Abstract2DPoint
+            @. Yₜ.c.uₕ -=
+                Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+        end
+
+        for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+            ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+            ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+            @. ᶜ𝕋ₜ -= divₕ(ᶜ𝕋 * ᶜuvw)
+        end
+    end
+
+    ### vertical
+    @nvtx "vertical" color = colorant"orange" begin
+        Fields.bycolumn(axes(Y.c)) do colidx
+
+            # Mass conservation
+            @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
+
+            # Energy conservation
+            @. Yₜ.c.ρe_tot[colidx] -=
+                ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
+
+            # Momentum conservation
+            @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+                (ᶜf[colidx] + ᶜω³[colidx]) ×
+                (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
+            @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx]
+
+            # Tracer conservation
+
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
+                @. ᶜ𝕋ₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜ𝕋[colidx] * ᶜuₕ[colidx]))
+            end
+        end
+    end
+end
+function default_remaining_tendency_generic!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -368,7 +561,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
         to_scalar_coefs(vector_coefs) =
             map(vector_coef -> vector_coef.u₃, vector_coefs)
 
-
+        ref_thermo_params = Ref(thermo_params)
         Fields.bycolumn(axes(Y.c)) do colidx
             @. ∂ᶜK∂ᶠw_data[colidx] =
                 ᶜinterp(ᶠw_data[colidx]) *
@@ -389,7 +582,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
                 ᶜK[colidx],
                 ᶠw[colidx],
             )
-            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
 
             if isnothing(ᶠupwind_product)
                 #         elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
@@ -432,7 +625,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
                 -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
                     R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
                 ) +
-                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                ᶠgradᵥ(ᶜp[colidx]) / abs2(ᶠinterp(ᶜρ[colidx])) *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
 

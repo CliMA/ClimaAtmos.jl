@@ -92,6 +92,17 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     FT = typeof(dt)
     (; microphysics_model, forcing_type, radiation_model, turbconv_model) =
         model_spec
+
+    default_remaining_tendency! = if model_spec.anelastic_dycore
+        (Yₜ, Y, p, t) -> nothing
+    else
+        if :ρe_tot in propertynames(Y.c)
+            default_remaining_tendency_special!
+        else
+            default_remaining_tendency_generic!
+        end
+    end
+
     return merge(
         hyperdiffusion_cache(
             Y,
@@ -136,7 +147,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             )
         ),
         (; Δt = dt),
-        (; enable_default_remaining_tendency = isnothing(turbconv_model)),
+        (; default_remaining_tendency!),
         !isnothing(turbconv_model) ?
         (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params)) : NamedTuple(),
         (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
@@ -222,7 +233,6 @@ include("callbacks.jl")
 callback = get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
-
 integrator = get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
