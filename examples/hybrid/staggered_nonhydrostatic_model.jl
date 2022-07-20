@@ -160,7 +160,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜΦ, params, ᶠupwind_product) = p
+    (; ᶜΦ, params, ᶠupwind_product, ᶠupwind_product_moisture) = p
     thermo_params = CAP.thermodynamics_params(params)
     # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
     # allocation because the cache is stored separately from Y, which means that
@@ -220,11 +220,11 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
             for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
                 ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
                 ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
-                if isnothing(ᶠupwind_product)
+                if isnothing(ᶠupwind_product_moisture)
                     @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(ᶠinterp(ᶜ𝕋[colidx]) * ᶠw[colidx]))
                 else
                     @. ᶜ𝕋ₜ[colidx] = -(ᶜdivᵥ(
-                        ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product(
+                        ᶠinterp(Y.c.ρ[colidx]) * ᶠupwind_product_moisture(
                             ᶠw[colidx],
                             ᶜ𝕋[colidx] / Y.c.ρ[colidx],
                         ),
