@@ -1,7 +1,7 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
