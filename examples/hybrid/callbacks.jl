@@ -1,7 +1,9 @@
 import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
+import ClimaCore as CC
 import OrdinaryDiffEq as ODE
+import ClimaAtmos.Parameters as CAP
 
 function get_callbacks(parsed_args, simulation, model_spec, params)
     FT = eltype(params)
@@ -10,6 +12,11 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     callback_filters = ODE.DiscreteCallback(
         condition_every_iter,
         affect_filter!;
+        save_positions = (false, false),
+    )
+    tc_callbacks = ODE.DiscreteCallback(
+        condition_every_iter,
+        turb_conv_affect_filter!;
         save_positions = (false, false),
     )
 
@@ -26,6 +33,10 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
         )
     else
         ()
+    end
+
+    if !isnothing(model_spec.turbconv_model)
+        additional_callbacks = (additional_callbacks..., tc_callbacks)
     end
     if model_spec.moisture_model isa EquilMoistModel &&
        parsed_args["apply_moisture_filter"]
@@ -80,6 +91,26 @@ function affect_filter!(integrator)
     ODE.u_modified!(integrator, false)
 end
 
+function turb_conv_affect_filter!(integrator)
+    (; edmf_cache, Δt) = p
+    (; edmf, param_set, aux, case, surf_params) = edmf_cache
+    t = integrator.t
+    Y = integrator.u
+    tc_params = CAP.turbconv_params(param_set)
+
+    for inds in TC.iterate_columns(Y.c)
+        state = TCU.tc_column_state(Y, aux, nothing, inds...)
+        grid = TC.Grid(state)
+        surf = TCU.get_surface(surf_params, grid, state, t, tc_params)
+        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+    end
+
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional `∑tendencies!` call, which is required
+    # to support supplying a continuous representation of the
+    # solution.
+    ODE.u_modified!(integrator, false)
+end
 
 function save_to_disk_func(integrator)
     if integrator.p.simulation.is_distributed
