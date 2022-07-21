@@ -1211,9 +1211,9 @@ version = "0.2.3"
 
 [[deps.NVTX]]
 deps = ["Colors"]
-git-tree-sha1 = "885cb8bb5d9861ad71e1d009ec24f97d2a88439a"
+git-tree-sha1 = "1aa34e3ee03f7253c9381c794e452e7af895b7ec"
 uuid = "5da4648a-3479-48b8-97b9-01cb529c0a1f"
-version = "0.1.1"
+version = "0.1.2"
 
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
@@ -1263,9 +1263,9 @@ uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 
 [[deps.OpenMPI_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "Pkg", "TOML"]
-git-tree-sha1 = "6198c6dc3b5c3dc01854879197a5f382a60f947d"
+git-tree-sha1 = "f603a060218ca6818055be3608d4969e937d81bb"
 uuid = "fe0851c0-eecd-5654-98d4-656369965a5c"
-version = "4.1.3+1"
+version = "4.1.3+2"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
