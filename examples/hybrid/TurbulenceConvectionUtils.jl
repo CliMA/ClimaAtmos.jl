@@ -36,7 +36,7 @@ function get_aux(edmf, Y, ::Type{FT}) where {FT}
     return aux
 end
 
-function get_edmf_cache(Y, namelist, param_set)
+function get_edmf_cache(Y, namelist, param_set, parsed_args)
     tc_params = CAP.turbconv_params(param_set)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     case = Cases.get_case(namelist)
@@ -64,7 +64,7 @@ function get_edmf_cache(Y, namelist, param_set)
     else
         error("Invalid precip_name $(precip_name)")
     end
-    edmf = TC.EDMFModel(FT, namelist, precip_model)
+    edmf = TC.EDMFModel(FT, namelist, precip_model, parsed_args)
     @info "EDMFModel: \n$(summary(edmf))"
     return (;
         edmf,
