@@ -1,7 +1,8 @@
 using NVTX, Colors
 
 if NVTX.isactive()
-    nvtx_domain = NVTX.Domain("ClimaAtmos")
+    NVTX.enable_gc_hooks()
+    const nvtx_domain = NVTX.Domain("ClimaAtmos")
 end
 macro nvtx(message, args...)
     block = args[end]
