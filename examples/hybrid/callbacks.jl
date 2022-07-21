@@ -53,6 +53,7 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
                 Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
                 Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
                 Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+                GC.gc(false)
                 Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
                 Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
             end

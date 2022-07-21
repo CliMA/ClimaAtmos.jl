@@ -243,7 +243,9 @@ end
 if simulation.is_distributed
     OrdinaryDiffEq.step!(integrator)
     ClimaComms.barrier(comms_ctx)
+    GC.enable(false)
     walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+    GC.enable(true)
     ClimaComms.barrier(comms_ctx)
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
