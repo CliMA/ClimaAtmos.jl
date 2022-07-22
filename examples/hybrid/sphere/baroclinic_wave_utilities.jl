@@ -532,8 +532,7 @@ end
 #       This currently results in a mismatched spaces error.
 function vertical_diffusion_boundary_layer_cache(
     Y;
-    Cd = FT(0.0044),
-    Ch = FT(0.0044),
+    surface_scheme = "bulk",
     diffuse_momentum = true,
     coupled = false,
 )
@@ -569,20 +568,43 @@ function vertical_diffusion_boundary_layer_cache(
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
 
-    return (;
-        ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
-        ᶠz_a,
-        ᶠK_E = similar(Y.f, FT),
-        surface_conditions = similar(z_bottom, cond_type),
-        dif_flux_uₕ,
-        dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
-        dif_flux_ρq_tot,
-        Cd,
-        Ch,
-        diffuse_momentum,
-        coupled,
-        z_bottom,
-    )
+    if surface_scheme == "bulk"
+        Cd = FT(0.0044)
+        Ch = FT(0.0044)
+        return (;
+            surface_scheme,
+            ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
+            ᶠz_a,
+            ᶠK_E = similar(Y.f, FT),
+            surface_conditions = similar(z_bottom, cond_type),
+            dif_flux_uₕ,
+            dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
+            dif_flux_ρq_tot,
+            Cd,
+            Ch,
+            diffuse_momentum,
+            coupled,
+            z_bottom,
+        )
+    elseif surface_scheme == "monin_obukhov"
+        z0m = FT(1e-5)
+        z0b = FT(1e-5)
+        return (;
+            surface_scheme,
+            ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
+            ᶠz_a,
+            ᶠK_E = similar(Y.f, FT),
+            surface_conditions = similar(z_bottom, cond_type),
+            dif_flux_uₕ,
+            dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
+            dif_flux_ρq_tot,
+            z0m,
+            z0b,
+            diffuse_momentum,
+            coupled,
+            z_bottom,
+        )
+    end
 end
 
 function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
@@ -642,39 +664,83 @@ function constant_T_saturated_surface_conditions(
     )
 end
 
-# This is the same as SF.sensible_heat_flux, but without the Φ term.
-# TODO: Move this to SurfaceFluxes.jl.
-function sensible_heat_flux_ρe_int(param_set, Ch, sc, scheme)
-    thermo_params = CAP.thermodynamics_params(param_set)
-    surf_flux_params = CAP.surface_fluxes_params(param_set)
-    cp_d::FT = CAP.cp_d(param_set)
-    R_d::FT = CAP.R_d(param_set)
-    T_0::FT = CAP.T_0(param_set)
-    cp_m = TD.cp_m(thermo_params, SF.ts_in(sc))
-    ρ_sfc = TD.air_density(thermo_params, SF.ts_sfc(sc))
-    T_in = TD.air_temperature(thermo_params, SF.ts_in(sc))
-    T_sfc = TD.air_temperature(thermo_params, SF.ts_sfc(sc))
-    ΔT = T_in - T_sfc
-    hd_sfc = cp_d * (T_sfc - T_0) + R_d * T_0
-    E = SF.evaporation(sc, surf_flux_params, Ch)
-    return -ρ_sfc * Ch * SF.windspeed(sc) * (cp_m * ΔT) - (hd_sfc) * E
+function variable_T_saturated_surface_conditions(
+    T_sfc,
+    ts_int,
+    uₕ_int,
+    z_int,
+    z_sfc,
+    z0m,
+    z0b,
+    params,
+)
+    # parameters
+    thermo_params = CAP.thermodynamics_params(params)
+    sf_params = CAP.surface_fluxes_params(params)
+
+    # get the near-surface thermal state
+    T_int = TD.air_temperature(thermo_params, ts_int)
+    Rm_int = TD.gas_constant_air(thermo_params, ts_int)
+    ρ_sfc =
+        TD.air_density(thermo_params, ts_int) *
+        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
+
+    q_sfc =
+        TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+    ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+
+    # wrap state values
+    sc = SF.ValuesOnly{FT}(;
+        state_in = SF.InteriorValues(z_int, (uₕ_int.u, uₕ_int.v), ts_int),
+        state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
+        z0m = z0m,
+        z0b = z0b,
+    )
+
+    # calculate all fluxes
+    tsf = SF.surface_conditions(sf_params, sc)
+
+    E = SF.evaporation(sc, sf_params, tsf.Ch)
+
+    return (;
+        shf = tsf.shf,
+        lhf = tsf.lhf,
+        E = E,
+        ρτxz = tsf.ρτxz,
+        ρτyz = tsf.ρτyz,
+    )
 end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
-    (;
-        surface_conditions,
-        dif_flux_uₕ,
-        dif_flux_energy,
-        dif_flux_ρq_tot,
-        Cd,
-        Ch,
-        diffuse_momentum,
-        coupled,
-        z_bottom,
-        params,
-    ) = p
+    if p.surface_scheme == "bulk"
+        (;
+            surface_conditions,
+            dif_flux_uₕ,
+            dif_flux_energy,
+            dif_flux_ρq_tot,
+            Cd,
+            Ch,
+            diffuse_momentum,
+            coupled,
+            z_bottom,
+            params,
+        ) = p
+    elseif p.surface_scheme == "monin_obukhov"
+        (;
+            surface_conditions,
+            dif_flux_uₕ,
+            dif_flux_energy,
+            dif_flux_ρq_tot,
+            z0m,
+            z0b,
+            diffuse_momentum,
+            coupled,
+            z_bottom,
+            params,
+        ) = p
+    end
     surf_flux_params = CAP.surface_fluxes_params(params)
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -690,17 +756,31 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     z_surface = Fields.field_values(z_sfc)
 
     if !coupled
-        surface_conditions .=
-            constant_T_saturated_surface_conditions.(
-                T_sfc,
-                Spaces.level(ᶜts, 1),
-                Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-                Fields.Field(ᶜz_interior, axes(z_bottom)),
-                Fields.Field(z_surface, axes(z_bottom)),
-                Cd,
-                Ch,
-                params,
-            )
+        if p.surface_scheme == "bulk"
+            surface_conditions .=
+                constant_T_saturated_surface_conditions.(
+                    T_sfc,
+                    Spaces.level(ᶜts, 1),
+                    Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
+                    Fields.Field(ᶜz_interior, axes(z_bottom)),
+                    Fields.Field(z_surface, axes(z_bottom)),
+                    Cd,
+                    Ch,
+                    params,
+                )
+        elseif p.surface_scheme == "monin_obukhov"
+            surface_conditions .=
+                variable_T_saturated_surface_conditions.(
+                    T_sfc,
+                    Spaces.level(ᶜts, 1),
+                    Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
+                    Fields.Field(ᶜz_interior, axes(z_bottom)),
+                    Fields.Field(z_surface, axes(z_bottom)),
+                    z0m,
+                    z0b,
+                    params,
+                )
+        end
     end
 
     if diffuse_momentum
