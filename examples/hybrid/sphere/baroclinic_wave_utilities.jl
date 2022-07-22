@@ -568,43 +568,25 @@ function vertical_diffusion_boundary_layer_cache(
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
 
-    if surface_scheme == "bulk"
-        Cd = FT(0.0044)
-        Ch = FT(0.0044)
-        return (;
-            surface_scheme,
-            ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
-            ᶠz_a,
-            ᶠK_E = similar(Y.f, FT),
-            surface_conditions = similar(z_bottom, cond_type),
-            dif_flux_uₕ,
-            dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
-            dif_flux_ρq_tot,
-            Cd,
-            Ch,
-            diffuse_momentum,
-            coupled,
-            z_bottom,
-        )
+    surface_scheme_params = if surface_scheme == "bulk"
+        (; Cd = FT(0.0044), Ch = FT(0.0044))
     elseif surface_scheme == "monin_obukhov"
-        z0m = FT(1e-5)
-        z0b = FT(1e-5)
-        return (;
-            surface_scheme,
-            ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
-            ᶠz_a,
-            ᶠK_E = similar(Y.f, FT),
-            surface_conditions = similar(z_bottom, cond_type),
-            dif_flux_uₕ,
-            dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
-            dif_flux_ρq_tot,
-            z0m,
-            z0b,
-            diffuse_momentum,
-            coupled,
-            z_bottom,
-        )
+        (; z0m = FT(1e-5), z0b = FT(1e-5))
     end
+    return (;
+        surface_scheme,
+        ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
+        ᶠz_a,
+        ᶠK_E = similar(Y.f, FT),
+        surface_conditions = similar(z_bottom, cond_type),
+        dif_flux_uₕ,
+        dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
+        dif_flux_ρq_tot,
+        surface_scheme_params...,
+        diffuse_momentum,
+        coupled,
+        z_bottom,
+    )
 end
 
 function eddy_diffusivity_coefficient(norm_v_a, z_a, p)
@@ -714,32 +696,20 @@ end
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (;
+        surface_conditions,
+        dif_flux_uₕ,
+        dif_flux_energy,
+        dif_flux_ρq_tot,
+        diffuse_momentum,
+        coupled,
+        z_bottom,
+        params,
+    ) = p
     if p.surface_scheme == "bulk"
-        (;
-            surface_conditions,
-            dif_flux_uₕ,
-            dif_flux_energy,
-            dif_flux_ρq_tot,
-            Cd,
-            Ch,
-            diffuse_momentum,
-            coupled,
-            z_bottom,
-            params,
-        ) = p
+        (; Cd, Ch) = p
     elseif p.surface_scheme == "monin_obukhov"
-        (;
-            surface_conditions,
-            dif_flux_uₕ,
-            dif_flux_energy,
-            dif_flux_ρq_tot,
-            z0m,
-            z0b,
-            diffuse_momentum,
-            coupled,
-            z_bottom,
-            params,
-        ) = p
+        (; z0m, z0b) = p
     end
     surf_flux_params = CAP.surface_fluxes_params(params)
 
