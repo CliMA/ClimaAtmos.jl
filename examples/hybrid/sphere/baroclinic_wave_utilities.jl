@@ -635,7 +635,7 @@ function constant_T_saturated_surface_conditions(
     # calculate all fluxes
     tsf = SF.surface_conditions(sf_params, sc, SF.FVScheme())
 
-    E = SF.evaporation(sc, sf_params, tsf.Ch)
+    E = SF.evaporation(sf_params, sc, tsf.Ch)
 
     return (;
         shf = tsf.shf,
@@ -682,7 +682,7 @@ function variable_T_saturated_surface_conditions(
     # calculate all fluxes
     tsf = SF.surface_conditions(sf_params, sc)
 
-    E = SF.evaporation(sc, sf_params, tsf.Ch)
+    E = SF.evaporation(sf_params, sc, tsf.Ch)
 
     return (;
         shf = tsf.shf,

@@ -167,7 +167,7 @@ version = "0.1.3"
 deps = ["ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "CloudMicrophysics", "Dierckx", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Flux", "Insolation", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "OperatorFlux", "OrdinaryDiffEq", "Pkg", "Printf", "Random", "StaticArrays", "StatsBase", "StochasticDiffEq", "SurfaceFluxes", "Test", "Thermodynamics", "UnPack"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.2.0"
+version = "0.3.0"
 
 [[deps.ClimaComms]]
 deps = ["CUDA", "KernelAbstractions", "StaticArrays"]
@@ -1241,9 +1241,9 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "KernelAbstractions", "RootSolvers", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "e688b5ce8576e1ff2d33efde2e5fab05db56aba9"
+git-tree-sha1 = "dd0ec993bf32e20ca385c8ac554dc8123ffe3b21"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.4.0"
+version = "0.4.1"
 
 [[deps.TOML]]
 deps = ["Dates"]
