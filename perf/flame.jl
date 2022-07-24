@@ -16,13 +16,17 @@ catch err
     end
 end
 
-OrdinaryDiffEq.step!(integrator) # compile first
+function do_work!(integrator)
+    for _ in 1:20
+        OrdinaryDiffEq.step!(integrator)
+    end
+end
+
+do_work!(integrator) # compile first
 import Profile
 Profile.clear_malloc_data()
 prof = Profile.@profile begin
-    for _ in 1:10
-        OrdinaryDiffEq.step!(integrator)
-    end
+    do_work!(integrator)
 end
 
 if !isempty(get(ENV, "CI_PERF_CPUPROFILE", ""))
