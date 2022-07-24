@@ -90,7 +90,6 @@ function compute_sgs_flux!(
     w_gm = prog_gm_f.w
     h_tot_gm = aux_gm.h_tot
     q_tot_gm = aux_gm.q_tot
-    q_tot_en = aux_en.q_tot
     a_en_bcs = a_en_boundary_conditions(surf, edmf)
     Ifae = CCO.InterpolateC2F(; a_en_bcs...)
     If = CCO.InterpolateC2F(;
@@ -114,7 +113,7 @@ function compute_sgs_flux!(
         ρ_f *
         Ifae(a_en) *
         (w_en - toscalar(w_gm)) *
-        (If(q_tot_en) - If(q_tot_gm))
+        (If(aux_en.q_tot) - If(q_tot_gm))
     @inbounds for i in 1:N_up
         aux_up_f_i = aux_up_f[i]
         aux_up_i = aux_up[i]
@@ -122,20 +121,18 @@ function compute_sgs_flux!(
         Ifau = CCO.InterpolateC2F(; a_up_bcs...)
         a_up = aux_up[i].area
         w_up_i = aux_up_f[i].w
-        q_tot_up = aux_up_i.q_tot
-        h_tot_up = aux_up_i.h_tot
         @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - toscalar(w_gm))
         @. massflux_h +=
             ρ_f * (
                 Ifau(a_up) *
                 (w_up_i - toscalar(w_gm)) *
-                (If(h_tot_up) - If(h_tot_gm))
+                (If(aux_up[i].h_tot) - If(h_tot_gm))
             )
         @. massflux_qt +=
             ρ_f * (
                 Ifau(a_up) *
                 (w_up_i - toscalar(w_gm)) *
-                (If(q_tot_up) - If(q_tot_gm))
+                (If(aux_up[i].q_tot) - If(q_tot_gm))
             )
     end
 
@@ -152,9 +149,8 @@ function compute_sgs_flux!(
         @. massflux_qi = massflux_en * (If(q_ice_en) - If(q_ice_gm))
         @inbounds for i in 1:N_up
             aux_up_f_i = aux_up_f[i]
-            aux_up_i = aux_up[i]
-            q_liq_up = aux_up_i.q_liq
-            q_ice_up = aux_up_i.q_ice
+            q_liq_up = aux_up[i].q_liq
+            q_ice_up = aux_up[i].q_ice
             massflux_up_i = aux_up_f[i].massflux
             @. massflux_ql += massflux_up_i * (If(q_liq_up) - If(q_liq_gm))
             @. massflux_qi += massflux_up_i * (If(q_ice_up) - If(q_ice_gm))
