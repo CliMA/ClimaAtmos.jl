@@ -3,16 +3,23 @@
 function percentile_bounds_mean_norm(
     low_percentile::FT,
     high_percentile::FT,
-    n_samples::I,
+    n_samples::Int,
     set_src_seed,
-) where {FT <: Real, I}
+) where {FT <: Real}
     D = Distributions
     set_src_seed && Random.seed!(123)
-    x = rand(D.Normal(), n_samples)
+    ∑samples = zero(FT)
     xp_low = D.quantile(D.Normal(), low_percentile)
     xp_high = D.quantile(D.Normal(), high_percentile)
-    filter!(y -> xp_low < y < xp_high, x)
-    return StatsBase.mean(x)
+    n_filtered_samples = 0
+    @inbounds for i in 1:n_samples
+        x = rand(D.Normal())
+        if xp_low < x < xp_high
+            ∑samples += x
+            n_filtered_samples += 1
+        end
+    end
+    return ∑samples / n_filtered_samples
 end
 
 function logistic(x, slope, mid)
