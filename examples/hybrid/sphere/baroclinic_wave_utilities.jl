@@ -706,6 +706,18 @@ function add_uₕ_div!(Yₜ, ᶠK_E, Y, dif_flux_uₕ)
     @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
 end
 
+function add_div_flux_e!(Yₜ, Y, ᶠK_E, ᶜp, ᶜρ, ᶜdivᵥ, ᶠgradᵥ, ᶠinterp)
+    @. Yₜ.c.ρe_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
+end
+
+function add_div_flux_q!(Yₜ, Y, ᶠK_E, ᶜp, ᶜρ, ᶜdivᵥ, ᶠgradᵥ, ᶠinterp)
+    @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
+end
+
+function add_div_flux_ρ!(Yₜ, Y, ᶠK_E, ᶜp, ᶜρ, ᶜdivᵥ, ᶠgradᵥ, ᶠinterp)
+    @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
+end
+
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
@@ -797,8 +809,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_energy),
         )
-        @. Yₜ.c.ρe_tot +=
-            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
+        add_div_flux_e!(Yₜ, Y, ᶠK_E, ᶜp, ᶜρ, ᶜdivᵥ, ᶠgradᵥ, ᶠinterp)
     end
 
     if :ρq_tot in propertynames(Y.c)
@@ -809,7 +820,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(.-dif_flux_ρq_tot),
         )
-        @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
-        @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
+        add_div_flux_q!(Yₜ, Y, ᶠK_E, ᶜp, ᶜρ, ᶜdivᵥ, ᶠgradᵥ, ᶠinterp)
+        add_div_flux_ρ!(Yₜ, Y, ᶠK_E, ᶜp, ᶜρ, ᶜdivᵥ, ᶠgradᵥ, ᶠinterp)
     end
 end
