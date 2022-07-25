@@ -693,6 +693,19 @@ function variable_T_saturated_surface_conditions(
     )
 end
 
+function add_uₕ_div!(Yₜ, ᶠK_E, Y, dif_flux_uₕ)
+    ᶠgradᵥ = Operators.GradientC2F()
+    ᶜdivᵥ = Operators.DivergenceF2C(
+        top = Operators.SetValue(
+            Geometry.Contravariant3Vector(FT(0)) ⊗
+            Geometry.Covariant12Vector(FT(0), FT(0)),
+        ),
+        bottom = Operators.SetValue(.-dif_flux_uₕ),
+    )
+
+    @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
+end
+
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
@@ -771,14 +784,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                     ),
                 )
         end
-        ᶜdivᵥ = Operators.DivergenceF2C(
-            top = Operators.SetValue(
-                Geometry.Contravariant3Vector(FT(0)) ⊗
-                Geometry.Covariant12Vector(FT(0), FT(0)),
-            ),
-            bottom = Operators.SetValue(.-dif_flux_uₕ),
-        )
-        @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
+        add_uₕ_div!(Yₜ, ᶠK_E, Y, dif_flux_uₕ)
     end
 
     if :ρe_tot in propertynames(Y.c)
