@@ -472,6 +472,9 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     (;
         ᶜts,
         ᶜΦ,
+        ᶜT,
+        ᶜ3d_rain,
+        ᶜ3d_snow,
         ᶜS_ρq_tot,
         ᶜλ,
         col_integrated_rain,
@@ -489,10 +492,10 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ += ᶜS_ρq_tot
 
     # update precip in cache for coupler's use
-    # 3d rain and snow 
-    ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-    ᶜ3d_rain = @. ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
-    ᶜ3d_snow = @. ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
+    # 3d rain and snow
+    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+    @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
+    @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
 
     col_integrated_rain .=
         vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
@@ -757,13 +760,13 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         if !coupled
             ρτxz = surface_conditions.ρτxz
             ρτyz = surface_conditions.ρτyz
-            u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with 
+            u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with
             normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
             ρ_1 = Fields.Field(
                 Fields.field_values(Fields.level(Y.c.ρ, 1)),
                 u_space,
             ) # TODO: delete when "space not the same instance" error is dealt with
-            parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with 
+            parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with
                 parent(
                     Geometry.Contravariant3Vector.(normal) .⊗
                     Geometry.Covariant12Vector.(
