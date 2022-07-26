@@ -255,6 +255,8 @@ else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
 
+@assert last(sol.t) == t_end
+
 verify_callbacks(sol.t)
 
 if simulation.is_distributed
