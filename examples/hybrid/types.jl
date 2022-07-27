@@ -153,7 +153,7 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
     return sim
 end
 
-function get_spaces(parsed_args, params, warp_function, comms_ctx)
+function get_spaces(parsed_args, params, comms_ctx)
 
     FT = eltype(params)
     z_elem = Int(parsed_args["z_elem"])
