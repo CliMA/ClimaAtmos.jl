@@ -11,9 +11,7 @@ env:
 agents:
   config: cpu
   queue: central
-  slurm_time: 04:00:00
-
-timeout_in_minutes: 240
+  slurm_time: 23:00:00
 
 steps:
   - label: "init :computer:"
@@ -48,6 +46,7 @@ steps:
         slurm_nodes: 1
         slurm_tasks_per_node: 1
         slurm_mem: 64GB
+        slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (2) processes"
       command:
@@ -64,54 +63,96 @@ steps:
         slurm_nodes: 1
         slurm_tasks_per_node: 2
         slurm_mem: 64GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (3) processes"
+    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (4) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 3 low enable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 4 low enable)" 
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe_3/scaling_data_3_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe_3/report.3.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_4/scaling_data_4_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_4/report.4.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 3
+        NPROCS: 4
       agents:
         config: cpu
         queue: central
         slurm_nodes: 1
-        slurm_tasks_per_node: 3
+        slurm_tasks_per_node: 4
         slurm_mem: 64GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (6) processes"
+    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (8) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 6 low enable)"
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 8 low enable)"
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe_6/scaling_data_6_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe_6/report.6.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_8/scaling_data_8_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_8/report.8.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 6
+        NPROCS: 8
       agents:
         config: cpu
         queue: central
         slurm_nodes: 1
-        slurm_tasks_per_node: 6
+        slurm_tasks_per_node: 8
         slurm_mem: 64GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (24) processes"
+    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (16) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 24 low enable)"
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 16 low enable)"
       artifact_paths:
-        - "sphere_held_suarez_low_res_rhoe_24/scaling_data_24_processes.jld2"
-        - "sphere_held_suarez_low_res_rhoe_24/report.24.nsys-rep"
+        - "sphere_held_suarez_low_res_rhoe_16/scaling_data_16_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_16/report.16.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 24
+        NPROCS: 16
       agents:
         config: cpu
         queue: central
         slurm_nodes: 1
-        slurm_tasks_per_node: 24
+        slurm_tasks_per_node: 16
         slurm_mem: 128GB
+        slurm_exclusive:
+
+    - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (32) processes"
+      command:
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 32 low enable)"
+      artifact_paths:
+        - "sphere_held_suarez_low_res_rhoe_32/scaling_data_32_processes.jld2"
+        - "sphere_held_suarez_low_res_rhoe_32/report.32.nsys-rep"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 32
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 32
+        slurm_mem: 128GB
+        slurm_exclusive:
+
+  - wait
+
+  - label: ":computer: scaling plots (low-resolution simulations)"
+    key: "cpu_scaling_plots_low-resolution"
+    command:
+      - "julia --color=yes --project=examples examples/hybrid/plot_scaling_results.jl --job_id sphere_held_suarez_low_res_rhoe"
+    artifact_paths:
+      - "low-resolution_sypd.png"
+      - "low-resolution_Scaling.png"
+      - "low-resolution_Scaling_efficiency.png"
+      - "low-resolution_sypd.pdf"
+      - "low-resolution_Scaling.pdf"
+      - "low-resolution_Scaling_efficiency.pdf"
+    agents:
+      config: cpu
+      queue: central
+      slurm_nodes: 1
+      slurm_tasks_per_node: 1
+
+  - wait
 
   - group: "ClimaAtmos high-resolution scaling tests"
     steps:
@@ -131,6 +172,7 @@ steps:
         slurm_nodes: 1
         slurm_tasks_per_node: 1
         slurm_mem: 64GB
+        slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (2) processes"
       command:
@@ -147,85 +189,124 @@ steps:
         slurm_nodes: 1
         slurm_tasks_per_node: 2
         slurm_mem: 64GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (3) processes"
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (4) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 3 high enable)"
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 4 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe_3/scaling_data_3_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe_3/report.3.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_4/scaling_data_4_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_4/report.4.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 3
+        NPROCS: 4
       agents:
         config: cpu
         queue: central
         slurm_nodes: 1
-        slurm_tasks_per_node: 3
+        slurm_tasks_per_node: 4
         slurm_mem: 64GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (6) processes"
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (8) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 6 high enable)"
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 8 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe_6/scaling_data_6_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe_6/report.6.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_8/scaling_data_8_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_8/report.8.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 6
+        NPROCS: 8
       agents:
         config: cpu
         queue: central
         slurm_nodes: 1
-        slurm_tasks_per_node: 6
+        slurm_tasks_per_node: 8
         slurm_mem: 64GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (24) processes"
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (16) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 24 high enable)"
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 16 high enable)"
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe_24/scaling_data_24_processes.jld2"
-        - "sphere_held_suarez_high_res_rhoe_24/report.24.nsys-rep"
+        - "sphere_held_suarez_high_res_rhoe_16/scaling_data_16_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_16/report.16.nsys-rep"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 24
+        NPROCS: 16
       agents:
         config: cpu
         queue: central
         slurm_nodes: 1
-        slurm_tasks_per_node: 24
+        slurm_tasks_per_node: 16
+        slurm_mem: 64GB
+        slurm_exclusive:
+
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (32) processes"
+      command:
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 32 high enable)" 
+      artifact_paths:
+        - "sphere_held_suarez_high_res_rhoe_32/scaling_data_32_processes.jld2"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 32
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 1
+        slurm_tasks_per_node: 32
         slurm_mem: 128GB
+        slurm_exclusive:
 
-    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (54) processes"
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (64) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 54 high disable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 64 high disable)" 
       artifact_paths:
-        - "sphere_held_suarez_high_res_rhoe_54/scaling_data_54_processes.jld2"
+        - "sphere_held_suarez_high_res_rhoe_64/scaling_data_64_processes.jld2"
       env:
         CLIMACORE_DISTRIBUTED: "MPI"
-        NPROCS: 54
+        NPROCS: 64
       agents:
         config: cpu
         queue: central
         slurm_nodes: 2
-        slurm_tasks_per_node: 27
+        slurm_tasks_per_node: 32
         slurm_mem: 128GB
+        slurm_exclusive:
+
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (128) processes"
+      command:
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 128 high disable)" 
+      artifact_paths:
+        - "sphere_held_suarez_high_res_rhoe_128/scaling_data_128_processes.jld2"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 128
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 4
+        slurm_tasks_per_node: 32
+        slurm_mem: 128GB
+        slurm_exclusive:
+
+    - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (256) processes"
+      command:
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 256 high disable)" 
+      artifact_paths:
+        - "sphere_held_suarez_high_res_rhoe_256/scaling_data_256_processes.jld2"
+      env:
+        CLIMACORE_DISTRIBUTED: "MPI"
+        NPROCS: 256
+      agents:
+        config: cpu
+        queue: central
+        slurm_nodes: 8
+        slurm_tasks_per_node: 32
+        slurm_mem: 128GB
+        slurm_exclusive:
 
   - wait
-
-  - label: ":computer: scaling plots (low-resolution simulations)"
-    key: "cpu_scaling_plots_low-resolution"
-    command:
-      - "julia --color=yes --project=examples examples/hybrid/plot_scaling_results.jl --job_id sphere_held_suarez_low_res_rhoe"
-    artifact_paths:
-      - "low-resolution_sypd.png"
-      - "low-resolution_Scaling.png"
-      - "low-resolution_Scaling_efficiency.png"
-    agents:
-      config: cpu
-      queue: central
-      slurm_nodes: 1
-      slurm_tasks_per_node: 1
 
   - label: ":computer: scaling plots (high-resolution simulations)"
     key: "cpu_scaling_plots_high-resolution"
@@ -235,6 +316,9 @@ steps:
       - "high-resolution_sypd.png"
       - "high-resolution_Scaling.png"
       - "high-resolution_Scaling_efficiency.png"
+      - "high-resolution_sypd.pdf"
+      - "high-resolution_Scaling.pdf"
+      - "high-resolution_Scaling_efficiency.pdf"
     agents:
       config: cpu
       queue: central

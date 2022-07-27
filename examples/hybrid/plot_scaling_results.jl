@@ -6,57 +6,29 @@ include("cli_options.jl")
 if !(@isdefined parsed_args)
     (s, parsed_args) = parse_commandline()
 end
-parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 job_id =
     isnothing(parsed_args["job_id"]) ? job_id_from_parsed_args(s, parsed_args) :
     parsed_args["job_id"]
-
 output_dir = "./"
-# Note
-# Low-resolution simulation is integrated for 10 days
-# High-resolution simulation is integrated for 1 hour
 
-# tempest scaling data
+secs_per_hour = 60 * 60
+secs_per_day = 60 * 60 * 24
+days_per_year = 8760 / 24
+
 if occursin("low", job_id)
-    # low-resolution (integration time = 10 days, on Caltech central cluster)
-    nprocs_tempest = [1, 2, 3, 6, 24]
-    walltime_tempest = [74.41848, 34.43472, 23.22432, 11.83896, 3.60936]
     resolution = "low-resolution"
-    t_int = "10 days"
-    sypd_tempest = (60 * 60 * 24) ./ walltime_tempest ./ (8760 / 10 / 24)
+    t_int_days = 10 # integration time
 else
-    # high-resolution (integration time = 1 day, on Caltech central cluster)
-    nprocs_tempest = [1, 2, 3, 6, 24, 54, 96, 216]
-    walltime_tempest = [
-        4673.969568,
-        2338.740864,
-        1505.628864,
-        755.51184,
-        245.157408,
-        130.145184,
-        76.487328,
-        32.298912,
-    ]
-    walltime_tempest .*= (1.0 / 1 / 24) # walltime for 1 hour of integration time
-    # cut-off at 54
-    nprocs_tempest = nprocs_tempest[1:6]
-    walltime_tempest = walltime_tempest[1:6]
     resolution = "high-resolution"
-    t_int = "1 hour"
-    sypd_tempest = (60 * 60 * 24) ./ walltime_tempest ./ 8760
+    t_int_days = 1 # integration time
 end
-cpu_hours_tempest = nprocs_tempest .* walltime_tempest / (60 * 60)
-scaling_efficiency_tempest =
-    trunc.(
-        100 * (walltime_tempest[1] ./ nprocs_tempest) ./ walltime_tempest,
-        digits = 1,
-    )
+t_int = string(t_int_days) * " days"
 
+# read ClimaAtmos scaling data
 I, FT = Int, Float64
-
-nprocs = I[]
-walltime = FT[]
+nprocs_clima_atmos = I[]
+walltime_clima_atmos = FT[]
 
 for foldername in readdir(output_dir)
     if occursin(job_id, foldername)
@@ -68,113 +40,103 @@ for foldername in readdir(output_dir)
                 "scaling_data_$(nprocs_string)_processes.jld2",
             ),
         )
-        push!(nprocs, I(dict["nprocs"]))
-        push!(walltime, FT(dict["walltime"]))
+        push!(nprocs_clima_atmos, I(dict["nprocs"]))
+        push!(walltime_clima_atmos, FT(dict["walltime"]))
     end
 end
+order = sortperm(nprocs_clima_atmos)
+nprocs_clima_atmos, walltime_clima_atmos =
+    nprocs_clima_atmos[order], walltime_clima_atmos[order]
 
-order = sortperm(nprocs)
-nprocs, walltime = nprocs[order], walltime[order]
-cpu_hours = nprocs .* walltime / (60 * 60)
-if t_int == "1 hour"
-    sypd = (60 * 60 * 24) ./ walltime ./ 8760
-else
-    sypd = (60 * 60 * 24) ./ walltime ./ (8760 / 10 / 24)
-end
-scaling_efficiency =
-    trunc.(100 * (walltime[1] ./ nprocs) ./ walltime, digits = 1)
-
-function linkfig(figpath, alt = "")
-    # buildkite-agent upload figpath
-    # link figure in logs if we are running on CI
-    if get(ENV, "BUILDKITE", "") == "true"
-        artifact_url = "artifact://$figpath"
-        print("\033]1338;url='$(artifact_url)';alt='$(alt)'\a\n")
-    end
-end
-
-figpath = joinpath(output_dir, resolution * "_" * "sypd.png")
+# simulated years per day
+sypd_clima_atmos =
+    (secs_per_day ./ walltime_clima_atmos) * t_int_days ./ days_per_year
+# CPU hours
+cpu_hours_clima_atmos =
+    nprocs_clima_atmos .* walltime_clima_atmos / secs_per_hour
+# scaling efficiency
+single_proc_time_clima_atmos = walltime_clima_atmos[1] * nprocs_clima_atmos[1]
+scaling_efficiency_clima_atmos =
+    trunc.(
+        100 * (single_proc_time_clima_atmos ./ nprocs_clima_atmos) ./
+        walltime_clima_atmos,
+        digits = 1,
+    )
+ENV["GKSwstype"] = "100"
+Plots.GRBackend()
+plt1 = plot(
+    log2.(nprocs_clima_atmos),
+    sypd_clima_atmos,
+    markershape = :circle,
+    markercolor = :blue,
+    xticks = (
+        log2.(nprocs_clima_atmos),
+        [string(i) for i in nprocs_clima_atmos],
+    ),
+    xlabel = "# of MPI processes",
+    ylabel = "SYPD",
+    title = "Simulated years per day",
+    label = "ClimaAtmos (Float32)",
+    legend = :topleft,
+    grid = :true,
+    left_margin = 10mm,
+    bottom_margin = 10mm,
+    top_margin = 10mm,
+)
+Plots.png(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
+Plots.pdf(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 
 Plots.GRBackend()
-Plots.png(
-    plot(
-        [nprocs nprocs_tempest],
-        [sypd sypd_tempest],
-        markershape = [:circle :square],
-        xticks = (nprocs, [string(i) for i in nprocs]),
-        xlabel = "nprocs",
-        ylabel = "SYPD",
-        title = "Simulated years per day",
-        label = ["ClimaAtmos (Float32)" "Tempest (Float64)"],
-        legend = :right,
-        grid = :true,
-        left_margin = 10mm,
-        bottom_margin = 10mm,
-        top_margin = 10mm,
+plt2 = plot(
+    log2.(nprocs_clima_atmos),
+    cpu_hours_clima_atmos,
+    markershape = :circle,
+    markercolor = :blue,
+    xticks = (
+        log2.(nprocs_clima_atmos),
+        [string(i) for i in nprocs_clima_atmos],
     ),
-    figpath,
+    xlabel = "# of MPI processes",
+    ylabel = "CPU hours",
+    title = "Scaling data (T_int = $t_int)",
+    label = "ClimaAtmos (Float32)",
+    legend = :topleft,
+    grid = :true,
+    left_margin = 10mm,
+    bottom_margin = 10mm,
+    top_margin = 10mm,
 )
-linkfig(relpath(figpath, joinpath(@__DIR__, "../")), "SYPD")
+Plots.png(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
+Plots.pdf(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
 
-figpath = joinpath(output_dir, resolution * "_" * "Scaling.png")
 
 Plots.GRBackend()
-Plots.png(
-    plot(
-        [nprocs nprocs_tempest],
-        [cpu_hours cpu_hours_tempest],
-        markershape = [:circle :square],
-        xticks = (nprocs, [string(i) for i in nprocs]),
-        xlabel = "nprocs",
-        ylabel = "CPU hours",
-        title = "Scaling data (integration time = " * t_int * ")",
-        label = ["ClimaAtmos (Float32)" "Tempest (Float64)"],
-        legend = :topleft,
-        grid = :true,
-        left_margin = 10mm,
-        bottom_margin = 10mm,
-        top_margin = 10mm,
+plt3 = plot(
+    log2.(nprocs_clima_atmos),
+    scaling_efficiency_clima_atmos,
+    markershape = :circle,
+    markercolor = :blue,
+    xticks = (
+        log2.(nprocs_clima_atmos),
+        [string(i) for i in nprocs_clima_atmos],
     ),
-    figpath,
+    xlabel = "# of MPI processes",
+    ylabel = "Efficiency (T1/N)/TN",
+    title = "Scaling efficiency (T_int = $t_int)",
+    label = "ClimaAtmos (Float32)",
+    legend = :topright,
+    grid = :true,
+    left_margin = 10mm,
+    bottom_margin = 10mm,
+    top_margin = 10mm,
+    annotations = [
+        (
+            log2.(nprocs_clima_atmos),
+            scaling_efficiency_clima_atmos .- 5,
+            [string(i) * "%" for i in scaling_efficiency_clima_atmos],
+            4,
+        ),
+    ],
 )
-
-linkfig(relpath(figpath, joinpath(@__DIR__, "../")), "Scaling Data")
-
-figpath = joinpath(output_dir, resolution * "_" * "Scaling_efficiency.png")
-
-Plots.GRBackend()
-Plots.png(
-    plot(
-        [nprocs nprocs_tempest],
-        [scaling_efficiency scaling_efficiency_tempest],
-        markershape = [:circle :square],
-        xticks = (nprocs, [string(i) for i in nprocs]),
-        ylims = ((0, 110)),
-        xlabel = "nprocs",
-        ylabel = "Efficiency",
-        title = "Scaling efficiency",
-        label = ["ClimaAtmos (Float32)" "Tempest (Float64)"],
-        legend = :bottom,
-        grid = :true,
-        left_margin = 10mm,
-        bottom_margin = 10mm,
-        top_margin = 10mm,
-        annotations = [
-            (
-                nprocs,
-                scaling_efficiency .- 5,
-                [string(i) * "%" for i in scaling_efficiency],
-                4,
-            ),
-            (
-                nprocs_tempest,
-                scaling_efficiency_tempest .- 5,
-                [string(i) * "%" for i in scaling_efficiency_tempest],
-                4,
-            ),
-        ],
-    ),
-    figpath,
-)
-
-linkfig(relpath(figpath, joinpath(@__DIR__, "../")), "Scaling Efficiency")
+Plots.png(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
+Plots.pdf(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))

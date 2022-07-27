@@ -1,4 +1,6 @@
 #! /bin/bash
+set -euxo pipefail
+set +x
 
 nargs=$#
 
@@ -19,7 +21,7 @@ if [[ "$resolution" == "low" ]]
 then
     sim_params="mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17"
 else
-    sim_params="mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --upwinding none --t_end 1hours --dt 100secs --z_elem 45 --h_elem 24 --kappa_4 5e14"
+    sim_params="mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 24 --kappa_4 5e14"
 fi
 
 if [[ "$profiling" == "enable" ]]
