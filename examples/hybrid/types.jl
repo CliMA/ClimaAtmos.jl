@@ -160,6 +160,15 @@ function get_spaces(parsed_args, params, warp_function, comms_ctx)
     z_max = FT(parsed_args["z_max"])
     dz_bottom = FT(parsed_args["dz_bottom"])
     dz_top = FT(parsed_args["dz_top"])
+    topography = parsed_args["topography"]
+
+    if topography == "DCMIP200"
+        warp_function = topography_dcmip200
+    elseif topography == "NoWarp"
+        warp_function = nothing
+    end
+    @assert topography in ("NoWarp", "DCMIP200")
+    @info "topography = `$topography`"
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
