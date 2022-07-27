@@ -29,7 +29,6 @@ zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
-dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 topography = parsed_args["topography"]
 
 @assert idealized_insolation in (true, false)
