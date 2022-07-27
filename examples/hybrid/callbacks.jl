@@ -22,7 +22,11 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
 
     additional_callbacks = if !isnothing(model_spec.radiation_model)
         # TODO: better if-else criteria?
-        dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
+        dt_rad = if parsed_args["config"] == "column"
+            dt
+        else
+            FT(time_to_seconds(parsed_args["dt_rad"]))
+        end
         (
             PeriodicCallback(
                 rrtmgp_model_callback!,

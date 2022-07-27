@@ -164,7 +164,8 @@ function get_spaces(parsed_args, params, comms_ctx)
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
     center_space, face_space = if parsed_args["config"] == "sphere"
-        quad = Spaces.Quadratures.GLL{5}()
+        nh_poly = parsed_args["nh_poly"]
+        quad = Spaces.Quadratures.GLL{nh_poly}()
         horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
         h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
         z_stretch = if parsed_args["z_stretch"]
