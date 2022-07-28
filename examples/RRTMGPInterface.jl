@@ -465,8 +465,7 @@ array.
         water in m on cell centers (required)
         - `center_cloud_ice_water_path`: mean path length of cloud ice water in
         m on cell centers (required)
-        - `center_cloud_boolean_mask`: a boolean at every cell center that
-        indicates whether there is a cloud at that location (required)
+        - `center_cloud_fraction`: cloud fraction on cell centers (required)
         - `ice_roughness`: either 1, 2, or 3, with 3 corresponding to the
         roughest ice (required); this is a constant that can't be modified after
         the model is constructed
@@ -815,7 +814,9 @@ function RRTMGPModel(
 
         if radiation_mode isa ClearSkyRadiation
             cld_r_eff_liq = cld_r_eff_ice = nothing
-            cld_path_liq = cld_path_ice = cld_mask = nothing
+            cld_path_liq = cld_path_ice = cld_frac = nothing
+            random_lw = random_sw = nothing
+            cld_mask_lw = cld_mask_sw = cld_overlap = nothing
             ice_rgh = 1
         else
             cld_r_eff_liq = DA{FT}(undef, nlay, ncol)
@@ -830,8 +831,13 @@ function RRTMGPModel(
             cld_path_ice = DA{FT}(undef, nlay, ncol)
             name = "center_cloud_ice_water_path"
             set_and_save!(cld_path_ice, name, t..., dict)
-            cld_mask = DA{Bool}(undef, nlay, ncol)
-            set_and_save!(cld_mask, "center_cloud_boolean_mask", t..., dict)
+            cld_frac = DA{FT}(undef, nlay, ncol)
+            set_and_save!(cld_frac, "center_cloud_fraction", t..., dict)
+            random_lw = DA{FT}(undef, ngpt_lw, ncol)
+            random_sw = DA{FT}(undef, ngpt_sw, ncol)
+            cld_mask_lw = DA{Bool}(undef, ngpt_lw, nlay, ncol)
+            cld_mask_sw = DA{Bool}(undef, ngpt_sw, nlay, ncol)
+            cld_overlap = RRTMGP.AtmosphericStates.MaxRandomOverlap()
 
             # ice_roughness is a constant, so don't use set_and_save! to get it
             if !(:ice_roughness in keys(dict))
@@ -857,7 +863,12 @@ function RRTMGPModel(
             cld_r_eff_ice,
             cld_path_liq,
             cld_path_ice,
-            cld_mask,
+            cld_frac,
+            random_lw, # random_lw array is for internal use only
+            random_sw, # random_sw array is for internal use only
+            cld_mask_lw, # cld_mask_lw array is for internal use only
+            cld_mask_sw, # cld_mask_sw array is for internal use only
+            cld_overlap,
             ice_rgh,
             nlay,
             ncol,
