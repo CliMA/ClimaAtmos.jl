@@ -24,6 +24,17 @@ function microphysics(
     @inbounds for k in real_center_indices(grid)
         # condensation
         ts = ts_env[k]
+        if edmf.moisture_model isa NonEquilibriumMoisture
+            mph_neq = noneq_moisture_sources(
+                param_set,
+                aux_en.area[k],
+                ρ_c[k],
+                Δt,
+                ts,
+            )
+            aux_en.ql_tendency_noneq[k] = mph_neq.ql_tendency * aux_en.area[k]
+            aux_en.qi_tendency_noneq[k] = mph_neq.qi_tendency * aux_en.area[k]
+        end
         # autoconversion and accretion
         mph = precipitation_formation(
             param_set,
