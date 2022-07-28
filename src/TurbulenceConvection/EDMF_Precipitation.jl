@@ -106,9 +106,11 @@ function compute_precipitation_sink_tendencies(
 
     precip_fraction = compute_precip_fraction(edmf, state)
 
+    FT = float_type(state)
+
     @inbounds for k in real_center_indices(grid)
-        qr = prog_pr.q_rai[k] / precip_fraction
-        qs = prog_pr.q_sno[k] / precip_fraction
+        qr = max(FT(0), prog_pr.q_rai[k]) / precip_fraction
+        qs = max(FT(0), prog_pr.q_sno[k]) / precip_fraction
         ρ = ρ_c[k]
         q_tot_gm = aux_gm.q_tot[k]
         T_gm = aux_gm.T[k]

@@ -75,15 +75,15 @@ all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :ρaw)] = 6.68392294285
 #
 all_best_mse["edmf_trmm"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_trmm"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :ρe_tot)] = 5.234937400806944e-14
-all_best_mse["edmf_trmm"][(:c, :uₕ, :components, :data, 1)] = 1.4367902394040735e-13
-all_best_mse["edmf_trmm"][(:c, :uₕ, :components, :data, 2)] = 1.6835121731555283e-13
-all_best_mse["edmf_trmm"][(:c, :ρq_tot)] = 6.34998917194688e-12
-all_best_mse["edmf_trmm"][(:c, :turbconv, :en, :ρatke)] = 2.3128570854672193e-11
-all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρarea)] = 1.3322599635057017e-11
-all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 1.250022665350686e-11
-all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 4.0547057900133534e-11
-all_best_mse["edmf_trmm"][(:f, :turbconv, :up, 1, :ρaw)] = 6.418126461562053e-12
+all_best_mse["edmf_trmm"][(:c, :ρe_tot)] = 1.9011542811143432e-10
+all_best_mse["edmf_trmm"][(:c, :uₕ, :components, :data, 1)] = 7.607842827254466e-10
+all_best_mse["edmf_trmm"][(:c, :uₕ, :components, :data, 2)] = 7.888960575221811e-10
+all_best_mse["edmf_trmm"][(:c, :ρq_tot)] = 5.046608618145722e-9
+all_best_mse["edmf_trmm"][(:c, :turbconv, :en, :ρatke)] = 1.0243382744484688e-7
+all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρarea)] = 1.808565765467562e-7
+all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 1.7203707485787055e-7
+all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 2.955189683560185e-7
+all_best_mse["edmf_trmm"][(:f, :turbconv, :up, 1, :ρaw)] = 1.7320394838399756e-7
 #
 all_best_mse["edmf_gabls"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_gabls"][(:c, :ρ)] = 0.0
