@@ -220,10 +220,10 @@ uuid = "5f86816e-8b66-43b2-912e-75384f99de49"
 version = "0.3.2"
 
 [[deps.ClimaCore]]
-deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "RecursiveArrayTools", "RootSolvers", "Rotations", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "39b0b723ff68c0a718653aebaa672aee5556c09f"
+deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "Rotations", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
+git-tree-sha1 = "8ab4217acbe37d9b32565d3780a456d68bdce61f"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.7"
+version = "0.10.8"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
@@ -257,9 +257,9 @@ version = "0.6.0"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
-git-tree-sha1 = "6d4fa04343a7fc9f9cb9cff9558929f3d2752717"
+git-tree-sha1 = "bfae3e59e3e20c0655e963c7f06362dce07c98d6"
 uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-version = "1.0.9"
+version = "1.0.10"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -747,6 +747,12 @@ git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
+[[deps.HDF5]]
+deps = ["Compat", "HDF5_jll", "Libdl", "Mmap", "Random", "Requires"]
+git-tree-sha1 = "9ffc57b9bb643bf3fce34f3daf9ff506ed2d8b7a"
+uuid = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+version = "0.16.10"
+
 [[deps.HDF5_jll]]
 deps = ["Artifacts", "JLLWrappers", "LibCURL_jll", "Libdl", "OpenSSL_jll", "Pkg", "Zlib_jll"]
 git-tree-sha1 = "bab67c0d1c4662d2c4be8c6007751b0b6111de5c"
@@ -826,10 +832,10 @@ uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 version = "0.13.6"
 
 [[deps.IntervalSets]]
-deps = ["Dates", "Random", "Statistics"]
-git-tree-sha1 = "57af5939800bce15980bddd2426912c4f83012d8"
+deps = ["Dates", "Statistics"]
+git-tree-sha1 = "ad841eddfb05f6d9be0bff1fa48dcae32f134a2d"
 uuid = "8197267c-284f-5f27-9208-e0e47529a953"
-version = "0.7.1"
+version = "0.6.2"
 
 [[deps.InverseFunctions]]
 deps = ["Test"]
