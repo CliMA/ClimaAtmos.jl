@@ -178,7 +178,7 @@ steps:
         artifact_paths: "test_io/*"
 
       - label: ":computer: Use test env with latest deps"
-        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 6 --h_elem 2 --post_process false --dt_rad 2secs"
+        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
         artifact_paths: "test_env/*"
 
 
