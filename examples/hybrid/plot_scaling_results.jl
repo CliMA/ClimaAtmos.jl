@@ -31,7 +31,7 @@ nprocs_clima_atmos = I[]
 walltime_clima_atmos = FT[]
 
 for foldername in readdir(output_dir)
-    if occursin(job_id, foldername)
+    if occursin(job_id, foldername) && !occursin("comparison", foldername)
         nprocs_string = split(foldername, "_")[end]
         dict = load(
             joinpath(
@@ -47,7 +47,6 @@ end
 order = sortperm(nprocs_clima_atmos)
 nprocs_clima_atmos, walltime_clima_atmos =
     nprocs_clima_atmos[order], walltime_clima_atmos[order]
-
 # simulated years per day
 sypd_clima_atmos =
     (secs_per_day ./ walltime_clima_atmos) * t_int_days ./ days_per_year
