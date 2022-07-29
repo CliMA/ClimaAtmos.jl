@@ -173,6 +173,11 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
     @nvtx "implicit tendency special" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
 
+            if p.tendency_knobs.has_turbconv
+                parent(Yₜ.c.turbconv[colidx]) .= FT(0)
+                parent(Yₜ.f.turbconv[colidx]) .= FT(0)
+            end
+
             @. ᶜK[colidx] =
                 norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
 
