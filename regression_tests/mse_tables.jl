@@ -6,48 +6,48 @@
 all_best_mse = OrderedCollections.OrderedDict()
 #
 all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 1.8443988202345924e-07
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 6.3245731672250676e-09
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 1)] = 7.3897763240045938e-03
-all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 2)] = 3.2126928766337909e-01
-all_best_mse["sphere_held_suarez_rhotheta"][(:f, :w, :components, :data, 1)] = 8.3186209553833539e+00
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 1.8443988202345924e-7
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 6.324573167225068e-9
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 1)] = 0.007389776324004594
+all_best_mse["sphere_held_suarez_rhotheta"][(:c, :uₕ, :components, :data, 2)] = 0.3212692876633791
+all_best_mse["sphere_held_suarez_rhotheta"][(:f, :w, :components, :data, 1)] = 8.318620955383354
 #
 all_best_mse["sphere_held_suarez_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρ)] = 4.2461223415004236e-09
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe_tot)] = 8.4273281818351322e-07
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 1.3280117592054644e-03
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 4.3465607647255017e-02
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρq_tot)] = 2.9656750499018924e-05
-all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 3.6027855811957018e+01
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρ)] = 4.246122341500424e-9
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρe_tot)] = 8.427328181835132e-7
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0.0013280117592054644
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0.04346560764725502
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:c, :ρq_tot)] = 2.9656750499018924e-5
+all_best_mse["sphere_held_suarez_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 36.02785581195702
 #
 all_best_mse["sphere_baroclinic_wave_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρ)] = 5.5933566543671513e-07
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe_tot)] = 9.5988308439307118e-06
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 8.6099415698739893e-05
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 4.6322046929675134e-02
-all_best_mse["sphere_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 1.3319686299101685e+00
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρ)] = 5.593356654367151e-7
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :ρe_tot)] = 9.598830843930712e-6
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 1)] = 8.609941569873989e-5
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.046322046929675134
+all_best_mse["sphere_baroclinic_wave_rhoe"][(:f, :w, :components, :data, 1)] = 1.3319686299101685
 #
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 2.5730268885919375e-08
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 1.3992122220669325e-06
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 3.1160896522822743e-05
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 7.2260271080074965e-03
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 9.7433774527988526e-06
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 4.1874289555362028e+00
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 2.5730268885919375e-8
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 1.3992122220669325e-6
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 3.116089652282274e-5
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0.0072260271080074965
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 9.743377452798853e-6
+all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 4.187428955536203
 #
 all_best_mse["sphere_held_suarez_rhoe"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρ)] = 6.2778199507009592e-09
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe_tot)] = 1.1217787432959677e-07
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 1)] = 6.9688206609128925e-04
-all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 2)] = 1.5636232022448279e-02
-all_best_mse["sphere_held_suarez_rhoe"][(:f, :w, :components, :data, 1)] = 2.9236318551400702e+00
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρ)] = 6.277819950700959e-9
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :ρe_tot)] = 1.1217787432959677e-7
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 1)] = 0.0006968820660912892
+all_best_mse["sphere_held_suarez_rhoe"][(:c, :uₕ, :components, :data, 2)] = 0.01563623202244828
+all_best_mse["sphere_held_suarez_rhoe"][(:f, :w, :components, :data, 1)] = 2.92363185514007
 #
 all_best_mse["sphere_held_suarez_rhoe_int"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρ)] = 1.6268100221432348e-08
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρe_int)] = 2.2951272392218787e-06
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 1)] = 9.1172256434432085e-04
-all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 2)] = 1.3212278564959526e-02
-all_best_mse["sphere_held_suarez_rhoe_int"][(:f, :w, :components, :data, 1)] = 2.4745736750594602e+00
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρ)] = 1.6268100221432348e-8
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :ρe_int)] = 2.2951272392218787e-6
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 1)] = 0.0009117225643443209
+all_best_mse["sphere_held_suarez_rhoe_int"][(:c, :uₕ, :components, :data, 2)] = 0.013212278564959526
+all_best_mse["sphere_held_suarez_rhoe_int"][(:f, :w, :components, :data, 1)] = 2.4745736750594602
 #
 all_best_mse["edmf_bomex"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_bomex"][(:c, :ρ)] = 0.0
@@ -63,15 +63,15 @@ all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :ρaw)] = 0.00834399482035984
 #
 all_best_mse["edmf_dycoms_rf01"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_dycoms_rf01"][(:c, :ρe_tot)] = 1.7155812387713146e-12
-all_best_mse["edmf_dycoms_rf01"][(:c, :uₕ, :components, :data, 1)] = 1.2384969282619718e-11
-all_best_mse["edmf_dycoms_rf01"][(:c, :uₕ, :components, :data, 2)] = 1.238496928544619e-11
-all_best_mse["edmf_dycoms_rf01"][(:c, :ρq_tot)] = 9.748244466190768e-12
-all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :en, :ρatke)] = 3.0911963872882134e-9
-all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρarea)] = 8.170562192650643e-9
-all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 8.169187333207332e-9
-all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 7.784512713474964e-9
-all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :ρaw)] = 8.201174837724625e-9
+all_best_mse["edmf_dycoms_rf01"][(:c, :ρe_tot)] = 1.6691240601771484e-12
+all_best_mse["edmf_dycoms_rf01"][(:c, :uₕ, :components, :data, 1)] = 1.1154746509782044e-11
+all_best_mse["edmf_dycoms_rf01"][(:c, :uₕ, :components, :data, 2)] = 1.1154746507889584e-11
+all_best_mse["edmf_dycoms_rf01"][(:c, :ρq_tot)] = 9.803431662060278e-12
+all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :en, :ρatke)] = 2.0379662046611414e-9
+all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρarea)] = 6.5951757617115724e-9
+all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 6.5940185303181666e-9
+all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 6.2828087684239064e-9
+all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :ρaw)] = 6.745827947213308e-9
 #
 all_best_mse["edmf_trmm"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_trmm"][(:c, :ρ)] = 0.0
@@ -87,17 +87,17 @@ all_best_mse["edmf_trmm"][(:f, :turbconv, :up, 1, :ρaw)] = 1.7320395096049777e-
 #
 all_best_mse["edmf_gabls"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_gabls"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_gabls"][(:c, :ρe_tot)] = 1.182173783922847e-21
-all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 3.715347519130266e-21
-all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 6.055813559241208e-21
-all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 2.1520015318016604e-20
+all_best_mse["edmf_gabls"][(:c, :ρe_tot)] = 0.11981655635627154
+all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.20543656614452674
+all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 4.926888764419212
+all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 8.50032654518012
 #
 all_best_mse["compressible_edmf_gabls"] = OrderedCollections.OrderedDict()
-all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 1.6390613078045193e-6
-all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 0.0031630681392908334
-all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.01389681639739545
-all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0.05172358125187535
-all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0.04058133439837814
+all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 4.888486165219538e-5
+all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 0.10337336544741292
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.18166174637526528
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 5.5710914785660925
+all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 12.062732246091889
 #
 #! format: on
 #################################

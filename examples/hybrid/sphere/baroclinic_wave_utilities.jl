@@ -669,12 +669,7 @@ function variable_T_saturated_surface_conditions(
 
     ρ_sfc =
         TD.air_density(thermo_params, ts_int) *
-        (
-            (
-                T_int +
-                FT(CAP.grav(params)) / FT(CAP.cp_d(params)) * (z_int - z_sfc)
-            ) / T_int
-        )^(TD.cv_m(thermo_params, ts_int) / Rm_int)
+        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
     q_sfc =
         TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
     ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
