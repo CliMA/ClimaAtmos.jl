@@ -37,7 +37,6 @@ function scampy_output_dataset_folder(lazy_download = true)
         AW.ArtifactFile(url = "https://caltech.box.com/shared/static/t6qq6plt2oxcmmy40r1szgokahykqggp.nc", filename = "Bomex.nc",),
         AW.ArtifactFile(url = "https://caltech.box.com/shared/static/wp8k4m7ta1hs0c6e4j2fpsp3kj05wdip.nc", filename = "Soares.nc",),
         AW.ArtifactFile(url = "https://caltech.box.com/shared/static/vbuxzg85scwy9mg0ziiuzy6fimo0e389.nc", filename = "Nieuwstadt.nc",),
-        AW.ArtifactFile(url = "https://caltech.box.com/shared/static/72t6fr1gq10tg3jjputtp35nfzex0o4k.nc", filename = "DryBubble.nc",),
         AW.ArtifactFile(url = "https://caltech.box.com/shared/static/7axeussneeg8g3k0ndvagsn0pkmbij3e.nc", filename = "life_cycle_Tan2018.nc",),
         ],
     )

@@ -74,8 +74,6 @@ struct DYCOMS_RF02 <: AbstractCaseType end
 
 struct GABLS <: AbstractCaseType end
 
-struct DryBubble <: AbstractCaseType end
-
 struct LES_driven_SCM <: AbstractCaseType end
 
 #####
@@ -164,7 +162,6 @@ get_case(::Val{:GATE_III}) = GATE_III()
 get_case(::Val{:DYCOMS_RF01}) = DYCOMS_RF01()
 get_case(::Val{:DYCOMS_RF02}) = DYCOMS_RF02()
 get_case(::Val{:GABLS}) = GABLS()
-get_case(::Val{:DryBubble}) = DryBubble()
 get_case(::Val{:LES_driven_SCM}) = LES_driven_SCM()
 
 get_case_name(case_type::AbstractCaseType) = string(case_type)
@@ -178,7 +175,6 @@ get_forcing_type(::Soares) = ForcingNone
 get_forcing_type(::Nieuwstadt) = ForcingNone
 get_forcing_type(::DYCOMS_RF01) = ForcingDYCOMS_RF01
 get_forcing_type(::DYCOMS_RF02) = ForcingDYCOMS_RF01
-get_forcing_type(::DryBubble) = ForcingNone
 get_forcing_type(::LES_driven_SCM) = ForcingLES
 get_forcing_type(::TRMM_LBA) = ForcingNone
 
@@ -1191,63 +1187,6 @@ function initialize_forcing(::GABLS, forcing, grid::Grid, state, param_set)
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, prof_vg)
     return nothing
-end
-
-#####
-##### DryBubble
-#####
-
-function surface_ref_state(::DryBubble, param_set::APS, namelist)
-    thermo_params = TCP.thermodynamics_params(param_set)
-    FT = eltype(param_set)
-    Pg::FT = 1.0e5  #Pressure at ground
-    Tg::FT = 296.0
-    qtg::FT = 1.0e-5
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
-
-function initialize_profiles(
-    ::DryBubble,
-    grid::Grid,
-    param_set,
-    state;
-    kwargs...,
-)
-    FT = TC.float_type(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-
-    prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    TC.set_z!(prog_gm_uₕ, FT(0.01), FT(0))
-
-    # initialize Grid Mean Profiles of thetali and qt
-    zc_in = grid.zc.z
-    prof_θ_liq_ice = APL.DryBubble_θ_liq_ice(FT)
-    aux_gm.θ_liq_ice .= prof_θ_liq_ice.(zc_in)
-    parent(prog_gm.ρq_tot) .= 0
-    parent(aux_gm.q_tot) .= 0
-    parent(aux_gm.tke) .= 0
-    parent(aux_gm.Hvar) .= 0
-    parent(aux_gm.QTvar) .= 0
-    parent(aux_gm.HQTcov) .= 0
-end
-
-function surface_params(
-    case::DryBubble,
-    surf_ref_state,
-    param_set;
-    Ri_bulk_crit,
-)
-    FT = eltype(surf_ref_state)
-    Tsurface::FT = 300.0
-    qsurface::FT = 0.0
-    shf::FT = 0.0001 # only prevent zero division in SF.jl lmo
-    lhf::FT = 0.0001 # only prevent zero division in SF.jl lmo
-    ustar::FT = 0.1
-
-    kwargs = (; Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit)
-    return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
 #####

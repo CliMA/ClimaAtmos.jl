@@ -323,8 +323,6 @@ function default_namelist(
         namelist = DYCOMS_RF02(namelist_defaults)
     elseif case_name == "GABLS"
         namelist = GABLS(namelist_defaults)
-    elseif case_name == "DryBubble"
-        namelist = DryBubble(namelist_defaults)
     elseif case_name == "LES_driven_SCM"
         namelist = LES_driven_SCM(namelist_defaults)
     else
@@ -584,34 +582,6 @@ function GABLS(namelist_defaults)
     namelist["time_stepping"]["dt_max"] = 8.0
     namelist["meta"]["simname"] = "GABLS"
     namelist["meta"]["casename"] = "GABLS"
-
-    return namelist
-end
-
-function DryBubble(namelist_defaults)
-    namelist = deepcopy(namelist_defaults)
-    namelist["meta"]["casename"] = "DryBubble"
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["surface_area"] = 0.0
-
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_buoy_coeff1"] =
-        0.12
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_adv_coeff"] =
-        0.25
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_drag_coeff"] =
-        0.1
-
-    namelist["grid"]["nz"] = 200
-    namelist["grid"]["dz"] = 50.0
-
-    namelist["stats_io"]["frequency"] = 10.0
-    namelist["time_stepping"]["t_max"] = 1000.0
-    namelist["time_stepping"]["dt_min"] = 0.5
-
-    namelist["meta"]["simname"] = "DryBubble"
-    namelist["meta"]["casename"] = "DryBubble"
-
-    namelist["turbulence"]["EDMF_PrognosticTKE"]["entrainment_massflux_div_factor"] =
-        0.4
 
     return namelist
 end
