@@ -82,7 +82,7 @@ function initialize_updrafts(edmf, grid, state, surf)
             aux_up[i].T[k] = aux_gm.T[k]
             prog_up[i].ρarea[k] = 0
             prog_up[i].ρaq_tot[k] = 0
-            prog_up[i].ρaθ_liq_ice[k] = 0
+            prog_up[i].ρae_tot[k] = 0
         end
         if edmf.entr_closure isa TC.PrognosticNoisyRelaxationProcess
             @. prog_up[i].ε_nondim = 0

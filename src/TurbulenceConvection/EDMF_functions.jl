@@ -340,6 +340,9 @@ function set_edmf_surface_bc(
 )
     thermo_params = TCP.thermodynamics_params(param_set)
     FT = float_type(state)
+    Ic = CCO.InterpolateF2C()
+    wvec = CC.Geometry.WVector
+    C123 = CCG.Covariant123Vector
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
@@ -349,19 +352,30 @@ function set_edmf_surface_bc(
     prog_up = center_prog_updrafts(state)
     prog_en = center_prog_environment(state)
     prog_up_f = face_prog_updrafts(state)
+    aux_up_f = face_aux_updrafts(state)
     aux_bulk = center_aux_bulk(state)
+    aux_tc = center_aux_turbconv(state)
+    prog_gm_uₕ = grid_mean_uₕ(state)
     ts_gm = aux_gm.ts
     cp = TD.cp_m(thermo_params, ts_gm[kc_surf])
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
+    p_c = aux_gm.p
+    w_up_c = aux_tc.w_up_c
     ae_surf::FT = 1
     @inbounds for i in 1:N_up
+        @. w_up_c = Ic(aux_up_f[i].w)
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
         a_surf = area_surface_bc(surf, edmf, i)
+        e_kin = @. LA.norm_sqr(C123(prog_gm_uₕ) + C123(wvec(w_up_c))) / 2
+        e_pot = geopotential(param_set, grid.zc.z[kc_surf])
+        ts_up_i = thermo_state_pθq(param_set, p_c[kc_surf], θ_surf, q_surf)
+        e_tot_surf =
+            TD.total_energy(thermo_params, ts_up_i, e_kin[kc_surf], e_pot)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
+        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         if edmf.moisture_model isa NonEquilibriumMoisture
             q_liq_surf = FT(0)
             q_ice_surf = FT(0)
@@ -669,20 +683,22 @@ function compute_up_tendencies!(
         a_up = aux_up_i.area
         q_tot_up = aux_up_i.q_tot
         q_tot_en = aux_en.q_tot
-        θ_liq_ice_en = aux_en.θ_liq_ice
-        θ_liq_ice_up = aux_up_i.θ_liq_ice
+        e_tot_up = aux_up_i.e_tot
+        e_tot_en = aux_en.e_tot
+        h_tot_up = aux_up_i.h_tot
+        h_tot_en = aux_en.h_tot
         entr_turb_dyn = aux_up_i.entr_turb_dyn
         detr_turb_dyn = aux_up_i.detr_turb_dyn
-        θ_liq_ice_tendency_precip_formation =
-            aux_up_i.θ_liq_ice_tendency_precip_formation
         qt_tendency_precip_formation = aux_up_i.qt_tendency_precip_formation
+        e_tot_tendency_precip_formation =
+            aux_up_i.e_tot_tendency_precip_formation
 
         ρarea = prog_up[i].ρarea
-        ρaθ_liq_ice = prog_up[i].ρaθ_liq_ice
+        ρae_tot = prog_up[i].ρae_tot
         ρaq_tot = prog_up[i].ρaq_tot
 
         tends_ρarea = tendencies_up[i].ρarea
-        tends_ρaθ_liq_ice = tendencies_up[i].ρaθ_liq_ice
+        tends_ρae_tot = tendencies_up[i].ρae_tot
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea =
@@ -690,11 +706,11 @@ function compute_up_tendencies!(
             (ρarea * Ic(w_up) * entr_turb_dyn) -
             (ρarea * Ic(w_up) * detr_turb_dyn)
 
-        @. tends_ρaθ_liq_ice =
-            -∇c(wvec(LBF(Ic(w_up) * ρaθ_liq_ice))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn * θ_liq_ice_en) -
-            (ρaθ_liq_ice * Ic(w_up) * detr_turb_dyn) +
-            (ρ_c * θ_liq_ice_tendency_precip_formation)
+        @. tends_ρae_tot =
+            -∇c(wvec(LBF(Ic(w_up) * ρarea * h_tot_up))) +
+            (ρarea * Ic(w_up) * entr_turb_dyn * h_tot_en) -
+            (ρarea * Ic(w_up) * detr_turb_dyn * h_tot_up) +
+            (ρ_c * e_tot_tendency_precip_formation)
 
         @. tends_ρaq_tot =
             -∇c(wvec(LBF(Ic(w_up) * ρaq_tot))) +
@@ -751,7 +767,7 @@ function compute_up_tendencies!(
             @. tends_δ_nondim = δ_λ * (mean_detr - δ_nondim)
         end
         tends_ρarea[kc_surf] = 0
-        tends_ρaθ_liq_ice[kc_surf] = 0
+        tends_ρae_tot[kc_surf] = 0
         tends_ρaq_tot[kc_surf] = 0
     end
 
@@ -802,21 +818,27 @@ function filter_updraft_vars(
     kf_surf = kf_surface(grid)
     FT = float_type(state)
     N_up = n_updrafts(edmf)
+    thermo_params = TCP.thermodynamics_params(param_set)
 
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
     aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
+    aux_gm = center_aux_grid_mean(state)
     prog_up_f = face_prog_updrafts(state)
+    aux_tc = center_aux_turbconv(state)
+    prog_gm_uₕ = grid_mean_uₕ(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
+    p_c = aux_gm.p
     a_min = edmf.minimum_area
     a_max = edmf.max_area
+    w_up_c = aux_tc.w_up_c
 
     @inbounds for i in 1:N_up
         prog_up[i].ρarea .= max.(prog_up[i].ρarea, 0)
-        prog_up[i].ρaθ_liq_ice .= max.(prog_up[i].ρaθ_liq_ice, 0)
+        prog_up[i].ρae_tot .= max.(prog_up[i].ρae_tot, 0)
         prog_up[i].ρaq_tot .= max.(prog_up[i].ρaq_tot, 0)
         if edmf.entr_closure isa PrognosticNoisyRelaxationProcess
             @. prog_up[i].ε_nondim = max(prog_up[i].ε_nondim, 0)
@@ -847,9 +869,10 @@ function filter_updraft_vars(
             prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
             # this is needed to make sure Rico is unchanged.
             # TODO : look into it further to see why
-            # a similar filtering of ρaθ_liq_ice breaks the simulation
+            # a similar filtering of ρae_tot breaks the simulation
             if prog_up[i].ρarea[k] / ρ_c[k] < a_min
                 prog_up[i].ρaq_tot[k] = 0
+                prog_up[i].ρae_tot[k] = 0
             end
         end
     end
@@ -860,7 +883,7 @@ function filter_updraft_vars(
                 prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
                 # this is needed to make sure Rico is unchanged.
                 # TODO : look into it further to see why
-                # a similar filtering of ρaθ_liq_ice breaks the simulation
+                # a similar filtering of ρae_tot breaks the simulation
                 if prog_up[i].ρarea[k] / ρ_c[k] < a_min
                     prog_up[i].ρaq_liq[k] = 0
                     prog_up[i].ρaq_ice[k] = 0
@@ -871,18 +894,26 @@ function filter_updraft_vars(
 
 
     Ic = CCO.InterpolateF2C()
+    wvec = CC.Geometry.WVector
+    C123 = CCG.Covariant123Vector
     @inbounds for i in 1:N_up
+        @. w_up_c = Ic(aux_up_f[i].w)
         @. prog_up[i].ρarea =
             ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρarea)
-        @. prog_up[i].ρaθ_liq_ice =
-            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
+        @. prog_up[i].ρae_tot =
+            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρae_tot)
         @. prog_up[i].ρaq_tot =
             ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_tot)
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
         a_surf = area_surface_bc(surf, edmf, i)
+        e_kin = @. LA.norm_sqr(C123(prog_gm_uₕ) + C123(wvec(w_up_c))) / 2
+        e_pot = geopotential(param_set, grid.zc.z[kc_surf])
+        ts_up_i = thermo_state_pθq(param_set, p_c[kc_surf], θ_surf, q_surf)
+        e_tot_surf =
+            TD.total_energy(thermo_params, ts_up_i, e_kin[kc_surf], e_pot)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
+        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
     if edmf.moisture_model isa NonEquilibriumMoisture

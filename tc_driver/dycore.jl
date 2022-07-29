@@ -232,8 +232,9 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
         aux_gm.T[k] = TD.air_temperature(thermo_params, ts)
         aux_gm.RH[k] = TD.relative_humidity(thermo_params, ts)
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
+        aux_gm.e_tot[k] = prog_gm.ρe_tot[k] / ρ_c[k]
         aux_gm.h_tot[k] =
-            TC.total_enthalpy(param_set, prog_gm.ρe_tot[k] / ρ_c[k], ts)
+            TC.total_enthalpy(param_set, aux_gm.e_tot[k], ts)
         aux_gm.p[k] = TD.air_pressure(thermo_params, ts)
         aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
     end

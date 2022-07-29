@@ -64,6 +64,7 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     q_tot = FT(0),
     p = FT(0),
     e_kin = FT(0),
+    e_tot = FT(0),
     h_tot = FT(0),
 )
 cent_aux_vars(FT, local_geometry, edmf) = (;
