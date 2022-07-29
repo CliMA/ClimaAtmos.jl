@@ -19,11 +19,7 @@ function initialize_edmf(
     ts_gm = aux_gm.ts
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ts_gm)
     surf = get_surface(surf_params, grid, state, t, param_set)
-    if case isa Cases.DryBubble
-        initialize_updrafts_DryBubble(edmf, grid, state)
-    else
-        initialize_updrafts(edmf, grid, state, surf)
-    end
+    initialize_updrafts(edmf, grid, state, surf)
     TC.set_edmf_surface_bc(edmf, grid, state, surf, param_set)
     return
 end
@@ -98,64 +94,4 @@ function initialize_updrafts(edmf, grid, state, surf)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
     end
     return
-end
-
-import AtmosphericProfilesLibrary
-const APL = AtmosphericProfilesLibrary
-function initialize_updrafts_DryBubble(edmf, grid, state)
-
-    # criterion 2: b>1e-4
-    aux_up = TC.center_aux_updrafts(state)
-    aux_up_f = TC.face_aux_updrafts(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    aux_gm_f = TC.face_aux_grid_mean(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    prog_up = TC.center_prog_updrafts(state)
-    prog_up_f = TC.face_prog_updrafts(state)
-    ρ_0_c = prog_gm.ρ
-    ρ_0_f = aux_gm_f.ρ
-    N_up = TC.n_updrafts(edmf)
-    FT = TC.float_type(state)
-    z_in = APL.DryBubble_updrafts_z(FT)
-    z_min, z_max = first(z_in), last(z_in)
-    prof_θ_liq_ice = APL.DryBubble_updrafts_θ_liq_ice(FT)
-    prof_area = APL.DryBubble_updrafts_area(FT)
-    prof_w = APL.DryBubble_updrafts_w(FT)
-    prof_T = APL.DryBubble_updrafts_T(FT)
-    face_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
-    If = CCO.InterpolateC2F(; face_bcs...)
-    @inbounds for i in 1:N_up
-        @inbounds for k in TC.real_face_indices(grid)
-            if z_min <= grid.zf[k].z <= z_max
-                aux_up_f[i].w[k] = eps(FT) # non zero value to aviod zeroing out fields in the filter
-            end
-        end
-
-        @inbounds for k in TC.real_center_indices(grid)
-            z = grid.zc[k].z
-            if z_min <= z <= z_max
-                aux_up[i].area[k] = prof_area(z)
-                aux_up[i].θ_liq_ice[k] = prof_θ_liq_ice(z)
-                aux_up[i].q_tot[k] = 0.0
-                aux_up[i].q_liq[k] = 0.0
-                aux_up[i].q_ice[k] = 0.0
-
-                # for now temperature is provided as diagnostics from LES
-                aux_up[i].T[k] = prof_T(z)
-                prog_up[i].ρarea[k] = ρ_0_c[k] * aux_up[i].area[k]
-                prog_up[i].ρaθ_liq_ice[k] =
-                    prog_up[i].ρarea[k] * aux_up[i].θ_liq_ice[k]
-                prog_up[i].ρaq_tot[k] = prog_up[i].ρarea[k] * aux_up[i].q_tot[k]
-            else
-                aux_up[i].area[k] = 0.0
-                aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
-                aux_up[i].T[k] = aux_gm.T[k]
-                prog_up[i].ρarea[k] = 0.0
-                prog_up[i].ρaθ_liq_ice[k] = 0.0
-                prog_up[i].ρaq_tot[k] = 0.0
-            end
-        end
-        @. prog_up_f[i].ρaw = If(prog_up[i].ρarea) * aux_up_f[i].w
-    end
-    return nothing
 end
