@@ -1451,10 +1451,10 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
-deps = ["Adapt", "CUDA", "DocStringExtensions", "GaussQuadrature", "StaticArrays"]
-git-tree-sha1 = "fcfe54b3682b1b8cc1e7a4424a30a666af2e663e"
+deps = ["Adapt", "CUDA", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
+git-tree-sha1 = "8f368b14d83d112d4f0a3524dbe3882ade3a97a6"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.4.0"
+version = "0.5.0"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]

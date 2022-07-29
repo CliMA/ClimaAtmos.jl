@@ -111,8 +111,12 @@ function rrtmgp_model_cache(
                     center_cloud_ice_water_path = RRTMGPI.field2array(
                         @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
                     ),
-                    center_cloud_boolean_mask = RRTMGPI.field2array(
-                        @. ᶜis_bottom_cloud || ᶜis_top_cloud
+                    center_cloud_fraction = RRTMGPI.field2array(
+                        @. ifelse(
+                            ᶜis_bottom_cloud || ᶜis_top_cloud,
+                            FT(1),
+                            FT(0) * ᶜΔz,
+                        )
                     ),
                 )
             else
@@ -120,7 +124,7 @@ function rrtmgp_model_cache(
                     kwargs...,
                     center_cloud_liquid_water_path = NaN, # initialized in callback
                     center_cloud_ice_water_path = NaN, # initialized in callback
-                    center_cloud_boolean_mask = false, # initialized in callback
+                    center_cloud_fraction = NaN, # initialized in callback
                 )
             end
         end
@@ -294,16 +298,15 @@ function rrtmgp_model_callback!(integrator)
             rrtmgp_model.center_cloud_ice_water_path,
             axes(Y.c),
         )
-        ᶜmask = RRTMGPI.array2field(
-            rrtmgp_model.center_cloud_boolean_mask,
-            axes(Y.c),
-        )
+        ᶜfrac =
+            RRTMGPI.array2field(rrtmgp_model.center_cloud_fraction, axes(Y.c))
         # multiply by 1000 to convert from kg/m^2 to g/m^2
         @. ᶜlwp =
             1000 * Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts) * ᶜΔz
         @. ᶜiwp =
             1000 * Y.c.ρ * TD.ice_specific_humidity(thermo_params, ᶜts) * ᶜΔz
-        @. ᶜmask = TD.has_condensate(thermo_params, ᶜts)
+        @. ᶜfrac =
+            ifelse(TD.has_condensate(thermo_params, ᶜts), FT(1), FT(0) * ᶜΔz)
     end
 
     RRTMGPI.update_fluxes!(rrtmgp_model)
