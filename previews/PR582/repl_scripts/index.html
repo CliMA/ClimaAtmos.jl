@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>REPL scripts · ClimaAtmos.jl</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.044/juliamono.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">ClimaAtmos.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../installation_instructions/">Installation instructions</a></li><li><a class="tocitem" href="../running_instructions/">Running instructions</a></li><li><a class="tocitem" href="../contributor_guide/">Contributor Guide</a></li><li><a class="tocitem" href="../function_index/">Function Index</a></li><li><a class="tocitem" href="../equations/">Equations</a></li><li class="is-active"><a class="tocitem" href>REPL scripts</a></li><li><a class="tocitem" href="../cl_args/">Command line arguments</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>REPL scripts</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>REPL scripts</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/src/repl_scripts.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Julia-scripts-per-Buildkite-job"><a class="docs-heading-anchor" href="#Julia-scripts-per-Buildkite-job">Julia scripts per Buildkite job</a><a id="Julia-scripts-per-Buildkite-job-1"></a><a class="docs-heading-anchor-permalink" href="#Julia-scripts-per-Buildkite-job" title="Permalink"></a></h1><pre><code class="language-julia hljs">include(&quot;repl_scripts.jl&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">### Buildkite job `sphere_single_column_radiative_equilibrium_gray&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;hyperdiff&quot;] = false;
+parsed_args[&quot;z_elem&quot;] = 70;
+parsed_args[&quot;dt&quot;] = &quot;3hours&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;654days&quot;;
+parsed_args[&quot;dz_top&quot;] = 10000;
+parsed_args[&quot;dz_bottom&quot;] = 100;
+parsed_args[&quot;config&quot;] = &quot;column&quot;;
+parsed_args[&quot;z_max&quot;] = 70000.0;
+parsed_args[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_single_column_radiative_equilibrium_gray&quot;;
+parsed_args[&quot;rad&quot;] = &quot;gray&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_single_column_radiative_equilibrium_clearsky&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;hyperdiff&quot;] = false;
+parsed_args[&quot;z_elem&quot;] = 70;
+parsed_args[&quot;dt&quot;] = &quot;3hours&quot;;
+parsed_args[&quot;idealized_h2o&quot;] = true;
+parsed_args[&quot;t_end&quot;] = &quot;654days&quot;;
+parsed_args[&quot;dz_top&quot;] = 10000;
+parsed_args[&quot;dz_bottom&quot;] = 100;
+parsed_args[&quot;config&quot;] = &quot;column&quot;;
+parsed_args[&quot;z_max&quot;] = 70000.0;
+parsed_args[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_single_column_radiative_equilibrium_clearsky&quot;;
+parsed_args[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_single_column_radiative_equilibrium_clearsky_insolation&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;hyperdiff&quot;] = false;
+parsed_args[&quot;z_elem&quot;] = 70;
+parsed_args[&quot;dt&quot;] = &quot;3hours&quot;;
+parsed_args[&quot;idealized_h2o&quot;] = true;
+parsed_args[&quot;t_end&quot;] = &quot;654days&quot;;
+parsed_args[&quot;dz_top&quot;] = 10000;
+parsed_args[&quot;dz_bottom&quot;] = 100;
+parsed_args[&quot;config&quot;] = &quot;column&quot;;
+parsed_args[&quot;idealized_insolation&quot;] = false;
+parsed_args[&quot;z_max&quot;] = 70000.0;
+parsed_args[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_single_column_radiative_equilibrium_clearsky_insolation&quot;;
+parsed_args[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_single_column_radiative_equilibrium_allsky_idealized_clouds&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;hyperdiff&quot;] = false;
+parsed_args[&quot;z_elem&quot;] = 70;
+parsed_args[&quot;dt&quot;] = &quot;3hours&quot;;
+parsed_args[&quot;idealized_h2o&quot;] = true;
+parsed_args[&quot;t_end&quot;] = &quot;654days&quot;;
+parsed_args[&quot;dz_top&quot;] = 10000;
+parsed_args[&quot;idealized_clouds&quot;] = true;
+parsed_args[&quot;dz_bottom&quot;] = 100;
+parsed_args[&quot;config&quot;] = &quot;column&quot;;
+parsed_args[&quot;z_max&quot;] = 70000.0;
+parsed_args[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_single_column_radiative_equilibrium_allsky_idealized_clouds&quot;;
+parsed_args[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `mpi_baroclinic_wave_rhoe&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;job_id&quot;] = &quot;mpi_baroclinic_wave_rhoe&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;rad&quot;] = &quot;clearsky&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;5days&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe_IMEXEuler&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;ode_algo&quot;] = &quot;IMEXEuler&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;2days&quot;;
+parsed_args[&quot;dt&quot;] = &quot;60secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_baroclinic_wave_rhoe_IMEXEuler&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe_Float64&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_baroclinic_wave_rhoe_Float64&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhotheta_Float64&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;energy_name&quot;] = &quot;rhotheta&quot;;
+parsed_args[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_baroclinic_wave_rhotheta_Float64&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhotheta`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;energy_name&quot;] = &quot;rhotheta&quot;;
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhotheta&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_third&quot;`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;upwinding&quot;] = &quot;third_order&quot;;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe_third&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_equilmoist_hightop`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;1days&quot;;
+parsed_args[&quot;z_elem&quot;] = 25;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe_equilmoist_hightop&quot;;
+parsed_args[&quot;z_max&quot;] = 45000.0;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_equilmoist_hightop_sponge`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;rayleigh_sponge&quot;] = true;
+parsed_args[&quot;zd_rayleigh&quot;] = 30000.0;
+parsed_args[&quot;z_elem&quot;] = 25;
+parsed_args[&quot;zd_viscous&quot;] = 30000.0;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;1days&quot;;
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;z_max&quot;] = 45000.0;
+parsed_args[&quot;viscous_sponge&quot;] = true;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe_equilmoist_hightop_sponge&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_int_equilmoist`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;energy_name&quot;] = &quot;rhoe_int&quot;;
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;t_end&quot;] = &quot;5days&quot;;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe_int_equilmoist&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_aquaplanet_rhoe_equilmoist_allsky`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;3.75days&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;150secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_aquaplanet_rhoe_equilmoist_allsky&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_baroclinic_wave_rhoe&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe_equilmoist`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;300secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_baroclinic_wave_rhoe_equilmoist&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_int`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;energy_name&quot;] = &quot;rhoe_int&quot;;
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe_int&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_equilmoist`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;t_end&quot;] = &quot;5days&quot;;
+parsed_args[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_held_suarez_rhoe_equilmoist&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_aquaplanet_rhoe_equilmoist_gray`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;rad&quot;] = &quot;gray&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;5days&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_aquaplanet_rhoe_equilmoist_gray&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_aquaplanet_rhoe_equilmoist_clearsky`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;vert_diff&quot;] = true;
+parsed_args[&quot;rad&quot;] = &quot;clearsky&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;5days&quot;;
+parsed_args[&quot;microphy&quot;] = &quot;0M&quot;;
+parsed_args[&quot;dt&quot;] = &quot;200secs&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;sphere_aquaplanet_rhoe_equilmoist_clearsky&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `edmf_single_column`
+
+using Revise; include(&quot;examples/hybrid/cli_options.jl&quot;);
+
+(s, parsed_args) = parse_commandline();
+parsed_args[&quot;hyperdiff&quot;] = false;
+parsed_args[&quot;z_elem&quot;] = 60;
+parsed_args[&quot;dt&quot;] = &quot;6secs&quot;;
+parsed_args[&quot;t_end&quot;] = &quot;6hours&quot;;
+parsed_args[&quot;turbconv&quot;] = &quot;edmf&quot;;
+parsed_args[&quot;z_stretch&quot;] = false;
+parsed_args[&quot;ode_algo&quot;] = &quot;Euler&quot;;
+parsed_args[&quot;config&quot;] = &quot;column&quot;;
+parsed_args[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+parsed_args[&quot;z_max&quot;] = 3000.0;
+parsed_args[&quot;split_ode&quot;] = false;
+parsed_args[&quot;regression_test&quot;] = true;
+parsed_args[&quot;dt_save_to_sol&quot;] = &quot;5mins&quot;;
+parsed_args[&quot;job_id&quot;] = &quot;edmf_single_column&quot;;
+parsed_args[&quot;moist&quot;] = &quot;equil&quot;;
+
+include(&quot;examples/hybrid/driver.jl&quot;)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../equations/">« Equations</a><a class="docs-footer-nextpage" href="../cl_args/">Command line arguments »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.19 on <span class="colophon-date" title="Wednesday 6 July 2022 04:03">Wednesday 6 July 2022</span>. Using Julia version 1.7.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
