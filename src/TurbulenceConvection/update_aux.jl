@@ -69,12 +69,11 @@ function update_aux!(
         e_pot = geopotential(param_set, grid.zc.z[k])
         @inbounds for i in 1:N_up
             if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
-                aux_up[i].θ_liq_ice[k] =
-                    prog_up[i].ρaθ_liq_ice[k] / prog_up[i].ρarea[k]
+                aux_up[i].e_tot[k] = prog_up[i].ρae_tot[k] / prog_up[i].ρarea[k]
                 aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / prog_up[i].ρarea[k]
                 aux_up[i].area[k] = prog_up[i].ρarea[k] / ρ_c[k]
             else
-                aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
+                aux_up[i].e_tot[k] = aux_gm.e_tot[k]
                 aux_up[i].q_tot[k] = aux_gm.q_tot[k]
                 aux_up[i].area[k] = 0
                 aux_up[i].e_kin[k] = aux_gm.e_kin[k]
@@ -92,19 +91,16 @@ function update_aux!(
                 end
                 thermo_args = (aux_up[i].q_liq[k], aux_up[i].q_ice[k])
             end
-            ts_up_i = thermo_state_pθq(
+            e_int = aux_up[i].e_tot[k] - aux_up[i].e_kin[k] - e_pot
+            ts_up_i = thermo_state_peq(
                 param_set,
                 p_c[k],
-                aux_up[i].θ_liq_ice[k],
+                e_int,
                 aux_up[i].q_tot[k],
                 thermo_args...,
             )
-            aux_up[i].e_tot[k] = TD.total_energy(
-                thermo_params,
-                ts_up_i,
-                aux_up[i].e_kin[k],
-                e_pot,
-            )
+            aux_up[i].θ_liq_ice[k] =
+                TD.liquid_ice_pottemp(thermo_params, ts_up_i)
             aux_up[i].h_tot[k] =
                 total_enthalpy(param_set, aux_up[i].e_tot[k], ts_up_i)
         end
