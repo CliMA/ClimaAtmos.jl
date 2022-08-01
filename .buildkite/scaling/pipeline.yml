@@ -45,7 +45,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 1
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (2) processes"
@@ -62,7 +62,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 2
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (4) processes"
@@ -79,7 +79,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 4
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (8) processes"
@@ -96,7 +96,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 8
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (16) processes"
@@ -113,7 +113,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 16
-        slurm_mem: 128GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (32) processes"
@@ -130,7 +130,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 32
-        slurm_mem: 128GB
+        slurm_mem: 0
         slurm_exclusive:
 
   - wait
@@ -171,7 +171,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 1
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (2) processes"
@@ -188,7 +188,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 2
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (4) processes"
@@ -205,7 +205,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 4
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (8) processes"
@@ -222,7 +222,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 8
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (16) processes"
@@ -239,7 +239,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 16
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (32) processes"
@@ -255,7 +255,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_tasks_per_node: 32
-        slurm_mem: 128GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (64) processes"
@@ -271,7 +271,7 @@ steps:
         queue: central
         slurm_nodes: 2
         slurm_tasks_per_node: 32
-        slurm_mem: 128GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (128) processes"
@@ -287,7 +287,7 @@ steps:
         queue: central
         slurm_nodes: 4
         slurm_tasks_per_node: 32
-        slurm_mem: 128GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (256) processes"
@@ -303,7 +303,7 @@ steps:
         queue: central
         slurm_nodes: 8
         slurm_tasks_per_node: 32
-        slurm_mem: 128GB
+        slurm_mem: 0
         slurm_exclusive:
 
   - wait
