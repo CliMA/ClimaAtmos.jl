@@ -12,7 +12,6 @@ parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
 fps = parsed_args["fps"]
-idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
@@ -31,7 +30,6 @@ zd_viscous = parsed_args["zd_viscous"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 
 @assert idealized_insolation in (true, false)
-@assert idealized_h2o in (true, false)
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
 @assert surface_scheme in ("bulk", "monin_obukhov")
@@ -130,7 +128,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             params,
             radiation_model;
             idealized_insolation,
-            idealized_h2o,
+            model_spec.idealized_h2o,
             idealized_clouds,
         ),
         vert_diff ?
