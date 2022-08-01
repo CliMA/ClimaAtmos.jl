@@ -1,3 +1,7 @@
+
+include(joinpath(@__DIR__, "self_reference_or_path.jl"))
+self_reference = self_reference_or_path() == :self_reference
+
 all_lines = readlines(joinpath(@__DIR__, "mse_tables.jl"))
 lines = deepcopy(all_lines)
 filter!(x -> occursin("] = OrderedCollections", x), lines)
@@ -5,7 +9,9 @@ job_ids = getindex.(split.(lines, "\""), 2)
 @assert count(x -> occursin("OrderedDict", x), all_lines) == length(job_ids) + 1
 @assert length(job_ids) ≠ 0 # safety net
 
-if haskey(ENV, "BUILDKITE_COMMIT") && haskey(ENV, "BUILDKITE_BRANCH")
+if haskey(ENV, "BUILDKITE_COMMIT") &&
+   haskey(ENV, "BUILDKITE_BRANCH") &&
+   self_reference
     commit = ENV["BUILDKITE_COMMIT"]
     branch = ENV["BUILDKITE_BRANCH"]
     # Note: cluster_data_prefix is also defined in compute_mse.jl
