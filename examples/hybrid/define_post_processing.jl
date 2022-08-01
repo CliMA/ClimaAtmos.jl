@@ -2,6 +2,23 @@
 space_string(::Spaces.FaceExtrudedFiniteDifferenceSpace) = "(Face field)"
 space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
 
+import ClimaCoreTempestRemap: def_space_coord
+
+function def_space_coord(
+    nc::NCDataset,
+    space::Spaces.ExtrudedFiniteDifferenceSpace{S};
+    type = "dgll",
+) where {S <: Spaces.Staggering}
+    hvar = def_space_coord(nc, space.horizontal_space; type = type)
+    vertical_topology =
+        space.vertical_topology isa
+        ClimaCore.Hypsography.TerrainWarpedIntervalTopology ?
+        space.vertical_topology.topology : space.vertical_topology
+    vvar =
+        def_space_coord(nc, Spaces.FiniteDifferenceSpace{S}(vertical_topology))
+    (hvar..., vvar...)
+end
+
 function process_name(s::AbstractString)
     # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
     s = replace(s, "components_data_" => "")
@@ -316,9 +333,10 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
-        ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
-        ᶠw_phy = Geometry.WVector.(ᶠw)
-        ᶜw_phy = ᶜinterp.(ᶠw_phy)
+        ᶜuvw_phy = @. C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+        ᶜuₕ_phy = @. Geometry.project(Geometry.UVAxis(), ᶜuvw_phy)
+        ᶜw_phy = @. Geometry.project(Geometry.WAxis(), ᶜuvw_phy)
+        ᶠw_phy = ᶠinterp.(ᶜw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
         thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)

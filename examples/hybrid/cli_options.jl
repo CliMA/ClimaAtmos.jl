@@ -187,6 +187,10 @@ function parse_commandline()
         help = "Start date of the simulation"
         arg_type = String
         default = "19790101"
+        "--topography"
+        help = "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`]"
+        arg_type = String
+        default = "NoWarp"
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
