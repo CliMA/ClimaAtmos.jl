@@ -1,5 +1,5 @@
-include("cli_options.jl")
 if !(@isdefined parsed_args)
+    include("cli_options.jl")
     (s, parsed_args) = parse_commandline()
 end
 
