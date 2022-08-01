@@ -80,7 +80,7 @@ for res in ${resolutions[@]}; do
         echo "        slurm_nodes: $nnodes" >> $file
         echo "        slurm_ntasks: $nprocs" >> $file
         #echo "        slurm_tasks_per_node: $procs_per_node" >> $file
-        echo "        slurm_mem: 64GB" >> $file
+        echo "        slurm_mem: 0" >> $file
         echo "        slurm_exclusive:" >> $file
         echo "" >> $file
     done

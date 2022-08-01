@@ -44,7 +44,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 1
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution test(ρe_tot) - (2) process"
@@ -61,7 +61,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 2
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution test(ρe_tot) - (3) process"
@@ -78,7 +78,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 3
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution test(ρe_tot) - (6) process"
@@ -95,7 +95,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 6
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez low resolution test(ρe_tot) - (24) process"
@@ -112,7 +112,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 24
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
   - wait
@@ -150,7 +150,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 1
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (2) process"
@@ -167,7 +167,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 2
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (3) process"
@@ -184,7 +184,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 3
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (6) process"
@@ -201,7 +201,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 6
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (24) process"
@@ -218,7 +218,7 @@ steps:
         queue: central
         slurm_nodes: 1
         slurm_ntasks: 24
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (54) process"
@@ -235,7 +235,7 @@ steps:
         queue: central
         slurm_nodes: 2
         slurm_ntasks: 54
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (96) process"
@@ -252,7 +252,7 @@ steps:
         queue: central
         slurm_nodes: 3
         slurm_ntasks: 96
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
     - label: ":computer: MPI Held-Suarez high resolution test(ρe_tot) - (216) process"
@@ -269,7 +269,7 @@ steps:
         queue: central
         slurm_nodes: 7
         slurm_ntasks: 216
-        slurm_mem: 64GB
+        slurm_mem: 0
         slurm_exclusive:
 
   - wait
