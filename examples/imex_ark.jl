@@ -114,16 +114,53 @@ Don't forget about the possible memory optimizations!
 =#
 
 using LinearAlgebra: norm
+using StaticArrays: @SArray
 
-Base.@kwdef struct IMEXARKAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp, N} <:
+struct IMEXARKAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp, N} <:
         ClimaTimeSteppers.DistributedODEAlgorithm
     nlsolve::N
 end
-IMEXARKAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp}(
+IMEXARKAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp}(;
     nlsolve::N,
 ) where {a_exp, a_imp, b_exp, b_imp, c_exp, c_imp, N} =
     IMEXARKAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp, N}(nlsolve)
 
+function ARS121_tableau()
+    a_exp = @SArray [0 0; 1 0]
+    b_exp = @SArray [0, 1]
+    c_exp = vec(sum(a_exp; dims = 2))
+
+    a_imp = @SArray [0 0; 0 1]
+    b_imp = @SArray [0, 1]
+    c_imp = vec(sum(a_imp; dims = 2))
+
+    return (a_exp, a_imp, b_exp, b_imp, c_exp, c_imp)
+end
+const ARS121new = IMEXARKAlgorithm{ARS121_tableau()...}
+
+function ARS232_tableau()
+    γ = 1 - sqrt(2) / 2
+    δ = -2/3 * sqrt(2)
+
+    a_exp = @SArray [
+      0 0     0;
+      γ 0     0;
+      δ (1-δ) 0;
+    ]
+    b_exp = @SArray [0, 1 - γ, γ]
+    c_exp = vec(sum(a_exp; dims = 2))
+
+    a_imp = @SArray [
+        0 0     0;
+        0 γ     0;
+        0 (1-γ) γ;
+    ]
+    b_imp = @SArray [0, 1 - γ, γ]
+    c_imp = vec(sum(a_imp; dims = 2))
+
+    return (a_exp, a_imp, b_exp, b_imp, c_exp, c_imp)
+end
+const ARS232new = IMEXARKAlgorithm{ARS232_tableau()...}
 
 function ARS343_tableau()
     γ = 0.4358665215084590
@@ -145,7 +182,7 @@ function ARS343_tableau()
       a41 a42 a43 0;
     ]
     b_exp = @SArray [0, b1, b2, γ]
-    c_exp = sum(a_exp; dims = 2)
+    c_exp = vec(sum(a_exp; dims = 2))
 
     a_imp = @SArray [
         0 0       0  0;
@@ -154,13 +191,40 @@ function ARS343_tableau()
         0 b1      b2 γ;
     ]
     b_imp = @SArray [0, b1, b2, γ]
-    c_imp = sum(a_imp; dims = 2)
+    c_imp = vec(sum(a_imp; dims = 2))
 
-    return (a_exp, b_exp, c_exp, a_imp, b_imp, c_imp)
+    return (a_exp, a_imp, b_exp, b_imp, c_exp, c_imp)
 end
-const ARS343 = IMEXARKAlgorithm{ARS343_tableau...}
+const ARS343new = IMEXARKAlgorithm{ARS343_tableau()...}
 
-struct IMEXARKCache{a_exp, a_imp, c_exp, c_imp, V, N} <:
+function IMKG354a_tableau()
+    a_exp = @SArray [
+      0   0   0   0   0   0;
+      1/5 0   0   0   0   0;
+      0   1/5 0   0   0   0;
+      0   0   2/3 0   0   0;
+      1/3 0   0   1/3 0   0;
+      1/4 0   0   0   3/4 0;
+    ]
+    b_exp = vec(a_exp[end, :])
+    c_exp = vec(sum(a_exp; dims = 2))
+
+    a_imp = @SArray [
+      0   0   0     0    0   0;
+      0   0   0     0    0   0;
+      0   0   2/5   0    0   0;
+      0   0   11/30 2/5  0   0;
+      1/3 0   0     -2/3 1   0;
+      1/4 0   0     0    3/4 0;
+    ]
+    b_imp = vec(a_imp[end, :])
+    c_imp = vec(sum(a_imp; dims = 2))
+
+    return (a_exp, a_imp, b_exp, b_imp, c_exp, c_imp)
+end
+const IMKG354a = IMEXARKAlgorithm{IMKG354a_tableau()...}
+
+struct IMEXARKCache{is, js, a, c, I, new_Js, old_Js, Js_to_save, V, N} <:
         ClimaTimeSteppers.DistributedODEAlgorithm
     vars::V
     nlsolve!::N
@@ -168,10 +232,10 @@ end
 
 function ClimaTimeSteppers.cache(
     prob::DiffEqBase.AbstractODEProblem,
-    alg::IMEXEulerAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp};
+    alg::IMEXARKAlgorithm{a_exp, a_imp, b_exp, b_imp, c_exp, c_imp};
     kwargs...
 ) where {a_exp, a_imp, b_exp, b_imp, c_exp, c_imp}
-    @assert ndims(a_exp) == ndims(a_imp) == 2 &&
+    @assert ndims(a_exp) == ndims(a_imp) == 2
     @assert ndims(b_exp) == ndims(b_imp) == ndims(c_exp) == ndims(c_imp) == 1
     @assert size(a_exp, 1) == size(a_exp, 2) == size(a_imp, 1) == size(a_imp, 2)
     @assert size(b_exp, 1) == size(b_imp, 1) == size(c_exp, 1) == size(c_imp, 1)
@@ -188,9 +252,9 @@ function ClimaTimeSteppers.cache(
     is = Tuple(1:(is_fsal ? s : s + 1))
     js = Tuple(1:s)
     I = map(χ -> map(j -> findfirst(i -> a[χ][i, j] != 0, is), js), χs)
-    all_Js = map(χ -> findall(j -> !isnothing(I[χ][j]), js))
-    new_Js = map(χ -> map(i -> findall(isequal(i), I[χ]), is), χs)
-    old_Js_func(χ, i) = findall(j -> I[χ][j] < i && a[χ][i, j] != 0, all_Js)
+    all_Js = map(χ -> filter(j -> !isnothing(I[χ][j]), js), χs)
+    new_Js = map(χ -> map(i -> filter(j -> I[χ][j] == i, js), is), χs)
+    old_Js_func(χ, i) = filter(j -> I[χ][j] < i && a[χ][i, j] != 0, all_Js[χ])
     old_Js = map(χ -> map(i -> old_Js_func(χ, i), is), χs)
     Js_to_save_func(χ, i) =
         filter(j -> findlast(i′ -> a[χ][i′, j] != 0, is) > i, new_Js[χ][i])
@@ -198,78 +262,110 @@ function ClimaTimeSteppers.cache(
 
     u = prob.u0
     Uis = map(i -> Symbol(:U, i) => similar(u), is)
-    ΔÛχjs = map(χ -> map(j -> Symbol(:ΔÛ, χ, :_, j) => similar(u), vcat(Js_to_save[χ]...)), χs)
-    vars = NamedTuple((Uis..., vcat(ΔÛχjs...)...))
+    ΔÛχjs = map(χ -> map(j -> Symbol(:ΔÛ, χ, :_, j) => similar(u), tuplejoin(Js_to_save[χ]...)), χs)
+    vars = NamedTuple((:Û_copy => similar(u), Uis..., tuplejoin(ΔÛχjs...)...))
     nlsolve! = nlcache(alg.nlsolve, u, prob.f.f1.jac_prototype)
-    return IMEXARKCache{is, js, a, c, I, new_Js, old_Js, Js_to_save}(vars, nlsolve!)
+    return IMEXARKCache{is, js, a, c, I, new_Js, old_Js, Js_to_save, typeof(vars), typeof(nlsolve!)}(
+        vars,
+        nlsolve!,
+    )
 end
 
-@generated function ClimaTimeSteppers.step_u!(integrator, cache::IMEXARKCache)
-    return step_u_expr(cache)
+@inline tuplejoin(x, y) = (x..., y...)
+@inline tuplejoin(x, y, z...) = (x..., tuplejoin(y, z...)...)
+
+# Workaround for not being allowed to use closures in a generated function
+struct ImplicitStepErrorFunction{F, U, P, T}
+    ode_f!::F
+    û::U
+    p::P
+    t::T
+    Δt::T
 end
+struct ImplicitStepErrorJacobian{W, P, T}
+    Wfact!::W
+    p::P
+    t::T
+    Δt::T
+end
+
+(f!::ImplicitStepErrorFunction)(f, u) = f!(f, u, f!.ode_f!)
+function (f!::ImplicitStepErrorFunction)(f, u, ode_f!::ForwardEulerODEFunction)
+    (; û, p, t, Δt) = f!
+    f .= û
+    ode_f!(f, u, p, t, Δt)
+    f .-= u
+end
+function (f!::ImplicitStepErrorFunction)(f, u, ode_f!::ODEFunction)
+    (; û, p, t, Δt) = f!
+    ode_f!(f, u, p, t)
+    f .= û .+ Δt .* f .- u
+end
+
+((; Wfact!, p, t, Δt)::ImplicitStepErrorJacobian)(j, u) = Wfact!(j, u, p, Δt, t)
 
 function step_u_expr(
-    ::IMEXARKCache{is, js, a, c, I, new_Js, old_Js, Js_to_save},
-) where {is, js, a, c, I, new_Js, old_Js, Js_to_save, FT}
+    ::Type{<:IMEXARKCache{is, js, a, c, I, new_Js, old_Js, Js_to_save}},
+) where {is, js, a, c, I, new_Js, old_Js, Js_to_save}
     function Δu_expr(χ, i, j)
         ΔÛχj = :(vars.$(Symbol(:ΔÛ, χ, :_, j)))
-        return quote broadcasted(*, $(a[χ][i, j] / a[χ][I[χ][j], j]), $ΔÛχj) end
+        return :(broadcasted(*, $(a[χ][i, j] / a[χ][I[χ][j], j]), $ΔÛχj))
     end
 
-    expr = quote
-        (; broadcasted, materialize!) = Base
-        (; u, p, t, dt, prob) = integrator
-        (; f) = prob
-        (; f1, f2) = f
+    expr = :(
+        (; broadcasted, materialize!) = Base;
+        (; u, p, t, dt, prob) = integrator;
+        (; f) = prob;
+        (; f1, f2) = f;
         (; nlsolve!, vars) = cache
-    end
+    )
 
     χs = (1, 2)
     f = (:f2, :f1) # the fs are stored in the opposite order in a SplitFunction
     for i in is
         Ui = i == is[end] ? :u : :(vars.$(Symbol(:U, i)))
         Δu_exprs =
-            vcat(map(χ -> map(j -> Δu_expr(χ, i, j), old_Js[χ][i]), χs)...)
-        ũi_expr = length(Δu_exprs) == 0 ? :u :
-            quote broadcasted(+, u, $(Δu_exprs...)) end
-        expr = quote $expr; materialize!($Ui, $ũi_expr) end
+            tuplejoin(map(χ -> map(j -> Δu_expr(χ, i, j), old_Js[χ][i]), χs)...)
+        ũi_expr =
+            length(Δu_exprs) == 0 ? :u : :(broadcasted(+, u, $(Δu_exprs...)))
+        expr = :($expr; materialize!($Ui, $ũi_expr))
         for χ in χs
             fχ! = f[χ]
             for j in new_Js[χ][i]
                 Uj = :(vars.$(Symbol(:U, j)))
-                Ûχik_expr = quote
-                    t′ = t + dt * $(c[χ][j])
+                Ûχik_expr = :(
+                    t′ = t + dt * $(c[χ][j]);
                     Δt′ = dt * $(a[χ][i, j])
-                end
+                )
                 if j == i
-                    Ûχik_expr = quote
-                        $Ûχik_expr
+                    Ûχik_expr = :(
+                        $Ûχik_expr;
                         nlsolve!(
                             $Uj,
-                            (f, u) -> begin
-                                f .= $Ui
-                                $fχ!(f, u, p, t′, Δt′)
-                                f .-= u
-                            end,
-                            (j, u) -> $fχ!.Wfact(j, u, p, Δt′, t′),
+                            ImplicitStepErrorFunction($fχ!, $Ui, p, t′, Δt′),
+                            ImplicitStepErrorJacobian($fχ!.Wfact, p, t′, Δt′),
                         )
-                    end
+                    )
                 else
-                    Ûχik_expr = quote $Ûχik_expr; $fχ!($Ui, $Uj, t′, Δt′) end
+                    Ûχik_expr = :($Ûχik_expr; $fχ!($Ui, $Uj, p, t′, Δt′))
                 end
                 if j in Js_to_save[χ][i]
                     ΔÛχj = :(vars.$(Symbol(:ΔÛ, χ, :_, j)))
-                    Ûχik_expr = quote
-                        vars.Û_copy .= $Ui
-                        $Ûχik_expr
+                    Ûχik_expr = :(
+                        vars.Û_copy .= $Ui;
+                        $Ûχik_expr;
                         $ΔÛχj .= $Ui .- vars.Û_copy
-                    end
+                    )
                 end
-                expr = quote $expr; $Ûχik_expr end
+                expr = :($expr; $Ûχik_expr)
             end
         end
     end
-    return quote $expr; return u end
+    return :($expr; return u)
+end
+
+@generated function ClimaTimeSteppers.step_u!(integrator, cache::IMEXARKCache)
+    return step_u_expr(cache)
 end
 
 abstract type ConvergenceCondition end
@@ -309,7 +405,7 @@ Base.@kwdef struct NewtonAlgorithm{L, C <: ConvergenceCondition}
     linsolve::L
     has_converged::C = nothing
     max_iters::Int = 1
-    recompute_jac::Bool = false # this could also be the recomputation frequency
+    update_jac::Bool = false # this could also be the Jacobian update frequency
 end
 struct NewtonCache{A, L, X, J, R}
     alg::A
@@ -328,7 +424,7 @@ nlcache(alg::NewtonAlgorithm, x_prototype, j_prototype) =
         similar(x_prototype),
         similar(j_prototype),
         isnothing(alg.has_converged) ? nothing :
-            Array{eltype(x_prototype)}(alg.max_iters + 1),
+            Array{eltype(x_prototype)}(undef, alg.max_iters + 1),
     )
 
 #=
@@ -344,7 +440,7 @@ stop based on some convergence condition.
 =#
 function (nlsolve!::NewtonCache)(x, f!, j!)
     (; alg, linsolve!, j_div_f, f, j, residuals) = nlsolve!
-    (; has_converged, max_iters, recompute_jac) = alg
+    (; has_converged, max_iters, update_jac) = alg
     for iter in 0:max_iters
         if iter > 0
             linsolve!(j_div_f, j, f)
@@ -362,6 +458,6 @@ function (nlsolve!::NewtonCache)(x, f!, j!)
                 (residual change: $(residuals[1]) → $(residuals[end]))"
             )
         end
-        (recompute_jac || iter == 0) && j!(j, x)
+        (update_jac || iter == 0) && j!(j, x)
     end
 end
