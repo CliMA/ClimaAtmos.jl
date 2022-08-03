@@ -212,6 +212,51 @@ initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) =
     initialize(forcing, grid, state)
 
 #####
+##### Pressure helper functions for making initial profiles hydrostatic.
+#####
+
+"""
+    Pressure derivative with height assuming:
+    - hydrostatic
+    - given θ_liq_ice and q_tot initial profiles
+"""
+function dp_dz!(p, params, z)
+    (; param_set, prof_thermo_var, prof_q_tot, thermo_flag) = params
+    thermo_params = TCP.thermodynamics_params(param_set)
+
+    FT = eltype(prof_q_tot(z))
+
+    q_tot = prof_q_tot(z)
+    q = TD.PhasePartition(q_tot)
+
+    R_m = TD.gas_constant_air(thermo_params, q)
+    grav = TCP.grav(param_set)
+
+    if thermo_flag == "θ_liq_ice"
+        θ_liq_ice = prof_thermo_var(z)
+        cp_m = TD.cp_m(thermo_params, q)
+        MSLP = TCP.MSLP(param_set)
+        T = θ_liq_ice * (p / MSLP)^(R_m / cp_m)
+    elseif thermo_flag == "temperature"
+        T = prof_thermo_var(z)
+    else
+        error("θ_liq_ice or T must be provided to solve for pressure")
+    end
+
+    return -grav * p / R_m / T
+end
+
+""" Solving initial value problem for pressure """
+function p_ivp(::Type{FT}, params, p_0, z_0, z_max) where {FT}
+
+    z_span = (z_0, z_max)
+    prob = ODE.ODEProblem(dp_dz!, p_0, z_span, params)
+
+    sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-15, abstol = 1e-15)
+    return sol
+end
+
+#####
 ##### Soares
 #####
 
@@ -226,21 +271,33 @@ end
 function initialize_profiles(::Soares, grid::Grid, param_set, state; kwargs...)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
+
     FT = TC.float_type(state)
+
+    # Read in the initial profiles
     prof_q_tot = APL.Soares_q_tot(FT)
     prof_θ_liq_ice = APL.Soares_θ_liq_ice(FT)
     prof_u = APL.Soares_u(FT)
     prof_tke = APL.Soares_tke(FT)
 
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_falg)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean state
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.tke[k] = prof_tke(z)
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -283,20 +340,31 @@ function initialize_profiles(
 )
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
 
     FT = TC.float_type(state)
+
+    # Read in the initial profies
     prof_θ_liq_ice = APL.Nieuwstadt_θ_liq_ice(FT)
     prof_u = APL.Nieuwstadt_u(FT)
     prof_tke = APL.Nieuwstadt_tke(FT)
 
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean state
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.tke[k] = prof_tke(z)
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -338,21 +406,33 @@ end
 function initialize_profiles(::Bomex, grid::Grid, param_set, state; kwargs...)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
 
     FT = TC.float_type(state)
+
+    # Read in the initial profiles
     prof_q_tot = APL.Bomex_q_tot(FT)
     prof_θ_liq_ice = APL.Bomex_θ_liq_ice(FT)
     prof_u = APL.Bomex_u(FT)
     prof_tke = APL.Bomex_tke(FT)
+
+    # Solve the initial value problem
+    p_0::FT = FT(1.015e5) # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.tke[k] = prof_tke(z)
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -427,22 +507,33 @@ function initialize_profiles(
 )
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
 
     FT = TC.float_type(state)
+
+    # Load the initial profiles
     prof_q_tot = APL.LifeCycleTan2018_q_tot(FT)
     prof_θ_liq_ice = APL.LifeCycleTan2018_θ_liq_ice(FT)
     prof_u = APL.LifeCycleTan2018_u(FT)
     prof_tke = APL.LifeCycleTan2018_tke(FT)
 
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.tke[k] = prof_tke(z)
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -531,23 +622,32 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    aux_tc = TC.center_aux_turbconv(state)
-    p = aux_gm.p
-    ρ_c = prog_gm.ρ
 
     FT = TC.float_type(state)
+
+    # Load the initial profiles
     prof_u = APL.Rico_u(FT)
     prof_v = APL.Rico_v(FT)
     prof_q_tot = APL.Rico_q_tot(FT)
     prof_θ_liq_ice = APL.Rico_θ_liq_ice(FT)
 
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
+        aux_gm.p[k] = prof_p(z)
     end
 
     # Need to get θ_virt
@@ -556,7 +656,7 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
         # defined, so we can't use it yet.
         ts = TD.PhaseEquil_pθq(
             thermo_params,
-            p[k],
+            aux_gm.p[k],
             aux_gm.θ_liq_ice[k],
             aux_gm.q_tot[k],
         )
@@ -634,10 +734,33 @@ function surface_ref_state(::TRMM_LBA, param_set::APS, namelist)
     molmass_ratio = TCP.molmass_ratio(param_set)
     FT = eltype(param_set)
     Pg::FT = 991.3 * 100  #Pressure at ground
-    Tg::FT = 296.85   # surface values for reference state (RS) which outputs p, ρ
+    Tg::FT = 296.85 # surface values for reference state (RS) which outputs p, ρ
     pvg = TD.saturation_vapor_pressure(thermo_params, Tg, TD.Liquid())
     qtg = (1 / molmass_ratio) * pvg / (Pg - pvg) #Total water mixing ratio at surface
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
+end
+function TRMM_q_tot_profile(::Type{FT}, param_set) where {FT}
+
+    thermo_params = TCP.thermodynamics_params(param_set)
+    molmass_ratio = TCP.molmass_ratio(param_set)
+
+    z_in = APL.TRMM_LBA_z(FT)
+    p_in = APL.TRMM_LBA_p(FT)
+    T_in = APL.TRMM_LBA_T(FT)
+    RH_in = APL.TRMM_LBA_RH(FT)
+
+    # eq. 37 in pressel et al and the def of RH
+    q_tot_in = similar(z_in)
+    for it in range(1, length = length(z_in))
+        z = z_in[it]
+        pv_star =
+            TD.saturation_vapor_pressure(thermo_params, T_in(z), TD.Liquid())
+        denom =
+            (p_in(z) - pv_star + (1 / molmass_ratio) * pv_star * RH_in(z) / 100)
+        qv_star = pv_star * (1 / molmass_ratio) / denom
+        q_tot_in[it] = qv_star * RH_in(z) / 100
+    end
+    return Dierckx.Spline1D(z_in, q_tot_in; k = 1)
 end
 function initialize_profiles(
     ::TRMM_LBA,
@@ -649,44 +772,37 @@ function initialize_profiles(
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    p = aux_gm.p
 
     FT = TC.float_type(state)
+
     # Get profiles from AtmosphericProfilesLibrary.jl
-    prof_p = APL.TRMM_LBA_p(FT)
     prof_T = APL.TRMM_LBA_T(FT)
-    prof_RH = APL.TRMM_LBA_RH(FT)
     prof_u = APL.TRMM_LBA_u(FT)
     prof_v = APL.TRMM_LBA_v(FT)
     prof_tke = APL.TRMM_LBA_tke(FT)
+    prof_q_tot = TRMM_q_tot_profile(FT, param_set)
 
-    zc = grid.zc.z
-    molmass_ratio = TCP.molmass_ratio(param_set)
-    prog_gm = TC.center_prog_grid_mean(state)
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(991.3 * 100)    # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_T
+    thermo_flag = "temperature"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-
-    aux_gm.T .= prof_T.(zc)
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
-        pv_star = TD.saturation_vapor_pressure(
-            thermo_params,
-            aux_gm.T[k],
-            TD.Liquid(),
-        )
-        # eq. 37 in pressel et al and the def of RH
-        RH = prof_RH(z)
-        denom = (prof_p(z) - pv_star + (1 / molmass_ratio) * pv_star * RH / 100)
-        qv_star = pv_star * (1 / molmass_ratio) / denom
-        aux_gm.q_tot[k] = qv_star * RH / 100
+        aux_gm.p[k] = prof_p(z)
+        aux_gm.q_tot[k] = prof_q_tot(z)
         phase_part = TD.PhasePartition(aux_gm.q_tot[k], FT(0), FT(0)) # initial state is not saturated
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
             thermo_params,
-            aux_gm.T[k],
-            p[k],
+            prof_T(z),
+            aux_gm.p[k],
             phase_part,
         )
         aux_gm.tke[k] = prof_tke(z)
@@ -750,32 +866,41 @@ end
 
 function initialize_profiles(::ARM_SGP, grid::Grid, param_set, state; kwargs...)
     thermo_params = TCP.thermodynamics_params(param_set)
-    # ARM_SGP inputs
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    p = aux_gm.p
 
     FT = TC.float_type(state)
+
+    # Load the initial profiles
     prof_u = APL.ARM_SGP_u(FT)
     prof_q_tot = APL.ARM_SGP_q_tot(FT)
     prof_θ_liq_ice = APL.ARM_SGP_θ_liq_ice(FT)
     prof_tke = APL.ARM_SGP_tke(FT)
 
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(970 * 100)    # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         # TODO figure out how to use ts here
+        aux_gm.p[k] = prof_p(z)
         phase_part = TD.PhasePartition(aux_gm.q_tot[k], aux_gm.q_liq[k], FT(0))
-        Π = TD.exner_given_pressure(thermo_params, p[k], phase_part)
+        Π = TD.exner_given_pressure(thermo_params, aux_gm.p[k], phase_part)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.T[k] = prof_θ_liq_ice(z) * Π
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
             thermo_params,
             aux_gm.T[k],
-            p[k],
+            aux_gm.p[k],
             phase_part,
         )
         aux_gm.tke[k] = prof_tke(z)
@@ -854,24 +979,42 @@ function initialize_profiles(
     kwargs...,
 )
     thermo_params = TCP.thermodynamics_params(param_set)
-    FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
 
+    FT = TC.float_type(state)
+
+    # Load the initial profiles
+    prof_q_tot = APL.GATE_III_q_tot(FT)
+    prof_T = APL.GATE_III_T(FT)
+    prof_tke = APL.GATE_III_tke(FT)
     prof_u = APL.GATE_III_u(FT)
+
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1013 * 100)    # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_T
+    thermo_falg = "temperature"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-
-    p = aux_gm.p
-    ρ_c = prog_gm.ρ
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
-        aux_gm.q_tot[k] = APL.GATE_III_q_tot(FT)(z)
-        aux_gm.T[k] = APL.GATE_III_T(FT)(z)
-        ts =
-            TD.PhaseEquil_pTq(thermo_params, p[k], aux_gm.T[k], aux_gm.q_tot[k])
+        aux_gm.q_tot[k] = prof_q_tot(z)
+        aux_gm.T[k] = prof_T(z)
+        aux_gm.p[k] = prof_p(z)
+        aux_gm.tke[k] = prof_tke(z)
+        ts = TD.PhaseEquil_pTq(
+            thermo_params,
+            aux_gm.p[k],
+            aux_gm.T[k],
+            aux_gm.q_tot[k],
+        )
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
-        aux_gm.tke[k] = APL.GATE_III_tke(FT)(z)
     end
 end
 
@@ -925,25 +1068,38 @@ function initialize_profiles(
     state;
     kwargs...,
 )
-    FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
 
+    FT = TC.float_type(state)
+
+    # Load the initial profiles
     prof_u = APL.Dycoms_RF01_u0(FT)
     prof_v = APL.Dycoms_RF01_v0(FT)
+    prof_q_tot = APL.Dycoms_RF01_q_tot(FT)
+    prof_θ_liq_ice = APL.Dycoms_RF01_θ_liq_ice(FT)
+
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-
-    ρ_c = prog_gm.ρ
-    p = aux_gm.p
     @inbounds for k in real_center_indices(grid)
         # thetal profile as defined in DYCOMS
         z = grid.zc[k].z
-        aux_gm.q_tot[k] = APL.Dycoms_RF01_q_tot(FT)(z)
-        aux_gm.θ_liq_ice[k] = APL.Dycoms_RF01_θ_liq_ice(FT)(z)
+        aux_gm.q_tot[k] = prof_q_tot(z)
+        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
 
         # velocity profile (geostrophic)
         aux_gm.tke[k] = APL.Dycoms_RF01_tke(FT)(z)
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -1039,25 +1195,38 @@ function initialize_profiles(
     state;
     kwargs...,
 )
-    FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
 
+    FT = TC.float_type(state)
+
+    # Load the initial profiles
     prof_u = APL.Dycoms_RF02_u(FT)
     prof_v = APL.Dycoms_RF02_v(FT)
+    prof_q_tot = APL.Dycoms_RF02_q_tot(FT)
+    prof_θ_liq_ice = APL.Dycoms_RF02_θ_liq_ice(FT)
+
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-
-    p = aux_gm.p
-    ρ_c = prog_gm.ρ
     @inbounds for k in real_center_indices(grid)
         # θ_liq_ice profile as defined in DYCOM RF02
         z = grid.zc[k].z
-        aux_gm.q_tot[k] = APL.Dycoms_RF02_q_tot(FT)(z)
-        aux_gm.θ_liq_ice[k] = APL.Dycoms_RF02_θ_liq_ice(FT)(z)
+        aux_gm.q_tot[k] = prof_q_tot(z)
+        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
 
         # velocity profile
         aux_gm.tke[k] = APL.Dycoms_RF02_tke(FT)(z)
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -1147,21 +1316,35 @@ end
 function initialize_profiles(::GABLS, grid::Grid, param_set, state; kwargs...)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
+
     FT = TC.float_type(state)
 
+    # Load the initial profiles
     prof_u = APL.GABLS_u(FT)
     prof_v = APL.GABLS_v(FT)
+    prof_θ_liq_ice = APL.GABLS_θ_liq_ice(FT)
+    prof_q_tot = APL.GABLS_q_tot(FT)
+
+    # Solve the initial value problem for pressure
+    p_0::FT = FT(1.0e5)         # TODO - duplicated from surface_ref_state
+    z_0::FT = grid.zf[TC.kf_surface(grid)].z
+    z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
+    prof_thermo_var = prof_θ_liq_ice
+    thermo_flag = "θ_liq_ice"
+    params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
+    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+
+    # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         #Set wind velocity profile
-        aux_gm.θ_liq_ice[k] = APL.GABLS_θ_liq_ice(FT)(z)
-        aux_gm.q_tot[k] = APL.GABLS_q_tot(FT)(z)
+        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
+        aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.tke[k] = APL.GABLS_tke(FT)(z)
         aux_gm.Hvar[k] = aux_gm.tke[k]
+        aux_gm.p[k] = prof_p(z)
     end
 end
 
@@ -1192,6 +1375,8 @@ end
 #####
 ##### LES_driven_SCM
 #####
+
+# TODO - what to do about those? Could we read in pressure from LES?
 
 function forcing_kwargs(::LES_driven_SCM, namelist)
     coriolis_param = namelist["forcing"]["coriolis"]
