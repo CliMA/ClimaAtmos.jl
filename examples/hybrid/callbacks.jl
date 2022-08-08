@@ -2,8 +2,10 @@ import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
+import ClimaCore.Spaces
 import OrdinaryDiffEq as ODE
 import ClimaAtmos.Parameters as CAP
+import DiffEqCallbacks as DEQ
 
 function get_callbacks(parsed_args, simulation, model_spec, params)
     FT = eltype(params)
@@ -28,7 +30,7 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
             FT(time_to_seconds(parsed_args["dt_rad"]))
         end
         (
-            PeriodicCallback(
+            DEQ.PeriodicCallback(
                 rrtmgp_model_callback!,
                 dt_rad; # update RRTMGPModel every dt_rad
                 initial_affect = true, # run callback at t = 0
@@ -49,30 +51,19 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
 
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
 
-    dss_callback =
-        FunctionCallingCallback(func_start = true) do Y, t, integrator
-            p = integrator.p
-            @nvtx "dss callback" color = colorant"yellow" begin
-                Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-                Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-                Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-                Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-                Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-                Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
-            end
-        end
+    dss_cb = DEQ.FunctionCallingCallback(dss_callback, func_start = true)
     save_to_disk_callback = if dt_save_to_disk == Inf
         nothing
     else
-        PeriodicCallback(
+        DEQ.PeriodicCallback(
             save_to_disk_func,
             dt_save_to_disk;
             initial_affect = true,
             save_positions = (false, false),
         )
     end
-    return CallbackSet(
-        dss_callback,
+    return ODE.CallbackSet(
+        dss_cb,
         save_to_disk_callback,
         additional_callbacks...,
     )
@@ -85,6 +76,20 @@ function affect_filter!(Y::Fields.FieldVector)
     @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
     return nothing
 end
+
+function dss_callback(Y, t, integrator)
+    p = integrator.p
+    @nvtx "dss callback" color = colorant"yellow" begin
+        Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+    end
+    # ODE.u_modified!(integrator, false) # TODO: try this
+end
+
 
 function affect_filter!(integrator)
     (; apply_moisture_filter) = integrator.p
