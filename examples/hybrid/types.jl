@@ -340,7 +340,7 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
     integrator = ODE.init(
         problem,
         ode_algorithm(; alg_kwargs...);
-        saveat = dt_save_to_sol == Inf ? [] : dt_save_to_sol,
+        saveat = dt_save_to_sol == Inf ? last(tspan) : dt_save_to_sol,
         callback = callback,
         dt = dt,
         adaptive = false,
