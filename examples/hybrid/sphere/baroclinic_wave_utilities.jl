@@ -551,22 +551,10 @@ function vertical_diffusion_boundary_layer_cache(
             zeros(axes(z_bottom)),
             zeros(axes(z_bottom)),
         )
-    if :ρq_tot in propertynames(Y.c)
-        dif_flux_ρq_tot = similar(z_bottom, Geometry.WVector{FT})
+    dif_flux_ρq_tot = if :ρq_tot in propertynames(Y.c)
+        similar(z_bottom, Geometry.WVector{FT})
     else
-        dif_flux_ρq_tot = Ref(Geometry.WVector(FT(0)))
-    end
-
-    if (
-        :ρq_liq in propertynames(Y.c) &&
-        :ρq_ice in propertynames(Y.c) &&
-        :ρq_tot in propertynames(Y.c)
-    )
-        ts_type = TD.PhaseNonEquil{FT}
-    elseif :ρq_tot in propertynames(Y.c)
-        ts_type = TD.PhaseEquil{FT}
-    else
-        ts_type = TD.PhaseDry{FT}
+        Ref(Geometry.WVector(FT(0)))
     end
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
