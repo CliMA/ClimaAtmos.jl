@@ -96,7 +96,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     default_remaining_tendency! = if model_spec.anelastic_dycore
         (Yₜ, Y, p, t) -> nothing
     else
-        if :ρe_tot in propertynames(Y.c)
+        if :ρe_tot in propertynames(Y.c) && enable_threading()
             default_remaining_tendency_special!
         else
             default_remaining_tendency_generic!
