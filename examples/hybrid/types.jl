@@ -285,7 +285,8 @@ function ode_config(Y, parsed_args, model_spec)
         Wfact! =
             if :ρe_tot in propertynames(Y.c) &&
                W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
-               W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+               W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact &&
+               enable_threading()
                 Wfact_special!
             else
                 Wfact_generic!
@@ -320,7 +321,7 @@ function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
     show_progress_bar = isinteractive()
     additional_solver_kwargs = () # e.g., abstol and reltol
 
-    if :ρe_tot in propertynames(Y.c)
+    if :ρe_tot in propertynames(Y.c) && enable_threading()
         implicit_tendency! = implicit_tendency_special!
     else
         implicit_tendency! = implicit_tendency_generic!

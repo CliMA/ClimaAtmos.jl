@@ -25,6 +25,7 @@ end
 do_work!(integrator) # compile first
 import Profile
 Profile.clear_malloc_data()
+Profile.clear()
 prof = Profile.@profile begin
     do_work!(integrator)
 end
