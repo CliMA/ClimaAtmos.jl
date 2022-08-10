@@ -231,6 +231,26 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
 
+      - label: ":computer: held suarez (ρe_tot) topography"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true" 
+        artifact_paths: "sphere_held_suarez_rhoe_dcmip_topography/*"
+
+      - label: ":computer: baroclinic wave (ρe_tot) topography"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography/*"
+      
+      - label: ":computer: baroclinic wave (ρe_tot) topography (RS)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography_rs --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography_rs/*"
+
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist topography"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography/*"
+
+      - label: ":computer: held suarez (ρe_tot) equilmoist topography"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_dcmip_topography --dt 200secs --t_end 3days --topography DCMIP200 --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_dcmip_topography/*"
+
 
   - group: "Performance targets"
     steps:
