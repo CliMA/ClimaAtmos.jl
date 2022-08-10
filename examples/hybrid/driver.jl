@@ -27,7 +27,6 @@ viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
-t_end = FT(time_to_seconds(parsed_args["t_end"]))
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
@@ -236,7 +235,7 @@ end
 include("callbacks.jl")
 
 callback = get_callbacks(parsed_args, simulation, model_spec, params)
-tspan = (t_start, t_end)
+tspan = (t_start, simulation.t_end)
 @info "tspan = `$tspan`"
 integrator = get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
 
@@ -253,7 +252,7 @@ else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
 
-@assert last(sol.t) == t_end
+@assert last(sol.t) == simulation.t_end
 
 verify_callbacks(sol.t)
 
