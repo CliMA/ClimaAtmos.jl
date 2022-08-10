@@ -268,7 +268,7 @@ import OrdinaryDiffEq as ODE
 (; jac_kwargs, alg_kwargs, ode_algorithm) =
     ode_config(Y, parsed_args, model_spec)
 =#
-function ode_config(Y, parsed_args, model_spec)
+function ode_configuration(Y, parsed_args, model_spec)
     # TODO: add max_newton_iters, newton_κ, test_implicit_solver to parsed_args?
     max_newton_iters = 2 # only required by ODE algorithms that use Newton's method
     newton_κ = Inf # similar to a reltol for Newton's method (default is 0.01)
@@ -322,7 +322,8 @@ function ode_config(Y, parsed_args, model_spec)
     return (; jac_kwargs, alg_kwargs, ode_algorithm)
 end
 
-function get_integrator(parsed_args, Y, p, tspan, jac_kwargs, callback)
+function get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
+    (; jac_kwargs, alg_kwargs, ode_algorithm) = ode_config
     (; dt) = p.simulation
     FT = eltype(tspan)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
