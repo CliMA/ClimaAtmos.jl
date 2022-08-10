@@ -152,6 +152,14 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
         job_id,
         dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
+        t_end = FT(time_to_seconds(parsed_args["t_end"])),
+    )
+    n_steps = floor(Int, sim.t_end / sim.dt)
+    @info(
+        "Time info:",
+        dt = parsed_args["dt"],
+        t_end = parsed_args["t_end"],
+        floor_n_steps = n_steps,
     )
 
     return sim
