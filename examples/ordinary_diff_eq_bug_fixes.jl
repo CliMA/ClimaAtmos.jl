@@ -19,6 +19,22 @@ using OrdinaryDiffEq.SciMLBase: RECOMPILE_BY_DEFAULT
 
 import OrdinaryDiffEq: nlsolve!
 import OrdinaryDiffEq.SciMLBase: SplitFunction
+import OrdinaryDiffEq as ODE
+using DiffEqBase: @..
+
+# TODO: remove this hack after updating to ClimaTimeSteppers.jl
+function ODE.calc_tderivative!(
+    integrator::ODE.ODEIntegrator,
+    cache,
+    dtd1,
+    repeat_step,
+)
+    @inbounds begin
+        @unpack fsalfirst, linsolve_tmp = cache
+        @.. linsolve_tmp = fsalfirst
+    end
+    return nothing
+end
 
 #=
 Issue: calc_W! attempts to access f.Wfact when has_Wfact(f) and f.Wfact_t when
