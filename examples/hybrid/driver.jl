@@ -28,6 +28,8 @@ case_name = parsed_args["turbconv_case"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
 viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
+α_rayleigh_uₕ = parsed_args["alpha_rayleigh_uh"]
+α_rayleigh_w = parsed_args["alpha_rayleigh_w"]
 zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 
@@ -114,8 +116,13 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             disable_qt_hyperdiffusion,
         ),
         rayleigh_sponge ?
-        rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(zd_rayleigh)) :
-        NamedTuple(),
+        rayleigh_sponge_cache(
+            Y,
+            dt;
+            zd_rayleigh = FT(zd_rayleigh),
+            α_rayleigh_uₕ = FT(α_rayleigh_uₕ),
+            α_rayleigh_w = FT(α_rayleigh_w),
+        ) : NamedTuple(),
         viscous_sponge ?
         viscous_sponge_cache(
             Y;
