@@ -5,7 +5,9 @@ ENV["CI_PERF_SKIP_RUN"] = true # we only need haskey(ENV, "CI_PERF_SKIP_RUN") ==
 
 filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
 dict = parsed_args_per_job_id(; trigger = "benchmark.jl")
-parsed_args = dict["perf_target_unthreaded"];
+(s, parsed_args_prescribed) = parse_commandline()
+parsed_args_target = dict["perf_target_unthreaded"];
+parsed_args = merge(parsed_args_target, parsed_args_prescribed);
 
 
 try # capture integrator
