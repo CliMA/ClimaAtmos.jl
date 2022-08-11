@@ -296,17 +296,25 @@ steps:
   - group: "Performance"
     steps:
 
-      - label: ":rocket: flame graph: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_sphere_baroclinic_wave_rhoe"
-        artifact_paths: "flame_sphere_baroclinic_wave_rhoe/*"
+      - label: ":rocket: flame graph: perf target (ρe_tot)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
+        artifact_paths: "flame_perf_target_rhoe/*"
         env:
           CI_PERF_CPUPROFILE: "true"
 
-      - label: ":rocket: flame graph: baroclinic wave (ρe_int)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_sphere_baroclinic_wave_rhoe_int --energy_name rhoe_int"
-        artifact_paths: "flame_sphere_baroclinic_wave_rhoe_int/*"
+      - label: ":rocket: flame graph: perf target (ρe_tot) disabled vert_diff"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_no_vert_diff --vert_diff false"
+        artifact_paths: "flame_perf_target_rhoe_no_vert_diff/*"
         env:
           CI_PERF_CPUPROFILE: "true"
+
+      - label: ":rocket: flame graph: perf target (ρe_int)" # vert_diff true not supported for rhoe_int..
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_int --energy_name rhoe_int --vert_diff false"
+        artifact_paths: "flame_perf_target_rhoe_int/*"
+        env:
+          CI_PERF_CPUPROFILE: "true"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"

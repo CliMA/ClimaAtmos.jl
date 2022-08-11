@@ -277,11 +277,14 @@ function print_repl_script(str)
     println(ib)
 end
 
-function parsed_args_from_command_line_flags(str, parsed_args = Dict())
-    s = str
-    s = last(split(s, ".jl"))
-    s = strip(s)
-    parsed_args_list = split(s, " ")
+parsed_args_from_ARGS(ARGS, parsed_args = Dict()) =
+    parsed_args_from_ARGS_string(strip(join(ARGS, " ")), parsed_args)
+
+parsed_args_from_command_line_flags(str, parsed_args = Dict()) =
+    parsed_args_from_ARGS_string(strip(last(split(str, ".jl"))), parsed_args)
+
+function parsed_args_from_ARGS_string(str, parsed_args = Dict())
+    parsed_args_list = split(str, " ")
     @assert iseven(length(parsed_args_list))
     parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
         Pair(parsed_args_list[i], strip(parsed_args_list[i + 1], '\"'))
