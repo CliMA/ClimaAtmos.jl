@@ -134,7 +134,7 @@ function parse_commandline()
         "--nh_poly"
         help = "Horizontal polynomial order"
         arg_type = Int
-        default = 5
+        default = 4
         "--z_max"
         help = "Model top height. Default: 30km"
         arg_type = Float64
