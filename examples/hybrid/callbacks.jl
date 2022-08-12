@@ -76,7 +76,7 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
 
     return ODE.CallbackSet(
         dss_cb,
-        saveto_disk_callback,
+        save_to_disk_callback,
         save_restart_callback,
         additional_callbacks...,
     )
