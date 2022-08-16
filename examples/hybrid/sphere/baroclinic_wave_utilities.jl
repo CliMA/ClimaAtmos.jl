@@ -318,23 +318,28 @@ end
 
 # Rayleigh sponge
 
-function rayleigh_sponge_cache(Y, dt; zd_rayleigh = FT(15e3))
+function rayleigh_sponge_cache(
+    Y,
+    dt;
+    zd_rayleigh = FT(15e3),
+    α_rayleigh_uₕ = FT(1e-4),
+    α_rayleigh_w = FT(1),
+)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > zd_rayleigh, 1 / (20 * dt), FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > zd_rayleigh, 1 / (20 * dt), FT(0))
+    ᶜαₘ_uₕ = @. ifelse(ᶜz > zd_rayleigh, α_rayleigh_uₕ, FT(0))
+    ᶠαₘ_w = @. ifelse(ᶠz > zd_rayleigh, α_rayleigh_w, FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ_rayleigh =
-        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
-    ᶠβ_rayleigh =
-        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
-    return (; ᶜβ_rayleigh, ᶠβ_rayleigh)
+    ᶜβ_rayleigh_uₕ =
+        @. ᶜαₘ_uₕ * sin(FT(π) / 2 * (ᶜz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    ᶠβ_rayleigh_w =
+        @. ᶠαₘ_w * sin(FT(π) / 2 * (ᶠz - zd_rayleigh) / (zmax - zd_rayleigh))^2
+    return (; ᶜβ_rayleigh_uₕ, ᶠβ_rayleigh_w)
 end
 
 function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
-    (; ᶜβ_rayleigh, ᶠβ_rayleigh) = p
-    @. Yₜ.c.uₕ -= ᶜβ_rayleigh * Y.c.uₕ
-    @. Yₜ.f.w -= ᶠβ_rayleigh * Y.f.w
+    (; ᶜβ_rayleigh_uₕ) = p
+    @. Yₜ.c.uₕ -= ᶜβ_rayleigh_uₕ * Y.c.uₕ
 end
 
 # Viscous sponge
