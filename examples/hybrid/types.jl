@@ -256,16 +256,22 @@ function ode_config(Y, parsed_args, model_spec)
     test_implicit_solver = false # makes solver extremely slow when set to `true`
     jacobian_flags = jacobi_flags(model_spec.energy_form)
     alg_symbol = Symbol(parsed_args["ode_algo"])
-    ode_algorithm = hasproperty(ClimaTimeSteppers, alg_symbol) ?
-        getproperty(ClimaTimeSteppers, alg_symbol) :
+    ode_algorithm = if hasproperty(ODE, alg_symbol)
         getproperty(ODE, alg_symbol)
+    elseif hasproperty(ClimaTimeSteppers, alg_symbol)
+        getproperty(ClimaTimeSteppers, alg_symbol)
+    else
+        getproperty(Main, alg_symbol)
+    end
 
     ode_algorithm_type =
         ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
+    use_clima_time_steppers =
+        ode_algorithm_type <: ClimaTimeSteppers.DistributedODEAlgorithm
     if ode_algorithm_type <: Union{
         ODE.OrdinaryDiffEqImplicitAlgorithm,
         ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
-    } || "linsolve" in split(methods(ode_algorithm_type)[1].slot_syms, "\0") # awful hack for ClimaTimeSteppers
+    } || use_clima_time_steppers # TODO: workaround for ClimaTimeSteppers
         untransformed_algs = (
             ODE.Rosenbrock23,
             ODE.Rosenbrock32,
@@ -302,11 +308,20 @@ function ode_config(Y, parsed_args, model_spec)
                     max_iter = max_newton_iters,
                 ),
             )
+        elseif use_clima_time_steppers
+            newtons_method = NewtonsMethod(;
+                linsolve = linsolve!,
+                # convergence_checker = ConvergenceChecker(
+                #     norm_condition = MinimumRateOfConvergence(0.9, 1),
+                # ),
+                # max_iters = 100,
+                max_iters = 2,
+            )
+            alg_kwargs = (; newtons_method)
         end
     else
         jac_kwargs = alg_kwargs = ()
     end
-    use_clima_time_steppers = ode_algorithm_type <: ClimaTimeSteppers.DistributedODEAlgorithm
     return (; jac_kwargs, alg_kwargs, ode_algorithm, use_clima_time_steppers)
 end
 

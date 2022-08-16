@@ -2,69 +2,97 @@ import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
 import OrdinaryDiffEq as ODE
+using Statistics
 
-function get_callbacks(parsed_args, simulation, model_spec, params)
+function get_callbacks(
+    parsed_args,
+    simulation,
+    model_spec,
+    params,
+    use_clima_time_steppers,
+)
     FT = eltype(params)
     (; dt) = simulation
+    callbacks = ()
 
-    callback_filters = ODE.DiscreteCallback(
-        condition_every_iter,
-        affect_filter!;
-        save_positions = (false, false),
-    )
-
-    additional_callbacks = if !isnothing(model_spec.radiation_model)
-        # TODO: better if-else criteria?
-        dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
-        (
-            PeriodicCallback(
-                rrtmgp_model_callback!,
-                dt_rad; # update RRTMGPModel every dt_rad
-                initial_affect = true, # run callback at t = 0
-                save_positions = (false, false), # do not save Y before and after callback
-            ),
-        )
-    else
-        ()
-    end
     if model_spec.moisture_model isa EquilMoistModel &&
        parsed_args["apply_moisture_filter"]
-        additional_callbacks = (additional_callbacks..., callback_filters)
+        filter_callback =  call_every_n_steps(affect_filter!, 1)
+        callbacks = (callbacks..., filter_callback)
+    end
+
+    if !isnothing(model_spec.radiation_model)
+        # TODO: better if-else criteria?
+        dt_rad = parsed_args["config"] == "column" ? dt : FT(6 * 60 * 60)
+        radiation_callback = call_every_dt(rrtmgp_model_callback!, dt_rad)
+        callbacks = (callbacks..., radiation_callback)
+    end
+
+    if use_clima_time_steppers
+        dss_callback =
+            call_every_n_steps(1) do integrator
+                (; u, p) = integrator
+                @nvtx "dss callback" color = colorant"yellow" begin
+                    Spaces.weighted_dss_start!(u.c, p.ghost_buffer.c)
+                    Spaces.weighted_dss_start!(u.f, p.ghost_buffer.f)
+                    Spaces.weighted_dss_internal!(u.c, p.ghost_buffer.c)
+                    Spaces.weighted_dss_internal!(u.f, p.ghost_buffer.f)
+                    Spaces.weighted_dss_ghost!(u.c, p.ghost_buffer.c)
+                    Spaces.weighted_dss_ghost!(u.f, p.ghost_buffer.f)
+                end
+            end
+        callbacks = (callbacks..., dss_callback)
     end
 
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
-
-    dss_callback =
-        FunctionCallingCallback(func_start = true) do Y, t, integrator
-            p = integrator.p
-            @nvtx "dss callback" color = colorant"yellow" begin
-                Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-                Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-                Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-                Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-                Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-                Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
-            end
-        end
-    save_to_disk_callback = if dt_save_to_disk == Inf
-        nothing
-    else
-        PeriodicCallback(
-            save_to_disk_func,
-            dt_save_to_disk;
-            initial_affect = true,
-            save_positions = (false, false),
-        )
+    if dt_save_to_disk != Inf
+        save_to_disk_callback =
+            call_every_dt(save_to_disk_func, dt_save_to_disk)
+        callbacks = (callbacks..., save_to_disk_callback)
     end
-    return CallbackSet(
-        dss_callback,
-        save_to_disk_callback,
-        additional_callbacks...,
+
+    mass_check_callback = call_every_dt(60 * 60 * 12) do integrator
+        t = integrator.t
+        @info "Total mass at t = $t s: $(sum(integrator.u.c.ρ)) kg"
+        # @info "Total moisture at t = $t s: $(sum(integrator.u.c.ρq_tot)) kg"
+        # avg = Statistics.mean(integrator.u.c.ρq_tot)
+        # std = sqrt(Statistics.mean(x -> (x - avg)^2, integrator.u.c.ρq_tot))
+        # @info "Average and Sigma of moisture at t = $t s: $avg ± $std kg/m^3"
+        # @info "Moisture extrema at t = $t s: $(extrema(integrator.u.c.ρq_tot)) kg/m^3"
+        # @info "Moisture L2 norm at t = $t s: $(norm(integrator.u.c.ρq_tot, 2)) kg/m^3"
+        # @info "Moisture L1 norm at t = $t s: $(norm(integrator.u.c.ρq_tot, 1)) kg/m^3"
+    end
+    callbacks = (callbacks..., mass_check_callback)
+
+    return CallbackSet(callbacks...)
+end
+
+function call_every_n_steps(func!, n)
+    current_step_number = Ref(0)
+    return ODE.DiscreteCallback(
+        (u, t, integrator) -> (current_step_number[] += 1) % n == 0,
+        func!;
+        initialize = (cb, u, t, integrator) -> func!(integrator),
+        save_positions = (false, false),
     )
 end
 
-
-condition_every_iter(u, t, integrator) = true
+function call_every_dt(func!, dt)
+    next_t = Ref{typeof(dt)}()
+    affect! = function (integrator)
+        while integrator.t >= next_t[]
+            func!(integrator)
+            next_t[] += dt
+        end
+    end
+    return ODE.DiscreteCallback(
+        (u, t, integrator) -> t >= next_t[],
+        affect!;
+        initialize = (cb, u, t, integrator) ->
+            (func!(integrator); next_t[] = t + dt),
+        save_positions = (false, false),
+    )
+end
 
 function affect_filter!(Y::Fields.FieldVector)
     @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)

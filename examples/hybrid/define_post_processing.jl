@@ -809,7 +809,6 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
             nc_u[:, i] = ᶜuₕ_phy.components.data.:1
             nc_qt[:, i] = ᶜqt
         end
-
     end
 
     ### write out our cubed sphere mesh
@@ -849,10 +848,10 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         lat = nc["lat"][:]
         z = nc["z"][:]
         time = nc["time"][:]
-        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
-        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
-        qt = nc["qt"][:, :, :, time .> 3600 * 24 * 200]
+        T = nc["T"][:, :, :, time .> 0]
+        θ = nc["PotentialTemperature"][:, :, :, time .> 0]
+        u = nc["u"][:, :, :, time .> 0]
+        qt = nc["qt"][:, :, :, time .> 0]
         (; lat, z, time, T, θ, u, qt)
     end
     (; lat, z, time, T, θ, u, qt) = nt

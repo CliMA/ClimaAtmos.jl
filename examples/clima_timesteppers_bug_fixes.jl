@@ -37,10 +37,10 @@ function step_u!(int, cache::ClimaTimeSteppers.ARSCache{Nstages}) where {Nstages
 
     function implicit_step!(ux, u, p, t, dt)
         FT = eltype(u)
-        abstol = FT <: Float32 ? 100f0 : 1e-6
+        abstol = FT(1e7) * eps(FT) # empirical threshold
         ux .= u
         converged = false
-        max_iters = 40
+        max_iters = 100
         prev_residual_norm = FT(Inf)
         for iter in 0:max_iters
             iter == 0 && Wfact!(W, ux, p, dt, t)
@@ -50,7 +50,6 @@ function step_u!(int, cache::ClimaTimeSteppers.ARSCache{Nstages}) where {Nstages
             if residual_norm < abstol || residual_norm > prev_residual_norm
                 # The residual oscillates around a minimum after the limit of
                 # numerical precision is reached.
-                @info "Breaking on iter $iter"
                 converged = true
                 break
             end

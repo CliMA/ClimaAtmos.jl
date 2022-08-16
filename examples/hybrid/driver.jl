@@ -3,6 +3,23 @@ if !(@isdefined parsed_args)
     (s, parsed_args) = parse_commandline()
 end
 
+#=
+
+include("cli_options.jl")
+(s, parsed_args) = parse_commandline()
+parsed_args["job_id"] = "test"
+parsed_args["FLOAT_TYPE"] = "Float64"
+parsed_args["enable_threading"] = false
+parsed_args["ode_algo"] = "ARS343new"
+parsed_args["t_end"] = "30.1days"
+parsed_args["dt"] = "100secs"
+parsed_args["dt_save_to_sol"] = Inf
+parsed_args["dt_save_to_disk"] = "5days"
+parsed_args["apply_limiter"] = false
+include("driver.jl")
+
+=#
+
 include("classify_case.jl")
 include("utilities.jl")
 include("nvtx.jl")
@@ -11,7 +28,6 @@ parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
-apply_limiter = parsed_args["apply_limiter"]
 fps = parsed_args["fps"]
 idealized_h2o = parsed_args["idealized_h2o"]
 idealized_insolation = parsed_args["idealized_insolation"]
@@ -30,7 +46,6 @@ zd_viscous = parsed_args["zd_viscous"]
 κ₂_sponge = parsed_args["kappa_2_sponge"]
 t_end = FT(time_to_seconds(parsed_args["t_end"]))
 
-@assert apply_limiter in (true, false)
 @assert idealized_insolation in (true, false)
 @assert idealized_h2o in (true, false)
 @assert idealized_clouds in (true, false)
@@ -191,6 +206,7 @@ parsed_args["trunc_stack_traces"] && include("truncate_stack_traces.jl")
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
 include("../clima_timesteppers_bug_fixes.jl")
+include("../imex_ark.jl")
 include("../common_spaces.jl")
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
@@ -219,7 +235,7 @@ end
 
 include("callbacks.jl")
 
-callback = get_callbacks(parsed_args, simulation, model_spec, params)
+callback = get_callbacks(parsed_args, simulation, model_spec, params, use_clima_time_steppers)
 tspan = (t_start, t_end)
 @info "tspan = `$tspan`"
 
