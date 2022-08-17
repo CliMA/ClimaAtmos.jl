@@ -232,13 +232,13 @@ steps:
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
 
       - label: ":computer: held suarez (ρe_tot) topography"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true" 
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true"
         artifact_paths: "sphere_held_suarez_rhoe_dcmip_topography/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) topography"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true --viscous_sponge true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography/*"
-      
+
       - label: ":computer: baroclinic wave (ρe_tot) topography (RS)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography_rs --topography DCMIP200 --dt 200secs --regression_test false --upwinding third_order --rayleigh_sponge true"
         artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography_rs/*"
@@ -305,6 +305,8 @@ steps:
       - label: ":rocket: flame graph: perf target (ρe_tot) disabled vert_diff"
         command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_no_vert_diff --vert_diff false"
         artifact_paths: "flame_perf_target_rhoe_no_vert_diff/*"
+        agents:
+          slurm_mem: 20GB
         env:
           CI_PERF_CPUPROFILE: "true"
 
