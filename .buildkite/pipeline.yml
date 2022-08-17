@@ -161,12 +161,8 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --job_id sphere_held_suarez_rhoe_third"
         artifact_paths: "sphere_held_suarez_rhoe_third/*"
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist hightop"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_hightop --dt 200secs --t_end 1days"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop/*"
-
       - label: ":computer: held suarez (ρe) equilmoist hightop sponge"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 200secs --t_end 1days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 200secs --t_end 1days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
 

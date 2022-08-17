@@ -167,11 +167,11 @@ function parse_commandline()
         help = "Rayleigh sponge height"
         arg_type = Float64
         default = Float64(15e3)
-        "alpha_rayleigh_uh"
+        "--alpha_rayleigh_uh"
         help = "Rayleigh sponge coefficient for horizontal velocity"
         arg_type = Float64
         default = Float64(1e-4)
-        "alpha_rayleigh_w"
+        "--alpha_rayleigh_w"
         help = "Rayleigh sponge coefficient for vertical velocity"
         arg_type = Float64
         default = Float64(1)
