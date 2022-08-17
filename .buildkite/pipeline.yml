@@ -124,7 +124,7 @@ steps:
 
       - label: ":computer: MPI baroclinic wave (ρe_tot)"
         key: "mpi_baro_wave"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt_save_to_disk 5days"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt_save_restart 5days"
         artifact_paths: "mpi_baroclinic_wave_rhoe/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -138,7 +138,7 @@ steps:
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
-          RESTART_FILE: "mpi_baroclinic_wave_rhoe/restart_baro_wave.jld2"
+          RESTART_FOLDER: "mpi_baroclinic_wave_rhoe/restart/day5.0/"
         agents:
           slurm_ntasks: 2
 

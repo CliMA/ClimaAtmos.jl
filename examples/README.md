@@ -19,7 +19,7 @@ export JULIA_MPI_BINARY=system
 export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
 
-#export RESTART_FILE=$YOUR_JLD2_RESTART_FILE
+#export RESTART_FOLDER=$YOUR_JLD2_RESTART_FOLDER
 
 CA_EXAMPLE=$HOME'/ClimaAtmos.jl/examples/'
 DRIVER=$CA_EXAMPLE'hybrid/driver.jl'
@@ -31,7 +31,7 @@ julia --project=$CA_EXAMPLE --threads=8 $DRIVER --forcing held_suarez --output_d
 
 ```
 In the runscript, one needs to specify the following environmant variable:
-* `RESTART_FILE`: if run from a pre-existing jld2 data saved from a previous simulation.
+* `RESTART_FOLDER`: if run from a pre-existing jld2 data saved from a previous simulation.
 
 Commonly used command line arguements for experiment setups are [here](https://clima.github.io/ClimaAtmos.jl/dev/cl_args/).
 

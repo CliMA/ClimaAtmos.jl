@@ -224,7 +224,7 @@ enable_threading() = enable_clima_core_threading
 
 
 if simulation.restart
-    (Y, t_start) = get_state_restart(simulation.is_distributed)
+    (Y, t_start) = get_state_restart(simulation)
     spaces = get_spaces_restart(Y, parsed_args, FT)
 else
     spaces = get_spaces(parsed_args, params, comms_ctx)

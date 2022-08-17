@@ -148,7 +148,7 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
     sim = (;
         is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
         output_dir,
-        restart = haskey(ENV, "RESTART_FILE"),
+        restart = haskey(ENV, "RESTART_FOLDER"),
         job_id,
         dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
@@ -261,14 +261,15 @@ function get_spaces_restart(Y, parsed_args, ::Type{FT}) where {FT}
     )
 end
 
-function get_state_restart(is_distributed)
-    @assert haskey(ENV, "RESTART_FILE")
-    restart_file_name = if is_distributed
-        split(ENV["RESTART_FILE"], ".jld2")[1] * "_pid$pid.jld2"
-    else
-        ENV["RESTART_FILE"]
-    end
-    @show readdir(dirname(ENV["RESTART_FILE"]))
+function get_state_restart(simulation)
+    (; output_dir, is_distributed) = simulation
+    @assert haskey(ENV, "RESTART_FOLDER")
+    # Must match function `restart_folder`:
+    restart_folder = ENV["RESTART_FOLDER"]
+    suffix = is_distributed ? "_pid$pid.jld2" : ".jld2"
+    # Must match function `restart_filename`:
+    restart_file_name = joinpath(restart_folder, "restart$suffix")
+    @show readdir(ENV["RESTART_FOLDER"])
     @show readdir(dirname(restart_file_name))
     local Y, t_start
     JLD2.jldopen(restart_file_name) do data
