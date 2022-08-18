@@ -424,7 +424,7 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
 
     @. ᶜheight_factor = max(0, (ᶜσ - σ_b) / (1 - σ_b))
     @. ᶜΔρT =
-        (k_a + (k_s - k_a) * ᶜheight_factor * cos(ᶜφ)^4) *
+        (k_a + (k_s - k_a) * ᶜheight_factor * (cos(ᶜφ)^2)^2) *
         Y.c.ρ *
         ( # ᶜT - ᶜT_equil
             ᶜp / (Y.c.ρ * R_d) - max(
@@ -432,13 +432,13 @@ function held_suarez_tendency!(Yₜ, Y, p, t)
                 (
                     T_equator - ΔT_y * sin(ᶜφ)^2 -
                     Δθ_z * log(ᶜp / MSLP) * cos(ᶜφ)^2
-                ) * ᶜσ^κ_d,
+                ) * fast_pow(ᶜσ, κ_d),
             )
         )
 
     @. Yₜ.c.uₕ -= (k_f * ᶜheight_factor) * Y.c.uₕ
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= ᶜΔρT * (MSLP / ᶜp)^κ_d
+        @. Yₜ.c.ρθ -= ᶜΔρT * fast_pow((MSLP / ᶜp), κ_d)
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot -= ᶜΔρT * cv_d
     elseif :ρe_int in propertynames(Y.c)
