@@ -185,8 +185,8 @@ end
 ################################################################################
 
 using Logging
+using ClimaComms
 if simulation.is_distributed
-    using ClimaComms
     if ENV["CLIMACORE_DISTRIBUTED"] == "MPI"
         using ClimaCommsMPI
         const comms_ctx = ClimaCommsMPI.MPICommsContext()
@@ -199,7 +199,7 @@ if simulation.is_distributed
     @info "Setting up distributed run on $nprocs \
         processor$(nprocs == 1 ? "" : "s")"
 else
-    const comms_ctx = nothing
+    const comms_ctx = ClimaComms.SingletonCommsContext()
     using TerminalLoggers: TerminalLogger
     prev_logger = global_logger(TerminalLogger())
 end
