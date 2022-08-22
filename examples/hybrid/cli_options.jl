@@ -134,7 +134,7 @@ function parse_commandline()
         "--nh_poly"
         help = "Horizontal polynomial order"
         arg_type = Int
-        default = 5
+        default = 4
         "--z_max"
         help = "Model top height. Default: 30km"
         arg_type = Float64
@@ -167,6 +167,14 @@ function parse_commandline()
         help = "Rayleigh sponge height"
         arg_type = Float64
         default = Float64(15e3)
+        "--alpha_rayleigh_uh"
+        help = "Rayleigh sponge coefficient for horizontal velocity"
+        arg_type = Float64
+        default = Float64(1e-4)
+        "--alpha_rayleigh_w"
+        help = "Rayleigh sponge coefficient for vertical velocity"
+        arg_type = Float64
+        default = Float64(1)
         "--zd_viscous"
         help = "Viscous sponge height"
         arg_type = Float64

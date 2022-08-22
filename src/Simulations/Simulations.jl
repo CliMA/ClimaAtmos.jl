@@ -1,7 +1,6 @@
 module Simulations
 
-import OrdinaryDiffEq
-const ODE = OrdinaryDiffEq
+import OrdinaryDiffEq as ODE
 
 using JLD2
 using Printf

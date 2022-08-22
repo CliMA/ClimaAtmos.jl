@@ -222,6 +222,10 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
                 ᶠgradᵥ(ᶜK[colidx] + ᶜΦ[colidx])
             )
 
+            if p.tendency_knobs.rayleigh_sponge
+                @. Yₜ.f.w[colidx] -= p.ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
+            end
+
             for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
                 ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
                 ᶜ𝕋ₜ = getproperty(Yₜ.c, ᶜ𝕋_name)
@@ -316,6 +320,10 @@ function implicit_tendency_generic!(Yₜ, Y, p, t)
         Yₜ.c.uₕ .= Ref(zero(eltype(Yₜ.c.uₕ)))
 
         @. Yₜ.f.w = -(ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) + ᶠgradᵥ(ᶜK + ᶜΦ))
+
+        if p.tendency_knobs.rayleigh_sponge
+            @. Yₜ.f.w -= p.ᶠβ_rayleigh_w * Y.f.w
+        end
 
         for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
             ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
@@ -643,6 +651,10 @@ function Wfact_special!(W, Y, p, dtγ, t)
                     ∂ᶜK∂ᶠw_data[colidx],
                 ),
             )
+
+            if p.tendency_knobs.rayleigh_sponge
+                @. ∂ᶠ𝕄ₜ∂ᶠ𝕄.coefs.:2[colidx] -= p.ᶠβ_rayleigh_w[colidx]
+            end
 
             for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
                 ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
@@ -1005,6 +1017,10 @@ function Wfact_generic!(W, Y, p, dtγ, t)
                     ∂ᶜK∂ᶠw_data,
                 ),
             )
+        end
+
+        if p.tendency_knobs.rayleigh_sponge
+            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄.coefs.:2 -= p.ᶠβ_rayleigh_w
         end
 
         for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
