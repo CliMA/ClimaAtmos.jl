@@ -244,6 +244,18 @@ function get_state(simulation, args...)
     end
 end
 
+function get_spaces_restart(Y)
+    center_space = axes(Y.c)
+    face_space = axes(Y.f)
+    hspace = Spaces.horizontal_space(center_space)
+    horizontal_mesh = hspace.topology.mesh
+    quad = horizontal_mesh.ne + 1
+    vertical_mesh = center_space.vertical_topology.mesh
+    z_max = vertical_mesh.domain.coord_max.z
+    z_elem = length(vertical_mesh.faces) - 1
+    return (; center_space, face_space, horizontal_mesh, quad, z_max, z_elem)
+end
+
 function get_state_restart(comms_ctx)
     @assert haskey(ENV, "RESTART_FILE")
     reader = InputOutput.HDF5Reader(ENV["RESTART_FILE"], comms_ctx)

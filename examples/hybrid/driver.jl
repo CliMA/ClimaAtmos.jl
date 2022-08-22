@@ -222,9 +222,14 @@ import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
 
-spaces = get_spaces(parsed_args, params, comms_ctx)
-
-(Y, t_start) = get_state(simulation, parsed_args, spaces, params, model_spec)
+if simulation.restart
+    (Y, t_start) = get_state_restart(comms_ctx)
+    spaces = get_spaces_restart(Y)
+else
+    spaces = get_spaces(parsed_args, params, comms_ctx)
+    (Y, t_start) =
+        get_state_fresh_start(parsed_args, spaces, params, model_spec)
+end
 
 p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
 if parsed_args["turbconv"] == "edmf"
