@@ -273,9 +273,9 @@ version = "0.1.10"
 
 [[deps.CloudMicrophysics]]
 deps = ["DocStringExtensions", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "c41c1f6802c17db58ab5d0fcf989ea78b30738c3"
+git-tree-sha1 = "dd4e3c5d24d4f72c9acda64f0deb4a3f37fbb9e6"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.6.0"
+version = "0.8.0"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
@@ -1998,9 +1998,9 @@ version = "0.3.4"
 
 [[deps.TurbulenceConvection]]
 deps = ["ClimaCore", "CloudMicrophysics", "Dierckx", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Flux", "LambertW", "LinearAlgebra", "OperatorFlux", "Random", "StaticArrays", "StatsBase", "StochasticDiffEq", "SurfaceFluxes", "Thermodynamics", "UnPack"]
-git-tree-sha1 = "ee448605313de213260ce38bc723761d77c33eaa"
+git-tree-sha1 = "97206f18bfd45902d29fb47e806907a0b91bf2e5"
 uuid = "8e072fc4-01f8-44fb-b9dc-f9336c367e6b"
-version = "0.33.0"
+version = "0.34.7"
 
 [[deps.URIs]]
 git-tree-sha1 = "e59ecc5a41b000fa94423a578d29290c7266fc10"

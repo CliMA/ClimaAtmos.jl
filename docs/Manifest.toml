@@ -201,9 +201,9 @@ version = "0.1.10"
 
 [[deps.CloudMicrophysics]]
 deps = ["DocStringExtensions", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "c41c1f6802c17db58ab5d0fcf989ea78b30738c3"
+git-tree-sha1 = "dd4e3c5d24d4f72c9acda64f0deb4a3f37fbb9e6"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.6.0"
+version = "0.8.0"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
