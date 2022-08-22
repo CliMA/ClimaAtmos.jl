@@ -1,4 +1,5 @@
 using ClimaCore: Geometry, Domains, Meshes, Topologies, Spaces, Hypsography
+using ClimaComms
 
 function periodic_line_mesh(; x_max, x_elem)
     domain = Domains.IntervalDomain(
@@ -30,7 +31,7 @@ function cubed_sphere_mesh(; radius, h_elem)
     return Meshes.EquiangularCubedSphere(domain, h_elem)
 end
 
-function make_horizontal_space(mesh, quad, ::Nothing)
+function make_horizontal_space(mesh, quad, ::ClimaComms.SingletonCommsContext)
     if mesh isa Meshes.AbstractMesh1D
         topology = Topologies.IntervalTopology(mesh)
         space = Spaces.SpectralElementSpace1D(topology, quad)

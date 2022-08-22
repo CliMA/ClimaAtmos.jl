@@ -1,4 +1,5 @@
 using Dates: DateTime, @dateformat_str
+import ClimaCore: InputOutput
 
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
@@ -237,24 +238,17 @@ end
 # get_state(simulation, parsed_args, spaces, params, model_spec)
 function get_state(simulation, args...)
     if simulation.restart
-        return get_state_restart(simulation.is_distributed)
+        return get_state_restart(comms_ctx)
     else
         return get_state_fresh_start(args...)
     end
 end
 
-function get_state_restart(is_distributed)
+function get_state_restart(comms_ctx)
     @assert haskey(ENV, "RESTART_FILE")
-    restart_file_name = if is_distributed
-        split(ENV["RESTART_FILE"], ".jld2")[1] * "_pid$pid.jld2"
-    else
-        ENV["RESTART_FILE"]
-    end
-    local Y, t_start
-    JLD2.jldopen(restart_file_name) do data
-        Y = data["Y"]
-        t_start = data["t"]
-    end
+    reader = InputOutput.HDF5Reader(ENV["RESTART_FILE"], comms_ctx)
+    Y = InputOutput.read_field(reader, "Y")
+    t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
     return (Y, t_start)
 end
 

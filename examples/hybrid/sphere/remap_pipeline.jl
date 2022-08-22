@@ -1,14 +1,17 @@
 import ClimaCore
-using ClimaCore: Geometry, Meshes, Domains, Topologies, Spaces, Operators
+using ClimaCore:
+    Geometry, Meshes, Domains, Topologies, Spaces, Operators, InputOutput
 using NCDatasets
 using ClimaCoreTempestRemap
 
 using JLD2
 
 if haskey(ENV, "JLD2_DIR")
-    jld2_dir = ENV["JLD2_DIR"]
+    data_dir = ENV["JLD2_DIR"]
+elseif haskey(ENV, "HDF5_DIR")
+    data_dir = ENV["HDF5_DIR"]
 else
-    error("ENV[\"JLD2_DIR\"] require!")
+    error("ENV[\"JLD2_DIR\"] or ENV[\"HDF5_DIR\"] require!")
 end
 
 if haskey(ENV, "THERMO_VAR")
@@ -20,7 +23,7 @@ end
 if haskey(ENV, "NC_DIR")
     nc_dir = ENV["NC_DIR"]
 else
-    nc_dir = jld2_dir * "/nc/"
+    nc_dir = data_dir * "/nc/"
 end
 mkpath(nc_dir)
 
@@ -40,15 +43,28 @@ end
 
 const ᶜinterp = Operators.InterpolateF2C()
 
-jld2_files = filter(x -> endswith(x, ".jld2"), readdir(jld2_dir, join = true))
+if haskey(ENV, "JLD2_DIR")
+    data_files =
+        filter(x -> endswith(x, ".jld2"), readdir(data_dir, join = true))
+elseif haskey(ENV, "HDF5_DIR")
+    data_files =
+        filter(x -> endswith(x, ".hdf5"), readdir(data_dir, join = true))
+end
 
 function remap2latlon(filein, nc_dir, nlat, nlon)
-    datain = jldopen(filein)
-
-    # get time and states from jld2 data
-    t_now = datain["t"]
-    Y = datain["Y"]
-    diag = datain["diagnostic"]
+    if split(filein, ".")[end] == "jld2"
+        datain = jldopen(filein)
+        t_now = datain["t"]
+        Y = datain["Y"]
+        diag = datain["diagnostic"]
+    elseif split(filein, ".")[end] == "hdf5"
+        reader = InputOutput.HDF5Reader(filein)
+        Y = InputOutput.read_field(reader, "Y")
+        diag = InputOutput.read_field(reader, "diagnostics")
+        t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
+    else
+        error("Input data is neither jld2 nor hdf5")
+    end
 
     # float type
     FT = eltype(Y)
@@ -278,6 +294,6 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
 
 end
 
-for jld2_file in jld2_files
-    remap2latlon(jld2_file, nc_dir, nlat, nlon)
+for data_file in data_files
+    remap2latlon(data_file, nc_dir, nlat, nlon)
 end
