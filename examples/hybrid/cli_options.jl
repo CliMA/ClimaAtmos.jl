@@ -22,6 +22,10 @@ function parse_commandline()
         help = "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
         arg_type = String
         default = "Inf"
+        "--dt_save_restart"
+        help = "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+        arg_type = String
+        default = "Inf"
         "--dt_rad"
         help = "Time between calling radiation callback for sphere configurations"
         arg_type = String

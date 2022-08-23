@@ -43,13 +43,12 @@ end
 
 const ᶜinterp = Operators.InterpolateF2C()
 
-if haskey(ENV, "JLD2_DIR")
-    data_files =
-        filter(x -> endswith(x, ".jld2"), readdir(data_dir, join = true))
+ext = if haskey(ENV, "JLD2_DIR")
+    ".jld2"
 elseif haskey(ENV, "HDF5_DIR")
-    data_files =
-        filter(x -> endswith(x, ".hdf5"), readdir(data_dir, join = true))
+    ".hdf5"
 end
+data_files = filter(x -> endswith(x, ext), readdir(data_dir, join = true))
 
 function remap2latlon(filein, nc_dir, nlat, nlon)
     if split(filein, ".")[end] == "jld2"
