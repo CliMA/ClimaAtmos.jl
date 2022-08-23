@@ -162,163 +162,113 @@ Note: The matrix S = A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I is th
 the large -I block in A.
 =#
 
-function linsolve!(::Type{Val{:init}}, f, u0; kwargs...)
-    function _linsolve!(x, A, b, update_matrix = false; kwargs...)
-        (; dtγ_ref, S, S_column_arrays) = A
-        (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
-        dtγ = dtγ_ref[]
-        dtγ² = dtγ^2
-        @nvtx "linsolve" color = colorant"lime" begin
+linsolve!(::Type{Val{:init}}, f, u0; kwargs...) = _linsolve!
 
-            # Compute Schur complement
-            Fields.bycolumn(axes(x.c)) do colidx
+include("linsolve_test.jl")
+call_verify_matrix() = false
 
-                # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
-                # than 2 diagonals per Jacobian block.
-                FT = eltype(eltype(S))
-                I = Ref(
-                    Operators.StencilCoefs{-1, 1}((
-                        zero(FT),
-                        one(FT),
-                        zero(FT),
-                    )),
+function _linsolve!(x, A, b, update_matrix = false; kwargs...)
+    (; dtγ_ref, S, S_column_arrays) = A
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
+    dtγ = dtγ_ref[]
+    dtγ² = dtγ^2
+    cond = Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
+    if cond
+        str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
+            block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
+            be set to 0 for the Schur complement computation. Consider \
+            changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
+        @warn str maxlog = 1
+    end
+    @nvtx "linsolve" color = colorant"lime" begin
+
+        # Compute Schur complement
+        Fields.bycolumn(axes(x.c)) do colidx
+
+            # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
+            # than 2 diagonals per Jacobian block.
+            FT = eltype(eltype(S))
+            I = Ref(
+                Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))),
+            )
+            if cond
+                @. S[colidx] =
+                    dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
+                    dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
+            else
+                @. S[colidx] =
+                    dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
+                    dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx]) +
+                    dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
+            end
+
+            # Compute xᶠ𝕄
+
+            xᶜρ = x.c.ρ
+            bᶜρ = b.c.ρ
+            ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
+            xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
+            bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
+            ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
+            xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
+            bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
+            ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
+            xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
+            bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
+
+            @. xᶠ𝕄[colidx] =
+                bᶠ𝕄[colidx] +
+                dtγ * (
+                    apply(∂ᶠ𝕄ₜ∂ᶜρ[colidx], bᶜρ[colidx]) +
+                    apply(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], bᶜ𝔼[colidx])
                 )
-                if Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
-                    str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
-                        block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
-                        be set to 0 for the Schur complement computation. Consider \
-                        changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
-                    @warn str maxlog = 1
-                    @. S[colidx] =
-                        dtγ^2 * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                        dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
-                else
-                    @. S[colidx] =
-                        dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                        dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx]) +
-                        dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
-                end
 
-                # Compute xᶠ𝕄
+            xᶠ𝕄_column_view = parent(xᶠ𝕄[colidx])
+            S_column = S[colidx]
+            S_column_array = S_column_arrays[Threads.threadid()]
+            @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
+            S_column_array.d .= parent(S_column.coefs.:2)
+            @views S_column_array.du .= parent(S_column.coefs.:3)[1:(end - 1)]
+            thomas_algorithm!(S_column_array, xᶠ𝕄_column_view)
 
-                xᶜρ = x.c.ρ
-                bᶜρ = b.c.ρ
-                ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
-                xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
-                bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
-                ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
-                xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
-                bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
-                ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
-                xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
-                bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
+            # Compute remaining components of x
 
-                @. xᶠ𝕄[colidx] =
-                    bᶠ𝕄[colidx] +
-                    dtγ * (
-                        apply(∂ᶠ𝕄ₜ∂ᶜρ[colidx], bᶜρ[colidx]) +
-                        apply(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], bᶜ𝔼[colidx])
-                    )
-
-                xᶠ𝕄_column_view = parent(xᶠ𝕄[colidx])
-                S_column = S[colidx]
-                S_column_array = S_column_arrays[Threads.threadid()]
-                @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
-                S_column_array.d .= parent(S_column.coefs.:2)
-                @views S_column_array.du .=
-                    parent(S_column.coefs.:3)[1:(end - 1)]
-                thomas_algorithm!(S_column_array, xᶠ𝕄_column_view)
-
-                # Compute remaining components of x
-
-                @. xᶜρ[colidx] =
-                    -bᶜρ[colidx] + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-                @. xᶜ𝔼[colidx] =
-                    -bᶜ𝔼[colidx] + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-                @. xᶜ𝕄[colidx] = -bᶜ𝕄[colidx]
-                for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
-                    xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
-                    bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
-                    ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
-                    @. xᶜ𝕋[colidx] =
-                        -bᶜ𝕋[colidx] + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-                end
-                for var_name in filter(is_edmf_var, propertynames(x.c))
-                    xᶜ𝕋 = getproperty(x.c, var_name)
-                    bᶜ𝕋 = getproperty(b.c, var_name)
-                    @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
-                end
-                for var_name in filter(is_edmf_var, propertynames(x.f))
-                    xᶜ𝕋 = getproperty(x.f, var_name)
-                    bᶜ𝕋 = getproperty(b.f, var_name)
-                    @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
-                end
+            @. xᶜρ[colidx] =
+                -bᶜρ[colidx] + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
+            @. xᶜ𝔼[colidx] =
+                -bᶜ𝔼[colidx] + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
+            @. xᶜ𝕄[colidx] = -bᶜ𝕄[colidx]
+            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
+                xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
+                bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                @. xᶜ𝕋[colidx] =
+                    -bᶜ𝕋[colidx] + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
             end
-            # Verify correctness (if needed)
-
-            if A.test && Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) == (-half, half)
-                Ni, Nj, _, Nv, Nh = size(Fields.field_values(x.c))
-                Nᶜf = DataLayouts.typesize(FT, eltype(x.c))
-                J_col = zeros(FT, Nv * Nᶜf + Nv + 1, Nv * Nᶜf + Nv + 1)
-                for h in 1:Nh, j in 1:Nj, i in 1:Ni
-                    x_col = Fields.FieldVector(;
-                        c = Spaces.column(x.c, i, j, h),
-                        f = Spaces.column(x.f, i, j, h),
-                    )
-                    b_col = Fields.FieldVector(;
-                        c = Spaces.column(b.c, i, j, h),
-                        f = Spaces.column(b.f, i, j, h),
-                    )
-                    ᶜρ_position = findfirst(isequal(:ρ), propertynames(x.c))
-                    ᶜρ_offset = DataLayouts.fieldtypeoffset(
-                        FT,
-                        eltype(x.c),
-                        ᶜρ_position,
-                    )
-                    ᶜρ_indices = (Nv * ᶜρ_offset + 1):(Nv * (ᶜρ_offset + 1))
-                    ᶜ𝔼_position = findfirst(is_energy_var, propertynames(x.c))
-                    ᶜ𝔼_offset = DataLayouts.fieldtypeoffset(
-                        FT,
-                        eltype(x.c),
-                        ᶜ𝔼_position,
-                    )
-                    ᶜ𝔼_indices = (Nv * ᶜ𝔼_offset + 1):(Nv * (ᶜ𝔼_offset + 1))
-                    ᶠ𝕄_indices = (Nv * Nᶜf + 1):(Nv * (Nᶜf + 1) + 1)
-                    J_col[ᶜρ_indices, ᶠ𝕄_indices] .=
-                        matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                    J_col[ᶜ𝔼_indices, ᶠ𝕄_indices] .=
-                        matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                    J_col[ᶠ𝕄_indices, ᶜρ_indices] .=
-                        matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(x.c), i, j, h)
-                    J_col[ᶠ𝕄_indices, ᶜ𝔼_indices] .=
-                        matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(x.c), i, j, h)
-                    J_col[ᶠ𝕄_indices, ᶠ𝕄_indices] .=
-                        matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                    for ᶜ𝕋_position in
-                        findall(is_tracer_var, propertynames(x.c))
-                        ᶜ𝕋_offset = DataLayouts.fieldtypeoffset(
-                            FT,
-                            eltype(x.c),
-                            ᶜ𝕋_position,
-                        )
-                        ᶜ𝕋_indices = (Nv * ᶜ𝕋_offset + 1):(Nv * (ᶜ𝕋_offset + 1))
-                        ᶜ𝕋_name = propertynames(x.c)[ᶜ𝕋_position]
-                        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
-                        J_col[ᶜ𝕋_indices, ᶠ𝕄_indices] .=
-                            matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-                    end
-                    @assert (-LinearAlgebra.I + dtγ * J_col) * x_col ≈ b_col
-                end
+            for var_name in filter(is_edmf_var, propertynames(x.c))
+                xᶜ𝕋 = getproperty(x.c, var_name)
+                bᶜ𝕋 = getproperty(b.c, var_name)
+                @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
             end
-
+            for var_name in filter(is_edmf_var, propertynames(x.f))
+                xᶜ𝕋 = getproperty(x.f, var_name)
+                bᶜ𝕋 = getproperty(b.f, var_name)
+                @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
+            end
             # Apply transform (if needed)
-
             if A.transform
-                x .*= dtγ
+                x.c[colidx] .*= dtγ
+                x.f[colidx] .*= dtγ
             end
+        end
+
+        # Verify correctness (if needed, but too expensive for runs)
+        if call_verify_matrix()
+            verify_matrix(x, A, b, update_matrix = false; kwargs...)
         end
     end
 end
+
 """
     thomas_algorithm!(A, b)
 
