@@ -193,7 +193,7 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜΦ, ᶜts, T_sfc, params) = p
+    (; ᶜK, ᶜts, T_sfc, params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, rrtmgp_model) = p
     thermo_params = CAP.thermodynamics_params(params)
