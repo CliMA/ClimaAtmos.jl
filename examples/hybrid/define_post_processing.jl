@@ -317,7 +317,7 @@ end
 
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
+    (; ᶜts, ᶜp, params, ᶜK) = p
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -772,7 +772,7 @@ function postprocessing_edmf(sol, output_dir, fps)
 end
 
 function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, params, ᶜK, ᶜΦ) = p
+    (; ᶜts, params, ᶜK) = p
     thermo_params = CAP.thermodynamics_params(params)
 
     ### save raw data into nc -> in preparation for remapping

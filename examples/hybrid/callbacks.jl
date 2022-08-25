@@ -141,9 +141,9 @@ function save_to_disk_func(integrator)
     Y = u
 
     if :ρq_tot in propertynames(Y.c)
-        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK, ᶜΦ) = p
+        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK) = p
     else
-        (; ᶜts, ᶜp, params, ᶜK, ᶜΦ) = p
+        (; ᶜts, ᶜp, params, ᶜK) = p
     end
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
