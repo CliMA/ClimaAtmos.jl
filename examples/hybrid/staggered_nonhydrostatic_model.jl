@@ -1,7 +1,7 @@
 using LinearAlgebra: ×, norm, norm_sqr, dot
 
 import ClimaAtmos.Parameters as CAP
-using ClimaCore: Operators, Fields
+using ClimaCore: Operators, Fields, Limiters
 
 using ClimaCore.Geometry: ⊗
 
@@ -79,7 +79,7 @@ get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
 )
 
 function default_cache(Y, params, spaces, numerics, simulation)
-    (; upwinding_mode) = numerics
+    (; upwinding_mode, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
@@ -107,10 +107,20 @@ function default_cache(Y, params, spaces, numerics, simulation)
         ghost_buffer =
             (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
     )
+    if apply_limiter
+        tracers = filter(is_tracer_var, propertynames(Y.c))
+        make_limiter =
+            ᶜ𝕋_name ->
+                Limiters.QuasiMonotoneLimiter(getproperty(Y.c, ᶜ𝕋_name), Y.c.ρ)
+        limiters = NamedTuple{tracers}(map(make_limiter, tracers))
+    else
+        limiters = nothing
+    end
     return (;
         simulation,
         spaces,
         Yₜ = similar(Y), # only needed when using increment formulation
+        limiters,
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜΦ,
@@ -362,13 +372,24 @@ function remaining_tendency!(Yₜ, Y, p, t)
 end
 
 function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
-    Yₜ = p.Yₜ
+    (; Yₜ, limiters) = p
     default_tends = p.default_remaining_tendencies
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         if !isnothing(default_tends)
             default_tends.horizontal_advection_tendency!(Yₜ, Y, p, t)
-            # TODO: Add dtγ * Yₜ to Y⁺ and apply the limiter to the result
+            # Apply limiter
+            if !isnothing(limiters)
+                @. Y⁺ += dtγ * Yₜ
+                for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
+                    𝕋_limiter = getproperty(limiters, ᶜ𝕋_name)
+                    ᶜ𝕋1 = getproperty(Y.c, ᶜ𝕋_name)
+                    ᶜ𝕋2 = getproperty(Y⁺.c, ᶜ𝕋_name)
+                    Limiters.compute_bounds!(𝕋_limiter, ᶜ𝕋1, Y.c.ρ)
+                    Limiters.apply_limiter!(ᶜ𝕋2, Y⁺.c.ρ, 𝕋_limiter)
+                end
+                Yₜ .= zero(eltype(Yₜ))
+            end
             default_tends.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "additional_tendency! increment" color = colorant"orange" begin

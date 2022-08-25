@@ -94,7 +94,7 @@ function parse_commandline()
         arg_type = String
         default = "none"
         "--ode_algo"
-        help = "ODE algorithm [`ARS343` (default), `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
+        help = "ODE algorithm [`ARS343`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23` (default), etc.]"
         arg_type = String
         default = "ODE.Rosenbrock23"
         "--max_newton_iters"
@@ -207,6 +207,10 @@ function parse_commandline()
         help = "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`]"
         arg_type = String
         default = "NoWarp"
+        "--apply_limiter"
+        help = "Apply a horizontal limiter to every tracer [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
