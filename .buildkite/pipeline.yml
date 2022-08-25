@@ -307,6 +307,8 @@ steps:
       - label: ":rocket: flame graph: perf target (ρe_tot)"
         command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
         artifact_paths: "flame_perf_target_rhoe/*"
+        agents:
+          slurm_mem: 20GB
         env:
           CI_PERF_CPUPROFILE: "true"
 

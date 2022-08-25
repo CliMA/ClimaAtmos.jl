@@ -1553,9 +1553,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "CUDA", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "8f368b14d83d112d4f0a3524dbe3882ade3a97a6"
+git-tree-sha1 = "5913f287feff5be5f8edc7b823e4a563efbc50e9"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.5.0"
+version = "0.6.0"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
