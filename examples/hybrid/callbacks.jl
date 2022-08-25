@@ -92,6 +92,8 @@ function affect_filter!(Y::Fields.FieldVector)
 end
 
 function dss_callback(Y, t, integrator)
+    ClimaComms.barrier(comms_ctx)
+
     p = integrator.p
     @nvtx "dss callback" color = colorant"yellow" begin
         Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
