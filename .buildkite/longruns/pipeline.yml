@@ -42,12 +42,16 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
+      - label: ":computer: held suarez (ρe_tot, unthreaded)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --forcing held_suarez --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_unthreaded --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_unthreaded/*"
+
       - label: ":computer: held suarez (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil/*"
         agents:
           slurm_cpus_per_task: 8
-      
+
       - label: ":computer: held suarez (ρe_tot) equilmoist no_save_to_sol"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil_nosavetosol --dt_save_to_sol Inf --dt_save_to_disk 10days --post_process false"
         artifact_paths: "longrun_hs_rhoe_equil_nosavetosol/*"
@@ -59,7 +63,7 @@ steps:
         artifact_paths: "longrun_hs_rhoe_equil_mo_ft64/*"
         agents:
           slurm_cpus_per_task: 8
-      
+
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov Float32"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme monin_obukhov --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil_mo --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_mo/*"
@@ -71,7 +75,7 @@ steps:
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_mo_ft64/*"
         agents:
           slurm_cpus_per_task: 8
-      
+
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --microphy 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_clearsky_mo --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_mo/*"
@@ -111,7 +115,7 @@ steps:
         artifact_paths: "longrun_hs_rhoe_third/*"
         agents:
           slurm_cpus_per_task: 8
-      
+
       - label: ":computer: held suarez (ρe_tot) third order topography"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --upwinding third_order --dt 300secs --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 1days --dt_save_to_disk 10days --topography DCMIP200"
         artifact_paths: "longrun_hs_rhoe_third/*"
@@ -152,13 +156,13 @@ steps:
         artifact_paths: "longrun_hs_rhoe_hightop_third/*"
         agents:
           slurm_cpus_per_task: 8
-      
+
       - label: ":computer: held suarez (ρe_tot) equilmoist hightop"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --z_max 45e3 --z_elem 25 --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_hightop --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_hightop/*"
         agents:
           slurm_cpus_per_task: 8
-      
+
       - label: ":computer: held suarez (ρe_tot) equilmoist hightop sponge"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --z_max 45e3 --z_elem 25 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_hightop_sponge --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_hightop_sponge/*"
@@ -166,7 +170,7 @@ steps:
           slurm_cpus_per_task: 8
 
   - group: "Targeted resolution AMIP long runs"
-  
+
     steps:
 
       - label: ":computer: held suarez (ρe_tot) high resolution"

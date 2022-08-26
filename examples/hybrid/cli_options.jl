@@ -297,6 +297,7 @@ parsed_args_from_command_line_flags(str, parsed_args = Dict()) =
 
 function parsed_args_from_ARGS_string(str, parsed_args = Dict())
     parsed_args_list = split(str, " ")
+    parsed_args_list == [""] && return parsed_args
     @assert iseven(length(parsed_args_list))
     parsed_arg_pairs = map(1:2:(length(parsed_args_list) - 1)) do i
         Pair(parsed_args_list[i], strip(parsed_args_list[i + 1], '\"'))
