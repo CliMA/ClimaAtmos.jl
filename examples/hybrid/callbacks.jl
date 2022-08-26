@@ -12,16 +12,9 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     FT = eltype(params)
     (; dt) = simulation
 
-    callback_filters = ODE.DiscreteCallback(
-        condition_every_iter,
-        affect_filter!;
-        save_positions = (false, false),
-    )
-    tc_callbacks = ODE.DiscreteCallback(
-        condition_every_iter,
-        turb_conv_affect_filter!;
-        save_positions = (false, false),
-    )
+    callback_filters = call_every_n_steps(affect_filter!; skip_first = true)
+    tc_callbacks =
+        call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
 
     additional_callbacks = if !isnothing(model_spec.radiation_model)
         # TODO: better if-else criteria?
@@ -30,14 +23,7 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
         else
             FT(time_to_seconds(parsed_args["dt_rad"]))
         end
-        (
-            DEQ.PeriodicCallback(
-                rrtmgp_model_callback!,
-                dt_rad; # update RRTMGPModel every dt_rad
-                initial_affect = true, # run callback at t = 0
-                save_positions = (false, false), # do not save Y before and after callback
-            ),
-        )
+        (call_every_dt(rrtmgp_model_callback!, dt_rad),)
     else
         ()
     end
@@ -53,27 +39,21 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
     dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
 
-    dss_cb = DEQ.FunctionCallingCallback(dss_callback, func_start = true)
+    dss_cb = if startswith(parsed_args["ode_algo"], "ODE.")
+        call_every_n_steps(dss_callback)
+    else
+        nothing
+    end
     save_to_disk_callback = if dt_save_to_disk == Inf
         nothing
     else
-        DEQ.PeriodicCallback(
-            save_to_disk_func,
-            dt_save_to_disk;
-            initial_affect = true,
-            save_positions = (false, false),
-        )
+        call_every_dt(save_to_disk_func, dt_save_to_disk)
     end
 
     save_restart_callback = if dt_save_restart == Inf
         nothing
     else
-        DEQ.PeriodicCallback(
-            save_restart_func,
-            dt_save_restart;
-            initial_affect = true,
-            save_positions = (false, false),
-        )
+        call_every_dt(save_restart_func, dt_save_restart)
     end
     return ODE.CallbackSet(
         dss_cb,
@@ -83,23 +63,58 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     )
 end
 
+function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
+    previous_step = Ref(0)
+    return ODE.DiscreteCallback(
+        (u, t, integrator) ->
+            (previous_step[] += 1) % n == 0 ||
+                (call_at_end && t == integrator.sol.prob.tspan[2]),
+        f!;
+        initialize = (cb, u, t, integrator) -> skip_first || f!(integrator),
+        save_positions = (false, false),
+    )
+end
 
-condition_every_iter(u, t, integrator) = true
+function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
+    next_t = Ref{typeof(dt)}()
+    affect! = function (integrator)
+        t = integrator.t
+        t_end = integrator.sol.prob.tspan[2]
+        while t >= next_t[]
+            f!(integrator)
+            next_t[] =
+                (call_at_end && t < t_end) ? min(t_end, next_t[] + dt) :
+                next_t[] + dt
+        end
+    end
+    return ODE.DiscreteCallback(
+        (u, t, integrator) -> t >= next_t[],
+        affect!;
+        initialize = (cb, u, t, integrator) -> begin
+            skip_first || f!(integrator)
+            t_end = integrator.sol.prob.tspan[2]
+            next_t[] =
+                (call_at_end && t < t_end) ? min(t_end, t + dt) : t + dt
+        end,
+        save_positions = (false, false),
+    )
+end
 
 function affect_filter!(Y::Fields.FieldVector)
     @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
     return nothing
 end
 
-function dss_callback(Y, t, integrator)
-    p = integrator.p
+function dss_callback(integrator)
+    Y = integrator.u
+    ghost_buffer = integrator.p.ghost_buffer
     @nvtx "dss callback" color = colorant"yellow" begin
-        Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-        Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-        Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_start!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_start!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_internal!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_internal!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_ghost!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_ghost!(Y.f, ghost_buffer.f)
     end
     # ODE.u_modified!(integrator, false) # TODO: try this
 end
@@ -271,7 +286,7 @@ function save_to_disk_func(integrator)
     )
 
     day = floor(Int, t / (60 * 60 * 24))
-    sec = Int(mod(t, 3600 * 24))
+    sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving diagnostics to HDF5 file on day $day second $sec"
     output_file = joinpath(output_dir, "day$day.$sec.hdf5")
     hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
@@ -291,7 +306,7 @@ function save_restart_func(integrator)
     (; output_dir) = p.simulation
     Y = u
     day = floor(Int, t / (60 * 60 * 24))
-    sec = Int(mod(t, 3600 * 24))
+    sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving restart file to HDF5 file on day $day second $sec"
     mkpath(joinpath(output_dir, "restart"))
     output_file = joinpath(output_dir, "restart", "day$day.$sec.hdf5")

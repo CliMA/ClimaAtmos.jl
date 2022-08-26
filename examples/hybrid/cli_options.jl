@@ -94,9 +94,13 @@ function parse_commandline()
         arg_type = String
         default = "none"
         "--ode_algo"
-        help = "ODE algorithm [`Rosenbrock23` (default), `Euler`]"
+        help = "ODE algorithm [`ARS343` (default), `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
         arg_type = String
-        default = "Rosenbrock23"
+        default = "ODE.Rosenbrock23"
+        "--max_newton_iters"
+        help = "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
+        arg_type = Int
+        default = 3
         "--split_ode"
         help = "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
         arg_type = Bool

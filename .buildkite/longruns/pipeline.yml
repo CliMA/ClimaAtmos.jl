@@ -42,6 +42,12 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
+      - label: ":computer: held suarez (ρe_tot) ARS343"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_ARS343 --ode_algo ARS343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_ARS343/*"
+        agents:
+          slurm_cpus_per_task: 8
+
       - label: ":computer: held suarez (ρe_tot, unthreaded)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --forcing held_suarez --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_unthreaded --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_unthreaded/*"
@@ -49,6 +55,12 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil/*"
+        agents:
+          slurm_cpus_per_task: 8
+
+      - label: ":computer: held suarez (ρe_tot) equilmoist ARS343"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_ARS343 --ode_algo ARS343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_ARS343/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -176,6 +188,14 @@ steps:
       - label: ":computer: held suarez (ρe_tot) high resolution"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 7e15 --dt 200secs --t_end 600days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres"
         artifact_paths: "longrun_hs_rhoe_highres/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 128
+
+      - label: ":computer: held suarez (ρe_tot) high resolution ARS343"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 7e15 --ode_algo ARS343 --dt 200secs --t_end 600days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres_ARS343"
+        artifact_paths: "longrun_hs_rhoe_highres_ARS343/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
