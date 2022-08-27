@@ -131,6 +131,15 @@ steps:
         agents:
           slurm_ntasks: 2
 
+      - label: ":computer: MPI baroclinic wave (ρe_tot) ARS343"
+        key: "mpi_baro_wave_ARS343"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe_ARS343 --ode_algo ARS343 --dt 580secs"
+        artifact_paths: "mpi_baroclinic_wave_rhoe_ARS343/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
       - label: ":computer: Test restart for MPI baroclinic wave"
         key: "restart_mpi_baro_wave"
         depends_on: "mpi_baro_wave"
@@ -141,6 +150,9 @@ steps:
           RESTART_FILE: "mpi_baroclinic_wave_rhoe/restart/day5.0.hdf5"
         agents:
           slurm_ntasks: 2
+        timeout_in_minutes: 20
+        retry:
+          automatic: true
 
       - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
         command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 4days"
@@ -154,12 +166,20 @@ steps:
     steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) IMEXEuler"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 40hours --dt 60secs --ode_algo IMEXEuler --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 40hours --dt 60secs --ode_algo ODE.IMEXEuler --max_newton_iters 2 --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
         artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64 --t_end 9days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
+
+      - label: ":computer: baroclinic wave (ρe_tot) ARS343"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_ARS343 --ode_algo ARS343 --dt 580secs"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_ARS343/*"
+
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist ARS343"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_ARS343 --ode_algo ARS343 --t_end 4days"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_ARS343/*"
 
       - label: ":computer: baroclinic wave (ρθ) Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64"
@@ -278,6 +298,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":computer: Unthreaded performance target ARS343"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_ARS343 --enable_threading false --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --ode_algo ARS343 --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        artifact_paths: "perf_target_unthreaded_ARS343/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":computer: Threaded performance target"
         command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_threaded/*"
@@ -290,20 +316,20 @@ steps:
     steps:
 
       - label: ":computer: Single column EDMF Bomex"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_bomex/*"
 
       - label: ":computer: Single column EDMF DYCOMS_RF01"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_dycoms_rf01/*"
 
       - label: ":computer: Single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true"
         artifact_paths: "edmf_trmm/*"
 
      # TODO: Add them back in #724
      # - label: ":computer: Single column EDMF GABLS"
-     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true"
+     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true"
      #   artifact_paths: "edmf_gabls/*"
 
      # - label: ":computer: Compressible Single column EDMF GABLS"

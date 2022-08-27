@@ -203,7 +203,6 @@ funcs = [
     "linsolve",
     "implicit_tendency!",
     "remaining_tendency!",
-    "default_remaining_tendency!",
     "additional_tendency!",
     "hyperdiffusion_tendency!",
     "step!",

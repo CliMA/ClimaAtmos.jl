@@ -19,22 +19,30 @@ catch err
 end
 
 import OrdinaryDiffEq as ODE
+import ClimaTimeSteppers as CTS
 ODE.step!(integrator) # compile first
 X = similar(integrator.u)
 
-(; cache, u, p, dt, t) = integrator
-(; W) = cache
+(; sol, cache, u, p, dt, t) = integrator
+f = sol.prob.f
+if integrator isa CTS.DistributedODEIntegrator
+    W = cache.newtons_method_cache.j
+    linsolve = cache.newtons_method_cache.linsolve!
+else
+    (; W, linsolve) = cache
+end
+f1_args = f.f1 isa CTS.ForwardEulerODEFunction ? (X, u, p, t, dt) : (X, u, p, t)
+f2_args = f.f2 isa CTS.ForwardEulerODEFunction ? (X, u, p, t, dt) : (X, u, p, t)
 
 include("benchmark_utils.jl")
 
 import OrderedCollections
 trials = OrderedCollections.OrderedDict()
 #! format: off
-trials["Wfact"] = get_trial(integrator.f.f1.Wfact, (W, u, p, dt, t), "Wfact");
-trials["linsolve"] = get_trial(integrator.cache.linsolve, (X, W, u), "linsolve");
-trials["implicit_tendency!"] = get_trial(integrator.f.f1, (X, u, p, t), "implicit_tendency!");
-trials["remaining_tendency!"] = get_trial(integrator.f.f2, (X, u, p, t), "remaining_tendency!");
-trials["default_remaining_tendency!"] = get_trial(p.default_remaining_tendency!, (X, u, p, t), "default_remaining_tendency!");
+trials["Wfact"] = get_trial(f.f1.Wfact, (W, u, p, dt, t), "Wfact");
+trials["linsolve"] = get_trial(linsolve, (X, W, u), "linsolve");
+trials["implicit_tendency!"] = get_trial(f.f1, f1_args, "implicit_tendency!");
+trials["remaining_tendency!"] = get_trial(f.f2, f2_args, "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(additional_tendency!, (X, u, p, t), "additional_tendency!");
 trials["hyperdiffusion_tendency!"] = get_trial(hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
 trials["step!"] = get_trial(ODE.step!, (integrator, ), "step!");
