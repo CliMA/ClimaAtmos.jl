@@ -63,6 +63,12 @@ steps:
         artifact_paths: "longrun_hs_rhoe_equil_ARS343/*"
         agents:
           slurm_cpus_per_task: 8
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist ARS343 dt200"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_ARS343_dt200 --ode_algo ARS343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_ARS343_dt200/*"
+        agents:
+          slurm_cpus_per_task: 8
 
       - label: ":computer: held suarez (ρe_tot) equilmoist no_save_to_sol"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil_nosavetosol --dt_save_to_sol Inf --dt_save_to_disk 10days --post_process false"
@@ -76,7 +82,7 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov Float32"
+      - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme monin_obukhov --microphy 0M --dt 250secs --t_end 800days --fps 30 --job_id longrun_hs_rhoe_equil_mo --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_equil_mo/*"
         agents:
