@@ -131,6 +131,9 @@ function get_numerics(parsed_args)
         apply_limiter = parsed_args["apply_limiter"],
     )
     @assert numerics.upwinding_mode in (:none, :first_order, :third_order)
+    for key in keys(numerics)
+        @info "`$(key)`:$(getproperty(numerics, key))"
+    end
 
     return numerics
 end
