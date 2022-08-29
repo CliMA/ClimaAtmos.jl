@@ -31,8 +31,10 @@ if integrator isa CTS.DistributedODEIntegrator
 else
     (; W, linsolve) = cache
 end
-f1_args = f.f1 isa CTS.ForwardEulerODEFunction ? (X, u, p, t, dt) : (X, u, p, t)
-f2_args = f.f2 isa CTS.ForwardEulerODEFunction ? (X, u, p, t, dt) : (X, u, p, t)
+f1_args =
+    f.f1 isa CTS.ForwardEulerODEFunction ? (copy(u), u, p, t, dt) : (X, u, p, t)
+f2_args =
+    f.f2 isa CTS.ForwardEulerODEFunction ? (copy(u), u, p, t, dt) : (X, u, p, t)
 
 include("benchmark_utils.jl")
 

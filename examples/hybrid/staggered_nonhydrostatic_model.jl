@@ -383,10 +383,10 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
                 @. Y⁺ += dtγ * Yₜ
                 for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
                     𝕋_limiter = getproperty(limiters, ᶜ𝕋_name)
-                    ᶜ𝕋1 = getproperty(Y.c, ᶜ𝕋_name)
-                    ᶜ𝕋2 = getproperty(Y⁺.c, ᶜ𝕋_name)
-                    Limiters.compute_bounds!(𝕋_limiter, ᶜ𝕋1, Y.c.ρ)
-                    Limiters.apply_limiter!(ᶜ𝕋2, Y⁺.c.ρ, 𝕋_limiter)
+                    ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
+                    ᶜ𝕋⁺ = getproperty(Y⁺.c, ᶜ𝕋_name)
+                    Limiters.compute_bounds!(𝕋_limiter, ᶜ𝕋, Y.c.ρ)
+                    Limiters.apply_limiter!(ᶜ𝕋⁺, Y⁺.c.ρ, 𝕋_limiter)
                 end
                 Yₜ .= zero(eltype(Yₜ))
             end
