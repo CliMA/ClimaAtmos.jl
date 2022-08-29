@@ -6,12 +6,13 @@ using UnPack
 
 import ClimaAtmos.Parameters as CAP
 using ClimaCore: Geometry
-using ClimaAtmos.Utils.InitialConditions: init_3d_solid_body_rotation
-using ClimaAtmos.Domains
-using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models
-using ClimaAtmos.Models.Nonhydrostatic3DModels
-using ClimaAtmos.Simulations
+using ClimaAtmos.Experimental.Utils.InitialConditions:
+    init_3d_solid_body_rotation
+using ClimaAtmos.Experimental.Domains
+using ClimaAtmos.Experimental.BoundaryConditions
+using ClimaAtmos.Experimental.Models
+using ClimaAtmos.Experimental.Models.Nonhydrostatic3DModels
+using ClimaAtmos.Experimental.Simulations
 
 import ClimaAtmos
 include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))

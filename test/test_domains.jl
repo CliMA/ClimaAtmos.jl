@@ -1,6 +1,6 @@
 using Test
 
-using ClimaAtmos: Domains
+using ClimaAtmos.Experimental: Domains
 using ClimaCore: Spaces, Meshes
 import ClimaCore.Meshes:
     StretchingRule,

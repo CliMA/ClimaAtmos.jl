@@ -6,12 +6,12 @@ using UnPack
 
 using ClimaCoreVTK
 using ClimaCore: Geometry
-using ClimaAtmos.Utils.InitialConditions: init_3d_rising_bubble
-using ClimaAtmos.Domains
-using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models
-using ClimaAtmos.Models.Nonhydrostatic3DModels
-using ClimaAtmos.Simulations
+using ClimaAtmos.Experimental.Utils.InitialConditions: init_3d_rising_bubble
+using ClimaAtmos.Experimental.Domains
+using ClimaAtmos.Experimental.BoundaryConditions
+using ClimaAtmos.Experimental.Models
+using ClimaAtmos.Experimental.Models.Nonhydrostatic3DModels
+using ClimaAtmos.Experimental.Simulations
 
 # Set up parameters
 import ClimaAtmos

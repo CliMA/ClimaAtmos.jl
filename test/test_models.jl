@@ -3,11 +3,13 @@ using Test
 using LinearAlgebra
 
 using ClimaCore: Geometry, Spaces, Fields
-using ClimaAtmos: Domains
-using ClimaAtmos: Models
-using ClimaAtmos.Models.Nonhydrostatic2DModels: Nonhydrostatic2DModel
-using ClimaAtmos.Models.Nonhydrostatic3DModels: Nonhydrostatic3DModel
-using ClimaAtmos.Models.SingleColumnModels: SingleColumnModel
+using ClimaAtmos.Experimental: Domains
+using ClimaAtmos.Experimental: Models
+using ClimaAtmos.Experimental.Models.Nonhydrostatic2DModels:
+    Nonhydrostatic2DModel
+using ClimaAtmos.Experimental.Models.Nonhydrostatic3DModels:
+    Nonhydrostatic3DModel
+using ClimaAtmos.Experimental.Models.SingleColumnModels: SingleColumnModel
 
 float_types = (Float32, Float64)
 

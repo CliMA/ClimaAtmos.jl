@@ -5,12 +5,12 @@ using ClimaCorePlots, Plots
 using UnPack
 
 import ClimaAtmos.Parameters as CAP
-using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
-using ClimaAtmos.Domains
-using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models: ConstantViscosity
-using ClimaAtmos.Models.Nonhydrostatic3DModels
-using ClimaAtmos.Simulations
+using ClimaAtmos.Experimental.Utils.InitialConditions: init_3d_baroclinic_wave
+using ClimaAtmos.Experimental.Domains
+using ClimaAtmos.Experimental.BoundaryConditions
+using ClimaAtmos.Experimental.Models: ConstantViscosity
+using ClimaAtmos.Experimental.Models.Nonhydrostatic3DModels
+using ClimaAtmos.Experimental.Simulations
 
 # Set up parameters
 import ClimaAtmos
