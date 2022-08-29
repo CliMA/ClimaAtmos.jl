@@ -127,9 +127,13 @@ function get_numerics(parsed_args)
     numerics = (;
         upwinding_mode = Symbol(
             parse_arg(parsed_args, "upwinding", "third_order"),
-        )
+        ),
+        apply_limiter = parsed_args["apply_limiter"],
     )
     @assert numerics.upwinding_mode in (:none, :first_order, :third_order)
+    for key in keys(numerics)
+        @info "`$(key)`:$(getproperty(numerics, key))"
+    end
 
     return numerics
 end
@@ -298,8 +302,7 @@ function ode_configuration(Y, parsed_args, model_spec)
     test_implicit_solver = false # makes solver extremely slow when set to `true`
     jacobian_flags = jacobi_flags(model_spec.energy_form)
     ode_algorithm = if startswith(parsed_args["ode_algo"], "ODE.")
-        # TODO: Check that neither limiters nor FCT (nor any other filters) need
-        # to be applied.
+        @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
         getproperty(ODE, Symbol(split(parsed_args["ode_algo"], ".")[2]))
     else
         getproperty(CTS, Symbol(parsed_args["ode_algo"]))
