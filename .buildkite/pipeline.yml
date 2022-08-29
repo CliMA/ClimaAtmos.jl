@@ -242,7 +242,7 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
-      
+
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 200secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
@@ -250,7 +250,7 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo_ft64 --dt 200secs --t_end 3days --FLOAT_TYPE Float64"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo_ft64/*"
-      
+
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky_mo --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky_mo/*"
@@ -348,22 +348,6 @@ steps:
           slurm_mem: 20GB
         env:
           CI_PERF_CPUPROFILE: "true"
-
-      - label: ":rocket: flame graph: perf target (ρe_tot) disabled vert_diff"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_no_vert_diff --vert_diff false"
-        artifact_paths: "flame_perf_target_rhoe_no_vert_diff/*"
-        agents:
-          slurm_mem: 20GB
-        env:
-          CI_PERF_CPUPROFILE: "true"
-
-      - label: ":rocket: flame graph: perf target (ρe_int)" # vert_diff true not supported for rhoe_int..
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_int --energy_name rhoe_int --vert_diff false"
-        artifact_paths: "flame_perf_target_rhoe_int/*"
-        env:
-          CI_PERF_CPUPROFILE: "true"
-        agents:
-          slurm_mem: 20GB
 
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
