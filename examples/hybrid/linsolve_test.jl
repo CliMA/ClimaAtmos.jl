@@ -1,7 +1,7 @@
 
 function verify_matrix(x, A, b, update_matrix = false; kwargs...)
     (; dtγ_ref, S, S_column_arrays) = A
-    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = A
     dtγ = dtγ_ref[]
     dtγ² = dtγ^2
     FT = eltype(eltype(S))
@@ -40,7 +40,7 @@ function verify_matrix(x, A, b, update_matrix = false; kwargs...)
                 DataLayouts.fieldtypeoffset(FT, eltype(x.c), ᶜ𝕋_position)
             ᶜ𝕋_indices = (Nv * ᶜ𝕋_offset + 1):(Nv * (ᶜ𝕋_offset + 1))
             ᶜ𝕋_name = propertynames(x.c)[ᶜ𝕋_position]
-            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
             J_col[ᶜ𝕋_indices, ᶠ𝕄_indices] .=
                 matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
         end

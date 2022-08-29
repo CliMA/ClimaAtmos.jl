@@ -602,7 +602,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
-    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = W
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -717,7 +717,7 @@ function Wfact_special!(W, Y, p, dtγ, t)
 
             for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
                 ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
                 if isnothing(ᶠupwind_product)
                     # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜ𝕋) * ᶠw)
                     # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋) * ᶠw_unit)
@@ -746,7 +746,7 @@ function Wfact_generic!(W, Y, p, dtγ, t)
     (; apply_moisture_filter) = p
     apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
-    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = W
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -1075,7 +1075,7 @@ function Wfact_generic!(W, Y, p, dtγ, t)
 
         for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
             ᶜ𝕋 = getproperty(Y.c, ᶜ𝕋_name)
-            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
             if isnothing(ᶠupwind_product)
                 # ᶜ𝕋ₜ = -ᶜdivᵥ(ᶠinterp(ᶜ𝕋) * ᶠw)
                 # ∂(ᶜ𝕋ₜ)/∂(ᶠw_data) = -ᶜdivᵥ_stencil(ᶠinterp(ᶜ𝕋) * ᶠw_unit)
@@ -1112,7 +1112,7 @@ function Wfact_generic!(W, Y, p, dtγ, t)
             @assert matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
                     exact_column_jacobian_block(args..., (:f, :w), (:f, :w))
             for ᶜ𝕋_name in filter(is_tracer_var, propertynames(Y.c))
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
                 ᶜ𝕋_tuple = (:c, ᶜ𝕋_name)
                 @assert matrix_column(∂ᶜ𝕋ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
                         exact_column_jacobian_block(args..., ᶜ𝕋_tuple, (:f, :w))
