@@ -1,9 +1,9 @@
 module Nonhydrostatic2DModels
 
-import ...Parameters as CAP
+import ....Parameters as CAP
 using StaticArrays
 using UnPack
-using Thermodynamics
+import Thermodynamics as TD
 using CloudMicrophysics
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
@@ -12,7 +12,6 @@ using ...Domains, ...Models
 using LinearAlgebra: norm_sqr
 
 export Nonhydrostatic2DModel
-const TD = Thermodynamics
 
 include("nonhydrostatic_2d_model.jl")
 include("default_ode_cache.jl")

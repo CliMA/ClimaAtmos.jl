@@ -1,16 +1,15 @@
 module SingleColumnModels
 
-import ...Parameters as CAP
+import ....Parameters as CAP
 using LinearAlgebra
 using StaticArrays
 import UnPack
-using Thermodynamics
+import Thermodynamics as TD
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models, ...BoundaryConditions
 
 export SingleColumnModel
-const TD = Thermodynamics
 
 include("single_column_model.jl")
 include("equations_base_model.jl")

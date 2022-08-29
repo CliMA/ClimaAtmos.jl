@@ -12,7 +12,7 @@ limits `zlim` (where `zlim[1] < zlim[2]`) and `nelements` elements. This domain
 is not periodic.
 
 # Example
-```setup = :(using ClimaAtmos.Domains)
+```setup = :(using ClimaAtmos.Experimental.Domains)
 julia> Column(zlim = (0, 1), nelements = 10)
 Domain set-up:
 \tz-column:\t[0.0, 1.0]
@@ -52,7 +52,7 @@ periodic along the z-axis. If the `stretching` keyword is unspecified, a uniform
 vertical mesh is generated. 
 
 # Example
-```setup = :(using ClimaAtmos.Domains)
+```setup = :(using ClimaAtmos.Experimental.Domains)
 julia> HybridPlane(
             xlim = (0, π),
             zlim = (0, 1),
@@ -112,7 +112,7 @@ This domain is not periodic along the z-axis. If `stretching` is unspecified, ge
 vertical interval mesh.
 
 # Example
-```setup = :(using ClimaAtmos.Domains)
+```setup = :(using ClimaAtmos.Experimental.Domains)
 julia> HybridBox(
             xlim = (0, π),
             ylim = (0, π),
@@ -172,7 +172,7 @@ and `nelements` elements of polynomial order `npolynomial`. If `stretching` is u
 uniform vertical interval mesh.
 
 # Example
-```setup = :(using ClimaAtmos.Domains)
+```setup = :(using ClimaAtmos.Experimental.Domains)
 julia> SphericalShell(radius = 1, height = 1, nelements = (6, 10), npolynomial = 5)
 Domain set-up:
 \tsphere radius:\t1.0

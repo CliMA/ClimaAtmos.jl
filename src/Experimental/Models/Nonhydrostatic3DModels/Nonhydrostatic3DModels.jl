@@ -1,16 +1,15 @@
 module Nonhydrostatic3DModels
 
-import ...Parameters as CAP
+import ....Parameters as CAP
 using LinearAlgebra
 using StaticArrays
 using UnPack
-using Thermodynamics
+import Thermodynamics as TD
 using ClimaCore: Geometry, Spaces, Fields, Operators
 using ClimaCore.Geometry: ⊗
 using ...Domains, ...Models
-using ClimaAtmos.BoundaryConditions
+using ClimaAtmos.Experimental.BoundaryConditions
 
-const TD = Thermodynamics
 export Nonhydrostatic3DModel
 
 include("nonhydrostatic_3d_model.jl")

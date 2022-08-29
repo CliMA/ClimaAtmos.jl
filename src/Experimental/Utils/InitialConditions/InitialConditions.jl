@@ -2,12 +2,11 @@ module InitialConditions
 
 using UnPack
 
-import ...Parameters as CAP
+import ....Parameters as CAP
 using ClimaCore: Geometry, Spaces, Fields
-using ClimaAtmos: Models
+using ...Models
 
-using Thermodynamics
-const TD = Thermodynamics
+import Thermodynamics as TD
 
 include("init_1d_ekman_column.jl")
 include("init_2d_dry_bubble.jl")

@@ -22,12 +22,12 @@ import ClimaAtmos
 include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
 params = create_climaatmos_parameter_set(Float64)
 
-using ClimaAtmos.Utils.InitialConditions: init_3d_baroclinic_wave
+using ClimaAtmos.Experimental.Utils.InitialConditions: init_3d_baroclinic_wave
 ```
 - Set up the problem domain, assume we want 6 horizontal of polynomial order 3, and 10 vertical elements. ClimaAtmos is tested with `Float32`, `Float64`; if something doesn't work in `Float32` please raise an issue! 
 ```
 julia> import ClimaAtmos.Parameters as CAP
-julia> using ClimaAtmos.Domains
+julia> using ClimaAtmos.Experimental.Domains
 julia> domain = SphericalShell(FT, 
                                radius = CAP.planet_radius(params), 
                                height = FT(30.0e3), 
@@ -38,8 +38,8 @@ julia> domain = SphericalShell(FT,
 `show(domain)`. With the domain set up, we assemble our `model`, which contains information on discretization, boundary conditions, and problem specific parameters. 
 
 ```
-julia> using ClimaAtmos.Models.Nonhydrostatic3DModels
-julia> using ClimaAtmos.BoundaryConditions
+julia> using ClimaAtmos.Experimental.Models.Nonhydrostatic3DModels
+julia> using ClimaAtmos.Experimental.BoundaryConditions
 julia> model = Nonhydrostatic3DModel(
         domain = domain,
         boundary_conditions = nothing,
@@ -51,7 +51,7 @@ julia>
 - For details on model properties, see the `Models` API documentation. To explore the properties of an existing `model`, use `show(model)`. We now select an integration method, SSPRK33 (available in the `OrdinaryDiffEq.jl` package) and construct the `simulation` object as follows:
 
 ```
-julia> using ClimaAtmos.Simulations
+julia> using ClimaAtmos.Experimental.Simulations
 julia> using UnPack
 julia> using OrdinaryDiffEq: SSPRK33
 julia> simulation = Simulation(model, SSPRK33(), dt = 0.02, tspan = (0.0, 1.0)) # Run for 1.0s in 0.02s intervals

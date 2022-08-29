@@ -7,13 +7,13 @@ using ClimaCorePlots, Plots
 using UnPack
 
 using ClimaCore: Geometry, Fields
-using ClimaAtmos.Utils.InitialConditions: init_1d_ekman_column
-using ClimaAtmos.Domains
-using ClimaAtmos.BoundaryConditions
-using ClimaAtmos.Models
-using ClimaAtmos.Models.SingleColumnModels
-using ClimaAtmos.Callbacks
-using ClimaAtmos.Simulations
+using ClimaAtmos.Experimental.Utils.InitialConditions: init_1d_ekman_column
+using ClimaAtmos.Experimental.Domains
+using ClimaAtmos.Experimental.BoundaryConditions
+using ClimaAtmos.Experimental.Models
+using ClimaAtmos.Experimental.Models.SingleColumnModels
+using ClimaAtmos.Experimental.Callbacks
+using ClimaAtmos.Experimental.Simulations
 
 # Set up parameters
 import ClimaAtmos

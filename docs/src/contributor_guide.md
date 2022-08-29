@@ -175,7 +175,7 @@ with extents zlim[1] < zlim[2] and `nelements` cells.
 Example:
 Generate a Column{Float64} with extents (0,1) and 10 elements.
 ```julia-repl
-julia> using ClimaAtmos.Domains
+julia> using ClimaAtmos.Experimental.Domains
 julia> z_domain = Column(Float64, 
                             zlim = (0,1), 
                             nelements = 10)
