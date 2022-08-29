@@ -18,6 +18,11 @@ is_tracer_var(symbol) = !(
     is_edmf_var(symbol)
 )
 
+function FieldFromNamedTuple(space, nt::NamedTuple)
+    cmv(z) = nt
+    return cmv.(Fields.coordinate_field(space))
+end
+
 struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
     # whether this struct is used to compute Wfact_t or Wfact
     transform::Bool
@@ -44,6 +49,17 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
     test::Bool
 end
 
+function tracer_variables(::Type{FT}, ᶜ𝕋_names) where {FT}
+    (; zip(ᶜ𝕋_names, bidiag_ntuple(FT, Val(length(ᶜ𝕋_names))))...)
+end
+
+function bidiag_ntuple(::Type{FT}, ::Val{N}) where {FT, N}
+    ntuple(
+        i -> Operators.StencilCoefs{-half, half, NTuple{2, FT}}((FT(0), FT(0))),
+        Val(N),
+    )
+end
+
 function SchurComplementW(Y, transform, flags, test = false)
     @assert length(filter(isequal(:ρ), propertynames(Y.c))) == 1
     @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
@@ -66,9 +82,8 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
     ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple = NamedTuple{ᶜ𝕋_names}(
-        ntuple(_ -> Fields.Field(bidiag_type, axes(Y.c)), length(ᶜ𝕋_names)),
-    )
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple =
+        FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
@@ -168,10 +183,9 @@ include("linsolve_test.jl")
 call_verify_matrix() = false
 
 function _linsolve!(x, A, b, update_matrix = false; kwargs...)
-    (; dtγ_ref, S, S_column_arrays) = A
+    (; dtγ_ref, S, S_column_arrays, transform) = A
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
     dtγ = dtγ_ref[]
-    dtγ² = dtγ^2
     cond = Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
     if cond
         str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
@@ -184,82 +198,23 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
 
         # Compute Schur complement
         Fields.bycolumn(axes(x.c)) do colidx
-
-            # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
-            # than 2 diagonals per Jacobian block.
-            FT = eltype(eltype(S))
-            I = Ref(
-                Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))),
+            _linsolve_serial!(
+                x.c[colidx],
+                x.f[colidx],
+                b.c[colidx],
+                b.f[colidx],
+                dtγ,
+                transform,
+                cond,
+                ∂ᶜρₜ∂ᶠ𝕄[colidx],
+                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+                ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
+                ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
+                ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple[colidx],
+                S[colidx],
+                S_column_arrays[Threads.threadid()], # can / should this be colidx?
             )
-            if cond
-                @. S[colidx] =
-                    dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                    dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
-            else
-                @. S[colidx] =
-                    dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ[colidx], ∂ᶜρₜ∂ᶠ𝕄[colidx]) +
-                    dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx]) +
-                    dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] - I
-            end
-
-            # Compute xᶠ𝕄
-
-            xᶜρ = x.c.ρ
-            bᶜρ = b.c.ρ
-            ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1]
-            xᶜ𝔼 = getproperty(x.c, ᶜ𝔼_name)
-            bᶜ𝔼 = getproperty(b.c, ᶜ𝔼_name)
-            ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1]
-            xᶜ𝕄 = getproperty(x.c, ᶜ𝕄_name)
-            bᶜ𝕄 = getproperty(b.c, ᶜ𝕄_name)
-            ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1]
-            xᶠ𝕄 = getproperty(x.f, ᶠ𝕄_name).components.data.:1
-            bᶠ𝕄 = getproperty(b.f, ᶠ𝕄_name).components.data.:1
-
-            @. xᶠ𝕄[colidx] =
-                bᶠ𝕄[colidx] +
-                dtγ * (
-                    apply(∂ᶠ𝕄ₜ∂ᶜρ[colidx], bᶜρ[colidx]) +
-                    apply(∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx], bᶜ𝔼[colidx])
-                )
-
-            xᶠ𝕄_column_view = parent(xᶠ𝕄[colidx])
-            S_column = S[colidx]
-            S_column_array = S_column_arrays[Threads.threadid()]
-            @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
-            S_column_array.d .= parent(S_column.coefs.:2)
-            @views S_column_array.du .= parent(S_column.coefs.:3)[1:(end - 1)]
-            thomas_algorithm!(S_column_array, xᶠ𝕄_column_view)
-
-            # Compute remaining components of x
-
-            @. xᶜρ[colidx] =
-                -bᶜρ[colidx] + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-            @. xᶜ𝔼[colidx] =
-                -bᶜ𝔼[colidx] + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-            @. xᶜ𝕄[colidx] = -bᶜ𝕄[colidx]
-            for ᶜ𝕋_name in filter(is_tracer_var, propertynames(x.c))
-                xᶜ𝕋 = getproperty(x.c, ᶜ𝕋_name)
-                bᶜ𝕋 = getproperty(b.c, ᶜ𝕋_name)
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
-                @. xᶜ𝕋[colidx] =
-                    -bᶜ𝕋[colidx] + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx], xᶠ𝕄[colidx])
-            end
-            for var_name in filter(is_edmf_var, propertynames(x.c))
-                xᶜ𝕋 = getproperty(x.c, var_name)
-                bᶜ𝕋 = getproperty(b.c, var_name)
-                @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
-            end
-            for var_name in filter(is_edmf_var, propertynames(x.f))
-                xᶜ𝕋 = getproperty(x.f, var_name)
-                bᶜ𝕋 = getproperty(b.f, var_name)
-                @. xᶜ𝕋[colidx] = -bᶜ𝕋[colidx]
-            end
-            # Apply transform (if needed)
-            if A.transform
-                x.c[colidx] .*= dtγ
-                x.f[colidx] .*= dtγ
-            end
         end
 
         # Verify correctness (if needed, but too expensive for runs)
@@ -267,6 +222,88 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
             verify_matrix(x, A, b, update_matrix = false; kwargs...)
         end
     end
+end
+
+function _linsolve_serial!(
+    xc,
+    xf,
+    bc,
+    bf,
+    dtγ,
+    transform,
+    cond,
+    ∂ᶜρₜ∂ᶠ𝕄,
+    ∂ᶜ𝔼ₜ∂ᶠ𝕄,
+    ∂ᶠ𝕄ₜ∂ᶜ𝔼,
+    ∂ᶠ𝕄ₜ∂ᶜρ,
+    ∂ᶠ𝕄ₜ∂ᶠ𝕄,
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple,
+    S_column,
+    S_column_array,
+)
+    dtγ² = dtγ^2
+    # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
+    # than 2 diagonals per Jacobian block.
+    FT = eltype(eltype(S_column))
+    I = Ref(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
+    if cond
+        @. S_column = dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+    else
+        @. S_column =
+            dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) +
+            dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶜ𝔼ₜ∂ᶠ𝕄) +
+            dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+    end
+
+    # Compute xᶠ𝕄
+
+    xᶜρ = xc.ρ
+    bᶜρ = bc.ρ
+    ᶜ𝔼_name = filter(is_energy_var, propertynames(xc))[1]
+    xᶜ𝔼 = getproperty(xc, ᶜ𝔼_name)
+    bᶜ𝔼 = getproperty(bc, ᶜ𝔼_name)
+    ᶜ𝕄_name = filter(is_momentum_var, propertynames(xc))[1]
+    xᶜ𝕄 = getproperty(xc, ᶜ𝕄_name)
+    bᶜ𝕄 = getproperty(bc, ᶜ𝕄_name)
+    ᶠ𝕄_name = filter(is_momentum_var, propertynames(xf))[1]
+    xᶠ𝕄 = getproperty(xf, ᶠ𝕄_name).components.data.:1
+    bᶠ𝕄 = getproperty(bf, ᶠ𝕄_name).components.data.:1
+
+    @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
+
+    xᶠ𝕄_column_view = parent(xᶠ𝕄)
+    @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
+    S_column_array.d .= parent(S_column.coefs.:2)
+    @views S_column_array.du .= parent(S_column.coefs.:3)[1:(end - 1)]
+    thomas_algorithm!(S_column_array, xᶠ𝕄_column_view)
+
+    # Compute remaining components of x
+
+    @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
+    @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
+    @. xᶜ𝕄 = -bᶜ𝕄
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(xc))
+        xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)
+        bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)
+        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+        @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
+    end
+    for var_name in filter(is_edmf_var, propertynames(xc))
+        xᶜ𝕋 = getproperty(xc, var_name)
+        bᶜ𝕋 = getproperty(bc, var_name)
+        @. xᶜ𝕋 = -bᶜ𝕋
+    end
+    for var_name in filter(is_edmf_var, propertynames(xf))
+        xᶜ𝕋 = getproperty(xf, var_name)
+        bᶜ𝕋 = getproperty(bf, var_name)
+        @. xᶜ𝕋 = -bᶜ𝕋
+    end
+    # Apply transform (if needed)
+    if transform
+        xc .*= dtγ
+        xf .*= dtγ
+    end
+    return nothing
 end
 
 """
