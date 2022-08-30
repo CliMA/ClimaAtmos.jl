@@ -187,6 +187,14 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
     dtγ = dtγ_ref[]
     cond = Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
+    varnames = (;
+        ᶜedmf_vars = filter(is_edmf_var, propertynames(x.c)),
+        ᶠedmf_vars = filter(is_edmf_var, propertynames(x.f)),
+        ᶜ𝕋_names = filter(is_tracer_var, propertynames(x.c)),
+        ᶜ𝔼_name = filter(is_energy_var, propertynames(x.c))[1],
+        ᶜ𝕄_name = filter(is_momentum_var, propertynames(x.c))[1],
+        ᶠ𝕄_name = filter(is_momentum_var, propertynames(x.f))[1],
+    )
     if cond
         str = "The linear solver cannot yet be run with the given ∂ᶜ𝔼ₜ/∂ᶠ𝕄 \
             block, since it has more than 2 diagonals. So, ∂ᶜ𝔼ₜ/∂ᶠ𝕄 will \
@@ -214,6 +222,7 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
                 ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple[colidx],
                 S[colidx],
                 S_column_arrays[Threads.threadid()], # can / should this be colidx?
+                varnames,
             )
         end
 
@@ -240,6 +249,7 @@ function _linsolve_serial!(
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple,
     S_column,
     S_column_array,
+    varnames,
 )
     dtγ² = dtγ^2
     # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
@@ -259,15 +269,12 @@ function _linsolve_serial!(
 
     xᶜρ = xc.ρ
     bᶜρ = bc.ρ
-    ᶜ𝔼_name = filter(is_energy_var, propertynames(xc))[1]
-    xᶜ𝔼 = getproperty(xc, ᶜ𝔼_name)
-    bᶜ𝔼 = getproperty(bc, ᶜ𝔼_name)
-    ᶜ𝕄_name = filter(is_momentum_var, propertynames(xc))[1]
-    xᶜ𝕄 = getproperty(xc, ᶜ𝕄_name)
-    bᶜ𝕄 = getproperty(bc, ᶜ𝕄_name)
-    ᶠ𝕄_name = filter(is_momentum_var, propertynames(xf))[1]
-    xᶠ𝕄 = getproperty(xf, ᶠ𝕄_name).components.data.:1
-    bᶠ𝕄 = getproperty(bf, ᶠ𝕄_name).components.data.:1
+    xᶜ𝔼 = getproperty(xc, varnames.ᶜ𝔼_name)
+    bᶜ𝔼 = getproperty(bc, varnames.ᶜ𝔼_name)
+    xᶜ𝕄 = getproperty(xc, varnames.ᶜ𝕄_name)
+    bᶜ𝕄 = getproperty(bc, varnames.ᶜ𝕄_name)
+    xᶠ𝕄 = getproperty(xf, varnames.ᶠ𝕄_name).components.data.:1
+    bᶠ𝕄 = getproperty(bf, varnames.ᶠ𝕄_name).components.data.:1
 
     @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
 
@@ -282,21 +289,21 @@ function _linsolve_serial!(
     @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝕄 = -bᶜ𝕄
-    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(xc))
+    for ᶜ𝕋_name in varnames.ᶜ𝕋_names
         xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)
         bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)
         ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
         @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
     end
-    for var_name in filter(is_edmf_var, propertynames(xc))
+    for var_name in varnames.ᶜedmf_vars
         xᶜ𝕋 = getproperty(xc, var_name)
         bᶜ𝕋 = getproperty(bc, var_name)
         @. xᶜ𝕋 = -bᶜ𝕋
     end
-    for var_name in filter(is_edmf_var, propertynames(xf))
-        xᶜ𝕋 = getproperty(xf, var_name)
-        bᶜ𝕋 = getproperty(bf, var_name)
-        @. xᶜ𝕋 = -bᶜ𝕋
+    for var_name in varnames.ᶠedmf_vars
+        xᶠ𝕋 = getproperty(xf, var_name)
+        bᶠ𝕋 = getproperty(bf, var_name)
+        @. xᶠ𝕋 = -bᶠ𝕋
     end
     # Apply transform (if needed)
     if transform
