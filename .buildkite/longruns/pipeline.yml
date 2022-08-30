@@ -211,3 +211,5 @@ steps:
       - label: ":balloon: Compressible single column EDMF TRMM_LBA"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --dt_save_to_sol 5mins --z_elem 90 --z_stretch false --z_max 17000 --rayleigh_sponge true --zd_rayleigh 15000 --job_id longrun_compressible_edmf_trmm --dt 0.1secs --t_end 6hours"
         artifact_paths: "longrun_compressible_edmf_trmm/*"
+        agents:
+          slurm_mem: 20GB
