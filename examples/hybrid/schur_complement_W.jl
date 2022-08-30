@@ -39,7 +39,7 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
     ∂ᶠ𝕄ₜ∂ᶜ𝔼::J3
     ∂ᶠ𝕄ₜ∂ᶜρ::J3
     ∂ᶠ𝕄ₜ∂ᶠ𝕄::J4
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple::J5
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field::J5
 
     # cache for the Schur complement linear solve
     S::S
@@ -82,7 +82,7 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
     ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple =
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
         FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
     S = Fields.Field(tridiag_type, axes(Y.f))
@@ -102,7 +102,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         typeof(∂ᶜ𝔼ₜ∂ᶠ𝕄),
         typeof(∂ᶠ𝕄ₜ∂ᶜρ),
         typeof(∂ᶠ𝕄ₜ∂ᶠ𝕄),
-        typeof(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple),
+        typeof(∂ᶜ𝕋ₜ∂ᶠ𝕄_field),
         typeof(S),
         typeof(S_column_arrays),
     }(
@@ -114,7 +114,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         ∂ᶠ𝕄ₜ∂ᶜ𝔼,
         ∂ᶠ𝕄ₜ∂ᶜρ,
         ∂ᶠ𝕄ₜ∂ᶠ𝕄,
-        ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple,
+        ∂ᶜ𝕋ₜ∂ᶠ𝕄_field,
         S,
         S_column_arrays,
         test,
@@ -184,7 +184,7 @@ call_verify_matrix() = false
 
 function _linsolve!(x, A, b, update_matrix = false; kwargs...)
     (; dtγ_ref, S, S_column_arrays, transform) = A
-    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple) = A
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = A
     dtγ = dtγ_ref[]
     cond = Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
     if cond
@@ -211,7 +211,7 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
                 ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
                 ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
                 ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple[colidx],
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
                 S[colidx],
                 S_column_arrays[Threads.threadid()], # can / should this be colidx?
             )
@@ -237,7 +237,7 @@ function _linsolve_serial!(
     ∂ᶠ𝕄ₜ∂ᶜ𝔼,
     ∂ᶠ𝕄ₜ∂ᶜρ,
     ∂ᶠ𝕄ₜ∂ᶠ𝕄,
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple,
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field,
     S_column,
     S_column_array,
 )
@@ -285,7 +285,7 @@ function _linsolve_serial!(
     for ᶜ𝕋_name in filter(is_tracer_var, propertynames(xc))
         xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)
         bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)
-        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_named_tuple, ᶜ𝕋_name)
+        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
         @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
     end
     for var_name in filter(is_edmf_var, propertynames(xc))
@@ -294,9 +294,9 @@ function _linsolve_serial!(
         @. xᶜ𝕋 = -bᶜ𝕋
     end
     for var_name in filter(is_edmf_var, propertynames(xf))
-        xᶜ𝕋 = getproperty(xf, var_name)
-        bᶜ𝕋 = getproperty(bf, var_name)
-        @. xᶜ𝕋 = -bᶜ𝕋
+        xᶠ𝕋 = getproperty(xf, var_name)
+        bᶠ𝕋 = getproperty(bf, var_name)
+        @. xᶠ𝕋 = -bᶠ𝕋
     end
     # Apply transform (if needed)
     if transform
