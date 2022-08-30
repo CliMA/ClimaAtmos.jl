@@ -11,7 +11,7 @@ env:
 agents:
   config: cpu
   queue: central
-  slurm_time: 48:00:00
+#  slurm_time: 48:00:00
 
 steps:
   - label: "init :computer:"

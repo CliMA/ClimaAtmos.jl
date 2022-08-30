@@ -20,21 +20,22 @@ days_per_year = 8760 / 24
 if occursin("low", job_id)
     resolution = "low-resolution"
     nprocs_tempest = [1, 2, 3, 6, 24]
-    walltime_tempest = [74.41848, 34.43472, 23.22432, 11.83896, 3.60936]
+    walltime_tempest = [102.5892, 49.0212, 33.41088, 17.064, 5.77584]
     t_int_days_tempest = 10 # integration time for Tempest
     t_int_days_climaatmos = 10 # integration time for ClimaAtmos
 else
     resolution = "high-resolution"
     nprocs_tempest = [1, 2, 3, 6, 24, 54, 96, 216]
     walltime_tempest = [
-        4673.969568,
-        2338.740864,
-        1505.628864,
-        755.51184,
-        245.157408,
-        130.145184,
-        76.487328,
-        32.298912,
+        6186.595968,
+        3197.915424,
+        2160.269568,
+        1131.526368,
+        385.558272,
+        174.662784,
+        139.771872,
+        45.971712,
+        43.602624,
     ]
     t_int_days_tempest = 1 # integration time for Tempest
     t_int_days_climaatmos = 1 # integration time for ClimaAtmos
@@ -135,6 +136,7 @@ plt2 = plot(
     ylabel = "CPU hours",
     title = "Scaling data (T_int = $t_int)",
     label = ["ClimaAtmos (Float64)" "Tempest (Float64)"],
+    ylims = (0.0, Inf),
     legend = :topleft,
     grid = :true,
     left_margin = 10mm,
@@ -156,6 +158,7 @@ plt3 = plot(
     ),
     xlabel = "# of MPI processes",
     ylabel = "ratio",
+    ylims = (0.0, Inf),
     label = "Ratio of CPU hours (ClimaAtmos/Tempest) (Float64)",
     title = "Comparison with Tempest",
     legend = :topleft,
@@ -182,6 +185,7 @@ plt4 = plot(
     ylabel = "Efficiency (T1/N)/TN",
     title = "Scaling efficiency (T_int = $t_int)",
     label = ["ClimaAtmos (Float64)" "Tempest (Float64)"],
+    ylims = (0.0, Inf),
     legend = :bottom,
     grid = :true,
     left_margin = 10mm,
