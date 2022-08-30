@@ -315,28 +315,53 @@ steps:
   - group: "TurbulenceConvection"
     steps:
 
-      - label: ":computer: Single column EDMF Bomex"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true"
+      - label: ":balloon: Single column EDMF Bomex"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false"
         artifact_paths: "edmf_bomex/*"
+        agents:
+          slurm_mem: 20GB
 
-      - label: ":computer: Single column EDMF DYCOMS_RF01"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true"
+      - label: ":balloon: Compressible single column EDMF Bomex"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id compressible_edmf_bomex --dt 1secs --t_end 6hours --regression_test true --apply_limiter false"
+        artifact_paths: "compressible_edmf_bomex/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: Single column EDMF DYCOMS_RF01"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true --apply_limiter false"
         artifact_paths: "edmf_dycoms_rf01/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":computer: Single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true"
+      - label: ":balloon: Compresible single column EDMF DYCOMS_RF01"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id compressible_edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --apply_limiter false"
+        artifact_paths: "compressible_edmf_dycoms_rf01/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: Single column EDMF TRMM_LBA"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false"
         artifact_paths: "edmf_trmm/*"
+        agents:
+          slurm_mem: 20GB
 
-     # TODO: Add them back in #724
-     # - label: ":computer: Single column EDMF GABLS"
-     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true"
-     #   artifact_paths: "edmf_gabls/*"
+      - label: ":balloon: Compressible single column EDMF TRMM_LBA"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --rayleigh_sponge true --zd_rayleigh 15000 --job_id compressible_edmf_trmm --dt 0.1secs --t_end 1hours --regression_test true --apply_limiter false"
+        artifact_paths: "compressible_edmf_trmm/*"
+        agents:
+          slurm_mem: 20GB
 
-     # - label: ":computer: Compressible Single column EDMF GABLS"
-     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true"
-     #   artifact_paths: "compressible_edmf_gabls/*"
+      - label: ":balloon: Single column EDMF GABLS"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true --apply_limiter false"
+        artifact_paths: "edmf_gabls/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: Compressible single column EDMF GABLS"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true --apply_limiter false"
+        artifact_paths: "compressible_edmf_gabls/*"
+        agents:
+          slurm_mem: 20GB
 
   - group: "Performance"
     steps:
