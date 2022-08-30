@@ -101,8 +101,15 @@ function thermo_state_ρθ!(ts, Yc, thermo_params, ::DryModel)
     @. ts = TD.PhaseDry_ρθ(thermo_params, Yc.ρ, Yc.ρθ / Yc.ρ)
 end
 function thermo_state_ρθ!(ts, Yc, thermo_params, ::EquilMoistModel)
-    @. ts =
-        TD.PhaseEquil_ρθq(thermo_params, Yc.ρ, Yc.ρθ / Yc.ρ, Yc.ρq_tot / Yc.ρ)
+    FT = Spaces.undertype(axes(Yc))
+    @. ts = TD.PhaseEquil_ρθq(
+        thermo_params,
+        Yc.ρ,
+        Yc.ρθ / Yc.ρ,
+        Yc.ρq_tot / Yc.ρ,
+        1,
+        FT(3),
+    )
 end
 function thermo_state_ρθ!(ts, Yc, thermo_params, ::NonEquilMoistModel)
     @. ts = TD.PhaseNonEquil_ρθq(
@@ -121,12 +128,15 @@ function thermo_state_ρe_tot!(ts, Yc, thermo_params, ::DryModel, z, K)
         TD.PhaseDry(thermo_params, internal_energy(Yc, K, g, z) / Yc.ρ, Yc.ρ)
 end
 function thermo_state_ρe_tot!(ts, Yc, thermo_params, ::EquilMoistModel, z, K)
+    FT = Spaces.undertype(axes(Yc))
     g = TD.Parameters.grav(thermo_params)
     @. ts = TD.PhaseEquil_ρeq(
         thermo_params,
         Yc.ρ,
         internal_energy(Yc, K, g, z) / Yc.ρ,
         Yc.ρq_tot / Yc.ρ,
+        1,
+        FT(3),
     )
 end
 
@@ -144,11 +154,14 @@ function thermo_state_ρe_int!(ts, Yc, thermo_params, ::DryModel)
     @. ts = TD.PhaseDry(thermo_params, Yc.ρe_int / Yc.ρ, Yc.ρ)
 end
 function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel)
+    FT = Spaces.undertype(axes(Yc))
     @. ts = TD.PhaseEquil_ρeq(
         thermo_params,
         Yc.ρ,
         Yc.ρe_int / Yc.ρ,
         Yc.ρq_tot / Yc.ρ,
+        1,
+        FT(3),
     )
 end
 function thermo_state_ρe_int!(ts, Yc, thermo_params, ::NonEquilMoistModel)
