@@ -89,10 +89,14 @@ function parse_commandline()
         help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
         arg_type = String
         default = "rhoe"
-        "--upwinding"
-        help = "Upwinding mode [`none` (default), `first_order` , `third_order`]"
-        arg_type = String
-        default = "none"
+        "--energy_upwinding"
+        help = "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none
+        "--tracer_upwinding"
+        help = "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none # TODO: change to :zalesak
         "--ode_algo"
         help = "ODE algorithm [`ARS343`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23` (default), etc.]"
         arg_type = String
