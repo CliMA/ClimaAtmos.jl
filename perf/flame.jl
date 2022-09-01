@@ -11,6 +11,8 @@ parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
 parsed_args_target = dict["perf_target_unthreaded"];
 parsed_args = merge(parsed_args_target, parsed_args_prescribed);
 
+# The callbacks flame graph is very expensive, so only do 2 steps.
+const n_samples = occursin("callbacks", parsed_args["job_id"]) ? 2 : 20
 
 try # capture integrator
     include(filename)
@@ -21,7 +23,7 @@ catch err
 end
 
 function do_work!(integrator)
-    for _ in 1:20
+    for _ in 1:n_samples
         OrdinaryDiffEq.step!(integrator)
     end
 end
@@ -55,16 +57,20 @@ end
 # We're grouping allocation tests here for convenience.
 
 using Test
-allocs_limit = Dict()
-allocs_limit["flame_perf_target_rhoe"] = 10357712
-allocs_limit["flame_perf_target_rhoe_threaded"] = 90909168
-
 # Threaded allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
 buffer = occursin("threaded", job_id) ? 1.4 : 1
 
 allocs = @allocated OrdinaryDiffEq.step!(integrator)
+@timev OrdinaryDiffEq.step!(integrator)
+@info "`allocs ($job_id)`: $(allocs)"
+
+allocs_limit = Dict()
+allocs_limit["flame_perf_target_rhoe"] = 10357712
+allocs_limit["flame_perf_target_rhoe_threaded"] = 90909168
+allocs_limit["flame_perf_target_rhoe_callbacks"] = 21523784
+
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
 end
