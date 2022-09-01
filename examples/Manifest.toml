@@ -219,13 +219,18 @@ version = "0.3.0"
 
 [[deps.ClimaComms]]
 deps = ["CUDA", "KernelAbstractions", "StaticArrays"]
-git-tree-sha1 = "50fbb76557f11e28ec21ad2fbe5e7547f1b1f432"
+git-tree-sha1 = "29ac122b177499025eae96645ea5ba53738412e7"
+repo-rev = "sk/consolidate_waitalls"
+repo-url = "https://github.com/CliMA/ClimaComms.jl.git"
 uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 version = "0.3.0"
 
 [[deps.ClimaCommsMPI]]
 deps = ["ClimaComms", "KernelAbstractions", "MPI"]
-git-tree-sha1 = "2a1857a51eab7e1b15dd709ccef3c3ccabd7a6f6"
+git-tree-sha1 = "1e0c2c5ea92ec50f9a9f5a993adb18f299aba466"
+repo-rev = "sk/consolidate_waitalls"
+repo-subdir = "backends/ClimaCommsMPI"
+repo-url = "https://github.com/CliMA/ClimaComms.jl.git"
 uuid = "5f86816e-8b66-43b2-912e-75384f99de49"
 version = "0.3.2"
 
