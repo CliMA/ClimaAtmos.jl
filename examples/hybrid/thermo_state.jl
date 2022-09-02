@@ -107,7 +107,7 @@ function thermo_state_ρθ!(ts, Yc, thermo_params, ::EquilMoistModel)
         Yc.ρ,
         Yc.ρθ / Yc.ρ,
         Yc.ρq_tot / Yc.ρ,
-        1,
+        2,
         FT(3),
     )
 end
@@ -135,7 +135,7 @@ function thermo_state_ρe_tot!(ts, Yc, thermo_params, ::EquilMoistModel, z, K)
         Yc.ρ,
         internal_energy(Yc, K, g, z) / Yc.ρ,
         Yc.ρq_tot / Yc.ρ,
-        1,
+        2,
         FT(3),
     )
 end
@@ -160,7 +160,7 @@ function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel)
         Yc.ρ,
         Yc.ρe_int / Yc.ρ,
         Yc.ρq_tot / Yc.ρ,
-        1,
+        2,
         FT(3),
     )
 end
