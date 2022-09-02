@@ -52,6 +52,10 @@ function parse_commandline()
         help = "Surface flux scheme [`bulk` (default), `monin_obukhov`]"
         arg_type = String
         default = "bulk"
+        "--C_E"
+        help = "Buld transfer coefficient"
+        arg_type = Float64
+        default = Float64(0.0044)
         "--coupled"
         help = "Coupled simulation [`false` (default), `true`]"
         arg_type = Bool
