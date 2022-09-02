@@ -238,7 +238,7 @@ else
         get_state_fresh_start(parsed_args, spaces, params, model_spec)
 end
 
-p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
+p = get_cache(Y, params, spaces, model_spec, numerics, simulation, comms_ctx)
 if parsed_args["turbconv"] == "edmf"
     TCU.init_tc!(Y, p, params, namelist)
 end

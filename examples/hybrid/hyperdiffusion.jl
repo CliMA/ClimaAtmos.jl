@@ -81,6 +81,7 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
             Spaces.weighted_dss_start!(ᶜχ, ghost_buffer.χ)
             Spaces.weighted_dss_internal!(ᶜχ, ghost_buffer.χ)
             Spaces.weighted_dss_ghost!(ᶜχ, ghost_buffer.χ)
+            ClimaComms.barrier(p.comms_ctx)
             if is_ρq_tot
                 Spaces.weighted_dss_start!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot)
                 Spaces.weighted_dss_internal!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot)
@@ -89,6 +90,7 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
             Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
             Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
             Spaces.weighted_dss_ghost!(ᶜχuₕ, ghost_buffer.χuₕ)
+            ClimaComms.barrier(p.comms_ctx)
         end
 
         @. ᵗρs -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
