@@ -13,6 +13,7 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
             include("test_domains.jl")
             include("test_models.jl")
             include("test_thomas.jl")
+            include("test_parameters.jl")
         end
     end
 end
