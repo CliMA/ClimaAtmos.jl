@@ -79,18 +79,15 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
 
         @nvtx "dss_hyperdiffusion_tendency" color = colorant"green" begin
             Spaces.weighted_dss_start!(ᶜχ, ghost_buffer.χ)
-            is_ρq_tot &&
-                (Spaces.weighted_dss_start!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-            Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
-
             Spaces.weighted_dss_internal!(ᶜχ, ghost_buffer.χ)
-            is_ρq_tot &&
-                (Spaces.weighted_dss_internal!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-            Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
-
             Spaces.weighted_dss_ghost!(ᶜχ, ghost_buffer.χ)
-            is_ρq_tot &&
-                (Spaces.weighted_dss_ghost!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+            if is_ρq_tot
+                Spaces.weighted_dss_start!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot)
+                Spaces.weighted_dss_internal!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot)
+                Spaces.weighted_dss_ghost!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot)
+            end
+            Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
+            Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
             Spaces.weighted_dss_ghost!(ᶜχuₕ, ghost_buffer.χuₕ)
         end
 

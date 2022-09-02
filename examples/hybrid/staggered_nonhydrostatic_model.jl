@@ -361,10 +361,10 @@ function remaining_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "dss_remaining_tendency" color = colorant"blue" begin
             Spaces.weighted_dss_start!(Yₜ.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
             Spaces.weighted_dss_internal!(Yₜ.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_internal!(Yₜ.f, p.ghost_buffer.f)
             Spaces.weighted_dss_ghost!(Yₜ.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_internal!(Yₜ.f, p.ghost_buffer.f)
             Spaces.weighted_dss_ghost!(Yₜ.f, p.ghost_buffer.f)
         end
     end
@@ -398,10 +398,10 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
         end
         @nvtx "dss_remaining_tendency increment" color = colorant"blue" begin
             Spaces.weighted_dss_start!(Y⁺.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_start!(Y⁺.f, p.ghost_buffer.f)
             Spaces.weighted_dss_internal!(Y⁺.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_internal!(Y⁺.f, p.ghost_buffer.f)
             Spaces.weighted_dss_ghost!(Y⁺.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_start!(Y⁺.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_internal!(Y⁺.f, p.ghost_buffer.f)
             Spaces.weighted_dss_ghost!(Y⁺.f, p.ghost_buffer.f)
         end
     end
