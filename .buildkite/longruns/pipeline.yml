@@ -54,15 +54,9 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist ARS343"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_ARS343 --ode_algo ARS343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equil_ARS343/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist ARS343 dt200"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_ARS343_dt200 --ode_algo ARS343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equil_ARS343_dt200/*"
+      - label: ":computer: held suarez (ρe_tot) equilmoist ars343"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 250secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_ars343 --ode_algo ARS343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_ars343/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -114,38 +108,26 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-  - group: "Core Long runs (third-order upwinding)"
+  - group: "Core Long runs (FCT Zalesak on tracer)"
 
     steps:
+      
+      # TODO: add it back after topography fix
+      #- label: ":computer: held suarez (ρe_tot) zalesak topography"
+      #  command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --tracer_upwinding zalesak --dt 300secs --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_zalesak --dt_save_to_sol 1days --dt_save_to_disk 10days --topography DCMIP200"
+      #  artifact_paths: "longrun_hs_rhoe_zalesak/*"
+      #  agents:
+      #    slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_tot) third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --tracer_upwinding third_order --dt 350secs --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_third/*"
+      - label: ":computer: held suarez (ρe_tot) equilmoist zalesak"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --tracer_upwinding zalesak --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_zalesak --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_zalesak/*"
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_tot) third order topography"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --forcing held_suarez --tracer_upwinding third_order --dt 300secs --t_end 1200days --fps 30 --job_id longrun_hs_rhoe_third --dt_save_to_sol 1days --dt_save_to_disk 10days --topography DCMIP200"
-        artifact_paths: "longrun_hs_rhoe_third/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --tracer_upwinding third_order --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 150secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_third --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equil_third/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --tracer_upwinding third_order --vert_diff true --moist equil --rad gray --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray_third --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_third/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --tracer_upwinding third_order --vert_diff true --moist equil --rad clearsky --microphy 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 150secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_clearsky_third --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_third/*"
+      - label: ":computer: held suarez (ρe_tot) equilmoist zalesak ars343"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --ode_algo ARS343 --tracer_upwinding zalesak --forcing held_suarez --moist equil --vert_diff true --microphy 0M --dt 200secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_equil_zalesak_ars343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equil_zalesak_ars343/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -159,9 +141,9 @@ steps:
         agents:
           slurm_cpus_per_task: 8
 
-      - label: ":computer: held suarez (ρe_tot) hightop third order"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --tracer_upwinding third_order --forcing held_suarez --z_max 45e3 --z_elem 25 --dt 300secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_hightop_third --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_hightop_third/*"
+      - label: ":computer: held suarez (ρe_tot) hightop ars343"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --ode_algo ARS343 --forcing held_suarez --z_max 45e3 --z_elem 25 --dt 300secs --t_end 600days --fps 30 --job_id longrun_hs_rhoe_hightop_ars343 --dt_save_to_sol 1days --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_hightop_ars343/*"
         agents:
           slurm_cpus_per_task: 8
 
@@ -181,6 +163,14 @@ steps:
 
     steps:
 
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution zalesak ars343"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --moist equil --microphy 0M --tracer_upwinding zalesak --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 14e15 --dt 50secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_zalesak_ars343"
+        artifact_paths: "longrun_bw_rhoe_equil_highres_zalesak_ars343/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 128
+
       - label: ":computer: held suarez (ρe_tot) high resolution"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 7e15 --dt 200secs --t_end 600days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres"
         artifact_paths: "longrun_hs_rhoe_highres/*"
@@ -190,8 +180,8 @@ steps:
           slurm_ntasks: 128
 
       - label: ":computer: held suarez (ρe_tot) high resolution ARS343"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 7e15 --ode_algo ARS343 --dt 200secs --t_end 600days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres_ARS343"
-        artifact_paths: "longrun_hs_rhoe_highres_ARS343/*"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 7e15 --ode_algo ARS343 --dt 200secs --t_end 600days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres_ars343"
+        artifact_paths: "longrun_hs_rhoe_highres_ars343/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -203,23 +193,15 @@ steps:
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
-          slurm_ntasks: 256
+          slurm_ntasks: 128
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution third order upwinding of tracers"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --tracer_upwinding third_order --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 14e15 --dt 50secs --t_end 150days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres"
-        artifact_paths: "longrun_hs_rhoe_equil_highres/*"
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution zalesak ars343"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --forcing held_suarez --moist equil --vert_diff true --microphy 0M --tracer_upwinding zalesak --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 14e15 --dt 50secs --t_end 150days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_zalesak_ars343"
+        artifact_paths: "longrun_hs_rhoe_equil_highres_zalesak_ars343/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
-          slurm_ntasks: 256
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution FCT Zalesak applied to tracers"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --microphy 0M --tracer_upwinding zalesak --z_elem 45 --dz_bottom 30 --h_elem 12 --kappa_4 14e15 --dt 50secs --t_end 150days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres"
-        artifact_paths: "longrun_hs_rhoe_equil_highres/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 256
+          slurm_ntasks: 128
 
   - group: "TurbulenceConvection"
     steps:
