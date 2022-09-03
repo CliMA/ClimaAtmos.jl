@@ -149,8 +149,10 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         ),
         vert_diff ?
         vertical_diffusion_boundary_layer_cache(
-            Y;
+            Y,
+            FT;
             surface_scheme,
+            model_spec.C_E,
             diffuse_momentum,
             coupled,
         ) : NamedTuple(),
