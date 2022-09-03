@@ -36,7 +36,7 @@ zd_viscous = parsed_args["zd_viscous"]
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
-@assert surface_scheme in ("bulk", "monin_obukhov")
+@assert surface_scheme in (nothing, "bulk", "monin_obukhov")
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
 @assert rayleigh_sponge in (true, false)
@@ -67,7 +67,10 @@ model_spec = get_model_spec(FT, parsed_args, namelist)
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
 
-diffuse_momentum = vert_diff && !(model_spec.forcing_type isa HeldSuarezForcing)
+diffuse_momentum =
+    vert_diff &&
+    !(model_spec.forcing_type isa HeldSuarezForcing) &&
+    !isnothing(surface_scheme)
 
 # TODO: use import istead of using
 using Colors
