@@ -63,7 +63,6 @@ SurfaceFluxes = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-TurbulenceConvection = "8e072fc4-01f8-44fb-b9dc-f9336c367e6b"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
