@@ -49,7 +49,7 @@ function parse_commandline()
         arg_type = Bool
         default = false
         "--surface_scheme"
-        help = "Surface flux scheme [`bulk` (default), `monin_obukhov`]"
+        help = "Surface flux scheme [`nothing`, `bulk` (default), `monin_obukhov`]"
         arg_type = String
         default = "bulk"
         "--C_E"

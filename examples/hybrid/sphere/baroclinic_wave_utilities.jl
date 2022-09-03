@@ -273,6 +273,8 @@ function vertical_diffusion_boundary_layer_cache(
         (; Cd = FT(0.0044), Ch = FT(0.0044))
     elseif surface_scheme == "monin_obukhov"
         (; z0m = FT(1e-5), z0b = FT(1e-5))
+    elseif isnothing(surface_scheme)
+        NamedTuple()
     end
     return (;
         surface_scheme,
@@ -484,9 +486,13 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρe_tot in propertynames(Y.c)
         if !coupled
-            @. dif_flux_energy = Geometry.WVector(
-                surface_conditions.shf + surface_conditions.lhf,
-            )
+            if isnothing(p.surface_scheme)
+                @. dif_flux_energy *= 0
+            else
+                @. dif_flux_energy = Geometry.WVector(
+                    surface_conditions.shf + surface_conditions.lhf,
+                )
+            end
         end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
@@ -498,7 +504,11 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
 
     if :ρq_tot in propertynames(Y.c)
         if !coupled
-            @. dif_flux_ρq_tot = Geometry.WVector(surface_conditions.E)
+            if isnothing(p.surface_scheme)
+                @. dif_flux_ρq_tot *= 0
+            else
+                @. dif_flux_ρq_tot = Geometry.WVector(surface_conditions.E)
+            end
         end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
