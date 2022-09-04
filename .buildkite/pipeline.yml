@@ -155,7 +155,7 @@ steps:
           automatic: true
 
       - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 4days"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 4days"
         artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -190,11 +190,11 @@ steps:
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) equilmoist hightop sponge"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 200secs --t_end 1days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 200secs --t_end 1days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist FCT Zalesak on moisture"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --tracer_upwinding zalesak --kappa_4 4e17 --job_id sphere_held_suarez_rhoe_equilmoist_zalesak --dt 200secs --t_end 3days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --tracer_upwinding zalesak --kappa_4 4e17 --job_id sphere_held_suarez_rhoe_equilmoist_zalesak --dt 200secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_zalesak/*"
 
   - group: "Configs"
@@ -205,7 +205,7 @@ steps:
         artifact_paths: "test_io/*"
 
       - label: ":computer: Use test env with latest deps"
-        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
+        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
         artifact_paths: "test_env/*"
         agents:
           slurm_mem: 20GB
@@ -239,31 +239,23 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 3days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 200secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo_ft64 --dt 200secs --t_end 3days --FLOAT_TYPE Float64"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo_ft64/*"
-
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky_mo --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky_mo/*"
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky_mo_ft64 --dt 200secs --t_end 2.5days --FLOAT_TYPE Float64"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky_mo_ft64/*"
-
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200secs --t_end 2.5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 2.5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
 
       # The following tests used to work with upwinding on both energy and tracers, but they fail with upwinding on only tracers. They will be re-enabled after updates to topography.
@@ -285,7 +277,7 @@ steps:
       #   artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography/*"
 
       # - label: ":computer: held suarez (ρe_tot) equilmoist topography"
-      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_dcmip_topography --dt 200secs --t_end 3days --topography DCMIP200 --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_dcmip_topography --dt 200secs --t_end 3days --topography DCMIP200 --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
       #   artifact_paths: "sphere_held_suarez_rhoe_equilmoist_dcmip_topography/*"
 
 
@@ -294,19 +286,19 @@ steps:
 
       # TODO: add/exercise edmf code
       - label: ":computer: Unthreaded performance target"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: Unthreaded performance target ARS343"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_ARS343 --enable_threading false --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --ode_algo ARS343 --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_ARS343 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --ode_algo ARS343 --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded_ARS343/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: Threaded performance target"
-        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_threaded/*"
         agents:
           slurm_ntasks: 8

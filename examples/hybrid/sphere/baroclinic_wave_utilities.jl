@@ -244,7 +244,7 @@ end
 function vertical_diffusion_boundary_layer_cache(
     Y,
     ::Type{FT};
-    surface_scheme = "bulk",
+    surface_scheme = nothing,
     C_E::FT = FT(0),
     diffuse_momentum = true,
     coupled = false,

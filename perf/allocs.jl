@@ -26,7 +26,7 @@ dirs_to_monitor = String.(dirs_to_monitor)
 
 cli_options = [
     ("--job_id alloc_sphere_baroclinic_wave_rhoe"),
-    ("--vert_diff true --moist equil --forcing held_suarez --microphy 0M"),
+    ("--vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M"),
 ]
 #! format: on
 
