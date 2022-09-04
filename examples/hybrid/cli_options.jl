@@ -312,6 +312,7 @@ parsed_args_from_command_line_flags(str, parsed_args = Dict()) =
     parsed_args_from_ARGS_string(strip(last(split(str, ".jl"))), parsed_args)
 
 function parsed_args_from_ARGS_string(str, parsed_args = Dict())
+    str = replace(str, "    " => " ", "   " => " ", "  " => " ")
     parsed_args_list = split(str, " ")
     parsed_args_list == [""] && return parsed_args
     @assert iseven(length(parsed_args_list))
