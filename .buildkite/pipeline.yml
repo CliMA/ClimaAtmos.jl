@@ -364,18 +364,12 @@ steps:
         artifact_paths: "flame_perf_target_rhoe/*"
         agents:
           slurm_mem: 20GB
-        env:
-          CI_PERF_CPUPROFILE: "true"
 
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
-        env:
-          CI_PERF_CPUPROFILE: "true"
 
       - label: ":mag: Allocations: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/allocs.jl"
-        env:
-          CI_PERF_CPUPROFILE: "true"
 
   - wait: ~
     continue_on_failure: true

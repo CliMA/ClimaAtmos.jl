@@ -34,41 +34,15 @@ prof = Profile.@profile begin
     do_work!(integrator)
 end
 
-if !isempty(get(ENV, "CI_PERF_CPUPROFILE", ""))
+(; output_dir, job_id) = simulation
 
-    (; output_dir, job_id) = simulation
-    import ChromeProfileFormat
-    output_path = output_dir
-    cpufile = job_id * ".cpuprofile"
-    ChromeProfileFormat.save_cpuprofile(joinpath(output_path, cpufile))
+import ProfileCanvas
+include("profile_canvas_patch.jl")
 
-    if !isempty(get(ENV, "BUILDKITE", ""))
-        import URIs
-
-        print_link_url(url) = print("\033]1339;url='$(url)'\a\n")
-
-        profiler_url(uri) = URIs.URI(
-            "https://profiler.firefox.com/from-url/$(URIs.escapeuri(uri))",
-        )
-
-        # copy the file to the clima-ci bucket
-        buildkite_pipeline = ENV["BUILDKITE_PIPELINE_SLUG"]
-        buildkite_buildnum = ENV["BUILDKITE_BUILD_NUMBER"]
-        buildkite_step = ENV["BUILDKITE_STEP_KEY"]
-
-        profile_uri = "$buildkite_pipeline/build/$buildkite_buildnum/$buildkite_step/$cpufile"
-        gs_profile_uri = "gs://clima-ci/$profile_uri"
-        dl_profile_uri = "https://storage.googleapis.com/clima-ci/$profile_uri"
-
-        # sync to bucket
-        run(`gsutil cp $(joinpath(output_path, cpufile)) $gs_profile_uri`)
-
-        # print link
-        println("+++ Profiler link for '$profile_uri': ")
-        print_link_url(profiler_url(dl_profile_uri))
-    end
+if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
+    output_dir = job_id
+    mkpath(output_dir)
+    html_file(joinpath(output_dir, "flame.html"))
 else
-    import PProf
-    PProf.pprof()
-    # http://localhost:57599/ui/flamegraph?tf
+    ProfileCanvas.view(Profile.fetch())
 end
