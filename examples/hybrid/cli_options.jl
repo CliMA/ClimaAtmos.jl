@@ -13,7 +13,7 @@ function parse_commandline()
         "--dt"
         help = "Simulation time step. Examples: [`10secs`, `1hours`]"
         arg_type = String
-        default = "400secs"
+        default = "600secs"
         "--dt_save_to_sol"
         help = "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
         arg_type = String
@@ -141,7 +141,7 @@ function parse_commandline()
         "--h_elem"
         help = "number of elements per edge on a cubed sphere"
         arg_type = Int
-        default = 4
+        default = 6
         "--z_elem"
         help = "number of vertical elements"
         arg_type = Int
@@ -149,7 +149,7 @@ function parse_commandline()
         "--nh_poly"
         help = "Horizontal polynomial order"
         arg_type = Int
-        default = 4
+        default = 3
         "--z_max"
         help = "Model top height. Default: 30km"
         arg_type = Float64
