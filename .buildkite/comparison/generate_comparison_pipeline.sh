@@ -19,7 +19,7 @@ fi
 # set up environment and agents
 cat << EOM > $file
 env:
-  JULIA_VERSION: "1.7.2"
+  JULIA_VERSION: "1.8.0"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.3"
