@@ -254,14 +254,15 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
             end
 
             for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                vertical_transport!(
-                    getproperty(Yₜ.c, ᶜρc_name)[colidx],
-                    ᶠw[colidx],
-                    ᶜρ[colidx],
-                    getproperty(Y.c, ᶜρc_name)[colidx],
-                    dt,
-                    tracer_upwinding,
-                )
+                # vertical_transport!(
+                #     getproperty(Yₜ.c, ᶜρc_name)[colidx],
+                #     ᶠw[colidx],
+                #     ᶜρ[colidx],
+                #     getproperty(Y.c, ᶜρc_name)[colidx],
+                #     dt,
+                #     tracer_upwinding,
+                # )
+                parent(getproperty(Yₜ.c, ᶜρc_name)[colidx]) .= FT(0) 
             end
         end
     end
@@ -320,9 +321,11 @@ function implicit_tendency_generic!(Yₜ, Y, p, t)
         end
 
         for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-            ᶜρc = getproperty(Y.c, ᶜρc_name)
-            vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
+            # ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+            # ᶜρc = getproperty(Y.c, ᶜρc_name)
+            # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
+
+            parent(ᶜρcₜ) .= FT(0)
         end
     end
     return Yₜ
@@ -496,7 +499,8 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, tracer_upwinding, simulation) = p
+    dt = simulation.dt
     @nvtx "vertical" color = colorant"orange" begin
         Fields.bycolumn(axes(Y.c)) do colidx
 
@@ -530,6 +534,17 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
                 ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
                 @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
             end
+
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                vertical_transport!(
+                    getproperty(Yₜ.c, ᶜρc_name)[colidx],
+                    ᶠw[colidx],
+                    ᶜρ[colidx],
+                    getproperty(Y.c, ᶜρc_name)[colidx],
+                    dt,
+                    tracer_upwinding,
+                )
+            end
         end
     end
 end
@@ -538,8 +553,8 @@ function explicit_vertical_advection_tendency_generic!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
-
+    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf, simulation, tracer_upwinding) = p
+    dt = simulation.dt
     # Mass conservation
     @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
 
@@ -570,6 +585,12 @@ function explicit_vertical_advection_tendency_generic!(Yₜ, Y, p, t)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
         @. ᶜρcₜ -= ᶜdivᵥ(ᶠinterp(ᶜρc * ᶜuₕ))
     end
+
+    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+        ᶜρc = getproperty(Y.c, ᶜρc_name)
+        vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
+    end
 end
 
 # Allow one() to be called on vectors.
@@ -592,6 +613,10 @@ function Base.convert(
               $ubw to a StencilCoefs object with bandwidths $lbw′ and $ubw′")
     end
 end
+
+Base.zero(::Type{T}) where {lbw, ubw, C, T <: Operators.StencilCoefs{lbw, ubw, C}} =
+    Operators.StencilCoefs{lbw, ubw}(ntuple(_ -> zero(eltype(C)), Operators.bandwidth(T)))
+
 
 # :ρe_tot in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
 function Wfact_special!(W, Y, p, dtγ, t)
@@ -699,13 +724,16 @@ function Wfact_special!(W, Y, p, dtγ, t)
             end
 
             for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                vertical_transport_jac!(
-                    getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)[colidx],
-                    ᶠw[colidx],
-                    ᶜρ[colidx],
-                    getproperty(Y.c, ᶜρc_name)[colidx],
-                    tracer_upwinding,
-                )
+                # vertical_transport_jac!(
+                #     getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)[colidx],
+                #     ᶠw[colidx],
+                #     ᶜρ[colidx],
+                #     getproperty(Y.c, ᶜρc_name)[colidx],
+                #     tracer_upwinding,
+                # )
+                field = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
+                value = zero(eltype(field))
+                field[colidx] .= Ref(value)
             end
         end
     end
@@ -992,10 +1020,14 @@ function Wfact_generic!(W, Y, p, dtγ, t)
         end
 
         for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
-            ᶜρc = getproperty(Y.c, ᶜρc_name)
-            # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
-            vertical_transport_jac!(∂ᶜρcₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρc, tracer_upwinding)
+            # ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
+            # ᶜρc = getproperty(Y.c, ᶜρc_name)
+            # # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
+            # vertical_transport_jac!(∂ᶜρcₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρc, tracer_upwinding)
+
+            
+            value = zero(eltype(∂ᶜρcₜ∂ᶠ𝕄))
+            ∂ᶜρcₜ∂ᶠ𝕄 .= Ref(value)
         end
 
         # TODO: Figure out a way to test the Jacobian when the thermodynamic
