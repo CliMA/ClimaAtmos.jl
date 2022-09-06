@@ -90,7 +90,6 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
             Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
             Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
             Spaces.weighted_dss_ghost!(ᶜχuₕ, ghost_buffer.χuₕ)
-            ClimaComms.barrier(p.comms_ctx)
         end
 
         @. ᵗρs -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
