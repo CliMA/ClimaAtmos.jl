@@ -367,6 +367,7 @@ function remaining_tendency!(Yₜ, Y, p, t)
             Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
             Spaces.weighted_dss_internal!(Yₜ.f, p.ghost_buffer.f)
             Spaces.weighted_dss_ghost!(Yₜ.f, p.ghost_buffer.f)
+            ClimaComms.barrier(p.comms_ctx)
         end
     end
     return Yₜ

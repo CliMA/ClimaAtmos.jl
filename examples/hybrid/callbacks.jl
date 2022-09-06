@@ -115,6 +115,7 @@ function dss_callback(integrator)
         Spaces.weighted_dss_internal!(Y.f, ghost_buffer.f)
         Spaces.weighted_dss_ghost!(Y.c, ghost_buffer.c)
         Spaces.weighted_dss_ghost!(Y.f, ghost_buffer.f)
+        ClimaComms.barrier(integrator.p.comms_ctx)
     end
     # ODE.u_modified!(integrator, false) # TODO: try this
 end
