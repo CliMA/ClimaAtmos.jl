@@ -324,16 +324,6 @@ function ode_configuration(Y, parsed_args, model_spec)
             jacobian_flags,
             test_implicit_solver,
         )
-        Wfact! =
-            if :ρe_tot in propertynames(Y.c) &&
-               W.flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK &&
-               W.flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact &&
-               !W.test &&
-               enable_threading()
-                Wfact_special!
-            else
-                Wfact_generic!
-            end
         jac_kwargs =
             use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
             (; jac_prototype = W, Wfact = Wfact!)
