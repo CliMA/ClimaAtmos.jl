@@ -194,7 +194,7 @@ vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:third_orde
     @. ᶜρcₜ -= (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw, ᶜρc / ᶜρ)))
 vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book}) =
     @. ᶜρcₜ -=
-        (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+        (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) + ᶜdivᵥ(
             ᶠinterp(ᶜρ) * ᶠfct_boris_book(
                 ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
                 (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
@@ -212,7 +212,7 @@ vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book
 
 
 vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ -=
-    (ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) - ᶜdivᵥ(
+    (ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) + ᶜdivᵥ(
         ᶠfct_zalesak(
             ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
             ᶜρc / dt,
