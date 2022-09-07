@@ -321,7 +321,7 @@ function implicit_tendency_generic!(Yₜ, Y, p, t)
         end
 
         for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            # ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+            ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
             # ᶜρc = getproperty(Y.c, ᶜρc_name)
             # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
 
@@ -1024,7 +1024,7 @@ function Wfact_generic!(W, Y, p, dtγ, t)
         end
 
         for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            # ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
+            ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
             # ᶜρc = getproperty(Y.c, ᶜρc_name)
             # # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
             # vertical_transport_jac!(∂ᶜρcₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρc, tracer_upwinding)
