@@ -56,10 +56,18 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         call_every_dt(save_restart_func, dt_save_restart)
     end
+
+    gc_callback = if simulation.is_distributed
+        call_every_n_steps(gc_func, 1000)
+    else
+        nothing
+    end
+
     return ODE.CallbackSet(
         dss_cb,
         save_to_disk_callback,
         save_restart_callback,
+        gc_callback,
         additional_callbacks...,
     )
 end
@@ -393,5 +401,10 @@ function save_restart_func(integrator)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
+    return nothing
+end
+
+function gc_func(integrator)
+    GC.gc()
     return nothing
 end
