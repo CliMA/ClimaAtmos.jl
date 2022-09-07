@@ -167,24 +167,24 @@ vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book}) = @.
             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
         ),
     )
-# vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
-#     -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-#         ᶠinterp(ᶜρ) * ᶠfct_zalesak(
-#             ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
-#             ᶜρc / ᶜρ / dt,
-#             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
-#         ),
-#     )
-
-
 vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
-    -(ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) - ᶜdivᵥ(
-        ᶠfct_zalesak(
-            ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
-            ᶜρc / dt,
-            (ᶜρc / dt - ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))),
+    -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+        ᶠinterp(ᶜρ) * ᶠfct_zalesak(
+            ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
+            ᶜρc / ᶜρ / dt,
+            (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
         ),
     )
+
+
+# vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
+#     -(ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) - ᶜdivᵥ(
+#         ᶠfct_zalesak(
+#             ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
+#             ᶜρc / dt,
+#             (ᶜρc / dt - ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))),
+#         ),
+#     )
 
 vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:none}) =
     @. ᶜρcₜ -= (ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw))
@@ -201,24 +201,27 @@ vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book
             ),
         )
 
+vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ -=
+    (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) + ᶜdivᵥ(
+        ᶠinterp(ᶜρ) * ᶠfct_zalesak(
+            ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
+            ᶜρc / ᶜρ / dt,
+            (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+        ),
+    )
+
+
 # vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ -=
-#     (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-#         ᶠinterp(ᶜρ) * ᶠfct_zalesak(
-#             ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
-#             ᶜρc / ᶜρ / dt,
-#             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+#     (ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) + ᶜdivᵥ(
+#         ᶠfct_zalesak(
+#             ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
+#             ᶜρc / dt,
+#             (ᶜρc / dt - ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))),
 #         ),
 #     )
 
 
-vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ -=
-    (ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) + ᶜdivᵥ(
-        ᶠfct_zalesak(
-            ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
-            ᶜρc / dt,
-            (ᶜρc / dt - ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))),
-        ),
-    )
+
 # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
 # allocation because the cache is stored separately from Y, which means that
 # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
