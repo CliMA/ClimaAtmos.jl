@@ -177,11 +177,11 @@ vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book}) = @.
 #     )
 
 
-    vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
-    -(ᶜdivᵥ( ᶠupwind1(ᶠw, ᶜρc ))) - ᶜdivᵥ(
+vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
+    -(ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) - ᶜdivᵥ(
         ᶠfct_zalesak(
             ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
-             ᶜρc / dt,
+            ᶜρc / dt,
             (ᶜρc / dt - ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))),
         ),
     )
