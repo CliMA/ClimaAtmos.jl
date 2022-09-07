@@ -186,6 +186,39 @@ vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. �
         ),
     )
 
+vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:none}) =
+    @. ᶜρcₜ -= (ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw))
+vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:first_order}) =
+    @. ᶜρcₜ -= (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ)))
+vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:third_order}) =
+    @. ᶜρcₜ -= (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw, ᶜρc / ᶜρ)))
+vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book}) =
+    @. ᶜρcₜ -=
+        (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+            ᶠinterp(ᶜρ) * ᶠfct_boris_book(
+                ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
+                (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+            ),
+        )
+
+# vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ -=
+#     (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+#         ᶠinterp(ᶜρ) * ᶠfct_zalesak(
+#             ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
+#             ᶜρc / ᶜρ / dt,
+#             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+#         ),
+#     )
+
+
+vertical_transport_update!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ -=
+    (ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))) - ᶜdivᵥ(
+        ᶠfct_zalesak(
+            ᶠupwind3(ᶠw, ᶜρc) - ᶠupwind1(ᶠw, ᶜρc),
+            ᶜρc / dt,
+            (ᶜρc / dt - ᶜdivᵥ(ᶠupwind1(ᶠw, ᶜρc))),
+        ),
+    )
 # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
 # allocation because the cache is stored separately from Y, which means that
 # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
@@ -539,8 +572,17 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
                 ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
 
 
+
+
+            # Tracer conservation
             for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                vertical_transport!(
+                ᶜρc = getproperty(Y.c, ᶜρc_name)
+                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
+            end
+
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                vertical_transport_update!(
                     getproperty(Yₜ.c, ᶜρc_name)[colidx],
                     ᶠw[colidx],
                     ᶜρ[colidx],
@@ -548,13 +590,6 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
                     dt,
                     tracer_upwinding,
                 )
-            end
-
-            # Tracer conservation
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                ᶜρc = getproperty(Y.c, ᶜρc_name)
-                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
             end
 
 
