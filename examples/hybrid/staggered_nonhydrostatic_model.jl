@@ -538,12 +538,6 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
             @. Yₜ.f.w[colidx] -=
                 ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
 
-            # Tracer conservation
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                ᶜρc = getproperty(Y.c, ᶜρc_name)
-                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
-            end
 
             for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
                 vertical_transport!(
@@ -555,6 +549,15 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
                     tracer_upwinding,
                 )
             end
+
+            # Tracer conservation
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜρc = getproperty(Y.c, ᶜρc_name)
+                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
+            end
+
+
         end
     end
 end
