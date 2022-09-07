@@ -319,6 +319,14 @@ if !simulation.is_distributed && parsed_args["post_process"]
     end
 end
 
+if parsed_args["debugging_tc"]
+    include(joinpath(@__DIR__, "define_tc_quicklook_profiles.jl"))
+    plot_tc_profiles(
+        simulation.output_dir,
+        "day0." * string(Int(simulation.t_end)) * ".hdf5",
+    )
+end
+
 if parsed_args["regression_test"]
     # Test results against main branch
     include(

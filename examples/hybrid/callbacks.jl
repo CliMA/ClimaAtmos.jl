@@ -151,6 +151,7 @@ function turb_conv_affect_filter!(integrator)
 end
 
 function save_to_disk_func(integrator)
+
     (; t, u, p) = integrator
     (; output_dir) = p.simulation
     Y = u
@@ -160,6 +161,7 @@ function save_to_disk_func(integrator)
     else
         (; ᶜts, ᶜp, params, ᶜK) = p
     end
+
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
 
@@ -189,6 +191,7 @@ function save_to_disk_func(integrator)
 
     # cloudwater (liquid and ice), watervapor and RH for moist simulation
     if :ρq_tot in propertynames(Y.c)
+
         ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
         ᶜcloud_liquid = @. ᶜq.liq
         ᶜcloud_ice = @. ᶜq.ice
@@ -228,6 +231,61 @@ function save_to_disk_func(integrator)
         end
     else
         moist_diagnostic = NamedTuple()
+    end
+
+    if :edmf_cache in propertynames(p) && p.simulation.is_debugging_tc
+
+        tc_cent(p) = p.edmf_cache.aux.cent.turbconv
+        tc_face(p) = p.edmf_cache.aux.face.turbconv
+        turbulence_convection_diagnostic = (;
+            bulk_up_area = tc_cent(p).bulk.area,
+            bulk_up_h_tot = tc_cent(p).bulk.h_tot,
+            bulk_up_buoyancy = tc_cent(p).bulk.buoy,
+            bulk_up_q_tot = tc_cent(p).bulk.q_tot,
+            bulk_up_q_liq = tc_cent(p).bulk.q_liq,
+            bulk_up_q_ice = tc_cent(p).bulk.q_ice,
+            bulk_up_temperature = tc_cent(p).bulk.T,
+            bulk_up_cloud_fraction = tc_cent(p).bulk.cloud_fraction,
+            bulk_up_e_tot_tendency_precip_formation = tc_cent(
+                p,
+            ).bulk.e_tot_tendency_precip_formation,
+            bulk_up_qt_tendency_precip_formation = tc_cent(
+                p,
+            ).bulk.qt_tendency_precip_formation,
+            env_w = tc_cent(p).en.w,
+            env_area = tc_cent(p).en.area,
+            env_q_tot = tc_cent(p).en.q_tot,
+            env_q_liq = tc_cent(p).en.q_liq,
+            env_q_ice = tc_cent(p).en.q_ice,
+            env_theta_liq_ice = tc_cent(p).en.θ_liq_ice,
+            env_theta_virt = tc_cent(p).en.θ_virt,
+            env_theta_dry = tc_cent(p).en.θ_dry,
+            env_e_tot = tc_cent(p).en.e_tot,
+            env_e_kin = tc_cent(p).en.e_kin,
+            env_h_tot = tc_cent(p).en.h_tot,
+            env_RH = tc_cent(p).en.RH,
+            env_s = tc_cent(p).en.s,
+            env_temperature = tc_cent(p).en.T,
+            env_buoyancy = tc_cent(p).en.buoy,
+            env_cloud_fraction = tc_cent(p).en.cloud_fraction,
+            env_TKE = tc_cent(p).en.tke,
+            env_Hvar = tc_cent(p).en.Hvar,
+            env_QTvar = tc_cent(p).en.QTvar,
+            env_HQTcov = tc_cent(p).en.HQTcov,
+            env_e_tot_tendency_precip_formation = tc_cent(
+                p,
+            ).en.e_tot_tendency_precip_formation,
+            env_qt_tendency_precip_formation = tc_cent(
+                p,
+            ).en.qt_tendency_precip_formation,
+            env_Hvar_rain_dt = tc_cent(p).en.Hvar_rain_dt,
+            env_QTvar_rain_dt = tc_cent(p).en.QTvar_rain_dt,
+            env_HQTcov_rain_dt = tc_cent(p).en.HQTcov_rain_dt,
+            face_bulk_w = tc_face(p).bulk.w,
+            face_env_w = tc_face(p).en.w,
+        )
+    else
+        turbulence_convection_diagnostic = NamedTuple()
     end
 
     if vert_diff
@@ -290,6 +348,7 @@ function save_to_disk_func(integrator)
         vert_diff_diagnostic,
         rad_diagnostic,
         rad_clear_diagnostic,
+        turbulence_convection_diagnostic,
     )
 
     day = floor(Int, t / (60 * 60 * 24))

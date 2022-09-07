@@ -151,6 +151,7 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
 
     sim = (;
         is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
+        is_debugging_tc = parsed_args["debugging_tc"],
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
