@@ -4,6 +4,8 @@ function find_latest_dataset_folder(; dir = pwd())
     matching_paths = String[]
     for file in readdir(dir)
         !ispath(joinpath(dir, file)) && continue
+        # Skip folders without the ref_counter
+        isfile(joinpath(dir, "ref_counter.jl")) || continue
         push!(matching_paths, joinpath(dir, file))
     end
     isempty(matching_paths) && return ""

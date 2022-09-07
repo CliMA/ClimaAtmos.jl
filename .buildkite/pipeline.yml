@@ -182,15 +182,15 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_ARS343/*"
 
       - label: ":computer: baroclinic wave (ρθ) Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64 --dt 500secs"
         artifact_paths: "sphere_baroclinic_wave_rhotheta_Float64/*"
 
       - label: ":computer: held suarez (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) equilmoist hightop sponge"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 200secs --t_end 1days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 1days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist FCT Zalesak on moisture"
@@ -227,11 +227,11 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 300secs --t_end 6days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --t_end 6days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe --regression_test true --t_end 6days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe --regression_test true --t_end 6days --dt 500secs"
         artifact_paths: "sphere_held_suarez_rhoe/*"
 
       - label: ":computer: held suarez (ρe_int)"
@@ -239,11 +239,11 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 200secs --t_end 3days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 450secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 200secs --t_end 3days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 300secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
@@ -251,7 +251,7 @@ steps:
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky_mo/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 200secs --t_end 2.5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 450secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
