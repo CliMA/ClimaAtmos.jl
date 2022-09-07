@@ -478,12 +478,12 @@ function horizontal_advection_tendency_special!(Yₜ, Y, p, t)
                 Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
         end
 
-        # Tracer conservation
-        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            ᶜρc = getproperty(Y.c, ᶜρc_name)
-            ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-            @. ᶜρcₜ -= divₕ(ᶜρc * ᶜuvw)
-        end
+        # # Tracer conservation
+        # for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+        #     ᶜρc = getproperty(Y.c, ᶜρc_name)
+        #     ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+        #     @. ᶜρcₜ -= divₕ(ᶜρc * ᶜuvw)
+        # end
     end
 end
 
@@ -578,22 +578,22 @@ function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
 
 
             # Tracer conservation
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                ᶜρc = getproperty(Y.c, ᶜρc_name)
-                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
-            end
+            # for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+            #     ᶜρc = getproperty(Y.c, ᶜρc_name)
+            #     ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+            #     @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
+            # end
 
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                vertical_transport_update!(
-                    getproperty(Yₜ.c, ᶜρc_name)[colidx],
-                    ᶠw[colidx],
-                    ᶜρ[colidx],
-                    getproperty(Y.c, ᶜρc_name)[colidx],
-                    dt,
-                    tracer_upwinding,
-                )
-            end
+            # for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+            #     vertical_transport_update!(
+            #         getproperty(Yₜ.c, ᶜρc_name)[colidx],
+            #         ᶠw[colidx],
+            #         ᶜρ[colidx],
+            #         getproperty(Y.c, ᶜρc_name)[colidx],
+            #         dt,
+            #         tracer_upwinding,
+            #     )
+            # end
 
 
         end
