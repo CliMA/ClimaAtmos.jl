@@ -180,6 +180,10 @@ steps:
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist ARS343"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_ARS343 --ode_algo ARS343 --t_end 4days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_ARS343/*"
+      
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist ARS343 zalesak"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_ARS343 --ode_algo ARS343 --tracer_upwinding zalesak --t_end 4days"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_ARS343_zalesak/*"
 
       - label: ":computer: baroclinic wave (ρθ) Float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64"
@@ -196,6 +200,10 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist FCT Zalesak on moisture"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --tracer_upwinding zalesak --kappa_4 4e17 --job_id sphere_held_suarez_rhoe_equilmoist_zalesak --dt 200secs --t_end 3days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_zalesak/*"
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist ars343 zalesak"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --ode_algo ARS343 --tracer_upwinding zalesak --kappa_4 4e17 --job_id sphere_held_suarez_rhoe_equilmoist_ars343_zalesak --dt 200secs --t_end 3days"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_ars343_zalesak/*"
 
   - group: "Configs"
     steps:

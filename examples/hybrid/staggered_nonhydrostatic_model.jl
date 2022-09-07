@@ -262,7 +262,7 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
                 #     dt,
                 #     tracer_upwinding,
                 # )
-                parent(getproperty(Yₜ.c, ᶜρc_name)[colidx]) .= FT(0) 
+                parent(getproperty(Yₜ.c, ᶜρc_name)[colidx]) .= FT(0)
             end
         end
     end
@@ -614,8 +614,12 @@ function Base.convert(
     end
 end
 
-Base.zero(::Type{T}) where {lbw, ubw, C, T <: Operators.StencilCoefs{lbw, ubw, C}} =
-    Operators.StencilCoefs{lbw, ubw}(ntuple(_ -> zero(eltype(C)), Operators.bandwidth(T)))
+Base.zero(
+    ::Type{T},
+) where {lbw, ubw, C, T <: Operators.StencilCoefs{lbw, ubw, C}} =
+    Operators.StencilCoefs{lbw, ubw}(
+        ntuple(_ -> zero(eltype(C)), Operators.bandwidth(T)),
+    )
 
 
 # :ρe_tot in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
@@ -1025,7 +1029,7 @@ function Wfact_generic!(W, Y, p, dtγ, t)
             # # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
             # vertical_transport_jac!(∂ᶜρcₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρc, tracer_upwinding)
 
-            
+
             value = zero(eltype(∂ᶜρcₜ∂ᶠ𝕄))
             ∂ᶜρcₜ∂ᶠ𝕄 .= Ref(value)
         end
