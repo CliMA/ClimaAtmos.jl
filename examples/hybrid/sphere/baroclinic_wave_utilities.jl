@@ -151,6 +151,8 @@ microphysics_cache(Y, ::Nothing) = NamedTuple()
 microphysics_cache(Y, ::Microphysics0Moment) = (
     ᶜS_ρq_tot = similar(Y.c, FT),
     ᶜλ = similar(Y.c, FT),
+    ᶜ3d_rain = similar(Y.c, FT),
+    ᶜ3d_snow = similar(Y.c, FT),
     col_integrated_rain = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
     col_integrated_snow = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
 )
