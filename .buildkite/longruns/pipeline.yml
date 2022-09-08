@@ -87,7 +87,7 @@ steps:
       #     slurm_ntasks: 128
       
       # - label: ":computer: held suarez (ρe_tot) equilmoist high resolution ars343"
-      #   command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --forcing held_suarez --moist equil --vert_diff true --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 50secs --t_end 200days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_ars343"
+      #   command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 50secs --t_end 200days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_ars343"
       #   artifact_paths: "longrun_hs_rhoe_equil_highres_ars343/*"
       #   env:
       #     CLIMACORE_DISTRIBUTED: "MPI"
