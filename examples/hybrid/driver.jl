@@ -157,6 +157,8 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             diffuse_momentum,
             coupled,
         ) : NamedTuple(),
+        model_spec.non_orographic_gravity_wave ? gravity_wave_cache(Y, FT) :
+        NamedTuple(),
         (;
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
@@ -166,6 +168,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
                 rayleigh_sponge,
                 viscous_sponge,
                 hyperdiff,
+                non_orographic_gravity_wave = model_spec.non_orographic_gravity_wave,
                 has_turbconv = !isnothing(turbconv_model),
             )
         ),
@@ -182,6 +185,7 @@ function additional_tendency!(Yₜ, Y, p, t)
     (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
     (; microphy_0M, hyperdiff, has_turbconv) = p.tendency_knobs
     (; rayleigh_sponge, viscous_sponge) = p.tendency_knobs
+    (; non_orographic_gravity_wave) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
     rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
@@ -190,6 +194,7 @@ function additional_tendency!(Yₜ, Y, p, t)
     microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t)
     has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t)
+    non_orographic_gravity_wave && gravity_wave_tendency!(Yₜ, Y, p, t)
 end
 
 ################################################################################
@@ -204,6 +209,12 @@ if parsed_args["trunc_stack_traces"]
 end
 
 include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
+include(
+    joinpath(
+        "gravitywave_parameterization",
+        "gravity_wave_parameterization.jl",
+    ),
+)
 
 
 import ClimaCore: enable_threading

@@ -123,6 +123,18 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_allsky_idealized_clouds"
         artifact_paths: "sphere_single_column_radiative_equilibrium_allsky_idealized_clouds/*"
 
+      - label: ":computer: single column non-orographic gravity wave parameterization"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --non_orographic_gravity_wave true --t_end 1500secs --dt 500secs --job_id single_column_nonorographic_gravity_wave --regression_test true"
+        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+
+      - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
+        command: "julia --color=yes --project=examples examples/hybrid/gravitywave_parameterization/gw_test_3d.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_3d/*"
+
+      - label: ":computer: non-orographic gravity wave parameterization unit test single column"
+        command: "julia --color=yes --project=examples examples/hybrid/gravitywave_parameterization/gw_test_single_column.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
+
   - group: "MPI Examples"
     steps:
 
