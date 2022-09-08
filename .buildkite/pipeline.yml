@@ -333,7 +333,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":balloon: Single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --dt_save_to_disk 3hours --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false"
         artifact_paths: "edmf_trmm/*"
         agents:
           slurm_mem: 20GB

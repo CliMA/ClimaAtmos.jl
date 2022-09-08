@@ -155,8 +155,8 @@ function save_to_disk_func(integrator)
     (; output_dir) = p.simulation
     Y = u
 
-    if :ρq_tot in propertynames(Y.c)
-        (; ᶜts, ᶜp, ᶜS_ρq_tot, params, ᶜK) = p
+    if :ᶜS_ρq_tot in propertynames(Y.c)
+        (; ᶜts, ᶜp, ᶜS_ρq_tot, ᶜ3d_rain, ᶜ3d_snow, params, ᶜK) = p
     else
         (; ᶜts, ᶜp, params, ᶜK) = p
     end
@@ -187,7 +187,7 @@ function save_to_disk_func(integrator)
         vorticity = ᶜvort,
     )
 
-    # cloudwater (liquid and ice), watervapor, precipitation, and RH for moist simulation
+    # cloudwater (liquid and ice), watervapor and RH for moist simulation
     if :ρq_tot in propertynames(Y.c)
         ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
         ᶜcloud_liquid = @. ᶜq.liq
@@ -195,30 +195,37 @@ function save_to_disk_func(integrator)
         ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
         ᶜRH = @. TD.relative_humidity(thermo_params, ᶜts)
 
-        # precipitation
-        @. ᶜS_ρq_tot =
-            Y.c.ρ * CM.Microphysics0M.remove_precipitation(
-                cm_params,
-                TD.PhasePartition(thermo_params, ᶜts),
-            )
-
-        # rain vs snow
-        ᶜ3d_rain = @. ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
-        ᶜ3d_snow = @. ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
-        col_integrated_rain =
-            vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
-        col_integrated_snow =
-            vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
-
         moist_diagnostic = (;
             cloud_liquid = ᶜcloud_liquid,
             cloud_ice = ᶜcloud_ice,
             water_vapor = ᶜwatervapor,
-            precipitation_removal = ᶜS_ρq_tot,
-            column_integrated_rain = col_integrated_rain,
-            column_integrated_snow = col_integrated_snow,
             relative_humidity = ᶜRH,
         )
+        # precipitation
+        if :ᶜS_ρq_tot in propertynames(Y.c)
+
+            @. ᶜS_ρq_tot =
+                Y.c.ρ * CM.Microphysics0M.remove_precipitation(
+                    cm_params,
+                    TD.PhasePartition(thermo_params, ᶜts),
+                )
+
+            # rain vs snow
+            @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
+            @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
+
+            col_integrated_rain =
+                vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
+            col_integrated_snow =
+                vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
+
+            moist_diagnostics = (
+                moist_diagnostics...,
+                precipitation_removal = ᶜS_ρq_tot,
+                column_integrated_rain = col_integrated_rain,
+                column_integrated_snow = col_integrated_snow,
+            )
+        end
     else
         moist_diagnostic = NamedTuple()
     end

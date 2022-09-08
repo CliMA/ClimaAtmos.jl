@@ -132,8 +132,6 @@ function default_cache(Y, params, spaces, numerics, simulation)
         ᶜts = similar(Y.c, ts_type),
         ᶜp = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),
-        ᶜ3d_rain = similar(Y.c, FT),
-        ᶜ3d_snow = similar(Y.c, FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),

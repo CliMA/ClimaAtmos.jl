@@ -57,7 +57,7 @@ end
 using Test
 allocs_limit = Dict()
 allocs_limit["flame_perf_target_rhoe"] = 10357712
-allocs_limit["flame_perf_target_rhoe_threaded"] = 90908208
+allocs_limit["flame_perf_target_rhoe_threaded"] = 90909168
 
 # Threaded allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
