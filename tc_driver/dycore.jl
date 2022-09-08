@@ -195,14 +195,17 @@ end
 function set_grid_mean_from_thermo_state!(param_set, state, grid)
     thermo_params = TCP.thermodynamics_params(param_set)
     Ic = CCO.InterpolateF2C()
+    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     ts_gm = TC.center_aux_grid_mean(state).ts
     prog_gm = TC.center_prog_grid_mean(state)
     prog_gm_f = TC.face_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
+    aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
 
     @. prog_gm.ρ = TD.air_density(thermo_params, ts_gm)
     ρ_c = prog_gm.ρ
+    ρ_f = aux_gm_f.ρ
 
     C123 = CCG.Covariant123Vector
     @. prog_gm.ρe_tot =
@@ -214,16 +217,22 @@ function set_grid_mean_from_thermo_state!(param_set, state, grid)
         )
 
     @. prog_gm.ρq_tot = ρ_c * aux_gm.q_tot
+    @. ρ_f = If(ρ_c)
 
     return nothing
 end
 
 function assign_thermo_aux!(state, grid, moisture_model, param_set)
+    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
+    aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean(state).ts
     ρ_c = prog_gm.ρ
+    ρ_f = aux_gm_f.ρ
+    @. ρ_f = If(ρ_c)
+
     @inbounds for k in TC.real_center_indices(grid)
         ts = ts_gm[k]
         aux_gm.q_tot[k] = prog_gm.ρq_tot[k] / ρ_c[k]
