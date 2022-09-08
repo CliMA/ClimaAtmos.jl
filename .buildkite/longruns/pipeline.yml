@@ -90,7 +90,7 @@ steps:
         agents:
           slurm_ntasks: 128
   
-   - group: "Core Long runs (central difference)"
+  - group: "Core Long runs (central difference)"
 
     steps:
 
