@@ -46,3 +46,30 @@ if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
 else
     ProfileCanvas.view(Profile.fetch())
 end
+
+
+#####
+##### Allocation tests
+#####
+
+# We're grouping allocation tests here for convenience.
+
+using Test
+allocs_limit = Dict()
+allocs_limit["flame_perf_target_rhoe"] = 10357712
+allocs_limit["flame_perf_target_rhoe_threaded"] = 90908208
+
+# Threaded allocations are not deterministic, so let's add a buffer
+# TODO: remove buffer, and threaded tests, when
+#       threaded/unthreaded functions are unified
+buffer = occursin("threaded", job_id) ? 1.4 : 1
+
+allocs = @allocated OrdinaryDiffEq.step!(integrator)
+if allocs < allocs_limit[job_id] * buffer
+    @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
+end
+
+# https://github.com/CliMA/ClimaAtmos.jl/issues/827
+@testset "Allocations limit" begin
+    @test allocs ≤ allocs_limit[job_id]
+end
