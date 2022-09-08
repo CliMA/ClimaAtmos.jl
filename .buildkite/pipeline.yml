@@ -365,6 +365,14 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":rocket: flame graph: threadedd perf target (ρe_tot)"
+        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
+        artifact_paths: "flame_perf_target_rhoe_threaded/*"
+        agents:
+          slurm_ntasks: 8
+          slurm_ntasks_per_node: 8
+          slurm_mem: 20GB
+
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
 
