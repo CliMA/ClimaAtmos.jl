@@ -120,11 +120,15 @@ function default_cache(Y, params, spaces, numerics, simulation)
     else
         limiters = nothing
     end
+    pnc = propertynames(Y.c)
+    ᶜρh_kwargs =
+        :ρe_tot in pnc || :ρe_int in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
     return (;
         simulation,
         spaces,
         Yₜ = similar(Y), # only needed when using increment formulation
         limiters,
+        ᶜρh_kwargs...,
         ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜΦ,
@@ -199,12 +203,11 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜK, ᶜts, ᶜp) = implicit_cache_vars(Y, p)
-    (; ᶠgradᵥ_ᶜΦ, params, energy_upwinding, tracer_upwinding, simulation) = p
-    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶠgradᵥ_ᶜΦ, params, energy_upwinding, tracer_upwinding, simulation, ᶜρh) =
+        p
     dt = simulation.dt
 
-    ref_thermo_params = Ref(thermo_params)
-    ref_zuₕ = Ref(zero(eltype(Yₜ.c.uₕ)))
+    ref_zuₕ = zero(eltype(Yₜ.c.uₕ))
 
     @nvtx "implicit tendency special" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
@@ -218,7 +221,8 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
                 ᶜK[colidx],
                 Y.f.w[colidx],
             )
-            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
+            thermo_params = CAP.thermodynamics_params(params)
+            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
             if p.tendency_knobs.has_turbconv
                 parent(Yₜ.c.turbconv[colidx]) .= FT(0)
@@ -234,16 +238,17 @@ function implicit_tendency_special!(Yₜ, Y, p, t)
                 Val(:none),
             )
 
+            @. ᶜρh[colidx] = Y.c.ρe_tot[colidx] + ᶜp[colidx]
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶠw[colidx],
                 ᶜρ[colidx],
-                Base.broadcasted(+, Y.c.ρe_tot[colidx], ᶜp[colidx]),
+                ᶜρh[colidx],
                 dt,
                 energy_upwinding,
             )
 
-            Yₜ.c.uₕ[colidx] .= ref_zuₕ
+            Yₜ.c.uₕ[colidx] .= Ref(ref_zuₕ)
 
             @. Yₜ.f.w[colidx] =
                 -(ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) + ᶠgradᵥ_ᶜΦ[colidx])
@@ -274,6 +279,9 @@ function implicit_tendency_generic!(Yₜ, Y, p, t)
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
         (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, params) = p
+        if :ρe_tot in propertynames(Y.c) || :ρe_int in propertynames(Y.c)
+            (; ᶜρh) = p
+        end
         (; energy_upwinding, tracer_upwinding, simulation) = p
         thermo_params = CAP.thermodynamics_params(params)
         dt = simulation.dt
@@ -301,10 +309,10 @@ function implicit_tendency_generic!(Yₜ, Y, p, t)
         if :ρθ in propertynames(Y.c)
             vertical_transport!(Yₜ.c.ρθ, ᶠw, ᶜρ, Y.c.ρθ, dt, energy_upwinding)
         elseif :ρe_tot in propertynames(Y.c)
-            ᶜρh = Base.broadcasted(+, Y.c.ρe_tot, ᶜp)
+            @. ᶜρh = Y.c.ρe_tot + ᶜp
             vertical_transport!(Yₜ.c.ρe_tot, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
         elseif :ρe_int in propertynames(Y.c)
-            ᶜρh = Base.broadcasted(+, Y.c.ρe_int, ᶜp)
+            @. ᶜρh = Y.c.ρe_int + ᶜp
             vertical_transport!(Yₜ.c.ρe_int, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
             @. Yₜ.c.ρe_int +=
                 ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw)))
@@ -392,7 +400,6 @@ function horizontal_advection_tendency_special!(Yₜ, Y, p, t)
     ᶠw = Y.f.w
     (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    thermo_params = CAP.thermodynamics_params(params)
     @nvtx "precomputed quantities" color = colorant"orange" begin
         Fields.bycolumn(axes(Y.c)) do colidx
             @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
@@ -405,7 +412,9 @@ function horizontal_advection_tendency_special!(Yₜ, Y, p, t)
                 ᶜK[colidx],
                 Y.f.w[colidx],
             )
+            thermo_params = CAP.thermodynamics_params(params)
             @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+            nothing
         end
     end
     @nvtx "horizontal" color = colorant"orange" begin
@@ -591,126 +600,69 @@ function Base.convert(
     end
 end
 
-# :ρe_tot in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-function Wfact_special!(W, Y, p, dtγ, t)
-    p.apply_moisture_filter && affect_filter!(Y)
-    (; dtγ_ref) = W
-    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
-    (; energy_upwinding, tracer_upwinding) = p
-    @nvtx "Wfact!" color = colorant"green" begin
-        thermo_params = CAP.thermodynamics_params(params)
+# In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if
+# this is not the case, the additional term should be added to the
+# result of this function.
+# In addition, we approximate the Jacobian for vertical transport with
+# FCT using the Jacobian for third-order upwinding (since only FCT
+# requires dt, we do not need to pass dt to this function).
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:none})
+    @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * one(ᶠw)))
+    return nothing
+end
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:first_order})
+    # To convert ᶠw to ᶠw_data, we extract the third vector component.
+    to_scalar(vector) = vector.u₃
+    FT = Spaces.undertype(axes(ᶜρ))
+    ref_εw = Ref(Geometry.Covariant3Vector(eps(FT)))
+    @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
+        ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw + ref_εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + ref_εw),
+    ))
+    return nothing
+end
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val)
+    # To convert ᶠw to ᶠw_data, we extract the third vector component.
+    to_scalar(vector) = vector.u₃
+    FT = Spaces.undertype(axes(ᶜρ))
+    ref_εw = Ref(Geometry.Covariant3Vector(eps(FT)))
+    @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
+        ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw + ref_εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + ref_εw),
+    ))
+    return nothing
+end
 
-        R_d = FT(CAP.R_d(params))
-        κ_d = FT(CAP.kappa_d(params))
-        cv_d = FT(CAP.cv_d(params))
-        T_tri = FT(CAP.T_triple(params))
-        MSLP = FT(CAP.MSLP(params))
-
-        dtγ_ref[] = dtγ
-
-        ᶠw_data = ᶠw.components.data.:1
-
-        to_scalar(vector) = vector.u₃
-
-        to_scalar_coefs(vector_coefs) =
-            map(vector_coef -> vector_coef.u₃, vector_coefs)
-
-        εw = Ref(Geometry.Covariant3Vector(eps(FT)))
-        vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:none}) =
-            @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * one(ᶠw)))
-        vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:first_order}) =
-            @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-                ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw + εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + εw),
-            ))
-        vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val) =
-            @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-                ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw + εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + εw),
-            ))
-
-        ref_thermo_params = Ref(thermo_params)
-        Fields.bycolumn(axes(Y.c)) do colidx
-            @. ᶜK[colidx] =
-                norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
-            thermo_state!(
-                ᶜts[colidx],
-                Y.c[colidx],
-                params,
-                ᶜinterp,
-                ᶜK[colidx],
-                ᶠw[colidx],
+function validate_flags!(Y, flags, energy_upwinding)
+    if :ρe_tot in propertynames(Y.c)
+        if energy_upwinding === Val(:none) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
+            error(
+                "∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact or :no_∂ᶜp∂ᶜK when using ρe_tot \
+                without upwinding",
             )
-            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
-
-            @. ∂ᶜK∂ᶠw_data[colidx] =
-                ᶜinterp(ᶠw_data[colidx]) *
-                norm_sqr(one(ᶜinterp(ᶠw[colidx]))) *
-                ᶜinterp_stencil(one(ᶠw_data[colidx]))
-
-            vertical_transport_jac!(
-                ∂ᶜρₜ∂ᶠ𝕄[colidx],
-                ᶠw[colidx],
-                ᶜρ[colidx],
-                ᶜρ[colidx],
-                Val(:none),
-            )
-
-            # :ρe_tot in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :no_∂ᶜp∂ᶜK
-            ᶜρe = Y.c.ρe_tot
-            vertical_transport_jac!(
-                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-                ᶠw[colidx],
-                ᶜρ[colidx],
-                Base.broadcasted(+, Y.c.ρe_tot[colidx], ᶜp[colidx]),
-                energy_upwinding,
-            )
-
-            # :ρe_tot in propertynames(Y.c)
-            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ[colidx]) *
-                ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe[colidx])),
-            )
-
-            # :ρe_tot in propertynames(Y.c) && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
-                    R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
-                ) +
-                ᶠgradᵥ(ᶜp[colidx]) / abs2(ᶠinterp(ᶜρ[colidx])) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-
-            # :ρe_tot in propertynames(Y.c)
-            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
-                compose(
-                    -1 / ᶠinterp(ᶜρ[colidx]) *
-                    ᶠgradᵥ_stencil(-(ᶜρ[colidx] * R_d / cv_d)),
-                    ∂ᶜK∂ᶠw_data[colidx],
-                ),
-            )
-
-            if p.tendency_knobs.rayleigh_sponge
-                @. ∂ᶠ𝕄ₜ∂ᶠ𝕄.coefs.:2[colidx] -= p.ᶠβ_rayleigh_w[colidx]
-            end
-
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                vertical_transport_jac!(
-                    getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)[colidx],
-                    ᶠw[colidx],
-                    ᶜρ[colidx],
-                    getproperty(Y.c, ᶜρc_name)[colidx],
-                    tracer_upwinding,
-                )
-            end
+        elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
+            # TODO: Add Operator2Stencil for UpwindBiasedProductC2F to ClimaCore
+            # to allow exact Jacobian calculation.
+            error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe_tot with \
+                  upwinding")
         end
+    elseif :ρe_int in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
+        error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")
+    end
+    # TODO: If we end up using :gradΦ_shenanigans, optimize it to
+    # `cached_stencil / ᶠinterp(ᶜρ)`.
+    if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode != :exact && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode != :gradΦ_shenanigans
+        error("∂ᶠ𝕄ₜ∂ᶜρ_mode must be :exact or :gradΦ_shenanigans")
     end
 end
 
+call_verify_wfact_matrix() = false
 
-function Wfact_generic!(W, Y, p, dtγ, t)
+function Wfact!(W, Y, p, dtγ, t)
+    @nvtx "Wfact!" color = colorant"green" begin
+        _Wfact!(W, Y, p, dtγ, t)
+    end
+end
+
+function _Wfact!(W, Y, p, dtγ, t)
     p.apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
@@ -719,30 +671,29 @@ function Wfact_generic!(W, Y, p, dtγ, t)
     ᶠw = Y.f.w
     (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
     (; energy_upwinding, tracer_upwinding) = p
-    @nvtx "Wfact!" color = colorant"green" begin
-        thermo_params = CAP.thermodynamics_params(params)
 
-        R_d = FT(CAP.R_d(params))
-        κ_d = FT(CAP.kappa_d(params))
-        cv_d = FT(CAP.cv_d(params))
-        T_tri = FT(CAP.T_triple(params))
-        MSLP = FT(CAP.MSLP(params))
+    validate_flags!(Y, flags, energy_upwinding)
 
-        dtγ_ref[] = dtγ
 
-        # If we let ᶠw_data = ᶠw.components.data.:1 and ᶠw_unit = one.(ᶠw), then
-        # ᶠw == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠw.
-        ᶠw_data = ᶠw.components.data.:1
+    R_d = FT(CAP.R_d(params))
+    κ_d = FT(CAP.kappa_d(params))
+    cv_d = FT(CAP.cv_d(params))
+    T_tri = FT(CAP.T_triple(params))
+    MSLP = FT(CAP.MSLP(params))
 
-        # To convert ᶠw to ᶠw_data, we extract the third vector component.
-        to_scalar(vector) = vector.u₃
+    dtγ_ref[] = dtγ
 
-        # To convert ∂(ᶠwₜ)/∂(ᶜ𝔼) to ∂(ᶠw_data)ₜ/∂(ᶜ𝔼) and ∂(ᶠwₜ)/∂(ᶠw_data) to
-        # ∂(ᶠw_data)ₜ/∂(ᶠw_data), we extract the third component of each vector-
-        # valued stencil coefficient.
-        to_scalar_coefs(vector_coefs) =
-            map(vector_coef -> vector_coef.u₃, vector_coefs)
+    # If we let ᶠw_data = ᶠw.components.data.:1 and ᶠw_unit = one.(ᶠw), then
+    # ᶠw == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠw.
+    ᶠw_data = ᶠw.components.data.:1
 
+    # To convert ∂(ᶠwₜ)/∂(ᶜ𝔼) to ∂(ᶠw_data)ₜ/∂(ᶜ𝔼) and ∂(ᶠwₜ)/∂(ᶠw_data) to
+    # ∂(ᶠw_data)ₜ/∂(ᶠw_data), we extract the third component of each vector-
+    # valued stencil coefficient.
+    to_scalar_coefs(vector_coefs) =
+        map(vector_coef -> vector_coef.u₃, vector_coefs)
+
+    Fields.bycolumn(axes(Y.c)) do colidx
         # If ᶜρcₜ = -ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw), then
         # ∂(ᶜρcₜ)/∂(ᶠw_data) =
         #     -ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * ᶠw_unit) -
@@ -756,27 +707,18 @@ function Wfact_generic!(W, Y, p, dtγ, t)
         # The εw is only necessary in case w = 0.
         # Since Operator2Stencil has not yet been extended to upwinding
         # operators, ᶠupwind_stencil is not available.
-        # In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if
-        # this is not the case, the additional term should be added to the
-        # result of this function.
-        # In addition, we approximate the Jacobian for vertical transport with
-        # FCT using the Jacobian for third-order upwinding (since only FCT
-        # requires dt, we do not need to pass dt to this function).
-        εw = Ref(Geometry.Covariant3Vector(eps(FT)))
-        vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:none}) =
-            @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * one(ᶠw)))
-        vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:first_order}) =
-            @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-                ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw + εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + εw),
-            ))
-        vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val) =
-            @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-                ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw + εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + εw),
-            ))
-
-        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+        @. ᶜK[colidx] =
+            norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+        thermo_state!(
+            ᶜts[colidx],
+            Y.c[colidx],
+            params,
+            ᶜinterp,
+            ᶜK[colidx],
+            Y.f.w[colidx],
+        )
+        thermo_params = CAP.thermodynamics_params(params)
+        @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
         # ᶜinterp(ᶠw) =
         #     ᶜinterp(ᶠw)_data * ᶜinterp(ᶠw)_unit =
@@ -791,26 +733,42 @@ function Wfact_generic!(W, Y, p, dtγ, t)
         # ∂(ᶜK)/∂(ᶠw_data) =
         #     ∂(ᶜK)/∂(ᶜinterp(ᶠw_data)) * ∂(ᶜinterp(ᶠw_data))/∂(ᶠw_data) =
         #     ᶜinterp(ᶠw_data) * norm_sqr(ᶜinterp(ᶠw)_unit) * ᶜinterp_stencil(1)
-        @. ∂ᶜK∂ᶠw_data =
-            ᶜinterp(ᶠw_data) *
-            norm_sqr(one(ᶜinterp(ᶠw))) *
-            ᶜinterp_stencil(one(ᶠw_data))
+        @. ∂ᶜK∂ᶠw_data[colidx] =
+            ᶜinterp(ᶠw_data[colidx]) *
+            norm_sqr(one(ᶜinterp(ᶠw[colidx]))) *
+            ᶜinterp_stencil(one(ᶠw_data[colidx]))
 
         # vertical_transport!(Yₜ.c.ρ, ᶠw, ᶜρ, ᶜρ, dt, Val(:none))
-        vertical_transport_jac!(∂ᶜρₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρ, Val(:none))
+        vertical_transport_jac!(
+            ∂ᶜρₜ∂ᶠ𝕄[colidx],
+            ᶠw[colidx],
+            ᶜρ[colidx],
+            ᶜρ[colidx],
+            Val(:none),
+        )
 
         if :ρθ in propertynames(Y.c)
             ᶜρθ = Y.c.ρθ
-            if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
-                error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρθ")
-            end
             # vertical_transport!(Yₜ.c.ρθ, ᶠw, ᶜρ, ᶜρθ, dt, energy_upwinding)
-            vertical_transport_jac!(∂ᶜ𝔼ₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρθ, energy_upwinding)
+            vertical_transport_jac!(
+                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+                ᶠw[colidx],
+                ᶜρ[colidx],
+                ᶜρθ[colidx],
+                energy_upwinding,
+            )
         elseif :ρe_tot in propertynames(Y.c)
             ᶜρe = Y.c.ρe_tot
-            ᶜρh = Base.broadcasted(+, Y.c.ρe_tot, ᶜp)
+            (; ᶜρh) = p
+            @. ᶜρh[colidx] = ᶜρe[colidx] + ᶜp[colidx]
             # vertical_transport!(Yₜ.c.ρe_tot, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
-            vertical_transport_jac!(∂ᶜ𝔼ₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρh, energy_upwinding)
+            vertical_transport_jac!(
+                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+                ᶠw[colidx],
+                ᶜρ[colidx],
+                ᶜρh[colidx],
+                energy_upwinding,
+            )
             if energy_upwinding === Val(:none)
                 if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
                     # ∂(ᶜρh)/∂(ᶠw_data) = ∂(ᶜp)/∂(ᶠw_data) =
@@ -818,44 +776,34 @@ function Wfact_generic!(W, Y, p, dtγ, t)
                     # If we ignore the dependence of pressure on moisture,
                     # ∂(ᶜp)/∂(ᶜK) = -ᶜρ * R_d / cv_d
                     @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 -= compose(
-                        ᶜdivᵥ_stencil(ᶠw),
+                        ᶜdivᵥ_stencil(ᶠw[colidx]),
                         compose(
-                            ᶠinterp_stencil(one(ᶜp)),
-                            -(ᶜρ * R_d / cv_d) * ∂ᶜK∂ᶠw_data,
+                            ᶠinterp_stencil(one(ᶜp[colidx])),
+                            -(ᶜρ[colidx] * R_d / cv_d) * ∂ᶜK∂ᶠw_data[colidx],
                         ),
                     )
-                elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
-                    error(
-                        "∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact or :no_∂ᶜp∂ᶜK when using ρe_tot \
-                        without upwinding",
-                    )
                 end
-            elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
-                # TODO: Add Operator2Stencil for UpwindBiasedProductC2F to ClimaCore
-                # to allow exact Jacobian calculation.
-                error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe_tot with \
-                      upwinding")
             end
         elseif :ρe_int in propertynames(Y.c)
-            ᶜρe_int = Y.c.ρe_int
-            if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
-                error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")
-            end
-            ᶜρh = Base.broadcasted(+, Y.c.ρe_int, ᶜp)
+            (; ᶜρh) = p
+            @. ᶜρh[colidx] = Y.c.ρe_int[colidx] + ᶜp[colidx]
             # vertical_transport!(Yₜ.c.ρe_int, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
             # ᶜρe_intₜ += ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw))
-            vertical_transport_jac!(∂ᶜ𝔼ₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρh, energy_upwinding)
-            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 += ᶜinterp_stencil(
-                dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(one(ᶠw))),
+            vertical_transport_jac!(
+                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+                ᶠw[colidx],
+                ᶜρ[colidx],
+                ᶜρh[colidx],
+                energy_upwinding,
+            )
+            @. ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx] += ᶜinterp_stencil(
+                dot(
+                    ᶠgradᵥ(ᶜp[colidx]),
+                    Geometry.Contravariant3Vector(one(ᶠw[colidx])),
+                ),
             )
         end
 
-        # TODO: If we end up using :gradΦ_shenanigans, optimize it to
-        # `cached_stencil / ᶠinterp(ᶜρ)`.
-        if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode != :exact &&
-           flags.∂ᶠ𝕄ₜ∂ᶜρ_mode != :gradΦ_shenanigans
-            error("∂ᶠ𝕄ₜ∂ᶜρ_mode must be :exact or :gradΦ_shenanigans")
-        end
         if :ρθ in propertynames(Y.c)
             # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
             # ∂(ᶠwₜ)/∂(ᶜρθ) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρθ)
@@ -865,9 +813,10 @@ function Wfact_generic!(W, Y, p, dtγ, t)
             #     ᶠgradᵥ_stencil(
             #         R_d / (1 - κ_d) * (ᶜρθ * R_d / MSLP)^(κ_d / (1 - κ_d))
             #     )
-            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(
-                    R_d / (1 - κ_d) * (ᶜρθ * R_d / MSLP)^(κ_d / (1 - κ_d)),
+            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
+                    R_d / (1 - κ_d) *
+                    (ᶜρθ[colidx] * R_d / MSLP)^(κ_d / (1 - κ_d)),
                 ),
             )
 
@@ -876,16 +825,18 @@ function Wfact_generic!(W, Y, p, dtγ, t)
                 # ∂(ᶠwₜ)/∂(ᶜρ) = ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
                 # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
                 # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
-                @. ∂ᶠ𝕄ₜ∂ᶜρ = to_scalar_coefs(
-                    ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2 * ᶠinterp_stencil(one(ᶜρ)),
+                @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                    ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                    ᶠinterp_stencil(one(ᶜρ[colidx])),
                 )
             elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
                 # ᶠwₜ = (
                 #     -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ′) -
                 #     ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ′) * ᶠinterp(ᶜρ)
                 # ), where ᶜρ′ = ᶜρ but we approximate ∂(ᶜρ′)/∂(ᶜρ) = 0
-                @. ∂ᶠ𝕄ₜ∂ᶜρ = to_scalar_coefs(
-                    -(ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ) * ᶠinterp_stencil(one(ᶜρ)),
+                @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                    -(ᶠgradᵥ_ᶜΦ[colidx]) / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠinterp_stencil(one(ᶜρ[colidx])),
                 )
             end
         elseif :ρe_tot in propertynames(Y.c)
@@ -894,8 +845,9 @@ function Wfact_generic!(W, Y, p, dtγ, t)
             # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
             # If we ignore the dependence of pressure on moisture,
             # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe) = ᶠgradᵥ_stencil(R_d / cv_d)
-            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe)),
+            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) *
+                ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe[colidx])),
             )
 
             if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
@@ -909,10 +861,12 @@ function Wfact_generic!(W, Y, p, dtγ, t)
                 #     ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri))
                 # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
                 # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
-                @. ∂ᶠ𝕄ₜ∂ᶜρ = to_scalar_coefs(
-                    -1 / ᶠinterp(ᶜρ) *
-                    ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri)) +
-                    ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2 * ᶠinterp_stencil(one(ᶜρ)),
+                @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                    -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
+                        R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
+                    ) +
+                    ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                    ᶠinterp_stencil(one(ᶜρ[colidx])),
                 )
             elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
                 # ᶠwₜ = (
@@ -920,20 +874,23 @@ function Wfact_generic!(W, Y, p, dtγ, t)
                 #     ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ′) * ᶠinterp(ᶜρ)
                 # ), where ᶜρ′ = ᶜρ but we approximate ∂ᶜρ′/∂ᶜρ = 0, and where
                 # ᶜp′ = ᶜp but with ᶜK = 0
-                @. ∂ᶠ𝕄ₜ∂ᶜρ = to_scalar_coefs(
-                    -1 / ᶠinterp(ᶜρ) *
-                    ᶠgradᵥ_stencil(R_d * (-(ᶜΦ) / cv_d + T_tri)) -
-                    ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ) * ᶠinterp_stencil(one(ᶜρ)),
+                @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(R_d * (-(ᶜΦ[colidx]) / cv_d + T_tri)) -
+                    ᶠgradᵥ_ᶜΦ[colidx] / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠinterp_stencil(one(ᶜρ[colidx])),
                 )
             end
         elseif :ρe_int in propertynames(Y.c)
+            ᶜρe_int = Y.c.ρe_int
             # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
             # ∂(ᶠwₜ)/∂(ᶜρe_int) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe_int)
             # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
             # If we ignore the dependence of pressure on moisture,
             # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe_int) = ᶠgradᵥ_stencil(R_d / cv_d)
-            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe_int)),
+            @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
+                -1 / ᶠinterp(ᶜρ[colidx]) *
+                ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe_int[colidx])),
             )
 
             if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
@@ -946,20 +903,22 @@ function Wfact_generic!(W, Y, p, dtγ, t)
                 # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) = ᶠgradᵥ_stencil(R_d * T_tri)
                 # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
                 # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
-                @. ∂ᶠ𝕄ₜ∂ᶜρ = to_scalar_coefs(
-                    -1 / ᶠinterp(ᶜρ) *
-                    ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int)) +
-                    ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2 * ᶠinterp_stencil(one(ᶜρ)),
+                @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int[colidx])) +
+                    ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                    ᶠinterp_stencil(one(ᶜρ[colidx])),
                 )
             elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
                 # ᶠwₜ = (
                 #     -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ′) -
                 #     ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ′) * ᶠinterp(ᶜρ)
                 # ), where ᶜp′ = ᶜp but we approximate ∂ᶜρ′/∂ᶜρ = 0
-                @. ∂ᶠ𝕄ₜ∂ᶜρ = to_scalar_coefs(
-                    -1 / ᶠinterp(ᶜρ) *
-                    ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int)) -
-                    ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ) * ᶠinterp_stencil(one(ᶜρ)),
+                @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int[colidx])) -
+                    ᶠgradᵥ_ᶜΦ[colidx] / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠinterp_stencil(one(ᶜρ[colidx])),
                 )
             end
         end
@@ -973,12 +932,14 @@ function Wfact_generic!(W, Y, p, dtγ, t)
         # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜK) =
         #     ᶜ𝔼_name == :ρe_tot ? ᶠgradᵥ_stencil(-ᶜρ * R_d / cv_d) : 0
         if :ρθ in propertynames(Y.c) || :ρe_int in propertynames(Y.c)
-            ∂ᶠ𝕄ₜ∂ᶠ𝕄 .= Ref(Operators.StencilCoefs{-1, 1}((FT(0), FT(0), FT(0))))
+            ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] .=
+                Ref(Operators.StencilCoefs{-1, 1}((FT(0), FT(0), FT(0))))
         elseif :ρe_tot in propertynames(Y.c)
-            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄 = to_scalar_coefs(
+            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
                 compose(
-                    -1 / ᶠinterp(ᶜρ) * ᶠgradᵥ_stencil(-(ᶜρ * R_d / cv_d)),
-                    ∂ᶜK∂ᶠw_data,
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(-(ᶜρ[colidx] * R_d / cv_d)),
+                    ∂ᶜK∂ᶠw_data[colidx],
                 ),
             )
         end
@@ -986,70 +947,76 @@ function Wfact_generic!(W, Y, p, dtγ, t)
         if p.tendency_knobs.rayleigh_sponge
             # ᶠwₜ -= p.ᶠβ_rayleigh_w * ᶠw
             # ∂(ᶠwₜ)/∂(ᶠw_data) -= p.ᶠβ_rayleigh_w
-            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄.coefs.:2 -= p.ᶠβ_rayleigh_w
+            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx].coefs.:2 -= p.ᶠβ_rayleigh_w[colidx]
         end
 
         for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
             ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
             ᶜρc = getproperty(Y.c, ᶜρc_name)
             # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
-            vertical_transport_jac!(∂ᶜρcₜ∂ᶠ𝕄, ᶠw, ᶜρ, ᶜρc, tracer_upwinding)
-        end
-
-        # TODO: Figure out a way to test the Jacobian when the thermodynamic
-        # state is PhaseEquil (i.e., when the implicit tendency calls saturation
-        # adjustment).
-        if W.test && !(eltype(ᶜts) <: TD.PhaseEquil)
-            # Checking every column takes too long, so just check one.
-            i, j, h = 1, 1, 1
-            args = (implicit_tendency_generic!, Y, p, t, i, j, h)
-            ᶜ𝔼_name = filter(is_energy_var, propertynames(Y.c))[1]
-
-            @assert matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
-                    exact_column_jacobian_block(args..., (:c, :ρ), (:f, :w))
-            @assert matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(Y.c), i, j, h) ≈
-                    exact_column_jacobian_block(
-                args...,
-                (:f, :w),
-                (:c, ᶜ𝔼_name),
+            vertical_transport_jac!(
+                ∂ᶜρcₜ∂ᶠ𝕄[colidx],
+                ᶠw[colidx],
+                ᶜρ[colidx],
+                ᶜρc[colidx],
+                tracer_upwinding,
             )
-            @assert matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
-                    exact_column_jacobian_block(args..., (:f, :w), (:f, :w))
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
-                ᶜρc_tuple = (:c, ᶜρc_name)
-                @assert matrix_column(∂ᶜρcₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
-                        exact_column_jacobian_block(
-                    args...,
-                    ᶜρc_tuple,
-                    (:f, :w),
-                )
-            end
-
-            ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx = matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(Y.f), i, j, h)
-            ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact =
-                exact_column_jacobian_block(args..., (:c, ᶜ𝔼_name), (:f, :w))
-            if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
-                @assert ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx ≈ ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact
-            else
-                err =
-                    norm(∂ᶜ𝔼ₜ∂ᶠ𝕄_approx .- ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact) / norm(∂ᶜ𝔼ₜ∂ᶠ𝕄_exact)
-                @assert err < 1e-6
-                # Note: the highest value seen so far is ~3e-7 (only applies to ρe_tot)
-            end
-
-            ∂ᶠ𝕄ₜ∂ᶜρ_approx = matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(Y.c), i, j, h)
-            ∂ᶠ𝕄ₜ∂ᶜρ_exact =
-                exact_column_jacobian_block(args..., (:f, :w), (:c, :ρ))
-            if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-                @assert ∂ᶠ𝕄ₜ∂ᶜρ_approx ≈ ∂ᶠ𝕄ₜ∂ᶜρ_exact
-            else
-                err =
-                    norm(∂ᶠ𝕄ₜ∂ᶜρ_approx .- ∂ᶠ𝕄ₜ∂ᶜρ_exact) / norm(∂ᶠ𝕄ₜ∂ᶜρ_exact)
-                @assert err < 0.03
-                # Note: the highest value seen so far for ρe_tot is ~0.01, and the
-                # highest value seen so far for ρθ is ~0.02
-            end
         end
+    end
+
+    # TODO: Figure out a way to test the Jacobian when the thermodynamic
+    # state is PhaseEquil (i.e., when the implicit tendency calls saturation
+    # adjustment).
+    if call_verify_wfact_matrix()
+        verify_wfact_matrix(W, Y, p, dtγ, t)
+    end
+end
+
+function verify_wfact_matrix(W, Y, p, dtγ, t)
+    (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
+    (; ᶜts) = p
+
+    if eltype(ᶜts) <: TD.PhaseEquil
+        error("This function is incompatible with $(typeof(ᶜts))")
+    end
+
+    # Checking every column takes too long, so just check one.
+    i, j, h = 1, 1, 1
+    args = (implicit_tendency_generic!, Y, p, t, i, j, h)
+    ᶜ𝔼_name = filter(is_energy_var, propertynames(Y.c))[1]
+
+    @assert matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
+            exact_column_jacobian_block(args..., (:c, :ρ), (:f, :w))
+    @assert matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(Y.c), i, j, h) ≈
+            exact_column_jacobian_block(args..., (:f, :w), (:c, ᶜ𝔼_name))
+    @assert matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
+            exact_column_jacobian_block(args..., (:f, :w), (:f, :w))
+    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+        ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
+        ᶜρc_tuple = (:c, ᶜρc_name)
+        @assert matrix_column(∂ᶜρcₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
+                exact_column_jacobian_block(args..., ᶜρc_tuple, (:f, :w))
+    end
+
+    ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx = matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(Y.f), i, j, h)
+    ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact =
+        exact_column_jacobian_block(args..., (:c, ᶜ𝔼_name), (:f, :w))
+    if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
+        @assert ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx ≈ ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact
+    else
+        err = norm(∂ᶜ𝔼ₜ∂ᶠ𝕄_approx .- ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact) / norm(∂ᶜ𝔼ₜ∂ᶠ𝕄_exact)
+        @assert err < 1e-6
+        # Note: the highest value seen so far is ~3e-7 (only applies to ρe_tot)
+    end
+
+    ∂ᶠ𝕄ₜ∂ᶜρ_approx = matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(Y.c), i, j, h)
+    ∂ᶠ𝕄ₜ∂ᶜρ_exact = exact_column_jacobian_block(args..., (:f, :w), (:c, :ρ))
+    if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
+        @assert ∂ᶠ𝕄ₜ∂ᶜρ_approx ≈ ∂ᶠ𝕄ₜ∂ᶜρ_exact
+    else
+        err = norm(∂ᶠ𝕄ₜ∂ᶜρ_approx .- ∂ᶠ𝕄ₜ∂ᶜρ_exact) / norm(∂ᶠ𝕄ₜ∂ᶜρ_exact)
+        @assert err < 0.03
+        # Note: the highest value seen so far for ρe_tot is ~0.01, and the
+        # highest value seen so far for ρθ is ~0.02
     end
 end
