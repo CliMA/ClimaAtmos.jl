@@ -83,8 +83,16 @@ steps:
           slurm_ntasks: 128
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 150secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 75secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres"
         artifact_paths: "longrun_hs_rhoe_equil_highres/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 128
+
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution monin obukhov Float64"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme monin_obukhov --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 75secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_monin_obukhov_FLoat64 --FLOAT_TYPE Float64"
+        artifact_paths: "longrun_hs_rhoe_equil_highres_monin_obukhov_Float64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
