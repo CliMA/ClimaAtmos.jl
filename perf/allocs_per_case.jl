@@ -15,5 +15,6 @@ catch err
 end
 
 OrdinaryDiffEq.step!(integrator) # compile first
+Profile.clear()
 Profile.clear_malloc_data()
 OrdinaryDiffEq.step!(integrator)

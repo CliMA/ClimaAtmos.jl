@@ -376,3 +376,13 @@ function parsed_args_per_job_id(buildkite_yaml; trigger = "driver.jl")
     end
     return result
 end
+
+function non_default_command_line_flags_parsed_args(parsed_args)
+    (s, default_parsed_args) = parse_commandline()
+    s = ""
+    for k in keys(parsed_args)
+        default_parsed_args[k] == parsed_args[k] && continue
+        s *= "--$k $(parsed_args[k]) "
+    end
+    return rstrip(s)
+end
