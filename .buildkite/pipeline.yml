@@ -381,6 +381,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":rocket: flame graph: perf target (ρe_tot) ARS343"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_ARS343 --ode_algo ARS343"
+        artifact_paths: "flame_perf_target_rhoe_ARS343/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
 
