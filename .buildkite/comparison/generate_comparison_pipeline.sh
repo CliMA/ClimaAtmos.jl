@@ -4,7 +4,7 @@ set +x
 
 slurm_time="48:00:00" # max slurm time
 script=".buildkite/comparison/comparison_sphere_held_suarez.sh"
-low_res_process_counts=(1 2 3 6 24) 
+low_res_process_counts=(1 2 3 6 24)
 high_res_process_counts=(1 2 3 6 24 54 96 216)
 FT="Float64"
 resolutions=("low" "high")
@@ -19,7 +19,7 @@ fi
 # set up environment and agents
 cat << EOM > $file
 env:
-  JULIA_VERSION: "1.8.0"
+  JULIA_VERSION: "1.8.1"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.3"

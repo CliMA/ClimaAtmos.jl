@@ -1,5 +1,5 @@
 env:
-  JULIA_VERSION: "1.8.0"
+  JULIA_VERSION: "1.8.1"
   MPI_IMPL: "openmpi"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.2"
@@ -33,7 +33,7 @@ steps:
   - group: "Targeted resolution AMIP long runs"
 
     steps:
-    
+
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres"
         artifact_paths: "longrun_bw_rhoe_equil_highres/*"
@@ -41,7 +41,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
-      
+
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution zalesak"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --tracer_upwinding zalesak --moist equil --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak"
         artifact_paths: "longrun_bw_rhoe_equil_highres_zalesak/*"
@@ -49,7 +49,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 8
-      
+
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution ars343"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --moist equil --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_ars343"
         artifact_paths: "longrun_bw_rhoe_equil_highres_ars343/*"
@@ -97,7 +97,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-  
+
   - group: "Low resolution long runs"
 
     steps:
