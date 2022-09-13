@@ -218,6 +218,10 @@ function parse_commandline()
         help = "Apply a horizontal limiter to every tracer [`true` (default), `false`]"
         arg_type = Bool
         default = true
+        "--debugging_tc"
+        help = "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
