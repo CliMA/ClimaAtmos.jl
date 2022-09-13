@@ -1,5 +1,5 @@
 env:
-  JULIA_VERSION: "1.8.0"
+  JULIA_VERSION: "1.8.1"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.3"
@@ -67,7 +67,7 @@ steps:
 
     - label: ":computer: MPI Held-Suarez low resolution scaling test(ρe_tot) - (4) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 4 low enable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 4 low enable)"
       artifact_paths:
         - "sphere_held_suarez_low_res_rhoe_4/scaling_data_4_processes.jld2"
         - "sphere_held_suarez_low_res_rhoe_4/report.4.nsys-rep"
@@ -244,7 +244,7 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (32) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 32 high enable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 32 high enable)"
       artifact_paths:
         - "sphere_held_suarez_high_res_rhoe_32/scaling_data_32_processes.jld2"
       env:
@@ -260,7 +260,7 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (64) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 64 high disable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 64 high disable)"
       artifact_paths:
         - "sphere_held_suarez_high_res_rhoe_64/scaling_data_64_processes.jld2"
       env:
@@ -276,7 +276,7 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (128) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 128 high disable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 128 high disable)"
       artifact_paths:
         - "sphere_held_suarez_high_res_rhoe_128/scaling_data_128_processes.jld2"
       env:
@@ -292,7 +292,7 @@ steps:
 
     - label: ":computer: MPI Held-Suarez high resolution scaling test(ρe_tot) - (256) processes"
       command:
-        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 256 high disable)" 
+        - echo "$(bash .buildkite/scaling/sphere_held_suarez.sh 256 high disable)"
       artifact_paths:
         - "sphere_held_suarez_high_res_rhoe_256/scaling_data_256_processes.jld2"
       env:
