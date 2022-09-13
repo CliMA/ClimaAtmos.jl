@@ -2,7 +2,7 @@
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "0a11b9bf1347d3d45f3efcc8480135ec53abf698"
+project_hash = "b4b43bb7f281f866c10fabdf7c52c6bfe395f88b"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -244,9 +244,9 @@ version = "0.3.2"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "Rotations", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "88374064fe8b77d4dffd6fe18371b4c3a1343fde"
+git-tree-sha1 = "1db2de9a08d67e4495146f152899dcf14d98fd2a"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.11"
+version = "0.10.12"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
@@ -256,9 +256,9 @@ version = "0.2.4"
 
 [[deps.ClimaCoreTempestRemap]]
 deps = ["ClimaCore", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll", "Test"]
-git-tree-sha1 = "22041ea2aff742f29a324a7a855a9158c6307b56"
+git-tree-sha1 = "12713936cdc28a3442f61d92d782d5bd329ded7e"
 uuid = "d934ef94-cdd4-4710-83d6-720549644b70"
-version = "0.3.4"
+version = "0.3.5"
 
 [[deps.ClimaCoreVTK]]
 deps = ["ClimaCore", "WriteVTK"]
@@ -280,9 +280,9 @@ version = "0.1.10"
 
 [[deps.CloudMicrophysics]]
 deps = ["DocStringExtensions", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "94f59648aba35a011e94670efc9cb6b7c7bb28fb"
+git-tree-sha1 = "ecabb89e9035e2b53c450aa9df4d1c69c0118282"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.8.2"
+version = "0.9.0"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
@@ -510,9 +510,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "8579b5cdae93e55c0cff50fbb0c2d1220efd5beb"
+git-tree-sha1 = "ee407ce31ab2f1bacadc3bd987e96de17e00aed3"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.70"
+version = "0.25.71"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -1460,9 +1460,9 @@ version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
-git-tree-sha1 = "a7a7e1a88853564e551e4eba8650f8c38df79b37"
+git-tree-sha1 = "192aa02cc47f6566c7a1a8907dee76f6eb0a7c90"
 uuid = "eebad327-c553-4316-9ea0-9fa01ccd7688"
-version = "0.1.1"
+version = "0.2.1"
 
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
