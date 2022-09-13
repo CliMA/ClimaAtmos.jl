@@ -405,6 +405,7 @@ function save_restart_func(integrator)
 end
 
 function gc_func(integrator)
+    @info "Calling GC" "free mem (MB)"=Sys.free_memory()/2^20 "total mem (MB)"=Sys.total_memory()/2^20
     GC.gc()
     return nothing
 end
