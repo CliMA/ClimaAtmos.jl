@@ -68,7 +68,7 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 
 allocs_limit = Dict()
 allocs_limit["flame_perf_target_rhoe"] = 13675232
-allocs_limit["flame_perf_target_rhoe_threaded"] = 27219952
+allocs_limit["flame_perf_target_rhoe_threaded"] = 27249159
 allocs_limit["flame_perf_target_rhoe_callbacks"] = 24841304
 allocs_limit["flame_perf_target_rhoe_ARS343"] = 33318672
 
