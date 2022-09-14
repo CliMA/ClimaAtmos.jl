@@ -4,21 +4,6 @@ space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
 
 import ClimaCoreTempestRemap: def_space_coord
 
-function def_space_coord(
-    nc::NCDataset,
-    space::Spaces.ExtrudedFiniteDifferenceSpace{S};
-    type = "dgll",
-) where {S <: Spaces.Staggering}
-    hvar = def_space_coord(nc, space.horizontal_space; type = type)
-    vertical_topology =
-        space.vertical_topology isa
-        ClimaCore.Hypsography.TerrainWarpedIntervalTopology ?
-        space.vertical_topology.topology : space.vertical_topology
-    vvar =
-        def_space_coord(nc, Spaces.FiniteDifferenceSpace{S}(vertical_topology))
-    (hvar..., vvar...)
-end
-
 function process_name(s::AbstractString)
     # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
     s = replace(s, "components_data_" => "")
