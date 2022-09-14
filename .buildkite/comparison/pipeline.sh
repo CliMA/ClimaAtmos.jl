@@ -40,13 +40,13 @@ steps:
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
 
+  - wait
+
 EOM
 
 for res in ${resolutions[@]}; do
 
 cat << EOM
-  - wait
-
   - group: "ClimaAtmos $res-resolution tests"
     steps:
 
