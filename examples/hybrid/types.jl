@@ -363,12 +363,6 @@ function get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
     show_progress_bar = isinteractive()
 
-    if :ρe_tot in propertynames(Y.c) && enable_threading()
-        implicit_tendency! = implicit_tendency_special!
-    else
-        implicit_tendency! = implicit_tendency_generic!
-    end
-
     problem = if parsed_args["split_ode"]
         remaining_func =
             startswith(parsed_args["ode_algo"], "ODE.") ?
