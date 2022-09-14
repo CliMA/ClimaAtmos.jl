@@ -1,7 +1,6 @@
 import Logging
 import ForwardDiff
 import TerminalLoggers
-Logging.global_logger(TerminalLoggers.TerminalLogger())
 
 import UnPack
 import JSON
