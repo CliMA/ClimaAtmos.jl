@@ -67,13 +67,16 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target_rhoe"] = 13675232
+allocs_limit["flame_perf_target_rhoe"] = 19867936
 allocs_limit["flame_perf_target_rhoe_threaded"] = 27249159
-allocs_limit["flame_perf_target_rhoe_callbacks"] = 24841304
-allocs_limit["flame_perf_target_rhoe_ARS343"] = 33318672
+allocs_limit["flame_perf_target_rhoe_callbacks"] = 31034008
+allocs_limit["flame_perf_target_rhoe_ARS343"] = 61185840
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
+else
+    alloc_increase = allocs / allocs_limit[job_id]
+    @warn "Allocation increase (allocs/allocs_limit): $alloc_increase"
 end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
