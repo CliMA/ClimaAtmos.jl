@@ -302,12 +302,12 @@ function _implicit_tendency!(Yₜ, Y, p, t)
 end
 
 function remaining_tendency!(Yₜ, Y, p, t)
-    default_tends = p.default_remaining_tendencies
+    anelastic_dycore = p.anelastic_dycore
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        if !isnothing(default_tends)
-            default_tends.horizontal_advection_tendency!(Yₜ, Y, p, t)
-            default_tends.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+        if !anelastic_dycore
+            horizontal_advection_tendency!(Yₜ, Y, p, t)
+            explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "additional_tendency!" color = colorant"orange" begin
             additional_tendency!(Yₜ, Y, p, t)
@@ -326,11 +326,11 @@ end
 
 function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     (; Yₜ, limiters) = p
-    default_tends = p.default_remaining_tendencies
+    anelastic_dycore = p.anelastic_dycore
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        if !isnothing(default_tends)
-            default_tends.horizontal_advection_tendency!(Yₜ, Y, p, t)
+        if !anelastic_dycore
+            horizontal_advection_tendency!(Yₜ, Y, p, t)
             # Apply limiter
             if !isnothing(limiters)
                 @. Y⁺ += dtγ * Yₜ
@@ -343,7 +343,7 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
                 end
                 Yₜ .= zero(eltype(Yₜ))
             end
-            default_tends.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+            explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "additional_tendency! increment" color = colorant"orange" begin
             additional_tendency!(Yₜ, Y, p, t)
@@ -361,70 +361,45 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     return Y⁺
 end
 
-function horizontal_advection_tendency_special!(Yₜ, Y, p, t)
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
-    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    @nvtx "precomputed quantities" color = colorant"orange" begin
-        Fields.bycolumn(axes(Y.c)) do colidx
-            @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
-            @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
-            thermo_state!(
-                ᶜts[colidx],
-                Y.c[colidx],
-                params,
-                ᶜinterp,
-                ᶜK[colidx],
-                Y.f.w[colidx],
-            )
-            thermo_params = CAP.thermodynamics_params(params)
-            @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
-            nothing
-        end
+function _precomputed_quantities!(Yₜ, Y, p, t)
+    Fields.bycolumn(axes(Y.c)) do colidx
+        ᶜuₕ = Y.c.uₕ
+        ᶠw = Y.f.w
+        (; ᶜuvw, ᶜK, ᶜts, ᶜp, params) = p
+
+        @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
+        @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
+        thermo_state!(
+            ᶜts[colidx],
+            Y.c[colidx],
+            params,
+            ᶜinterp,
+            ᶜK[colidx],
+            Y.f.w[colidx],
+        )
+        thermo_params = CAP.thermodynamics_params(params)
+        @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+        nothing
     end
-    @nvtx "horizontal" color = colorant"orange" begin
-        # Mass conservation
-        @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
-
-        # Energy conservation
-        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
-
-        # Momentum conservation
-        if point_type <: Geometry.Abstract3DPoint
-            @. ᶜω³ = curlₕ(ᶜuₕ)
-            @. ᶠω¹² = curlₕ(ᶠw)
-            @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
-        elseif point_type <: Geometry.Abstract2DPoint
-            ᶜω³ .= Ref(zero(eltype(ᶜω³)))
-            @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
-            @. Yₜ.c.uₕ -=
-                Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
-        end
-
-        # Tracer conservation
-        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            ᶜρc = getproperty(Y.c, ᶜρc_name)
-            ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-            @. ᶜρcₜ -= divₕ(ᶜρc * ᶜuvw)
-        end
-    end
+    return nothing
 end
 
-function horizontal_advection_tendency_generic!(Yₜ, Y, p, t)
+function horizontal_advection_tendency!(Yₜ, Y, p, t)
+    @nvtx "precomputed quantities" color = colorant"orange" begin
+        _precomputed_quantities!(Yₜ, Y, p, t)
+    end
+    @nvtx "horizontal" color = colorant"orange" begin
+        _horizontal_advection_tendency!(Yₜ, Y, p, t)
+    end
+    return nothing
+end
+
+function _horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    thermo_params = CAP.thermodynamics_params(params)
-
-    # Precomputed quantities
-    @. ᶜuvw = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
-    @. ᶜK = norm_sqr(ᶜuvw) / 2
-    thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     # Mass conservation
     @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
@@ -464,86 +439,60 @@ function horizontal_advection_tendency_generic!(Yₜ, Y, p, t)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
         @. ᶜρcₜ -= divₕ(ᶜρc * ᶜuvw)
     end
+    return nothing
 end
 
-function explicit_vertical_advection_tendency_special!(Yₜ, Y, p, t)
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     @nvtx "vertical" color = colorant"orange" begin
-        Fields.bycolumn(axes(Y.c)) do colidx
+        _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    end
+    return nothing
+end
+function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    Fields.bycolumn(axes(Y.c)) do colidx
+        ᶜρ = Y.c.ρ
+        ᶜuₕ = Y.c.uₕ
+        ᶠw = Y.f.w
+        (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+        # Mass conservation
+        @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
 
-            # Mass conservation
-            @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
-
-            # Energy conservation
+        # Energy conservation
+        if :ρθ in propertynames(Y.c)
+            @. Yₜ.c.ρθ[colidx] -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ[colidx] * ᶜuₕ[colidx]))
+        elseif :ρe_tot in propertynames(Y.c)
             @. Yₜ.c.ρe_tot[colidx] -=
                 ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
-
-            # Momentum conservation
-            @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
-            @. ᶠu¹²[colidx] = Geometry.project(
-                Geometry.Contravariant12Axis(),
-                ᶠinterp(ᶜuvw[colidx]),
-            )
-            @. ᶠu³[colidx] = Geometry.project(
-                Geometry.Contravariant3Axis(),
-                C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
-            )
-            @. Yₜ.c.uₕ[colidx] -=
-                ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
-                (ᶜf[colidx] + ᶜω³[colidx]) ×
-                (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
-            @. Yₜ.f.w[colidx] -=
-                ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
-
-            # Tracer conservation
-            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-                ᶜρc = getproperty(Y.c, ᶜρc_name)
-                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
-            end
+        elseif :ρe_int in propertynames(Y.c)
+            @. Yₜ.c.ρe_int[colidx] -=
+                ᶜdivᵥ(ᶠinterp((Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
         end
+
+        # Momentum conservation
+        @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
+        @. ᶠu¹²[colidx] = Geometry.project(
+            Geometry.Contravariant12Axis(),
+            ᶠinterp(ᶜuvw[colidx]),
+        )
+        @. ᶠu³[colidx] = Geometry.project(
+            Geometry.Contravariant3Axis(),
+            C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
+        )
+        @. Yₜ.c.uₕ[colidx] -=
+            ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+            (ᶜf[colidx] + ᶜω³[colidx]) ×
+            (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
+        @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
+
+        # Tracer conservation
+        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+            ᶜρc = getproperty(Y.c, ᶜρc_name)
+            ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+            @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
+        end
+        nothing
     end
-end
-
-function explicit_vertical_advection_tendency_generic!(Yₜ, Y, p, t)
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
-
-    # Mass conservation
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(ᶜρ * ᶜuₕ))
-
-    # Energy conservation
-    if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ * ᶜuₕ))
-    elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot + ᶜp) * ᶜuₕ))
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠinterp((Y.c.ρe_int + ᶜp) * ᶜuₕ))
-    end
-
-    # Momentum conservation
-    @. ᶠω¹² += ᶠcurlᵥ(ᶜuₕ)
-    @. ᶠu¹² = Geometry.project(Geometry.Contravariant12Axis(), ᶠinterp(ᶜuvw))
-    @. ᶠu³ = Geometry.project(
-        Geometry.Contravariant3Axis(),
-        C123(ᶠinterp(ᶜuₕ)) + C123(ᶠw),
-    )
-    @. Yₜ.c.uₕ -=
-        ᶜinterp(ᶠω¹² × ᶠu³) +
-        (ᶜf + ᶜω³) × (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw))
-    @. Yₜ.f.w -= ᶠω¹² × ᶠu¹² + ᶠgradᵥ(ᶜK)
-
-    # Tracer conservation
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
-        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ -= ᶜdivᵥ(ᶠinterp(ᶜρc * ᶜuₕ))
-    end
+    return nothing
 end
 
 # Allow one() to be called on vectors.

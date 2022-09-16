@@ -101,21 +101,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     (; microphysics_model, forcing_type, radiation_model, turbconv_model) =
         model_spec
 
-    default_remaining_tendencies = if model_spec.anelastic_dycore
-        nothing
-    else
-        if :ρe_tot in propertynames(Y.c) && enable_threading()
-            (;
-                horizontal_advection_tendency! = horizontal_advection_tendency_special!,
-                explicit_vertical_advection_tendency! = explicit_vertical_advection_tendency_special!,
-            )
-        else
-            (;
-                horizontal_advection_tendency! = horizontal_advection_tendency_generic!,
-                explicit_vertical_advection_tendency! = explicit_vertical_advection_tendency_generic!,
-            )
-        end
-    end
+    anelastic_dycore = model_spec.anelastic_dycore
 
     return merge(
         hyperdiffusion_cache(
@@ -172,7 +158,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             )
         ),
         (; Δt = dt),
-        (; default_remaining_tendencies),
+        (; anelastic_dycore),
         !isnothing(turbconv_model) ?
         (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params, parsed_args)) :
         NamedTuple(),
