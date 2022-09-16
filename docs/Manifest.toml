@@ -179,9 +179,9 @@ version = "0.3.0"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "Rotations", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "1db2de9a08d67e4495146f152899dcf14d98fd2a"
+git-tree-sha1 = "e00b0651585a22d9cd8ce223639a3cf9c7d289d4"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.12"
+version = "0.10.13"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
@@ -892,10 +892,10 @@ uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
 [[deps.NonlinearSolve]]
-deps = ["ArrayInterfaceCore", "FiniteDiff", "ForwardDiff", "LinearAlgebra", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "StaticArrays", "UnPack"]
-git-tree-sha1 = "12ea26dc2d8d8f6773bccfe7e616b129b9705380"
+deps = ["ArrayInterfaceCore", "FiniteDiff", "ForwardDiff", "IterativeSolvers", "LinearAlgebra", "RecursiveArrayTools", "RecursiveFactorization", "Reexport", "SciMLBase", "Setfield", "StaticArrays", "UnPack"]
+git-tree-sha1 = "a754a21521c0ab48d37f44bbac1eefd1387bdcfc"
 uuid = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
-version = "0.3.23"
+version = "0.3.22"
 
 [[deps.OffsetArrays]]
 deps = ["Adapt"]
@@ -1177,9 +1177,9 @@ version = "0.6.35"
 
 [[deps.SciMLBase]]
 deps = ["ArrayInterfaceCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "Preferences", "RecipesBase", "RecursiveArrayTools", "StaticArraysCore", "Statistics", "Tables"]
-git-tree-sha1 = "8c7acbc1a974db5f533b59ab74b69042fa05b002"
+git-tree-sha1 = "b04da5c714e0eb117c508055dc2f3d9b4f46a45e"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.57.0"
+version = "1.57.1"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1326,9 +1326,9 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits", "Test"]
-git-tree-sha1 = "5ce79ce186cc678bbb5c5681ca3379d1ddae11a1"
+git-tree-sha1 = "4d5536136ca85fe9931d6e8920c138bb9fcc6532"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
