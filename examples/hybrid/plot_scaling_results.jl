@@ -30,7 +30,7 @@ I, FT = Int, Float64
 nprocs_clima_atmos = I[]
 walltime_clima_atmos = FT[]
 
-for foldername in readdir(output_dir)
+for foldername in filter(isdir, readdir(output_dir))
     if occursin(job_id, foldername) && !occursin("comparison", foldername)
         nprocs_string = split(foldername, "_")[end]
         dict = load(
