@@ -86,13 +86,13 @@ struct Simulation1d{
 end
 
 function open_files(sim::Simulation1d)
-    for inds in TC.iterate_columns(sim.prog.cent)
-        open_files(sim.Stats[inds...])
+    Fields.bycolumn(axes(sim.prog.cent)) do colidx
+        open_files(sim.Stats[colidx])
     end
 end
 function close_files(sim::Simulation1d)
-    for inds in TC.iterate_columns(sim.prog.cent)
-        close_files(sim.Stats[inds...])
+    Fields.bycolumn(axes(sim.prog.cent)) do colidx
+        close_files(sim.Stats[colidx])
     end
 end
 
@@ -185,20 +185,23 @@ function Simulation1d(namelist)
     frequency = namelist["stats_io"]["frequency"]
     nc_filename, outpath = nc_fileinfo(namelist)
     nc_filename_suffix = if namelist["config"] == "column"
-        (fn, inds) -> fn
+        (fn, colidx) -> fn
     elseif namelist["config"] == "sphere"
-        (fn, inds) -> first(split(fn, ".nc")) * "_col=$(inds).nc"
+        (fn, colidx) -> first(split(fn, ".nc")) * "_col=$(colidx).nc"
     end
 
     Stats = if skip_io
         nothing
     else
-        map(TC.iterate_columns(prog.cent)) do inds
-            col_state = TC.column_prog_aux(prog, aux, inds...)
+        colidx_type = TC.column_idx_type(axes(prog.cent))
+        stats = Dict{colidx_type, NetCDFIO_Stats{FT}}()
+        Fields.bycolumn(axes(prog.cent)) do colidx
+            col_state = TC.column_prog_aux(prog, aux, colidx)
             grid = TC.Grid(col_state)
             ncfn = nc_filename_suffix(nc_filename, inds)
-            NetCDFIO_Stats(ncfn, frequency, grid)
+            stats[colidx] = NetCDFIO_Stats(ncfn, frequency, grid)
         end
+        stats
     end
     casename = namelist["meta"]["casename"]
     open(joinpath(outpath, "namelist_$casename.in"), "w") do io
@@ -302,15 +305,15 @@ function initialize(sim::Simulation1d)
     ts_list = vcat(ts_gm, ts_edmf)
 
     # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
-    for inds in TC.iterate_columns(prog.cent)
-        state = TC.column_prog_aux(prog, aux, inds...)
-        diagnostics_col = TC.column_diagnostics(diagnostics, inds...)
+    Fields.bycolumn(axes(prog.cent)) do colidx
+        state = TC.column_prog_aux(prog, aux, colidx)
+        diagnostics_col = TC.column_diagnostics(diagnostics, colidx)
         grid = TC.Grid(state)
         FT = TC.float_type(state)
         t = FT(0)
         compute_ref_state!(state, grid, param_set; ts_g = surf_ref_state)
         if !skip_io
-            stats = Stats[inds...]
+            stats = Stats[colidx]
             NC.Dataset(stats.nc_filename, "a") do ds
                 group = "reference"
                 add_write_field(
@@ -371,7 +374,7 @@ function initialize(sim::Simulation1d)
         )
         initialize_edmf(edmf, grid, state, surf_params, param_set, t, case)
         if !skip_io
-            stats = Stats[inds...]
+            stats = Stats[colidx]
             initialize_io(
                 stats.nc_filename,
                 eltype(grid),

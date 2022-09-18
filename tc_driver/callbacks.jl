@@ -2,7 +2,7 @@ function condition_io(u, t, integrator)
     UnPack.@unpack TS, Stats = integrator.p
     TS.dt_io += TS.dt
     io_flag = false
-    if TS.dt_io > Stats[1].frequency
+    if TS.dt_io > Stats[Fields.ColumnIndex((1, 1), 1)].frequency
         TS.dt_io = 0
         io_flag = true
     end
@@ -26,17 +26,17 @@ function affect_io!(integrator)
     t = integrator.t
     prog = integrator.u
 
-    for inds in TC.iterate_columns(prog.cent)
-        stats = Stats[inds...]
+    Fields.bycolumn(axes(prog.cent)) do colidx
+        stats = Stats[colidx]
         # TODO: remove `vars` hack that avoids
         # https://github.com/Alexander-Barth/NCDatasets.jl/issues/135
         # opening/closing files every step should be okay. #removeVarsHack
         # TurbulenceConvection.io(sim) # #removeVarsHack
         write_simulation_time(stats, t) # #removeVarsHack
 
-        state = TC.column_prog_aux(prog, aux, inds...)
+        state = TC.column_prog_aux(prog, aux, colidx)
         grid = TC.Grid(state)
-        diag_col = TC.column_diagnostics(diagnostics, inds...)
+        diag_col = TC.column_diagnostics(diagnostics, colidx)
 
         # TODO: is this the best location to call diagnostics?
         compute_diagnostics!(
@@ -170,8 +170,8 @@ function dt_max!(integrator)
     prog = integrator.u
 
     dt_max = TS.dt_max # initialize dt_max
-    for inds in TC.iterate_columns(prog.cent)
-        state = TC.column_prog_aux(prog, aux, inds...)
+    Fields.bycolumn(axes(prog.cent)) do colidx
+        state = TC.column_prog_aux(prog, aux, colidx)
         dt_max = compute_dt_max(state, edmf, dt_max, TS.cfl_limit)
     end
     to_float(f) = f isa ForwardDiff.Dual ? ForwardDiff.value(f) : f
@@ -184,8 +184,8 @@ function monitor_cfl!(integrator)
     UnPack.@unpack edmf, aux, TS = integrator.p
     prog = integrator.u
 
-    for inds in TC.iterate_columns(prog.cent)
-        state = TC.column_prog_aux(prog, aux, inds...)
+    Fields.bycolumn(axes(prog.cent)) do colidx
+        state = TC.column_prog_aux(prog, aux, colidx)
         grid = TC.Grid(state)
         prog_gm = TC.center_prog_grid_mean(state)
         Δz = TC.get_Δz(prog_gm.ρ)

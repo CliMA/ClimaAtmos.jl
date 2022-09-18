@@ -136,8 +136,8 @@ function turb_conv_affect_filter!(integrator)
     Y = integrator.u
     tc_params = CAP.turbconv_params(param_set)
 
-    for inds in TC.iterate_columns(Y.c)
-        state = TCU.tc_column_state(Y, aux, nothing, inds...)
+    Fields.bycolumn(axes(Y.c)) do colidx
+        state = TCU.tc_column_state(Y, aux, nothing, colidx)
         grid = TC.Grid(state)
         surf = TCU.get_surface(surf_params, grid, state, t, tc_params)
         TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
