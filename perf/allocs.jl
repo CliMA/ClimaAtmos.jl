@@ -1,5 +1,6 @@
 # Track some important dependencies:
 example_dir = joinpath(dirname(@__DIR__), "examples")
+include(joinpath(example_dir, "hybrid", "cli_options.jl"));
 
 import ClimaCore
 import SciMLBase
@@ -24,9 +25,16 @@ dirs_to_monitor = String.(dirs_to_monitor)
 
 #! format: off
 
+dict = parsed_args_per_job_id(; trigger = "benchmark.jl")
+for k in keys(dict)
+    dict[k]["job_id"] = "allocs_"*dict[k]["job_id"]
+
+    # Lower resolution, since allocation tracking is expensive
+    dict[k]["h_elem"] = 6
+    dict[k]["z_elem"] = 18
+end
 cli_options = [
-    ("--job_id alloc_sphere_baroclinic_wave_rhoe"),
-    ("--vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M"),
+    non_default_command_line_flags_parsed_args(dict["perf_target_unthreaded"]),
 ]
 #! format: on
 
@@ -35,6 +43,7 @@ import ReportMetrics
 for clio in cli_options
     job_id = first(split(last(split(clio, "--job_id ")), " "))
     clio_in = split(clio, " ")
+    @info "CL options: `$clio_in`"
     ReportMetrics.report_allocs(;
         job_name = string(job_id),
         run_cmd = `$(Base.julia_cmd()) --project=perf/ --track-allocation=all perf/allocs_per_case.jl $clio_in`,
