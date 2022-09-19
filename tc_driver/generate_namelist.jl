@@ -26,7 +26,7 @@ module NameList
 #NB: except for Bomex and life_cycle_Tan2018 cases, the parameters listed have not been thoroughly tuned/tested
 # and should be regarded as placeholders only. Optimal parameters may also depend on namelist options, such as
 # entrainment/detrainment rate formulation, diagnostic vs. prognostic updrafts, and vertical resolution
-export default_namelist
+export default_namelist, namelist_to_toml_file
 
 using ArgParse
 
@@ -38,6 +38,7 @@ include(joinpath(@__DIR__, "artifact_funcs.jl"))
 import Random
 
 import JSON
+import TOML
 
 function parse_commandline()
     s = ArgParseSettings(; description = "namelist Generator")
@@ -625,6 +626,89 @@ function write_file(namelist, root::String = ".")
     end
 
     return
+end
+
+
+"""
+Flattens a namelist Dict, prepending keys of formerly nested Dictionaries
+"""
+function flatten_namelist!(namelist::Dict)
+    for (key, value) in namelist
+        if value isa Dict
+            temp_dict = flatten_namelist(value)
+            for (newkey, newvalue) in temp_dict
+                namelist[string("$key", "-", "$newkey")] = newvalue
+            end
+            delete!(namelist, key)
+        else
+            namelist[key] = value
+        end
+    end
+end
+
+"""
+Helper function for flatten_namelist!, doesn't flatten in-place
+"""
+function flatten_namelist(namelist::Dict, prependkey = "")
+    out_namelist = Dict()
+    for (key, value) in namelist
+        fullkey = prependkey == "" ? key : string("$prependkey", "-", "$key")
+        if typeof(value) <: Dict
+            temp_dict = flatten_namelist(value, fullkey)
+            out_namelist = merge(out_namelist, temp_dict)
+        else
+            out_namelist[fullkey] = value
+        end
+    end
+    return out_namelist
+end
+
+flatten_namelist(obj, prepend) = Dict(prepend => obj)
+
+"""
+Takes a namelist Dict and parses it into a flat TOML file.
+"""
+function namelist_to_toml_file(namelist::Dict, fname::String)
+    open(fname, "w") do io
+        TOML.print(io, namelist_to_toml_dict(namelist))
+    end
+end
+
+function namelist_to_toml_dict(namelist::Dict)
+    flatten_namelist!(namelist)
+    toml_dict = Dict()
+    for (key, val) in namelist
+        (type, value) = parse_namelist_entry(key, val)
+        alias = last(split(key, "-"))
+        toml_dict[key] =
+            Dict("alias" => "$alias", "value" => value, "type" => "$type")
+    end
+    return toml_dict
+end
+
+"""
+Helper functions that parse namelist entries of different types
+for namelist_to_toml functions
+"""
+function parse_namelist_entry(key::String, value::Tuple)
+    # Changes type from tuple to array{float}
+    return ("array{float}", [i for i in value])
+end
+
+function parse_namelist_entry(key::String, value::AbstractArray)
+    return ("array{float}", value)
+end
+
+function parse_namelist_entry(key::String, value::String)
+    return ("string", "$value")
+end
+
+function parse_namelist_entry(key::String, value::Bool)
+    return ("bool", value)
+end
+
+function parse_namelist_entry(key::String, value::Real)
+    return ("float", value)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
