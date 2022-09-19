@@ -293,7 +293,7 @@ if !simulation.is_distributed && parsed_args["post_process"]
             FT(90),
             FT(180),
         )
-    elseif is_column_radiative_equilibrium(parsed_args)
+    elseif is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir)
     elseif is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)

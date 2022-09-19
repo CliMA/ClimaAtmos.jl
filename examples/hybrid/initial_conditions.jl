@@ -10,7 +10,8 @@ function init_state(
     params,
     model_spec,
 )
-    (; energy_form, moisture_model, turbconv_model) = model_spec
+    (; energy_form, perturb_initstate, moisture_model, turbconv_model) =
+        model_spec
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     c =
@@ -18,6 +19,7 @@ function init_state(
             ᶜlocal_geometry,
             params,
             energy_form,
+            perturb_initstate,
             moisture_model,
             turbconv_model,
         )
@@ -41,6 +43,7 @@ function center_initial_condition_column(
     local_geometry,
     params,
     energy_form,
+    perturb_initstate,
     moisture_model,
     turbconv_model,
 )
@@ -87,9 +90,9 @@ function center_initial_condition_baroclinic_wave(
     local_geometry,
     params,
     energy_form,
+    perturb_initstate,
     moisture_model,
     turbconv_model;
-    is_balanced_flow = false,
 )
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -147,7 +150,7 @@ function center_initial_condition_baroclinic_wave(
     U = grav * k / R * τ_int_2 * T_v * (cosd(ϕ)^(k - 1) - cosd(ϕ)^(k + 1))
     u = -Ω * R * cosd(ϕ) + sqrt((Ω * R * cosd(ϕ))^2 + R * cosd(ϕ) * U)
     v = FT(0)
-    if !is_balanced_flow
+    if perturb_initstate
         F_z = (1 - 3 * (z / z_t)^2 + 2 * (z / z_t)^3) * (z ≤ z_t)
         r = R * acos(sind(ϕ_c) * sind(ϕ) + cosd(ϕ_c) * cosd(ϕ) * cosd(λ - λ_c))
         c3 = cos(π * r / 2 / d_0)^3
@@ -228,6 +231,7 @@ function center_initial_condition_sphere(
     local_geometry,
     params,
     energy_form,
+    perturb_initstate,
     moisture_model,
     turbconv_model;
 )
@@ -248,7 +252,9 @@ function center_initial_condition_sphere(
         FT(8e3),
     )
     T, p = temp_profile(thermo_params, z)
-    T += rand(FT) * FT(0.1) * (z < 5000)
+    if perturb_initstate
+        T += rand(FT) * FT(0.1) * (z < 5000)
+    end
 
     # Initial velocity
     u = FT(0)

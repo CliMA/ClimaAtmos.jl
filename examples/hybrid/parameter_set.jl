@@ -7,7 +7,7 @@ function create_parameter_set(::Type{FT}, parsed_args, namelist) where {FT}
     dt = FT(time_to_seconds(parsed_args["dt"]))
     return if is_column_edmf(parsed_args)
         tc_parameter_set(toml_dict, dt)
-    elseif is_column_radiative_equilibrium(parsed_args)
+    elseif is_column_without_edmf(parsed_args)
         overrides = (; τ_precip = dt)
         create_climaatmos_parameter_set(toml_dict, overrides)
     else

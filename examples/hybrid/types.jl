@@ -111,6 +111,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
     model_spec = (;
         moisture_model = moisture_model(parsed_args),
         energy_form = energy_form(parsed_args),
+        perturb_initstate = parsed_args["perturb_initstate"],
         idealized_h2o,
         radiation_model = radiation_model(parsed_args),
         microphysics_model = microphysics_model(parsed_args),
@@ -211,6 +212,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             )
         end
     elseif parsed_args["config"] == "column" # single column
+        @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
         quad = Spaces.Quadratures.GL{1}()

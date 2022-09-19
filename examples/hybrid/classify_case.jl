@@ -2,13 +2,14 @@ is_baro_wave(parsed_args) = all((
     parsed_args["config"] == "sphere",
     parsed_args["forcing"] == nothing,
     parsed_args["rad"] == nothing,
+    parsed_args["perturb_initstate"] == true,
 ))
 
-is_column_radiative_equilibrium(parsed_args) = all((
+is_column_without_edmf(parsed_args) = all((
     parsed_args["config"] == "column",
     parsed_args["turbconv"] == nothing,
     parsed_args["forcing"] == nothing,
-    parsed_args["rad"] != nothing,
+    parsed_args["turbconv"] != "edmf",
 ))
 
 is_column_edmf(parsed_args) = all((
