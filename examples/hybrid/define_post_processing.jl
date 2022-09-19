@@ -111,6 +111,16 @@ function postprocessing(sol, output_dir, fps)
     end
     Plots.mp4(anim, joinpath(output_dir, "v.mp4"), fps = fps)
 
+    anim = Plots.@animate for Y in sol.u
+        ᶠw = Geometry.WVector.(Y.f.w).components.data.:1
+        Plots.plot(
+            ᶠw,
+            level = ClimaCore.Utilities.PlusHalf(3),
+            clim = (-0.02, 0.02),
+        )
+    end
+    Plots.mp4(anim, joinpath(output_dir, "w.mp4"), fps = fps)
+
     prop_chains = Fields.property_chains(sol.u[1])
     if any(pc -> pc == (:c, :ρq_tot), prop_chains)
         anim = Plots.@animate for Y in sol.u
@@ -981,4 +991,17 @@ function custom_postprocessing(sol, output_dir)
         )
     end
     Plots.mp4(anim, joinpath(output_dir, "T.mp4"), fps = 10)
+
+    anim = @animate for Y in sol.u
+        w_phy = Geometry.WVector.(Y.f.w).components.data.:1
+        plot(
+            vec(w_phy),
+            vec(Fields.coordinate_field(Y.f).z ./ 1000);
+            xlabel = "w [m/s]",
+            ylabel = "z [km]",
+            xlims = (-0.02, 0.02),
+            legend = false,
+        )
+    end
+    Plots.mp4(anim, joinpath(output_dir, "w.mp4"), fps = 10)
 end
