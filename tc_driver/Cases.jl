@@ -76,6 +76,8 @@ struct GABLS <: AbstractCaseType end
 
 struct LES_driven_SCM <: AbstractCaseType end
 
+struct GCM <: AbstractCaseType end
+
 #####
 ##### Radiation and forcing types
 #####
@@ -163,6 +165,7 @@ get_case(::Val{:DYCOMS_RF01}) = DYCOMS_RF01()
 get_case(::Val{:DYCOMS_RF02}) = DYCOMS_RF02()
 get_case(::Val{:GABLS}) = GABLS()
 get_case(::Val{:LES_driven_SCM}) = LES_driven_SCM()
+get_case(::Val{:GCM}) = GCM()
 
 get_case_name(case_type::AbstractCaseType) = string(case_type)
 
@@ -177,6 +180,7 @@ get_forcing_type(::DYCOMS_RF01) = ForcingDYCOMS_RF01
 get_forcing_type(::DYCOMS_RF02) = ForcingDYCOMS_RF01
 get_forcing_type(::LES_driven_SCM) = ForcingLES
 get_forcing_type(::TRMM_LBA) = ForcingNone
+get_forcing_type(::GCM) = ForcingNone
 
 get_radiation_type(::AbstractCaseType) = RadiationNone # default
 get_radiation_type(::DYCOMS_RF01) = RadiationDYCOMS_RF01
@@ -1575,5 +1579,52 @@ initialize_radiation(
     param_set;
     LESDat,
 ) = initialize(radiation, grid, state, LESDat)
+
+#####
+##### GCM
+#####
+
+function surface_ref_state(::GCM, param_set::APS, namelist)
+    thermo_params = TCP.thermodynamics_params(param_set)
+    FT = eltype(param_set)
+    # TODO - get from GCM
+    Pg::FT = 101300.0  #Pressure at ground,
+    Tg::FT = 299.0  #Temperature at ground,
+    qtg::FT = 0.0
+    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
+end
+function initialize_profiles(::GCM, grid::Grid, param_set, state; kwargs...)
+    aux_gm = TC.center_aux_grid_mean(state)
+    prog_gm = TC.center_prog_grid_mean(state)
+
+    FT = TC.float_type(state)
+
+    # Fill in the grid mean values
+    prog_gm_uₕ = TC.grid_mean_uₕ(state)
+    #TODO - don't overwrite
+    TC.set_z!(prog_gm_uₕ, 0.0, 0.0)
+    @inbounds for k in real_center_indices(grid)
+        z = grid.zc[k].z
+        #Set wind velocity profile
+        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
+        aux_gm.q_tot[k] = prof_q_tot(z)
+        aux_gm.tke[k] = APL.GABLS_tke(FT)(z)
+        aux_gm.Hvar[k] = aux_gm.tke[k]
+        aux_gm.p[k] = prof_p(z)
+    end
+end
+function surface_params(case::GCM, surf_ref_state, param_set; kwargs...)
+    FT = eltype(surf_ref_state)
+    #TODO - get from GCM
+    Tsurface = t -> 265 - (FT(0.25) / 3600) * t
+    qsurface::FT = 0.0
+    zrough::FT = 0.1
+
+    kwargs = (; Tsurface, qsurface, zrough, kwargs...)
+    return TC.MoninObukhovSurface(FT; kwargs...)
+end
+function initialize_forcing(::GCM, forcing, grid::Grid, state, param_set)
+    return nothing
+end
 
 end # module Cases

@@ -54,6 +54,11 @@ function get_edmf_cache(Y, namelist, param_set, parsed_args)
         default = "None",
         valid_options = ["None", "cutoff", "clima_1m"],
     )
+
+    print("\n")
+    print(parsed_args)
+    print("\n")
+
     # TODO: move to grid mean model
     precip_model = if precip_name == "None"
         TC.NoPrecipitation()

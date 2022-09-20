@@ -326,6 +326,8 @@ function default_namelist(
         namelist = GABLS(namelist_defaults)
     elseif case_name == "LES_driven_SCM"
         namelist = LES_driven_SCM(namelist_defaults)
+    elseif case_name == "GCM"
+        namelist = GCM(namelist_defaults)
     else
         error("Not a valid case name")
     end
@@ -333,6 +335,18 @@ function default_namelist(
     if write
         write_file(namelist, root)
     end
+    return namelist
+end
+function GCM(namelist_defaults)
+
+    namelist = deepcopy(namelist_defaults)
+    namelist["meta"]["casename"] = "GCM"
+
+    #TODO- make sure that dz, dt etc are not overwritten here by our namelist
+
+    namelist["meta"]["simname"] = "GCM"
+    namelist["meta"]["casename"] = "GCM"
+
     return namelist
 end
 function Soares(namelist_defaults)

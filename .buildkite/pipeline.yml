@@ -262,6 +262,10 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 200secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
 
+      - label: ":computer: held suarez (ρe_tot) equilmoist with edmf"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff false --surface_scheme monin_obukhov --forcing held_suarez --job_id sphere_held_suarez_rhoe_equilmoist_mo_edmf --moist equil --regression_test true --dt 1secs --t_end 2hours --FLOAT_TYPE Float64 --turbconv edmf --turbconv_case GCM --config sphere --microphy 0M --z_stretch false --dt_save_to_sol 5mins --dt_save_to_disk 1hours"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo_edmf_edmf/*"
+
       # The following tests used to work with upwinding on both energy and tracers, but they fail with upwinding on only tracers. They will be re-enabled after updates to topography.
 
       # - label: ":computer: held suarez (ρe_tot) topography"

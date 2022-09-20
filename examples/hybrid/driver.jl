@@ -175,7 +175,10 @@ function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
     hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t)
     vert_diff && vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
-    microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
+    if microphy_0M && !has_turbconv
+        # turbconv model applies the microphysics tendencies to the grid mean
+        zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
+    end
     rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t)
     has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t)
 end
