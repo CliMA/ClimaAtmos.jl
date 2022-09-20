@@ -156,7 +156,7 @@ function save_to_disk_func(integrator)
     (; output_dir) = p.simulation
     Y = u
 
-    if :ᶜS_ρq_tot in propertynames(Y.c)
+    if :ᶜS_ρq_tot in propertynames(p)
         (; ᶜts, ᶜp, ᶜS_ρq_tot, ᶜ3d_rain, ᶜ3d_snow, params, ᶜK) = p
     else
         (; ᶜts, ᶜp, params, ᶜK) = p
@@ -205,7 +205,7 @@ function save_to_disk_func(integrator)
             relative_humidity = ᶜRH,
         )
         # precipitation
-        if :ᶜS_ρq_tot in propertynames(Y.c)
+        if :ᶜS_ρq_tot in propertynames(p)
 
             @. ᶜS_ρq_tot =
                 Y.c.ρ * CM.Microphysics0M.remove_precipitation(
@@ -222,8 +222,8 @@ function save_to_disk_func(integrator)
             col_integrated_snow =
                 vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
 
-            moist_diagnostics = (
-                moist_diagnostics...,
+            moist_diagnostic = (
+                moist_diagnostic...,
                 precipitation_removal = ᶜS_ρq_tot,
                 column_integrated_rain = col_integrated_rain,
                 column_integrated_snow = col_integrated_snow,
