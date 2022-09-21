@@ -405,7 +405,17 @@ function save_restart_func(integrator)
 end
 
 function gc_func(integrator)
-    @info "Calling GC" "free mem (MB)"=Sys.free_memory()/2^20 "total mem (MB)"=Sys.total_memory()/2^20
-    GC.gc()
+    free_mem = Sys.free_memory()
+    total_mem = Sys.total_memory()
+    p_free_mem = free_mem / total_mem
+    min_p_free_mem =
+        ClimaCommsMPI.MPI.Allreduce(p_free_mem, min, comms_ctx.mpicomm)
+    do_gc = min_p_free_mem < 0.2
+    @info "GC check" "free mem (MB)" = free_mem / 2^20 "total mem (MB)" =
+        total_mem / 2^20 "Minimum free memory (%)" = min_p_free_mem * 100 "Calling GC" =
+        do_gc
+    if do_gc
+        GC.gc()
+    end
     return nothing
 end
