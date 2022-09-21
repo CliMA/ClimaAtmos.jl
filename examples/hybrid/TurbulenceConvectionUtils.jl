@@ -79,13 +79,13 @@ function get_edmf_cache(Y, namelist, param_set, parsed_args)
     )
 end
 
-function tc_column_state(prog, aux, tendencies, inds...)
-    prog_cent_column = CC.column(prog.c, inds...)
-    prog_face_column = CC.column(prog.f, inds...)
-    aux_cent_column = CC.column(aux.cent, inds...)
-    aux_face_column = CC.column(aux.face, inds...)
-    tends_cent_column = CC.column(tendencies.c, inds...)
-    tends_face_column = CC.column(tendencies.f, inds...)
+function tc_column_state(prog, aux, tendencies, colidx)
+    prog_cent_column = CC.column(prog.c, colidx)
+    prog_face_column = CC.column(prog.f, colidx)
+    aux_cent_column = CC.column(aux.cent, colidx)
+    aux_face_column = CC.column(aux.face, colidx)
+    tends_cent_column = CC.column(tendencies.c, colidx)
+    tends_face_column = CC.column(tendencies.f, colidx)
     prog_column =
         CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
     aux_column =
@@ -98,11 +98,11 @@ function tc_column_state(prog, aux, tendencies, inds...)
     return TC.State(prog_column, aux_column, tends_column)
 end
 
-function tc_column_state(prog, aux, tendencies::Nothing, inds...)
-    prog_cent_column = CC.column(prog.c, inds...)
-    prog_face_column = CC.column(prog.f, inds...)
-    aux_cent_column = CC.column(aux.cent, inds...)
-    aux_face_column = CC.column(aux.face, inds...)
+function tc_column_state(prog, aux, tendencies::Nothing, colidx)
+    prog_cent_column = CC.column(prog.c, colidx)
+    prog_face_column = CC.column(prog.f, colidx)
+    aux_cent_column = CC.column(aux.cent, colidx)
+    aux_face_column = CC.column(aux.face, colidx)
     prog_column =
         CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
     aux_column =
@@ -130,9 +130,9 @@ function init_tc!(Y, p, param_set, namelist)
     FT = eltype(edmf)
     N_up = TC.n_updrafts(edmf)
 
-    for inds in TC.iterate_columns(Y.c)
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
-        state = tc_column_state(Y, aux, nothing, inds...)
+        state = tc_column_state(Y, aux, nothing, colidx)
 
         grid = TC.Grid(state)
         FT = eltype(grid)
@@ -165,8 +165,8 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
     tc_params = CAP.turbconv_params(param_set)
 
     # TODO: write iterator for this
-    for inds in TC.iterate_columns(Y.c)
-        state = tc_column_state(Y, aux, Yₜ, inds...)
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
+        state = tc_column_state(Y, aux, Yₜ, colidx)
         grid = TC.Grid(state)
 
         set_thermo_state_peq!(
