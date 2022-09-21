@@ -19,6 +19,9 @@ days_per_year = 8760 / 24
 if occursin("low", job_id)
     resolution = "low-resolution"
     t_int_days = 10 # integration time
+elseif occursin("mid", job_id)
+    resolution = "mid-resolution"
+    t_int_days = 4 # integration time
 else
     resolution = "high-resolution"
     t_int_days = 1 # integration time

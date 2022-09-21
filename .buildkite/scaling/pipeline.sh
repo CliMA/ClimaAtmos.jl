@@ -2,9 +2,10 @@
 set -euo pipefail
 
 low_res_process_counts=(1 2 4 8 16 32)
-high_res_process_counts=(1 2 4 8 16 32 64 128 256)
+mid_res_process_counts=(1 2 4 8 16 32 64)
+high_res_process_counts=(1 2 4 8 16 32 64 128)
 FT="Float32"
-resolutions=("low" "high")
+resolutions=("low" "mid" "high")
 max_procs_per_node=16 # limit this artificially for profiling
 profiling=enable
 exclusive=false
@@ -53,6 +54,8 @@ EOM
 
 if [[ "$res" == "low" ]]; then
     process_counts=${low_res_process_counts[@]}
+elif [[ "$res" == "mid" ]]; then
+    process_counts=${mid_res_process_counts[@]}
 else
     process_counts=${high_res_process_counts[@]}
 fi
@@ -62,9 +65,11 @@ for nprocs in ${process_counts[@]}; do
     job_id="sphere_held_suarez_${res}_res_rhoe_$nprocs"
 
 if [[ "$res" == "low" ]]; then
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 6 --kappa_4 2e17"
+elif [[ "$res" == "mid" ]]; then
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --FLOAT_TYPE $FT --tracer_upwinding none --t_end 4days --dt 150secs --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16"
 else
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 24 --kappa_4 5e14"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --enable_threading false --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 30 --kappa_4 5e14"
 fi
 
 if [[ "$mpi_impl" == "mpich" ]]; then
