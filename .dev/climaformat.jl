@@ -82,4 +82,23 @@ else
     filenames = ARGS
 end
 
-format(filenames; clima_formatter_options..., opts...)
+# Until https://github.com/domluna/JuliaFormatter.jl/issues/640 is closed:
+function logged_format(paths; kwargs...)
+    jl_files = map(paths) do path
+        [
+            joinpath(root, f) for
+            (root, dirs, files) in Base.Filesystem.walkdir(path) for
+            f in files if endswith(f, ".jl")
+        ]
+    end
+    for f in Iterators.flatten(jl_files)
+        try
+            format(f; kwargs...)
+        catch
+            @info "Error in formatting file $f"
+            format(f; kwargs...)
+        end
+    end
+end
+
+logged_format(filenames; clima_formatter_options..., opts...)
