@@ -19,6 +19,9 @@ days_per_year = 8760 / 24
 if occursin("low", job_id)
     resolution = "low-resolution"
     t_int_days = 10 # integration time
+elseif occursin("mid", job_id)
+    resolution = "mid-resolution"
+    t_int_days = 4 # integration time
 else
     resolution = "high-resolution"
     t_int_days = 1 # integration time
@@ -30,7 +33,7 @@ I, FT = Int, Float64
 nprocs_clima_atmos = I[]
 walltime_clima_atmos = FT[]
 
-for foldername in readdir(output_dir)
+for foldername in filter(isdir, readdir(output_dir))
     if occursin(job_id, foldername) && !occursin("comparison", foldername)
         nprocs_string = split(foldername, "_")[end]
         dict = load(

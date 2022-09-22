@@ -92,6 +92,10 @@ function parse_commandline()
         help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
         arg_type = String
         default = "rhoe"
+        "--perturb_initstate"
+        help = "Add a perturbation to the initial condition [`false`, `true` (default)]"
+        arg_type = Bool
+        default = true
         "--energy_upwinding"
         help = "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
         arg_type = Symbol

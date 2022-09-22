@@ -195,49 +195,31 @@ z_findlast_face(f::F, grid::Grid) where {F} = grid.zf[findlast_face(f, grid)].z
 
 Base.eltype(::Grid{FT}) where {FT} = FT
 
-#####
-##### Column iterator # TODO: Move these things into ClimaCore
-#####
+function number_of_columns(space::CC.Spaces.SpectralElementSpace1D)
+    Nh = CC.Topologies.nlocalelems(space)
+    Nq = CC.Spaces.Quadratures.degrees_of_freedom(
+        CC.Spaces.quadrature_style(space),
+    )
+    return Nh * Nq
+end
+function number_of_columns(space::CC.Spaces.SpectralElementSpace2D)
+    Nh = CC.Topologies.nlocalelems(space)
+    Nq = CC.Spaces.Quadratures.degrees_of_freedom(
+        CC.Spaces.quadrature_style(space),
+    )
+    return Nh * Nq * Nq
+end
+number_of_columns(space::CC.Spaces.ExtrudedFiniteDifferenceSpace) =
+    number_of_columns(space.horizontal_space)
 
-struct ColumnIterator{Nh, Nj, Ni}
-    function ColumnIterator(space::CC.Spaces.AbstractSpace)
-        lgd = CC.Spaces.local_geometry_data(space)
-        Ni, Nj, _, _, Nh = size(CC.Spaces.local_geometry_data(space))
-        return new{Nh, Nj, Ni}()
+function column_idx_type(space::CC.Spaces.AbstractSpace)
+    colidxtype = nothing
+    CC.Fields.bycolumn(space) do colidx
+        if colidxtype == nothing
+            colidxtype = typeof(colidx)
+        else
+            colidxtype = typejoin(colidxtype, typeof(colidx))
+        end
     end
+    return colidxtype
 end
-
-Base.iterate(
-    iter::ColumnIterator{Nh, Nj, Ni},
-    state = (1, 1, 1),
-) where {Nh, Nj, Ni} = Iterators.product(1:Ni, 1:Nj, 1:Nh)
-
-iterate_columns(space::CC.Spaces.AbstractSpace) =
-    Base.iterate(ColumnIterator(space))
-
-Base.length(::ColumnIterator{Nh, Nj, Ni}) where {Nh, Nj, Ni} =
-    prod((Nh, Nj, Ni))
-
-
-const ColumnIteratorTypes = Union{
-    CC.Fields.ExtrudedFiniteDifferenceField,
-    CC.Fields.FiniteDifferenceField,
-}
-
-"""
-    iterate_columns(::ExtrudedFiniteDifferenceField)
-    iterate_columns(::FiniteDifferenceField)
-
-Iterates over columns given a field (or space)
-
-```julia
-for inds in Spaces.iterate_columns(field)
-    column_field = Fields.column(field, inds...)
-end
-```
-"""
-iterate_columns(field::ColumnIteratorTypes) = iterate_columns(axes(field))
-
-number_of_columns(field::ColumnIteratorTypes) = number_of_columns(axes(field))
-number_of_columns(space::CC.Spaces.AbstractSpace) =
-    length(ColumnIterator(space))
