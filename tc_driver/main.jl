@@ -308,7 +308,11 @@ function initialize(sim::Simulation1d)
         grid = TC.Grid(state)
         FT = TC.float_type(state)
         t = FT(0)
-        compute_ref_state!(state, grid, param_set; ts_g = surf_ref_state)
+
+        # TODO - this is too slow to execute on all columns
+        # Trying to not overwrite the GCM profiles
+        #compute_ref_state!(state, grid, param_set; ts_g = surf_ref_state)
+
         if !skip_io
             stats = Stats[inds...]
             NC.Dataset(stats.nc_filename, "a") do ds

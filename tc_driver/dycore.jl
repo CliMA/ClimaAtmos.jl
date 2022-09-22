@@ -46,6 +46,9 @@ function compute_ref_state!(
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+
+    print(aux_gm.p, prog_gm.ρ, aux_gm_f.p, aux_gm_f.ρ)
+
     p_c = aux_gm.p
     ρ_c = prog_gm.ρ
     p_f = aux_gm_f.p

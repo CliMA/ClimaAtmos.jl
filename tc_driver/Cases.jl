@@ -1599,12 +1599,16 @@ function initialize_profiles(::GCM, grid::Grid, param_set, state; kwargs...)
 
     FT = TC.float_type(state)
 
+    print(state.cent.ρ, "\n")
+    print(state.cent.ρθ_liq_ice, "\n")
+
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    #TODO - don't overwrite
+    #TODO - is it correct to setthem to 0?
     TC.set_z!(prog_gm_uₕ, 0.0, 0.0)
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
+        ts =
         #Set wind velocity profile
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
