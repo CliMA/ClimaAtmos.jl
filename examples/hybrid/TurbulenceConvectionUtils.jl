@@ -135,6 +135,8 @@ function init_tc!(Y, p, param_set, namelist)
     FT = eltype(edmf)
     N_up = TC.n_updrafts(edmf)
 
+    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
+
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
         state = tc_column_state(Y, aux, nothing, colidx)
@@ -142,11 +144,24 @@ function init_tc!(Y, p, param_set, namelist)
         grid = TC.Grid(state)
         FT = eltype(grid)
         t = FT(0)
-        compute_ref_state!(state, grid, tc_params; ts_g = surf_ref_state)
 
-        Cases.initialize_profiles(case, grid, tc_params, state)
+        # TODO - trying to see if we can get away with taking the GCM profiles
+        # instead of precomputing it ourselves
+        #compute_ref_state!(state, grid, tc_params; ts_g = surf_ref_state)
+        prog_gm = TC.center_prog_grid_mean(state)
+        aux_gm = TC.center_aux_grid_mean(state)
+        aux_gm_f = TC.face_aux_grid_mean(state)
+        @. aux_gm.p = p.ᶜp[colidx]
+        @. aux_gm_f.p = If(aux_gm.p)
+        @. aux_gm_f.ρ = If(prog_gm.ρ)
+
+        # TODO - pressure is not initialized here
+        print(aux_gm.p, aux_gm_f.p)
+        print(prog_gm.ρ, aux_gm_f.ρ)
+
+        #Cases.initialize_profiles(case, grid, tc_params, state)
         set_thermo_state_pθq!(state, grid, edmf.moisture_model, tc_params)
-        set_grid_mean_from_thermo_state!(tc_params, state, grid)
+        #set_grid_mean_from_thermo_state!(tc_params, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
         Cases.initialize_forcing(case, forcing, grid, state, tc_params)
         Cases.initialize_radiation(case, radiation, grid, state, tc_params)
