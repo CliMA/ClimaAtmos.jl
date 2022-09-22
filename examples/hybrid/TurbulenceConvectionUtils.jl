@@ -133,11 +133,13 @@ function init_tc!(Y, p, param_set, namelist)
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
         state = tc_column_state(Y, aux, nothing, colidx)
+        aux_gm = TC.center_aux_grid_mean(state)
 
         grid = TC.Grid(state)
         FT = eltype(grid)
         t = FT(0)
         compute_ref_state!(state, grid, tc_params; ts_g = surf_ref_state)
+        @. p.ᶜp[colidx] = aux_gm.p
 
         Cases.initialize_profiles(case, grid, tc_params, state)
         set_thermo_state_pθq!(state, grid, edmf.moisture_model, tc_params)
@@ -167,6 +169,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
     # TODO: write iterator for this
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         state = tc_column_state(Y, aux, Yₜ, colidx)
+        aux_gm = TC.center_aux_grid_mean(state)
         grid = TC.Grid(state)
 
         set_thermo_state_peq!(
@@ -177,8 +180,8 @@ function sgs_flux_tendency!(Yₜ, Y, p, t)
             tc_params,
         )
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
+        @. p.ᶜp[colidx] = aux_gm.p
 
-        aux_gm = TC.center_aux_grid_mean(state)
 
         surf = get_surface(surf_params, grid, state, t, tc_params)
 
