@@ -123,17 +123,17 @@ all_best_mse["compressible_edmf_trmm"][(:f, :turbconv, :up, 1, :ρaw)] = 0.00425
 #
 all_best_mse["edmf_gabls"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_gabls"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_gabls"][(:c, :ρe_tot)] = 8.257969489046732e-8
-all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 1.9191344156903696e-7
-all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 2.0519655324182885e-6
-all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 1.4171936019257627e-5
+all_best_mse["edmf_gabls"][(:c, :ρe_tot)] = 2.827742925728304e-7
+all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 4.944300598721989e-7
+all_best_mse["edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 4.081727630121925e-6
+all_best_mse["edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 1.7893976631737016e-5
 #
 all_best_mse["compressible_edmf_gabls"] = OrderedCollections.OrderedDict()
-all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 3.561636221187301e-11
-all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 5.161582682425597e-8
-all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 8.312857435311898e-7
-all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 2.0668858793099215e-6
-all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 1.2899437829172826e-5
+all_best_mse["compressible_edmf_gabls"][(:c, :ρ)] = 8.594108353858545e-11
+all_best_mse["compressible_edmf_gabls"][(:c, :ρe_tot)] = 1.1232940371213663e-7
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 9.786880624905995e-7
+all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 2.4719912917168085e-6
+all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 1.3695372955163653e-5
 #
 #! format: on
 #################################
