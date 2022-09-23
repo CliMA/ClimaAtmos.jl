@@ -169,15 +169,27 @@ vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:boris_book}) = @.
             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
         ),
     )
-vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
-    -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+# vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ =
+#     -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+#         ᶠinterp(ᶜρ) * ᶠfct_zalesak(
+#             ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
+#             ᶜρc / ᶜρ / dt,
+#             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+#         ),
+#     )
+
+vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) =
+@. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw))
+
+vertical_transport_reminder!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, ::Val{:zalesak}) = @. ᶜρcₜ +=
+    (ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw)) -
+    (ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
         ᶠinterp(ᶜρ) * ᶠfct_zalesak(
             ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
             ᶜρc / ᶜρ / dt,
             (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
         ),
     )
-
 # Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
 # allocation because the cache is stored separately from Y, which means that
 # similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
@@ -454,6 +466,9 @@ function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
         (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+        (; tracer_upwinding, simulation) = p
+        dt = simulation.dt
+
         # Mass conservation
         @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
 
@@ -489,6 +504,11 @@ function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜρc = getproperty(Y.c, ᶜρc_name)
             ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
             @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
+
+            if tracer_upwinding == Val{:zalesak}()
+                vertical_transport_reminder!(ᶜρcₜ[colidx], ᶠw[colidx], ᶜρ[colidx], ᶜρc[colidx], dt, tracer_upwinding)
+            end
+
         end
         nothing
     end
@@ -587,7 +607,7 @@ function _Wfact!(W, Y, p, dtγ, t)
     ᶠw = Y.f.w
     (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
     (; energy_upwinding, tracer_upwinding) = p
-
+    
     validate_flags!(Y, flags, energy_upwinding)
 
 
@@ -875,7 +895,8 @@ function _Wfact!(W, Y, p, dtγ, t)
                 ᶠw[colidx],
                 ᶜρ[colidx],
                 ᶜρc[colidx],
-                tracer_upwinding,
+                Val{:none}(),
+                # tracer_upwinding,
             )
         end
     end
