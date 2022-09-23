@@ -111,7 +111,7 @@ function parse_commandline()
         "--max_newton_iters"
         help = "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
         arg_type = Int
-        default = 3
+        default = 1
         "--split_ode"
         help = "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
         arg_type = Bool

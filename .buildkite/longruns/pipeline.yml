@@ -59,7 +59,7 @@ steps:
           slurm_ntasks: 8
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution ars343"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --moist equil --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_ars343"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --moist equil --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_ars343"
         artifact_paths: "longrun_bw_rhoe_equil_highres_ars343/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -67,7 +67,7 @@ steps:
           slurm_ntasks: 8
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution zalesak ars343"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --moist equil --microphy 0M --tracer_upwinding zalesak --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak_ars343"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --ode_algo ARS343 --moist equil --microphy 0M --tracer_upwinding zalesak --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak_ars343"
         artifact_paths: "longrun_bw_rhoe_equil_highres_zalesak_ars343/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -83,7 +83,7 @@ steps:
           slurm_ntasks: 64
 
       - label: ":computer: held suarez (ρe_tot) high resolution ARS343"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --ode_algo ARS343 --dt 200secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres_ars343"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --ode_algo ARS343 --dt 400secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres_ars343"
         artifact_paths: "longrun_hs_rhoe_highres_ars343/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
