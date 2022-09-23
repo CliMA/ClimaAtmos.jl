@@ -42,6 +42,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
+          slurm_mem_per_cpu: 8G
 
 
 
@@ -52,6 +53,6 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
-
+          slurm_mem_per_cpu: 8G
 
   
