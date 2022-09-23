@@ -196,9 +196,78 @@ function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
     return (; ᶜK, ᶜts, ᶜp)
 end
 
-function implicit_tendency!(Yₜ, Y, p, t)
-    @nvtx "implicit tendency" color = colorant"yellow" begin
-        _implicit_tendency!(Yₜ, Y, p, t)
+function implicit_tendency_special!(Yₜ, Y, p, t)
+    (; apply_moisture_filter) = p
+    apply_moisture_filter && affect_filter!(Y)
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜK, ᶜts, ᶜp) = implicit_cache_vars(Y, p)
+    (; ᶠgradᵥ_ᶜΦ, params, energy_upwinding, tracer_upwinding, simulation) = p
+    tracer_upwinding = Val{:none}()
+    thermo_params = CAP.thermodynamics_params(params)
+    dt = simulation.dt
+
+    ref_thermo_params = Ref(thermo_params)
+    ref_zuₕ = Ref(zero(eltype(Yₜ.c.uₕ)))
+
+    @nvtx "implicit tendency special" color = colorant"yellow" begin
+        Fields.bycolumn(axes(Y.c)) do colidx
+            @. ᶜK[colidx] =
+                norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+            thermo_state!(
+                ᶜts[colidx],
+                Y.c[colidx],
+                params,
+                ᶜinterp,
+                ᶜK[colidx],
+                Y.f.w[colidx],
+            )
+            @. ᶜp[colidx] = TD.air_pressure(ref_thermo_params, ᶜts[colidx])
+
+            if p.tendency_knobs.has_turbconv
+                parent(Yₜ.c.turbconv[colidx]) .= FT(0)
+                parent(Yₜ.f.turbconv[colidx]) .= FT(0)
+            end
+
+            vertical_transport!(
+                Yₜ.c.ρ[colidx],
+                ᶠw[colidx],
+                ᶜρ[colidx],
+                ᶜρ[colidx],
+                dt,
+                Val(:none),
+            )
+
+            vertical_transport!(
+                Yₜ.c.ρe_tot[colidx],
+                ᶠw[colidx],
+                ᶜρ[colidx],
+                Base.broadcasted(+, Y.c.ρe_tot[colidx], ᶜp[colidx]),
+                dt,
+                energy_upwinding,
+            )
+
+            Yₜ.c.uₕ[colidx] .= ref_zuₕ
+
+            @. Yₜ.f.w[colidx] =
+                -(ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) + ᶠgradᵥ_ᶜΦ[colidx])
+            if p.tendency_knobs.rayleigh_sponge
+                @. Yₜ.f.w[colidx] -= p.ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
+            end
+
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                vertical_transport!(
+                    getproperty(Yₜ.c, ᶜρc_name)[colidx],
+                    ᶠw[colidx],
+                    ᶜρ[colidx],
+                    getproperty(Y.c, ᶜρc_name)[colidx],
+                    dt,
+                    tracer_upwinding,
+                )
+                # getproperty(Yₜ.c, ᶜρc_name)[colidx] .= FT(0)
+            end
+        end
     end
 end
 
@@ -389,7 +458,30 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         _precomputed_quantities!(Yₜ, Y, p, t)
     end
     @nvtx "horizontal" color = colorant"orange" begin
-        _horizontal_advection_tendency!(Yₜ, Y, p, t)
+        # Mass conservation
+        @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
+
+        # Energy conservation
+        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
+
+        # Momentum conservation
+        if point_type <: Geometry.Abstract3DPoint
+            @. ᶜω³ = curlₕ(ᶜuₕ)
+            @. ᶠω¹² = curlₕ(ᶠw)
+            @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+        elseif point_type <: Geometry.Abstract2DPoint
+            ᶜω³ .= Ref(zero(eltype(ᶜω³)))
+            @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
+            @. Yₜ.c.uₕ -=
+                Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+        end
+
+        # Tracer conservation
+        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+            ᶜρc = getproperty(Y.c, ᶜρc_name)
+            ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+            @. ᶜρcₜ -= divₕ(ᶜρc * ᶜuvw)
+        end
     end
     return nothing
 end
@@ -463,9 +555,42 @@ function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         elseif :ρe_tot in propertynames(Y.c)
             @. Yₜ.c.ρe_tot[colidx] -=
                 ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
-        elseif :ρe_int in propertynames(Y.c)
-            @. Yₜ.c.ρe_int[colidx] -=
-                ᶜdivᵥ(ᶠinterp((Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
+
+            # Momentum conservation
+            @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
+            @. ᶠu¹²[colidx] = Geometry.project(
+                Geometry.Contravariant12Axis(),
+                ᶠinterp(ᶜuvw[colidx]),
+            )
+            @. ᶠu³[colidx] = Geometry.project(
+                Geometry.Contravariant3Axis(),
+                C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
+            )
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+                (ᶜf[colidx] + ᶜω³[colidx]) ×
+                (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
+            @. Yₜ.f.w[colidx] -=
+                ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
+
+            # Tracer conservation
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                ᶜρc = getproperty(Y.c, ᶜρc_name)
+                ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+                @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
+            end
+
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                vertical_transport_update!(
+                    getproperty(Yₜ.c, ᶜρc_name)[colidx],
+                    ᶠw[colidx],
+                    ᶜρ[colidx],
+                    getproperty(Y.c, ᶜρc_name)[colidx],
+                    dt,
+                    Val{:zalesak}(),
+                )
+            end
+
         end
 
         # Momentum conservation
@@ -554,11 +679,34 @@ function validate_flags!(Y, flags, energy_upwinding)
                 "∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact or :no_∂ᶜp∂ᶜK when using ρe_tot \
                 without upwinding",
             )
-        elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
-            # TODO: Add Operator2Stencil for UpwindBiasedProductC2F to ClimaCore
-            # to allow exact Jacobian calculation.
-            error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe_tot with \
-                  upwinding")
+
+            # :ρe_tot in propertynames(Y.c)
+            @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
+                compose(
+                    -1 / ᶠinterp(ᶜρ[colidx]) *
+                    ᶠgradᵥ_stencil(-(ᶜρ[colidx] * R_d / cv_d)),
+                    ∂ᶜK∂ᶠw_data[colidx],
+                ),
+            )
+
+            if p.tendency_knobs.rayleigh_sponge
+                @. ∂ᶠ𝕄ₜ∂ᶠ𝕄.coefs.:2[colidx] -= p.ᶠβ_rayleigh_w[colidx]
+            end
+
+            for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
+                vertical_transport_jac!(
+                    getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)[colidx],
+                    ᶠw[colidx],
+                    ᶜρ[colidx],
+                    getproperty(Y.c, ᶜρc_name)[colidx],
+                    tracer_upwinding,
+                )
+
+                # field = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
+                # value = zero(eltype(field))
+                # field[colidx] .= Ref(value)
+            end
+
         end
     elseif :ρe_int in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
         error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")
