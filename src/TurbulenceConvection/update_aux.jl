@@ -45,7 +45,7 @@ function update_aux!(
     ∇m_entr_detr = aux_tc.ψ_temporary
     wvec = CC.Geometry.WVector
     max_area = edmf.max_area
-    ts_gm = center_aux_grid_mean(state).ts
+    ts_gm = center_aux_grid_mean_ts(state)
     ts_env = center_aux_environment(state).ts
 
     prog_gm_uₕ = grid_mean_uₕ(state)

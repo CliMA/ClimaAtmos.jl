@@ -460,7 +460,7 @@ function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
     initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = aux_gm.ts
+    ts_gm = TC.center_aux_grid_mean_ts(state)
     p_c = aux_gm.p
 
     FT = TC.float_type(state)
@@ -579,7 +579,7 @@ function initialize_forcing(
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     p_c = aux_gm.p
-    ts_gm = aux_gm.ts
+    ts_gm = TC.center_aux_grid_mean_ts(state)
 
     FT = TC.float_type(state)
     prof_ug = APL.LifeCycleTan2018_geostrophic_u(FT)
@@ -702,7 +702,7 @@ function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
     initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = aux_gm.ts
+    ts_gm = TC.center_aux_grid_mean_ts(state)
     p_c = aux_gm.p
 
     FT = TC.float_type(state)
@@ -945,7 +945,7 @@ end
 function update_forcing(::ARM_SGP, grid, state, t::Real, param_set)
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = TC.center_aux_grid_mean(state).ts
+    ts_gm = TC.center_aux_grid_mean_ts(state)
     prog_gm = TC.center_prog_grid_mean(state)
     p_c = prog_gm.ρ
     FT = TC.float_type(state)

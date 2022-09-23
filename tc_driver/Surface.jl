@@ -28,7 +28,7 @@ function get_surface(
     thermo_params = TCP.thermodynamics_params(param_set)
 
     ts_sfc = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
-    ts_in = aux_gm.ts[kc_surf]
+    ts_in = TC.center_aux_grid_mean_ts(state)[kc_surf]
     scheme = SF.FVScheme()
 
     bflux = SF.compute_buoyancy_flux(
@@ -109,7 +109,7 @@ function get_surface(
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
     ts_sfc = TD.PhaseEquil_pθq(thermo_params, p_f_surf, Tsurface, qsurface)
-    ts_in = aux_gm.ts[kc_surf]
+    ts_in = TC.center_aux_grid_mean_ts(state)[kc_surf]
     u_sfc = SA.SVector{2, FT}(0, 0)
     # TODO: make correct with topography
     uₕ_gm_surf = TC.physical_grid_mean_uₕ(state)[kc_surf]
@@ -165,7 +165,7 @@ function get_surface(
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     p_f_surf = aux_gm_f.p[kf_surf]
-    ts_gm = aux_gm.ts
+    ts_gm = TC.center_aux_grid_mean_ts(state)
     Tsurface = TC.surface_temperature(surf_params, t)
     qsurface = TC.surface_q_tot(surf_params, t)
     zrough = surf_params.zrough

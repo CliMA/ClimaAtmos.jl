@@ -26,7 +26,6 @@ cent_aux_vars_gm_moisture(FT, ::TC.NonEquilibriumMoisture) = (;
 )
 cent_aux_vars_gm_moisture(FT, ::TC.EquilibriumMoisture) = NamedTuple()
 cent_aux_vars_gm(FT, local_geometry, edmf) = (;
-    ts = TC.thermo_state(FT, edmf.moisture_model),
     tke = FT(0),
     Hvar = FT(0),
     QTvar = FT(0),
