@@ -14,7 +14,6 @@ import ClimaAtmos.TurbulenceConvection as TC
 import UnPack
 import Logging
 import TerminalLoggers
-Logging.global_logger(TerminalLoggers.TerminalLogger())
 
 const ca_dir = pkgdir(ClimaAtmos)
 
