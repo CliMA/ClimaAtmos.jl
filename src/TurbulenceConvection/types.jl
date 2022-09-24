@@ -1114,10 +1114,12 @@ function Base.summary(io::IO, edmf::EDMFModel)
 end
 
 
-struct State{P, A, T}
+struct State{P, A, T, CACHE, C}
     prog::P
     aux::A
     tendencies::T
+    p::CACHE
+    colidx::C
 end
 
 """
@@ -1136,11 +1138,11 @@ Fields.bycolumn(axes(Y.c)) do colidx
     ...
 end
 """
-function column_state(prog, aux, tendencies, colidx)
+function column_state(prog, p, tendencies, colidx)
     prog_cent_column = CC.column(prog.cent, colidx)
     prog_face_column = CC.column(prog.face, colidx)
-    aux_cent_column = CC.column(aux.cent, colidx)
-    aux_face_column = CC.column(aux.face, colidx)
+    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
+    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
     tends_cent_column = CC.column(tendencies.cent, colidx)
     tends_face_column = CC.column(tendencies.face, colidx)
     prog_column =
@@ -1152,20 +1154,20 @@ function column_state(prog, aux, tendencies, colidx)
         face = tends_face_column,
     )
 
-    return State(prog_column, aux_column, tends_column)
+    return State(prog_column, aux_column, tends_column, p, colidx)
 end
 
-function column_prog_aux(prog, aux, colidx)
+function column_prog_aux(prog, p, colidx)
     prog_cent_column = CC.column(prog.cent, colidx)
     prog_face_column = CC.column(prog.face, colidx)
-    aux_cent_column = CC.column(aux.cent, colidx)
-    aux_face_column = CC.column(aux.face, colidx)
+    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
+    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
     prog_column =
         CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
     aux_column =
         CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
 
-    return State(prog_column, aux_column, nothing)
+    return State(prog_column, aux_column, nothing, p, colidx)
 end
 
 function column_diagnostics(diagnostics, colidx)

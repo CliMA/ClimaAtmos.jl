@@ -16,7 +16,7 @@ function initialize_edmf(
     thermo_params = TCP.thermodynamics_params(param_set)
     initialize_covariance(edmf, grid, state)
     aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = aux_gm.ts
+    ts_gm = TC.center_aux_grid_mean_ts(state)
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ts_gm)
     surf = get_surface(surf_params, grid, state, t, param_set)
     initialize_updrafts(edmf, grid, state, surf)

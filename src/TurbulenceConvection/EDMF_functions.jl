@@ -100,7 +100,7 @@ function compute_sgs_flux!(
 
     # compute total enthalpies
     ts_en = center_aux_environment(state).ts
-    ts_gm = center_aux_grid_mean(state).ts
+    ts_gm = center_aux_grid_mean_ts(state)
     @. h_tot_gm = total_enthalpy(param_set, prog_gm.ρe_tot / ρ_c, ts_gm)
     # Compute the mass flux and associated scalar fluxes
     @. massflux = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm))
@@ -350,7 +350,7 @@ function set_edmf_surface_bc(
     prog_en = center_prog_environment(state)
     prog_up_f = face_prog_updrafts(state)
     aux_bulk = center_aux_bulk(state)
-    ts_gm = aux_gm.ts
+    ts_gm = center_aux_grid_mean_ts(state)
     cp = TD.cp_m(thermo_params, ts_gm[kc_surf])
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
@@ -456,7 +456,7 @@ function θ_surface_bc(
     prog_gm = center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
     kc_surf = kc_surface(grid)
-    ts_gm = aux_gm.ts
+    ts_gm = center_aux_grid_mean_ts(state)
     c_p = TD.cp_m(thermo_params, ts_gm[kc_surf])
     UnPack.@unpack ustar, zLL, oblength, ρLL = surface_helper(surf, grid, state)
 

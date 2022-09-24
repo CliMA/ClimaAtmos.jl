@@ -102,7 +102,7 @@ function compute_precipitation_sink_tendencies(
     prog_pr = center_prog_precipitation(state)
     ρ_c = prog_gm.ρ
     tendencies_pr = center_tendencies_precipitation(state)
-    ts_gm = aux_gm.ts
+    ts_gm = center_aux_grid_mean_ts(state)
 
     precip_fraction = compute_precip_fraction(edmf, state)
 
