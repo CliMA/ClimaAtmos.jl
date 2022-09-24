@@ -297,8 +297,8 @@ steps:
     steps:
 
       # TODO: add/exercise edmf code
-      - label: ":computer: Unthreaded performance target"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+      - label: ":computer: Unthreaded performance target (Rosenbrock)"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded/*"
         agents:
           slurm_mem: 20GB
