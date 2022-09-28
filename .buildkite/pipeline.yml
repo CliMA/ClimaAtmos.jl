@@ -271,7 +271,7 @@ steps:
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
       
       - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 200secs --t_end 2days --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --rayleigh_sponge true --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 200secs --t_end 2days --regression_test true"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
 
       # The following tests used to work with upwinding on both energy and tracers, but they fail with upwinding on only tracers. They will be re-enabled after updates to topography.
