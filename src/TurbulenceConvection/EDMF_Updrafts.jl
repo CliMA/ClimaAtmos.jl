@@ -15,7 +15,7 @@ function compute_nonequilibrium_moisture_tendencies!(
     aux_up = center_aux_updrafts(state)
     aux_bulk = center_aux_bulk(state)
     prog_gm = center_prog_grid_mean(state)
-    p_c = aux_gm.p
+    p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
 
     @inbounds for i in 1:N_up
@@ -71,7 +71,7 @@ function compute_precipitation_formation_tendencies(
     aux_bulk = center_aux_bulk(state)
     prog_pr = center_prog_precipitation(state)
     tendencies_pr = center_tendencies_precipitation(state)
-    p_c = aux_gm.p
+    p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
 
     precip_fraction = compute_precip_fraction(edmf, state)

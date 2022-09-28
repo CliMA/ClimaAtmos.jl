@@ -46,7 +46,7 @@ function compute_ref_state!(
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     p_f = aux_gm_f.p
     ρ_f = aux_gm_f.ρ
@@ -129,7 +129,7 @@ function set_thermo_state_peq!(
     prog_gm_f = TC.face_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     C123 = CCG.Covariant123Vector
     @. aux_gm.e_kin = LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(prog_gm_f.w))) / 2
@@ -156,7 +156,7 @@ function set_thermo_state_peq!(
         elseif compressibility_model isa TC.AnelasticFluid
             ts_gm[k] = TC.thermo_state_peq(
                 param_set,
-                aux_gm.p[k],
+                p_c[k],
                 e_int,
                 prog_gm.ρq_tot[k] / ρ_c[k],
                 thermo_args...,
@@ -171,6 +171,7 @@ function set_thermo_state_pθq!(state, grid, moisture_model, param_set)
     ts_gm = TC.center_aux_grid_mean_ts(state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
     @inbounds for k in TC.real_center_indices(grid)
         thermo_args = if moisture_model isa TC.EquilibriumMoisture
             ()
@@ -183,7 +184,7 @@ function set_thermo_state_pθq!(state, grid, moisture_model, param_set)
         end
         ts_gm[k] = TC.thermo_state_pθq(
             param_set,
-            aux_gm.p[k],
+            p_c[k],
             aux_gm.θ_liq_ice[k],
             aux_gm.q_tot[k],
             thermo_args...,
@@ -229,6 +230,7 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
     aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
+    p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
     @. ρ_f = If(ρ_c)
@@ -243,7 +245,7 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
         aux_gm.h_tot[k] =
             TC.total_enthalpy(param_set, prog_gm.ρe_tot[k] / ρ_c[k], ts)
-        aux_gm.p[k] = TD.air_pressure(thermo_params, ts)
+        p_c[k] = TD.air_pressure(thermo_params, ts)
         aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
     end
     return
@@ -397,8 +399,7 @@ function compute_gm_tendencies!(
     aux_en_f = TC.face_aux_environment(state)
     aux_up = TC.center_aux_updrafts(state)
     aux_bulk = TC.center_aux_bulk(state)
-    ρ_f = aux_gm_f.ρ
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     aux_tc = TC.center_aux_turbconv(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
