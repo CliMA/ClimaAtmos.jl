@@ -54,6 +54,7 @@ function initialize_covariance(
 end
 
 function initialize_updrafts(edmf, grid, state, surf)
+    FT = TC.float_type(state)
     N_up = TC.n_updrafts(edmf)
     kc_surf = TC.kc_surface(grid)
     aux_up = TC.center_aux_updrafts(state)
@@ -64,6 +65,7 @@ function initialize_updrafts(edmf, grid, state, surf)
     prog_up = TC.center_prog_updrafts(state)
     prog_up_f = TC.face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
+    a_min = edmf.minimum_area
     @inbounds for i in 1:N_up
         @inbounds for k in TC.real_face_indices(grid)
             aux_up_f[i].w[k] = 0
@@ -74,15 +76,16 @@ function initialize_updrafts(edmf, grid, state, surf)
             aux_up[i].buoy[k] = 0
             # Simple treatment for now, revise when multiple updraft closures
             # become more well defined
-            aux_up[i].area[k] = 0
+            aux_up[i].area[k] = a_min
             aux_up[i].q_tot[k] = aux_gm.q_tot[k]
             aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
             aux_up[i].q_liq[k] = aux_gm.q_liq[k]
             aux_up[i].q_ice[k] = aux_gm.q_ice[k]
             aux_up[i].T[k] = aux_gm.T[k]
-            prog_up[i].ρarea[k] = 0
-            prog_up[i].ρaq_tot[k] = 0
-            prog_up[i].ρaθ_liq_ice[k] = 0
+            prog_up[i].ρarea[k] = ρ_c[k] * aux_up[i].area[k]
+            prog_up[i].ρaq_tot[k] = prog_up[i].ρarea[k] * aux_up[i].q_tot[k]
+            prog_up[i].ρaθ_liq_ice[k] =
+                prog_up[i].ρarea[k] * aux_up[i].θ_liq_ice[k]
         end
         if edmf.entr_closure isa TC.PrognosticNoisyRelaxationProcess
             @. prog_up[i].ε_nondim = 0
