@@ -4,6 +4,7 @@ using CloudMicrophysics
 const SF = SurfaceFluxes
 const CCG = ClimaCore.Geometry
 import ClimaAtmos.TurbulenceConvection as TC
+import ClimaCore.Operators as CCO
 const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
@@ -164,27 +165,6 @@ microphysics_cache(Y, ::Microphysics0Moment) = (
     col_integrated_snow = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
 )
 
-vertical∫_col(field::ClimaCore.Fields.CenterExtrudedFiniteDifferenceField) =
-    vertical∫_col(field, 1)
-vertical∫_col(field::ClimaCore.Fields.FaceExtrudedFiniteDifferenceField) =
-    vertical∫_col(field, ClimaCore.Operators.PlusHalf(1))
-
-function vertical∫_col(
-    field::ClimaCore.Fields.Field,
-    one_index::Union{Int, ClimaCore.Operators.PlusHalf},
-)
-    Δz = Fields.local_geometry_field(field).∂x∂ξ.components.data.:9
-    Ni, Nj, _, _, Nh = size(ClimaCore.Spaces.local_geometry_data(axes(field)))
-    planar_field = similar(Fields.level(field, one_index))
-    for inds in Iterators.product(1:Ni, 1:Nj, 1:Nh)
-        Δz_col = column(Δz, inds...)
-        field_col = column(field, inds...)
-        planar_field_column = column(planar_field, inds...)
-        parent(planar_field_column) .= sum(parent(field_col .* Δz_col))
-    end
-    return planar_field
-end
-
 function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     (;
         ᶜts,
@@ -213,11 +193,11 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
     @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
     @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
+    CCO.column_integral_definite!(col_integrated_rain, ᶜ3d_rain)
+    CCO.column_integral_definite!(col_integrated_snow, ᶜ3d_snow)
 
-    col_integrated_rain .=
-        vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
-    col_integrated_snow .=
-        vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
+    @. col_integrated_rain = col_integrated_rain / CAP.ρ_cloud_liq(params)
+    @. col_integrated_snow = col_integrated_snow / CAP.ρ_cloud_liq(params)
 
     # liquid fraction
     @. ᶜλ = TD.liquid_fraction(thermo_params, ᶜts)

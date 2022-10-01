@@ -177,10 +177,6 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64 --t_end 9days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
-      - label: ":computer: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs"
-        artifact_paths: "sphere_baroclinic_wave_rhoe/*"
-
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --t_end 4days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
@@ -233,7 +229,7 @@ steps:
         artifact_paths: "sphere_hydrostatic_balance_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
