@@ -2,6 +2,7 @@ import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
+import ClimaCore.Operators as CCO
 import ClimaCore.Spaces
 import OrdinaryDiffEq as ODE
 import ClimaAtmos.Parameters as CAP
@@ -217,10 +218,12 @@ function save_to_disk_func(integrator)
             @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
             @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
 
-            col_integrated_rain =
-                vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
-            col_integrated_snow =
-                vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
+            CCO.column_integral_definite!(col_integrated_rain, ᶜ3d_rain)
+            CCO.column_integral_definite!(col_integrated_snow, ᶜ3d_snow)
+
+            @. col_integrated_rain /= CAP.ρ_cloud_liq(params)
+            @. col_integrated_snow /= CAP.ρ_cloud_liq(params)
+
 
             moist_diagnostic = (
                 moist_diagnostic...,
