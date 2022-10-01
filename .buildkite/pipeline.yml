@@ -262,6 +262,10 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 450secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
 
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation varying insolation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --idealized_insolation false --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray_insolation --dt 450secs --t_end 2.5days"
+        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray_insolation/*"
+
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
