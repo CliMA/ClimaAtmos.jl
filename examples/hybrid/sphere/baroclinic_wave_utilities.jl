@@ -265,6 +265,7 @@ function vertical_diffusion_boundary_layer_cache(
     elseif isnothing(surface_scheme)
         NamedTuple()
     end
+    dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
     return (;
         surface_scheme,
         ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
@@ -273,8 +274,11 @@ function vertical_diffusion_boundary_layer_cache(
         ᶠK_E = similar(Y.f, FT),
         surface_conditions = similar(z_bottom, cond_type),
         dif_flux_uₕ,
-        dif_flux_energy = similar(z_bottom, Geometry.WVector{FT}),
+        dif_flux_uₕ_bc = similar(dif_flux_uₕ),
+        dif_flux_energy,
         dif_flux_ρq_tot,
+        dif_flux_energy_bc = similar(dif_flux_energy),
+        dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
         surface_scheme_params...,
         diffuse_momentum,
         coupled,
@@ -391,8 +395,11 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     (;
         surface_conditions,
         dif_flux_uₕ,
+        dif_flux_uₕ_bc,
         dif_flux_energy,
+        dif_flux_energy_bc,
         dif_flux_ρq_tot,
+        dif_flux_ρq_tot_bc,
         diffuse_momentum,
         coupled,
         z_bottom,
@@ -462,13 +469,14 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                         Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
                     ),
                 )
+            @. dif_flux_uₕ_bc = -dif_flux_uₕ
         end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(
                 Geometry.Contravariant3Vector(FT(0)) ⊗
                 Geometry.Covariant12Vector(FT(0), FT(0)),
             ),
-            bottom = Operators.SetValue(.-dif_flux_uₕ),
+            bottom = Operators.SetValue(dif_flux_uₕ_bc),
         )
         @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
     end
@@ -483,9 +491,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                 )
             end
         end
+        @. dif_flux_energy_bc = -dif_flux_energy
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(.-dif_flux_energy),
+            bottom = Operators.SetValue(dif_flux_energy_bc),
         )
         @. Yₜ.c.ρe_tot +=
             ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
@@ -499,9 +508,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
                 @. dif_flux_ρq_tot = Geometry.WVector(surface_conditions.E)
             end
         end
+        @. dif_flux_ρq_tot_bc = -dif_flux_ρq_tot
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(.-dif_flux_ρq_tot),
+            bottom = Operators.SetValue(dif_flux_ρq_tot_bc),
         )
         @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
         @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
