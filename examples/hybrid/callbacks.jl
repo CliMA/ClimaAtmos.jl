@@ -158,7 +158,17 @@ function save_to_disk_func(integrator)
     Y = u
 
     if :ᶜS_ρq_tot in propertynames(p)
-        (; ᶜts, ᶜp, ᶜS_ρq_tot, ᶜ3d_rain, ᶜ3d_snow, params, ᶜK) = p
+        (;
+            ᶜts,
+            ᶜp,
+            ᶜS_ρq_tot,
+            ᶜ3d_rain,
+            ᶜ3d_snow,
+            params,
+            ᶜK,
+            col_integrated_rain,
+            col_integrated_snow,
+        ) = p
     else
         (; ᶜts, ᶜp, params, ᶜK) = p
     end
