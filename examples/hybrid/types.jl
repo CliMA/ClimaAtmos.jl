@@ -97,6 +97,29 @@ function turbconv_model(FT, parsed_args, namelist)
     end
 end
 
+abstract type AbstractSurfaceScheme end
+Base.@kwdef struct BulkSurfaceScheme{FT} <: AbstractSurfaceScheme
+    Cd::FT
+    Ch::FT
+end
+Base.@kwdef struct MoninObukhovSurface{FT} <: AbstractSurfaceScheme
+    z0m::FT
+    z0b::FT
+end # TODO: unify with MoninObukhovSurface in TC
+
+function surface_scheme(FT, parsed_args)
+    surface_scheme = parsed_args["surface_scheme"]
+    @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
+    return if surface_scheme == "bulk"
+        BulkSurfaceScheme{FT}(; Cd = FT(0.0044), Ch = FT(0.0044))
+    elseif surface_scheme == "monin_obukhov"
+        MoninObukhovSurface{FT}(; z0m = FT(1e-5), z0b = FT(1e-5))
+    elseif surface_scheme == nothing
+        surface_scheme
+    end
+end
+
+Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)
 Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
 Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
@@ -118,6 +141,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
         forcing_type = forcing_type(parsed_args),
         turbconv_model = turbconv_model(FT, parsed_args, namelist),
         anelastic_dycore = parsed_args["anelastic_dycore"],
+        surface_scheme = surface_scheme(FT, parsed_args),
         C_E = FT(parsed_args["C_E"]),
     )
 
