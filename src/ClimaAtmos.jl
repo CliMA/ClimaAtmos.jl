@@ -16,6 +16,10 @@ function error_on_nan(Y::Fields.FieldVector, p::NamedTuple)
     error_on_nan(p)
 end
 
+function error_on_nan(Y::Union{Bool, AbstractString, Number})
+    nothing
+end
+
 function error_on_nan(cache::NamedTuple)
     for pn in propertynames(cache)
         error_on_nan(getproperty(cache, pn))
