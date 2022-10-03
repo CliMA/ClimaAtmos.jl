@@ -226,10 +226,6 @@ end
 # 1) turn the liquid_theta into theta version
 # 2) have a total energy version (primary goal)
 
-# Note: ᶠv_a and ᶠz_a are 3D projections of 2D Fields (the values of uₕ and z at
-#       the first cell center of every column, respectively).
-# TODO: Allow ClimaCore to handle both 2D and 3D Fields in a single broadcast.
-#       This currently results in a mismatched spaces error.
 function vertical_diffusion_boundary_layer_cache(
     Y,
     ::Type{FT};
@@ -238,11 +234,7 @@ function vertical_diffusion_boundary_layer_cache(
     diffuse_momentum = true,
     coupled = false,
 ) where {FT}
-    ᶠz_a = similar(Y.f, FT)
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
-    Fields.field_values(ᶠz_a) .=
-        Fields.field_values(z_bottom) .* one.(Fields.field_values(ᶠz_a))
-    # TODO: fix VIJFH copyto! to remove the one.(...)
 
     dif_flux_uₕ =
         Geometry.Contravariant3Vector.(zeros(axes(z_bottom))) .⊗
@@ -258,14 +250,16 @@ function vertical_diffusion_boundary_layer_cache(
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
 
+    normal = Geometry.WVector.(ones(axes(Y.c)))
+
     dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
     return (;
         surface_scheme,
-        ᶠv_a = similar(Y.f, eltype(Y.c.uₕ)),
-        ᶠz_a,
         C_E,
+        ᶠp = similar(Y.f, FT),
         ᶠK_E = similar(Y.f, FT),
         surface_conditions = similar(z_bottom, cond_type),
+        uₕ_int_local = similar(Spaces.level(Y.c.uₕ, 1), Geometry.UVVector{FT}),
         dif_flux_uₕ,
         dif_flux_uₕ_bc = similar(dif_flux_uₕ),
         dif_flux_energy,
@@ -274,6 +268,7 @@ function vertical_diffusion_boundary_layer_cache(
         dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
         diffuse_momentum,
         coupled,
+        normal,
         z_bottom,
     )
 end
@@ -386,8 +381,15 @@ function saturated_surface_conditions(
 end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
+    Fields.bycolumn(axes(Y.c.uₕ)) do colidx
+        vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+    end
+end
+
+function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
     ᶜρ = Y.c.ρ
-    (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠv_a, ᶠz_a, ᶠK_E, C_E) = p # assume ᶜts and ᶜp have been updated
+    FT = Spaces.undertype(axes(ᶜρ))
+    (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠK_E, C_E) = p # assume ᶜts and ᶜp have been updated
     (;
         surface_conditions,
         dif_flux_uₕ,
@@ -398,97 +400,105 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         dif_flux_ρq_tot_bc,
         diffuse_momentum,
         coupled,
+        ᶠp,
         z_bottom,
         params,
     ) = p
+    (; uₕ_int_local, normal) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
-    Fields.field_values(ᶠv_a) .=
-        Fields.field_values(Spaces.level(Y.c.uₕ, 1)) .*
-        one.(Fields.field_values(ᶠz_a)) # TODO: fix VIJFH copyto! to remove this
-    @. ᶠK_E = eddy_diffusivity_coefficient(C_E, norm(ᶠv_a), ᶠz_a, ᶠinterp(ᶜp))
-
-    # TODO: Revisit z_surface construction when "space is not same instance" error is dealt with
-    ᶜz_field = Fields.coordinate_field(Y.c).z
-    ᶜz_interior = Fields.field_values(Fields.level(ᶜz_field, 1))
-    z_surface = Fields.field_values(z_sfc)
+    uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
+    @. uₕ_int_local[colidx] = Geometry.UVVector(uₕ_int)
+    @. ᶠp[colidx] = ᶠinterp(ᶜp[colidx])
+    @. ᶠK_E[colidx] = eddy_diffusivity_coefficient(
+        C_E,
+        norm(uₕ_int),
+        z_bottom[colidx],
+        ᶠp[colidx],
+    )
 
     if !coupled
-        surface_conditions .=
+        surface_conditions[colidx] .=
             saturated_surface_conditions.(
                 p.surface_scheme,
-                T_sfc,
-                Spaces.level(ᶜts, 1),
-                Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-                Fields.Field(ᶜz_interior, axes(z_bottom)),
-                Fields.Field(z_surface, axes(z_bottom)),
+                T_sfc[colidx],
+                Spaces.level(ᶜts[colidx], 1),
+                uₕ_int_local[colidx],
+                z_bottom[colidx],
+                z_sfc[colidx],
                 params,
             )
     end
-
     if diffuse_momentum
         if !coupled
-            ρτxz = surface_conditions.ρτxz
-            ρτyz = surface_conditions.ρτyz
-            u_space = axes(ρτxz) # TODO: delete when "space not the same instance" error is dealt with
-            normal = Geometry.WVector.(ones(u_space)) # TODO: this will need to change for topography
-            ρ_1 = Fields.Field(
-                Fields.field_values(Fields.level(Y.c.ρ, 1)),
-                u_space,
-            ) # TODO: delete when "space not the same instance" error is dealt with
-            parent(dif_flux_uₕ) .=  # TODO: remove parent when "space not the same instance" error is dealt with
-                parent(
-                    Geometry.Contravariant3Vector.(normal) .⊗
-                    Geometry.Covariant12Vector.(
-                        Geometry.UVVector.(ρτxz ./ ρ_1, ρτyz ./ ρ_1)
-                    ),
+            ρτxz = surface_conditions[colidx].ρτxz
+            ρτyz = surface_conditions[colidx].ρτyz
+            ρ_1 = Fields.level(Y.c.ρ[colidx], 1)
+            surface_normal = Fields.level(normal[colidx], 1)
+            @. dif_flux_uₕ[colidx] =
+                Geometry.Contravariant3Vector(surface_normal) ⊗
+                Geometry.Covariant12Vector(
+                    Geometry.UVVector(ρτxz / ρ_1, ρτyz / ρ_1),
                 )
-            @. dif_flux_uₕ_bc = -dif_flux_uₕ
+            @. dif_flux_uₕ_bc[colidx] = -dif_flux_uₕ[colidx]
         end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(
                 Geometry.Contravariant3Vector(FT(0)) ⊗
                 Geometry.Covariant12Vector(FT(0), FT(0)),
             ),
-            bottom = Operators.SetValue(dif_flux_uₕ_bc),
+            bottom = Operators.SetValue(dif_flux_uₕ_bc[colidx]),
         )
-        @. Yₜ.c.uₕ += ᶜdivᵥ(ᶠK_E * ᶠgradᵥ(Y.c.uₕ))
+        @. Yₜ.c.uₕ[colidx] += ᶜdivᵥ(ᶠK_E[colidx] * ᶠgradᵥ(Y.c.uₕ[colidx]))
     end
 
     if :ρe_tot in propertynames(Y.c)
         if !coupled
             if isnothing(p.surface_scheme)
-                @. dif_flux_energy *= 0
+                @. dif_flux_energy[colidx] *= 0
             else
-                @. dif_flux_energy = Geometry.WVector(
-                    surface_conditions.shf + surface_conditions.lhf,
+                @. dif_flux_energy[colidx] = Geometry.WVector(
+                    surface_conditions[colidx].shf +
+                    surface_conditions[colidx].lhf,
                 )
             end
         end
-        @. dif_flux_energy_bc = -dif_flux_energy
+        @. dif_flux_energy_bc[colidx] = -dif_flux_energy[colidx]
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_energy_bc),
+            bottom = Operators.SetValue(dif_flux_energy_bc[colidx]),
         )
-        @. Yₜ.c.ρe_tot +=
-            ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ((Y.c.ρe_tot + ᶜp) / ᶜρ))
+        @. Yₜ.c.ρe_tot[colidx] += ᶜdivᵥ(
+            ᶠK_E[colidx] *
+            ᶠinterp(ᶜρ[colidx]) *
+            ᶠgradᵥ((Y.c.ρe_tot[colidx] + ᶜp[colidx]) / ᶜρ[colidx]),
+        )
     end
 
     if :ρq_tot in propertynames(Y.c)
         if !coupled
             if isnothing(p.surface_scheme)
-                @. dif_flux_ρq_tot *= 0
+                @. dif_flux_ρq_tot[colidx] *= 0
             else
-                @. dif_flux_ρq_tot = Geometry.WVector(surface_conditions.E)
+                @. dif_flux_ρq_tot[colidx] =
+                    Geometry.WVector(surface_conditions[colidx].E)
             end
         end
-        @. dif_flux_ρq_tot_bc = -dif_flux_ρq_tot
+        @. dif_flux_ρq_tot_bc[colidx] = -dif_flux_ρq_tot[colidx]
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
-            bottom = Operators.SetValue(dif_flux_ρq_tot_bc),
+            bottom = Operators.SetValue(dif_flux_ρq_tot_bc[colidx]),
         )
-        @. Yₜ.c.ρq_tot += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
-        @. Yₜ.c.ρ += ᶜdivᵥ(ᶠK_E * ᶠinterp(ᶜρ) * ᶠgradᵥ(Y.c.ρq_tot / ᶜρ))
+        @. Yₜ.c.ρq_tot[colidx] += ᶜdivᵥ(
+            ᶠK_E[colidx] *
+            ᶠinterp(ᶜρ[colidx]) *
+            ᶠgradᵥ(Y.c.ρq_tot[colidx] / ᶜρ[colidx]),
+        )
+        @. Yₜ.c.ρ[colidx] += ᶜdivᵥ(
+            ᶠK_E[colidx] *
+            ᶠinterp(ᶜρ[colidx]) *
+            ᶠgradᵥ(Y.c.ρq_tot[colidx] / ᶜρ[colidx]),
+        )
     end
 end
