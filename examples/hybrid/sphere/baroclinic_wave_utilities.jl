@@ -258,13 +258,6 @@ function vertical_diffusion_boundary_layer_cache(
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
 
-    surface_scheme_params = if surface_scheme == "bulk"
-        (; Cd = FT(0.0044), Ch = FT(0.0044))
-    elseif surface_scheme == "monin_obukhov"
-        (; z0m = FT(1e-5), z0b = FT(1e-5))
-    elseif isnothing(surface_scheme)
-        NamedTuple()
-    end
     dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
     return (;
         surface_scheme,
@@ -279,7 +272,6 @@ function vertical_diffusion_boundary_layer_cache(
         dif_flux_ρq_tot,
         dif_flux_energy_bc = similar(dif_flux_energy),
         dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
-        surface_scheme_params...,
         diffuse_momentum,
         coupled,
         z_bottom,
@@ -293,16 +285,17 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
 
-function constant_T_saturated_surface_conditions(
+function saturated_surface_conditions(
+    surface_scheme::BulkSurfaceScheme,
     T_sfc,
     ts_int,
     uₕ_int,
     z_int,
     z_sfc,
-    Cd,
-    Ch,
     params,
 )
+    Cd = surface_scheme.Cd
+    Ch = surface_scheme.Ch
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
     sf_params = CAP.surface_fluxes_params(params)
@@ -342,16 +335,19 @@ function constant_T_saturated_surface_conditions(
     )
 end
 
-function variable_T_saturated_surface_conditions(
+saturated_surface_conditions(::Nothing, args...) = nothing
+
+function saturated_surface_conditions(
+    surface_scheme::MoninObukhovSurface,
     T_sfc,
     ts_int,
     uₕ_int,
     z_int,
     z_sfc,
-    z0m,
-    z0b,
     params,
 )
+    z0m = surface_scheme.z0m
+    z0b = surface_scheme.z0b
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
     sf_params = CAP.surface_fluxes_params(params)
@@ -405,12 +401,6 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
         z_bottom,
         params,
     ) = p
-    if p.surface_scheme == "bulk"
-        (; Cd, Ch) = p
-    elseif p.surface_scheme == "monin_obukhov"
-        (; z0m, z0b) = p
-    end
-    surf_flux_params = CAP.surface_fluxes_params(params)
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -425,31 +415,16 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     z_surface = Fields.field_values(z_sfc)
 
     if !coupled
-        if p.surface_scheme == "bulk"
-            surface_conditions .=
-                constant_T_saturated_surface_conditions.(
-                    T_sfc,
-                    Spaces.level(ᶜts, 1),
-                    Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-                    Fields.Field(ᶜz_interior, axes(z_bottom)),
-                    Fields.Field(z_surface, axes(z_bottom)),
-                    Cd,
-                    Ch,
-                    params,
-                )
-        elseif p.surface_scheme == "monin_obukhov"
-            surface_conditions .=
-                variable_T_saturated_surface_conditions.(
-                    T_sfc,
-                    Spaces.level(ᶜts, 1),
-                    Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
-                    Fields.Field(ᶜz_interior, axes(z_bottom)),
-                    Fields.Field(z_surface, axes(z_bottom)),
-                    z0m,
-                    z0b,
-                    params,
-                )
-        end
+        surface_conditions .=
+            saturated_surface_conditions.(
+                p.surface_scheme,
+                T_sfc,
+                Spaces.level(ᶜts, 1),
+                Geometry.UVVector.(Spaces.level(Y.c.uₕ, 1)),
+                Fields.Field(ᶜz_interior, axes(z_bottom)),
+                Fields.Field(z_surface, axes(z_bottom)),
+                params,
+            )
     end
 
     if diffuse_momentum

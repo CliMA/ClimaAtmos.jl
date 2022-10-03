@@ -32,7 +32,6 @@ fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
-surface_scheme = parsed_args["surface_scheme"]
 coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
@@ -50,7 +49,6 @@ zd_viscous = parsed_args["zd_viscous"]
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
-@assert surface_scheme in (nothing, "bulk", "monin_obukhov")
 @assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column")
 @assert rayleigh_sponge in (true, false)
@@ -84,7 +82,7 @@ simulation = get_simulation(FT, parsed_args)
 diffuse_momentum =
     vert_diff &&
     !(model_spec.forcing_type isa HeldSuarezForcing) &&
-    !isnothing(surface_scheme)
+    !isnothing(model_spec.surface_scheme)
 
 # TODO: use import istead of using
 using Colors
@@ -154,7 +152,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         vertical_diffusion_boundary_layer_cache(
             Y,
             FT;
-            surface_scheme,
+            model_spec.surface_scheme,
             model_spec.C_E,
             diffuse_momentum,
             coupled,
