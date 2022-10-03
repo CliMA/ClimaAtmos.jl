@@ -1,15 +1,19 @@
 #! /bin/bash
 set -euo pipefail
 
-low_res_process_counts=(1 2 4 8 16 32)
-mid_res_process_counts=(1 2 4 8 16 32 64)
-high_res_process_counts=(1 2 4 8 16 32 64 128)
+low_res_process_counts=(1 2 4 8 16 32 64)
+mid_res_process_counts=(1 2 4 8 16 32 64 128)
+high_res_process_counts=(1 2 4 8 16 32 64 128 256 512)
 FT="Float32"
 resolutions=("low" "mid" "high")
-max_procs_per_node=16 # limit this artificially for profiling
-profiling=enable
-exclusive=true
-mpi_impl="openmpi"
+profiling="${profiling:-false}"
+exclusive="${exclusive:-true}"
+if [[ "$profiling" == "true" ]]; then
+  max_procs_per_node=16
+else
+  max_procs_per_node=32
+fi
+mpi_impl="${mpi_impl:-openmpi}"
 
 # set up environment and agents
 cat << EOM
@@ -77,7 +81,7 @@ if [[ "$mpi_impl" == "mpich" ]]; then
 else
     rank_env_var="OMPI_COMM_WORLD_RANK"
 fi
-if [[ "$profiling" == "enable" ]]; then
+if [[ "$profiling" == "true" ]]; then
     command="nsys profile --sample=none --trace=nvtx,mpi --mpi-impl=$mpi_impl --output=${job_id}/rank-%q{$rank_env_var} $command"
     cpus_per_proc=2
 else
@@ -89,10 +93,14 @@ else
     launcher="mpiexec --map-by node:PE=$cpus_per_proc --bind-to core"
 fi
 
-if [[ $nprocs -gt 4 ]]; then
+if [[ $nprocs -ge 64 ]]; then
+    time="00:30:00"
+elif [[ $nprocs -ge 16 ]]; then
     time="01:00:00"
+elif [[ $nprocs -ge 4 ]]; then
+    time="02:00:00"
 else
-    time="04:00:00"
+    time="08:00:00"
 fi
 
 
