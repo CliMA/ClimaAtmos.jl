@@ -16,7 +16,7 @@ function error_on_nan(Y::Fields.FieldVector, p::NamedTuple)
     error_on_nan(p)
 end
 
-function error_on_nan(Y::Union{Bool, AbstractString, Number})
+function error_on_nan(Y::Union{Bool, AbstractString, Number, DateTime})
     nothing
 end
 
