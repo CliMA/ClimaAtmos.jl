@@ -50,366 +50,366 @@ steps:
 
   - wait
 
-  - group: "ClimaAtmos src unit tests"
-    steps:
+  # - group: "ClimaAtmos src unit tests"
+  #   steps:
 
-      - label: ":computer: domains"
-        command: "julia --color=yes --project=test test/test_domains.jl"
+  #     - label: ":computer: domains"
+  #       command: "julia --color=yes --project=test test/test_domains.jl"
 
-      - label: ":computer: models"
-        command: "julia --color=yes --project=test test/test_models.jl"
+  #     - label: ":computer: models"
+  #       command: "julia --color=yes --project=test test/test_models.jl"
 
-  - group: "ClimaAtmos src integration tests"
-    steps:
+  # - group: "ClimaAtmos src integration tests"
+  #   steps:
 
-      - label: ":computer: 1d_ekman_column regression (Float32)"
-        command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float32 --test_mode regression"
+  #     - label: ":computer: 1d_ekman_column regression (Float32)"
+  #       command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float32 --test_mode regression"
 
-      - label: ":computer: 1d_ekman_column regression (Float64)"
-        command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode regression"
+  #     - label: ":computer: 1d_ekman_column regression (Float64)"
+  #       command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode regression"
 
-      - label: ":computer: 1d_ekman_column validation"
-        command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode validation"
-        artifact_paths: "test/test_cases/run_1d_ekman_column/*"
+  #     - label: ":computer: 1d_ekman_column validation"
+  #       command: "julia --color=yes --project=test test/test_cases/run_1d_ekman_column.jl --FT Float64 --test_mode validation"
+  #       artifact_paths: "test/test_cases/run_1d_ekman_column/*"
 
-      - label: ":computer: 2d_dry_bubble"
-        command: "julia --color=yes --project=test test/test_cases/run_2d_dry_bubble.jl"
-        artifact_paths: "test/test_cases/run_2d_dry_bubble/*"
+  #     - label: ":computer: 2d_dry_bubble"
+  #       command: "julia --color=yes --project=test test/test_cases/run_2d_dry_bubble.jl"
+  #       artifact_paths: "test/test_cases/run_2d_dry_bubble/*"
 
-      - label: ":computer: 2d_moist_bubble"
-        command: "julia --color=yes --project=test test/test_cases/run_2d_moist_bubble.jl"
-        artifact_paths: "test/test_cases/run_2d_moist_bubble/*"
+  #     - label: ":computer: 2d_moist_bubble"
+  #       command: "julia --color=yes --project=test test/test_cases/run_2d_moist_bubble.jl"
+  #       artifact_paths: "test/test_cases/run_2d_moist_bubble/*"
 
-      - label: ":computer: 2d_precipitating_bubble"
-        command: "julia --color=yes --project=test test/test_cases/run_2d_precipitating_bubble.jl"
-        artifact_paths: "test/test_cases/run_2d_precipitating_bubble/*"
+  #     - label: ":computer: 2d_precipitating_bubble"
+  #       command: "julia --color=yes --project=test test/test_cases/run_2d_precipitating_bubble.jl"
+  #       artifact_paths: "test/test_cases/run_2d_precipitating_bubble/*"
 
-      - label: ":computer: 3d_rising_bubble"
-        command: "julia --color=yes --project=test test/test_cases/run_3d_rising_bubble.jl"
-        artifact_paths: "test/test_cases/run_3d_rising_bubble/*"
+  #     - label: ":computer: 3d_rising_bubble"
+  #       command: "julia --color=yes --project=test test/test_cases/run_3d_rising_bubble.jl"
+  #       artifact_paths: "test/test_cases/run_3d_rising_bubble/*"
 
-      - label: ":computer: 3d_solid_body_rotation"
-        command: "julia --color=yes --project=test test/test_cases/run_3d_solid_body_rotation.jl"
-        artifact_paths: "test/test_cases/run_3d_solid_body_rotation/*"
+  #     - label: ":computer: 3d_solid_body_rotation"
+  #       command: "julia --color=yes --project=test test/test_cases/run_3d_solid_body_rotation.jl"
+  #       artifact_paths: "test/test_cases/run_3d_solid_body_rotation/*"
 
-      - label: ":computer: 3d_balanced_flow"
-        command: "julia --color=yes --project=test test/test_cases/run_3d_balanced_flow.jl"
-        artifact_paths: "test/test_cases/run_3d_balanced_flow/*"
+  #     - label: ":computer: 3d_balanced_flow"
+  #       command: "julia --color=yes --project=test test/test_cases/run_3d_balanced_flow.jl"
+  #       artifact_paths: "test/test_cases/run_3d_balanced_flow/*"
 
-      - label: ":computer: 3d_baroclinic_wave"
-        command: "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
-        artifact_paths: "test/test_cases/run_3d_baroclinic_wave/*"
+  #     - label: ":computer: 3d_baroclinic_wave"
+  #       command: "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
+  #       artifact_paths: "test/test_cases/run_3d_baroclinic_wave/*"
 
-  - group: "Column Examples"
-    steps:
+  # - group: "Column Examples"
+  #   steps:
 
-      - label: ":computer: single column hydrostatic balance"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --job_id sphere_single_column_hydrostatic_balance"
-        artifact_paths: "sphere_single_column_hydrostatic_balance/*"
+  #     - label: ":computer: single column hydrostatic balance"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --job_id sphere_single_column_hydrostatic_balance"
+  #       artifact_paths: "sphere_single_column_hydrostatic_balance/*"
 
-      - label: ":computer: single column radiative equilibrium gray"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_gray"
-        artifact_paths: "sphere_single_column_radiative_equilibrium_gray/*"
+  #     - label: ":computer: single column radiative equilibrium gray"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_gray"
+  #       artifact_paths: "sphere_single_column_radiative_equilibrium_gray/*"
 
-      - label: ":computer: single column radiative equilibrium clearsky"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky"
-        artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky/*"
+  #     - label: ":computer: single column radiative equilibrium clearsky"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky"
+  #       artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky/*"
 
-      - label: ":computer: single column radiative equilibrium clearsky varying insolation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_insolation false --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky_insolation"
-        artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky_insolation/*"
+  #     - label: ":computer: single column radiative equilibrium clearsky varying insolation"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_insolation false --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_clearsky_insolation"
+  #       artifact_paths: "sphere_single_column_radiative_equilibrium_clearsky_insolation/*"
 
-      - label: ":computer: single column radiative equilibrium allsky idealized clouds"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_allsky_idealized_clouds"
-        artifact_paths: "sphere_single_column_radiative_equilibrium_allsky_idealized_clouds/*"
+  #     - label: ":computer: single column radiative equilibrium allsky idealized clouds"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_allsky_idealized_clouds"
+  #       artifact_paths: "sphere_single_column_radiative_equilibrium_allsky_idealized_clouds/*"
 
-  - group: "MPI Examples"
-    steps:
+  # - group: "MPI Examples"
+  #   steps:
 
-      - label: ":computer: MPI baroclinic wave (ρe_tot)"
-        key: "mpi_baro_wave"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt_save_restart 5days"
-        artifact_paths: "mpi_baroclinic_wave_rhoe/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 2
+  #     - label: ":computer: MPI baroclinic wave (ρe_tot)"
+  #       key: "mpi_baro_wave"
+  #       command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt_save_restart 5days"
+  #       artifact_paths: "mpi_baroclinic_wave_rhoe/*"
+  #       env:
+  #         CLIMACORE_DISTRIBUTED: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
 
-      - label: ":computer: MPI baroclinic wave (ρe_tot)"
-        key: "mpi_baro_wave_ARS343"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt 580secs"
-        artifact_paths: "mpi_baroclinic_wave_rhoe/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 2
+  #     - label: ":computer: MPI baroclinic wave (ρe_tot)"
+  #       key: "mpi_baro_wave_ARS343"
+  #       command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt 580secs"
+  #       artifact_paths: "mpi_baroclinic_wave_rhoe/*"
+  #       env:
+  #         CLIMACORE_DISTRIBUTED: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
 
-      - label: ":computer: Test restart for MPI baroclinic wave"
-        key: "restart_mpi_baro_wave"
-        depends_on: "mpi_baro_wave"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --t_end 20days"
-        artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-          RESTART_FILE: "mpi_baroclinic_wave_rhoe/restart/day5.0.hdf5"
-        agents:
-          slurm_ntasks: 2
-        timeout_in_minutes: 20
-        retry:
-          automatic: true
+  #     - label: ":computer: Test restart for MPI baroclinic wave"
+  #       key: "restart_mpi_baro_wave"
+  #       depends_on: "mpi_baro_wave"
+  #       command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --t_end 20days"
+  #       artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
+  #       env:
+  #         CLIMACORE_DISTRIBUTED: "MPI"
+  #         RESTART_FILE: "mpi_baroclinic_wave_rhoe/restart/day5.0.hdf5"
+  #       agents:
+  #         slurm_ntasks: 2
+  #       timeout_in_minutes: 20
+  #       retry:
+  #         automatic: true
 
-      - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 4days"
-        artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 2
+  #     - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
+  #       command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 4days"
+  #       artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
+  #       env:
+  #         CLIMACORE_DISTRIBUTED: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
 
-  - group: "Sphere Examples"
-    steps:
+  # - group: "Sphere Examples"
+  #   steps:
 
-      - label: ":computer: baroclinic wave (ρe_tot) IMEXEuler"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 40hours --dt 60secs --ode_algo ODE.IMEXEuler --max_newton_iters 2 --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
+  #     - label: ":computer: baroclinic wave (ρe_tot) IMEXEuler"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 40hours --dt 60secs --ode_algo ODE.IMEXEuler --max_newton_iters 2 --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
 
-      - label: ":computer: baroclinic wave (ρe_tot) Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64 --t_end 9days"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
+  #     - label: ":computer: baroclinic wave (ρe_tot) Float64"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64 --t_end 9days"
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
-      - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --t_end 4days"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
+  #     - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --t_end 4days"
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: baroclinic wave (ρθ) Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64 --dt 500secs"
-        artifact_paths: "sphere_baroclinic_wave_rhotheta_Float64/*"
+  #     - label: ":computer: baroclinic wave (ρθ) Float64"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhotheta_Float64 --dt 500secs"
+  #       artifact_paths: "sphere_baroclinic_wave_rhotheta_Float64/*"
 
-      - label: ":computer: held suarez (ρθ)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs"
-        artifact_paths: "sphere_held_suarez_rhotheta/*"
+  #     - label: ":computer: held suarez (ρθ)"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs"
+  #       artifact_paths: "sphere_held_suarez_rhotheta/*"
 
-      - label: ":computer: held suarez (ρe) equilmoist hightop sponge"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 1days"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
+  #     - label: ":computer: held suarez (ρe) equilmoist hightop sponge"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 1days"
+  #       artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist FCT Zalesak on moisture"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --tracer_upwinding zalesak --kappa_4 4e17 --job_id sphere_held_suarez_rhoe_equilmoist_zalesak --dt 400secs --t_end 3days"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_zalesak/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: held suarez (ρe_tot) equilmoist FCT Zalesak on moisture"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --tracer_upwinding zalesak --kappa_4 4e17 --job_id sphere_held_suarez_rhoe_equilmoist_zalesak --dt 400secs --t_end 3days"
+  #       artifact_paths: "sphere_held_suarez_rhoe_equilmoist_zalesak/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-  - group: "Configs"
-    steps:
+  # - group: "Configs"
+  #   steps:
 
-      - label: ":computer: Test IO"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --microphy 0M --rad clearsky --t_end 2hours --job_id test_io --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
-        artifact_paths: "test_io/*"
+  #     - label: ":computer: Test IO"
+  #       command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --microphy 0M --rad clearsky --t_end 2hours --job_id test_io --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
+  #       artifact_paths: "test_io/*"
 
-      - label: ":computer: Use test env with latest deps"
-        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
-        artifact_paths: "test_env/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Use test env with latest deps"
+  #       command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
+  #       artifact_paths: "test_env/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
 
-      - label: ":computer: MPI io test"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id test_mpi_io --t_end 2hours --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
-        artifact_paths: "test_mpi_io/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 2
+  #     - label: ":computer: MPI io test"
+  #       command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id test_mpi_io --t_end 2hours --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
+  #       artifact_paths: "test_mpi_io/*"
+  #       env:
+  #         CLIMACORE_DISTRIBUTED: "MPI"
+  #       agents:
+  #         slurm_ntasks: 2
 
   - group: "Milestones"
     steps:
 
-      - label: ":computer: hydrostatic balance (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --job_id sphere_hydrostatic_balance_rhoe"
-        artifact_paths: "sphere_hydrostatic_balance_rhoe/*"
+  #     - label: ":computer: hydrostatic balance (ρe_tot)"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --job_id sphere_hydrostatic_balance_rhoe"
+  #       artifact_paths: "sphere_hydrostatic_balance_rhoe/*"
 
-      - label: ":computer: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
-        artifact_paths: "sphere_baroclinic_wave_rhoe/*"
+  #     - label: ":computer: baroclinic wave (ρe_tot)"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
-      - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --t_end 6days"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
+  #     - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --t_end 6days"
+  #       artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: held suarez (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe --regression_test true --t_end 6days --dt 500secs"
-        artifact_paths: "sphere_held_suarez_rhoe/*"
+  #     - label: ":computer: held suarez (ρe_tot)"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe --regression_test true --t_end 6days --dt 500secs"
+  #       artifact_paths: "sphere_held_suarez_rhoe/*"
 
-      - label: ":computer: held suarez (ρe_int)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true --t_end 6days"
-        artifact_paths: "sphere_held_suarez_rhoe_int/*"
+  #     - label: ":computer: held suarez (ρe_int)"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true --t_end 6days"
+  #       artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 450secs --t_end 3days"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
+  #     - label: ":computer: held suarez (ρe_tot) equilmoist"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 450secs --t_end 3days"
+  #       artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 600secs --t_end 3days"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
+  #     - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 600secs --t_end 3days"
+  #       artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky_mo --dt 400secs --t_end 2.5days"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky_mo/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky_mo --dt 400secs --t_end 2.5days"
+  #       artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky_mo/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 450secs --t_end 2.5days"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
+  #     - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 450secs --t_end 2.5days"
+  #       artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation varying insolation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --idealized_insolation false --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray_insolation --dt 450secs --t_end 2.5days"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray_insolation/*"
+  #     - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation varying insolation"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --idealized_insolation false --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray_insolation --dt 450secs --t_end 2.5days"
+  #       artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray_insolation/*"
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 2.5days"
-        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
+  #     - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 2.5days"
+  #       artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
       
       - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --rayleigh_sponge true --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 200secs --t_end 2days --regression_test true"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
 
-      # The following tests used to work with upwinding on both energy and tracers, but they fail with upwinding on only tracers. They will be re-enabled after updates to topography.
+  #     # The following tests used to work with upwinding on both energy and tracers, but they fail with upwinding on only tracers. They will be re-enabled after updates to topography.
 
-      # - label: ":computer: held suarez (ρe_tot) topography"
-      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
-      #   artifact_paths: "sphere_held_suarez_rhoe_dcmip_topography/*"
+  #     # - label: ":computer: held suarez (ρe_tot) topography"
+  #     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+  #     #   artifact_paths: "sphere_held_suarez_rhoe_dcmip_topography/*"
 
-      # - label: ":computer: baroclinic wave (ρe_tot) topography"
-      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
-      #   artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography/*"
+  #     # - label: ":computer: baroclinic wave (ρe_tot) topography"
+  #     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+  #     #   artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography/*"
 
-      # - label: ":computer: baroclinic wave (ρe_tot) topography (RS)"
-      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography_rs --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true"
-      #   artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography_rs/*"
+  #     # - label: ":computer: baroclinic wave (ρe_tot) topography (RS)"
+  #     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_dcmip_topography_rs --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true"
+  #     #   artifact_paths: "sphere_baroclinic_wave_rhoe_dcmip_topography_rs/*"
 
-      # - label: ":computer: baroclinic wave (ρe_tot) equilmoist topography"
-      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
-      #   artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography/*"
+  #     # - label: ":computer: baroclinic wave (ρe_tot) equilmoist topography"
+  #     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography --t_end 6days --topography DCMIP200 --dt 200secs --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+  #     #   artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_dcmip_topography/*"
 
-      # - label: ":computer: held suarez (ρe_tot) equilmoist topography"
-      #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_dcmip_topography --dt 200secs --t_end 3days --topography DCMIP200 --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
-      #   artifact_paths: "sphere_held_suarez_rhoe_equilmoist_dcmip_topography/*"
-
-
-  - group: "Performance targets"
-    steps:
-
-      # TODO: add/exercise edmf code
-      # Comment out the following job for now, until flame graph w/ changing ID is cleared
-      # - label: ":computer: Unthreaded performance target (Rosenbrock)"
-      #   command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-      #   artifact_paths: "perf_target_unthreaded_rosenbrock/*"
-      #   agents:
-      #     slurm_mem: 20GB
-
-      - label: ":computer: Unthreaded performance target"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-        artifact_paths: "perf_target_unthreaded/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: Threaded performance target"
-        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-        artifact_paths: "perf_target_threaded/*"
-        agents:
-          slurm_ntasks: 8
-          slurm_ntasks_per_node: 8
+  #     # - label: ":computer: held suarez (ρe_tot) equilmoist topography"
+  #     #   command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_dcmip_topography --dt 200secs --t_end 3days --topography DCMIP200 --regression_test false --tracer_upwinding third_order --rayleigh_sponge true --viscous_sponge true"
+  #     #   artifact_paths: "sphere_held_suarez_rhoe_equilmoist_dcmip_topography/*"
 
 
-  - group: "TurbulenceConvection"
-    steps:
+  # - group: "Performance targets"
+  #   steps:
 
-      - label: ":balloon: Single column EDMF Bomex"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 6hours"
-        artifact_paths: "edmf_bomex/*"
-        agents:
-          slurm_mem: 20GB
+  #     # TODO: add/exercise edmf code
+  #     # Comment out the following job for now, until flame graph w/ changing ID is cleared
+  #     # - label: ":computer: Unthreaded performance target (Rosenbrock)"
+  #     #   command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+  #     #   artifact_paths: "perf_target_unthreaded_rosenbrock/*"
+  #     #   agents:
+  #     #     slurm_mem: 20GB
 
-      - label: ":balloon: Compressible single column EDMF Bomex"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id compressible_edmf_bomex --dt 1secs --t_end 6hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 6hours"
-        artifact_paths: "compressible_edmf_bomex/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Unthreaded performance target"
+  #       command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+  #       artifact_paths: "perf_target_unthreaded/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":balloon: Single column EDMF DYCOMS_RF01"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true --apply_limiter false"
-        artifact_paths: "edmf_dycoms_rf01/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":computer: Threaded performance target"
+  #       command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+  #       artifact_paths: "perf_target_threaded/*"
+  #       agents:
+  #         slurm_ntasks: 8
+  #         slurm_ntasks_per_node: 8
 
-      - label: ":balloon: Compresible single column EDMF DYCOMS_RF01"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id compressible_edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --apply_limiter false"
-        artifact_paths: "compressible_edmf_dycoms_rf01/*"
-        agents:
-          slurm_mem: 20GB
 
-      - label: ":balloon: Single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --dt_save_to_disk 3hours --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false"
-        artifact_paths: "edmf_trmm/*"
-        agents:
-          slurm_mem: 20GB
+  # - group: "TurbulenceConvection"
+  #   steps:
 
-      - label: ":balloon: Compressible single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --rayleigh_sponge true --zd_rayleigh 15000 --job_id compressible_edmf_trmm --dt 0.1secs --t_end 1hours --regression_test true --apply_limiter false"
-        artifact_paths: "compressible_edmf_trmm/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":balloon: Single column EDMF Bomex"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 6hours"
+  #       artifact_paths: "edmf_bomex/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":balloon: Single column EDMF GABLS"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true --apply_limiter false"
-        artifact_paths: "edmf_gabls/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":balloon: Compressible single column EDMF Bomex"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id compressible_edmf_bomex --dt 1secs --t_end 6hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 6hours"
+  #       artifact_paths: "compressible_edmf_bomex/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":balloon: Compressible single column EDMF GABLS"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true --apply_limiter false"
-        artifact_paths: "compressible_edmf_gabls/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":balloon: Single column EDMF DYCOMS_RF01"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --anelastic_dycore true --apply_limiter false"
+  #       artifact_paths: "edmf_dycoms_rf01/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-  - group: "Performance"
-    steps:
+  #     - label: ":balloon: Compresible single column EDMF DYCOMS_RF01"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case DYCOMS_RF01 --dt_save_to_sol 5mins --z_elem 30 --z_stretch false --z_max 1500 --job_id compressible_edmf_dycoms_rf01 --dt 6secs --t_end 4hours --regression_test true --apply_limiter false"
+  #       artifact_paths: "compressible_edmf_dycoms_rf01/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: perf target (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
-        artifact_paths: "flame_perf_target_rhoe/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":balloon: Single column EDMF TRMM_LBA"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --dt_save_to_disk 3hours --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false"
+  #       artifact_paths: "edmf_trmm/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: threaded perf target (ρe_tot)"
-        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
-        artifact_paths: "flame_perf_target_rhoe_threaded/*"
-        agents:
-          slurm_ntasks: 8
-          slurm_ntasks_per_node: 8
-          slurm_mem: 20GB
+  #     - label: ":balloon: Compressible single column EDMF TRMM_LBA"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case TRMM_LBA --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --rayleigh_sponge true --zd_rayleigh 15000 --job_id compressible_edmf_trmm --dt 0.1secs --t_end 1hours --regression_test true --apply_limiter false"
+  #       artifact_paths: "compressible_edmf_trmm/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: perf target callbacks"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
-        artifact_paths: "flame_perf_target_rhoe_callbacks/*"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":balloon: Single column EDMF GABLS"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true --apply_limiter false"
+  #       artifact_paths: "edmf_gabls/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      # Comment out the following job for now, until flame graph w/ changing ID is cleared
-      # - label: ":rocket: flame graph: perf target (ρe_tot) (Rosenbrock)"
-      #   command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_rosenbrock --ode_algo ODE.Rosenbrock23"
-      #   artifact_paths: "flame_perf_target_rhoe_rosenbrock/*"
-      #   agents:
-      #     slurm_mem: 20GB
+  #     - label: ":balloon: Compressible single column EDMF GABLS"
+  #       command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true --apply_limiter false"
+  #       artifact_paths: "compressible_edmf_gabls/*"
+  #       agents:
+  #         slurm_mem: 20GB
 
-      - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
+  # - group: "Performance"
+  #   steps:
 
-      - label: ":mag: Allocations: perf target"
-        command: "julia --color=yes --project=perf perf/allocs.jl"
-        agents:
-          slurm_mem: 20GB
+  #     - label: ":rocket: flame graph: perf target (ρe_tot)"
+  #       command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
+  #       artifact_paths: "flame_perf_target_rhoe/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     - label: ":rocket: flame graph: threaded perf target (ρe_tot)"
+  #       command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
+  #       artifact_paths: "flame_perf_target_rhoe_threaded/*"
+  #       agents:
+  #         slurm_ntasks: 8
+  #         slurm_ntasks_per_node: 8
+  #         slurm_mem: 20GB
+
+  #     - label: ":rocket: flame graph: perf target callbacks"
+  #       command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
+  #       artifact_paths: "flame_perf_target_rhoe_callbacks/*"
+  #       agents:
+  #         slurm_mem: 20GB
+
+  #     # Comment out the following job for now, until flame graph w/ changing ID is cleared
+  #     # - label: ":rocket: flame graph: perf target (ρe_tot) (Rosenbrock)"
+  #     #   command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_rosenbrock --ode_algo ODE.Rosenbrock23"
+  #     #   artifact_paths: "flame_perf_target_rhoe_rosenbrock/*"
+  #     #   agents:
+  #     #     slurm_mem: 20GB
+
+  #     - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
+  #       command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
+
+  #     - label: ":mag: Allocations: perf target"
+  #       command: "julia --color=yes --project=perf perf/allocs.jl"
+  #       agents:
+  #         slurm_mem: 20GB
 
   - wait: ~
     continue_on_failure: true
