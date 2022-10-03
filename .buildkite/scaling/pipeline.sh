@@ -139,7 +139,7 @@ else
     cat << EOM
         slurm_ntasks: $nprocs
         slurm_cpus_per_task: $cpus_per_proc
-        slurm_mem_per_cpu: 8G
+        slurm_mem: 128G # per node
 EOM
 fi
 
