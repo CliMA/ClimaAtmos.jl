@@ -305,7 +305,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         )
         png(plot_ω, output_dir * "/bw-vorticity-day" * string(day) * ".png")
 
-        rm(datafile_latlon)
+        rm(datafile_latlon; force = true)
     end
 
 end
@@ -584,7 +584,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             output_dir * "/bw-vert_intg_water_vapor-day" * string(day) * ".png",
         )
 
-        rm(datafile_latlon)
+        rm(datafile_latlon; force = true)
     end
 
 end

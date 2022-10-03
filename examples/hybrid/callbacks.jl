@@ -2,6 +2,7 @@ import ClimaCore.DataLayouts as DL
 import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
+import ClimaCore.Operators as CCO
 import ClimaCore.Spaces
 import OrdinaryDiffEq as ODE
 import ClimaAtmos.Parameters as CAP
@@ -55,10 +56,18 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         call_every_dt(save_restart_func, dt_save_restart)
     end
+
+    gc_callback = if simulation.is_distributed
+        call_every_n_steps(gc_func, 1000)
+    else
+        nothing
+    end
+
     return ODE.CallbackSet(
         dss_cb,
         save_to_disk_callback,
         save_restart_callback,
+        gc_callback,
         additional_callbacks...,
     )
 end
@@ -157,7 +166,17 @@ function save_to_disk_func(integrator)
     Y = u
 
     if :ᶜS_ρq_tot in propertynames(p)
-        (; ᶜts, ᶜp, ᶜS_ρq_tot, ᶜ3d_rain, ᶜ3d_snow, params, ᶜK) = p
+        (;
+            ᶜts,
+            ᶜp,
+            ᶜS_ρq_tot,
+            ᶜ3d_rain,
+            ᶜ3d_snow,
+            params,
+            ᶜK,
+            col_integrated_rain,
+            col_integrated_snow,
+        ) = p
     else
         (; ᶜts, ᶜp, params, ᶜK) = p
     end
@@ -217,10 +236,12 @@ function save_to_disk_func(integrator)
             @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
             @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
 
-            col_integrated_rain =
-                vertical∫_col(ᶜ3d_rain) ./ FT(CAP.ρ_cloud_liq(params))
-            col_integrated_snow =
-                vertical∫_col(ᶜ3d_snow) ./ FT(CAP.ρ_cloud_liq(params))
+            CCO.column_integral_definite!(col_integrated_rain, ᶜ3d_rain)
+            CCO.column_integral_definite!(col_integrated_snow, ᶜ3d_snow)
+
+            @. col_integrated_rain /= CAP.ρ_cloud_liq(params)
+            @. col_integrated_snow /= CAP.ρ_cloud_liq(params)
+
 
             moist_diagnostic = (
                 moist_diagnostic...,
@@ -380,5 +401,21 @@ function save_restart_func(integrator)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
+    return nothing
+end
+
+function gc_func(integrator)
+    free_mem = Sys.free_memory()
+    total_mem = Sys.total_memory()
+    p_free_mem = free_mem / total_mem
+    min_p_free_mem =
+        ClimaCommsMPI.MPI.Allreduce(p_free_mem, min, comms_ctx.mpicomm)
+    do_gc = min_p_free_mem < 0.2
+    @info "GC check" "free mem (MB)" = free_mem / 2^20 "total mem (MB)" =
+        total_mem / 2^20 "Minimum free memory (%)" = min_p_free_mem * 100 "Calling GC" =
+        do_gc
+    if do_gc
+        GC.gc()
+    end
     return nothing
 end

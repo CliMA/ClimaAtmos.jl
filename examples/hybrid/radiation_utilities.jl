@@ -260,11 +260,12 @@ function rrtmgp_model_callback!(integrator)
                 rrtmgp_model.weighted_irradiance,
                 axes(bottom_coords),
             )
+            ref_insolation_params = Ref(insolation_params)
             @. insolation_tuple = instantaneous_zenith_angle(
                 current_datetime,
                 Float64(bottom_coords.long),
                 Float64(bottom_coords.lat),
-                insolation_params,
+                ref_insolation_params,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
             @. solar_zenith_angle =
                 min(first(insolation_tuple), max_zenith_angle)

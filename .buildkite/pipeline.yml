@@ -177,10 +177,6 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64 --t_end 9days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
-      - label: ":computer: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs"
-        artifact_paths: "sphere_baroclinic_wave_rhoe/*"
-
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --microphy 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --t_end 4days"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
@@ -207,7 +203,7 @@ steps:
     steps:
 
       - label: ":computer: Test IO"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --t_end 2hours --job_id test_io --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --microphy 0M --rad clearsky --t_end 2hours --job_id test_io --dt_save_to_sol 1hours --dt_save_to_disk 1hours --post_process false"
         artifact_paths: "test_io/*"
 
       - label: ":computer: Use test env with latest deps"
@@ -233,7 +229,7 @@ steps:
         artifact_paths: "sphere_hydrostatic_balance_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
@@ -265,6 +261,10 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray --dt 450secs --t_end 2.5days"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray/*"
+
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation varying insolation"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --idealized_insolation false --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_gray_insolation --dt 450secs --t_end 2.5days"
+        artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_gray_insolation/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --microphy 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 2.5days"
