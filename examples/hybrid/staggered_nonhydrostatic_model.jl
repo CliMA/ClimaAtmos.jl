@@ -1,6 +1,7 @@
 using LinearAlgebra: ×, norm, norm_sqr, dot
 
 import ClimaAtmos.Parameters as CAP
+using ClimaAtmos: error_on_nan
 using ClimaCore: Operators, Fields, Limiters
 
 using ClimaCore.Geometry: ⊗
