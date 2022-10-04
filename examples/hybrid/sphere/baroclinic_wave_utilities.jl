@@ -250,7 +250,7 @@ function vertical_diffusion_boundary_layer_cache(
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
 
-    normal = Geometry.WVector.(ones(axes(Y.c)))
+    surface_normal = Geometry.WVector.(ones(axes(Fields.level(Y.c, 1))))
 
     dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
     return (;
@@ -268,7 +268,7 @@ function vertical_diffusion_boundary_layer_cache(
         dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
         diffuse_momentum,
         coupled,
-        normal,
+        surface_normal,
         z_bottom,
     )
 end
@@ -404,7 +404,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         z_bottom,
         params,
     ) = p
-    (; uₕ_int_local, normal) = p
+    (; uₕ_int_local, surface_normal) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -435,9 +435,8 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
             ρτxz = surface_conditions[colidx].ρτxz
             ρτyz = surface_conditions[colidx].ρτyz
             ρ_1 = Fields.level(Y.c.ρ[colidx], 1)
-            surface_normal = Fields.level(normal[colidx], 1)
             @. dif_flux_uₕ[colidx] =
-                Geometry.Contravariant3Vector(surface_normal) ⊗
+                Geometry.Contravariant3Vector(surface_normal[colidx]) ⊗
                 Geometry.Covariant12Vector(
                     Geometry.UVVector(ρτxz / ρ_1, ρτyz / ρ_1),
                 )
