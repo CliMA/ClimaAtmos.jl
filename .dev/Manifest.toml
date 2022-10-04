@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.1"
+julia_version = "1.8.2"
 manifest_format = "2.0"
 project_hash = "b280bcf3b481823c97fa1a62c1b5e65114b8fa18"
 
@@ -176,7 +176,7 @@ version = "1.0.0"
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
+version = "1.10.1"
 
 [[deps.Tokenize]]
 git-tree-sha1 = "2b3af135d85d7e70b863540160208fa612e736b9"
