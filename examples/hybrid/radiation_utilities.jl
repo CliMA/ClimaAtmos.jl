@@ -1,4 +1,5 @@
 import ClimaAtmos.Parameters as CAP
+using ClimaAtmos: error_on_nan
 using Statistics: mean
 using Dierckx: Spline1D
 using Dates: Second
