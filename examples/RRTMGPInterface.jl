@@ -1090,6 +1090,7 @@ function update_boundary_layer!(model)
     @views as.t_lay[end, :] .= as.t_lev[end - 1, :]
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
     update_boundary_layer_vmr!(model.radiation_mode, as)
+    update_boundary_layer_cloud!(model.radiation_mode, as)
 end
 update_boundary_layer_vmr!(::GrayRadiation, as) = nothing
 update_boundary_layer_vmr!(radiation_mode, as) =
@@ -1100,6 +1101,21 @@ function update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.VmrGM)
 end
 update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.Vmr) =
     @views vmr.vmr[end, :, :] .= vmr.vmr[end - 1, :, :]
+
+update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, as) =
+    nothing
+update_boundary_layer_cloud!(
+    ::Union{AllSkyRadiation, AllSkyRadiationWithClearSkyDiagnostics},
+    as,
+) = update_boundary_layer_cloud!(as)
+
+function update_boundary_layer_cloud!(as)
+    @views as.cld_r_eff_liq[end, :] .= as.cld_r_eff_liq[end - 1, :]
+    @views as.cld_r_eff_ice[end, :] .= as.cld_r_eff_ice[end - 1, :]
+    @views as.cld_path_liq[end, :] .= as.cld_path_liq[end - 1, :]
+    @views as.cld_path_ice[end, :] .= as.cld_path_ice[end - 1, :]
+    @views as.cld_frac[end, :] .= as.cld_frac[end - 1, :]
+end
 
 function clip_values!(model)
     (; p_lay, p_lev) = model.solver.as
