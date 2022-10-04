@@ -189,6 +189,7 @@ function rrtmgp_model_tendency!(Yₜ, Y, p, t)
     end
 end
 function rrtmgp_model_callback!(integrator)
+    
     Y = integrator.u
     p = integrator.p
     t = integrator.t
@@ -312,4 +313,6 @@ function rrtmgp_model_callback!(integrator)
 
     RRTMGPI.update_fluxes!(rrtmgp_model)
     RRTMGPI.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+
+    error_on_nan(Y, p)
 end

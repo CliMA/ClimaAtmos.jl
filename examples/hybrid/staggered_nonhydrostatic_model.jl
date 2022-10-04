@@ -1,7 +1,6 @@
 using LinearAlgebra: ×, norm, norm_sqr, dot
 
 import ClimaAtmos.Parameters as CAP
-using ClimaAtmos: error_on_nan
 using ClimaCore: Operators, Fields, Limiters
 
 using ClimaCore.Geometry: ⊗
@@ -574,7 +573,6 @@ end
 call_verify_wfact_matrix() = false
 
 function Wfact!(W, Y, p, dtγ, t)
-    error_on_nan(Y, p)
     @nvtx "Wfact!" color = colorant"green" begin
         _Wfact!(W, Y, p, dtγ, t)
     end
