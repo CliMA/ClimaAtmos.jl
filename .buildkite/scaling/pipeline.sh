@@ -29,6 +29,7 @@ env:
 agents:
   config: cpu
   queue: central
+  slurm_partition: expansion
 
 steps:
   - label: "init :computer:"
@@ -129,8 +130,7 @@ if [[ "$exclusive" == "true" ]]; then
     procs_per_node=$(( nprocs/nnodes ))
 
     cat << EOM
-        slurm_nodes: $nnodes
-        slurm_tasks_per_node: $procs_per_node
+        slurm_ntasks: $nprocs
         slurm_cpus_per_task: $cpus_per_proc
         slurm_mem: 0
         slurm_exclusive:
