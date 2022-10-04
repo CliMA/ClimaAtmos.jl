@@ -411,7 +411,7 @@ function gc_func(integrator)
     min_p_free_mem =
         ClimaCommsMPI.MPI.Allreduce(p_free_mem, min, comms_ctx.mpicomm)
     do_gc = min_p_free_mem < 0.2
-    @info "GC check" "free mem (MB)" = free_mem / 2^20 "total mem (MB)" =
+    @debug "GC check" "free mem (MB)" = free_mem / 2^20 "total mem (MB)" =
         total_mem / 2^20 "Minimum free memory (%)" = min_p_free_mem * 100 "Calling GC" =
         do_gc
     if do_gc
