@@ -835,8 +835,12 @@ function RRTMGPModel(
             set_and_save!(cld_frac, "center_cloud_fraction", t..., dict)
             random_lw = DA{FT}(undef, ngpt_lw, nlay, ncol)
             random_sw = DA{FT}(undef, ngpt_sw, nlay, ncol)
+            #random_lw .= 0
+            #random_sw .= 0
             cld_mask_lw = DA{Bool}(undef, ngpt_lw, nlay, ncol)
+            #cld_mask_lw .= false
             cld_mask_sw = DA{Bool}(undef, ngpt_sw, nlay, ncol)
+            #cld_mask_sw .= false
             cld_overlap = RRTMGP.AtmosphericStates.MaxRandomOverlap()
 
             # ice_roughness is a constant, so don't use set_and_save! to get it

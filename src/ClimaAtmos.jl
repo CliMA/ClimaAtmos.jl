@@ -4,7 +4,6 @@ include("Parameters.jl")
 import .Parameters
 
 import ClimaCore: Fields
-using Dates: DateTime
 
 function error_on_nan(cache::Fields.FieldVector)
     for pn in propertynames(cache)
