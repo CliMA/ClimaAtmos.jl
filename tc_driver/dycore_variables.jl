@@ -61,7 +61,6 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     Ri = FT(0),
     θ_liq_ice = FT(0),
     q_tot = FT(0),
-    p = FT(0),
     e_kin = FT(0),
     h_tot = FT(0),
 )

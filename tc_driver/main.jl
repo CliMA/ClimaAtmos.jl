@@ -339,7 +339,7 @@ function initialize(sim::Simulation1d)
                 add_write_field(
                     ds,
                     "p_c",
-                    vec(TC.center_aux_grid_mean(state).p),
+                    vec(TC.center_aux_grid_mean_p(state)),
                     group,
                     ("zc",),
                 )

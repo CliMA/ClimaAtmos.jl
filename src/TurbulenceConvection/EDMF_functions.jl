@@ -73,7 +73,7 @@ function compute_sgs_flux!(
     aux_up_f = face_aux_updrafts(state)
     ρ_f = aux_gm_f.ρ
     ρ_c = prog_gm.ρ
-    p_c = aux_gm.p
+    p_c = center_aux_grid_mean_p(state)
     kf_surf = kf_surface(grid)
     kc_surf = kc_surface(grid)
     massflux = aux_tc_f.massflux

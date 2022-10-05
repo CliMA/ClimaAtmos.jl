@@ -288,6 +288,7 @@ function initialize_profiles(::Soares, grid::Grid, param_set, state; kwargs...)
     thermo_flag = "θ_liq_ice"
     params = (; param_set, prof_thermo_var, prof_q_tot, thermo_falg)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean state
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -297,7 +298,7 @@ function initialize_profiles(::Soares, grid::Grid, param_set, state; kwargs...)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.tke[k] = prof_tke(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 
@@ -356,6 +357,7 @@ function initialize_profiles(
     thermo_flag = "θ_liq_ice"
     params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean state
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -364,7 +366,7 @@ function initialize_profiles(
         z = grid.zc[k].z
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.tke[k] = prof_tke(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 
@@ -423,6 +425,7 @@ function initialize_profiles(::Bomex, grid::Grid, param_set, state; kwargs...)
     thermo_flag = "θ_liq_ice"
     params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -432,7 +435,7 @@ function initialize_profiles(::Bomex, grid::Grid, param_set, state; kwargs...)
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.tke[k] = prof_tke(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 
@@ -461,7 +464,7 @@ function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
     prof_ug = APL.Bomex_geostrophic_u(FT)
@@ -524,6 +527,7 @@ function initialize_profiles(
     thermo_flag = "θ_liq_ice"
     params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -533,7 +537,7 @@ function initialize_profiles(
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.tke[k] = prof_tke(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 
@@ -578,7 +582,7 @@ function initialize_forcing(
     initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
 
     FT = TC.float_type(state)
@@ -622,6 +626,7 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
 
@@ -647,7 +652,7 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
         z = grid.zc[k].z
         aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 
     # Need to get θ_virt
@@ -656,7 +661,7 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
         # defined, so we can't use it yet.
         ts = TD.PhaseEquil_pθq(
             thermo_params,
-            aux_gm.p[k],
+            p_c[k],
             aux_gm.θ_liq_ice[k],
             aux_gm.q_tot[k],
         )
@@ -703,7 +708,7 @@ function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
     prof_ug = APL.Rico_geostrophic_ug(FT)
@@ -772,6 +777,7 @@ function initialize_profiles(
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
 
@@ -796,13 +802,13 @@ function initialize_profiles(
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
         aux_gm.q_tot[k] = prof_q_tot(z)
         phase_part = TD.PhasePartition(aux_gm.q_tot[k], FT(0), FT(0)) # initial state is not saturated
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
             thermo_params,
             prof_T(z),
-            aux_gm.p[k],
+            p_c[k],
             phase_part,
         )
         aux_gm.tke[k] = prof_tke(z)
@@ -892,15 +898,15 @@ function initialize_profiles(::ARM_SGP, grid::Grid, param_set, state; kwargs...)
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         # TODO figure out how to use ts here
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
         phase_part = TD.PhasePartition(aux_gm.q_tot[k], aux_gm.q_liq[k], FT(0))
-        Π = TD.exner_given_pressure(thermo_params, aux_gm.p[k], phase_part)
+        Π = TD.exner_given_pressure(thermo_params, p_c[k], phase_part)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.T[k] = prof_θ_liq_ice(z) * Π
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
             thermo_params,
             aux_gm.T[k],
-            aux_gm.p[k],
+            p_c[k],
             phase_part,
         )
         aux_gm.tke[k] = prof_tke(z)
@@ -947,7 +953,7 @@ function update_forcing(::ARM_SGP, grid, state, t::Real, param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    p_c = prog_gm.ρ
+    ρ_c = prog_gm.ρ
     FT = TC.float_type(state)
     @inbounds for k in real_center_indices(grid)
         Π = TD.exner(thermo_params, ts_gm[k])
@@ -981,6 +987,7 @@ function initialize_profiles(
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
 
@@ -1006,11 +1013,11 @@ function initialize_profiles(
         z = grid.zc[k].z
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.T[k] = prof_T(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
         aux_gm.tke[k] = prof_tke(z)
         ts = TD.PhaseEquil_pTq(
             thermo_params,
-            aux_gm.p[k],
+            p_c[k],
             aux_gm.T[k],
             aux_gm.q_tot[k],
         )
@@ -1070,6 +1077,7 @@ function initialize_profiles(
 )
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
 
@@ -1099,7 +1107,7 @@ function initialize_profiles(
 
         # velocity profile (geostrophic)
         aux_gm.tke[k] = APL.Dycoms_RF01_tke(FT)(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 
@@ -1197,6 +1205,7 @@ function initialize_profiles(
 )
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
 
@@ -1226,7 +1235,7 @@ function initialize_profiles(
 
         # velocity profile
         aux_gm.tke[k] = APL.Dycoms_RF02_tke(FT)(z)
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 
@@ -1316,6 +1325,7 @@ end
 function initialize_profiles(::GABLS, grid::Grid, param_set, state; kwargs...)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
+    p_c = TC.center_aux_grid_mean_p(state)
 
     FT = TC.float_type(state)
 
@@ -1344,7 +1354,7 @@ function initialize_profiles(::GABLS, grid::Grid, param_set, state; kwargs...)
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.tke[k] = APL.GABLS_tke(FT)(z)
         aux_gm.Hvar[k] = aux_gm.tke[k]
-        aux_gm.p[k] = prof_p(z)
+        p_c[k] = prof_p(z)
     end
 end
 

@@ -200,7 +200,7 @@ function compute_entr_detr!(
     prog_gm = center_prog_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
     aux_tc = center_aux_turbconv(state)
-    p_c = aux_gm.p
+    p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     g::FT = TCP.grav(param_set)
     w_up_c = aux_tc.w_up_c
@@ -337,7 +337,7 @@ function compute_entr_detr!(
     aux_gm = center_aux_grid_mean(state)
     aux_tc = center_aux_turbconv(state)
     prog_gm = center_prog_grid_mean(state)
-    p_c = aux_gm.p
+    p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     g::FT = TCP.grav(param_set)
     w_up_c = aux_tc.w_up_c

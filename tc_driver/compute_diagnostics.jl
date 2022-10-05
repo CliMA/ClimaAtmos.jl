@@ -148,7 +148,7 @@ function compute_diagnostics!(
     diag_tc_f = face_diagnostics_turbconv(diagnostics)
     diag_tc_f_precip = face_diagnostics_precip(diagnostics)
     ρ_c = prog_gm.ρ
-    p_c = aux_gm.p
+    p_c = TC.center_aux_grid_mean_p(state)
 
     diag_tc_svpc = svpc_diagnostics_turbconv(diagnostics)
     diag_svpc = svpc_diagnostics_grid_mean(diagnostics)

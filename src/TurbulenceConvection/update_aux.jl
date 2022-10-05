@@ -37,7 +37,7 @@ function update_aux!(
     prog_up = center_prog_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_f = aux_gm_f.ρ
-    p_c = aux_gm.p
+    p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     aux_en_unsat = aux_en.unsat
     aux_en_sat = aux_en.sat
