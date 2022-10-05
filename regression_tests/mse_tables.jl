@@ -143,6 +143,13 @@ all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 1)] = 0.
 all_best_mse["compressible_edmf_gabls"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["compressible_edmf_gabls"][(:c, :turbconv, :en, :ρatke)] = 0.0
 #
+all_best_mse["single_column_nonorographic_gravity_wave"] = OrderedCollections.OrderedDict()
+all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :ρ)] = 0
+all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :ρe_tot)] = 0
+all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["single_column_nonorographic_gravity_wave"][(:f, :w, :components, :data, 1)] = 0
+#
 #! format: on
 #################################
 #################################

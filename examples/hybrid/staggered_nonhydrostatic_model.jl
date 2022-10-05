@@ -50,6 +50,7 @@ const ᶠgradᵥ = Operators.GradientC2F(
     bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
     top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
 )
+const ᶜgradᵥ = Operators.GradientF2C()
 const ᶠcurlᵥ = Operators.CurlC2F(
     bottom = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
     top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
