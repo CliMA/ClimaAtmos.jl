@@ -56,18 +56,10 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         call_every_dt(save_restart_func, dt_save_restart)
     end
-
-    gc_callback = if simulation.is_distributed
-        call_every_n_steps(gc_func, 1000)
-    else
-        nothing
-    end
-
     return ODE.CallbackSet(
         dss_cb,
         save_to_disk_callback,
         save_restart_callback,
-        gc_callback,
         additional_callbacks...,
     )
 end
@@ -401,21 +393,5 @@ function save_restart_func(integrator)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
-    return nothing
-end
-
-function gc_func(integrator)
-    free_mem = Sys.free_memory()
-    total_mem = Sys.total_memory()
-    p_free_mem = free_mem / total_mem
-    min_p_free_mem =
-        ClimaCommsMPI.MPI.Allreduce(p_free_mem, min, comms_ctx.mpicomm)
-    do_gc = min_p_free_mem < 0.2
-    @debug "GC check" "free mem (MB)" = free_mem / 2^20 "total mem (MB)" =
-        total_mem / 2^20 "Minimum free memory (%)" = min_p_free_mem * 100 "Calling GC" =
-        do_gc
-    if do_gc
-        GC.gc()
-    end
     return nothing
 end
