@@ -151,7 +151,7 @@ steps:
           slurm_ntasks: 32
       
       - label: ":computer: aquaplanet (ρe_tot) equilmoist high resolution allsky radiation float64"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad allskywithclear --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 150secs --dt_rad 1hours --idealized_insolation false --t_end 365days --job_id longrun_aquaplanet_rhoe_equil_highres_allsky_ft64 --dt_save_to_disk 10days"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad allskywithclear --microphy 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 150secs --dt_rad 1hours --idealized_insolation false --t_end 365days --job_id longrun_aquaplanet_rhoe_equil_highres_allsky_ft64 --dt_save_to_disk 10days --FLOAT_TYPE Float64"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_allsky_ft64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
