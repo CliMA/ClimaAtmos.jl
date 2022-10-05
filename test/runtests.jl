@@ -18,4 +18,14 @@ group = get(ENV, "TEST_GROUP", :all) |> Symbol
     end
 end
 
+using Test
+import ClimaAtmos
+using Aqua
+
+@testset "Aqua tests - unbound args" begin
+    # This tests that we don't accidentally run into
+    # https://github.com/JuliaLang/julia/issues/29393
+    Aqua.test_unbound_args(ClimaAtmos)
+end
+
 nothing

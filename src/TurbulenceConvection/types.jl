@@ -372,7 +372,7 @@ function FixedSurfaceCoeffs(
     ch::FloatOrFunc{FT},
     cm::FloatOrFunc{FT},
     kwargs...,
-) where {FT, FVT}
+) where {FT}
     TS = typeof(Tsurface)
     QS = typeof(qsurface)
     CH = typeof(ch)
@@ -399,7 +399,7 @@ function MoninObukhovSurface(
     Tsurface::FloatOrFunc{FT},
     qsurface::FloatOrFunc{FT},
     kwargs...,
-) where {FT, FVT}
+) where {FT}
     TS = typeof(Tsurface)
     QS = typeof(qsurface)
     return MoninObukhovSurface{FT, TS, QS}(; Tsurface, qsurface, kwargs...)
