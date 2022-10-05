@@ -67,9 +67,9 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target_rhoe"] = 2529584
-allocs_limit["flame_perf_target_rhoe_threaded"] = 6474592
-allocs_limit["flame_perf_target_rhoe_callbacks"] = 14247192
+allocs_limit["flame_perf_target_rhoe"] = 538352
+allocs_limit["flame_perf_target_rhoe_threaded"] = 4440864
+allocs_limit["flame_perf_target_rhoe_callbacks"] = 12832664
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
