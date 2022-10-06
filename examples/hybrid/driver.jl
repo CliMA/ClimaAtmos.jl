@@ -3,20 +3,7 @@ if !(@isdefined parsed_args)
     (s, parsed_args) = parse_commandline()
 end
 
-# Distributed log must be configured before we start logging:
-# https://github.com/CliMA/ClimaAtmos.jl/issues/838
-include("config_log.jl")
-const comms_ctx = get_comms_ctx()
-if haskey(ENV, "CLIMACORE_DISTRIBUTED")
-    const pid, nprocs = ClimaComms.init(comms_ctx)
-    @info "Setting up distributed run on $nprocs \
-        processor$(nprocs == 1 ? "" : "s")"
-end
-import Logging
-atexit() do
-    Logging.global_logger(Logging.global_logger(get_logger(comms_ctx)))
-end
-
+include("comms.jl")
 include("../implicit_solver_debugging_tools.jl")
 include("../ordinary_diff_eq_bug_fixes.jl")
 include("../common_spaces.jl")
@@ -274,7 +261,13 @@ end
 verify_callbacks(sol.t)
 
 if simulation.is_distributed
-    export_scaling_file(sol, simulation.output_dir, walltime, comms_ctx, nprocs)
+    export_scaling_file(
+        sol,
+        simulation.output_dir,
+        walltime,
+        comms_ctx,
+        ClimaComms.nprocs(comms_ctx),
+    )
 end
 
 import JSON
