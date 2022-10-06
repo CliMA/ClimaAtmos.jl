@@ -193,6 +193,7 @@ function compute_entr_detr!(
     N_up = n_updrafts(edmf)
     aux_up = center_aux_updrafts(state)
     prog_up = center_prog_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
     aux_en = center_aux_environment(state)
     aux_en_f = face_aux_environment(state)
@@ -218,7 +219,7 @@ function compute_entr_detr!(
     @inbounds for i in 1:N_up
         # compute ∇m at cell centers
         a_up = aux_up[i].area
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
         @. m_entr_detr = a_up * (Ic(w_up) - toscalar(Ic(w_gm)))
@@ -331,6 +332,7 @@ function compute_entr_detr!(
     N_up = n_updrafts(edmf)
     aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_en = center_aux_environment(state)
     aux_en_f = face_aux_environment(state)
     prog_gm_f = face_prog_grid_mean(state)
@@ -357,7 +359,7 @@ function compute_entr_detr!(
     @inbounds for i in 1:N_up
         # compute ∇m at cell centers
         a_up = aux_up[i].area
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
         @. m_entr_detr = a_up * (Ic(w_up) - Ic(toscalar(w_gm)))

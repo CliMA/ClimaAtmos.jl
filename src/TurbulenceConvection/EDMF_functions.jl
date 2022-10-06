@@ -71,6 +71,7 @@ function compute_sgs_flux!(
     aux_up = center_aux_updrafts(state)
     aux_tc_f = face_aux_turbconv(state)
     aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     ρ_f = aux_gm_f.ρ
     ρ_c = prog_gm.ρ
     p_c = center_aux_grid_mean_p(state)
@@ -120,7 +121,7 @@ function compute_sgs_flux!(
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         Ifau = CCO.InterpolateC2F(; a_up_bcs...)
         a_up = aux_up[i].area
-        w_up_i = aux_up_f[i].w
+        w_up_i = prog_up_f[i].w
         @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - toscalar(w_gm))
         @. massflux_h +=
             ρ_f * (
@@ -368,7 +369,7 @@ function set_edmf_surface_bc(
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * q_liq_surf
             prog_up[i].ρaq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * q_ice_surf
         end
-        prog_up_f[i].ρaw[kf_surf] = ρ_f[kf_surf] * w_surface_bc(surf)
+        prog_up_f[i].w[kf_surf] = w_surface_bc(surf)
         ae_surf -= a_surf
     end
 
@@ -536,12 +537,12 @@ function get_GMV_CoVar(
     aux_gm_f = face_aux_grid_mean(state)
     prog_gm_c = center_prog_grid_mean(state)
     prog_gm_f = face_prog_grid_mean(state)
-    aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_en_c = center_aux_environment(state)
     aux_en_f = face_aux_environment(state)
     aux_en = is_tke ? aux_en_f : aux_en_c
     aux_up_c = center_aux_updrafts(state)
-    aux_up = is_tke ? aux_up_f : aux_up_c
+    aux_up = is_tke ? prog_up_f : aux_up_c
     gmv_covar = getproperty(center_aux_grid_mean(state), covar_sym)
     covar_e = getproperty(center_aux_environment(state), covar_sym)
     gm = is_tke ? prog_gm_f : aux_gm_c
@@ -666,7 +667,7 @@ function compute_up_tendencies!(
     # Solve for updraft area fraction
     @inbounds for i in 1:N_up
         aux_up_i = aux_up[i]
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         a_up = aux_up_i.area
         q_tot_up = aux_up_i.q_tot
         q_tot_en = aux_en.q_tot
@@ -766,26 +767,18 @@ function compute_up_tendencies!(
         (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
     ∇f = CCO.DivergenceC2F(; adv_bcs...)
-
     @inbounds for i in 1:N_up
-        a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
-        Iaf = CCO.InterpolateC2F(; a_up_bcs...)
-        ρaw = prog_up_f[i].ρaw
-        tends_ρaw = tendencies_up_f[i].ρaw
+        w = prog_up_f[i].w
+        tends_w = tendencies_up_f[i].w
         nh_pressure = aux_up_f[i].nh_pressure
-        a_up = aux_up[i].area
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         w_en = aux_en_f.w
         entr_w = aux_up[i].entr_turb_dyn
-        detr_w = aux_up[i].detr_turb_dyn
         buoy = aux_up[i].buoy
 
-        @. tends_ρaw = -(∇f(wvec(LBC(ρaw * w_up))))
-        @. tends_ρaw +=
-            (ρaw * (I0f(entr_w) * w_en - I0f(detr_w) * w_up)) +
-            (ρ_f * Iaf(a_up) * I0f(buoy)) +
-            nh_pressure
-        tends_ρaw[kf_surf] = 0
+        @. tends_w = -w * (∇f(wvec(LBC(w))))
+        @. tends_w += w * I0f(entr_w) * (w_en - w) + I0f(buoy) + nh_pressure
+        tends_w[kf_surf] = 0
     end
 
     return nothing
@@ -801,15 +794,16 @@ function filter_updraft_vars(
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
+    kf_toa = kf_top_of_atmos(grid)
     FT = float_type(state)
     N_up = n_updrafts(edmf)
 
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
+    prog_gm_f = face_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
     aux_up = center_aux_updrafts(state)
-    aux_up_f = face_aux_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
@@ -817,6 +811,8 @@ function filter_updraft_vars(
     a_max = edmf.max_area
 
     @inbounds for i in 1:N_up
+        prog_up_f[i].w[kf_toa] = FT(0)
+
         @. prog_up[i].ρarea = ifelse(
             prog_up[i].ρarea > ρ_c * a_min,
             prog_up[i].ρarea,
@@ -825,12 +821,12 @@ function filter_updraft_vars(
         @. prog_up[i].ρaθ_liq_ice = ifelse(
             prog_up[i].ρarea > ρ_c * a_min,
             prog_up[i].ρaθ_liq_ice,
-            prog_up[i].ρarea * aux_gm.θ_liq_ice,
+            ρ_c * a_min * aux_gm.θ_liq_ice,
         )
         @. prog_up[i].ρaq_tot = ifelse(
             prog_up[i].ρarea > ρ_c * a_min,
             prog_up[i].ρaq_tot,
-            prog_up[i].ρarea * aux_gm.q_tot,
+            ρ_c * a_min * aux_gm.q_tot,
         )
         if edmf.entr_closure isa PrognosticNoisyRelaxationProcess
             @. prog_up[i].ε_nondim = max(prog_up[i].ε_nondim, 0)
@@ -846,15 +842,15 @@ function filter_updraft_vars(
             prog_up[i].ρaq_ice .= max.(prog_up[i].ρaq_ice, 0)
         end
     end
-
+    to_scalar(vector) = vector.u₃
     @inbounds for i in 1:N_up
-        @. prog_up_f[i].ρaw = max.(prog_up_f[i].ρaw, 0)
+        @. prog_up_f[i].w = max.(prog_up_f[i].w, 0)
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
-        @. prog_up_f[i].ρaw = ifelse(
+        @. prog_up_f[i].w = ifelse(
             If(prog_up[i].ρarea) > ρ_f * a_min,
-            prog_up_f[i].ρaw,
-            If(prog_up[i].ρarea) * a_min,
+            prog_up_f[i].w,
+            to_scalar(prog_gm_f.w),
         )
     end
 
@@ -862,9 +858,6 @@ function filter_updraft_vars(
         @inbounds for i in 1:N_up
             is_surface_center(grid, k) && continue
             prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
-            # this is needed to make sure Rico is unchanged.
-            # TODO : look into it further to see why
-            # a similar filtering of ρaθ_liq_ice breaks the simulation
         end
     end
     if edmf.moisture_model isa NonEquilibriumMoisture
@@ -887,18 +880,17 @@ function filter_updraft_vars(
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
         @. prog_up[i].ρarea =
-            ifelse(Ic(prog_up_f[i].ρaw) < FT(0), ρ_c * a_min, prog_up[i].ρarea)
+            ifelse(Ic(prog_up_f[i].w) <= 0, a_min, prog_up[i].ρarea)
         @. prog_up[i].ρaθ_liq_ice = ifelse(
-            Ic(prog_up_f[i].ρaw) < FT(0),
-            prog_up[i].ρarea * aux_gm.θ_liq_ice,
+            Ic(prog_up_f[i].w) <= 0,
+            ρ_c * a_min * aux_gm.θ_liq_ice,
             prog_up[i].ρaθ_liq_ice,
         )
         @. prog_up[i].ρaq_tot = ifelse(
-            Ic(prog_up_f[i].ρaw) < FT(0),
-            prog_up[i].ρarea * aux_gm.q_tot,
+            Ic(prog_up_f[i].w) <= 0,
+            ρ_c * a_min * aux_gm.q_tot,
             prog_up[i].ρaq_tot,
         )
-
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
         a_surf = area_surface_bc(surf, edmf, i)
@@ -909,9 +901,9 @@ function filter_updraft_vars(
     if edmf.moisture_model isa NonEquilibriumMoisture
         @inbounds for i in 1:N_up
             @. prog_up[i].ρaq_liq =
-                ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_liq)
+                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_liq)
             @. prog_up[i].ρaq_ice =
-                ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_ice)
+                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_ice)
             ql_surf = ql_surface_bc(surf)
             qi_surf = qi_surface_bc(surf)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf
@@ -989,10 +981,10 @@ function compute_covariance_interdomain_src(
     FT = float_type(state)
     tke_factor = is_tke ? FT(0.5) : 1
     aux_up = center_aux_updrafts(state)
-    aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_en_2m = center_aux_environment_2m(state)
     interdomain = getproperty(aux_en_2m, covar_sym).interdomain
-    prog_up = is_tke ? aux_up_f : aux_up
+    prog_up = is_tke ? prog_up_f : aux_up
     aux_en_c = center_aux_environment(state)
     aux_en_f = face_aux_environment(state)
     aux_en = is_tke ? aux_en_f : aux_en_c
@@ -1029,13 +1021,13 @@ function compute_covariance_entr(
     is_tke = covar_sym == :tke
     tke_factor = is_tke ? FT(0.5) : 1
     aux_up = center_aux_updrafts(state)
-    aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_gm_c = center_aux_grid_mean(state)
     prog_gm_f = face_prog_grid_mean(state)
     prog_gm = center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
     gm = is_tke ? prog_gm_f : aux_gm_c
-    prog_up = is_tke ? aux_up_f : aux_up
+    prog_up = is_tke ? prog_up_f : aux_up
     to_scalar = is_tke ? toscalar : x -> x
     ϕ_gm = getproperty(gm, ϕ_sym)
     ψ_gm = getproperty(gm, ψ_sym)
@@ -1062,7 +1054,7 @@ function compute_covariance_entr(
         eps_turb = frac_turb_entr
         detr_sc = aux_up_i.detr_sc
         entr_sc = aux_up_i.entr_sc
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         prog_up_i = prog_up[i]
         ϕ_up = getproperty(prog_up_i, ϕ_sym)
         ψ_up = getproperty(prog_up_i, ψ_sym)
@@ -1120,11 +1112,11 @@ function compute_en_tendencies!(
     aux_gm_f = face_aux_grid_mean(state)
     prog_en = center_prog_environment(state)
     prog_gm = center_prog_grid_mean(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_en_2m = center_aux_environment_2m(state)
     tendencies_en = center_tendencies_environment(state)
     tend_covar = getproperty(tendencies_en, prog_sym)
     prog_covar = getproperty(prog_en, prog_sym)
-    aux_up_f = face_aux_updrafts(state)
     aux_en = center_aux_environment(state)
     covar = getproperty(aux_en, covar_sym)
     aux_covar = getproperty(aux_en_2m, covar_sym)
@@ -1180,7 +1172,7 @@ function compute_en_tendencies!(
     @inbounds for i in 1:N_up
         turb_entr = aux_up[i].frac_turb_entr
         entr_sc = aux_up[i].entr_sc
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         a_up = aux_up[i].area
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
@@ -1212,7 +1204,7 @@ function update_diagnostic_covariances!(
     prog_gm = center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
     aux_en_2m = center_aux_environment_2m(state)
-    aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_en = center_aux_environment(state)
     covar = getproperty(aux_en, covar_sym)
     aux_covar = getproperty(aux_en_2m, covar_sym)
@@ -1242,7 +1234,7 @@ function update_diagnostic_covariances!(
     @inbounds for i in 1:N_up
         turb_entr = aux_up[i].frac_turb_entr
         entr_sc = aux_up[i].entr_sc
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         a_up = aux_up[i].area
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
@@ -1275,7 +1267,7 @@ function GMV_third_m(
     FT = float_type(state)
 
     aux_bulk = center_aux_bulk(state)
-    aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     is_tke = covar_en_sym == :tke
     aux_en_c = center_aux_environment(state)
     covar_en = getproperty(aux_en_c, covar_en_sym)
@@ -1287,7 +1279,7 @@ function GMV_third_m(
     ϕ_gm_cov = aux_tc.ϕ_gm_cov
     ϕ_en_cov = aux_tc.ϕ_en_cov
     ϕ_up_cubed = aux_tc.ϕ_up_cubed
-    aux_up = is_tke ? aux_up_f : aux_up_c
+    aux_up = is_tke ? prog_up_f : aux_up_c
     var_en = getproperty(aux_en, var)
     area_en = aux_en_c.area
     Ic = is_tke ? CCO.InterpolateF2C() : x -> x

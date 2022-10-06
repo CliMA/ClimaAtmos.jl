@@ -36,8 +36,8 @@ function update_aux!(
     aux_en_2m = center_aux_environment_2m(state)
     prog_up = center_prog_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
-    ρ_f = aux_gm_f.ρ
     p_c = center_aux_grid_mean_p(state)
+    ρ_f = aux_gm_f.ρ
     ρ_c = prog_gm.ρ
     aux_en_unsat = aux_en.unsat
     aux_en_sat = aux_en.sat
@@ -67,9 +67,9 @@ function update_aux!(
         @. aux_up[i].θ_liq_ice = prog_up[i].ρaθ_liq_ice / prog_up[i].ρarea
         @. aux_up[i].q_tot = prog_up[i].ρaq_tot / prog_up[i].ρarea
         @. aux_up[i].area = prog_up[i].ρarea / ρ_c
-        @. aux_up_f[i].w = prog_up_f[i].ρaw / (If(prog_up[i].ρarea))
+        @. prog_up_f[i].w = prog_up_f[i].w
         @. aux_up[i].e_kin =
-            LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_up_f[i].w)))) / 2
+            LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(prog_up_f[i].w)))) / 2
     end
 
     @inbounds for k in real_center_indices(grid)
@@ -322,7 +322,7 @@ function update_aux!(
     ##### face variables: diagnose primitive, diagnose env and compute bulk
     #####
     @inbounds for i in 1:N_up
-        aux_up_f[i].w[kf_surf] = w_surface_bc(surf)
+        prog_up_f[i].w[kf_surf] = w_surface_bc(surf)
     end
 
     parent(aux_tc_f.bulk.w) .= 0
@@ -334,7 +334,7 @@ function update_aux!(
         Ifu = CCO.InterpolateC2F(; a_up_bcs...)
         @. aux_tc_f.bulk.w += ifelse(
             Ifb(aux_bulk.area) > 0,
-            Ifu(a_up) * aux_up_f[i].w / Ifb(aux_bulk.area),
+            Ifu(a_up) * prog_up_f[i].w / Ifb(aux_bulk.area),
             FT(0),
         )
     end
@@ -342,7 +342,7 @@ function update_aux!(
     @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
         @. aux_en_f.w -=
-            Ifb(aux_up[i].area) * aux_up_f[i].w / (1 - Ifb(aux_bulk.area))
+            Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
     end
 
     #####
@@ -397,7 +397,7 @@ function update_aux!(
     tke_en = aux_en.tke
     @inbounds for i in 1:N_up
         a_up = aux_up[i].area
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         δ_dyn = aux_up[i].detr_sc
         ε_turb = aux_up[i].frac_turb_entr
         @. b_exch +=
@@ -536,9 +536,9 @@ function update_aux!(
     w_en = aux_en_f.w
     parent(tke_press) .= 0
     @inbounds for i in 1:N_up
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         nh_press = aux_up_f[i].nh_pressure
-        @. tke_press += (Ic(w_en) - Ic(w_up)) * Ic(nh_press)
+        @. tke_press += (Ic(w_en) - Ic(w_up)) * prog_up[i].ρarea * Ic(nh_press)
     end
 
     compute_covariance_entr(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
