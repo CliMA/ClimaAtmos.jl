@@ -381,15 +381,15 @@ function saturated_surface_conditions(
 end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
+    (; coupled) = p
     Fields.bycolumn(axes(Y.c.uₕ)) do colidx
+        !coupled && get_surface_fluxes!(Y, p, colidx)
         vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
     end
 end
 
-function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
-    ᶜρ = Y.c.ρ
-    FT = Spaces.undertype(axes(ᶜρ))
-    (; z_sfc, ᶜts, ᶜp, T_sfc, ᶠK_E, C_E) = p # assume ᶜts and ᶜp have been updated
+function get_surface_fluxes!(Y, p, colidx)
+    (; z_sfc, ᶜts, T_sfc) = p
     (;
         surface_conditions,
         dif_flux_uₕ,
@@ -399,12 +399,70 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         dif_flux_ρq_tot,
         dif_flux_ρq_tot_bc,
         diffuse_momentum,
-        coupled,
-        ᶠp,
         z_bottom,
         params,
     ) = p
     (; uₕ_int_local, surface_normal) = p
+
+    uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
+    @. uₕ_int_local[colidx] = Geometry.UVVector(uₕ_int)
+
+    surface_conditions[colidx] .=
+        saturated_surface_conditions.(
+            p.surface_scheme,
+            T_sfc[colidx],
+            Spaces.level(ᶜts[colidx], 1),
+            uₕ_int_local[colidx],
+            z_bottom[colidx],
+            z_sfc[colidx],
+            params,
+        )
+    if diffuse_momentum
+        ρτxz = surface_conditions[colidx].ρτxz
+        ρτyz = surface_conditions[colidx].ρτyz
+        ρ_1 = Fields.level(Y.c.ρ[colidx], 1)
+        @. dif_flux_uₕ[colidx] =
+            Geometry.Contravariant3Vector(surface_normal[colidx]) ⊗
+            Geometry.Covariant12Vector(
+                Geometry.UVVector(ρτxz / ρ_1, ρτyz / ρ_1),
+            )
+        @. dif_flux_uₕ_bc[colidx] = -dif_flux_uₕ[colidx]
+    end
+    if :ρe_tot in propertynames(Y.c)
+        if isnothing(p.surface_scheme)
+            @. dif_flux_energy[colidx] *= 0
+        else
+            @. dif_flux_energy[colidx] = Geometry.WVector(
+                surface_conditions[colidx].shf + surface_conditions[colidx].lhf,
+            )
+        end
+        @. dif_flux_energy_bc[colidx] = -dif_flux_energy[colidx]
+    end
+
+    if :ρq_tot in propertynames(Y.c)
+        if isnothing(p.surface_scheme)
+            @. dif_flux_ρq_tot[colidx] *= 0
+        else
+            @. dif_flux_ρq_tot[colidx] =
+                Geometry.WVector(surface_conditions[colidx].E)
+        end
+        @. dif_flux_ρq_tot_bc[colidx] = -dif_flux_ρq_tot[colidx]
+    end
+end
+
+function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+    ᶜρ = Y.c.ρ
+    FT = Spaces.undertype(axes(ᶜρ))
+    (; ᶜp, ᶠK_E, C_E) = p # assume ᶜts and ᶜp have been updated
+    (;
+        dif_flux_uₕ_bc,
+        dif_flux_energy_bc,
+        dif_flux_ρq_tot_bc,
+        diffuse_momentum,
+        ᶠp,
+        z_bottom,
+        uₕ_int_local,
+    ) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -418,30 +476,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         ᶠp[colidx],
     )
 
-    if !coupled
-        surface_conditions[colidx] .=
-            saturated_surface_conditions.(
-                p.surface_scheme,
-                T_sfc[colidx],
-                Spaces.level(ᶜts[colidx], 1),
-                uₕ_int_local[colidx],
-                z_bottom[colidx],
-                z_sfc[colidx],
-                params,
-            )
-    end
     if diffuse_momentum
-        if !coupled
-            ρτxz = surface_conditions[colidx].ρτxz
-            ρτyz = surface_conditions[colidx].ρτyz
-            ρ_1 = Fields.level(Y.c.ρ[colidx], 1)
-            @. dif_flux_uₕ[colidx] =
-                Geometry.Contravariant3Vector(surface_normal[colidx]) ⊗
-                Geometry.Covariant12Vector(
-                    Geometry.UVVector(ρτxz / ρ_1, ρτyz / ρ_1),
-                )
-            @. dif_flux_uₕ_bc[colidx] = -dif_flux_uₕ[colidx]
-        end
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(
                 Geometry.Contravariant3Vector(FT(0)) ⊗
@@ -453,17 +488,6 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
     end
 
     if :ρe_tot in propertynames(Y.c)
-        if !coupled
-            if isnothing(p.surface_scheme)
-                @. dif_flux_energy[colidx] *= 0
-            else
-                @. dif_flux_energy[colidx] = Geometry.WVector(
-                    surface_conditions[colidx].shf +
-                    surface_conditions[colidx].lhf,
-                )
-            end
-        end
-        @. dif_flux_energy_bc[colidx] = -dif_flux_energy[colidx]
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_energy_bc[colidx]),
@@ -476,15 +500,6 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
     end
 
     if :ρq_tot in propertynames(Y.c)
-        if !coupled
-            if isnothing(p.surface_scheme)
-                @. dif_flux_ρq_tot[colidx] *= 0
-            else
-                @. dif_flux_ρq_tot[colidx] =
-                    Geometry.WVector(surface_conditions[colidx].E)
-            end
-        end
-        @. dif_flux_ρq_tot_bc[colidx] = -dif_flux_ρq_tot[colidx]
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(dif_flux_ρq_tot_bc[colidx]),
