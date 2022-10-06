@@ -56,10 +56,13 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
 
     if ClimaComms.iamroot(comms_ctx)
         sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
-        @info "walltime = $walltime (seconds)"
         scaling_file =
             joinpath(output_dir, "scaling_data_$(nprocs)_processes.jld2")
-        @info "writing performance data to $scaling_file"
+        @info(
+            "Writing scaling data",
+            "walltime (seconds)" = walltime,
+            scaling_file
+        )
         JLD2.jldsave(scaling_file; nprocs, walltime)
     end
     return nothing

@@ -22,8 +22,12 @@ function profile_animation(sol, output_dir, fps)
         var_space = axes(Fields.single_field(Y0, prop_chain))
         Ni, Nj, _, _, Nh = size(ClimaCore.Spaces.local_geometry_data(var_space))
         n_columns = Nh * Nj * Ni # TODO: is this correct?
-        @info "Creating profile animation with `n_columns` = $n_columns, for `$var_name`"
-        @info "Number of timesteps: $(length(sol.u))"
+        @info(
+            "Creating profile animation",
+            n_columns,
+            var_name,
+            n_timesteps = length(sol.u)
+        )
         anim = Plots.@animate for Y in sol.u
             var = Fields.single_field(Y, prop_chain)
             temporary = ClimaCore.column(var, 1, 1, 1)
@@ -72,7 +76,7 @@ end
 function contour_animations(sol, output_dir, fps)
     for prop_chain in Fields.property_chains(sol.u[end])
         var_name = processed_varname(prop_chain)
-        @info "Creating animation for variable:`$(var_name)`"
+        @info "Creating contour animation" var_name n_timesteps = length(sol.u)
         anim = Plots.@animate for Y in sol.u
             var = Fields.single_field(Y, prop_chain)
             level = 3
@@ -94,13 +98,18 @@ end
 function postprocessing(sol, output_dir, fps)
     for prop_chain in Fields.property_chains(sol.u[1])
         var_name = processed_varname(prop_chain)
-        var = Fields.single_field(sol.u[1], prop_chain)
-        @info "L₂ norm of `$(var_name)` at t = $(sol.t[1]): $(norm(var))"
-    end
-    for prop_chain in Fields.property_chains(sol.u[end])
-        var_name = processed_varname(prop_chain)
-        var = Fields.single_field(sol.u[end], prop_chain)
-        @info "L₂ norm of `$(var_name)` at t = $(sol.t[end]): $(norm(var))"
+        t_start = sol.t[1]
+        var_start = Fields.single_field(sol.u[1], prop_chain)
+        t_end = sol.t[end]
+        var_end = Fields.single_field(sol.u[end], prop_chain)
+        @info(
+            "L₂ norm",
+            var_name,
+            t_start,
+            norm(var_start),
+            t_end,
+            norm(var_end)
+        )
     end
 
     # contour_animations(sol, output_dir, fps) # For generic contours:
@@ -129,7 +138,7 @@ function postprocessing(sol, output_dir, fps)
         end
         Plots.mp4(anim, joinpath(output_dir, "contour_q_tot.mp4"), fps = fps)
     else
-        @info "Moisture not found. property_chains: `$(prop_chains)`"
+        @info "Moisture not found" prop_chains
     end
 
     profile_animation(sol, output_dir, fps)

@@ -158,9 +158,7 @@ function get_numerics(parsed_args)
         tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
         apply_limiter = parsed_args["apply_limiter"],
     )
-    for key in keys(numerics)
-        @info "`$(key)`:$(getproperty(numerics, key))"
-    end
+    @info "numerics" numerics...
 
     return numerics
 end
@@ -213,7 +211,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         warp_function = nothing
     end
     @assert topography in ("NoWarp", "DCMIP200")
-    @info "topography = `$topography`"
+    @info "Topography" topography
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
