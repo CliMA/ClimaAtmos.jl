@@ -375,13 +375,14 @@ end
 function precomputed_quantities!(Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜts, ᶜp, params, thermo_dispatcher) = p
+    (; ᶜuvw, ᶜK, ᶜts, ᶜp, ᶜT, params, thermo_dispatcher) = p
 
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
     thermo_params = CAP.thermodynamics_params(params)
     thermo_state!(Y, p, ᶜinterp, colidx)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
+    @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
     return nothing
 end
 

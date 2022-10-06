@@ -177,7 +177,6 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
     aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
-    p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
     @. ρ_f = If(ρ_c)
@@ -187,12 +186,10 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
         aux_gm.q_tot[k] = prog_gm.ρq_tot[k] / ρ_c[k]
         aux_gm.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts)
         aux_gm.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts)
-        aux_gm.T[k] = TD.air_temperature(thermo_params, ts)
         aux_gm.RH[k] = TD.relative_humidity(thermo_params, ts)
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
         aux_gm.h_tot[k] =
             TC.total_enthalpy(param_set, prog_gm.ρe_tot[k] / ρ_c[k], ts)
-        p_c[k] = TD.air_pressure(thermo_params, ts)
         aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
     end
     return
@@ -272,6 +269,7 @@ function compute_gm_tendencies!(
     C12 = CCG.Contravariant12Vector
     lg = CC.Fields.local_geometry_field(axes(ρ_c))
     @. tendencies_gm_uₕ -= f × (C12(C123(prog_gm_uₕ)) - C12(C123(aux_gm_uₕ_g)))
+    T_gm = TC.center_aux_grid_mean_T(state)
 
     cp_v = TCP.cp_v(param_set)
     cv_v = TCP.cv_v(param_set)
@@ -287,13 +285,12 @@ function compute_gm_tendencies!(
     # LS advection
     @. tendencies_gm.ρq_tot += ρ_c * aux_gm.dqtdt_hadv
     # TODO: should `hv` be a thermo function?
-    #     (hv = cv_v * (aux_gm.T - T_0) + Lv_0 - R_v * T_0)
+    #     (hv = cv_v * (T_gm - T_0) + Lv_0 - R_v * T_0)
     if !(Cases.force_type(force) <: Cases.ForcingDYCOMS_RF01)
         @. tendencies_gm.ρe_tot +=
             ρ_c * (
                 TD.cp_m(thermo_params, ts_gm) * aux_gm.dTdt_hadv +
-                (cv_v * (aux_gm.T - T_0) + Lv_0 - R_v * T_0) *
-                aux_gm.dqtdt_hadv
+                (cv_v * (T_gm - T_0) + Lv_0 - R_v * T_0) * aux_gm.dqtdt_hadv
             )
     end
     if edmf.moisture_model isa CA.NonEquilMoistModel

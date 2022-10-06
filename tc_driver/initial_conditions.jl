@@ -66,6 +66,7 @@ function initialize_updrafts(edmf, grid, state, surf)
     prog_up_f = TC.face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
     a_min = edmf.minimum_area
+    T_gm = TC.center_aux_grid_mean_T(state)
     @inbounds for i in 1:N_up
         @inbounds for k in TC.real_face_indices(grid)
             prog_up_f[i].w[k] = 0
@@ -80,7 +81,7 @@ function initialize_updrafts(edmf, grid, state, surf)
             aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
             aux_up[i].q_liq[k] = aux_gm.q_liq[k]
             aux_up[i].q_ice[k] = aux_gm.q_ice[k]
-            aux_up[i].T[k] = aux_gm.T[k]
+            aux_up[i].T[k] = T_gm[k]
             prog_up[i].ρarea[k] = ρ_c[k] * aux_up[i].area[k]
             prog_up[i].ρaq_tot[k] = prog_up[i].ρarea[k] * aux_up[i].q_tot[k]
             prog_up[i].ρaθ_liq_ice[k] =

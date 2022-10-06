@@ -813,6 +813,7 @@ function initialize_profiles(::ARM_SGP, grid::Grid, param_set, state; kwargs...)
     thermo_flag = "θ_liq_ice"
     params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+    T_gm = TC.center_aux_grid_mean_T(state)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -824,10 +825,10 @@ function initialize_profiles(::ARM_SGP, grid::Grid, param_set, state; kwargs...)
         phase_part = TD.PhasePartition(aux_gm.q_tot[k], aux_gm.q_liq[k], FT(0))
         Π = TD.exner_given_pressure(thermo_params, p_c[k], phase_part)
         aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.T[k] = prof_θ_liq_ice(z) * Π
+        T_gm[k] = prof_θ_liq_ice(z) * Π
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
             thermo_params,
-            aux_gm.T[k],
+            T_gm[k],
             p_c[k],
             phase_part,
         )
@@ -927,6 +928,7 @@ function initialize_profiles(
     thermo_falg = "temperature"
     params = (; param_set, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
+    T_gm = TC.center_aux_grid_mean_T(state)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -934,15 +936,10 @@ function initialize_profiles(
     @inbounds for k in real_center_indices(grid)
         z = grid.zc[k].z
         aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.T[k] = prof_T(z)
+        T_gm[k] = prof_T(z)
         p_c[k] = prof_p(z)
         aux_gm.tke[k] = prof_tke(z)
-        ts = TD.PhaseEquil_pTq(
-            thermo_params,
-            p_c[k],
-            aux_gm.T[k],
-            aux_gm.q_tot[k],
-        )
+        ts = TD.PhaseEquil_pTq(thermo_params, p_c[k], T_gm[k], aux_gm.q_tot[k])
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
     end
 end

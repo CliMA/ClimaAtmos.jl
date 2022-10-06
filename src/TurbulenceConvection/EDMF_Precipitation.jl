@@ -103,6 +103,7 @@ function compute_precipitation_sink_tendencies(
     ρ_c = prog_gm.ρ
     tendencies_pr = center_tendencies_precipitation(state)
     ts_gm = center_aux_grid_mean_ts(state)
+    T_grid_mean = center_aux_grid_mean_T(state)
 
     precip_fraction = compute_precip_fraction(edmf, state)
 
@@ -113,7 +114,7 @@ function compute_precipitation_sink_tendencies(
         qs = max(FT(0), prog_pr.q_sno[k]) / precip_fraction
         ρ = ρ_c[k]
         q_tot_gm = aux_gm.q_tot[k]
-        T_gm = aux_gm.T[k]
+        T_gm = T_grid_mean[k]
         # When we fuse loops, this should hopefully disappear
         ts = ts_gm[k]
         q = TD.PhasePartition(thermo_params, ts)

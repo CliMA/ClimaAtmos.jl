@@ -250,6 +250,7 @@ end
 
 p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
 if parsed_args["turbconv"] == "edmf"
+    precomputed_quantities!(Y, p, FT(0))
     TCU.init_tc!(Y, p, params, namelist)
 end
 

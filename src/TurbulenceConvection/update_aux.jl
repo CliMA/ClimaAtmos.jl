@@ -318,10 +318,6 @@ function update_aux!(
             aux_bulk.area[k] * aux_bulk.q_ice[k] +
             (1 - aux_bulk.area[k]) * aux_en.q_ice[k]
         )
-        aux_gm.T[k] = (
-            aux_bulk.area[k] * aux_bulk.T[k] +
-            (1 - aux_bulk.area[k]) * aux_en.T[k]
-        )
         aux_gm.buoy[k] = (
             aux_bulk.area[k] * aux_bulk.buoy[k] +
             (1 - aux_bulk.area[k]) * aux_en.buoy[k]
