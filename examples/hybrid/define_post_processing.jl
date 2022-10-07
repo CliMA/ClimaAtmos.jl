@@ -597,6 +597,7 @@ calc_zonalave_variance(x) = calc_zonalave_timeave((x .- mean(x, dims = 4)) .^ 2)
 function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params) = p
     thermo_params = CAP.thermodynamics_params(params)
+    last_day = floor(Int, sol.t[end] / (24 * 3600))
 
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
@@ -683,9 +684,14 @@ function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
         lat = nc["lat"][:]
         z = nc["z"][:]
         time = nc["time"][:]
-        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
-        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
+        if last_day > 200
+            time_mask = time .> 3600 * 24 * 200
+        else
+            time_mask = time .> 3600 * 24 * (last_day - 1)
+        end
+        T = nc["T"][:, :, :, time .> time_mask]
+        θ = nc["PotentialTemperature"][:, :, :, time .> time_mask]
+        u = nc["u"][:, :, :, time .> time_mask]
         (; lat, z, time, T, θ, u)
     end
     (; lat, z, time, T, θ, u) = nt
@@ -769,6 +775,7 @@ end
 function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params, ᶜK) = p
     thermo_params = CAP.thermodynamics_params(params)
+    last_day = floor(Int, sol.t[end] / (24 * 3600))
 
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
@@ -862,10 +869,15 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         lat = nc["lat"][:]
         z = nc["z"][:]
         time = nc["time"][:]
-        T = nc["T"][:, :, :, time .> 3600 * 24 * 200]
-        θ = nc["PotentialTemperature"][:, :, :, time .> 3600 * 24 * 200]
-        u = nc["u"][:, :, :, time .> 3600 * 24 * 200]
-        qt = nc["qt"][:, :, :, time .> 3600 * 24 * 200]
+        if last_day > 200
+            time_mask = time .> 3600 * 24 * 200
+        else
+            time_mask = time .> 3600 * 24 * (last_day - 1)
+        end
+        T = nc["T"][:, :, :, time .> time_mask]
+        θ = nc["PotentialTemperature"][:, :, :, time .> time_mask]
+        u = nc["u"][:, :, :, time .> time_mask]
+        qt = nc["qt"][:, :, :, time .> time_mask]
         (; lat, z, time, T, θ, u, qt)
     end
     (; lat, z, time, T, θ, u, qt) = nt
