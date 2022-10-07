@@ -57,7 +57,6 @@ end
             "DYCOMS_RF01",
             "DYCOMS_RF02",
             "GABLS",
-            "LES_driven_SCM",
         ]
 
         for case_name in case_names

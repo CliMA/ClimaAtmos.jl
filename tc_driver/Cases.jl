@@ -74,8 +74,6 @@ struct DYCOMS_RF02 <: AbstractCaseType end
 
 struct GABLS <: AbstractCaseType end
 
-struct LES_driven_SCM <: AbstractCaseType end
-
 #####
 ##### Radiation and forcing types
 #####
@@ -162,7 +160,6 @@ get_case(::Val{:GATE_III}) = GATE_III()
 get_case(::Val{:DYCOMS_RF01}) = DYCOMS_RF01()
 get_case(::Val{:DYCOMS_RF02}) = DYCOMS_RF02()
 get_case(::Val{:GABLS}) = GABLS()
-get_case(::Val{:LES_driven_SCM}) = LES_driven_SCM()
 
 get_case_name(case_type::AbstractCaseType) = string(case_type)
 
@@ -175,13 +172,11 @@ get_forcing_type(::Soares) = ForcingNone
 get_forcing_type(::Nieuwstadt) = ForcingNone
 get_forcing_type(::DYCOMS_RF01) = ForcingDYCOMS_RF01
 get_forcing_type(::DYCOMS_RF02) = ForcingDYCOMS_RF01
-get_forcing_type(::LES_driven_SCM) = ForcingLES
 get_forcing_type(::TRMM_LBA) = ForcingNone
 
 get_radiation_type(::AbstractCaseType) = RadiationNone # default
 get_radiation_type(::DYCOMS_RF01) = RadiationDYCOMS_RF01
 get_radiation_type(::DYCOMS_RF02) = RadiationDYCOMS_RF01
-get_radiation_type(::LES_driven_SCM) = RadiationLES
 get_radiation_type(::TRMM_LBA) = RadiationTRMM_LBA
 
 large_scale_divergence(::Union{DYCOMS_RF01, DYCOMS_RF02}) = 3.75e-6
@@ -1381,209 +1376,5 @@ function initialize_forcing(::GABLS, forcing, grid::Grid, state, param_set)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, prof_vg)
     return nothing
 end
-
-#####
-##### LES_driven_SCM
-#####
-
-# TODO - what to do about those? Could we read in pressure from LES?
-
-function forcing_kwargs(::LES_driven_SCM, namelist)
-    coriolis_param = namelist["forcing"]["coriolis"]
-    les_filename = namelist["meta"]["lesfile"]
-    cfsite_number, forcing_model, month, experiment =
-        TC.parse_les_path(les_filename)
-    LES_library = TC.get_LES_library()
-    les_type =
-        LES_library[forcing_model][string(month, pad = 2)]["cfsite_numbers"][string(
-            cfsite_number,
-            pad = 2,
-        )]
-    if les_type == "shallow"
-        wind_nudge_τᵣ = 6.0 * 3600.0
-        scalar_nudge_zᵢ = 3000.0
-        scalar_nudge_zᵣ = 3500.0
-        scalar_nudge_τᵣ = 24.0 * 3600.0
-    elseif les_type == "deep"
-        wind_nudge_τᵣ = 3600.0
-        scalar_nudge_zᵢ = 16000.0
-        scalar_nudge_zᵣ = 20000.0
-        scalar_nudge_τᵣ = 2.0 * 3600.0
-    end
-
-    return (;
-        wind_nudge_τᵣ,
-        scalar_nudge_zᵢ,
-        scalar_nudge_zᵣ,
-        scalar_nudge_τᵣ,
-        coriolis_param,
-    )
-end
-
-function les_data_kwarg(::LES_driven_SCM, namelist)
-    les_filename = namelist["meta"]["lesfile"]
-    # load data here
-    LESDat = NC.Dataset(les_filename, "r") do data
-        t = data.group["profiles"]["t"][:]
-        t_interval_from_end_s = namelist["t_interval_from_end_s"]
-        t_from_end_s = t .- t[end]
-        # find inds within time interval
-        time_interval_bool =
-            findall(>(-t_interval_from_end_s), t_from_end_s)
-        imin = time_interval_bool[1]
-        imax = time_interval_bool[end]
-
-        LESData(
-            imin,
-            imax,
-            les_filename,
-            t_interval_from_end_s,
-            namelist["initial_condition_averaging_window_s"],
-        )
-    end
-    return (; LESDat)
-end
-
-function surface_ref_state(::LES_driven_SCM, param_set::APS, namelist)
-    thermo_params = TCP.thermodynamics_params(param_set)
-    FT = eltype(param_set)
-    les_filename = namelist["meta"]["lesfile"]
-
-    Pg, Tg, qtg = NC.Dataset(les_filename, "r") do data
-        pg_str = haskey(data.group["reference"], "p0_full") ? "p0_full" : "p0"
-        Pg = data.group["reference"][pg_str][1] #Pressure at ground
-        Tg = data.group["reference"]["temperature0"][1] #Temperature at ground
-        ql_ground = data.group["reference"]["ql0"][1]
-        qv_ground = data.group["reference"]["qv0"][1]
-        qi_ground = data.group["reference"]["qi0"][1]
-        qtg = ql_ground + qv_ground + qi_ground #Total water mixing ratio at surface
-        (FT(Pg), FT(Tg), FT(qtg))
-    end
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
-
-function initialize_profiles(
-    ::LES_driven_SCM,
-    grid::Grid,
-    param_set,
-    state;
-    LESDat,
-)
-
-    FT = TC.float_type(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-
-    nt = NC.Dataset(LESDat.les_filename, "r") do data
-        t = data.group["profiles"]["t"][:]
-        # define time interval
-        half_window = LESDat.initial_condition_averaging_window_s / 2
-        t_window_start = (LESDat.t_interval_from_end_s + half_window)
-        t_window_end = (LESDat.t_interval_from_end_s - half_window)
-        t_from_end_s = Array(t) .- t[end]
-        # find inds within time interval
-        in_window(x) = -t_window_start <= x <= -t_window_end
-        time_interval_bool = findall(in_window, t_from_end_s)
-        imin = time_interval_bool[1]
-        imax = time_interval_bool[end]
-        zc_les = Array(TC.get_nc_data(data, "zc"))
-
-        getvar(var) = pyinterp(
-            vec(grid.zc.z),
-            zc_les,
-            TC.mean_nc_data(data, "profiles", var, imin, imax),
-        )
-
-        θ_liq_ice_gm = getvar("thetali_mean")
-        q_tot_gm = getvar("qt_mean")
-        prog_gm_u_gm = getvar("u_mean")
-        prog_gm_v_gm = getvar("v_mean")
-        (; zc_les, θ_liq_ice_gm, q_tot_gm, prog_gm_u_gm, prog_gm_v_gm)
-    end
-
-    prog_gm_u = copy(aux_gm.q_tot)
-    prog_gm_v = copy(aux_gm.q_tot)
-    @inbounds for k in real_center_indices(grid)
-        aux_gm.θ_liq_ice[k] = nt.θ_liq_ice_gm[k.i]
-        aux_gm.q_tot[k] = nt.q_tot_gm[k.i]
-        prog_gm_u[k] = nt.prog_gm_u_gm[k.i]
-        prog_gm_v[k] = nt.prog_gm_v_gm[k.i]
-    end
-
-    prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    @. prog_gm_uₕ = CCG.Covariant12Vector(CCG.UVVector(prog_gm_u, prog_gm_v))
-
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.tke[k] = if z <= 2500.0
-            1 - z / 3000
-        else
-            FT(0)
-        end
-    end
-end
-
-function surface_params(
-    case::LES_driven_SCM,
-    surf_ref_state,
-    param_set;
-    Ri_bulk_crit,
-    LESDat,
-)
-    FT = eltype(surf_ref_state)
-    nt = NC.Dataset(LESDat.les_filename, "r") do data
-        imin = LESDat.imin
-        imax = LESDat.imax
-
-        zrough = FT(1.0e-4)
-        Tsurface = Statistics.mean(
-            data.group["timeseries"]["surface_temperature"][:][imin:imax],
-            dims = 1,
-        )[1]
-        # get surface value of q
-        mean_qt_prof = Statistics.mean(
-            data.group["profiles"]["qt_mean"][:][:, imin:imax],
-            dims = 2,
-        )[:]
-        # TODO: this will need to be changed if/when we don't prescribe surface fluxes
-        qsurface = FT(0)
-        lhf = FT(
-            Statistics.mean(
-                data.group["timeseries"]["lhf_surface_mean"][:][imin:imax],
-                dims = 1,
-            )[1],
-        )
-        shf = FT(
-            Statistics.mean(
-                data.group["timeseries"]["shf_surface_mean"][:][imin:imax],
-                dims = 1,
-            )[1],
-        )
-        (; zrough, Tsurface, qsurface, lhf, shf)
-    end
-    UnPack.@unpack zrough, Tsurface, qsurface, lhf, shf = nt
-
-    ustar = FT(0) # TODO: why is initialization missing?
-    kwargs = (; zrough, Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit)
-    return TC.FixedSurfaceFlux(FT, TC.VariableFrictionVelocity; kwargs...)
-end
-
-initialize_forcing(
-    ::LES_driven_SCM,
-    forcing,
-    grid::Grid,
-    state,
-    param_set;
-    LESDat,
-) = initialize(forcing, grid, state, LESDat)
-
-initialize_radiation(
-    ::LES_driven_SCM,
-    radiation,
-    grid::Grid,
-    state,
-    param_set;
-    LESDat,
-) = initialize(radiation, grid, state, LESDat)
 
 end # module Cases
