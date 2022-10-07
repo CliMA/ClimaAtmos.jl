@@ -223,10 +223,7 @@ if parsed_args["turbconv"] == "edmf"
 end
 
 # Print tendencies:
-@info "Output directory: `$(simulation.output_dir)`"
-for key in keys(p.tendency_knobs)
-    @info "`$(key)`:$(getproperty(p.tendency_knobs, key))"
-end
+@info "Tendencies" p.tendency_knobs...
 
 ode_config = ode_configuration(Y, parsed_args, model_spec)
 
@@ -234,13 +231,14 @@ include("callbacks.jl")
 
 callback = get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, simulation.t_end)
-@info "tspan = `$tspan`"
 integrator = get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
 end
-@info "Running job:`$(simulation.job_id)`"
+
+@info "Running" job_id = simulation.job_id output_dir = simulation.output_dir tspan
+
 if simulation.is_distributed
     OrdinaryDiffEq.step!(integrator)
     ClimaComms.barrier(comms_ctx)
