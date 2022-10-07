@@ -280,14 +280,29 @@ function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
 
+function get_surface_density_and_humidity(T_sfc, ts_int, params)
+    thermo_params = CAP.thermodynamics_params(params)
+    T_int = TD.air_temperature(thermo_params, ts_int)
+    Rm_int = TD.gas_constant_air(thermo_params, ts_int)
+    ρ_sfc =
+        TD.air_density(thermo_params, ts_int) *
+        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
+    q_sfc =
+        TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+    return ρ_sfc, q_sfc
+end
+
 function saturated_surface_conditions(
     surface_scheme::BulkSurfaceScheme,
     T_sfc,
+    ρ_sfc,
+    q_sfc,
     ts_int,
     uₕ_int,
     z_int,
     z_sfc,
     params,
+    coupled,
 )
     Cd = surface_scheme.Cd
     Ch = surface_scheme.Ch
@@ -296,14 +311,9 @@ function saturated_surface_conditions(
     sf_params = CAP.surface_fluxes_params(params)
 
     # get the near-surface thermal state
-    T_int = TD.air_temperature(thermo_params, ts_int)
-    Rm_int = TD.gas_constant_air(thermo_params, ts_int)
-    ρ_sfc =
-        TD.air_density(thermo_params, ts_int) *
-        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
-
-    q_sfc =
-        TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+    if !coupled
+        ρ_sfc, q_sfc = get_surface_density_and_humidity(T_sfc, ts_int, params)
+    end
     ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
 
     # wrap state values
@@ -335,11 +345,14 @@ saturated_surface_conditions(::Nothing, args...) = nothing
 function saturated_surface_conditions(
     surface_scheme::MoninObukhovSurface,
     T_sfc,
+    ρ_sfc,
+    q_sfc,
     ts_int,
     uₕ_int,
     z_int,
     z_sfc,
     params,
+    coupled,
 )
     z0m = surface_scheme.z0m
     z0b = surface_scheme.z0b
@@ -348,14 +361,9 @@ function saturated_surface_conditions(
     sf_params = CAP.surface_fluxes_params(params)
 
     # get the near-surface thermal state
-    T_int = TD.air_temperature(thermo_params, ts_int)
-    Rm_int = TD.gas_constant_air(thermo_params, ts_int)
-
-    ρ_sfc =
-        TD.air_density(thermo_params, ts_int) *
-        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
-    q_sfc =
-        TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+    if !coupled
+        ρ_sfc, q_sfc = get_surface_density_and_humidity(T_sfc, ts_int, params)
+    end
     ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
 
     # wrap state values
@@ -381,15 +389,15 @@ function saturated_surface_conditions(
 end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
-    (; coupled) = p
     Fields.bycolumn(axes(Y.c.uₕ)) do colidx
+        (; coupled) = p
         !coupled && get_surface_fluxes!(Y, p, colidx)
         vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
     end
 end
 
 function get_surface_fluxes!(Y, p, colidx)
-    (; z_sfc, ᶜts, T_sfc) = p
+    (; z_sfc, ᶜts, T_sfc, ρ_sfc, q_sfc) = p
     (;
         surface_conditions,
         dif_flux_uₕ,
@@ -401,6 +409,7 @@ function get_surface_fluxes!(Y, p, colidx)
         diffuse_momentum,
         z_bottom,
         params,
+        coupled,
     ) = p
     (; uₕ_int_local, surface_normal) = p
 
@@ -411,11 +420,14 @@ function get_surface_fluxes!(Y, p, colidx)
         saturated_surface_conditions.(
             p.surface_scheme,
             T_sfc[colidx],
+            ρ_sfc[colidx],
+            q_sfc[colidx],
             Spaces.level(ᶜts[colidx], 1),
             uₕ_int_local[colidx],
             z_bottom[colidx],
             z_sfc[colidx],
             params,
+            coupled,
         )
     if diffuse_momentum
         ρτxz = surface_conditions[colidx].ρτxz
