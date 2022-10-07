@@ -141,69 +141,66 @@ function init_tc!(Y, p, param_set, namelist)
 end
 
 
-function sgs_flux_tendency!(Yₜ, Y, p, t)
+function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     (; edmf_cache, Δt) = p
     (; edmf, param_set, case, surf_params, radiation, forcing, precip_model) =
         edmf_cache
     tc_params = CAP.turbconv_params(param_set)
+    state = tc_column_state(Y, p, Yₜ, colidx)
+    grid = TC.Grid(state)
 
-    # TODO: write iterator for this
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        state = tc_column_state(Y, p, Yₜ, colidx)
-        grid = TC.Grid(state)
+    set_thermo_state_peq!(
+        state,
+        grid,
+        edmf.moisture_model,
+        edmf.compressibility_model,
+        tc_params,
+    )
+    assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
-        set_thermo_state_peq!(
-            state,
-            grid,
-            edmf.moisture_model,
-            edmf.compressibility_model,
-            tc_params,
-        )
-        assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
+    aux_gm = TC.center_aux_grid_mean(state)
 
-        aux_gm = TC.center_aux_grid_mean(state)
+    surf = get_surface(surf_params, grid, state, t, tc_params)
 
-        surf = get_surface(surf_params, grid, state, t, tc_params)
+    TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
 
-        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+    # Update aux / pre-tendencies filters. TODO: combine these into a function that minimizes traversals
+    # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
+    # treat them as auxiliary variables for now, until we disentangle the tendency computations.
+    Cases.update_forcing(case, grid, state, t, tc_params)
+    Cases.update_radiation(radiation, grid, state, t, tc_params)
 
-        # Update aux / pre-tendencies filters. TODO: combine these into a function that minimizes traversals
-        # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
-        # treat them as auxiliary variables for now, until we disentangle the tendency computations.
-        Cases.update_forcing(case, grid, state, t, tc_params)
-        Cases.update_radiation(radiation, grid, state, t, tc_params)
+    TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
-        TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
+    TC.compute_precipitation_sink_tendencies(
+        precip_model,
+        edmf,
+        grid,
+        state,
+        tc_params,
+        Δt,
+    )
+    TC.compute_precipitation_advection_tendencies(
+        precip_model,
+        edmf,
+        grid,
+        state,
+        tc_params,
+    )
 
-        TC.compute_precipitation_sink_tendencies(
-            precip_model,
-            edmf,
-            grid,
-            state,
-            tc_params,
-            Δt,
-        )
-        TC.compute_precipitation_advection_tendencies(
-            precip_model,
-            edmf,
-            grid,
-            state,
-            tc_params,
-        )
+    TC.compute_turbconv_tendencies!(edmf, grid, state, tc_params, surf, Δt)
 
-        TC.compute_turbconv_tendencies!(edmf, grid, state, tc_params, surf, Δt)
-
-        # TODO: incrementally disable this and enable proper grid mean terms
-        compute_gm_tendencies!(
-            edmf,
-            grid,
-            state,
-            surf,
-            radiation,
-            forcing,
-            tc_params,
-        )
-    end
+    # TODO: incrementally disable this and enable proper grid mean terms
+    compute_gm_tendencies!(
+        edmf,
+        grid,
+        state,
+        surf,
+        radiation,
+        forcing,
+        tc_params,
+    )
+    return nothing
 end
 
 end # module

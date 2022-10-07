@@ -309,7 +309,12 @@ function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         if !anelastic_dycore
-            horizontal_advection_tendency!(Yₜ, Y, p, t)
+            @nvtx "precomputed quantities" color = colorant"orange" begin
+                precomputed_quantities!(Y, p, t)
+            end
+            @nvtx "horizontal" color = colorant"orange" begin
+                horizontal_advection_tendency!(Yₜ, Y, p, t)
+            end
             explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "additional_tendency!" color = colorant"orange" begin
@@ -333,7 +338,12 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         if !anelastic_dycore
-            horizontal_advection_tendency!(Yₜ, Y, p, t)
+            @nvtx "precomputed quantities" color = colorant"orange" begin
+                precomputed_quantities!(Y, p, t)
+            end
+            @nvtx "horizontal" color = colorant"orange" begin
+                horizontal_advection_tendency!(Yₜ, Y, p, t)
+            end
             # Apply limiter
             if !isnothing(limiters)
                 @. Y⁺ += dtγ * Yₜ
@@ -364,40 +374,32 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     return Y⁺
 end
 
-function _precomputed_quantities!(Yₜ, Y, p, t)
+function precomputed_quantities!(Y, p, t)
     Fields.bycolumn(axes(Y.c)) do colidx
-        ᶜuₕ = Y.c.uₕ
-        ᶠw = Y.f.w
-        (; ᶜuvw, ᶜK, ᶜts, ᶜp, params) = p
-
-        @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
-        @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
-        thermo_state!(
-            ᶜts[colidx],
-            Y.c[colidx],
-            params,
-            ᶜinterp,
-            ᶜK[colidx],
-            Y.f.w[colidx],
-        )
-        thermo_params = CAP.thermodynamics_params(params)
-        @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
-        nothing
+        precomputed_quantities!(Y, p, t, colidx)
     end
+end
+function precomputed_quantities!(Y, p, t, colidx)
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    (; ᶜuvw, ᶜK, ᶜts, ᶜp, params) = p
+
+    @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
+    @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
+    thermo_state!(
+        ᶜts[colidx],
+        Y.c[colidx],
+        params,
+        ᶜinterp,
+        ᶜK[colidx],
+        Y.f.w[colidx],
+    )
+    thermo_params = CAP.thermodynamics_params(params)
+    @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
     return nothing
 end
 
 function horizontal_advection_tendency!(Yₜ, Y, p, t)
-    @nvtx "precomputed quantities" color = colorant"orange" begin
-        _precomputed_quantities!(Yₜ, Y, p, t)
-    end
-    @nvtx "horizontal" color = colorant"orange" begin
-        _horizontal_advection_tendency!(Yₜ, Y, p, t)
-    end
-    return nothing
-end
-
-function _horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w

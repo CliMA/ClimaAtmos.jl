@@ -177,16 +177,17 @@ function rrtmgp_model_cache(
         rrtmgp_model,
     )
 end
-function rrtmgp_model_tendency!(Yₜ, Y, p, t)
+function rrtmgp_model_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶠradiation_flux) = p
     ᶜdivᵥ = Operators.DivergenceF2C()
     if :ρθ in propertynames(Y.c)
         error("rrtmgp_model_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int -= ᶜdivᵥ(ᶠradiation_flux)
+        @. Yₜ.c.ρe_int[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     end
+    return nothing
 end
 function rrtmgp_model_callback!(integrator)
     Y = integrator.u
