@@ -4,7 +4,10 @@ using Plots
 function plot_tc_profiles(folder, hdf5_filename)
 
     input_filename = joinpath(folder, hdf5_filename)
-    output_filename = joinpath(folder, "final_profiles.png")
+    output_filename = joinpath(
+        folder,
+        "____________________________________final_profiles.png",
+    )
 
     reader = InputOutput.HDF5Reader(input_filename)
     Y = InputOutput.read_field(reader, "Y")
