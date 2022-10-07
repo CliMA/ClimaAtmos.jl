@@ -100,6 +100,12 @@ steps:
         command: "julia --color=yes --project=test test/test_cases/run_3d_baroclinic_wave.jl"
         artifact_paths: "test/test_cases/run_3d_baroclinic_wave/*"
 
+  - group: "Regression tests"
+    steps:
+
+      - label: ":computer: Ensure mse tables are reset when necessary"
+        command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
+
   - group: "Column Examples"
     steps:
 
