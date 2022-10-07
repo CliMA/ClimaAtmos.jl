@@ -167,8 +167,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 )
 
 # Face only
-face_aux_vars_up(FT, local_geometry) =
-    (; w = FT(0), nh_pressure = FT(0), massflux = FT(0))
+face_aux_vars_up(FT, local_geometry) = (; nh_pressure = FT(0), massflux = FT(0))
 face_aux_vars_edmf_moisture(FT, ::NonEquilibriumMoisture) = (;
     massflux_en = FT(0), # TODO: is this the right place for this?
     massflux_ql = FT(0),
@@ -286,7 +285,7 @@ cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
 # cent_prognostic_vars_edmf(FT, edmf) = (;) # could also use this for empty model
 
 # Face only
-face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; ρaw = FT(0))
+face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; w = FT(0))
 face_prognostic_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         up = ntuple(

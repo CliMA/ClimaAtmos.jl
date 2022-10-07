@@ -32,6 +32,7 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
     ∇ = CCO.DivergenceC2F(; w_bcs...)
     aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
     aux_gm_f = face_aux_grid_mean(state)
     aux_en_f = face_aux_environment(state)
     ρ_f = aux_gm_f.ρ
@@ -49,8 +50,7 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
     @inbounds for i in 1:N_up
         # pressure
         b_up = aux_up[i].buoy
-        a_up = aux_up[i].area
-        w_up = aux_up_f[i].w
+        w_up = prog_up_f[i].w
         H_up = plume_scale_height[i]
         w_en = aux_en_f.w
 
@@ -58,18 +58,13 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
             bottom = CCO.SetValue(b_up[kc_surf]),
             top = CCO.SetValue(b_up[kc_toa]),
         )
-        a_bcs = a_up_boundary_conditions(surf, edmf, i)
         Ifb = CCO.InterpolateC2F(; b_bcs...)
-        Ifa = CCO.InterpolateC2F(; a_bcs...)
 
         nh_pressure = aux_up_f[i].nh_pressure
 
         @. nh_pressure =
-            ρ_f * (
-                -α_b * Ifa(a_up) * Ifb(b_up) +
-                Ifa(a_up) * α_a * w_up * ∇(wvec(Ifc(w_up))) -
-                α_d * Ifa(a_up) * (w_up - w_en) * abs(w_up - w_en) / H_up
-            )
+            -α_b * Ifb(b_up) + α_a * w_up * ∇(wvec(Ifc(w_up))) -
+            α_d * (w_up - w_en) * abs(w_up - w_en) / H_up
     end
     return nothing
 end
