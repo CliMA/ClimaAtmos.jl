@@ -404,19 +404,19 @@ end
 
 function a_up_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel, i::Int)
     a_surf = area_surface_bc(surf, edmf, i)
-    return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
+    return (; bottom = CCO.SetValue(a_surf), top = CCO.SetValue(0))
 end
 
 function a_bulk_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel)
     N_up = n_updrafts(edmf)
     a_surf = sum(i -> area_surface_bc(surf, edmf, i), 1:N_up)
-    return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
+    return (; bottom = CCO.SetValue(a_surf), top = CCO.SetValue(0))
 end
 
 function a_en_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel)
     N_up = n_updrafts(edmf)
     a_surf = 1 - sum(i -> area_surface_bc(surf, edmf, i), 1:N_up)
-    return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
+    return (; bottom = CCO.SetValue(a_surf), top = CCO.SetValue(0))
 end
 
 function area_surface_bc(
@@ -426,7 +426,7 @@ function area_surface_bc(
 )::FT where {FT}
     N_up = n_updrafts(edmf)
     a_min = edmf.minimum_area
-    return surf.bflux > 0 ? edmf.surface_area / N_up : FT(0)
+    return surf.bflux > 0 ? edmf.surface_area / N_up : edmf.minimum_area / N_up
 end
 
 function w_surface_bc(::SurfaceBase{FT})::FT where {FT}
@@ -455,7 +455,7 @@ function θ_surface_bc(
     c_p = TD.cp_m(thermo_params, ts_gm[kc_surf])
     UnPack.@unpack ustar, zLL, oblength, ρLL = surface_helper(surf, grid, state)
 
-    surf.bflux > 0 || return FT(0)
+    surf.bflux > 0 || return aux_gm.θ_liq_ice[kc_surf]
     a_total = edmf.surface_area
     a_ = area_surface_bc(surf, edmf, i)
     ρθ_liq_ice_flux = surf.shf / c_p # assuming no ql,qi flux
@@ -789,6 +789,7 @@ function filter_updraft_vars(
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
+    prog_gm_f = face_prog_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
     aux_up = center_aux_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
@@ -798,9 +799,21 @@ function filter_updraft_vars(
     a_max = edmf.max_area
 
     @inbounds for i in 1:N_up
-        prog_up[i].ρarea .= max.(prog_up[i].ρarea, 0)
-        prog_up[i].ρaθ_liq_ice .= max.(prog_up[i].ρaθ_liq_ice, 0)
-        prog_up[i].ρaq_tot .= max.(prog_up[i].ρaq_tot, 0)
+        @. prog_up[i].ρarea = ifelse(
+            prog_up[i].ρarea > ρ_c * a_min,
+            prog_up[i].ρarea,
+            ρ_c * a_min,
+        )
+        @. prog_up[i].ρaθ_liq_ice = ifelse(
+            prog_up[i].ρarea > ρ_c * a_min,
+            prog_up[i].ρaθ_liq_ice,
+            prog_up[i].ρarea * aux_gm.θ_liq_ice,
+        )
+        @. prog_up[i].ρaq_tot = ifelse(
+            prog_up[i].ρarea > ρ_c * a_min,
+            prog_up[i].ρaq_tot,
+            prog_up[i].ρarea * aux_gm.q_tot,
+        )
         if edmf.entr_closure isa PrognosticNoisyRelaxationProcess
             @. prog_up[i].ε_nondim = max(prog_up[i].ε_nondim, 0)
             @. prog_up[i].δ_nondim = max(prog_up[i].δ_nondim, 0)
@@ -820,20 +833,17 @@ function filter_updraft_vars(
         @. prog_up_f[i].w = max.(prog_up_f[i].w, 0)
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
-        @. prog_up_f[i].w =
-            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].w
+        @. prog_up_f[i].w = ifelse(
+            If(prog_up[i].ρarea) > ρ_f * a_min * 2,
+            prog_up_f[i].w,
+            FT(0),
+        )
     end
 
     @inbounds for k in real_center_indices(grid)
         @inbounds for i in 1:N_up
             is_surface_center(grid, k) && continue
             prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
-            # this is needed to make sure Rico is unchanged.
-            # TODO : look into it further to see why
-            # a similar filtering of ρaθ_liq_ice breaks the simulation
-            if prog_up[i].ρarea[k] / ρ_c[k] < a_min
-                prog_up[i].ρaq_tot[k] = 0
-            end
         end
     end
     if edmf.moisture_model isa NonEquilMoistModel
@@ -856,11 +866,17 @@ function filter_updraft_vars(
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
         @. prog_up[i].ρarea =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρarea)
-        @. prog_up[i].ρaθ_liq_ice =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
-        @. prog_up[i].ρaq_tot =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_tot)
+            ifelse(Ic(prog_up_f[i].w) <= 0, ρ_c * a_min, prog_up[i].ρarea)
+        @. prog_up[i].ρaθ_liq_ice = ifelse(
+            Ic(prog_up_f[i].w) <= 0,
+            ρ_c * a_min * aux_gm.θ_liq_ice,
+            prog_up[i].ρaθ_liq_ice,
+        )
+        @. prog_up[i].ρaq_tot = ifelse(
+            Ic(prog_up_f[i].w) <= 0,
+            ρ_c * a_min * aux_gm.q_tot,
+            prog_up[i].ρaq_tot,
+        )
 
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
@@ -871,10 +887,16 @@ function filter_updraft_vars(
     end
     if edmf.moisture_model isa NonEquilMoistModel
         @inbounds for i in 1:N_up
-            @. prog_up[i].ρaq_liq =
-                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_liq)
-            @. prog_up[i].ρaq_ice =
-                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_ice)
+            @. prog_up[i].ρaq_liq = ifelse(
+                Ic(prog_up_f[i].w) <= 0,
+                ρ_c * a_min * aux_gm.q_liq,
+                prog_up[i].ρaq_liq,
+            )
+            @. prog_up[i].ρaq_ice = ifelse(
+                Ic(prog_up_f[i].w) <= 0,
+                ρ_c * a_min * aux_gm.q_ice,
+                prog_up[i].ρaq_ice,
+            )
             ql_surf = ql_surface_bc(surf)
             qi_surf = qi_surface_bc(surf)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf

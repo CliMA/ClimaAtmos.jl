@@ -57,9 +57,13 @@ function update_aux!(
     #####
     ##### center variables
     #####
+
     C123 = CCG.Covariant123Vector
 
     @inbounds for i in 1:N_up
+        @. aux_up[i].θ_liq_ice = prog_up[i].ρaθ_liq_ice / prog_up[i].ρarea
+        @. aux_up[i].q_tot = prog_up[i].ρaq_tot / prog_up[i].ρarea
+        @. aux_up[i].area = prog_up[i].ρarea / ρ_c
         @. aux_up[i].e_kin =
             LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(prog_up_f[i].w)))) / 2
     end
@@ -70,28 +74,8 @@ function update_aux!(
         #####
         e_pot = geopotential(param_set, grid.zc.z[k])
         @inbounds for i in 1:N_up
-            if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
-                aux_up[i].θ_liq_ice[k] =
-                    prog_up[i].ρaθ_liq_ice[k] / prog_up[i].ρarea[k]
-                aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / prog_up[i].ρarea[k]
-                aux_up[i].area[k] = prog_up[i].ρarea[k] / ρ_c[k]
-            else
-                aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
-                aux_up[i].q_tot[k] = aux_gm.q_tot[k]
-                aux_up[i].area[k] = 0
-                aux_up[i].e_kin[k] = e_kin[k]
-            end
             thermo_args = ()
             if edmf.moisture_model isa NonEquilMoistModel
-                if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
-                    aux_up[i].q_liq[k] =
-                        prog_up[i].ρaq_liq[k] / prog_up[i].ρarea[k]
-                    aux_up[i].q_ice[k] =
-                        prog_up[i].ρaq_ice[k] / prog_up[i].ρarea[k]
-                else
-                    aux_up[i].q_liq[k] = prog_gm.q_liq[k]
-                    aux_up[i].q_ice[k] = prog_gm.q_ice[k]
-                end
                 thermo_args = (aux_up[i].q_liq[k], aux_up[i].q_ice[k])
             end
             ts_up_i = thermo_state_pθq(
