@@ -799,6 +799,7 @@ function filter_updraft_vars(
 
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
+    prog_gm_f = face_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
     aux_up = center_aux_updrafts(state)
@@ -827,13 +828,16 @@ function filter_updraft_vars(
             prog_up[i].ρaq_ice .= max.(prog_up[i].ρaq_ice, 0)
         end
     end
-
+    to_scalar(vector) = vector.u₃
     @inbounds for i in 1:N_up
         @. prog_up_f[i].ρaw = max.(prog_up_f[i].ρaw, 0)
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
-        @. prog_up_f[i].ρaw =
-            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].ρaw
+        @. prog_up_f[i].ρaw = ifelse(
+            If(prog_up[i].ρarea) > ρ_f * a_min,
+            prog_up_f[i].ρaw,
+            ρ_f * a_min * to_scalar(prog_gm_f.w), #TODO - or should it just be zero?
+        )
     end
 
     @inbounds for k in real_center_indices(grid)
