@@ -144,6 +144,8 @@ function default_cache(Y, params, spaces, numerics, simulation)
         ᶜf,
         z_sfc,
         T_sfc,
+        ρ_sfc = similar(T_sfc, FT),
+        q_sfc = similar(T_sfc, FT),
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
