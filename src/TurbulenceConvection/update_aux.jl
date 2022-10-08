@@ -331,7 +331,7 @@ function update_aux!(
         a_up = aux_up[i].area
         @. aux_up_f[i].w = ifelse(
             If(a_up) >= a_min,
-            max(prog_up_f[i].ρaw / (ρ_f * If(a_up)), 0),
+            max(prog_up_f[i].w, 0),
             FT(0),
         )
     end

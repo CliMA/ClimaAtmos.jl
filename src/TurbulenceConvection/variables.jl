@@ -284,7 +284,7 @@ cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
 # cent_prognostic_vars_edmf(FT, edmf) = (;) # could also use this for empty model
 
 # Face only
-face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; ρaw = FT(0))
+face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; w = FT(0))
 face_prognostic_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         up = ntuple(

@@ -96,7 +96,7 @@ function debug_state(state, code_location::String)
         vec(prog_gm_f.w),
         vec(prog_up[1].ρarea),
         vec(prog_up[1].ρaθ_liq_ice),
-        vec(prog_up_f[1].ρaw),
+        vec(prog_up_f[1].w),
         vec(aux_en.area),
         vec(aux_en.θ_liq_ice),
     ]

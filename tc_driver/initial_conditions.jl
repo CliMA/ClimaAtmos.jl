@@ -69,7 +69,7 @@ function initialize_updrafts(edmf, grid, state, surf)
     @inbounds for i in 1:N_up
         @inbounds for k in TC.real_face_indices(grid)
             aux_up_f[i].w[k] = 0
-            prog_up_f[i].ρaw[k] = 0
+            prog_up_f[i].w[k] = 0
         end
 
         @inbounds for k in TC.real_center_indices(grid)

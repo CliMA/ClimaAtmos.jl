@@ -368,7 +368,7 @@ function set_edmf_surface_bc(
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * q_liq_surf
             prog_up[i].ρaq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * q_ice_surf
         end
-        prog_up_f[i].ρaw[kf_surf] = ρ_f[kf_surf] * w_surface_bc(surf)
+        prog_up_f[i].w[kf_surf] = w_surface_bc(surf)
         ae_surf -= a_surf
     end
 
@@ -766,12 +766,13 @@ function compute_up_tendencies!(
         (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
     ∇f = CCO.DivergenceC2F(; adv_bcs...)
+    a_min = edmf.minimum_area
 
     @inbounds for i in 1:N_up
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         Iaf = CCO.InterpolateC2F(; a_up_bcs...)
-        ρaw = prog_up_f[i].ρaw
-        tends_ρaw = tendencies_up_f[i].ρaw
+        w = prog_up_f[i].w
+        tends_w = tendencies_up_f[i].w
         nh_pressure = aux_up_f[i].nh_pressure
         a_up = aux_up[i].area
         w_up = aux_up_f[i].w
@@ -780,12 +781,11 @@ function compute_up_tendencies!(
         detr_w = aux_up[i].detr_turb_dyn
         buoy = aux_up[i].buoy
 
-        @. tends_ρaw = -(∇f(wvec(LBC(ρaw * w_up))))
-        @. tends_ρaw +=
-            (ρaw * (I0f(entr_w) * w_en - I0f(detr_w) * w_up)) +
-            (ρ_f * Iaf(a_up) * I0f(buoy)) +
-            nh_pressure
-        tends_ρaw[kf_surf] = 0
+        @. tends_w = -(∇f(wvec(LBC(w * w_up))))
+        @. tends_w +=
+            w * I0f(entr_w) * (w_en -  w_up) +
+            I0f(buoy) + nh_pressure / (ρ_f * Iaf(max(a_up, a_min)))
+        tends_w[kf_surf] = 0
     end
 
     return nothing
@@ -836,11 +836,11 @@ function filter_updraft_vars(
     end
 
     @inbounds for i in 1:N_up
-        @. prog_up_f[i].ρaw = max.(prog_up_f[i].ρaw, 0)
+        @. prog_up_f[i].w = max.(prog_up_f[i].w, 0)
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
-        @. prog_up_f[i].ρaw =
-            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].ρaw
+        @. prog_up_f[i].w =
+            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].w
     end
 
     @inbounds for k in real_center_indices(grid)
@@ -875,11 +875,11 @@ function filter_updraft_vars(
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
         @. prog_up[i].ρarea =
-            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρarea)
+            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρarea)
         @. prog_up[i].ρaθ_liq_ice =
-            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
+            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
         @. prog_up[i].ρaq_tot =
-            ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_tot)
+            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_tot)
 
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
@@ -891,9 +891,9 @@ function filter_updraft_vars(
     if edmf.moisture_model isa NonEquilibriumMoisture
         @inbounds for i in 1:N_up
             @. prog_up[i].ρaq_liq =
-                ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_liq)
+                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_liq)
             @. prog_up[i].ρaq_ice =
-                ifelse(Ic(prog_up_f[i].ρaw) <= 0, FT(0), prog_up[i].ρaq_ice)
+                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_ice)
             ql_surf = ql_surface_bc(surf)
             qi_surf = qi_surface_bc(surf)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf
