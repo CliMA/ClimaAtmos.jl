@@ -929,14 +929,18 @@ function compute_covariance_shear(
 
     C123 = CCG.Covariant123Vector
     local_geometry = CC.Fields.local_geometry_field(axes(ρ_c))
-    k̂ = @. CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
+    k̂ = center_aux_turbconv(state).k̂
+
+    @. k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
     Ifuₕ = uₕ_bcs()
     ∇uvw = CCO.GradientF2C()
     # TODO: k_eddy and Shear² should probably be tensors (Contravariant3 tensor),
     #       so that the result (a contraction) is a scalar.
     if is_tke
-        uvw = @. C123(Ifuₕ(uₕ_gm)) + C123(wvec(ϕ_en)) # ϕ_en === ψ_en
-        Shear² = @. LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
+        uvw = face_aux_turbconv(state).uvw
+        Shear² = center_aux_turbconv(state).Shear²
+        @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(wvec(ϕ_en)) # ϕ_en === ψ_en
+        @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
         @. shear = ρ_c * area_en * k_eddy * Shear²
     else
         ∇c = CCO.GradientF2C()

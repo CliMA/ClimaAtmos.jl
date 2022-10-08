@@ -72,6 +72,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         ϕ_temporary = FT(0),
         ψ_temporary = FT(0),
+        k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry),
         bulk = (;
             area = FT(0),
             h_tot = FT(0),
@@ -196,6 +197,7 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         face_aux_vars_edmf_moisture(FT, edmf.moisture_model)...,
         diffusive_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
                             CCG.Covariant12Vector(FT(0), FT(0)),
+        uvw = CCG.Covariant123Vector(CCG.WVector(FT(0)), local_geometry),
     )
 )
 
