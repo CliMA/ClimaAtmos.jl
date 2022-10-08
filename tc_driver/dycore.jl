@@ -326,72 +326,72 @@ function compute_gm_tendencies!(
     lg = CC.Fields.local_geometry_field(axes(ρ_c))
     @. tendencies_gm_uₕ -= f × (C12(C123(prog_gm_uₕ)) - C12(C123(aux_gm_uₕ_g)))
 
+    cp_v = TCP.cp_v(param_set)
+    cv_v = TCP.cv_v(param_set)
+    R_v = TCP.R_v(param_set)
 
-    @inbounds for k in TC.real_center_indices(grid)
-        cp_m = TD.cp_m(thermo_params, ts_gm[k])
-        cp_v = TCP.cp_v(param_set)
-        cv_v = TCP.cv_v(param_set)
-        R_v = TCP.R_v(param_set)
-        cv_m = TD.cv_m(thermo_params, ts_gm[k])
-        h_v = cv_v * (aux_gm.T[k] - T_0) + Lv_0 - R_v * T_0
-
-        # LS Subsidence
-        tendencies_gm.ρe_tot[k] -= ρ_c[k] * aux_gm.subsidence[k] * ∇MSE_gm[k]
-        tendencies_gm.ρq_tot[k] -= ρ_c[k] * aux_gm.subsidence[k] * ∇q_tot_gm[k]
-        if edmf.moisture_model isa TC.NonEquilibriumMoisture
-            tendencies_gm.q_liq[k] -= ∇q_liq_gm[k] * aux_gm.subsidence[k]
-            tendencies_gm.q_ice[k] -= ∇q_ice_gm[k] * aux_gm.subsidence[k]
-        end
-        # Radiation
-        if Cases.rad_type(radiation) <: Union{
-            Cases.RadiationDYCOMS_RF01,
-            Cases.RadiationLES,
-            Cases.RadiationTRMM_LBA,
-        }
-            tendencies_gm.ρe_tot[k] += ρ_c[k] * cv_m * aux_gm.dTdt_rad[k]
-        end
-        # LS advection
-        tendencies_gm.ρq_tot[k] += ρ_c[k] * aux_gm.dqtdt_hadv[k]
-        if !(Cases.force_type(force) <: Cases.ForcingDYCOMS_RF01)
-            tendencies_gm.ρe_tot[k] +=
-                ρ_c[k] *
-                (cp_m * aux_gm.dTdt_hadv[k] + h_v * aux_gm.dqtdt_hadv[k])
-        end
-        if edmf.moisture_model isa TC.NonEquilibriumMoisture
-            tendencies_gm.q_liq[k] += aux_gm.dqldt[k]
-            tendencies_gm.q_ice[k] += aux_gm.dqidt[k]
-        end
-
-        # Apply precipitation tendencies
-        tendencies_gm.ρq_tot[k] +=
-            ρ_c[k] * (
-                aux_bulk.qt_tendency_precip_formation[k] +
-                aux_en.qt_tendency_precip_formation[k] +
-                aux_tc.qt_tendency_precip_sinks[k]
-            )
-
-        tendencies_gm.ρe_tot[k] +=
-            ρ_c[k] * (
-                aux_bulk.e_tot_tendency_precip_formation[k] +
-                aux_en.e_tot_tendency_precip_formation[k] +
-                aux_tc.e_tot_tendency_precip_sinks[k]
-            )
-
-        if edmf.moisture_model isa TC.NonEquilibriumMoisture
-            tendencies_gm.q_liq[k] +=
-                aux_bulk.ql_tendency_precip_formation[k] +
-                aux_en.ql_tendency_precip_formation[k]
-            tendencies_gm.q_ice[k] +=
-                aux_bulk.qi_tendency_precip_formation[k] +
-                aux_en.qi_tendency_precip_formation[k]
-
-            # Additionally apply cloud liquid and ice formation tendencies
-            tendencies_gm.q_liq[k] +=
-                aux_bulk.ql_tendency_noneq[k] + aux_en.ql_tendency_noneq[k]
-            tendencies_gm.q_ice[k] +=
-                aux_bulk.qi_tendency_noneq[k] + aux_en.qi_tendency_noneq[k]
-        end
+    # LS Subsidence
+    @. tendencies_gm.ρe_tot -= ρ_c * aux_gm.subsidence * ∇MSE_gm
+    @. tendencies_gm.ρq_tot -= ρ_c * aux_gm.subsidence * ∇q_tot_gm
+    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+        @. tendencies_gm.q_liq -= ∇q_liq_gm * aux_gm.subsidence
+        @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
     end
+    # Radiation
+    if Cases.rad_type(radiation) <: Union{
+        Cases.RadiationDYCOMS_RF01,
+        Cases.RadiationLES,
+        Cases.RadiationTRMM_LBA,
+    }
+        @. tendencies_gm.ρe_tot +=
+            ρ_c * TD.cv_m(thermo_params, ts_gm) * aux_gm.dTdt_rad
+    end
+    # LS advection
+    @. tendencies_gm.ρq_tot += ρ_c * aux_gm.dqtdt_hadv
+    # TODO: should `hv` be a thermo function?
+    #     (hv = cv_v * (aux_gm.T - T_0) + Lv_0 - R_v * T_0)
+    if !(Cases.force_type(force) <: Cases.ForcingDYCOMS_RF01)
+        @. tendencies_gm.ρe_tot +=
+            ρ_c * (
+                TD.cp_m(thermo_params, ts_gm) * aux_gm.dTdt_hadv +
+                (cv_v * (aux_gm.T - T_0) + Lv_0 - R_v * T_0) *
+                aux_gm.dqtdt_hadv
+            )
+    end
+    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+        @. tendencies_gm.q_liq += aux_gm.dqldt
+        @. tendencies_gm.q_ice += aux_gm.dqidt
+    end
+
+    # Apply precipitation tendencies
+    @. tendencies_gm.ρq_tot +=
+        ρ_c * (
+            aux_bulk.qt_tendency_precip_formation +
+            aux_en.qt_tendency_precip_formation +
+            aux_tc.qt_tendency_precip_sinks
+        )
+
+    @. tendencies_gm.ρe_tot +=
+        ρ_c * (
+            aux_bulk.e_tot_tendency_precip_formation +
+            aux_en.e_tot_tendency_precip_formation +
+            aux_tc.e_tot_tendency_precip_sinks
+        )
+    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+        @. tendencies_gm.q_liq +=
+            aux_bulk.ql_tendency_precip_formation +
+            aux_en.ql_tendency_precip_formation
+        @. tendencies_gm.q_ice +=
+            aux_bulk.qi_tendency_precip_formation +
+            aux_en.qi_tendency_precip_formation
+
+        # Additionally apply cloud liquid and ice formation tendencies
+        @. tendencies_gm.q_liq +=
+            aux_bulk.ql_tendency_noneq + aux_en.ql_tendency_noneq
+        @. tendencies_gm.q_ice +=
+            aux_bulk.qi_tendency_noneq + aux_en.qi_tendency_noneq
+    end
+
     TC.compute_sgs_flux!(edmf, grid, state, surf, param_set)
 
     ∇sgs = CCO.DivergenceF2C()
