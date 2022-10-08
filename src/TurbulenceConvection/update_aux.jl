@@ -329,11 +329,8 @@ function update_aux!(
         If = CCO.InterpolateC2F(; a_up_bcs...)
         a_min = edmf.minimum_area
         a_up = aux_up[i].area
-        @. aux_up_f[i].w = ifelse(
-            If(a_up) >= a_min,
-            max(prog_up_f[i].w, 0),
-            FT(0),
-        )
+        @. aux_up_f[i].w =
+            ifelse(If(a_up) >= a_min, max(prog_up_f[i].w, 0), FT(0))
     end
 
     @inbounds for i in 1:N_up

@@ -783,8 +783,9 @@ function compute_up_tendencies!(
 
         @. tends_w = -(∇f(wvec(LBC(w * w_up))))
         @. tends_w +=
-            w * I0f(entr_w) * (w_en -  w_up) +
-            I0f(buoy) + nh_pressure / (ρ_f * Iaf(max(a_up, a_min)))
+            w * I0f(entr_w) * (w_en - w_up) +
+            I0f(buoy) +
+            nh_pressure / (ρ_f * Iaf(max(a_up, a_min)))
         tends_w[kf_surf] = 0
     end
 
@@ -840,7 +841,7 @@ function filter_updraft_vars(
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
         @. prog_up_f[i].w =
-            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].w
+            ifelse(If(prog_up[i].ρarea) >= ρ_f * a_min, prog_up_f[i].w, FT(0))
     end
 
     @inbounds for k in real_center_indices(grid)
