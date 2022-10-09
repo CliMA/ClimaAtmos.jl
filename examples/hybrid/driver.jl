@@ -169,18 +169,28 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
 end
 
 function additional_tendency!(Yₜ, Y, p, t)
-    (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
-    (; microphy_0M, hyperdiff, has_turbconv) = p.tendency_knobs
-    (; rayleigh_sponge, viscous_sponge) = p.tendency_knobs
-    (; non_orographic_gravity_wave) = p.tendency_knobs
+    (; viscous_sponge, hyperdiff) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t)
     viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
-    hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t)
-    vert_diff && vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
-    microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
-    rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t)
-    has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t)
+
+    # Vertical tendencies
+    Fields.bycolumn(axes(Y.c)) do colidx
+        (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
+        (; microphy_0M, has_turbconv) = p.tendency_knobs
+        (; rayleigh_sponge) = p.tendency_knobs
+        rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
+        hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+        if vert_diff
+            (; coupled) = p
+            !coupled && get_surface_fluxes!(Y, p, colidx)
+            vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+        end
+        microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
+        rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t, colidx)
+        has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
+    end
+    # TODO: make bycolumn-able
+    (; non_orographic_gravity_wave) = p.tendency_knobs
     non_orographic_gravity_wave && gravity_wave_tendency!(Yₜ, Y, p, t)
 end
 

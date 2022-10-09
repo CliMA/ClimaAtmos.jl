@@ -37,9 +37,9 @@ function rayleigh_sponge_cache(
     return (; ᶜβ_rayleigh_uₕ, ᶠβ_rayleigh_w)
 end
 
-function rayleigh_sponge_tendency!(Yₜ, Y, p, t)
+function rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶜβ_rayleigh_uₕ) = p
-    @. Yₜ.c.uₕ -= ᶜβ_rayleigh_uₕ * Y.c.uₕ
+    @. Yₜ.c.uₕ[colidx] -= ᶜβ_rayleigh_uₕ[colidx] * Y.c.uₕ[colidx]
 end
 
 # Viscous sponge
@@ -90,65 +90,57 @@ forcing_cache(Y, ::HeldSuarezForcing) = (;
     ᶜφ = deg2rad.(Fields.coordinate_field(Y.c).lat),
 )
 
-function held_suarez_tendency!(Yₜ, Y, p, t)
-    Fields.bycolumn(axes(Y.c)) do colidx
-        (; T_sfc, z_sfc, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+function held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+    (; T_sfc, z_sfc, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
-        R_d = FT(CAP.R_d(params))
-        κ_d = FT(CAP.kappa_d(params))
-        cv_d = FT(CAP.cv_d(params))
-        day = FT(CAP.day(params))
-        MSLP = FT(CAP.MSLP(params))
-        grav = FT(CAP.grav(params))
+    R_d = FT(CAP.R_d(params))
+    κ_d = FT(CAP.kappa_d(params))
+    cv_d = FT(CAP.cv_d(params))
+    day = FT(CAP.day(params))
+    MSLP = FT(CAP.MSLP(params))
+    grav = FT(CAP.grav(params))
 
-        z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z[colidx], 1)
-        z_surface =
-            Fields.Field(Fields.field_values(z_sfc[colidx]), axes(z_bottom))
+    z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z[colidx], 1)
+    z_surface = Fields.Field(Fields.field_values(z_sfc[colidx]), axes(z_bottom))
 
-        σ_b = FT(7 / 10)
-        k_a = 1 / (40 * day)
-        k_s = 1 / (4 * day)
-        k_f = 1 / day
-        if :ρq_tot in propertynames(Y.c)
-            ΔT_y = FT(65)
-            T_equator = FT(294)
-        else
-            ΔT_y = FT(60)
-            T_equator = FT(315)
-        end
-        Δθ_z = FT(10)
-        T_min = FT(200)
+    σ_b = FT(7 / 10)
+    k_a = 1 / (40 * day)
+    k_s = 1 / (4 * day)
+    k_f = 1 / day
+    if :ρq_tot in propertynames(Y.c)
+        ΔT_y = FT(65)
+        T_equator = FT(294)
+    else
+        ΔT_y = FT(60)
+        T_equator = FT(315)
+    end
+    Δθ_z = FT(10)
+    T_min = FT(200)
 
-        @. ᶜσ[colidx] .=
-            ᶜp[colidx] ./ (MSLP * exp(-grav * z_surface / R_d / T_sfc[colidx]))
+    @. ᶜσ[colidx] =
+        ᶜp[colidx] / (MSLP * exp(-grav * z_surface / R_d / T_sfc[colidx]))
 
-        @. ᶜheight_factor[colidx] = max(0, (ᶜσ[colidx] - σ_b) / (1 - σ_b))
-        @. ᶜΔρT[colidx] =
-            (
-                k_a +
-                (k_s - k_a) * ᶜheight_factor[colidx] * (cos(ᶜφ[colidx])^2)^2
-            ) *
-            Y.c.ρ[colidx] *
-            ( # ᶜT - ᶜT_equil
-                ᶜp[colidx] / (Y.c.ρ[colidx] * R_d) - max(
-                    T_min,
-                    (
-                        T_equator - ΔT_y * sin(ᶜφ[colidx])^2 -
-                        Δθ_z * log(ᶜp[colidx] / MSLP) * cos(ᶜφ[colidx])^2
-                    ) * fast_pow(ᶜσ[colidx], κ_d),
-                )
+    @. ᶜheight_factor[colidx] = max(0, (ᶜσ[colidx] - σ_b) / (1 - σ_b))
+    @. ᶜΔρT[colidx] =
+        (k_a + (k_s - k_a) * ᶜheight_factor[colidx] * (cos(ᶜφ[colidx])^2)^2) *
+        Y.c.ρ[colidx] *
+        ( # ᶜT - ᶜT_equil
+            ᶜp[colidx] / (Y.c.ρ[colidx] * R_d) - max(
+                T_min,
+                (
+                    T_equator - ΔT_y * sin(ᶜφ[colidx])^2 -
+                    Δθ_z * log(ᶜp[colidx] / MSLP) * cos(ᶜφ[colidx])^2
+                ) * fast_pow(ᶜσ[colidx], κ_d),
             )
+        )
 
-        @. Yₜ.c.uₕ[colidx] -= (k_f * ᶜheight_factor[colidx]) * Y.c.uₕ[colidx]
-        if :ρθ in propertynames(Y.c)
-            @. Yₜ.c.ρθ[colidx] -=
-                ᶜΔρT[colidx] * fast_pow((MSLP / ᶜp[colidx]), κ_d)
-        elseif :ρe_tot in propertynames(Y.c)
-            @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
-        elseif :ρe_int in propertynames(Y.c)
-            @. Yₜ.c.ρe_int[colidx] -= ᶜΔρT[colidx] * cv_d
-        end
-        nothing
+    @. Yₜ.c.uₕ[colidx] -= (k_f * ᶜheight_factor[colidx]) * Y.c.uₕ[colidx]
+    if :ρθ in propertynames(Y.c)
+        @. Yₜ.c.ρθ[colidx] -= ᶜΔρT[colidx] * fast_pow((MSLP / ᶜp[colidx]), κ_d)
+    elseif :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
+    elseif :ρe_int in propertynames(Y.c)
+        @. Yₜ.c.ρe_int[colidx] -= ᶜΔρT[colidx] * cv_d
     end
     return nothing
 end
@@ -165,7 +157,7 @@ microphysics_cache(Y, ::Microphysics0Moment) = (
     col_integrated_snow = similar(ClimaCore.Fields.level(Y.c.ρ, 1), FT),
 )
 
-function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
+function zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
     (;
         ᶜts,
         ᶜΦ,
@@ -180,44 +172,51 @@ function zero_moment_microphysics_tendency!(Yₜ, Y, p, t)
     ) = p # assume ᶜts has been updated
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
-    @. ᶜS_ρq_tot =
-        Y.c.ρ * CM.Microphysics0M.remove_precipitation(
+    @. ᶜS_ρq_tot[colidx] =
+        Y.c.ρ[colidx] * CM.Microphysics0M.remove_precipitation(
             cm_params,
-            TD.PhasePartition(thermo_params, ᶜts),
+            TD.PhasePartition(thermo_params, ᶜts[colidx]),
         )
-    @. Yₜ.c.ρq_tot += ᶜS_ρq_tot
-    @. Yₜ.c.ρ += ᶜS_ρq_tot
+    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
 
     # update precip in cache for coupler's use
     # 3d rain and snow
-    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
-    @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
-    @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
-    CCO.column_integral_definite!(col_integrated_rain, ᶜ3d_rain)
-    CCO.column_integral_definite!(col_integrated_snow, ᶜ3d_snow)
+    @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
+    @. ᶜ3d_rain[colidx] =
+        ifelse(ᶜT[colidx] >= FT(273.15), ᶜS_ρq_tot[colidx], FT(0))
+    @. ᶜ3d_snow[colidx] =
+        ifelse(ᶜT[colidx] < FT(273.15), ᶜS_ρq_tot[colidx], FT(0))
+    CCO.column_integral_definite!(col_integrated_rain[colidx], ᶜ3d_rain[colidx])
+    CCO.column_integral_definite!(col_integrated_snow[colidx], ᶜ3d_snow[colidx])
 
-    @. col_integrated_rain = col_integrated_rain / CAP.ρ_cloud_liq(params)
-    @. col_integrated_snow = col_integrated_snow / CAP.ρ_cloud_liq(params)
+    @. col_integrated_rain[colidx] =
+        col_integrated_rain[colidx] / CAP.ρ_cloud_liq(params)
+    @. col_integrated_snow[colidx] =
+        col_integrated_snow[colidx] / CAP.ρ_cloud_liq(params)
 
     # liquid fraction
-    @. ᶜλ = TD.liquid_fraction(thermo_params, ᶜts)
+    @. ᶜλ[colidx] = TD.liquid_fraction(thermo_params, ᶜts[colidx])
 
     if :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot +=
-            ᶜS_ρq_tot * (
-                ᶜλ * TD.internal_energy_liquid(thermo_params, ᶜts) +
-                (1 - ᶜλ) * TD.internal_energy_ice(thermo_params, ᶜts) +
-                ᶜΦ
+        @. Yₜ.c.ρe_tot[colidx] +=
+            ᶜS_ρq_tot[colidx] * (
+                ᶜλ[colidx] *
+                TD.internal_energy_liquid(thermo_params, ᶜts[colidx]) +
+                (1 - ᶜλ[colidx]) *
+                TD.internal_energy_ice(thermo_params, ᶜts[colidx]) +
+                ᶜΦ[colidx]
             )
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int +=
-            ᶜS_ρq_tot * (
-                ᶜλ * TD.internal_energy_liquid(thermo_params, ᶜts) +
-                (1 - ᶜλ) * TD.internal_energy_ice(thermo_params, ᶜts)
+        @. Yₜ.c.ρe_int[colidx] +=
+            ᶜS_ρq_tot[colidx] * (
+                ᶜλ[colidx] *
+                TD.internal_energy_liquid(thermo_params, ᶜts[colidx]) +
+                (1 - ᶜλ[colidx]) *
+                TD.internal_energy_ice(thermo_params, ᶜts[colidx])
             )
     end
-
-
+    return nothing
 end
 
 # Vertical diffusion boundary layer parameterization
