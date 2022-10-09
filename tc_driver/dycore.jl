@@ -132,7 +132,7 @@ function set_thermo_state_peq!(
     p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     C123 = CCG.Covariant123Vector
-    @. aux_gm.e_kin = LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(prog_gm_f.w))) / 2
+    ᶜK = TC.center_aux_grid_mean_e_kin(state)
 
     @inbounds for k in TC.real_center_indices(grid)
         thermo_args = if moisture_model isa TC.EquilibriumMoisture
@@ -145,7 +145,7 @@ function set_thermo_state_peq!(
             )
         end
         e_pot = TC.geopotential(param_set, grid.zc.z[k])
-        e_int = prog_gm.ρe_tot[k] / ρ_c[k] - aux_gm.e_kin[k] - e_pot
+        e_int = prog_gm.ρe_tot[k] / ρ_c[k] - ᶜK[k] - e_pot
         if compressibility_model isa TC.CompressibleFluid
             ts_gm[k] = TD.PhaseEquil_ρeq(
                 thermo_params,
@@ -283,14 +283,15 @@ function compute_gm_tendencies!(
     ρ_c = prog_gm.ρ
     aux_tc = TC.center_aux_turbconv(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
+    ᶜK = TC.center_aux_grid_mean_e_kin(state)
 
-    MSE_gm_toa = aux_gm.h_tot[kc_toa] - aux_gm.e_kin[kc_toa]
+    MSE_gm_toa = aux_gm.h_tot[kc_toa] - ᶜK[kc_toa]
     q_tot_gm_toa = prog_gm.ρq_tot[kc_toa] / ρ_c[kc_toa]
     RBe = CCO.RightBiasedC2F(; top = CCO.SetValue(MSE_gm_toa))
     RBq = CCO.RightBiasedC2F(; top = CCO.SetValue(q_tot_gm_toa))
     wvec = CC.Geometry.WVector
     ∇c = CCO.DivergenceF2C()
-    @. ∇MSE_gm = ∇c(wvec(RBe(aux_gm.h_tot - aux_gm.e_kin)))
+    @. ∇MSE_gm = ∇c(wvec(RBe(aux_gm.h_tot - ᶜK)))
     @. ∇q_tot_gm = ∇c(wvec(RBq(prog_gm.ρq_tot / ρ_c)))
 
     if edmf.moisture_model isa TC.NonEquilibriumMoisture

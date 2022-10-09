@@ -32,6 +32,7 @@ aux(state, fl) = getproperty(state.aux, field_loc(fl))
 
 center_aux_grid_mean_ts(state) = state.p.ᶜts[state.colidx]
 center_aux_grid_mean_p(state) = state.p.ᶜp[state.colidx]
+center_aux_grid_mean_e_kin(state) = state.p.ᶜK[state.colidx]
 center_aux_grid_mean(state) = aux(state, CentField())
 face_aux_grid_mean(state) = aux(state, FaceField())
 
