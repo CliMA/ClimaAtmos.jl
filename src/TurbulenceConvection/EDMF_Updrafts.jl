@@ -40,13 +40,11 @@ function compute_nonequilibrium_moisture_tendencies!(
             aux_up[i].qi_tendency_noneq[k] = mph.qi_tendency * aux_up[i].area[k]
         end
     end
-    @inbounds for k in real_center_indices(grid)
-        aux_bulk.ql_tendency_noneq[k] = 0
-        aux_bulk.qi_tendency_noneq[k] = 0
-        @inbounds for i in 1:N_up
-            aux_bulk.ql_tendency_noneq[k] += aux_up[i].ql_tendency_noneq[k]
-            aux_bulk.qi_tendency_noneq[k] += aux_up[i].qi_tendency_noneq[k]
-        end
+    @. aux_bulk.ql_tendency_noneq = 0
+    @. aux_bulk.qi_tendency_noneq = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.ql_tendency_noneq += aux_up[i].ql_tendency_noneq
+        @. aux_bulk.qi_tendency_noneq += aux_up[i].qi_tendency_noneq
     end
     return nothing
 end

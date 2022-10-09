@@ -47,6 +47,7 @@ function update_aux!(
     max_area = edmf.max_area
     ts_gm = center_aux_grid_mean_ts(state)
     ts_env = center_aux_environment(state).ts
+    e_kin = center_aux_grid_mean_e_kin(state)
 
     prog_gm_uₕ = grid_mean_uₕ(state)
     Ic = CCO.InterpolateF2C()
@@ -77,7 +78,7 @@ function update_aux!(
                 aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
                 aux_up[i].q_tot[k] = aux_gm.q_tot[k]
                 aux_up[i].area[k] = 0
-                aux_up[i].e_kin[k] = aux_gm.e_kin[k]
+                aux_up[i].e_kin[k] = e_kin[k]
             end
             thermo_args = ()
             if edmf.moisture_model isa NonEquilibriumMoisture
@@ -428,17 +429,19 @@ function update_aux!(
 
     ∇0_bcs = (; bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     If0 = CCO.InterpolateC2F(; ∇0_bcs...)
+    uvw = face_aux_turbconv(state).uvw
 
     uₕ_gm = grid_mean_uₕ(state)
     w_en = aux_en_f.w
     # compute shear
+    k̂ = center_aux_turbconv(state).k̂
 
     # TODO: Will need to be changed with topography
     local_geometry = CC.Fields.local_geometry_field(axes(ρ_c))
-    k̂ = @. CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
+    @. k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
     Ifuₕ = uₕ_bcs()
     ∇uvw = CCO.GradientF2C()
-    uvw = @. C123(Ifuₕ(uₕ_gm)) + C123(wvec(w_en))
+    @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(wvec(w_en))
     @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
 
     q_tot_en = aux_en.q_tot
