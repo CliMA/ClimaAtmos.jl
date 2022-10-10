@@ -778,7 +778,7 @@ function compute_up_tendencies!(
         @. tends_w +=
             w * I0f(entr_w) * (w_en - w_up) +
             I0f(buoy) +
-            nh_pressure / (ρ_f * Iaf(max(a_up, a_min)))
+            nh_pressure * Iaf(a_up) / (ρ_f * Iaf(max(a_up, a_min)))
         tends_w[kf_surf] = 0
     end
 
