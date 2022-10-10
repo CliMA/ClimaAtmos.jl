@@ -836,7 +836,7 @@ function filter_updraft_vars(
         @. prog_up_f[i].ρaw = ifelse(
             If(prog_up[i].ρarea) > ρ_f * a_min,
             prog_up_f[i].ρaw,
-            ρ_f * a_min * to_scalar(prog_gm_f.w), #TODO - or should it just be zero?
+            FT(0), #ρ_f * a_min * to_scalar(prog_gm_f.w), #TODO - or should it just be zero?
         )
     end
 
