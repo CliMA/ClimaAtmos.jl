@@ -149,6 +149,14 @@ all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components
 all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["single_column_nonorographic_gravity_wave"][(:f, :w, :components, :data, 1)] = 0.0
 #
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"] = OrderedCollections.OrderedDict()
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"][(:c, :ρ)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"][(:c, :ρe_tot)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"][(:c, :uₕ, :components, :data, 1)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"][(:c, :uₕ, :components, :data, 2)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"][(:c, :ρq_tot)] = 0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_gw"][(:f, :w, :components, :data, 1)] = 0
+#
 #! format: on
 #################################
 #################################

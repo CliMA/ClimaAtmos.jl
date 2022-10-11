@@ -161,6 +161,10 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 1days"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
+      - label: ":computer: held suarez (ρe) equilmoist hightop gw parameterization"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 50 --dz_top 3e3 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --microphy 0M --non_orographic_gravity_wave true --job_id sphere_held_suarez_rhoe_equilmoist_hightop_gw --dt 450secs --t_end 1days --regression_test true"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_gw/*"
+
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --microphy 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 600secs"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
