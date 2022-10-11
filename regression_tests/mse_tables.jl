@@ -127,7 +127,6 @@ all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["compressible_edmf_trmm"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["edmf_gabls"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_gabls"][(:c, :ρ)] = 0.0
