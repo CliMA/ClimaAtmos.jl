@@ -226,6 +226,10 @@ function parse_commandline()
         help = "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--test_edmf_consistency"
+        help = "Test edmf equation consistency [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--non_orographic_gravity_wave"
         help = "Apply parameterization for convective gravity wave forcing on horizontal mean flow"
         arg_type = Bool

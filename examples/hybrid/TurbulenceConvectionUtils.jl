@@ -40,6 +40,7 @@ function get_edmf_cache(Y, namelist, param_set, parsed_args)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     case = Cases.get_case(namelist)
     FT = CC.Spaces.undertype(axes(Y.c))
+    test_consistency = parsed_args["test_edmf_consistency"]
     forcing =
         Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
     radiation = Cases.RadiationBase(case, FT)
@@ -69,6 +70,7 @@ function get_edmf_cache(Y, namelist, param_set, parsed_args)
         edmf,
         case,
         forcing,
+        test_consistency,
         radiation,
         surf_params,
         param_set,
@@ -143,11 +145,15 @@ end
 
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, case, surf_params, radiation, forcing, precip_model) =
-        edmf_cache
+    (; edmf, param_set, case, surf_params) = edmf_cache
+    (; radiation, forcing, precip_model, test_consistency) = edmf_cache
     tc_params = CAP.turbconv_params(param_set)
     state = tc_column_state(Y, p, Yₜ, colidx)
     grid = TC.Grid(state)
+    if test_consistency
+        parent(state.aux.face) .= NaN
+        parent(state.aux.cent) .= NaN
+    end
 
     set_thermo_state_peq!(
         state,
