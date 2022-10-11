@@ -67,7 +67,7 @@ all_best_mse["edmf_bomex"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0
+all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["compressible_edmf_bomex"] = OrderedCollections.OrderedDict()
 all_best_mse["compressible_edmf_bomex"][(:c, :ρ)] = 0.0
@@ -79,7 +79,7 @@ all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["compressible_edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["compressible_edmf_bomex"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0
+all_best_mse["compressible_edmf_bomex"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["edmf_dycoms_rf01"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρ)] = 0.0
@@ -91,7 +91,7 @@ all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0
+all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["compressible_edmf_dycoms_rf01"] = OrderedCollections.OrderedDict()
 all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :ρ)] = 0.0
@@ -103,7 +103,7 @@ all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["compressible_edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0
+all_best_mse["compressible_edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["edmf_trmm"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_trmm"][(:c, :ρ)] = 0.0
@@ -115,7 +115,7 @@ all_best_mse["edmf_trmm"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_trmm"][(:f, :turbconv, :up, 1, :ρaw)] = 0.0
+all_best_mse["edmf_trmm"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["compressible_edmf_trmm"] = OrderedCollections.OrderedDict()
 all_best_mse["compressible_edmf_trmm"][(:c, :ρ)] = 0.0
@@ -127,6 +127,7 @@ all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["compressible_edmf_trmm"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
+all_best_mse["compressible_edmf_trmm"][(:f, :turbconv, :up, 1, :w)] = 0.0
 #
 all_best_mse["edmf_gabls"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_gabls"][(:c, :ρ)] = 0.0
