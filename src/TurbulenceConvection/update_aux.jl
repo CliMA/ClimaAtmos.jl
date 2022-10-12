@@ -10,7 +10,6 @@ function update_aux!(
     #####
     ##### Unpack common variables
     #####
-    to_scalar(vector) = vector.u₃
 
     a_bulk_bcs = a_bulk_boundary_conditions(surf, edmf)
     Ifb = CCO.InterpolateC2F(; a_bulk_bcs...)
@@ -153,7 +152,7 @@ function update_aux!(
         end
     end
 
-    @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
+    @. aux_en_f.w = toscalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
         @. aux_en_f.w -=
             Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
