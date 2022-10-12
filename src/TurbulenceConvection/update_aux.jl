@@ -10,6 +10,10 @@ function update_aux!(
     #####
     ##### Unpack common variables
     #####
+    to_scalar(vector) = vector.u₃
+
+    a_bulk_bcs = a_bulk_boundary_conditions(surf, edmf)
+    Ifb = CCO.InterpolateC2F(; a_bulk_bcs...)
     thermo_params = TCP.thermodynamics_params(param_set)
     microphys_params = TCP.microphysics_params(param_set)
     N_up = n_updrafts(edmf)
@@ -55,8 +59,6 @@ function update_aux!(
     ##### center variables
     #####
     C123 = CCG.Covariant123Vector
-    @. aux_en.e_kin =
-        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
 
     @inbounds for i in 1:N_up
         @. aux_up[i].e_kin =
@@ -149,6 +151,19 @@ function update_aux!(
             aux_en.QTvar[k] = prog_en.ρaQTvar[k] / (ρ_c[k] * aux_en.area[k])
             aux_en.HQTcov[k] = prog_en.ρaHQTcov[k] / (ρ_c[k] * aux_en.area[k])
         end
+    end
+
+    @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
+    @inbounds for i in 1:N_up
+        @. aux_en_f.w -=
+            Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
+    end
+
+    @. aux_en.e_kin =
+        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
+
+    @inbounds for k in real_center_indices(grid)
+        e_pot = geopotential(param_set, grid.zc.z[k])
 
         #####
         ##### decompose_environment
@@ -324,8 +339,6 @@ function update_aux!(
     ##### face variables: diagnose primitive, diagnose env and compute bulk
     #####
     parent(aux_tc_f.bulk.w) .= 0
-    a_bulk_bcs = a_bulk_boundary_conditions(surf, edmf)
-    Ifb = CCO.InterpolateC2F(; a_bulk_bcs...)
     @inbounds for i in 1:N_up
         a_up = aux_up[i].area
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
@@ -335,12 +348,6 @@ function update_aux!(
             Ifu(a_up) * prog_up_f[i].w / Ifb(aux_bulk.area),
             FT(0),
         )
-    end
-    to_scalar(vector) = vector.u₃
-    @. aux_en_f.w = to_scalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
-    @inbounds for i in 1:N_up
-        @. aux_en_f.w -=
-            Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
     end
 
     #####
