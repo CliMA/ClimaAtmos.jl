@@ -21,9 +21,7 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "Installation instructions" => "installation_instructions.md",
-        "Running instructions" => "running_instructions.md",
         "Contributor Guide" => "contributor_guide.md",
-        "Function Index" => "function_index.md",
         "Equations" => "equations.md",
         "REPL scripts" => "repl_scripts.md",
         "Command line arguments" => "cl_args.md",
