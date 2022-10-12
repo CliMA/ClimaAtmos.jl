@@ -1,131 +1,22 @@
 using Dates: DateTime, @dateformat_str
 import ClimaCore: InputOutput
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import ClimaAtmos as CA
+import ClimaAtmos:
+    DryModel,
+    EquilMoistModel,
+    NonEquilMoistModel,
+    CompressibleFluid,
+    AnelasticFluid,
+    PotentialTemperature,
+    TotalEnergy,
+    InternalEnergy,
+    Microphysics0Moment,
+    HeldSuarezForcing,
+    BulkSurfaceScheme,
+    MoninObukhovSurface
 
-abstract type AbstractMoistureModel end
-struct DryModel <: AbstractMoistureModel end
-struct EquilMoistModel <: AbstractMoistureModel end
-struct NonEquilMoistModel <: AbstractMoistureModel end
-
-abstract type AbstractCompressibilityModel end
-struct CompressibleFluid <: AbstractCompressibilityModel end
-struct AnelasticFluid <: AbstractCompressibilityModel end
-
-function moisture_model(parsed_args)
-    moisture_name = parsed_args["moist"]
-    @assert moisture_name in ("dry", "equil", "nonequil")
-    return if moisture_name == "dry"
-        DryModel()
-    elseif moisture_name == "equil"
-        EquilMoistModel()
-    elseif moisture_name == "nonequil"
-        NonEquilMoistModel()
-    end
-end
-
-abstract type AbstractEnergyFormulation end
-struct PotentialTemperature <: AbstractEnergyFormulation end
-struct TotalEnergy <: AbstractEnergyFormulation end
-struct InternalEnergy <: AbstractEnergyFormulation end
-
-function energy_form(parsed_args)
-    energy_name = parse_arg(parsed_args, "energy_name", "rhoe")
-    @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")
-    vert_diff = parsed_args["vert_diff"]
-    if vert_diff
-        @assert energy_name == "rhoe"
-    end
-    return if energy_name == "rhoe"
-        TotalEnergy()
-    elseif energy_name == "rhoe_int"
-        InternalEnergy()
-    elseif energy_name == "rhotheta"
-        PotentialTemperature()
-    end
-end
-
-function radiation_model(parsed_args)
-    radiation_name = parsed_args["rad"]
-    @assert radiation_name in
-            (nothing, "clearsky", "gray", "allsky", "allskywithclear")
-    return if radiation_name == "clearsky"
-        RRTMGPI.ClearSkyRadiation()
-    elseif radiation_name == "gray"
-        RRTMGPI.GrayRadiation()
-    elseif radiation_name == "allsky"
-        RRTMGPI.AllSkyRadiation()
-    elseif radiation_name == "allskywithclear"
-        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics()
-    else
-        nothing
-    end
-end
-
-abstract type AbstractMicrophysicsModel end
-struct Microphysics0Moment <: AbstractMicrophysicsModel end
-
-function microphysics_model(parsed_args)
-    microphysics_name = parsed_args["microphy"]
-    @assert microphysics_name in (nothing, "0M")
-    return if microphysics_name == nothing
-        nothing
-    elseif microphysics_name == "0M"
-        Microphysics0Moment()
-    end
-end
-
-abstract type AbstractForcing end
-struct HeldSuarezForcing <: AbstractForcing end
-
-function forcing_type(parsed_args)
-    forcing = parsed_args["forcing"]
-    @assert forcing in (nothing, "held_suarez")
-    return if forcing == nothing
-        nothing
-    elseif forcing == "held_suarez"
-        HeldSuarezForcing()
-    end
-end
-
-function turbconv_model(FT, parsed_args, namelist)
-    turbconv = parsed_args["turbconv"]
-    precip_model = nothing
-    @assert turbconv in (nothing, "edmf")
-    return if turbconv == "edmf"
-        TC.EDMFModel(FT, namelist, precip_model, parsed_args)
-    else
-        nothing
-    end
-end
-
-abstract type AbstractSurfaceScheme end
-Base.@kwdef struct BulkSurfaceScheme{FT} <: AbstractSurfaceScheme
-    Cd::FT
-    Ch::FT
-end
-Base.@kwdef struct MoninObukhovSurface{FT} <: AbstractSurfaceScheme
-    z0m::FT
-    z0b::FT
-end # TODO: unify with MoninObukhovSurface in TC
-
-function surface_scheme(FT, parsed_args)
-    surface_scheme = parsed_args["surface_scheme"]
-    @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
-    return if surface_scheme == "bulk"
-        BulkSurfaceScheme{FT}(; Cd = FT(0.0044), Ch = FT(0.0044))
-    elseif surface_scheme == "monin_obukhov"
-        MoninObukhovSurface{FT}(; z0m = FT(1e-5), z0b = FT(1e-5))
-    elseif surface_scheme == nothing
-        surface_scheme
-    end
-end
-
-Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)
-Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
-Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
-Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
-Base.broadcastable(x::AbstractForcing) = Ref(x)
-
+import ClimaCore: InputOutput
 
 function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
     # should this live in the radiation model?
@@ -135,16 +26,16 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
     @assert non_orographic_gravity_wave in (true, false)
 
     model_spec = (;
-        moisture_model = moisture_model(parsed_args),
-        energy_form = energy_form(parsed_args),
+        moisture_model = CA.moisture_model(parsed_args),
+        energy_form = CA.energy_form(parsed_args),
         perturb_initstate = parsed_args["perturb_initstate"],
         idealized_h2o,
-        radiation_model = radiation_model(parsed_args),
-        microphysics_model = microphysics_model(parsed_args),
-        forcing_type = forcing_type(parsed_args),
-        turbconv_model = turbconv_model(FT, parsed_args, namelist),
+        radiation_model = CA.radiation_model(parsed_args),
+        microphysics_model = CA.microphysics_model(parsed_args),
+        forcing_type = CA.forcing_type(parsed_args),
+        turbconv_model = CA.turbconv_model(FT, parsed_args, namelist),
         anelastic_dycore = parsed_args["anelastic_dycore"],
-        surface_scheme = surface_scheme(FT, parsed_args),
+        surface_scheme = CA.surface_scheme(FT, parsed_args),
         C_E = FT(parsed_args["C_E"]),
         non_orographic_gravity_wave,
     )
