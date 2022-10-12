@@ -2,7 +2,39 @@ import ClimaAtmos.Parameters as CAP
 using Statistics: mean
 using Dierckx: Spline1D
 using Dates: Second
+import Pkg
+import NCDatasets as NC
+import RRTMGP
 using Insolation: instantaneous_zenith_angle
+
+"""
+    rrtmgp_artifact(file_name)
+
+Returns the filename of an artifact stored in
+`RRTMGPReferenceData/<file_name>`.
+"""
+function rrtmgp_artifact(file_name)
+    artifact_name = "RRTMGPReferenceData"
+    artifacts_file = joinpath(pkgdir(RRTMGP), "test", "Artifacts.toml")
+    data_folder = joinpath(
+        Pkg.Artifacts.ensure_artifact_installed(artifact_name, artifacts_file),
+        artifact_name,
+    )
+    return joinpath(data_folder, file_name)
+end
+
+"""
+    data_loader(fn, file_name)
+
+Loads data from an `NCDataset` from the `RRTMGP.jl` artifact stored in
+`RRTMGPReferenceData/<file_name>`, and calls a function, `fn` on the
+dataset.
+"""
+function data_loader(fn, file_name)
+    NC.Dataset(rrtmgp_artifact(file_name), "r") do ds
+        fn(ds)
+    end
+end
 
 function rrtmgp_model_cache(
     Y,
@@ -32,7 +64,8 @@ function rrtmgp_model_cache(
     else
         latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    input_data = RRTMGPI.rrtmgp_artifact("atmos_state", "clearsky_as.nc")
+    input_data =
+        NC.Dataset(rrtmgp_artifact(joinpath("atmos_state", "clearsky_as.nc")))
     if radiation_mode isa RRTMGPI.GrayRadiation
         kwargs = (;
             lapse_rate = 3.5,
@@ -149,8 +182,10 @@ function rrtmgp_model_cache(
     end
 
     rrtmgp_model = RRTMGPI.RRTMGPModel(
-        rrtmgp_params;
-        FT = Float64,
+        rrtmgp_params,
+        data_loader,
+        Float64,
+        RRTMGP.Device.array_type();
         ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
         radiation_mode,

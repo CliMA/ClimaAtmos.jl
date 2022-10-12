@@ -1,7 +1,5 @@
 module RRTMGPInterface
 
-using Pkg
-using NCDatasets
 using RRTMGP
 using ClimaCore: DataLayouts, Spaces, Fields
 
@@ -93,22 +91,6 @@ array2data(
 import ClimaCore.DataLayouts: parent_array_type
 parent_array_type(::Type{<:Base.ReshapedArray{T, N, P}}) where {T, N, P} =
     parent_array_type(P)
-
-"""
-    rrtmgp_artifact(subfolder, file_name)
-
-Constructs an `NCDataset` from the `RRTMGP.jl` artifact stored in
-`RRTMGPReferenceData/<subfolder>/<file_name>`.
-"""
-function rrtmgp_artifact(subfolder, file_name)
-    artifact_name = "RRTMGPReferenceData"
-    artifacts_file = joinpath(pkgdir(RRTMGP), "test", "Artifacts.toml")
-    data_folder = joinpath(
-        Pkg.Artifacts.ensure_artifact_installed(artifact_name, artifacts_file),
-        artifact_name,
-    )
-    return Dataset(joinpath(data_folder, subfolder, file_name), "r")
-end
 
 abstract type AbstractRadiationMode end
 struct GrayRadiation <: AbstractRadiationMode end
@@ -380,9 +362,18 @@ Similarly, every keyword argument that corresponds to an array of values at the
 top/bottom of the atmosphere can be specified as a scalar, or as the full 1D
 array.
 
-# Keyword Arguments
+# Positional Arguments
+- `data_loader(callback::Function, file_name)`: a function for
+   loading RRTMGP.jl artifacts, stored in `RRTMGPReferenceData/<file_name>`.
+   Should be callable with filenames:
+  - `lookup_tables/clearsky_lw.nc`
+  - `lookup_tables/cloudysky_lw.nc`
+  - `lookup_tables/clearsky_sw.nc`
+  - `lookup_tables/cloudysky_sw.nc`
 - `FT`: floating-point number type (performance with `Float32` is questionable)
 - `DA`: array type (defaults to `CuArray` when a compatible GPU is available)
+
+# Keyword Arguments
 - `ncol`: number of vertical columns in the domain/extension
 - `domain_nlay`: number of cells (layers) in the domain
 - `extension_nlay`: number of cells (layers) in the extension
@@ -477,9 +468,10 @@ array.
     - `face_z`: z-coordinate in m at cell faces
 """
 function RRTMGPModel(
-    params::RRTMGP.Parameters.ARP;
-    FT::Type{<:AbstractFloat} = Float64,
-    DA::Type{<:AbstractArray} = RRTMGP.Device.array_type(),
+    params::RRTMGP.Parameters.ARP,
+    data_loader::Function,
+    ::Type{FT},
+    ::Type{DA};
     ncol::Int,
     domain_nlay::Int,
     extension_nlay::Int = 0,
@@ -494,7 +486,7 @@ function RRTMGPModel(
     add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
-)
+) where {FT <: AbstractFloat, DA <: AbstractArray}
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
@@ -575,10 +567,11 @@ function RRTMGPModel(
         if radiation_mode isa GrayRadiation
             nbnd_lw = ngpt_lw = 1
         else
-            ds_lw = rrtmgp_artifact("lookup_tables", "clearsky_lw.nc")
-            lookup_lw, idx_gases =
-                RRTMGP.LookUpTables.LookUpLW(ds_lw, Int, FT, DA)
-            close(ds_lw)
+            local lookup_lw, idx_gases
+            data_loader(joinpath("lookup_tables", "clearsky_lw.nc")) do ds
+                lookup_lw, idx_gases =
+                    RRTMGP.LookUpTables.LookUpLW(ds, Int, FT, DA)
+            end
             lookups = (; lookups..., lookup_lw, idx_gases)
 
             nbnd_lw = lookup_lw.n_bnd
@@ -586,15 +579,16 @@ function RRTMGPModel(
             ngas = lookup_lw.n_gases
 
             if !(radiation_mode isa ClearSkyRadiation)
-                ds_lw_cld = rrtmgp_artifact("lookup_tables", "cloudysky_lw.nc")
-                lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(
-                    ds_lw_cld,
-                    Int,
-                    FT,
-                    DA,
-                    !use_pade_cloud_optics_mode,
-                )
-                close(ds_lw_cld)
+                local lookup_lw_cld
+                data_loader(joinpath("lookup_tables", "cloudysky_lw.nc")) do ds
+                    lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(
+                        ds,
+                        Int,
+                        FT,
+                        DA,
+                        !use_pade_cloud_optics_mode,
+                    )
+                end
                 lookups = (; lookups..., lookup_lw_cld)
             end
         end
@@ -639,10 +633,11 @@ function RRTMGPModel(
         if radiation_mode isa GrayRadiation
             nbnd_sw = ngpt_sw = 1
         else
-            ds_sw = rrtmgp_artifact("lookup_tables", "clearsky_sw.nc")
-            lookup_sw, idx_gases =
-                RRTMGP.LookUpTables.LookUpSW(ds_sw, Int, FT, DA)
-            close(ds_sw)
+            local lookup_sw, idx_gases
+            data_loader(joinpath("lookup_tables", "clearsky_sw.nc")) do ds
+                lookup_sw, idx_gases =
+                    RRTMGP.LookUpTables.LookUpSW(ds, Int, FT, DA)
+            end
             lookups = (; lookups..., lookup_sw, idx_gases)
 
             nbnd_sw = lookup_sw.n_bnd
@@ -650,15 +645,16 @@ function RRTMGPModel(
             ngas = lookup_sw.n_gases
 
             if !(radiation_mode isa ClearSkyRadiation)
-                ds_sw_cld = rrtmgp_artifact("lookup_tables", "cloudysky_sw.nc")
-                lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(
-                    ds_sw_cld,
-                    Int,
-                    FT,
-                    DA,
-                    !use_pade_cloud_optics_mode,
-                )
-                close(ds_sw_cld)
+                local lookup_sw_cld
+                data_loader(joinpath("lookup_tables", "cloudysky_sw.nc")) do ds
+                    lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(
+                        ds,
+                        Int,
+                        FT,
+                        DA,
+                        !use_pade_cloud_optics_mode,
+                    )
+                end
                 lookups = (; lookups..., lookup_sw_cld)
             end
         end

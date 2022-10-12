@@ -41,8 +41,7 @@ zd_viscous = parsed_args["zd_viscous"]
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
 
-include(joinpath("..", "RRTMGPInterface.jl"))
-import .RRTMGPInterface as RRTMGPI
+import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
 include("types.jl")
 
