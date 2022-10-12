@@ -1,5 +1,6 @@
 using Dates: DateTime, @dateformat_str
 import ClimaCore: InputOutput
+import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
