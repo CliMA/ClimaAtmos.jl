@@ -51,7 +51,6 @@ include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
     nl = TCU.NameList.default_namelist(case_name)
-    nl["set_src_seed"] = true
     nl
 else
     nothing
@@ -96,10 +95,15 @@ jacobi_flags(::PotentialTemperature) =
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     FT = typeof(dt)
-    (; microphysics_model, forcing_type, radiation_model, turbconv_model) =
-        model_spec
+    (;
+        microphysics_model,
+        forcing_type,
+        radiation_model,
+        turbconv_model,
+        precip_model,
+    ) = model_spec
 
-    anelastic_dycore = model_spec.anelastic_dycore
+    compressibility_model = model_spec.compressibility_model
 
     return merge(
         hyperdiffusion_cache(
@@ -159,10 +163,18 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             )
         ),
         (; Δt = dt),
-        (; anelastic_dycore),
+        (; compressibility_model),
         !isnothing(turbconv_model) ?
-        (; edmf_cache = TCU.get_edmf_cache(Y, namelist, params, parsed_args)) :
-        NamedTuple(),
+        (;
+            edmf_cache = TCU.get_edmf_cache(
+                Y,
+                turbconv_model,
+                precip_model,
+                namelist,
+                params,
+                parsed_args,
+            )
+        ) : NamedTuple(),
         (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
     )
 end

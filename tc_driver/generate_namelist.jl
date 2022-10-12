@@ -76,7 +76,6 @@ function default_namelist(
     namelist_defaults["meta"]["uuid"] = basename(tempname())
 
     namelist_defaults["config"] = "column"
-    namelist_defaults["set_src_seed"] = false
     namelist_defaults["test_duals"] = false
 
     namelist_defaults["logging"] = Dict()

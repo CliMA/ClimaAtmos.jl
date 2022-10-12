@@ -136,7 +136,7 @@ function compute_sgs_flux!(
             )
     end
 
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         massflux_en = aux_tc_f.massflux_en
         massflux_ql = aux_tc_f.massflux_ql
         massflux_qi = aux_tc_f.massflux_qi
@@ -182,7 +182,7 @@ function compute_sgs_flux!(
         CCG.Covariant3Vector(wvec(FT(1)), lg_surf) ⊗
         CCG.Covariant12Vector(CCG.UVVector(surf.ρu_flux, surf.ρv_flux), lg_surf)
 
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         diffusive_flux_ql = aux_tc_f.diffusive_flux_ql
         diffusive_flux_qi = aux_tc_f.diffusive_flux_qi
 
@@ -275,7 +275,7 @@ function compute_diffusive_fluxes(
         -aux_tc_f.ρ_ae_KH * ∇h_tot_en(wvec(aux_en.h_tot))
     @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * ∇uₕ_gm(prog_gm_uₕ)
 
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         aeKHq_liq_bc = FT(0)
         aeKHq_ice_bc = FT(0)
 
@@ -356,7 +356,7 @@ function set_edmf_surface_bc(
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
         prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
-        if edmf.moisture_model isa NonEquilibriumMoisture
+        if edmf.moisture_model isa NonEquilMoistModel
             q_liq_surf = FT(0)
             q_ice_surf = FT(0)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * q_liq_surf
@@ -691,7 +691,7 @@ function compute_up_tendencies!(
             (ρaq_tot * Ic(w_up) * detr_turb_dyn) +
             (ρ_c * qt_tendency_precip_formation)
 
-        if edmf.moisture_model isa NonEquilibriumMoisture
+        if edmf.moisture_model isa NonEquilMoistModel
 
             q_liq_up = aux_up_i.q_liq
             q_ice_up = aux_up_i.q_ice
@@ -809,7 +809,7 @@ function filter_updraft_vars(
             prog_up[i].ρarea[k] = min(prog_up[i].ρarea[k], ρ_c[k] * a_max)
         end
     end
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         @inbounds for i in 1:N_up
             prog_up[i].ρaq_liq .= max.(prog_up[i].ρaq_liq, 0)
             prog_up[i].ρaq_ice .= max.(prog_up[i].ρaq_ice, 0)
@@ -836,7 +836,7 @@ function filter_updraft_vars(
             end
         end
     end
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         @inbounds for k in real_center_indices(grid)
             @inbounds for i in 1:N_up
                 is_surface_center(grid, k) && continue
@@ -869,7 +869,7 @@ function filter_updraft_vars(
         prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         @inbounds for i in 1:N_up
             @. prog_up[i].ρaq_liq =
                 ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_liq)

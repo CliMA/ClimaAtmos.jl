@@ -83,7 +83,7 @@ function update_aux!(
                 aux_up[i].e_kin[k] = e_kin[k]
             end
             thermo_args = ()
-            if edmf.moisture_model isa NonEquilibriumMoisture
+            if edmf.moisture_model isa NonEquilMoistModel
                 if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
                     aux_up[i].q_liq[k] =
                         prog_up[i].ρaq_liq[k] / prog_up[i].ρarea[k]
@@ -129,7 +129,7 @@ function update_aux!(
             aux_bulk.q_tot[k] = aux_gm.q_tot[k]
             aux_bulk.h_tot[k] = aux_gm.h_tot[k]
         end
-        if edmf.moisture_model isa NonEquilibriumMoisture
+        if edmf.moisture_model isa NonEquilMoistModel
             aux_bulk.q_liq[k] = 0
             aux_bulk.q_ice[k] = 0
             if aux_bulk.area[k] > 0
@@ -174,7 +174,7 @@ function update_aux!(
         aux_en.q_tot[k] =
             max(val1 * aux_gm.q_tot[k] - val2 * aux_bulk.q_tot[k], 0) #Yair - this is here to prevent negative QT
         aux_en.h_tot[k] = val1 * aux_gm.h_tot[k] - val2 * aux_bulk.h_tot[k]
-        if edmf.moisture_model isa NonEquilibriumMoisture
+        if edmf.moisture_model isa NonEquilMoistModel
             aux_en.q_liq[k] =
                 max(val1 * prog_gm.q_liq[k] - val2 * aux_bulk.q_liq[k], 0)
             aux_en.q_ice[k] =
@@ -184,9 +184,9 @@ function update_aux!(
         #####
         ##### condensation, etc (done via saturation_adjustment or non-equilibrium) and buoyancy
         #####
-        thermo_args = if edmf.moisture_model isa EquilibriumMoisture
+        thermo_args = if edmf.moisture_model isa EquilMoistModel
             ()
-        elseif edmf.moisture_model isa NonEquilibriumMoisture
+        elseif edmf.moisture_model isa NonEquilMoistModel
             (aux_en.q_liq[k], aux_en.q_ice[k])
         else
             error(
@@ -234,9 +234,9 @@ function update_aux!(
                aux_up[i].area[k - 1] > 0.0
                 qt = aux_up[i].q_tot[k - 1]
                 h = aux_up[i].θ_liq_ice[k - 1]
-                if edmf.moisture_model isa EquilibriumMoisture
+                if edmf.moisture_model isa EquilMoistModel
                     ts_up = thermo_state_pθq(param_set, p_c[k], h, qt)
-                elseif edmf.moisture_model isa NonEquilibriumMoisture
+                elseif edmf.moisture_model isa NonEquilMoistModel
                     ql = aux_up[i].q_liq[k - 1]
                     qi = aux_up[i].q_ice[k - 1]
                     ts_up = thermo_state_pθq(param_set, p_c[k], h, qt, ql, qi)
@@ -246,14 +246,14 @@ function update_aux!(
                     )
                 end
             else
-                if edmf.moisture_model isa EquilibriumMoisture
+                if edmf.moisture_model isa EquilMoistModel
                     ts_up = thermo_state_pθq(
                         param_set,
                         p_c[k],
                         aux_up[i].θ_liq_ice[k],
                         aux_up[i].q_tot[k],
                     )
-                elseif edmf.moisture_model isa NonEquilibriumMoisture
+                elseif edmf.moisture_model isa NonEquilMoistModel
                     ts_up = thermo_state_pθq(
                         param_set,
                         p_c[k],
@@ -368,7 +368,7 @@ function update_aux!(
     ##### compute_updraft_closures
     #####
     #TODO - AJ add the non-equilibrium tendency computation here
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         compute_nonequilibrium_moisture_tendencies!(
             grid,
             state,

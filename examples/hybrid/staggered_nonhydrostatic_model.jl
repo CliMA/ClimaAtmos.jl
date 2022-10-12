@@ -305,10 +305,10 @@ function _implicit_tendency!(Yₜ, Y, p, t)
 end
 
 function remaining_tendency!(Yₜ, Y, p, t)
-    anelastic_dycore = p.anelastic_dycore
+    (; compressibility_model) = p
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        if !anelastic_dycore
+        if compressibility_model isa CA.CompressibleFluid
             @nvtx "precomputed quantities" color = colorant"orange" begin
                 precomputed_quantities!(Y, p, t)
             end
@@ -334,10 +334,10 @@ end
 
 function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     (; Yₜ, limiters) = p
-    anelastic_dycore = p.anelastic_dycore
+    (; compressibility_model) = p
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        if !anelastic_dycore
+        if compressibility_model isa CA.CompressibleFluid
             @nvtx "precomputed quantities" color = colorant"orange" begin
                 precomputed_quantities!(Y, p, t)
             end

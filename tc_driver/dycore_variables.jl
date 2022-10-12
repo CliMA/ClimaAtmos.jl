@@ -10,7 +10,7 @@ import ClimaCore.Geometry: ⊗
 ##### Auxiliary fields
 
 # Center only
-cent_aux_vars_gm_moisture(FT, ::TC.NonEquilibriumMoisture) = (;
+cent_aux_vars_gm_moisture(FT, ::CA.NonEquilMoistModel) = (;
     ∇q_liq_gm = FT(0),
     ∇q_ice_gm = FT(0),
     dqldt_rad = FT(0),
@@ -24,7 +24,7 @@ cent_aux_vars_gm_moisture(FT, ::TC.NonEquilibriumMoisture) = (;
     dqldt_fluc = FT(0),
     dqidt_fluc = FT(0),
 )
-cent_aux_vars_gm_moisture(FT, ::TC.EquilibriumMoisture) = NamedTuple()
+cent_aux_vars_gm_moisture(FT, ::CA.EquilMoistModel) = NamedTuple()
 cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     tke = FT(0),
     Hvar = FT(0),
@@ -69,9 +69,9 @@ cent_aux_vars(FT, local_geometry, edmf) = (;
 )
 
 # Face only
-face_aux_vars_gm_moisture(FT, ::TC.NonEquilibriumMoisture) =
+face_aux_vars_gm_moisture(FT, ::CA.NonEquilMoistModel) =
     (; sgs_flux_q_liq = FT(0), sgs_flux_q_ice = FT(0))
-face_aux_vars_gm_moisture(FT, ::TC.EquilibriumMoisture) = NamedTuple()
+face_aux_vars_gm_moisture(FT, ::CA.EquilMoistModel) = NamedTuple()
 face_aux_vars_gm(FT, local_geometry, edmf) = (;
     massflux_s = FT(0),
     diffusive_flux_s = FT(0),
