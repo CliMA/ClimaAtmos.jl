@@ -391,17 +391,17 @@ function update_aux!(
     b_exch = center_aux_turbconv(state).b_exch
     parent(b_exch) .= 0
     a_en = aux_en.area
-    w_en = aux_en_f.w
+    w_en = aux_en_f.w  # vertical velocity here?
     tke_en = aux_en.tke
     @inbounds for i in 1:N_up
         a_up = aux_up[i].area
-        w_up = prog_up_f[i].w
+        w_up = prog_up_f[i].w  # vertical velocity here?
         δ_dyn = aux_up[i].detr_sc
         ε_turb = aux_up[i].frac_turb_entr
         @. b_exch +=
-            a_up * Ic(w_up) * δ_dyn / a_en *
-            (1 / 2 * (Ic(w_up) - Ic(w_en))^2 - tke_en) -
-            a_up * Ic(w_up) * (Ic(w_up) - Ic(w_en)) * ε_turb * Ic(w_en) / a_en
+            a_up * Ic(w_up) * δ_dyn / a_en *  # vertical velocity here?
+            (1 / 2 * (Ic(w_up) - Ic(w_en))^2 - tke_en) -  # vertical velocity here?
+            a_up * Ic(w_up) * (Ic(w_up) - Ic(w_en)) * ε_turb * Ic(w_en) / a_en  # vertical velocity here?
     end
 
     Shear² = center_aux_turbconv(state).Shear²
@@ -417,7 +417,7 @@ function update_aux!(
     uvw = face_aux_turbconv(state).uvw
 
     uₕ_gm = grid_mean_uₕ(state)
-    w_en = aux_en_f.w
+    w_en = aux_en_f.w  # vertical velocity here?
     # compute shear
     k̂ = center_aux_turbconv(state).k̂
 
@@ -426,7 +426,7 @@ function update_aux!(
     @. k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
     Ifuₕ = uₕ_bcs()
     ∇uvw = CCO.GradientF2C()
-    @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(wvec(w_en))
+    @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(wvec(w_en))  # vertical velocity here?
     @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
 
     q_tot_en = aux_en.q_tot
@@ -533,12 +533,12 @@ function update_aux!(
     ##### compute covarinaces tendendies
     #####
     tke_press = aux_en_2m.tke.press
-    w_en = aux_en_f.w
+    w_en = aux_en_f.w  # vertical velocity here?
     parent(tke_press) .= 0
     @inbounds for i in 1:N_up
-        w_up = prog_up_f[i].w
+        w_up = prog_up_f[i].w  # vertical velocity here?
         nh_press = aux_up_f[i].nh_pressure
-        @. tke_press += (Ic(w_en) - Ic(w_up)) * prog_up[i].ρarea * Ic(nh_press)
+        @. tke_press += (Ic(w_en) - Ic(w_up)) * prog_up[i].ρarea * Ic(nh_press)  # vertical velocity here?
     end
 
     compute_covariance_entr(edmf, grid, state, Val(:tke), Val(:w), Val(:w))

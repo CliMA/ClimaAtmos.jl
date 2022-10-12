@@ -9,10 +9,10 @@ end
 
 function non_dimensional_groups(εδ_model, εδ_model_vars)
     FT = eltype(εδ_model_vars.tke_en)
-    Δw = get_Δw(εδ_model, εδ_model_vars.w_up, εδ_model_vars.w_en)
+    Δw = get_Δw(εδ_model, εδ_model_vars.w_up, εδ_model_vars.w_en)  # vertical velocity here?
     Δb = εδ_model_vars.b_up - εδ_model_vars.b_en
     Π_norm = εδ_params(εδ_model).Π_norm
-    Π₁ = (εδ_model_vars.zc_i * Δb) / (Δw^2 + εδ_model_vars.wstar^2) / Π_norm[1]
+    Π₁ = (εδ_model_vars.zc_i * Δb) / (Δw^2 + εδ_model_vars.wstar^2) / Π_norm[1]  # vertical velocity here?
     Π₂ =
         (εδ_model_vars.tke_gm - εδ_model_vars.a_en * εδ_model_vars.tke_en) /
         (εδ_model_vars.tke_gm + eps(FT)) / Π_norm[2]
@@ -35,7 +35,7 @@ functions following Cohen et al. (JAMES, 2020), given:
 """
 function non_dimensional_function(εδ_model::MDEntr, εδ_model_vars)
     FT = eltype(εδ_model_vars.q_cond_up)
-    Δw = get_Δw(εδ_model, εδ_model_vars.w_up, εδ_model_vars.w_en)
+    Δw = get_Δw(εδ_model, εδ_model_vars.w_up, εδ_model_vars.w_en)  # vertical velocity here?
     c_ε = εδ_params(εδ_model).c_ε
     μ_0 = εδ_params(εδ_model).μ_0
     β = εδ_params(εδ_model).β
@@ -50,7 +50,7 @@ function non_dimensional_function(εδ_model::MDEntr, εδ_model_vars)
     Δb = εδ_model_vars.b_up - εδ_model_vars.b_en
     μ_ij =
         (χ - εδ_model_vars.a_up / (εδ_model_vars.a_up + εδ_model_vars.a_en)) *
-        Δb / Δw
+        Δb / Δw  # vertical velocity here?
     exp_arg = μ_ij / μ_0
     D_ε = 1 / (1 + exp(-exp_arg))
     D_δ = 1 / (1 + exp(exp_arg))

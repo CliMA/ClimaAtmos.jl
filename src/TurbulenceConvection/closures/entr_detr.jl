@@ -3,13 +3,13 @@
 function compute_turbulent_entrainment(
     c_γ::FT,
     a_up::FT,
-    w_up::FT,
+    w_up::FT,  # vertical velocity here?
     tke::FT,
     H_up::FT,
 ) where {FT}
 
-    ε_turb = if w_up * a_up > 0
-        2 * c_γ * sqrt(max(tke, 0)) / (w_up * H_up)
+    ε_turb = if w_up * a_up > 0  # vertical velocity here?
+        2 * c_γ * sqrt(max(tke, 0)) / (w_up * H_up)  # vertical velocity here?
     else
         FT(0)
     end
@@ -21,12 +21,12 @@ function compute_inverse_timescale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::FT,  # vertical velocity here?
+    w_en::FT,  # vertical velocity here?
     tke::FT,
 ) where {FT}
     Δb = b_up - b_en
-    Δw = get_Δw(εδ_model, w_up, w_en)
+    Δw = get_Δw(εδ_model, w_up, w_en)  # vertical velocity here?
     c_λ = εδ_params(εδ_model).c_λ
 
     l_1 = c_λ * abs(Δb / sqrt(tke + 1e-8))
@@ -35,8 +35,8 @@ function compute_inverse_timescale(
     return lamb_smooth_minimum(l, FT(0.1), FT(0.0005))
 end
 
-function get_Δw(εδ_model, w_up::FT, w_en::FT) where {FT}
-    Δw = w_up - w_en
+function get_Δw(εδ_model, w_up::FT, w_en::FT) where {FT}  # vertical velocity here?
+    Δw = w_up - w_en  # vertical velocity here?
     Δw += copysign(FT(εδ_params(εδ_model).w_min), Δw)
     return Δw
 end
@@ -51,14 +51,14 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::FT,  # vertical velocity here?
+    w_en::FT,  # vertical velocity here?
     tke::FT,
     zc_i::FT,
     ::BuoyVelEntrDimScale,
 ) where {FT}
-    Δw = get_Δw(εδ_model, w_up, w_en)
-    λ = compute_inverse_timescale(εδ_model, b_up, b_en, w_up, w_en, tke)
+    Δw = get_Δw(εδ_model, w_up, w_en)  # vertical velocity here?
+    λ = compute_inverse_timescale(εδ_model, b_up, b_en, w_up, w_en, tke)  # vertical velocity here?
     return (λ / Δw)
 end
 
@@ -66,8 +66,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::FT,  # vertical velocity here?
+    w_en::FT,  # vertical velocity here?
     tke::FT,
     zc_i::FT,
     ::InvZEntrDimScale,
@@ -79,8 +79,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::FT,  # vertical velocity here?
+    w_en::FT,  # vertical velocity here?
     tke::FT,
     zc_i::FT,
     ::InvMeterEntrDimScale,
@@ -94,8 +94,8 @@ function entrainment_inv_length_scale(εδ_model, εδ_vars, dim_scale)
         εδ_model,
         εδ_vars.b_up,
         εδ_vars.b_en,
-        εδ_vars.w_up,
-        εδ_vars.w_en,
+        εδ_vars.w_up,  # vertical velocity here?
+        εδ_vars.w_en,  # vertical velocity here?
         εδ_vars.tke_en,
         εδ_vars.zc_i,
         dim_scale,
@@ -171,7 +171,7 @@ function entr_detr(εδ_model, εδ_vars, entr_dim_scale, detr_dim_scale)
     ε_turb = compute_turbulent_entrainment(
         εδ_params(εδ_model).c_γ,
         εδ_vars.a_up,
-        εδ_vars.w_up,
+        εδ_vars.w_up,  # vertical velocity here?
         εδ_vars.tke_en,
         εδ_vars.H_up,
     )
@@ -218,13 +218,13 @@ function compute_entr_detr!(
     @inbounds for i in 1:N_up
         # compute ∇m at cell centers
         a_up = aux_up[i].area
-        w_up = prog_up_f[i].w
-        w_en = aux_en_f.w
+        w_up = prog_up_f[i].w  # vertical velocity here?
+        w_en = aux_en_f.w  # vertical velocity here?
         w_gm = prog_gm_f.w
-        @. m_entr_detr = a_up * (Ic(w_up) - toscalar(Ic(w_gm)))
+        @. m_entr_detr = a_up * (Ic(w_up) - toscalar(Ic(w_gm)))  # vertical velocity here?
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
-        @. w_up_c = Ic(w_up)
-        @. w_en_c = Ic(w_en)
+        @. w_up_c = Ic(w_up)  # vertical velocity here?
+        @. w_en_c = Ic(w_en)  # vertical velocity here?
         @inbounds for k in real_center_indices(grid)
             # entrainment
 
@@ -247,8 +247,8 @@ function compute_entr_detr!(
                 εδ_model_vars = (;
                     q_cond_up = q_cond_up, # updraft condensate (liquid water + ice)
                     q_cond_en = q_cond_en, # environment condensate (liquid water + ice)
-                    w_up = w_up_c[k], # updraft vertical velocity
-                    w_en = w_en_c[k], # environment vertical velocity
+                    w_up = w_up_c[k], # updraft vertical velocity  # vertical velocity here?
+                    w_en = w_en_c[k], # environment vertical velocity  # vertical velocity here?
                     b_up = aux_up[i].buoy[k], # updraft buoyancy
                     b_en = aux_en.buoy[k], # environment buoyancy
                     tke_gm = aux_gm.tke[k], # grid mean tke
@@ -278,7 +278,7 @@ function compute_entr_detr!(
                     mean_model = εδ_closure.mean_model
                     ε_dyn, δ_dyn = εδ_dyn(
                         mean_model,
-                        εδ_model_vars,
+                        εδ_model_vars,  # vertical velocity here?
                         edmf.entr_dim_scale,
                         edmf.detr_dim_scale,
                         ε_nondim,
@@ -287,7 +287,7 @@ function compute_entr_detr!(
                     # turbulent & mean nondimensional entrainment
                     er = entr_detr(
                         mean_model,
-                        εδ_model_vars,
+                        εδ_model_vars,  # vertical velocity here?
                         edmf.entr_dim_scale,
                         edmf.detr_dim_scale,
                     )
@@ -295,7 +295,7 @@ function compute_entr_detr!(
                     # fractional, turbulent & nondimensional entrainment
                     er = entr_detr(
                         εδ_closure,
-                        εδ_model_vars,
+                        εδ_model_vars,  # vertical velocity here?
                         edmf.entr_dim_scale,
                         edmf.detr_dim_scale,
                     )
