@@ -1,25 +1,14 @@
-# compute the mean of the values between two percentiles (0 to 1) for a standard normal distribution
-# this gives the surface scalar coefficients for 1 to n-1 updrafts when using n updrafts
+"""Compute average between two percentiles of a standard Gaussian"""
 function percentile_bounds_mean_norm(
     low_percentile::FT,
     high_percentile::FT,
-    n_samples::Int,
-    set_src_seed,
 ) where {FT <: Real}
     D = Distributions
-    set_src_seed && Random.seed!(123)
-    ∑samples = zero(FT)
+    gauss_int(x) = -exp(-x * x / 2) / sqrt(2 * pi)
     xp_low = D.quantile(D.Normal(), low_percentile)
     xp_high = D.quantile(D.Normal(), high_percentile)
-    n_filtered_samples = 0
-    @inbounds for i in 1:n_samples
-        x = rand(D.Normal())
-        if xp_low < x < xp_high
-            ∑samples += x
-            n_filtered_samples += 1
-        end
-    end
-    return ∑samples / n_filtered_samples
+    return (gauss_int(xp_high) - gauss_int(xp_low)) /
+           (D.cdf(D.Normal(), xp_high) - D.cdf(D.Normal(), xp_low))
 end
 
 function logistic(x, slope, mid)
