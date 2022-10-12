@@ -121,7 +121,6 @@ function init_tc!(Y, p, param_set, namelist)
     tc_params = CAP.turbconv_params(param_set)
 
     FT = eltype(edmf)
-    N_up = TC.n_updrafts(edmf)
 
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.

@@ -200,43 +200,6 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     )
 )
 
-##### Diagnostic fields
-
-# Center only
-cent_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
-    turbconv = (;
-        entr_sc = FT(0),
-        ε_nondim = FT(0),
-        detr_sc = FT(0),
-        δ_nondim = FT(0),
-        massflux = FT(0),
-        frac_turb_entr = FT(0),
-    )
-)
-
-# Face only
-face_diagnostic_vars_edmf(FT, local_geometry, edmf) = (;
-    turbconv = (; nh_pressure = FT(0)),
-    precip = (; rain_flux = FT(0), snow_flux = FT(0)),
-)
-
-# Single value per column diagnostic variables
-single_value_per_col_diagnostic_vars_edmf(FT, edmf) = (;
-    turbconv = (;
-        env_cloud_base = FT(0),
-        env_cloud_top = FT(0),
-        env_cloud_cover = FT(0),
-        env_lwp = FT(0),
-        env_iwp = FT(0),
-        updraft_cloud_cover = FT(0),
-        updraft_cloud_base = FT(0),
-        updraft_cloud_top = FT(0),
-        updraft_lwp = FT(0),
-        updraft_iwp = FT(0),
-        Hd = FT(0),
-    )
-)
-
 ##### Prognostic fields
 
 # Center only
