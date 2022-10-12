@@ -91,26 +91,35 @@ function compute_ref_state!(
     z_span = (grid.zmin, grid.zmax)
     prob = ODE.ODEProblem(minus_inv_scale_height, logp, z_span)
     sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
-    parent(p_f) .= sol.(vec(grid.zf.z))
-    parent(p_c) .= sol.(vec(grid.zc.z))
+
+    zc = CC.Fields.coordinate_field(axes(ρ_c)).z
+    zf = CC.Fields.coordinate_field(axes(ρ_f)).z
+
+    parent(p_c) .= sol.(vec(zc))
+    parent(p_f) .= sol.(vec(zf))
 
     p_f .= exp.(p_f)
     p_c .= exp.(p_c)
 
     # Compute reference state thermodynamic profiles
-    @inbounds for k in TC.real_center_indices(grid)
-        Φ = TC.geopotential(param_set, grid.zc[k].z)
-        h = TC.enthalpy(mse_g, Φ)
-        ts = TD.PhaseEquil_phq(thermo_params, p_c[k], h, qtg)
-        ρ_c[k] = TD.air_density(thermo_params, ts)
-    end
-
-    @inbounds for k in TC.real_face_indices(grid)
-        Φ = TC.geopotential(param_set, grid.zf[k].z)
-        h = TC.enthalpy(mse_g, Φ)
-        ts = TD.PhaseEquil_phq(thermo_params, p_f[k], h, qtg)
-        ρ_f[k] = TD.air_density(thermo_params, ts)
-    end
+    @. ρ_c = TD.air_density(
+        thermo_params,
+        TD.PhaseEquil_phq(
+            thermo_params,
+            p_c,
+            TC.enthalpy(mse_g, TC.geopotential(param_set, zc)),
+            qtg,
+        ),
+    )
+    @. ρ_f = TD.air_density(
+        thermo_params,
+        TD.PhaseEquil_phq(
+            thermo_params,
+            p_f,
+            TC.enthalpy(mse_g, TC.geopotential(param_set, zf)),
+            qtg,
+        ),
+    )
     return nothing
 end
 
