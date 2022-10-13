@@ -17,7 +17,7 @@ Base.:<(h1::Cent, h2::Cent) = h1.i < h2.i
 Base.max(h1::Cent, h2::Cent) = Cent(max(h1.i, h2.i))
 Base.min(h1::Cent, h2::Cent) = Cent(min(h1.i, h2.i))
 
-toscalar(x::CCG.Covariant3Vector) = x.u₃
+toscalar(x::CCG.Covariant3Vector) = CCG.WVector(x.u₃).w
 
 const FDFields = Union{
     CC.Fields.ExtrudedFiniteDifferenceField,
