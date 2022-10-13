@@ -25,16 +25,26 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
     non_orographic_gravity_wave = parsed_args["non_orographic_gravity_wave"]
     @assert non_orographic_gravity_wave in (true, false)
 
+    moisture_model = CA.moisture_model(parsed_args)
+    precip_model = CA.precipitation_model(parsed_args, namelist)
+
     model_spec = (;
-        moisture_model = CA.moisture_model(parsed_args),
+        moisture_model,
         energy_form = CA.energy_form(parsed_args),
         perturb_initstate = parsed_args["perturb_initstate"],
         idealized_h2o,
         radiation_model = CA.radiation_model(parsed_args),
         microphysics_model = CA.microphysics_model(parsed_args),
+        precip_model,
         forcing_type = CA.forcing_type(parsed_args),
-        turbconv_model = CA.turbconv_model(FT, parsed_args, namelist),
-        anelastic_dycore = parsed_args["anelastic_dycore"],
+        turbconv_model = CA.turbconv_model(
+            FT,
+            moisture_model,
+            precip_model,
+            parsed_args,
+            namelist,
+        ),
+        compressibility_model = CA.compressibility_model(parsed_args),
         surface_scheme = CA.surface_scheme(FT, parsed_args),
         C_E = FT(parsed_args["C_E"]),
         non_orographic_gravity_wave,

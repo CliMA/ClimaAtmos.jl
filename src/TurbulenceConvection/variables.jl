@@ -4,8 +4,8 @@
 import ClimaCore.Geometry: ⊗
 
 # Helpers for adding empty thermodynamic state fields:
-thermo_state(FT, ::EquilibriumMoisture) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
-thermo_state(FT, ::NonEquilibriumMoisture) =
+thermo_state(FT, ::EquilMoistModel) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
+thermo_state(FT, ::NonEquilMoistModel) =
     TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
 
 ##### Auxiliary fields
@@ -20,13 +20,13 @@ cent_aux_vars_en_2m(FT) = (;
     interdomain = FT(0),
     rain_src = FT(0),
 )
-cent_aux_vars_up_moisture(FT, ::NonEquilibriumMoisture) = (;
+cent_aux_vars_up_moisture(FT, ::NonEquilMoistModel) = (;
     ql_tendency_precip_formation = FT(0),
     qi_tendency_precip_formation = FT(0),
     ql_tendency_noneq = FT(0),
     qi_tendency_noneq = FT(0),
 )
-cent_aux_vars_up_moisture(FT, ::EquilibriumMoisture) = NamedTuple()
+cent_aux_vars_up_moisture(FT, ::EquilMoistModel) = NamedTuple()
 cent_aux_vars_up(FT, local_geometry, edmf) = (;
     ts = thermo_state(FT, edmf.moisture_model),
     q_liq = FT(0),
@@ -54,20 +54,20 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     detr_turb_dyn = FT(0),
     Π_groups = ntuple(i -> FT(0), n_Π_groups(edmf)),
 )
-cent_aux_vars_edmf_bulk_moisture(FT, ::NonEquilibriumMoisture) = (;
+cent_aux_vars_edmf_bulk_moisture(FT, ::NonEquilMoistModel) = (;
     ql_tendency_precip_formation = FT(0),
     qi_tendency_precip_formation = FT(0),
     ql_tendency_noneq = FT(0),
     qi_tendency_noneq = FT(0),
 )
-cent_aux_vars_edmf_bulk_moisture(FT, ::EquilibriumMoisture) = NamedTuple()
-cent_aux_vars_edmf_en_moisture(FT, ::NonEquilibriumMoisture) = (;
+cent_aux_vars_edmf_bulk_moisture(FT, ::EquilMoistModel) = NamedTuple()
+cent_aux_vars_edmf_en_moisture(FT, ::NonEquilMoistModel) = (;
     ql_tendency_precip_formation = FT(0),
     qi_tendency_precip_formation = FT(0),
     ql_tendency_noneq = FT(0),
     qi_tendency_noneq = FT(0),
 )
-cent_aux_vars_edmf_en_moisture(FT, ::EquilibriumMoisture) = NamedTuple()
+cent_aux_vars_edmf_en_moisture(FT, ::EquilMoistModel) = NamedTuple()
 cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         ϕ_temporary = FT(0),
@@ -168,14 +168,14 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 
 # Face only
 face_aux_vars_up(FT, local_geometry) = (; nh_pressure = FT(0), massflux = FT(0))
-face_aux_vars_edmf_moisture(FT, ::NonEquilibriumMoisture) = (;
+face_aux_vars_edmf_moisture(FT, ::NonEquilMoistModel) = (;
     massflux_en = FT(0), # TODO: is this the right place for this?
     massflux_ql = FT(0),
     massflux_qi = FT(0),
     diffusive_flux_ql = FT(0),
     diffusive_flux_qi = FT(0),
 )
-face_aux_vars_edmf_moisture(FT, ::EquilibriumMoisture) = NamedTuple()
+face_aux_vars_edmf_moisture(FT, ::EquilMoistModel) = NamedTuple()
 face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         bulk = (; w = FT(0)),
@@ -209,12 +209,10 @@ cent_prognostic_vars_up_noisy_relaxation(
 ) where {FT} = (; ε_nondim = FT(0), δ_nondim = FT(0))
 cent_prognostic_vars_up_noisy_relaxation(::Type{FT}, _) where {FT} =
     NamedTuple()
-cent_prognostic_vars_up_moisture(::Type{FT}, ::EquilibriumMoisture) where {FT} =
+cent_prognostic_vars_up_moisture(::Type{FT}, ::EquilMoistModel) where {FT} =
     NamedTuple()
-cent_prognostic_vars_up_moisture(
-    ::Type{FT},
-    ::NonEquilibriumMoisture,
-) where {FT} = (; ρaq_liq = FT(0), ρaq_ice = FT(0))
+cent_prognostic_vars_up_moisture(::Type{FT}, ::NonEquilMoistModel) where {FT} =
+    (; ρaq_liq = FT(0), ρaq_ice = FT(0))
 cent_prognostic_vars_up(::Type{FT}, edmf) where {FT} = (;
     ρarea = FT(0),
     ρaθ_liq_ice = FT(0),

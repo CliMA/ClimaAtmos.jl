@@ -1,5 +1,11 @@
 module TurbulenceConvection
 
+# Import ClimaAtmos types
+import ..EquilMoistModel
+import ..NonEquilMoistModel
+import ..AnelasticFluid
+import ..CompressibleFluid
+
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
 import ClimaCore.Geometry: ⊗

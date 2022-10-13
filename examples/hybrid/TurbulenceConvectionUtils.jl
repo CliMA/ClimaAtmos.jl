@@ -35,7 +35,14 @@ function get_aux(edmf, Y, ::Type{FT}) where {FT}
     return aux
 end
 
-function get_edmf_cache(Y, namelist, param_set, parsed_args)
+function get_edmf_cache(
+    Y,
+    turbconv_model,
+    precip_model,
+    namelist,
+    param_set,
+    parsed_args,
+)
     tc_params = CAP.turbconv_params(param_set)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     case = Cases.get_case(namelist)
@@ -47,24 +54,7 @@ function get_edmf_cache(Y, namelist, param_set, parsed_args)
     surf_ref_state = Cases.surface_ref_state(case, tc_params, namelist)
     surf_params =
         Cases.surface_params(case, surf_ref_state, tc_params; Ri_bulk_crit)
-    precip_name = TC.parse_namelist(
-        namelist,
-        "microphysics",
-        "precipitation_model";
-        default = "None",
-        valid_options = ["None", "cutoff", "clima_1m"],
-    )
-    # TODO: move to grid mean model
-    precip_model = if precip_name == "None"
-        TC.NoPrecipitation()
-    elseif precip_name == "cutoff"
-        TC.CutoffPrecipitation()
-    elseif precip_name == "clima_1m"
-        TC.Clima1M()
-    else
-        error("Invalid precip_name $(precip_name)")
-    end
-    edmf = TC.EDMFModel(FT, namelist, precip_model, parsed_args)
+    edmf = turbconv_model
     @info "EDMFModel: \n$(summary(edmf))"
     return (;
         edmf,

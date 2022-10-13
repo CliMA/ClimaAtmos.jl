@@ -2,6 +2,7 @@ import UnPack
 import LinearAlgebra as LA
 import LinearAlgebra: ×
 
+import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
@@ -144,9 +145,9 @@ function set_thermo_state_peq!(
     ᶜK = TC.center_aux_grid_mean_e_kin(state)
 
     @inbounds for k in TC.real_center_indices(grid)
-        thermo_args = if moisture_model isa TC.EquilibriumMoisture
+        thermo_args = if moisture_model isa CA.EquilMoistModel
             ()
-        elseif moisture_model isa TC.NonEquilibriumMoisture
+        elseif moisture_model isa CA.NonEquilMoistModel
             (prog_gm.q_liq[k], prog_gm.q_ice[k])
         else
             error(
@@ -155,14 +156,14 @@ function set_thermo_state_peq!(
         end
         e_pot = TC.geopotential(param_set, grid.zc.z[k])
         e_int = prog_gm.ρe_tot[k] / ρ_c[k] - ᶜK[k] - e_pot
-        if compressibility_model isa TC.CompressibleFluid
+        if compressibility_model isa CA.CompressibleFluid
             ts_gm[k] = TD.PhaseEquil_ρeq(
                 thermo_params,
                 ρ_c[k],
                 e_int,
                 prog_gm.ρq_tot[k] / ρ_c[k],
             )
-        elseif compressibility_model isa TC.AnelasticFluid
+        elseif compressibility_model isa CA.AnelasticFluid
             ts_gm[k] = TC.thermo_state_peq(
                 param_set,
                 p_c[k],
@@ -182,9 +183,9 @@ function set_thermo_state_pθq!(state, grid, moisture_model, param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     p_c = TC.center_aux_grid_mean_p(state)
     @inbounds for k in TC.real_center_indices(grid)
-        thermo_args = if moisture_model isa TC.EquilibriumMoisture
+        thermo_args = if moisture_model isa CA.EquilMoistModel
             ()
-        elseif moisture_model isa TC.NonEquilibriumMoisture
+        elseif moisture_model isa CA.NonEquilMoistModel
             (prog_gm.q_liq[k], prog_gm.q_ice[k])
         else
             error(
@@ -303,7 +304,7 @@ function compute_gm_tendencies!(
     @. ∇MSE_gm = ∇c(wvec(RBe(aux_gm.h_tot - ᶜK)))
     @. ∇q_tot_gm = ∇c(wvec(RBq(prog_gm.ρq_tot / ρ_c)))
 
-    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+    if edmf.moisture_model isa CA.NonEquilMoistModel
         ∇q_liq_gm = TC.center_aux_grid_mean(state).∇q_liq_gm
         ∇q_ice_gm = TC.center_aux_grid_mean(state).∇q_ice_gm
         q_liq_gm_toa = prog_gm.q_liq[kc_toa]
@@ -343,7 +344,7 @@ function compute_gm_tendencies!(
     # LS Subsidence
     @. tendencies_gm.ρe_tot -= ρ_c * aux_gm.subsidence * ∇MSE_gm
     @. tendencies_gm.ρq_tot -= ρ_c * aux_gm.subsidence * ∇q_tot_gm
-    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+    if edmf.moisture_model isa CA.NonEquilMoistModel
         @. tendencies_gm.q_liq -= ∇q_liq_gm * aux_gm.subsidence
         @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
     end
@@ -368,7 +369,7 @@ function compute_gm_tendencies!(
                 aux_gm.dqtdt_hadv
             )
     end
-    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+    if edmf.moisture_model isa CA.NonEquilMoistModel
         @. tendencies_gm.q_liq += aux_gm.dqldt
         @. tendencies_gm.q_ice += aux_gm.dqidt
     end
@@ -387,7 +388,7 @@ function compute_gm_tendencies!(
             aux_en.e_tot_tendency_precip_formation +
             aux_tc.e_tot_tendency_precip_sinks
         )
-    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+    if edmf.moisture_model isa CA.NonEquilMoistModel
         @. tendencies_gm.q_liq +=
             aux_bulk.ql_tendency_precip_formation +
             aux_en.ql_tendency_precip_formation
@@ -409,7 +410,7 @@ function compute_gm_tendencies!(
     @. tendencies_gm.ρq_tot += -∇sgs(wvec(aux_gm_f.sgs_flux_q_tot))
     @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
 
-    if edmf.moisture_model isa TC.NonEquilibriumMoisture
+    if edmf.moisture_model isa CA.NonEquilMoistModel
         @. tendencies_gm.q_liq += -∇sgs(wvec(aux_gm_f.sgs_flux_q_liq)) / ρ_c
         @. tendencies_gm.q_ice += -∇sgs(wvec(aux_gm_f.sgs_flux_q_ice)) / ρ_c
     end

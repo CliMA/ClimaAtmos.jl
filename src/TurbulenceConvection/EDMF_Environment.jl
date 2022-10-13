@@ -24,7 +24,7 @@ function microphysics(
     @inbounds for k in real_center_indices(grid)
         # condensation
         ts = ts_env[k]
-        if edmf.moisture_model isa NonEquilibriumMoisture
+        if edmf.moisture_model isa NonEquilMoistModel
             mph_neq = noneq_moisture_sources(
                 param_set,
                 aux_en.area[k],
@@ -71,7 +71,7 @@ function microphysics(
             mph.qt_tendency * aux_en.area[k]
         aux_en.e_tot_tendency_precip_formation[k] =
             mph.e_tot_tendency * aux_en.area[k]
-        if edmf.moisture_model isa NonEquilibriumMoisture
+        if edmf.moisture_model isa NonEquilMoistModel
             aux_en.ql_tendency_precip_formation[k] =
                 mph.ql_tendency * aux_en.area[k]
             aux_en.qi_tendency_precip_formation[k] =
@@ -303,7 +303,7 @@ function microphysics(
 
     epsilon = 10e-14 # eps(float)
 
-    if edmf.moisture_model isa NonEquilibriumMoisture
+    if edmf.moisture_model isa NonEquilMoistModel
         error(
             "The SGS quadrature microphysics is not compatible with non-equilibrium moisture",
         )

@@ -26,6 +26,16 @@ function energy_form(parsed_args)
     end
 end
 
+function compressibility_model(parsed_args)
+    anelastic_dycore = parsed_args["anelastic_dycore"]
+    @assert anelastic_dycore in (true, false)
+    return if anelastic_dycore
+        AnelasticFluid()
+    else
+        CompressibleFluid()
+    end
+end
+
 function radiation_model(parsed_args)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in
@@ -63,12 +73,36 @@ function forcing_type(parsed_args)
     end
 end
 
-function turbconv_model(FT, parsed_args, namelist)
+function precipitation_model(parsed_args, namelist)
+    namelist isa Nothing && return TC.NoPrecipitation()
+
+    precip_name = TC.parse_namelist(
+        namelist,
+        "microphysics",
+        "precipitation_model";
+        default = "None",
+        valid_options = ["None", "cutoff", "clima_1m"],
+    )
+    # TODO: use parsed_args
+    # precip_name = parsed_args["precipitation_model"]
+    # TODO: move to grid mean model
+    return if precip_name == "None"
+        TC.NoPrecipitation()
+    elseif precip_name == "cutoff"
+        TC.CutoffPrecipitation()
+    elseif precip_name == "clima_1m"
+        TC.Clima1M()
+    else
+        error("Invalid precip_name $(precip_name)")
+    end
+end
+
+
+function turbconv_model(FT, moisture_model, precip_model, parsed_args, namelist)
     turbconv = parsed_args["turbconv"]
-    precip_model = nothing
     @assert turbconv in (nothing, "edmf")
     return if turbconv == "edmf"
-        TC.EDMFModel(FT, namelist, precip_model, parsed_args)
+        TC.EDMFModel(FT, namelist, moisture_model, precip_model, parsed_args)
     else
         nothing
     end

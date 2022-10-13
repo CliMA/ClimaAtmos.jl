@@ -238,14 +238,6 @@ Base.@kwdef struct PressureModelParams{FT}
     α_d::FT # factor multiplier for pressure drag
 end
 
-abstract type AbstractMoistureModel end
-struct EquilibriumMoisture <: AbstractMoistureModel end
-struct NonEquilibriumMoisture <: AbstractMoistureModel end
-
-abstract type AbstractCompressibilityModel end
-struct CompressibleFluid <: AbstractCompressibilityModel end
-struct AnelasticFluid <: AbstractCompressibilityModel end
-
 abstract type AbstractCovarianceModel end
 struct PrognosticThermoCovariances <: AbstractCovarianceModel end
 struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
@@ -471,10 +463,15 @@ struct EDMFModel{
     entr_dim_scale::EDS
     detr_dim_scale::DDS
     entr_pi_subset::EPG
-    set_src_seed::Bool
     H_up_min::FT # minimum updraft top to avoid zero division in pressure drag and turb-entr
 end
-function EDMFModel(::Type{FT}, namelist, precip_model, parsed_args) where {FT}
+function EDMFModel(
+    ::Type{FT},
+    namelist,
+    moisture_model,
+    precip_model,
+    parsed_args,
+) where {FT}
 
     # Set the number of updrafts (1)
     n_updrafts = parse_namelist(
@@ -484,7 +481,6 @@ function EDMFModel(::Type{FT}, namelist, precip_model, parsed_args) where {FT}
         "updraft_number";
         default = 1,
     )
-    set_src_seed::Bool = namelist["set_src_seed"]
 
     pressure_func_drag_str = parse_namelist(
         namelist,
@@ -521,23 +517,6 @@ function EDMFModel(::Type{FT}, namelist, precip_model, parsed_args) where {FT}
         AnelasticFluid()
     else
         CompressibleFluid()
-    end
-
-    moisture_model_name = parse_namelist(
-        namelist,
-        "thermodynamics",
-        "moisture_model";
-        default = "equilibrium",
-    )
-
-    moisture_model = if moisture_model_name == "equilibrium"
-        EquilibriumMoisture()
-    elseif moisture_model_name == "nonequilibrium"
-        NonEquilibriumMoisture()
-    else
-        error(
-            "Something went wrong. Invalid moisture model: '$moisture_model_name'",
-        )
     end
 
     thermo_covariance_model_name = parse_namelist(
@@ -617,7 +596,7 @@ function EDMFModel(::Type{FT}, namelist, precip_model, parsed_args) where {FT}
             "Something went wrong. Invalid environmental buoyancy gradient closure type '$en_sgs_name'",
         )
     end
-    if moisture_model_name == "nonequilibrium" && en_thermo == "quadrature"
+    if moisture_model isa NonEquilMoistModel && en_thermo == "quadrature"
         error(
             "SGS quadratures are not yet implemented for non-equilibrium moisture. Please use the option: mean.",
         )
@@ -1067,7 +1046,6 @@ function EDMFModel(::Type{FT}, namelist, precip_model, parsed_args) where {FT}
         entr_dim_scale,
         detr_dim_scale,
         entr_pi_subset,
-        set_src_seed,
         H_up_min,
     )
 end
