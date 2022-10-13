@@ -221,7 +221,7 @@ function compute_entr_detr!(
         w_up = prog_up_f[i].w
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
-        @. m_entr_detr = a_up * (Ic(w_up) - toscalar(Ic(w_gm)))
+        @. m_entr_detr = a_up * (Ic(w_up) - CCG.WVector(Ic(w_gm)).w)
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
         @. w_up_c = Ic(w_up)
         @. w_en_c = Ic(w_en)
@@ -361,7 +361,7 @@ function compute_entr_detr!(
         w_up = prog_up_f[i].w
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
-        @. m_entr_detr = a_up * (Ic(w_up) - Ic(toscalar(w_gm)))
+        @. m_entr_detr = a_up * (Ic(w_up) - Ic(CCG.WVector(w_gm).w))
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
         @. w_up_c = Ic(w_up)
         @. w_en_c = Ic(w_en)

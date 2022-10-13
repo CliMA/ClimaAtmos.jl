@@ -103,16 +103,16 @@ function compute_sgs_flux!(
     ts_gm = center_aux_grid_mean_ts(state)
     @. h_tot_gm = total_enthalpy(param_set, prog_gm.ρe_tot / ρ_c, ts_gm)
     # Compute the mass flux and associated scalar fluxes
-    @. massflux = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm))
+    @. massflux = ρ_f * Ifae(a_en) * (w_en - CCG.WVector(w_gm).w)
     @. massflux_h =
         ρ_f *
         Ifae(a_en) *
-        (w_en - toscalar(w_gm)) *
+        (w_en - CCG.WVector(w_gm).w) *
         (If(aux_en.h_tot) - If(h_tot_gm))
     @. massflux_qt =
         ρ_f *
         Ifae(a_en) *
-        (w_en - toscalar(w_gm)) *
+        (w_en - CCG.WVector(w_gm).w) *
         (If(aux_en.q_tot) - If(q_tot_gm))
     @inbounds for i in 1:N_up
         aux_up_f_i = aux_up_f[i]
@@ -121,17 +121,18 @@ function compute_sgs_flux!(
         Ifau = CCO.InterpolateC2F(; a_up_bcs...)
         a_up = aux_up[i].area
         w_up_i = prog_up_f[i].w
-        @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - toscalar(w_gm))
+        @. aux_up_f[i].massflux =
+            ρ_f * Ifau(a_up) * (w_up_i - CCG.WVector(w_gm).w)
         @. massflux_h +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - toscalar(w_gm)) *
+                (w_up_i - CCG.WVector(w_gm).w) *
                 (If(aux_up[i].h_tot) - If(h_tot_gm))
             )
         @. massflux_qt +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - toscalar(w_gm)) *
+                (w_up_i - CCG.WVector(w_gm).w) *
                 (If(aux_up[i].q_tot) - If(q_tot_gm))
             )
     end
@@ -144,7 +145,7 @@ function compute_sgs_flux!(
         q_ice_en = aux_en.q_ice
         q_liq_gm = prog_gm.q_liq
         q_ice_gm = prog_gm.q_ice
-        @. massflux_en = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm))
+        @. massflux_en = ρ_f * Ifae(a_en) * (w_en - CCG.WVector(w_gm).w)
         @. massflux_ql = massflux_en * (If(q_liq_en) - If(q_liq_gm))
         @. massflux_qi = massflux_en * (If(q_ice_en) - If(q_ice_gm))
         @inbounds for i in 1:N_up
