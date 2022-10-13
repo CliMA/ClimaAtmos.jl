@@ -14,7 +14,8 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     p2 = plot(; title = "up qt", args...)
     p3 = plot(; title = "up ql", args...)
     p4 = plot(; title = "up qi", args...)
-    p5 = plot(; title = "w", args...)
+    p5a = plot(; title = "up w", args...)
+    p5b = plot(; title = "en w", args...)
     p6 = plot(; title = "en qt", args...)
     p7 = plot(; title = "en ql", args...)
     p8 = plot(; title = "en qi", args...)
@@ -45,8 +46,8 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         plot!(p2, parent(D.bulk_up_q_tot)[:], zc; label = "$data_source")
         plot!(p3, parent(D.bulk_up_q_liq)[:], zc; label = "$data_source")
         plot!(p4, parent(D.bulk_up_q_ice)[:], zc; label = "$data_source")
-        plot!(p5, parent(D.face_bulk_w)[:], zf; label = "up $data_source")
-        plot!(p5, parent(D.face_env_w)[:], zf; label = "en $data_source")
+        plot!(p5a, parent(D.face_bulk_w)[:], zf; label = "$data_source")
+        plot!(p5b, parent(D.face_env_w)[:], zf; label = "$data_source")
         plot!(p6, parent(D.env_q_tot)[:], zc; label = "$data_source")
         plot!(p7, parent(D.env_q_liq)[:], zc; label = "$data_source")
         plot!(p8, parent(D.env_q_ice)[:], zc; label = "$data_source")
@@ -85,13 +86,15 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         size = (2400.0, 1500.0),
         bottom_margin = 20.0 * Plots.PlotMeasures.px,
         left_margin = 20.0 * Plots.PlotMeasures.px,
+        layout = (4, 5),
     )
     p = plot(
         p1,
         p2,
         p3,
         p4,
-        p5,
+        p5a,
+        p5b,
         p6,
         p7,
         p8,
