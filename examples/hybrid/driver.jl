@@ -325,10 +325,28 @@ if !simulation.is_distributed && parsed_args["post_process"]
 end
 
 if parsed_args["debugging_tc"]
+    include(
+        joinpath(
+            @__DIR__,
+            "..",
+            "..",
+            "regression_tests",
+            "self_reference_or_path.jl",
+        ),
+    )
     include(joinpath(@__DIR__, "define_tc_quicklook_profiles.jl"))
+
+    main_branch_root = get_main_branch_buildkite_path()
+    @info "Comparing PR profiles against main with commit id: $(basename(main_branch_root))"
+    main_branch_data_path = joinpath(main_branch_root, simulation.job_id)
+    # check that data exists on the main branch path
+
+    day = floor(Int, simulation.t_end / (60 * 60 * 24))
+    sec = floor(Int, simulation.t_end % (60 * 60 * 24))
     plot_tc_profiles(
-        simulation.output_dir,
-        "day0." * string(Int(simulation.t_end)) * ".hdf5",
+        simulation.output_dir;
+        hdf5_filename = "day$day.$sec.hdf5",
+        main_branch_data_path,
     )
 end
 
