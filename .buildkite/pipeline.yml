@@ -311,8 +311,8 @@ steps:
           slurm_mem: 20GB
 
       - label: ":dart: EDMF Consistency test Bomex"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex --dt 6secs --t_end 6hours --anelastic_dycore true --apply_limiter false --test_edmf_consistency true --debugging_tc true --dt_save_to_disk 6hours"
-        artifact_paths: "edmf_bomex/*"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex_consistency --dt 6secs --t_end 6hours --anelastic_dycore true --apply_limiter false --test_edmf_consistency true --debugging_tc true --dt_save_to_disk 6hours"
+        artifact_paths: "edmf_bomex_consistency/*"
         agents:
           slurm_mem: 20GB
         soft_fail: true
