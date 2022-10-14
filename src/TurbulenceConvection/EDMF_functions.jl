@@ -103,16 +103,16 @@ function compute_sgs_flux!(
     ts_gm = center_aux_grid_mean_ts(state)
     @. h_tot_gm = total_enthalpy(param_set, prog_gm.ρe_tot / ρ_c, ts_gm)
     # Compute the mass flux and associated scalar fluxes
-    @. massflux = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm))
+    @. massflux = ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
     @. massflux_h =
         ρ_f *
         Ifae(a_en) *
-        (w_en - toscalar(w_gm)) *
+        (w_en - wcomponent(CCG.WVector(w_gm))) *
         (If(aux_en.h_tot) - If(h_tot_gm))
     @. massflux_qt =
         ρ_f *
         Ifae(a_en) *
-        (w_en - toscalar(w_gm)) *
+        (w_en - wcomponent(CCG.WVector(w_gm))) *
         (If(aux_en.q_tot) - If(q_tot_gm))
     @inbounds for i in 1:N_up
         aux_up_f_i = aux_up_f[i]
@@ -121,17 +121,18 @@ function compute_sgs_flux!(
         Ifau = CCO.InterpolateC2F(; a_up_bcs...)
         a_up = aux_up[i].area
         w_up_i = prog_up_f[i].w
-        @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - toscalar(w_gm))
+        @. aux_up_f[i].massflux =
+            ρ_f * Ifau(a_up) * (w_up_i - wcomponent(CCG.WVector(w_gm)))
         @. massflux_h +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - toscalar(w_gm)) *
+                (w_up_i - wcomponent(CCG.WVector(w_gm))) *
                 (If(aux_up[i].h_tot) - If(h_tot_gm))
             )
         @. massflux_qt +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - toscalar(w_gm)) *
+                (w_up_i - wcomponent(CCG.WVector(w_gm))) *
                 (If(aux_up[i].q_tot) - If(q_tot_gm))
             )
     end
@@ -144,7 +145,8 @@ function compute_sgs_flux!(
         q_ice_en = aux_en.q_ice
         q_liq_gm = prog_gm.q_liq
         q_ice_gm = prog_gm.q_ice
-        @. massflux_en = ρ_f * Ifae(a_en) * (w_en - toscalar(w_gm))
+        @. massflux_en =
+            ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
         @. massflux_ql = massflux_en * (If(q_liq_en) - If(q_liq_gm))
         @. massflux_qi = massflux_en * (If(q_ice_en) - If(q_ice_gm))
         @inbounds for i in 1:N_up
@@ -533,7 +535,6 @@ function get_GMV_CoVar(
     gmv_covar = getproperty(center_aux_grid_mean(state), covar_sym)
     covar_e = getproperty(center_aux_environment(state), covar_sym)
     gm = is_tke ? prog_gm_f : aux_gm_c
-    to_scalar = is_tke ? toscalar : x -> x
     ϕ_gm = getproperty(gm, ϕ_sym)
     ψ_gm = getproperty(gm, ψ_sym)
     ϕ_en = getproperty(aux_en, ϕ_sym)
@@ -544,16 +545,16 @@ function get_GMV_CoVar(
     @. gmv_covar =
         tke_factor *
         area_en *
-        Icd(ϕ_en - to_scalar(ϕ_gm)) *
-        Icd(ψ_en - to_scalar(ψ_gm)) + area_en * covar_e
+        Icd(ϕ_en - wcomponent(CCG.WVector(ϕ_gm))) *
+        Icd(ψ_en - wcomponent(CCG.WVector(ψ_gm))) + area_en * covar_e
     @inbounds for i in 1:N_up
         ϕ_up = getproperty(aux_up[i], ϕ_sym)
         ψ_up = getproperty(aux_up[i], ψ_sym)
         @. gmv_covar +=
             tke_factor *
             aux_up_c[i].area *
-            Icd(ϕ_up - to_scalar(ϕ_gm)) *
-            Icd(ψ_up - to_scalar(ψ_gm))
+            Icd(ϕ_up - wcomponent(CCG.WVector(ϕ_gm))) *
+            Icd(ψ_up - wcomponent(CCG.WVector(ψ_gm)))
     end
     return nothing
 end
@@ -1003,7 +1004,6 @@ function compute_covariance_entr(
     ρ_c = prog_gm.ρ
     gm = is_tke ? prog_gm_f : aux_gm_c
     prog_up = is_tke ? prog_up_f : aux_up
-    to_scalar = is_tke ? toscalar : x -> x
     ϕ_gm = getproperty(gm, ϕ_sym)
     ψ_gm = getproperty(gm, ψ_sym)
     aux_en_2m = center_aux_environment_2m(state)
@@ -1052,9 +1052,9 @@ function compute_covariance_entr(
                 abs(Ic(w_up)) *
                 eps_turb *
                 (
-                    (Idc(ϕ_en) - Idc(to_scalar(ϕ_gm))) *
+                    (Idc(ϕ_en) - Idc(wcomponent(CCG.WVector(ϕ_gm)))) *
                     (Idc(ψ_up) - Idc(ψ_en)) +
-                    (Idc(ψ_en) - Idc(to_scalar(ψ_gm))) *
+                    (Idc(ψ_en) - Idc(wcomponent(CCG.WVector(ψ_gm)))) *
                     (Idc(ϕ_up) - Idc(ϕ_en))
                 )
             )
