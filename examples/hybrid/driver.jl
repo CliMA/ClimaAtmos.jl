@@ -310,7 +310,9 @@ if !simulation.is_distributed && parsed_args["post_process"]
         custom_postprocessing(sol, simulation.output_dir)
     elseif is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
-    elseif model_spec.forcing_type isa HeldSuarezForcing
+    elseif is_solid_body(parsed_args)
+        postprocessing(sol, simulation.output_dir, fps)
+    else
         paperplots_held_suarez(
             model_spec,
             sol,
@@ -319,8 +321,6 @@ if !simulation.is_distributed && parsed_args["post_process"]
             FT(90),
             FT(180),
         )
-    else
-        postprocessing(sol, simulation.output_dir, fps)
     end
 end
 
