@@ -113,6 +113,7 @@ cat << EOM
         config: cpu
         queue: central
         slurm_time: $time
+        slurm_profile: task
 EOM
 
 if [[ "$exclusive" == "true" ]]; then
