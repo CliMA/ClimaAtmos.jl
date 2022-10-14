@@ -1165,3 +1165,37 @@ Grid(state::State) = Grid(axes(state.prog.cent))
 float_type(state::State) = eltype(state.prog)
 # float_type(field::CC.Fields.Field) = CC.Spaces.undertype(axes(field))
 float_type(field::CC.Fields.Field) = eltype(parent(field))
+
+
+function tc_column_state(prog, p, tendencies, colidx)
+    prog_cent_column = CC.column(prog.c, colidx)
+    prog_face_column = CC.column(prog.f, colidx)
+    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
+    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
+    tends_cent_column = CC.column(tendencies.c, colidx)
+    tends_face_column = CC.column(tendencies.f, colidx)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    tends_column = CC.Fields.FieldVector(
+        cent = tends_cent_column,
+        face = tends_face_column,
+    )
+
+    return State(prog_column, aux_column, tends_column, p, colidx)
+end
+
+function tc_column_state(prog, p, tendencies::Nothing, colidx)
+    prog_cent_column = CC.column(prog.c, colidx)
+    prog_face_column = CC.column(prog.f, colidx)
+    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
+    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    tends_column = nothing
+
+    return State(prog_column, aux_column, tends_column, p, colidx)
+end
