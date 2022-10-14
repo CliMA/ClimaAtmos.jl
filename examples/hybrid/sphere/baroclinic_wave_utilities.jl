@@ -241,6 +241,7 @@ function vertical_diffusion_boundary_layer_cache(
             zeros(axes(z_bottom)),
             zeros(axes(z_bottom)),
         )
+    dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
     dif_flux_ρq_tot = if :ρq_tot in propertynames(Y.c)
         similar(z_bottom, Geometry.WVector{FT})
     else
@@ -248,10 +249,22 @@ function vertical_diffusion_boundary_layer_cache(
     end
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
-
     surface_normal = Geometry.WVector.(ones(axes(Fields.level(Y.c, 1))))
 
-    dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
+    surface_scheme_params = if surface_scheme isa BulkSurfaceScheme
+        (;
+            Cd = ones(axes(Fields.level(Y.f, half))) .* FT(0.0044),
+            Ch = ones(axes(Fields.level(Y.f, half))) .* FT(0.0044),
+        )
+    elseif surface_scheme isa MoninObukhovSurface
+        (;
+            z0m = ones(axes(Fields.level(Y.f, half))) .* FT(1e-5),
+            z0b = ones(axes(Fields.level(Y.f, half))) .* FT(1e-5),
+        )
+    elseif isnothing(surface_scheme)
+        NamedTuple()
+    end
+
     return (;
         surface_scheme,
         C_E,
@@ -266,6 +279,7 @@ function vertical_diffusion_boundary_layer_cache(
         dif_flux_energy_bc = similar(dif_flux_energy),
         dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
         diffuse_momentum,
+        surface_scheme_params...,
         coupled,
         surface_normal,
         z_bottom,
@@ -291,8 +305,12 @@ function get_surface_density_and_humidity(T_sfc, ts_int, params)
     return ρ_sfc, q_sfc
 end
 
+surface_args(::BulkSurfaceScheme, p, colidx) = (p.Cd[colidx], p.Ch[colidx])
+
 function saturated_surface_conditions(
     surface_scheme::BulkSurfaceScheme,
+    Cd,
+    Ch,
     T_sfc,
     ρ_sfc,
     q_sfc,
@@ -303,9 +321,8 @@ function saturated_surface_conditions(
     params,
     coupled,
 )
-    Cd = surface_scheme.Cd
-    Ch = surface_scheme.Ch
-    # parameters
+
+    # parametercs
     thermo_params = CAP.thermodynamics_params(params)
     sf_params = CAP.surface_fluxes_params(params)
 
@@ -341,8 +358,12 @@ end
 
 saturated_surface_conditions(::Nothing, args...) = nothing
 
+surface_args(::MoninObukhovSurface, p, colidx) = (p.z0m[colidx], p.z0b[colidx])
+
 function saturated_surface_conditions(
     surface_scheme::MoninObukhovSurface,
+    z0m,
+    z0b,
     T_sfc,
     ρ_sfc,
     q_sfc,
@@ -353,8 +374,7 @@ function saturated_surface_conditions(
     params,
     coupled,
 )
-    z0m = surface_scheme.z0m
-    z0b = surface_scheme.z0b
+
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
     sf_params = CAP.surface_fluxes_params(params)
@@ -415,9 +435,12 @@ function get_surface_fluxes!(Y, p, colidx)
     uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
     @. uₕ_int_local[colidx] = Geometry.UVVector(uₕ_int)
 
+    surf_args = surface_args(p.surface_scheme, p, colidx)
+
     surface_conditions[colidx] .=
         saturated_surface_conditions.(
             p.surface_scheme,
+            surf_args...,
             T_sfc[colidx],
             ρ_sfc[colidx],
             q_sfc[colidx],
