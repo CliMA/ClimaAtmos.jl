@@ -13,7 +13,7 @@ Here is a sbatch script template for setting up simulations using multithreading
 #SBATCH --output=$YOUR_SIMULATION_LOG_DIR/simulation.log
 
 module purge
-module load julia/1.8.0
+module load julia/1.8.2
 
 export JULIA_MPI_BINARY=system
 export JULIA_CUDA_USE_BINARYBUILDER=false
@@ -43,7 +43,7 @@ Here is a sbatch script template for setting up simulations using mpi on caltech
 #SBATCH --output=$YOUR_SIMULATION_LOG_DIR/simulation.log
 
 module purge
-module load julia/1.8.0
+module load julia/1.8.2 openmpi/4.1.1 hdf5/1.12.1-ompi411
 
 export JULIA_MPI_BINARY=system
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
@@ -80,8 +80,4 @@ Commonly used command line arguements for experiment setups are [here](https://c
 * `NC_DIR`: the directory where remapped `nc` files will be saved in; if not specified, a subdirectory named `nc` will be created under `JLD2_DIR`;
 * `NLAT` and `NLON`: the number of evenly distributed grids in latitudes and longitudes; if not specified, they are default to `90` and `180` respectively.
 
-### Note: A computing node is needed to run the remapping on caltech central hpc. It gives the following warning messages without interrupting the process.
-```
-/home/****/.julia/artifacts/db8bb055d059e1c04bade7bd86a3010466d5ad4a/bin/ApplyOfflineMap: /central/software/julia/1.8.0/bin/../lib/julia/libcurl.so.4: no version information available (required by /home/jiahe/.julia/artifacts/a990d3d23ca4ca4c1fcd1e42fc198f1272f7c49b/lib/libnetcdf.so.18)
-```
-
+### Note: A computing node is needed to run the remapping on caltech central hpc.
