@@ -19,14 +19,8 @@ abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 
 abstract type AbstractSurfaceScheme end
-Base.@kwdef struct BulkSurfaceScheme{FT} <: AbstractSurfaceScheme
-    Cd::FT
-    Ch::FT
-end
-Base.@kwdef struct MoninObukhovSurface{FT} <: AbstractSurfaceScheme
-    z0m::FT
-    z0b::FT
-end # TODO: unify with MoninObukhovSurface in TC
+struct BulkSurfaceScheme <: AbstractSurfaceScheme end
+struct MoninObukhovSurface <: AbstractSurfaceScheme end # TODO: unify with MoninObukhovSurface in TC
 
 # Define broadcasting for types
 Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)

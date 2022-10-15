@@ -112,9 +112,9 @@ function surface_scheme(FT, parsed_args)
     surface_scheme = parsed_args["surface_scheme"]
     @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
     return if surface_scheme == "bulk"
-        BulkSurfaceScheme{FT}(; Cd = FT(0.0044), Ch = FT(0.0044))
+        BulkSurfaceScheme()
     elseif surface_scheme == "monin_obukhov"
-        MoninObukhovSurface{FT}(; z0m = FT(1e-5), z0b = FT(1e-5))
+        MoninObukhovSurface()
     elseif surface_scheme == nothing
         surface_scheme
     end
