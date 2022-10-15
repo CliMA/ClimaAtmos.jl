@@ -79,13 +79,13 @@ end
 function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     next_t = Ref{typeof(dt)}()
     affect! = function (integrator)
+        f!(integrator)
+
         t = integrator.t
         t_end = integrator.sol.prob.tspan[2]
-        while t >= next_t[]
-            f!(integrator)
-            next_t[] =
-                (call_at_end && t < t_end) ? min(t_end, next_t[] + dt) :
-                next_t[] + dt
+        next_t[] = max(t, next_t[] + dt)
+        if call_at_end
+            next_t[] = min(next_t[], t_end)
         end
     end
     return ODE.DiscreteCallback(
