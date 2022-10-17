@@ -141,7 +141,6 @@ end
 #####
 
 include("Radiation.jl")
-include("Forcing.jl")
 
 #####
 ##### Case methods
@@ -204,7 +203,7 @@ initialize_radiation(::AbstractCaseType, radiation, grid, state, param_set) =
 
 update_forcing(::AbstractCaseType, grid, state, t::Real, param_set) = nothing
 initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) =
-    initialize(forcing, grid, state)
+    nothing
 
 #####
 ##### Pressure helper functions for making initial profiles hydrostatic.
@@ -455,7 +454,6 @@ end
 
 function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
     thermo_params = TCP.thermodynamics_params(param_set)
-    initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
@@ -470,17 +468,12 @@ function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
     z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     @. aux_gm.uₕ_g = CCG.Covariant12Vector(CCG.UVVector(prof_ug(z), FT(0)))
 
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        # Geostrophic velocity profiles. vg = 0
-        Π = TD.exner(thermo_params, ts_gm[k])
-        # Set large-scale cooling
-        aux_gm.dTdt_hadv[k] = prof_dTdt(Π, z)
-        # Set large-scale drying
-        aux_gm.dqtdt_hadv[k] = prof_dqtdt(z)
-        #Set large scale subsidence
-        aux_gm.subsidence[k] = prof_subsidence(z)
-    end
+    # Set large-scale cooling
+    @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z)
+    # Set large-scale drying
+    @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
+    #Set large scale subsidence
+    @. aux_gm.subsidence = prof_subsidence(z)
     return nothing
 end
 
@@ -574,7 +567,6 @@ function initialize_forcing(
     param_set,
 )
     thermo_params = TCP.thermodynamics_params(param_set)
-    initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     p_c = TC.center_aux_grid_mean_p(state)
@@ -589,17 +581,14 @@ function initialize_forcing(
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, x -> FT(0))
 
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        # Geostrophic velocity profiles. vg = 0
-        Π = TD.exner(thermo_params, ts_gm[k])
-        # Set large-scale cooling
-        aux_gm.dTdt_hadv[k] = prof_dTdt(Π, z)
-        # Set large-scale drying
-        aux_gm.dqtdt_hadv[k] = prof_dqtdt(z)
-        #Set large scale subsidence
-        aux_gm.subsidence[k] = prof_subsidence(z)
-    end
+    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
+    # Geostrophic velocity profiles. vg = 0
+    # Set large-scale cooling
+    @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z)
+    # Set large-scale drying
+    @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
+    #Set large scale subsidence
+    @. aux_gm.subsidence = prof_subsidence(z)
     return nothing
 end
 
@@ -699,7 +688,6 @@ end
 
 function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
     thermo_params = TCP.thermodynamics_params(param_set)
-    initialize(forcing, grid, state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
@@ -712,16 +700,13 @@ function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
     prof_dqtdt = APL.Rico_dqtdt(FT)
     prof_subsidence = APL.Rico_subsidence(FT)
 
+    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, prof_vg)
 
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        Π = TD.exner(thermo_params, ts_gm[k])
-        aux_gm.dTdt_hadv[k] = prof_dTdt(Π, z) # Set large-scale cooling
-        aux_gm.dqtdt_hadv[k] = prof_dqtdt(z) # Set large-scale moistening
-        aux_gm.subsidence[k] = prof_subsidence(z) #Set large scale subsidence
-    end
+    @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z) # Set large-scale cooling
+    @. aux_gm.dqtdt_hadv = prof_dqtdt(z) # Set large-scale moistening
+    @. aux_gm.subsidence = prof_subsidence(z) #Set large scale subsidence
     return nothing
 end
 
@@ -1041,11 +1026,11 @@ end
 function initialize_forcing(::GATE_III, forcing, grid::Grid, state, param_set)
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
-    for k in TC.real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.dqtdt_hadv[k] = APL.GATE_III_dqtdt(FT)(z)
-        aux_gm.dTdt_hadv[k] = APL.GATE_III_dTdt(FT)(z)
-    end
+    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
+    prof_dqtdt = APL.GATE_III_dqtdt(FT)
+    prof_dTdt = APL.GATE_III_dTdt(FT)
+    @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
+    @. aux_gm.dTdt_hadv = prof_dTdt(z)
 end
 
 #####
@@ -1138,15 +1123,14 @@ function initialize_forcing(
     # geostrophic velocity profiles
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, FT(7), FT(-5.5))
+    z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
 
     # large scale subsidence
     divergence = forcing.divergence
-    @inbounds for k in real_center_indices(grid)
-        aux_gm.subsidence[k] = -grid.zc[k].z * divergence
-    end
+    @. aux_gm.subsidence = -z * divergence
 
     # no large-scale drying
-    parent(aux_gm.dqtdt_hadv) .= 0 #kg/(kg * s)
+    @. aux_gm.dqtdt_hadv = 0 #kg/(kg * s)
 end
 
 function RadiationBase(case::DYCOMS_RF01, FT)
@@ -1266,15 +1250,14 @@ function initialize_forcing(
     # geostrophic velocity profiles
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, FT(5), FT(-5.5))
+    z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
 
     # large scale subsidence
     divergence = forcing.divergence
-    @inbounds for k in real_center_indices(grid)
-        aux_gm.subsidence[k] = -grid.zc[k].z * divergence
-    end
+    @. aux_gm.subsidence = -z * divergence
 
     # no large-scale drying
-    parent(aux_gm.dqtdt_hadv) .= 0 #kg/(kg * s)
+    @. aux_gm.dqtdt_hadv .= 0 #kg/(kg * s)
 end
 
 function RadiationBase(case::DYCOMS_RF02, FT)
@@ -1365,7 +1348,6 @@ end
 
 function initialize_forcing(::GABLS, forcing, grid::Grid, state, param_set)
     FT = TC.float_type(state)
-    initialize(forcing, grid, state)
     aux_gm = TC.center_aux_grid_mean(state)
 
     prof_ug = APL.GABLS_geostrophic_ug(FT)
