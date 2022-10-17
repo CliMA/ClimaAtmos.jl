@@ -49,6 +49,7 @@ function compute_precipitation_advection_tendencies(
     # helper to calculate the rain velocity
     # TODO: assuming w_gm = 0
     # TODO: verify translation
+    # TODO - make it a Covariant#Vector
     term_vel_rain = aux_tc.term_vel_rain
     term_vel_snow = aux_tc.term_vel_snow
 

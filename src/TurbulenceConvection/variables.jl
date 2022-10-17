@@ -92,7 +92,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         ),
         en = (;
             ts = thermo_state(FT, edmf.moisture_model),
-            w = FT(0),
+            w = CCG.Covariant3Vector(FT(0)),
             area = FT(0),
             q_tot = FT(0),
             q_liq = FT(0),
@@ -150,8 +150,8 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         prandtl_nvec = FT(0),
         # Variable Prandtl number initialized as neutral value.
         b_exch = FT(0),
-        w_up_c = FT(0),
-        w_en_c = FT(0),
+        w_up_c = CCG.Covariant3Vector(FT(0)),
+        w_en_c = CCG.Covariant3Vector(FT(0)),
         Shear² = FT(0),
         ∂θv∂z = FT(0),
         ∂qt∂z = FT(0),
@@ -178,7 +178,7 @@ face_aux_vars_edmf_moisture(FT, ::NonEquilMoistModel) = (;
 face_aux_vars_edmf_moisture(FT, ::EquilMoistModel) = NamedTuple()
 face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
-        bulk = (; w = FT(0)),
+        bulk = (; w = CCG.Covariant3Vector(FT(0))),
         ρ_ae_KM = FT(0),
         ρ_ae_KH = FT(0),
         ρ_ae_K = FT(0),
@@ -246,7 +246,7 @@ cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
 # cent_prognostic_vars_edmf(FT, edmf) = (;) # could also use this for empty model
 
 # Face only
-face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; w = FT(0))
+face_prognostic_vars_up(::Type{FT}, local_geometry) where {FT} = (; w = CCG.Covariant3Vector(FT(0)))
 face_prognostic_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         up = ntuple(

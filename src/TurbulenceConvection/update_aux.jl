@@ -61,7 +61,7 @@ function update_aux!(
 
     @inbounds for i in 1:N_up
         @. aux_up[i].e_kin =
-            LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(prog_up_f[i].w)))) / 2
+            LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic((prog_up_f[i].w)))) / 2
     end
 
     @inbounds for k in real_center_indices(grid)
@@ -152,15 +152,14 @@ function update_aux!(
         end
     end
 
-    @. aux_en_f.w =
-        wcomponent(CCG.WVector(prog_gm_f.w)) / (1 - Ifb(aux_bulk.area))
+    @. aux_en_f.w = prog_gm_f.w / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
         @. aux_en_f.w -=
             Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
     end
 
     @. aux_en.e_kin =
-        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
+        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(aux_en_f.w))) / 2
 
     @inbounds for k in real_center_indices(grid)
         e_pot = geopotential(param_set, grid.zc.z[k])
@@ -212,6 +211,7 @@ function update_aux!(
         aux_en.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts_en)
         aux_en.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_en)
         rho = TD.air_density(thermo_params, ts_en)
+        # TODO - buoyancy should be a vector too
         aux_en.buoy[k] = buoyancy_c(param_set, ρ_c[k], rho)
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
     end
@@ -273,6 +273,7 @@ function update_aux!(
             aux_up[i].q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_up)
             aux_up[i].T[k] = TD.air_temperature(thermo_params, ts_up)
             ρ = TD.air_density(thermo_params, ts_up)
+            # TODO - buoyancy should be a vector too
             aux_up[i].buoy[k] = buoyancy_c(param_set, ρ_c[k], ρ)
             aux_up[i].RH[k] = TD.relative_humidity(thermo_params, ts_up)
         end
@@ -346,7 +347,7 @@ function update_aux!(
         @. aux_tc_f.bulk.w += ifelse(
             Ifb(aux_bulk.area) > 0,
             Ifu(a_up) * prog_up_f[i].w / Ifb(aux_bulk.area),
-            FT(0),
+            CCG.Covariant3Vector(FT(0)),
         )
     end
 
@@ -405,10 +406,13 @@ function update_aux!(
         w_up = prog_up_f[i].w
         δ_dyn = aux_up[i].detr_sc
         ε_turb = aux_up[i].frac_turb_entr
+
+        # TODO make buoyancy a vector
         @. b_exch +=
-            a_up * Ic(w_up) * δ_dyn / a_en *
-            (1 / 2 * (Ic(w_up) - Ic(w_en))^2 - tke_en) -
-            a_up * Ic(w_up) * (Ic(w_up) - Ic(w_en)) * ε_turb * Ic(w_en) / a_en
+            a_up * Ic(wcomponent(CCG.WVector(w_up))) * δ_dyn / a_en *
+            (1 / 2 * (Ic(wcomponent(CCG.WVector(w_up - w_en))))^2 - tke_en) -
+            a_up * Ic(wcomponent(CCG.WVector(w_up))) * Ic(wcomponent(CCG.WVector(w_up - w_en))) *
+            ε_turb * Ic(wcomponent(CCG.WVector(w_en))) / a_en
     end
 
     Shear² = center_aux_turbconv(state).Shear²
@@ -430,10 +434,12 @@ function update_aux!(
 
     # TODO: Will need to be changed with topography
     local_geometry = CC.Fields.local_geometry_field(axes(ρ_c))
+
     @. k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
+
     Ifuₕ = uₕ_bcs()
     ∇uvw = CCO.GradientF2C()
-    @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(wvec(w_en))
+    @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(w_en)
     @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
 
     q_tot_en = aux_en.q_tot
@@ -545,7 +551,8 @@ function update_aux!(
     @inbounds for i in 1:N_up
         w_up = prog_up_f[i].w
         nh_press = aux_up_f[i].nh_pressure
-        @. tke_press += (Ic(w_en) - Ic(w_up)) * prog_up[i].ρarea * Ic(nh_press)
+        # TODO - make buoyancy and pressure terms a vector
+        @. tke_press += Ic(wcomponent(CCG.WVector(w_en - w_up))) * prog_up[i].ρarea * Ic(nh_press)
     end
 
     compute_covariance_entr(edmf, grid, state, Val(:tke), Val(:w), Val(:w))

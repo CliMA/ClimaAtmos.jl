@@ -103,16 +103,17 @@ function compute_sgs_flux!(
     ts_gm = center_aux_grid_mean_ts(state)
     @. h_tot_gm = total_enthalpy(param_set, prog_gm.ρe_tot / ρ_c, ts_gm)
     # Compute the mass flux and associated scalar fluxes
-    @. massflux = ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
+    # TODO - make fluxes vectors too!
+    @. massflux = ρ_f * Ifae(a_en) * wcomponent(CCG.WVector(w_en - w_gm))
     @. massflux_h =
         ρ_f *
         Ifae(a_en) *
-        (w_en - wcomponent(CCG.WVector(w_gm))) *
+        wcomponent(CCG.WVector(w_en - w_gm)) *
         (If(aux_en.h_tot) - If(h_tot_gm))
     @. massflux_qt =
         ρ_f *
         Ifae(a_en) *
-        (w_en - wcomponent(CCG.WVector(w_gm))) *
+        wcomponent(CCG.WVector(w_en - w_gm)) *
         (If(aux_en.q_tot) - If(q_tot_gm))
     @inbounds for i in 1:N_up
         aux_up_f_i = aux_up_f[i]
@@ -122,17 +123,17 @@ function compute_sgs_flux!(
         a_up = aux_up[i].area
         w_up_i = prog_up_f[i].w
         @. aux_up_f[i].massflux =
-            ρ_f * Ifau(a_up) * (w_up_i - wcomponent(CCG.WVector(w_gm)))
+            ρ_f * Ifau(a_up) * wcomponent(CCG.WVector(w_up_i - w_gm))
         @. massflux_h +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - wcomponent(CCG.WVector(w_gm))) *
+                wcomponent(CCG.WVector(w_up_i - w_gm)) *
                 (If(aux_up[i].h_tot) - If(h_tot_gm))
             )
         @. massflux_qt +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - wcomponent(CCG.WVector(w_gm))) *
+                wcomponent(CCG.WVector(w_up_i - w_gm)) *
                 (If(aux_up[i].q_tot) - If(q_tot_gm))
             )
     end
@@ -146,7 +147,7 @@ function compute_sgs_flux!(
         q_liq_gm = prog_gm.q_liq
         q_ice_gm = prog_gm.q_ice
         @. massflux_en =
-            ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
+            ρ_f * Ifae(a_en) * wcomponent(CCG.WVector(w_en - w_gm))
         @. massflux_ql = massflux_en * (If(q_liq_en) - If(q_liq_gm))
         @. massflux_qi = massflux_en * (If(q_ice_en) - If(q_ice_gm))
         @inbounds for i in 1:N_up
@@ -432,7 +433,7 @@ function area_surface_bc(
 end
 
 function w_surface_bc(::SurfaceBase{FT})::FT where {FT}
-    return FT(0)
+    return CCG.Covariant3Vector(FT(0))
 end
 function uₕ_bcs()
     return CCO.InterpolateC2F(
@@ -648,8 +649,6 @@ function compute_up_tendencies!(
 
     wvec = CC.Geometry.WVector
     ∇c = CCO.DivergenceF2C()
-    w_bcs =
-        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(FT(0)))
 
     # Solve for updraft area fraction
@@ -675,21 +674,23 @@ function compute_up_tendencies!(
         tends_ρaθ_liq_ice = tendencies_up[i].ρaθ_liq_ice
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
+        # TODO -∇c(wvec(LBF(Ic(w_up) * ρarea))) -> -∇c(w_up * LBF(ρarea))
+        # TODO - entr_turb_dyn, detr - shoudl this be a vector
         @. tends_ρarea =
-            -∇c(wvec(LBF(Ic(w_up) * ρarea))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn) -
-            (ρarea * Ic(w_up) * detr_turb_dyn)
+            -∇c(LBF(Ic(w_up) * ρarea)) +
+            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn) -
+            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn)
 
         @. tends_ρaθ_liq_ice =
-            -∇c(wvec(LBF(Ic(w_up) * ρaθ_liq_ice))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn * θ_liq_ice_en) -
-            (ρaθ_liq_ice * Ic(w_up) * detr_turb_dyn) +
+            -∇c(LBF(Ic(w_up) * ρaθ_liq_ice)) +
+            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * θ_liq_ice_en) -
+            (ρaθ_liq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * θ_liq_ice_tendency_precip_formation)
 
         @. tends_ρaq_tot =
-            -∇c(wvec(LBF(Ic(w_up) * ρaq_tot))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn * q_tot_en) -
-            (ρaq_tot * Ic(w_up) * detr_turb_dyn) +
+            -∇c(LBF(Ic(w_up) * ρaq_tot)) +
+            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_tot_en) -
+            (ρaq_tot * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * qt_tendency_precip_formation)
 
         if edmf.moisture_model isa NonEquilMoistModel
@@ -711,15 +712,15 @@ function compute_up_tendencies!(
             tends_ρaq_ice = tendencies_up[i].ρaq_ice
 
             @. tends_ρaq_liq =
-                -∇c(wvec(LBF(Ic(w_up) * ρaq_liq))) +
-                (ρarea * Ic(w_up) * entr_turb_dyn * q_liq_en) -
-                (ρaq_liq * Ic(w_up) * detr_turb_dyn) +
+                -∇c(LBF(Ic(w_up) * ρaq_liq)) +
+                (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_liq_en) -
+                (ρaq_liq * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
                 (ρ_c * (ql_tendency_precip_formation + ql_tendency_noneq))
 
             @. tends_ρaq_ice =
-                -∇c(wvec(LBF(Ic(w_up) * ρaq_ice))) +
-                (ρarea * Ic(w_up) * entr_turb_dyn * q_ice_en) -
-                (ρaq_ice * Ic(w_up) * detr_turb_dyn) +
+                -∇c(LBF(Ic(w_up) * ρaq_ice)) +
+                (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_ice_en) -
+                (ρaq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
                 (ρ_c * (qi_tendency_precip_formation + qi_tendency_noneq))
 
             tends_ρaq_liq[kc_surf] = 0
@@ -765,10 +766,11 @@ function compute_up_tendencies!(
         detr_w = aux_up[i].detr_turb_dyn
         buoy = aux_up[i].buoy
 
+        # TODO, improve later...
         @. tends_w = -(∇f(wvec(LBC(w_up * w_up))))
         @. tends_w +=
-            w_up * I0f(entr_w) * (w_en - w_up) + I0f(buoy) + nh_pressure
-        tends_w[kf_surf] = 0
+            w_up * I0f(entr_w) * (w_en - w_up) + CCG.Covariant3Vector(I0f(buoy) + nh_pressure)
+        tends_w[kf_surf] = CCG.Covariant3Vector(FT(0))
     end
 
     return nothing
