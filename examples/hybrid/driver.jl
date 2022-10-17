@@ -262,6 +262,8 @@ end
 
 if simulation.is_distributed
     OrdinaryDiffEq.step!(integrator)
+    # GC.enable(false) # disabling GC causes a memory leak
+    GC.gc()
     ClimaComms.barrier(comms_ctx)
     if ClimaComms.iamroot(comms_ctx)
         @timev begin
@@ -271,6 +273,7 @@ if simulation.is_distributed
         walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
     end
     ClimaComms.barrier(comms_ctx)
+    GC.enable(true)
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end

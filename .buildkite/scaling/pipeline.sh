@@ -8,7 +8,7 @@ FT="Float32"
 resolutions=("low" "mid" "high")
 max_procs_per_node=16 # limit this artificially for profiling
 profiling=enable
-exclusive=false
+exclusive=true
 mpi_impl="openmpi"
 
 # set up environment and agents

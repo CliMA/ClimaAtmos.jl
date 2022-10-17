@@ -56,10 +56,22 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         call_every_dt(save_restart_func, dt_save_restart)
     end
+
+    gc_callback = if simulation.is_distributed
+        call_every_n_steps(
+            gc_func,
+            parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
+            skip_first = true,
+        )
+    else
+        nothing
+    end
+
     return ODE.CallbackSet(
         dss_cb,
         save_to_disk_callback,
         save_restart_callback,
+        gc_callback,
         additional_callbacks...,
     )
 end
@@ -394,4 +406,25 @@ function save_restart_func(integrator)
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing
+end
+
+function gc_func(integrator)
+    full = true # whether to do a full GC
+    num_pre = Base.gc_num()
+    alloc_since_last = (num_pre.allocd + num_pre.deferred_alloc) / 2^20
+    live_pre = Base.gc_live_bytes() / 2^20
+    GC.gc(full)
+    live_post = Base.gc_live_bytes() / 2^20
+    num_post = Base.gc_num()
+    gc_time = (num_post.total_time - num_pre.total_time) / 10^9 # count in ns
+    @debug(
+        "GC",
+        t = integrator.t,
+        "alloc since last GC (MB)" = alloc_since_last,
+        "live mem pre (MB)" = live_pre,
+        "live mem post (MB)" = live_post,
+        "GC time (s)" = gc_time,
+        "# pause" = num_post.pause,
+        "# full_sweep" = num_post.full_sweep,
+    )
 end
