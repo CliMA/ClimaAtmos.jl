@@ -365,7 +365,7 @@ function set_edmf_surface_bc(
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * q_liq_surf
             prog_up[i].ρaq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * q_ice_surf
         end
-        prog_up_f[i].w[kf_surf] = w_surface_bc(surf)
+        prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(FT(0)) #TODO  w_surface_bc(surf)
         ae_surf -= a_surf
     end
 
@@ -433,7 +433,7 @@ function area_surface_bc(
 end
 
 function w_surface_bc(::SurfaceBase{FT})::FT where {FT}
-    return CCG.Covariant3Vector(wvec(FT(0)))
+    return CCG.Covariant3Vector(FT(0))
 end
 function uₕ_bcs()
     return CCO.InterpolateC2F(
@@ -829,7 +829,7 @@ function filter_updraft_vars(
     end
 
     @inbounds for i in 1:N_up
-        @. prog_up_f[i].w = max.(prog_up_f[i].w, CCG.Covariant3Vector(0))
+        @. prog_up_f[i].w = CCG.Covariant3Vector(max.(wcomponent(CCG.WVector(prog_up_f[i].w)), 0))
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
         @. prog_up_f[i].w =

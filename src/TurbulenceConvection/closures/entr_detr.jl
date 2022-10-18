@@ -3,13 +3,13 @@
 function compute_turbulent_entrainment(
     c_γ::FT,
     a_up::FT,
-    w_up::FT,
+    w_up::CCG.Covariant3Vector,
     tke::FT,
     H_up::FT,
 ) where {FT}
 
-    ε_turb = if w_up * a_up > 0
-        2 * c_γ * sqrt(max(tke, 0)) / (w_up * H_up)
+    ε_turb = if wcomponent(CCG.WVector(w_up)) * a_up > 0
+        2 * c_γ * sqrt(max(tke, 0)) / (wcomponent(CCG.Covariant3Vector(w_up)) * H_up)
     else
         FT(0)
     end
@@ -21,8 +21,8 @@ function compute_inverse_timescale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::CCG.Covariant3Vector,
+    w_en::CCG.Covariant3Vector,
     tke::FT,
 ) where {FT}
     Δb = b_up - b_en
@@ -35,8 +35,8 @@ function compute_inverse_timescale(
     return lamb_smooth_minimum(l, FT(0.1), FT(0.0005))
 end
 
-function get_Δw(εδ_model, w_up::FT, w_en::FT) where {FT}
-    Δw = w_up - w_en
+function get_Δw(εδ_model, w_up::CCG.Covariant3Vector, w_en::CCG.Covariant3Vector) where {FT}
+    Δw = wcomponent(CCG.WVector(w_up - w_en))
     Δw += copysign(FT(εδ_params(εδ_model).w_min), Δw)
     return Δw
 end
@@ -51,8 +51,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::CCG.Covariant3Vector,
+    w_en::CCG.Covariant3Vector,
     tke::FT,
     zc_i::FT,
     ::BuoyVelEntrDimScale,
@@ -66,8 +66,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::CCG.Covariant3Vector,
+    w_en::CCG.Covariant3Vector,
     tke::FT,
     zc_i::FT,
     ::InvZEntrDimScale,
@@ -79,8 +79,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::FT,
-    w_en::FT,
+    w_up::CCG.Covariant3Vector,
+    w_en::CCG.Covariant3Vector,
     tke::FT,
     zc_i::FT,
     ::InvMeterEntrDimScale,
@@ -222,7 +222,7 @@ function compute_entr_detr!(
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
         # TODO: should we interpolate in local or covariant basis?
-        @. m_entr_detr = a_up * (Ic(w_up) - wcomponent(CCG.WVector(Ic(w_gm))))
+        @. m_entr_detr = a_up * wcomponent(CCG.WVector(Ic(w_up - w_gm)))
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
         @. w_up_c = Ic(w_up)
         @. w_en_c = Ic(w_en)
@@ -363,7 +363,7 @@ function compute_entr_detr!(
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
         # TODO: should we interpolate in local or covariant basis?
-        @. m_entr_detr = a_up * (Ic(w_up) - Ic(wcomponent(CCG.WVector(w_gm))))
+        @. m_entr_detr = a_up * Ic(wcomponent(CCG.WVector(w_up - w_gm)))
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
         @. w_up_c = Ic(w_up)
         @. w_en_c = Ic(w_en)
