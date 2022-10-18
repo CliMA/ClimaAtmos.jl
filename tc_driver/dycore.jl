@@ -125,53 +125,37 @@ function compute_ref_state!(
 end
 
 
-function set_thermo_state_peq!(
-    state,
-    grid,
-    moisture_model,
-    compressibility_model,
-    param_set,
-)
-    Ic = CCO.InterpolateF2C()
-    thermo_params = TCP.thermodynamics_params(param_set)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    prog_gm_f = TC.face_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    p_c = TC.center_aux_grid_mean_p(state)
-    ρ_c = prog_gm.ρ
+function set_thermo_state_peq!(Y, p, colidx)
+    (; edmf_cache, params) = p
+    (; moisture_model, compressibility_model) = edmf_cache.edmf
+    thermo_params = CAP.thermodynamics_params(params)
+    ᶜts_gm = p.ᶜts[colidx]
+    ᶜρ = Y.c.ρ[colidx]
+    uₕ = Y.c.uₕ[colidx]
+    ᶜp = p.ᶜp[colidx]
     C123 = CCG.Covariant123Vector
-    ᶜK = TC.center_aux_grid_mean_e_kin(state)
+    ᶜK = p.ᶜK[colidx]
+    ρe_tot = Y.c.ρe_tot[colidx]
+    ρq_tot = Y.c.ρq_tot[colidx]
+    zc = CC.Fields.coordinate_field(axes(ᶜρ)).z
+    grav = CAP.grav(params)
 
-    @inbounds for k in TC.real_center_indices(grid)
-        thermo_args = if moisture_model isa CA.EquilMoistModel
-            ()
-        elseif moisture_model isa CA.NonEquilMoistModel
-            (prog_gm.q_liq[k], prog_gm.q_ice[k])
-        else
-            error(
-                "Something went wrong. The moisture_model options are equilibrium or nonequilibrium",
-            )
-        end
-        e_pot = TC.geopotential(param_set, grid.zc.z[k])
-        e_int = prog_gm.ρe_tot[k] / ρ_c[k] - ᶜK[k] - e_pot
-        if compressibility_model isa CA.CompressibleFluid
-            ts_gm[k] = TD.PhaseEquil_ρeq(
-                thermo_params,
-                ρ_c[k],
-                e_int,
-                prog_gm.ρq_tot[k] / ρ_c[k],
-            )
-        elseif compressibility_model isa CA.AnelasticFluid
-            ts_gm[k] = TC.thermo_state_peq(
-                param_set,
-                p_c[k],
-                e_int,
-                prog_gm.ρq_tot[k] / ρ_c[k],
-                thermo_args...,
-            )
-        end
+    @assert moisture_model isa CA.EquilMoistModel "TODO: add non-equilibrium moisture model support"
+
+    if compressibility_model isa CA.CompressibleFluid
+        @. ᶜts_gm = TD.PhaseEquil_ρeq(
+            thermo_params,
+            ᶜρ,
+            ρe_tot / ᶜρ - ᶜK - grav * zc,
+            ρq_tot / ᶜρ,
+        )
+    elseif compressibility_model isa CA.AnelasticFluid
+        @. ᶜts_gm = TD.PhaseEquil_peq(
+            thermo_params,
+            ᶜp,
+            ρe_tot / ᶜρ - ᶜK - grav * zc,
+            ρq_tot / ᶜρ,
+        )
     end
     return nothing
 end
