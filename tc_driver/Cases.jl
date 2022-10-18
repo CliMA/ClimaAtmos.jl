@@ -102,22 +102,11 @@ Base.@kwdef struct ForcingBase{T, FT}
     scalar_nudge_zᵣ::FT = 0.0
     "Scalar maximum relaxation timescale"
     scalar_nudge_τᵣ::FT = 0.0
-    "Large-scale divergence (same as in RadiationBase)"
+    "Large-scale divergence (same as in RadiationDYCOMS_RF01)"
     divergence::FT = 0
 end
 
 force_type(::ForcingBase{T}) where {T} = T
-
-Base.@kwdef struct RadiationBase{T, FT}
-    "Large-scale divergence (same as in ForcingBase)"
-    divergence::FT = 0
-    alpha_z::FT = 0
-    kappa::FT = 0
-    F0::FT = 0
-    F1::FT = 0
-end
-
-rad_type(::RadiationBase{T}) where {T} = T
 
 Base.@kwdef struct LESData
     "Start time index of LES"
@@ -169,15 +158,7 @@ get_forcing_type(::DYCOMS_RF01) = ForcingDYCOMS_RF01
 get_forcing_type(::DYCOMS_RF02) = ForcingDYCOMS_RF01
 get_forcing_type(::TRMM_LBA) = ForcingNone
 
-get_radiation_type(::AbstractCaseType) = CA.RadiationNone # default
-get_radiation_type(::DYCOMS_RF01) = CA.RadiationDYCOMS_RF01
-get_radiation_type(::DYCOMS_RF02) = CA.RadiationDYCOMS_RF01
-get_radiation_type(::TRMM_LBA) = CA.RadiationTRMM_LBA
-
 large_scale_divergence(::Union{DYCOMS_RF01, DYCOMS_RF02}) = 3.75e-6
-
-RadiationBase(case::AbstractCaseType, FT) =
-    RadiationBase{Cases.get_radiation_type(case), FT}()
 
 forcing_kwargs(::AbstractCaseType, namelist) =
     (; coriolis_param = namelist["forcing"]["coriolis"])
@@ -827,9 +808,6 @@ function surface_params(case::TRMM_LBA, surf_ref_state, param_set; Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-RadiationBase(case::TRMM_LBA, FT) =
-    RadiationBase{Cases.get_radiation_type(case), FT}()
-
 initialize_radiation(::TRMM_LBA, radiation, grid::Grid, state, param_set) =
     initialize(radiation, grid, state)
 
@@ -1129,16 +1107,6 @@ function initialize_forcing(
     @. aux_gm.dqtdt_hadv = 0 #kg/(kg * s)
 end
 
-function RadiationBase(case::DYCOMS_RF01, FT)
-    return RadiationBase{Cases.get_radiation_type(case), FT}(;
-        divergence = large_scale_divergence(case),
-        alpha_z = 1.0,
-        kappa = 85.0,
-        F0 = 70.0,
-        F1 = 22.0,
-    )
-end
-
 function initialize_radiation(
     ::DYCOMS_RF01,
     radiation,
@@ -1254,16 +1222,6 @@ function initialize_forcing(
 
     # no large-scale drying
     @. aux_gm.dqtdt_hadv .= 0 #kg/(kg * s)
-end
-
-function RadiationBase(case::DYCOMS_RF02, FT)
-    return RadiationBase{Cases.get_radiation_type(case), FT}(;
-        divergence = large_scale_divergence(case),
-        alpha_z = 1.0,
-        kappa = 85.0,
-        F0 = 70.0,
-        F1 = 22.0,
-    )
 end
 
 function initialize_radiation(

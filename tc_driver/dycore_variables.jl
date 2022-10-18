@@ -40,7 +40,6 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     H_third_m = FT(0),
     W_third_m = FT(0),
     QT_third_m = FT(0),
-    # From RadiationBase
     dTdt_rad = FT(0), # horizontal advection temperature tendency
     dqtdt_rad = FT(0), # horizontal advection moisture tendency
     # From ForcingBase

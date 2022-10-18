@@ -5,7 +5,6 @@ import ..EquilMoistModel
 import ..NonEquilMoistModel
 import ..AnelasticFluid
 import ..CompressibleFluid
-import ..RadiationNone
 import ..RadiationDYCOMS_RF01
 import ..RadiationTRMM_LBA
 

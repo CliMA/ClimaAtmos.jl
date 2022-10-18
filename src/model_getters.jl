@@ -38,8 +38,15 @@ end
 
 function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     radiation_name = parsed_args["rad"]
-    @assert radiation_name in
-            (nothing, "clearsky", "gray", "allsky", "allskywithclear")
+    @assert radiation_name in (
+        nothing,
+        "clearsky",
+        "gray",
+        "allsky",
+        "allskywithclear",
+        "DYCOMS_RF01",
+        "TRMM_LBA",
+    )
     return if radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation()
     elseif radiation_name == "gray"
@@ -48,6 +55,10 @@ function radiation_mode(parsed_args, ::Type{FT}) where {FT}
         RRTMGPI.AllSkyRadiation()
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics()
+    elseif radiation_name == "DYCOMS_RF01"
+        RadiationDYCOMS_RF01{FT}()
+    elseif radiation_name == "TRMM_LBA"
+        RadiationTRMM_LBA(FT)
     else
         nothing
     end

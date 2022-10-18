@@ -39,6 +39,7 @@ function get_edmf_cache(
     Y,
     turbconv_model,
     precip_model,
+    radiation,
     namelist,
     param_set,
     parsed_args,
@@ -50,7 +51,6 @@ function get_edmf_cache(
     test_consistency = parsed_args["test_edmf_consistency"]
     forcing =
         Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
-    radiation = Cases.RadiationBase(case, FT)
     surf_ref_state = Cases.surface_ref_state(case, tc_params, namelist)
     surf_params =
         Cases.surface_params(case, surf_ref_state, tc_params; Ri_bulk_crit)

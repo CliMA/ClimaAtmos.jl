@@ -239,7 +239,7 @@ function compute_gm_tendencies!(
     grid::TC.Grid,
     state::TC.State,
     surf::TC.SurfaceBase,
-    radiation::Cases.RadiationBase,
+    radiation,
     force::Cases.ForcingBase,
     param_set::APS,
 )
@@ -322,8 +322,8 @@ function compute_gm_tendencies!(
         @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
     end
     # Radiation
-    if Cases.rad_type(radiation) <:
-       Union{CA.RadiationDYCOMS_RF01, CA.RadiationTRMM_LBA}
+    if radiation isa CA.RadiationDYCOMS_RF01 ||
+       radiation isa CA.RadiationTRMM_LBA
         @. tendencies_gm.ρe_tot +=
             ρ_c * TD.cv_m(thermo_params, ts_gm) * aux_gm.dTdt_rad
     end
