@@ -1,11 +1,11 @@
 update_radiation(self::RadiationBase, grid, state, t::Real, param_set) = nothing
-initialize(self::RadiationBase{RadiationNone}, grid, state) = nothing
+initialize(self::RadiationBase{CA.RadiationNone}, grid, state) = nothing
 
 """
 see eq. 3 in Stevens et. al. 2005 DYCOMS paper
 """
 function update_radiation(
-    self::RadiationBase{RadiationDYCOMS_RF01},
+    self::RadiationBase{CA.RadiationDYCOMS_RF01},
     grid,
     state,
     t::Real,
@@ -81,31 +81,7 @@ function update_radiation(
     return
 end
 
-function initialize(
-    self::RadiationBase{RadiationLES},
-    grid,
-    state,
-    LESDat::LESData,
-)
-    # load from LES
-    aux_gm = TC.center_aux_grid_mean(state)
-    dTdt = NC.Dataset(LESDat.les_filename, "r") do data
-        imin = LESDat.imin
-        imax = LESDat.imax
-
-        # interpolate here
-        zc_les = Array(TC.get_nc_data(data, "zc"))
-        meandata = TC.mean_nc_data(data, "profiles", "dtdt_rad", imin, imax)
-        pyinterp(vec(grid.zc.z), zc_les, meandata)
-    end
-    @inbounds for k in TC.real_center_indices(grid)
-        aux_gm.dTdt_rad[k] = dTdt[k]
-    end
-    return
-end
-
-
-function initialize(self::RadiationBase{RadiationTRMM_LBA}, grid, state)
+function initialize(self::RadiationBase{CA.RadiationTRMM_LBA}, grid, state)
     aux_gm = TC.center_aux_grid_mean(state)
     rad = APL.TRMM_LBA_radiation(eltype(grid))
     @inbounds for k in real_center_indices(grid)
@@ -115,7 +91,7 @@ function initialize(self::RadiationBase{RadiationTRMM_LBA}, grid, state)
 end
 
 function update_radiation(
-    self::RadiationBase{RadiationTRMM_LBA},
+    self::RadiationBase{CA.RadiationTRMM_LBA},
     grid,
     state,
     t::Real,

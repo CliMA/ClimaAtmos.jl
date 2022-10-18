@@ -17,17 +17,18 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     tc_callbacks =
         call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
 
-    additional_callbacks = if !isnothing(model_spec.radiation_model)
-        # TODO: better if-else criteria?
-        dt_rad = if parsed_args["config"] == "column"
-            dt
+    additional_callbacks =
+        if model_spec.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+            # TODO: better if-else criteria?
+            dt_rad = if parsed_args["config"] == "column"
+                dt
+            else
+                FT(time_to_seconds(parsed_args["dt_rad"]))
+            end
+            (call_every_dt(rrtmgp_model_callback!, dt_rad),)
         else
-            FT(time_to_seconds(parsed_args["dt_rad"]))
+            ()
         end
-        (call_every_dt(rrtmgp_model_callback!, dt_rad),)
-    else
-        ()
-    end
 
     if !isnothing(model_spec.turbconv_model)
         additional_callbacks = (additional_callbacks..., tc_callbacks)
@@ -324,23 +325,23 @@ function save_to_disk_func(integrator)
         vert_diff_diagnostic = NamedTuple()
     end
 
-    if !isnothing(model_spec.radiation_model)
+    if model_spec.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         (; face_lw_flux_dn, face_lw_flux_up, face_sw_flux_dn, face_sw_flux_up) =
-            p.rrtmgp_model
+            p.radiation_model
         rad_diagnostic = (;
             lw_flux_down = RRTMGPI.array2field(FT.(face_lw_flux_dn), axes(Y.f)),
             lw_flux_up = RRTMGPI.array2field(FT.(face_lw_flux_up), axes(Y.f)),
             sw_flux_down = RRTMGPI.array2field(FT.(face_sw_flux_dn), axes(Y.f)),
             sw_flux_up = RRTMGPI.array2field(FT.(face_sw_flux_up), axes(Y.f)),
         )
-        if model_spec.radiation_model isa
+        if model_spec.radiation_mode isa
            RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
             (;
                 face_clear_lw_flux_dn,
                 face_clear_lw_flux_up,
                 face_clear_sw_flux_dn,
                 face_clear_sw_flux_up,
-            ) = p.rrtmgp_model
+            ) = p.radiation_model
             rad_clear_diagnostic = (;
                 clear_lw_flux_down = RRTMGPI.array2field(
                     FT.(face_clear_lw_flux_dn),
@@ -362,6 +363,14 @@ function save_to_disk_func(integrator)
         else
             rad_clear_diagnostic = NamedTuple()
         end
+    elseif model_spec.radiation_mode isa CA.RadiationDYCOMS_RF01
+        # TODO: add radiation diagnostics
+        rad_diagnostic = NamedTuple()
+        rad_clear_diagnostic = NamedTuple()
+    elseif model_spec.radiation_mode isa CA.RadiationTRMM_LBA
+        # TODO: add radiation diagnostics
+        rad_diagnostic = NamedTuple()
+        rad_clear_diagnostic = NamedTuple()
     else
         rad_diagnostic = NamedTuple()
         rad_clear_diagnostic = NamedTuple()

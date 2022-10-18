@@ -28,3 +28,7 @@ Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
 Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
 Base.broadcastable(x::AbstractForcing) = Ref(x)
+
+struct RadiationNone end
+struct RadiationDYCOMS_RF01 end
+struct RadiationTRMM_LBA end

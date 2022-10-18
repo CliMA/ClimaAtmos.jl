@@ -83,7 +83,7 @@ using ClimaTimeSteppers
 import Random
 Random.seed!(1234)
 
-!isnothing(model_spec.radiation_model) && include("radiation_utilities.jl")
+isnothing(model_spec.radiation_mode) || include("radiation_utilities.jl")
 
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -98,12 +98,27 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     (;
         microphysics_model,
         forcing_type,
-        radiation_model,
+        radiation_mode,
         turbconv_model,
         precip_model,
     ) = model_spec
 
     compressibility_model = model_spec.compressibility_model
+
+    radiation_cache = if radiation_mode isa Nothing
+        NamedTuple()
+    elseif radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        radiation_model_cache(
+            Y,
+            params,
+            radiation_mode;
+            idealized_insolation,
+            model_spec.idealized_h2o,
+            idealized_clouds,
+        )
+    else
+        radiation_model_cache(Y, params, radiation_mode)
+    end
 
     return merge(
         hyperdiffusion_cache(
@@ -129,15 +144,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         ) : NamedTuple(),
         microphysics_cache(Y, microphysics_model),
         forcing_cache(Y, forcing_type),
-        isnothing(radiation_model) ? NamedTuple() :
-        rrtmgp_model_cache(
-            Y,
-            params,
-            radiation_model;
-            idealized_insolation,
-            model_spec.idealized_h2o,
-            idealized_clouds,
-        ),
+        radiation_cache,
         vert_diff ?
         vertical_diffusion_boundary_layer_cache(
             Y,
@@ -153,7 +160,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
                 microphy_0M = microphysics_model isa Microphysics0Moment,
-                rad_flux = !isnothing(radiation_model),
+                rad_flux = !isnothing(radiation_mode),
                 vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
@@ -197,7 +204,8 @@ function additional_tendency!(Yₜ, Y, p, t)
             vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
-        rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t, colidx)
+        rad_flux &&
+            radiation_model_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able

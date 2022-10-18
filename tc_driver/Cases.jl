@@ -4,6 +4,7 @@ import NCDatasets as NC
 import OrdinaryDiffEq as ODE
 import Thermodynamics as TD
 
+import ClimaAtmos as CA
 import ClimaCore as CC
 import ClimaCore.Operators as CCO
 import ClimaCore.Geometry as CCG
@@ -82,11 +83,6 @@ struct ForcingNone end
 struct ForcingStandard end
 struct ForcingDYCOMS_RF01 end
 struct ForcingLES end
-
-struct RadiationNone end
-struct RadiationDYCOMS_RF01 end
-struct RadiationLES end
-struct RadiationTRMM_LBA end
 
 """
     ForcingBase
@@ -173,10 +169,10 @@ get_forcing_type(::DYCOMS_RF01) = ForcingDYCOMS_RF01
 get_forcing_type(::DYCOMS_RF02) = ForcingDYCOMS_RF01
 get_forcing_type(::TRMM_LBA) = ForcingNone
 
-get_radiation_type(::AbstractCaseType) = RadiationNone # default
-get_radiation_type(::DYCOMS_RF01) = RadiationDYCOMS_RF01
-get_radiation_type(::DYCOMS_RF02) = RadiationDYCOMS_RF01
-get_radiation_type(::TRMM_LBA) = RadiationTRMM_LBA
+get_radiation_type(::AbstractCaseType) = CA.RadiationNone # default
+get_radiation_type(::DYCOMS_RF01) = CA.RadiationDYCOMS_RF01
+get_radiation_type(::DYCOMS_RF02) = CA.RadiationDYCOMS_RF01
+get_radiation_type(::TRMM_LBA) = CA.RadiationTRMM_LBA
 
 large_scale_divergence(::Union{DYCOMS_RF01, DYCOMS_RF02}) = 3.75e-6
 
