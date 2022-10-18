@@ -29,6 +29,21 @@ Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
 Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
 Base.broadcastable(x::AbstractForcing) = Ref(x)
 
-struct RadiationNone end
-struct RadiationDYCOMS_RF01 end
-struct RadiationTRMM_LBA end
+Base.@kwdef struct RadiationDYCOMS_RF01{FT}
+    "Large-scale divergence (same as in ForcingBase)"
+    # TODO: make sure in sync with large_scale_divergence
+    divergence::FT = 3.75e-6
+    alpha_z::FT = 1.0
+    kappa::FT = 85.0
+    F0::FT = 70.0
+    F1::FT = 22.0
+end
+import AtmosphericProfilesLibrary as APL
+
+struct RadiationTRMM_LBA{R}
+    rad_profile::R
+    function RadiationTRMM_LBA(::Type{FT}) where {FT}
+        rad_profile = APL.TRMM_LBA_radiation(FT)
+        return new{typeof(rad_profile)}(rad_profile)
+    end
+end

@@ -106,7 +106,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     compressibility_model = model_spec.compressibility_model
 
     radiation_cache = if radiation_mode isa Nothing
-        NamedTuple()
+        (; radiation_model = radiation_mode)
     elseif radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         radiation_model_cache(
             Y,
@@ -177,6 +177,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
                 Y,
                 turbconv_model,
                 precip_model,
+                radiation_cache.radiation_model,
                 namelist,
                 params,
                 parsed_args,
@@ -204,8 +205,7 @@ function additional_tendency!(Yₜ, Y, p, t)
             vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
-        rad_flux &&
-            radiation_model_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
+        rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able

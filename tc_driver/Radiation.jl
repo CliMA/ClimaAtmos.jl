@@ -1,11 +1,10 @@
-update_radiation(self::RadiationBase, grid, state, t::Real, param_set) = nothing
-initialize(self::RadiationBase{CA.RadiationNone}, grid, state) = nothing
+update_radiation(self, grid, state, t::Real, param_set) = nothing
 
 """
 see eq. 3 in Stevens et. al. 2005 DYCOMS paper
 """
 function update_radiation(
-    self::RadiationBase{CA.RadiationDYCOMS_RF01},
+    self::CA.RadiationDYCOMS_RF01,
     grid,
     state,
     t::Real,
@@ -81,7 +80,7 @@ function update_radiation(
     return
 end
 
-function initialize(self::RadiationBase{CA.RadiationTRMM_LBA}, grid, state)
+function initialize(self::CA.RadiationTRMM_LBA, grid, state)
     aux_gm = TC.center_aux_grid_mean(state)
     rad = APL.TRMM_LBA_radiation(eltype(grid))
     @inbounds for k in real_center_indices(grid)
@@ -91,7 +90,7 @@ function initialize(self::RadiationBase{CA.RadiationTRMM_LBA}, grid, state)
 end
 
 function update_radiation(
-    self::RadiationBase{CA.RadiationTRMM_LBA},
+    self::CA.RadiationTRMM_LBA,
     grid,
     state,
     t::Real,

@@ -216,11 +216,11 @@ function radiation_model_cache(
         radiation_model,
     )
 end
-function radiation_model_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
+function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
     (; ᶠradiation_flux) = p
     ᶜdivᵥ = Operators.DivergenceF2C()
     if :ρθ in propertynames(Y.c)
-        error("radiation_model_tendency! not implemented for ρθ")
+        error("radiation_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     elseif :ρe_int in propertynames(Y.c)
@@ -355,3 +355,19 @@ function rrtmgp_model_callback!(integrator)
     RRTMGPI.update_fluxes!(radiation_model)
     RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
 end
+
+#####
+##### RadiationDYCOMS_RF01
+#####
+radiation_model_cache(Y, params, radiation_mode::CA.RadiationDYCOMS_RF01) =
+    (; radiation_model = radiation_mode)
+# Temporarily handled elsewhere
+radiation_tendency!(Yₜ, Y, p, t, colidx, ::CA.RadiationDYCOMS_RF01) = nothing
+
+#####
+##### RadiationTRMM_LBA
+#####
+radiation_model_cache(Y, params, radiation_mode::CA.RadiationTRMM_LBA) =
+    (; radiation_model = radiation_mode)
+# Temporarily handled elsewhere
+radiation_tendency!(Yₜ, Y, p, t, colidx, ::CA.RadiationTRMM_LBA) = nothing
