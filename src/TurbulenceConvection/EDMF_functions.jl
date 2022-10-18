@@ -751,10 +751,12 @@ function compute_up_tendencies!(
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
-    adv_bcs =
-        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
-    ∇f = CCO.DivergenceC2F(; adv_bcs...)
+    prog_bcs = (;
+        bottom = CCO.SetGradient(wvec(FT(0))),
+        top = CCO.SetGradient(wvec(FT(0))),
+    )
+    grad_f = CCO.GradientC2F(; prog_bcs...)
 
     @inbounds for i in 1:N_up
         w_up = prog_up_f[i].w
@@ -765,7 +767,8 @@ function compute_up_tendencies!(
         detr_w = aux_up[i].detr_turb_dyn
         buoy = aux_up[i].buoy
 
-        @. tends_w = -(∇f(wvec(LBC(w_up * w_up))))
+        @. tends_w =
+            -wcomponent(CCG.WVector(grad_f(LBC(LA.norm_sqr(wvec(w_up)) / 2))))
         @. tends_w +=
             w_up * I0f(entr_w) * (w_en - w_up) + I0f(buoy) + nh_pressure
         tends_w[kf_surf] = 0
