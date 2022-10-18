@@ -87,8 +87,13 @@ function init_tc!(Y, p, param_set, namelist)
         t = FT(0)
         compute_ref_state!(state, grid, tc_params; ts_g = surf_ref_state)
 
+        # TODO: convert initialize_profiles to set prognostic state, not aux state
         Cases.initialize_profiles(case, grid, tc_params, state)
-        set_thermo_state_pθq!(state, grid, edmf.moisture_model, tc_params)
+
+        # Temporarily, we'll re-populate ρq_tot based on initial aux q_tot
+        q_tot = edmf_cache.aux.cent.q_tot[colidx]
+        @. Y.c.ρq_tot[colidx] = Y.c.ρ[colidx] * q_tot
+        set_thermo_state_pθq!(Y, p, colidx)
         set_grid_mean_from_thermo_state!(tc_params, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
         Cases.initialize_forcing(case, forcing, grid, state, tc_params)
