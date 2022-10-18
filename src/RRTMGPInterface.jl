@@ -92,11 +92,11 @@ import ClimaCore.DataLayouts: parent_array_type
 parent_array_type(::Type{<:Base.ReshapedArray{T, N, P}}) where {T, N, P} =
     parent_array_type(P)
 
-abstract type AbstractRadiationMode end
-struct GrayRadiation <: AbstractRadiationMode end
-struct ClearSkyRadiation <: AbstractRadiationMode end
-struct AllSkyRadiation <: AbstractRadiationMode end
-struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRadiationMode end
+abstract type AbstractRRTMGPMode end
+struct GrayRadiation <: AbstractRRTMGPMode end
+struct ClearSkyRadiation <: AbstractRRTMGPMode end
+struct AllSkyRadiation <: AbstractRRTMGPMode end
+struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode end
 
 """
     abstract type AbstractInterpolation
@@ -475,7 +475,7 @@ function RRTMGPModel(
     ncol::Int,
     domain_nlay::Int,
     extension_nlay::Int = 0,
-    radiation_mode::AbstractRadiationMode = ClearSkyRadiation(),
+    radiation_mode::AbstractRRTMGPMode = ClearSkyRadiation(),
     interpolation::AbstractInterpolation = NoInterpolation(),
     bottom_extrapolation::AbstractBottomExtrapolation = SameAsInterpolation(),
     disable_longwave::Bool = false,

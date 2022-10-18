@@ -7,6 +7,10 @@ import NCDatasets as NC
 import RRTMGP
 using Insolation: instantaneous_zenith_angle
 
+#####
+##### RRTMGP
+#####
+
 """
     rrtmgp_artifact(file_name)
 
@@ -36,10 +40,10 @@ function data_loader(fn, file_name)
     end
 end
 
-function rrtmgp_model_cache(
+function radiation_model_cache(
     Y,
     params,
-    radiation_mode::RRTMGPI.AbstractRadiationMode = RRTMGPI.ClearSkyRadiation();
+    radiation_mode::RRTMGPI.AbstractRRTMGPMode = RRTMGPI.ClearSkyRadiation();
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
@@ -181,7 +185,7 @@ function rrtmgp_model_cache(
         solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
     end
 
-    rrtmgp_model = RRTMGPI.RRTMGPModel(
+    radiation_model = RRTMGPI.RRTMGPModel(
         rrtmgp_params,
         data_loader,
         Float64,
@@ -209,14 +213,14 @@ function rrtmgp_model_cache(
         idealized_clouds,
         insolation_tuple = similar(Spaces.level(Y.c, 1), Tuple{FT, FT, FT}),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
-        rrtmgp_model,
+        radiation_model,
     )
 end
-function rrtmgp_model_tendency!(Yₜ, Y, p, t, colidx)
+function radiation_model_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
     (; ᶠradiation_flux) = p
     ᶜdivᵥ = Operators.DivergenceF2C()
     if :ρθ in propertynames(Y.c)
-        error("rrtmgp_model_tendency! not implemented for ρθ")
+        error("radiation_model_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     elseif :ρe_int in propertynames(Y.c)
@@ -231,22 +235,22 @@ function rrtmgp_model_callback!(integrator)
 
     (; ᶜK, ᶜts, T_sfc, params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
-    (; insolation_tuple, ᶠradiation_flux, rrtmgp_model) = p
+    (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
     thermo_params = CAP.thermodynamics_params(params)
     insolation_params = CAP.insolation_params(params)
 
-    rrtmgp_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
+    radiation_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
-    ᶜp = RRTMGPI.array2field(rrtmgp_model.center_pressure, axes(Y.c))
-    ᶜT = RRTMGPI.array2field(rrtmgp_model.center_temperature, axes(Y.c))
+    ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
+    ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
     thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
-    if !(rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation)
+    if !(radiation_model.radiation_mode isa RRTMGPI.GrayRadiation)
         ᶜvmr_h2o = RRTMGPI.array2field(
-            rrtmgp_model.center_volume_mixing_ratio_h2o,
+            radiation_model.center_volume_mixing_ratio_h2o,
             axes(Y.c),
         )
         if idealized_h2o
@@ -289,11 +293,11 @@ function rrtmgp_model_callback!(integrator)
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
             solar_zenith_angle = RRTMGPI.array2field(
-                rrtmgp_model.solar_zenith_angle,
+                radiation_model.solar_zenith_angle,
                 axes(bottom_coords),
             )
             weighted_irradiance = RRTMGPI.array2field(
-                rrtmgp_model.weighted_irradiance,
+                radiation_model.weighted_irradiance,
                 axes(bottom_coords),
             )
             ref_insolation_params = Ref(insolation_params)
@@ -315,28 +319,30 @@ function rrtmgp_model_callback!(integrator)
                 0.0,
                 insolation_params,
             )
-            rrtmgp_model.solar_zenith_angle .=
+            radiation_model.solar_zenith_angle .=
                 min(first(insolation_tuple), max_zenith_angle)
-            rrtmgp_model.weighted_irradiance .=
+            radiation_model.weighted_irradiance .=
                 irradiance * (au / last(insolation_tuple))^2
         end
     end
 
     if !idealized_clouds && !(
-        rrtmgp_model.radiation_mode isa RRTMGPI.GrayRadiation ||
-        rrtmgp_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+        radiation_model.radiation_mode isa RRTMGPI.GrayRadiation ||
+        radiation_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
     )
         ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
         ᶜlwp = RRTMGPI.array2field(
-            rrtmgp_model.center_cloud_liquid_water_path,
+            radiation_model.center_cloud_liquid_water_path,
             axes(Y.c),
         )
         ᶜiwp = RRTMGPI.array2field(
-            rrtmgp_model.center_cloud_ice_water_path,
+            radiation_model.center_cloud_ice_water_path,
             axes(Y.c),
         )
-        ᶜfrac =
-            RRTMGPI.array2field(rrtmgp_model.center_cloud_fraction, axes(Y.c))
+        ᶜfrac = RRTMGPI.array2field(
+            radiation_model.center_cloud_fraction,
+            axes(Y.c),
+        )
         # multiply by 1000 to convert from kg/m^2 to g/m^2
         @. ᶜlwp =
             1000 * Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts) * ᶜΔz
@@ -346,6 +352,6 @@ function rrtmgp_model_callback!(integrator)
             ifelse(TD.has_condensate(thermo_params, ᶜts), FT(1), FT(0) * ᶜΔz)
     end
 
-    RRTMGPI.update_fluxes!(rrtmgp_model)
-    RRTMGPI.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    RRTMGPI.update_fluxes!(radiation_model)
+    RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
 end

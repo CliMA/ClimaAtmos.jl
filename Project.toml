@@ -4,6 +4,7 @@ authors = ["Climate Modeling Alliance"]
 version = "0.5.0"
 
 [deps]
+AtmosphericProfilesLibrary = "86bc3604-9858-485a-bdbe-831ec50de11d"
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
 ClimaCorePlots = "cf7c7e5a-b407-4c48-9047-11a94a308626"
 ClimaCoreVTK = "c8b6d40d-e815-466f-95ae-c48aefa668fa"
