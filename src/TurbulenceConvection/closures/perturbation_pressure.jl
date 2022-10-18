@@ -29,7 +29,7 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
     wvec = CC.Geometry.WVector
     w_bcs =
         (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
-    ∇ = CCO.DivergenceC2F(; w_bcs...)
+    div = CCO.DivergenceC2F(; w_bcs...)
     aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
@@ -64,7 +64,7 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
 
         @. nh_pressure =
             -α_b * Ifb(b_up) + α_a * wcomponent(CCG.WVector(w_up)) *
-            ∇(Ifc(wcomponent(CCG.WVector(w_up)))) -
+            div(Ifc(w_up)) -
             α_d * wcomponent(CCG.WVector(w_up - w_en)) *
             abs(wcomponent(CCG.WVector(w_up - w_en))) / H_up
 

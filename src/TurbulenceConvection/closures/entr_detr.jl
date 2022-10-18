@@ -3,13 +3,13 @@
 function compute_turbulent_entrainment(
     c_γ::FT,
     a_up::FT,
-    w_up::CCG.Covariant3Vector,
+    w_up::FT,
     tke::FT,
     H_up::FT,
 ) where {FT}
 
-    ε_turb = if wcomponent(CCG.WVector(w_up)) * a_up > 0
-        2 * c_γ * sqrt(max(tke, 0)) / (wcomponent(CCG.Covariant3Vector(w_up)) * H_up)
+    ε_turb = if w_up * a_up > 0
+        2 * c_γ * sqrt(max(tke, 0)) / (w_up * H_up)
     else
         FT(0)
     end
@@ -21,8 +21,8 @@ function compute_inverse_timescale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::CCG.Covariant3Vector,
-    w_en::CCG.Covariant3Vector,
+    w_up::FT,
+    w_en::FT,
     tke::FT,
 ) where {FT}
     Δb = b_up - b_en
@@ -35,8 +35,8 @@ function compute_inverse_timescale(
     return lamb_smooth_minimum(l, FT(0.1), FT(0.0005))
 end
 
-function get_Δw(εδ_model, w_up::CCG.Covariant3Vector, w_en::CCG.Covariant3Vector) where {FT}
-    Δw = wcomponent(CCG.WVector(w_up - w_en))
+function get_Δw(εδ_model, w_up::FT, w_en::FT) where {FT}
+    Δw = w_up - w_en
     Δw += copysign(FT(εδ_params(εδ_model).w_min), Δw)
     return Δw
 end
@@ -51,8 +51,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::CCG.Covariant3Vector,
-    w_en::CCG.Covariant3Vector,
+    w_up::FT,
+    w_en::FT,
     tke::FT,
     zc_i::FT,
     ::BuoyVelEntrDimScale,
@@ -66,8 +66,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::CCG.Covariant3Vector,
-    w_en::CCG.Covariant3Vector,
+    w_up::FT,
+    w_en::FT,
     tke::FT,
     zc_i::FT,
     ::InvZEntrDimScale,
@@ -79,8 +79,8 @@ function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
     b_en::FT,
-    w_up::CCG.Covariant3Vector,
-    w_en::CCG.Covariant3Vector,
+    w_up::FT,
+    w_en::FT,
     tke::FT,
     zc_i::FT,
     ::InvMeterEntrDimScale,
@@ -191,6 +191,10 @@ function compute_entr_detr!(
 )
     FT = float_type(state)
     N_up = n_updrafts(edmf)
+
+
+    g::FT = TCP.grav(param_set)
+
     aux_up = center_aux_updrafts(state)
     prog_up = center_prog_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
@@ -200,15 +204,18 @@ function compute_entr_detr!(
     prog_gm = center_prog_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
     aux_tc = center_aux_turbconv(state)
+
+    local_geom = CC.Fields.local_geometry_field(axes(prog_up))
+
     p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
-    g::FT = TCP.grav(param_set)
     w_up_c = aux_tc.w_up_c
     w_en_c = aux_tc.w_en_c
     m_entr_detr = aux_tc.ϕ_temporary
     ∇m_entr_detr = aux_tc.ψ_temporary
     wvec = CC.Geometry.WVector
     max_area = edmf.max_area
+
     plume_scale_height = map(1:N_up) do i
         compute_plume_scale_height(grid, state, edmf.H_up_min, i)
     end
@@ -248,8 +255,8 @@ function compute_entr_detr!(
                 εδ_model_vars = (;
                     q_cond_up = q_cond_up, # updraft condensate (liquid water + ice)
                     q_cond_en = q_cond_en, # environment condensate (liquid water + ice)
-                    w_up = w_up_c[k], # updraft vertical velocity
-                    w_en = w_en_c[k], # environment vertical velocity
+                    w_up = wcomponent(CCG.WVector(w_up_c[k], local_geom[k])), # updraft vertical velocity
+                    w_en = wcomponent(CCG.WVector(w_en_c[k], local_geom[k])), # environment vertical velocity
                     b_up = aux_up[i].buoy[k], # updraft buoyancy
                     b_en = aux_en.buoy[k], # environment buoyancy
                     tke_gm = aux_gm.tke[k], # grid mean tke

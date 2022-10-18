@@ -1052,7 +1052,7 @@ function compute_covariance_entr(
                 tke_factor *
                 ρ_c *
                 a_up *
-                abs(Ic(w_up)) *
+                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
                 detr_sc *
                 (Idc(ϕ_up) - Idc(ϕ_en)) *
                 (Idc(ψ_up) - Idc(ψ_en))
@@ -1060,7 +1060,7 @@ function compute_covariance_entr(
                 tke_factor *
                 ρ_c *
                 a_up *
-                abs(Ic(w_up)) *
+                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
                 eps_turb *
                 (
                     (Idc(ϕ_en) - Idc(wcomponent(CCG.WVector(ϕ_gm)))) *
@@ -1075,7 +1075,7 @@ function compute_covariance_entr(
             tke_factor *
             ρ_c *
             a_up *
-            abs(Ic(w_up)) *
+            abs(Ic(wcomponent(CCG.WVector(w_up)))) *
             (entr_sc + eps_turb) *
             covar
 
