@@ -433,7 +433,7 @@ function area_surface_bc(
 end
 
 function w_surface_bc(::SurfaceBase{FT})::FT where {FT}
-    return CCG.Covariant3Vector(FT(0))
+    return CCG.Covariant3Vector(wvec(FT(0)))
 end
 function uₕ_bcs()
     return CCO.InterpolateC2F(
@@ -757,6 +757,12 @@ function compute_up_tendencies!(
     LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
     ∇f = CCO.DivergenceC2F(; adv_bcs...)
 
+    prog_bcs = (;
+        bottom = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
+        top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
+    )
+    grad_f = CCO.GradientC2F(; prog_bcs )
+
     @inbounds for i in 1:N_up
         w_up = prog_up_f[i].w
         tends_w = tendencies_up_f[i].w
@@ -767,9 +773,12 @@ function compute_up_tendencies!(
         buoy = aux_up[i].buoy
 
         # TODO, improve later...
-        @. tends_w = -(∇f(wvec(LBC(w_up * w_up))))
+        #@. tends_w = -(∇f(wvec(LBC(w_up * w_up))))
+        @. tends_w = -(grad_f(LBC(LA.norm_sqr(wvec(w_up)) / 2)))
         @. tends_w +=
-            w_up * I0f(entr_w) * (w_en - w_up) + CCG.Covariant3Vector(I0f(buoy) + nh_pressure)
+            w_up * I0f(entr_w) *
+            wcomponent(CCG.WVector(w_en - w_up)) +
+            CCG.Covariant3Vector(wvec(I0f(buoy) + nh_pressure))
         tends_w[kf_surf] = CCG.Covariant3Vector(FT(0))
     end
 
@@ -820,7 +829,7 @@ function filter_updraft_vars(
     end
 
     @inbounds for i in 1:N_up
-        @. prog_up_f[i].w = max.(prog_up_f[i].w, 0)
+        @. prog_up_f[i].w = max.(prog_up_f[i].w, CCG.Covariant3Vector(0))
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
         @. prog_up_f[i].w =
@@ -859,11 +868,11 @@ function filter_updraft_vars(
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
         @. prog_up[i].ρarea =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρarea)
+            ifelse(Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0, FT(0), prog_up[i].ρarea)
         @. prog_up[i].ρaθ_liq_ice =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
+            ifelse(Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
         @. prog_up[i].ρaq_tot =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_tot)
+            ifelse(Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0, FT(0), prog_up[i].ρaq_tot)
 
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
@@ -875,9 +884,9 @@ function filter_updraft_vars(
     if edmf.moisture_model isa NonEquilMoistModel
         @inbounds for i in 1:N_up
             @. prog_up[i].ρaq_liq =
-                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_liq)
+                ifelse(Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0, FT(0), prog_up[i].ρaq_liq)
             @. prog_up[i].ρaq_ice =
-                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_ice)
+                ifelse(Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0, FT(0), prog_up[i].ρaq_ice)
             ql_surf = ql_surface_bc(surf)
             qi_surf = qi_surface_bc(surf)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf
