@@ -3,6 +3,12 @@ using NVTX, Colors
 if NVTX.isactive()
     NVTX.enable_gc_hooks()
     const nvtx_domain = NVTX.Domain("ClimaAtmos")
+    # makes output on buildkite a bit nicer
+    if ClimaComms.iamroot(comms_ctx)
+        atexit() do
+            println("--- Saving profiler information")
+        end
+    end
 end
 macro nvtx(message, args...)
     block = args[end]

@@ -125,82 +125,55 @@ function compute_ref_state!(
 end
 
 
-function set_thermo_state_peq!(
-    state,
-    grid,
-    moisture_model,
-    compressibility_model,
-    param_set,
-)
-    Ic = CCO.InterpolateF2C()
-    thermo_params = TCP.thermodynamics_params(param_set)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    prog_gm_f = TC.face_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    p_c = TC.center_aux_grid_mean_p(state)
-    ρ_c = prog_gm.ρ
+function set_thermo_state_peq!(Y, p, colidx)
+    (; edmf_cache, params) = p
+    (; moisture_model, compressibility_model) = edmf_cache.edmf
+    thermo_params = CAP.thermodynamics_params(params)
+    ᶜts_gm = p.ᶜts[colidx]
+    ᶜρ = Y.c.ρ[colidx]
+    uₕ = Y.c.uₕ[colidx]
+    ᶜp = p.ᶜp[colidx]
     C123 = CCG.Covariant123Vector
-    ᶜK = TC.center_aux_grid_mean_e_kin(state)
+    ᶜK = p.ᶜK[colidx]
+    ρe_tot = Y.c.ρe_tot[colidx]
+    ρq_tot = Y.c.ρq_tot[colidx]
+    zc = CC.Fields.coordinate_field(axes(ᶜρ)).z
+    grav = CAP.grav(params)
 
-    @inbounds for k in TC.real_center_indices(grid)
-        thermo_args = if moisture_model isa CA.EquilMoistModel
-            ()
-        elseif moisture_model isa CA.NonEquilMoistModel
-            (prog_gm.q_liq[k], prog_gm.q_ice[k])
-        else
-            error(
-                "Something went wrong. The moisture_model options are equilibrium or nonequilibrium",
-            )
-        end
-        e_pot = TC.geopotential(param_set, grid.zc.z[k])
-        e_int = prog_gm.ρe_tot[k] / ρ_c[k] - ᶜK[k] - e_pot
-        if compressibility_model isa CA.CompressibleFluid
-            ts_gm[k] = TD.PhaseEquil_ρeq(
-                thermo_params,
-                ρ_c[k],
-                e_int,
-                prog_gm.ρq_tot[k] / ρ_c[k],
-            )
-        elseif compressibility_model isa CA.AnelasticFluid
-            ts_gm[k] = TC.thermo_state_peq(
-                param_set,
-                p_c[k],
-                e_int,
-                prog_gm.ρq_tot[k] / ρ_c[k],
-                thermo_args...,
-            )
-        end
+    @assert moisture_model isa CA.EquilMoistModel "TODO: add non-equilibrium moisture model support"
+
+    if compressibility_model isa CA.CompressibleFluid
+        @. ᶜts_gm = TD.PhaseEquil_ρeq(
+            thermo_params,
+            ᶜρ,
+            ρe_tot / ᶜρ - ᶜK - grav * zc,
+            ρq_tot / ᶜρ,
+        )
+    elseif compressibility_model isa CA.AnelasticFluid
+        @. ᶜts_gm = TD.PhaseEquil_peq(
+            thermo_params,
+            ᶜp,
+            ρe_tot / ᶜρ - ᶜK - grav * zc,
+            ρq_tot / ᶜρ,
+        )
     end
     return nothing
 end
 
-function set_thermo_state_pθq!(state, grid, moisture_model, param_set)
-    Ic = CCO.InterpolateF2C()
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    p_c = TC.center_aux_grid_mean_p(state)
-    @inbounds for k in TC.real_center_indices(grid)
-        thermo_args = if moisture_model isa CA.EquilMoistModel
-            ()
-        elseif moisture_model isa CA.NonEquilMoistModel
-            (prog_gm.q_liq[k], prog_gm.q_ice[k])
-        else
-            error(
-                "Something went wrong. The moisture_model options are equilibrium or nonequilibrium",
-            )
-        end
-        ts_gm[k] = TC.thermo_state_pθq(
-            param_set,
-            p_c[k],
-            aux_gm.θ_liq_ice[k],
-            aux_gm.q_tot[k],
-            thermo_args...,
-        )
-    end
-    return nothing
+function set_thermo_state_pθq!(Y, p, colidx)
+    (; edmf_cache, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; moisture_model) = edmf_cache.edmf
+    ᶜts_gm = p.ᶜts[colidx]
+    ᶜρ = Y.c.ρ[colidx]
+    ᶜp = p.ᶜp[colidx]
+    ρq_tot = Y.c.ρq_tot[colidx]
+    θ_liq_ice = edmf_cache.aux.cent.θ_liq_ice[colidx]
+
+    @assert moisture_model isa CA.EquilMoistModel "TODO: add non-equilibrium moisture model support"
+
+    @. ᶜts_gm = TD.PhaseEquil_pθq(thermo_params, ᶜp, θ_liq_ice, ρq_tot / ᶜρ)
+    nothing
 end
 
 function set_grid_mean_from_thermo_state!(param_set, state, grid)
@@ -349,11 +322,8 @@ function compute_gm_tendencies!(
         @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
     end
     # Radiation
-    if Cases.rad_type(radiation) <: Union{
-        Cases.RadiationDYCOMS_RF01,
-        Cases.RadiationLES,
-        Cases.RadiationTRMM_LBA,
-    }
+    if Cases.rad_type(radiation) <:
+       Union{CA.RadiationDYCOMS_RF01, CA.RadiationTRMM_LBA}
         @. tendencies_gm.ρe_tot +=
             ρ_c * TD.cv_m(thermo_params, ts_gm) * aux_gm.dTdt_rad
     end

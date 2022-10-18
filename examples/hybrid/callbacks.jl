@@ -17,17 +17,18 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     tc_callbacks =
         call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
 
-    additional_callbacks = if !isnothing(model_spec.radiation_model)
-        # TODO: better if-else criteria?
-        dt_rad = if parsed_args["config"] == "column"
-            dt
+    additional_callbacks =
+        if model_spec.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+            # TODO: better if-else criteria?
+            dt_rad = if parsed_args["config"] == "column"
+                dt
+            else
+                FT(time_to_seconds(parsed_args["dt_rad"]))
+            end
+            (call_every_dt(rrtmgp_model_callback!, dt_rad),)
         else
-            FT(time_to_seconds(parsed_args["dt_rad"]))
+            ()
         end
-        (call_every_dt(rrtmgp_model_callback!, dt_rad),)
-    else
-        ()
-    end
 
     if !isnothing(model_spec.turbconv_model)
         additional_callbacks = (additional_callbacks..., tc_callbacks)
@@ -56,10 +57,22 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         call_every_dt(save_restart_func, dt_save_restart)
     end
+
+    gc_callback = if simulation.is_distributed
+        call_every_n_steps(
+            gc_func,
+            parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
+            skip_first = true,
+        )
+    else
+        nothing
+    end
+
     return ODE.CallbackSet(
         dss_cb,
         save_to_disk_callback,
         save_restart_callback,
+        gc_callback,
         additional_callbacks...,
     )
 end
@@ -312,23 +325,23 @@ function save_to_disk_func(integrator)
         vert_diff_diagnostic = NamedTuple()
     end
 
-    if !isnothing(model_spec.radiation_model)
+    if model_spec.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         (; face_lw_flux_dn, face_lw_flux_up, face_sw_flux_dn, face_sw_flux_up) =
-            p.rrtmgp_model
+            p.radiation_model
         rad_diagnostic = (;
             lw_flux_down = RRTMGPI.array2field(FT.(face_lw_flux_dn), axes(Y.f)),
             lw_flux_up = RRTMGPI.array2field(FT.(face_lw_flux_up), axes(Y.f)),
             sw_flux_down = RRTMGPI.array2field(FT.(face_sw_flux_dn), axes(Y.f)),
             sw_flux_up = RRTMGPI.array2field(FT.(face_sw_flux_up), axes(Y.f)),
         )
-        if model_spec.radiation_model isa
+        if model_spec.radiation_mode isa
            RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
             (;
                 face_clear_lw_flux_dn,
                 face_clear_lw_flux_up,
                 face_clear_sw_flux_dn,
                 face_clear_sw_flux_up,
-            ) = p.rrtmgp_model
+            ) = p.radiation_model
             rad_clear_diagnostic = (;
                 clear_lw_flux_down = RRTMGPI.array2field(
                     FT.(face_clear_lw_flux_dn),
@@ -350,6 +363,14 @@ function save_to_disk_func(integrator)
         else
             rad_clear_diagnostic = NamedTuple()
         end
+    elseif model_spec.radiation_mode isa CA.RadiationDYCOMS_RF01
+        # TODO: add radiation diagnostics
+        rad_diagnostic = NamedTuple()
+        rad_clear_diagnostic = NamedTuple()
+    elseif model_spec.radiation_mode isa CA.RadiationTRMM_LBA
+        # TODO: add radiation diagnostics
+        rad_diagnostic = NamedTuple()
+        rad_clear_diagnostic = NamedTuple()
     else
         rad_diagnostic = NamedTuple()
         rad_clear_diagnostic = NamedTuple()
@@ -394,4 +415,25 @@ function save_restart_func(integrator)
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing
+end
+
+function gc_func(integrator)
+    full = true # whether to do a full GC
+    num_pre = Base.gc_num()
+    alloc_since_last = (num_pre.allocd + num_pre.deferred_alloc) / 2^20
+    live_pre = Base.gc_live_bytes() / 2^20
+    GC.gc(full)
+    live_post = Base.gc_live_bytes() / 2^20
+    num_post = Base.gc_num()
+    gc_time = (num_post.total_time - num_pre.total_time) / 10^9 # count in ns
+    @debug(
+        "GC",
+        t = integrator.t,
+        "alloc since last GC (MB)" = alloc_since_last,
+        "live mem pre (MB)" = live_pre,
+        "live mem post (MB)" = live_post,
+        "GC time (s)" = gc_time,
+        "# pause" = num_post.pause,
+        "# full_sweep" = num_post.full_sweep,
+    )
 end

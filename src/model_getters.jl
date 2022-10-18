@@ -36,7 +36,7 @@ function compressibility_model(parsed_args)
     end
 end
 
-function radiation_model(parsed_args)
+function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     radiation_name = parsed_args["rad"]
     @assert radiation_name in
             (nothing, "clearsky", "gray", "allsky", "allskywithclear")
