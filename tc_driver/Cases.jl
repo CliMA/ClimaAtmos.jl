@@ -76,7 +76,7 @@ struct DYCOMS_RF02 <: AbstractCaseType end
 struct GABLS <: AbstractCaseType end
 
 #####
-##### Radiation and forcing types
+##### Forcing types
 #####
 
 struct ForcingNone end
@@ -120,12 +120,6 @@ Base.@kwdef struct LESData
     "Length of time to average over for SCM initialization"
     initial_condition_averaging_window_s::Float64 = 3600.0
 end
-
-#####
-##### Radiation and forcing functions
-#####
-
-include("Radiation.jl")
 
 #####
 ##### Case methods
@@ -174,9 +168,6 @@ ForcingBase(case::AbstractCaseType, FT; kwargs...) =
 #####
 ##### Default case behavior:
 #####
-
-initialize_radiation(::AbstractCaseType, radiation, grid, state, param_set) =
-    nothing
 
 update_forcing(::AbstractCaseType, grid, state, t::Real, param_set) = nothing
 initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) =
@@ -808,8 +799,6 @@ function surface_params(case::TRMM_LBA, surf_ref_state, param_set; Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-initialize_radiation(::TRMM_LBA, radiation, grid::Grid, state, param_set) =
-    initialize(radiation, grid, state)
 
 #####
 ##### ARM_SGP
@@ -1107,23 +1096,6 @@ function initialize_forcing(
     @. aux_gm.dqtdt_hadv = 0 #kg/(kg * s)
 end
 
-function initialize_radiation(
-    ::DYCOMS_RF01,
-    radiation,
-    grid::Grid,
-    state,
-    param_set,
-)
-    aux_gm = TC.center_aux_grid_mean(state)
-
-    # no large-scale drying
-    parent(aux_gm.dqtdt_rad) .= 0 #kg/(kg * s)
-
-    # Radiation based on eq. 3 in Stevens et. al., (2005)
-    # cloud-top cooling + cloud-base warming + cooling in free troposphere
-    update_radiation(radiation, grid, state, 0, param_set)
-end
-
 #####
 ##### DYCOMS_RF02
 #####
@@ -1222,24 +1194,6 @@ function initialize_forcing(
 
     # no large-scale drying
     @. aux_gm.dqtdt_hadv .= 0 #kg/(kg * s)
-end
-
-function initialize_radiation(
-    ::DYCOMS_RF02,
-    radiation,
-    grid::Grid,
-    state,
-    param_set,
-)
-    # the same as in DYCOMS_RF01
-    aux_gm = TC.center_aux_grid_mean(state)
-
-    # no large-scale drying
-    parent(aux_gm.dqtdt_rad) .= 0 #kg/(kg * s)
-
-    # Radiation based on eq. 3 in Stevens et. al., (2005)
-    # cloud-top cooling + cloud-base warming + cooling in free troposphere
-    update_radiation(radiation, grid, state, 0, param_set)
 end
 
 #####

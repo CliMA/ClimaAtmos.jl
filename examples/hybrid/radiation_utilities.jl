@@ -357,17 +357,154 @@ function rrtmgp_model_callback!(integrator)
 end
 
 #####
-##### RadiationDYCOMS_RF01
+##### DYCOMS_RF01 radiation
 #####
-radiation_model_cache(Y, params, radiation_mode::CA.RadiationDYCOMS_RF01) =
-    (; radiation_model = radiation_mode)
-# Temporarily handled elsewhere
-radiation_tendency!(Yₜ, Y, p, t, colidx, ::CA.RadiationDYCOMS_RF01) = nothing
+
+function radiation_model_cache(
+    Y,
+    params,
+    radiation_mode::CA.RadiationDYCOMS_RF01;
+)
+    FT = Spaces.undertype(axes(Y.c))
+    # TODO: should we distinguish between radiation mode vs model?
+    return (;
+        ᶠρ = similar(Y.f, FT),
+        ᶠf_rad = similar(Y.f, FT),
+        ᶠq_tot = similar(Y.f, FT),
+        ᶜq_tot = similar(Y.c, FT),
+        ᶜq_liq = similar(Y.c, FT),
+        ᶜdTdt_rad = similar(Y.c, FT),
+        radiation_model = radiation_mode,
+    )
+end
+
+# TODO: move to ClimaCore with test
+import ClimaCore: Spaces, Geometry
+Spaces.z_component(::Type{<:Geometry.XYZPoint}) = 9
+
+"""
+    radiation_tendency!(Yₜ, Y, p, t, colidx, self::CA.RadiationDYCOMS_RF01)
+
+see eq. 3 in Stevens et. al. 2005 DYCOMS paper
+"""
+function radiation_tendency!(Yₜ, Y, p, t, colidx, self::CA.RadiationDYCOMS_RF01)
+    (; params) = p
+    FT = Spaces.undertype(axes(Y.c))
+    thermo_params = CAP.thermodynamics_params(params)
+    cp_d = CAP.cp_d(params)
+    # Unpack
+    ᶜρ = Y.c.ρ[colidx]
+    ᶜdTdt_rad = p.ᶜdTdt_rad[colidx]
+    ᶜts_gm = p.ᶜts[colidx]
+    ᶠf_rad = p.ᶠf_rad[colidx]
+    ᶠq_tot = p.ᶠq_tot[colidx]
+    ᶠρ = p.edmf_cache.aux.face.ρ[colidx]
+    ᶜq_tot = p.edmf_cache.aux.cent.q_tot[colidx]
+    ᶜq_liq = p.edmf_cache.aux.cent.q_liq[colidx]
+    # TODO: remove once thermostate is computed in thermo_state!
+    TCU.set_thermo_state_pθq!(Y, p, colidx)
+    # TODO: unify (ᶜq_tot, ᶜq_liq) with grid-mean
+    @. ᶜq_tot = TD.total_specific_humidity(thermo_params, ᶜts_gm)
+    @. ᶜq_liq = TD.liquid_specific_humidity(thermo_params, ᶜts_gm)
+
+    ᶜq_tot_surf = Spaces.level(ᶜq_tot, 1)
+
+    zc = Fields.coordinate_field(axes(ᶜρ)).z
+    zf = Fields.coordinate_field(axes(ᶠρ)).z
+    # find zi (level of 8.0 g/kg isoline of qt)
+    # TODO: report bug: zi and ρ_i are not initialized
+    zi = FT(0)
+    ρ_i = FT(0)
+    Ifq = Operators.InterpolateC2F(;
+        bottom = Operators.SetValue(ᶜq_tot_surf),
+        top = Operators.Extrapolate(),
+    )
+    @. ᶠq_tot .= Ifq(ᶜq_tot)
+    n = length(parent(ᶠρ))
+    for k in CCO.PlusHalf(1):CCO.PlusHalf(n)
+        ᶠq_tot_lev = Spaces.level(ᶠq_tot, k)
+        ᶠq_tot_lev = parent(ᶠq_tot_lev)[1]
+        if (ᶠq_tot_lev < 8.0 / 1000)
+            # will be used at cell faces
+            zi = Spaces.level(zf, k)
+            zi = parent(zi)[1]
+            ρ_i = Spaces.level(ᶠρ, k)
+            ρ_i = parent(ρ_i)[1]
+            break
+        end
+    end
+
+    ρ_z = Dierckx.Spline1D(vec(zc), vec(ᶜρ); k = 1)
+    q_liq_z = Dierckx.Spline1D(vec(zc), vec(ᶜq_liq); k = 1)
+
+    integrand(ρq_l, params, z) = params.κ * ρ_z(z) * q_liq_z(z)
+    rintegrand(ρq_l, params, z) = -integrand(ρq_l, params, z)
+
+    z_span = (minimum(zf), maximum(zf))
+    rz_span = (z_span[2], z_span[1])
+    params = (; κ = self.kappa)
+
+    Δz = parent(Fields.dz_field(axes(ᶜρ)))[1]
+    rprob = ODE.ODEProblem(rintegrand, 0.0, rz_span, params; dt = Δz)
+    rsol = ODE.solve(rprob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
+    q_0 = rsol.(vec(zf))
+
+    prob = ODE.ODEProblem(integrand, 0.0, z_span, params; dt = Δz)
+    sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
+    q_1 = sol.(vec(zf))
+    parent(ᶠf_rad) .= self.F0 .* exp.(-q_0)
+    parent(ᶠf_rad) .+= self.F1 .* exp.(-q_1)
+
+    # cooling in free troposphere
+    for k in CCO.PlusHalf(1):CCO.PlusHalf(n)
+        zf_lev = Spaces.level(zf, k)
+        zf_lev = parent(zf_lev)[1]
+        ᶠf_rad_lev = Spaces.level(ᶠf_rad, k)
+        if zf_lev > zi
+            cbrt_z = cbrt(zf_lev - zi)
+            @. ᶠf_rad_lev +=
+                ρ_i *
+                cp_d *
+                self.divergence *
+                self.alpha_z *
+                (cbrt_z^4 / 4 + zi * cbrt_z)
+        end
+    end
+
+    ∇c = Operators.DivergenceF2C()
+    wvec = Geometry.WVector
+    @. ᶜdTdt_rad = -∇c(wvec(ᶠf_rad)) / ᶜρ / cp_d
+
+    @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
+
+    return
+end
 
 #####
-##### RadiationTRMM_LBA
+##### TRMM_LBA radiation
 #####
-radiation_model_cache(Y, params, radiation_mode::CA.RadiationTRMM_LBA) =
-    (; radiation_model = radiation_mode)
-# Temporarily handled elsewhere
-radiation_tendency!(Yₜ, Y, p, t, colidx, ::CA.RadiationTRMM_LBA) = nothing
+
+function radiation_model_cache(Y, params, radiation_mode::CA.RadiationTRMM_LBA;)
+    FT = Spaces.undertype(axes(Y.c))
+    # TODO: should we distinguish between radiation mode vs model?
+    return (; ᶜdTdt_rad = similar(Y.c, FT), radiation_model = radiation_mode)
+end
+function radiation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    radiation_mode::CA.RadiationTRMM_LBA,
+)
+    # TODO: get working (need to add cache / function)
+    rad = radiation_mode.rad_profile
+    thermo_params = CAP.thermodynamics_params(params)
+    ᶜdTdt_rad = p.ᶜdTdt_rad[colidx]
+    ᶜρ = Y.c.ρ[colidx]
+    ᶜts_gm = p.ᶜts[colidx]
+    zc = Fields.coordinate_field(axes(ᶜρ)).z
+    @. ᶜdTdt_rad = rad(t, zc)
+    @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
+    return nothing
+end

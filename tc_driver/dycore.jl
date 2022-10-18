@@ -239,7 +239,6 @@ function compute_gm_tendencies!(
     grid::TC.Grid,
     state::TC.State,
     surf::TC.SurfaceBase,
-    radiation,
     force::Cases.ForcingBase,
     param_set::APS,
 )
@@ -288,7 +287,7 @@ function compute_gm_tendencies!(
         @. ∇q_ice_gm = ∇c(wvec(RBq(prog_gm.q_ice)))
     end
 
-    # Apply forcing and radiation
+    # Apply forcing
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     # prog_gm_v = TC.grid_mean_v(state)
@@ -320,12 +319,6 @@ function compute_gm_tendencies!(
     if edmf.moisture_model isa CA.NonEquilMoistModel
         @. tendencies_gm.q_liq -= ∇q_liq_gm * aux_gm.subsidence
         @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
-    end
-    # Radiation
-    if radiation isa CA.RadiationDYCOMS_RF01 ||
-       radiation isa CA.RadiationTRMM_LBA
-        @. tendencies_gm.ρe_tot +=
-            ρ_c * TD.cv_m(thermo_params, ts_gm) * aux_gm.dTdt_rad
     end
     # LS advection
     @. tendencies_gm.ρq_tot += ρ_c * aux_gm.dqtdt_hadv
