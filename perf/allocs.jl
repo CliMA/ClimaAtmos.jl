@@ -19,14 +19,14 @@ dirs_to_monitor = [
     joinpath(example_dir, "hybrid"),
     joinpath(example_dir, "hybrid", "sphere"),
     pkgdir(ClimaCore),
-    pkgdir(SciMLBase),
-    pkgdir(DiffEqBase),
-    pkgdir(OrdinaryDiffEq),
+    # pkgdir(SciMLBase),
+    # pkgdir(DiffEqBase),
+    # pkgdir(OrdinaryDiffEq),
     pkgdir(ClimaTimeSteppers),
-    pkgdir(Thermodynamics),
-    pkgdir(SurfaceFluxes),
-    pkgdir(CloudMicrophysics),
-    pkgdir(DiffEqOperators),
+    # pkgdir(Thermodynamics),
+    # pkgdir(SurfaceFluxes),
+    # pkgdir(CloudMicrophysics),
+    # pkgdir(DiffEqOperators),
 ]
 @info "`dirs_to_monitor` (Pre)  = $dirs_to_monitor"
 dirs_to_monitor_filtered = filter(x -> x isa String, dirs_to_monitor)
