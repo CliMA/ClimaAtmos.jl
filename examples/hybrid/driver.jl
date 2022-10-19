@@ -37,7 +37,7 @@ zd_viscous = parsed_args["zd_viscous"]
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
-@assert parsed_args["config"] in ("sphere", "column")
+@assert parsed_args["config"] in ("sphere", "column", "box")
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
 
@@ -323,6 +323,8 @@ if !simulation.is_distributed && parsed_args["post_process"]
         postprocessing_edmf(sol, simulation.output_dir, fps)
     elseif is_solid_body(parsed_args)
         postprocessing(sol, simulation.output_dir, fps)
+    elseif is_box(parsed_args)
+        postprocessing_box(sol, simulation.output_dir)
     else
         paperplots_held_suarez(
             model_spec,
