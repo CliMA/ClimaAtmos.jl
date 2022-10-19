@@ -87,6 +87,10 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
+    gⁱʲ = Fields.level(Fields.local_geometry_field(Y.f), ClimaCore.Utilities.half).gⁱʲ
+    g¹³ = gⁱʲ.components.data.:1
+    g²³ = gⁱʲ.components.data.:6
+    g³³ = gⁱʲ.components.data.:9 
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
     z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
@@ -141,9 +145,16 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
+        ᶜω¹² = similar(Y.c, Geometry.Contravariant12Vector{FT}),
+        ᶜu³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
+        ᶜw = similar(Y.c, Geometry.Covariant3Vector{FT}),
         ᶜf,
         z_sfc,
         T_sfc,
+        gⁱʲ, 
+        g¹³,
+        g²³,
+        g³³,
         ρ_sfc = similar(T_sfc, FT),
         q_sfc = similar(T_sfc, FT),
         ∂ᶜK∂ᶠw_data = similar(
@@ -432,10 +443,14 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(ᶜuₕ)
         @. ᶠω¹² = curlₕ(ᶠw)
+        @. ᶜw = ᶜinterp(ᶠw)
+        @. ᶜω¹² = curlₕ(ᶜw)
         @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
     elseif point_type <: Geometry.Abstract2DPoint
         ᶜω³ .= Ref(zero(eltype(ᶜω³)))
+        @. ᶜw = ᶜinterp(ᶠw)
         @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
+        @. ᶜω¹² = Geometry.Contravariant12Vector(curlₕ(ᶜw))
         @. Yₜ.c.uₕ -=
             Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
     end
@@ -477,6 +492,7 @@ function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
         # Momentum conservation
         @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
+        @. ᶜω¹²[colidx] += ᶜinterp(ᶠcurlᵥ(ᶜuₕ[colidx]))
         @. ᶠu¹²[colidx] = Geometry.project(
             Geometry.Contravariant12Axis(),
             ᶠinterp(ᶜuvw[colidx]),
@@ -485,10 +501,16 @@ function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             Geometry.Contravariant3Axis(),
             C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
         )
+        # Oct19
         @. Yₜ.c.uₕ[colidx] -=
-            ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+            ᶜω¹²[colidx] × ᶜinterp(ᶠu³[colidx]) +
             (ᶜf[colidx] + ᶜω³[colidx]) ×
             (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
+        # Oct19
+        #@. Yₜ.c.uₕ[colidx] -=
+        #    ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+        #    (ᶜf[colidx] + ᶜω³[colidx]) ×
+        #    (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
         @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
 
         # Tracer conservation
