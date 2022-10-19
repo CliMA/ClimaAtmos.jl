@@ -95,6 +95,33 @@ function contour_animations(sol, output_dir, fps)
     end
 end
 
+function postprocessing_box(sol, output_dir)
+    for prop_chain in Fields.property_chains(sol.u[1])
+        var_name = processed_varname(prop_chain)
+        t_start = sol.t[1]
+        var_start = Fields.single_field(sol.u[1], prop_chain)
+        t_end = sol.t[end]
+        var_end = Fields.single_field(sol.u[end], prop_chain)
+        @info(
+            "L₂ norm",
+            var_name,
+            t_start,
+            norm(var_start),
+            t_end,
+            norm(var_end)
+        )
+    end
+
+    Y = sol.u[end]
+    ᶠw = Geometry.WVector.(Y.f.w).components.data.:1
+    p = Plots.plot(
+        ᶠw,
+        slice = (:, FT(parsed_args["y_max"] / 2), :),
+        clim = (-0.1, 0.1),
+    )
+    Plots.png(p, joinpath(output_dir, "w.png"))
+end
+
 function postprocessing(sol, output_dir, fps)
     for prop_chain in Fields.property_chains(sol.u[1])
         var_name = processed_varname(prop_chain)
