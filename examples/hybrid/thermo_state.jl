@@ -13,6 +13,28 @@ function thermo_state_type(Yc::Fields.Field, ::Type{FT}) where {FT}
     end
 end
 
+#= High-level wrapper =#
+function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp, colidx)
+    ᶜts = p.ᶜts[colidx]
+    ᶜK = p.ᶜK[colidx]
+    ᶠw = Y.f.w[colidx]
+    ᶜp = p.ᶜp[colidx]
+    thermo_params = CAP.thermodynamics_params(p.params)
+    td = p.thermo_dispatcher
+    thermo_state!(ᶜts, Y.c[colidx], thermo_params, td, ᶜinterp, ᶜK, ᶠw, ᶜp)
+end
+
+#= High-level wrapper =#
+function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp)
+    ᶜts = p.ᶜts
+    ᶜK = p.ᶜK
+    ᶠw = Y.f.w
+    ᶜp = p.ᶜp
+    thermo_params = CAP.thermodynamics_params(p.params)
+    td = p.thermo_dispatcher
+    thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, ᶜK, ᶠw, ᶜp)
+end
+
 thermo_state!(
     ᶜts,
     Y::Fields.FieldVector,
@@ -40,17 +62,32 @@ function thermo_state!(
     ᶜinterp,
     K = nothing,
     wf = nothing,
+    ᶜp = nothing,
 )
     # Sometimes we want to zero out kinetic energy
     (; energy_form, moisture_model, compressibility_model) = td
     if energy_form isa TotalEnergy
-        if isnothing(K)
-            @assert !isnothing(wf)
-            C123 = Geometry.Covariant123Vector
-            K = @. norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(wf))) / 2
+        if compressibility_model isa CA.CompressibleFluid
+            if isnothing(K)
+                @assert !isnothing(wf)
+                C123 = Geometry.Covariant123Vector
+                K = @. norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(wf))) / 2
+            end
+            z = Fields.local_geometry_field(Yc).coordinates.z
+            thermo_state_ρe_tot!(ᶜts, Yc, thermo_params, moisture_model, z, K)
+        elseif compressibility_model isa CA.AnelasticFluid
+            @assert !isnothing(ᶜp)
+            z = Fields.local_geometry_field(Yc).coordinates.z
+            thermo_state_ρe_tot_anelastic!(
+                ᶜts,
+                Yc,
+                thermo_params,
+                moisture_model,
+                z,
+                K,
+                ᶜp,
+            )
         end
-        z = Fields.local_geometry_field(Yc).coordinates.z
-        thermo_state_ρe_tot!(ᶜts, Yc, thermo_params, moisture_model, z, K)
     elseif energy_form isa InternalEnergy
         thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model)
     elseif energy_form isa PotentialTemperature
@@ -61,13 +98,34 @@ function thermo_state!(
     return nothing
 end
 
+function thermo_state_ρe_tot_anelastic!(
+    ᶜts,
+    Yc,
+    thermo_params,
+    ::CA.EquilMoistModel,
+    z,
+    ᶜK,
+    ᶜp,
+)
+    grav = TD.Parameters.grav(thermo_params)
+    @. ᶜts = TD.PhaseEquil_peq(
+        thermo_params,
+        ᶜp,
+        Yc.ρe_tot / Yc.ρ - ᶜK - grav * z,
+        Yc.ρq_tot / Yc.ρ,
+    )
+    return nothing
+end
+
+
 thermo_state(
     Y::Fields.FieldVector,
     thermo_params,
     td::CA.ThermoDispatcher,
     ᶜinterp,
     K = nothing,
-) = thermo_state(Y.c, thermo_params, td, ᶜinterp, K, Y.f.w)
+    ᶜp = nothing,
+) = thermo_state(Y.c, thermo_params, td, ᶜinterp, K, Y.f.w, ᶜp)
 
 function thermo_state(
     Yc::Fields.Field,
@@ -76,11 +134,12 @@ function thermo_state(
     ᶜinterp,
     K = nothing,
     wf = nothing,
+    ᶜp = nothing,
 )
     FT = Spaces.undertype(axes(Yc))
     ts_type = thermo_state_type(Yc, FT)
     ts = similar(Yc, ts_type)
-    thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, K, wf)
+    thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, K, wf, ᶜp)
     return ts
 end
 

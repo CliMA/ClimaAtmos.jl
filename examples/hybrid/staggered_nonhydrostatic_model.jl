@@ -217,15 +217,7 @@ function _implicit_tendency!(Yₜ, Y, p, t)
         dt = simulation.dt
         @. ᶜK[colidx] =
             norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
-        thermo_state!(
-            ᶜts[colidx],
-            Y.c[colidx],
-            thermo_params,
-            thermo_dispatcher,
-            ᶜinterp,
-            ᶜK[colidx],
-            Y.f.w[colidx],
-        )
+        thermo_state!(Y, p, ᶜinterp, colidx)
         @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
         if p.tendency_knobs.has_turbconv
@@ -309,10 +301,10 @@ function remaining_tendency!(Yₜ, Y, p, t)
     (; compressibility_model) = p
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
+        @nvtx "precomputed quantities" color = colorant"orange" begin
+            precomputed_quantities!(Y, p, t)
+        end
         if compressibility_model isa CA.CompressibleFluid
-            @nvtx "precomputed quantities" color = colorant"orange" begin
-                precomputed_quantities!(Y, p, t)
-            end
             @nvtx "horizontal" color = colorant"orange" begin
                 horizontal_advection_tendency!(Yₜ, Y, p, t)
             end
@@ -338,10 +330,10 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     (; compressibility_model) = p
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
+        @nvtx "precomputed quantities" color = colorant"orange" begin
+            precomputed_quantities!(Y, p, t)
+        end
         if compressibility_model isa CA.CompressibleFluid
-            @nvtx "precomputed quantities" color = colorant"orange" begin
-                precomputed_quantities!(Y, p, t)
-            end
             @nvtx "horizontal" color = colorant"orange" begin
                 horizontal_advection_tendency!(Yₜ, Y, p, t)
             end
@@ -388,15 +380,7 @@ function precomputed_quantities!(Y, p, t, colidx)
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
     thermo_params = CAP.thermodynamics_params(params)
-    thermo_state!(
-        ᶜts[colidx],
-        Y.c[colidx],
-        thermo_params,
-        thermo_dispatcher,
-        ᶜinterp,
-        ᶜK[colidx],
-        Y.f.w[colidx],
-    )
+    thermo_state!(Y, p, ᶜinterp, colidx)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
     return nothing
 end
@@ -633,15 +617,7 @@ function _Wfact!(W, Y, p, dtγ, t)
         @. ᶜK[colidx] =
             norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
         thermo_params = CAP.thermodynamics_params(params)
-        thermo_state!(
-            ᶜts[colidx],
-            Y.c[colidx],
-            thermo_params,
-            thermo_dispatcher,
-            ᶜinterp,
-            ᶜK[colidx],
-            Y.f.w[colidx],
-        )
+        thermo_state!(Y, p, ᶜinterp, colidx)
         @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
         # ᶜinterp(ᶠw) =

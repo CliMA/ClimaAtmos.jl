@@ -245,7 +245,7 @@ function rrtmgp_model_callback!(integrator)
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
-    thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp, ᶜK)
+    thermo_state!(Y, p, ᶜinterp)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
@@ -402,8 +402,6 @@ function radiation_tendency!(Yₜ, Y, p, t, colidx, self::CA.RadiationDYCOMS_RF0
     ᶠρ = p.edmf_cache.aux.face.ρ[colidx]
     ᶜq_tot = p.edmf_cache.aux.cent.q_tot[colidx]
     ᶜq_liq = p.edmf_cache.aux.cent.q_liq[colidx]
-    # TODO: remove once thermostate is computed in thermo_state!
-    TCU.set_thermo_state_pθq!(Y, p, colidx)
     # TODO: unify (ᶜq_tot, ᶜq_liq) with grid-mean
     @. ᶜq_tot = TD.total_specific_humidity(thermo_params, ᶜts_gm)
     @. ᶜq_liq = TD.liquid_specific_humidity(thermo_params, ᶜts_gm)

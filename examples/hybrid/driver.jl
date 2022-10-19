@@ -180,7 +180,6 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
                 Y,
                 turbconv_model,
                 precip_model,
-                radiation_cache.radiation_model,
                 namelist,
                 params,
                 parsed_args,

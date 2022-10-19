@@ -434,7 +434,6 @@ struct EDMFModel{
     N_up,
     FT,
     MM,
-    CM,
     TCM,
     PM,
     PFM,
@@ -451,7 +450,6 @@ struct EDMFModel{
     max_area::FT
     minimum_area::FT
     moisture_model::MM
-    compressibility_model::CM
     thermo_covariance_model::TCM
     precip_model::PM
     precip_fraction_model::PFM
@@ -512,12 +510,6 @@ function EDMFModel(
         "min_area";
         default = 1e-5,
     )
-
-    compressibility_model = if parsed_args["anelastic_dycore"]
-        AnelasticFluid()
-    else
-        CompressibleFluid()
-    end
 
     thermo_covariance_model_name = parse_namelist(
         namelist,
@@ -1004,7 +996,6 @@ function EDMFModel(
     DDS = typeof(detr_dim_scale)
     EC = typeof(entr_closure)
     MM = typeof(moisture_model)
-    CM = typeof(compressibility_model)
     TCM = typeof(thermo_covariance_model)
     PM = typeof(precip_model)
     PFM = typeof(precip_fraction_model)
@@ -1017,7 +1008,6 @@ function EDMFModel(
         n_updrafts,
         FT,
         MM,
-        CM,
         TCM,
         PM,
         PFM,
@@ -1034,7 +1024,6 @@ function EDMFModel(
         max_area,
         minimum_area,
         moisture_model,
-        compressibility_model,
         thermo_covariance_model,
         precip_model,
         precip_fraction_model,

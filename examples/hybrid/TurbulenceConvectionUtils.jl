@@ -39,7 +39,6 @@ function get_edmf_cache(
     Y,
     turbconv_model,
     precip_model,
-    radiation,
     namelist,
     param_set,
     parsed_args,
@@ -112,7 +111,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
         parent(state.aux.cent) .= NaN
     end
 
-    set_thermo_state_peq!(Y, p, colidx)
     assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
     aux_gm = TC.center_aux_grid_mean(state)
