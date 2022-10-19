@@ -416,7 +416,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
+    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², ᶜω¹², ᶜw, ᶜu³, params) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     # Mass conservation
