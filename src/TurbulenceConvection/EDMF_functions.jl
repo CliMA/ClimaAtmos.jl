@@ -761,7 +761,7 @@ function compute_up_tendencies!(
         bottom = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
         top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
     )
-    grad_f = CCO.GradientC2F(; prog_bcs )
+    grad_f = CCO.GradientC2F(; prog_bcs...)
 
     @inbounds for i in 1:N_up
         w_up = prog_up_f[i].w
