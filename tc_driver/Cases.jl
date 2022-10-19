@@ -94,32 +94,11 @@ $(DocStringExtensions.FIELDS)
 Base.@kwdef struct ForcingBase{T, FT}
     "Coriolis parameter"
     coriolis_param::FT = 0
-    "Wind relaxation timescale"
-    wind_nudge_τᵣ::FT = 0.0
-    "Scalar relaxation lower z"
-    scalar_nudge_zᵢ::FT = 0.0
-    "Scalar relaxation upper z"
-    scalar_nudge_zᵣ::FT = 0.0
-    "Scalar maximum relaxation timescale"
-    scalar_nudge_τᵣ::FT = 0.0
     "Large-scale divergence (same as in RadiationDYCOMS_RF01)"
     divergence::FT = 0
 end
 
 force_type(::ForcingBase{T}) where {T} = T
-
-Base.@kwdef struct LESData
-    "Start time index of LES"
-    imin::Int = 0
-    "End time index of LES"
-    imax::Int = 0
-    "Path to LES stats file used to drive SCM"
-    les_filename::String = nothing
-    "Drive SCM with LES data from t = [end - t_interval_from_end_s, end]"
-    t_interval_from_end_s::Float64 = 6 * 3600.0
-    "Length of time to average over for SCM initialization"
-    initial_condition_averaging_window_s::Float64 = 3600.0
-end
 
 #####
 ##### Case methods
