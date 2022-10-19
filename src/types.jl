@@ -47,3 +47,17 @@ struct RadiationTRMM_LBA{R}
         return new{typeof(rad_profile)}(rad_profile)
     end
 end
+
+"""
+    ThermoDispatcher
+
+A dispatching type for selecting the
+precise thermodynamics method call to
+be used.
+"""
+Base.@kwdef struct ThermoDispatcher{EF, MM, CM}
+    energy_form::EF
+    moisture_model::MM
+    compressibility_model::CM
+end
+Base.broadcastable(x::ThermoDispatcher) = Ref(x)

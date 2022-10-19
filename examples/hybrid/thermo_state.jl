@@ -13,56 +13,37 @@ function thermo_state_type(Yc::Fields.Field, ::Type{FT}) where {FT}
     end
 end
 
-function get_moisture_model(Yc::Fields.Field)
-    pns = propertynames(Yc)
-    if (:ρq_liq in pns && :ρq_ice in pns && :ρq_tot in pns)
-        return NonEquilMoistModel()
-    elseif :ρq_tot in pns
-        return EquilMoistModel()
-    else
-        return DryModel()
-    end
-end
-
-function get_energy_model(Yc::Fields.Field)
-    pns = propertynames(Yc)
-    if :ρθ in pns
-        return PotentialTemperature()
-    elseif :ρe_tot in pns
-        return TotalEnergy()
-    elseif :ρe_int in pns
-        return InternalEnergy()
-    else
-        error("Could not determine energy model")
-    end
-end
-
-thermo_state!(ᶜts, Y::Fields.FieldVector, params, ᶜinterp, K = nothing) =
-    thermo_state!(ᶜts, Y.c, params, ᶜinterp, K, Y.f.w)
+thermo_state!(
+    ᶜts,
+    Y::Fields.FieldVector,
+    thermo_params,
+    td::CA.ThermoDispatcher,
+    ᶜinterp,
+    K = nothing,
+) = thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, K, Y.f.w)
 
 #=
 
-    thermo_state!(ᶜts, wf, params, ᶜinterp[, K, wf])
+    thermo_state!(ᶜts, wf, thermo_params, ᶜinterp[, K, wf])
 
-Populate the thermodynamic state, `ᶜts`, given
-`Field` `Yc` and parameters `params`. Interpolation
-`ᶜinterp` is used to interpolate vertical velocity
-when computing kinetic energy (assuming it's not given)
-when using the total energy formulation.
+Populate the thermodynamic state, `ᶜts`, given `Field`
+`Yc` and thermodynamic parameters `thermo_params`.
+Interpolation `ᶜinterp` is used to interpolate vertical
+velocity when computing kinetic energy (assuming it's not
+given) when using the total energy formulation.
 =#
 function thermo_state!(
     ᶜts,
     Yc::Fields.Field,
-    params,
+    thermo_params,
+    td::CA.ThermoDispatcher,
     ᶜinterp,
     K = nothing,
     wf = nothing,
 )
     # Sometimes we want to zero out kinetic energy
-    moisture_model = get_moisture_model(Yc)
-    energy_model = get_energy_model(Yc)
-    thermo_params = CAP.thermodynamics_params(params)
-    if energy_model isa TotalEnergy
+    (; energy_form, moisture_model, compressibility_model) = td
+    if energy_form isa TotalEnergy
         if isnothing(K)
             @assert !isnothing(wf)
             C123 = Geometry.Covariant123Vector
@@ -70,9 +51,9 @@ function thermo_state!(
         end
         z = Fields.local_geometry_field(Yc).coordinates.z
         thermo_state_ρe_tot!(ᶜts, Yc, thermo_params, moisture_model, z, K)
-    elseif energy_model isa InternalEnergy
+    elseif energy_form isa InternalEnergy
         thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model)
-    elseif energy_model isa PotentialTemperature
+    elseif energy_form isa PotentialTemperature
         thermo_state_ρθ!(ᶜts, Yc, thermo_params, moisture_model)
     else
         error("Could not determine energy model")
@@ -80,12 +61,18 @@ function thermo_state!(
     return nothing
 end
 
-thermo_state(Y::Fields.FieldVector, params, ᶜinterp, K = nothing) =
-    thermo_state(Y.c, params, ᶜinterp, K, Y.f.w)
+thermo_state(
+    Y::Fields.FieldVector,
+    thermo_params,
+    td::CA.ThermoDispatcher,
+    ᶜinterp,
+    K = nothing,
+) = thermo_state(Y.c, thermo_params, td, ᶜinterp, K, Y.f.w)
 
 function thermo_state(
     Yc::Fields.Field,
-    params,
+    thermo_params,
+    td::CA.ThermoDispatcher,
     ᶜinterp,
     K = nothing,
     wf = nothing,
@@ -93,7 +80,7 @@ function thermo_state(
     FT = Spaces.undertype(axes(Yc))
     ts_type = thermo_state_type(Yc, FT)
     ts = similar(Yc, ts_type)
-    thermo_state!(ts, Yc, params, ᶜinterp, K, wf)
+    thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, K, wf)
     return ts
 end
 

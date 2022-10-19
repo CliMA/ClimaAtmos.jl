@@ -79,11 +79,11 @@ const C123 = Geometry.Covariant123Vector
 include("thermo_state.jl")
 
 get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
-    default_cache(Y, params, spaces, numerics, simulation),
+    default_cache(Y, params, model_spec, spaces, numerics, simulation),
     additional_cache(Y, params, model_spec, simulation.dt),
 )
 
-function default_cache(Y, params, spaces, numerics, simulation)
+function default_cache(Y, params, model_spec, spaces, numerics, simulation)
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -210,7 +210,7 @@ function _implicit_tendency!(Yₜ, Y, p, t)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
-        (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, params) = p
+        (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, params, thermo_dispatcher) = p
         (; energy_upwinding, tracer_upwinding, simulation) = p
 
         thermo_params = CAP.thermodynamics_params(params)
@@ -220,7 +220,8 @@ function _implicit_tendency!(Yₜ, Y, p, t)
         thermo_state!(
             ᶜts[colidx],
             Y.c[colidx],
-            params,
+            thermo_params,
+            thermo_dispatcher,
             ᶜinterp,
             ᶜK[colidx],
             Y.f.w[colidx],
@@ -382,19 +383,20 @@ end
 function precomputed_quantities!(Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜts, ᶜp, params) = p
+    (; ᶜuvw, ᶜK, ᶜts, ᶜp, params, thermo_dispatcher) = p
 
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
+    thermo_params = CAP.thermodynamics_params(params)
     thermo_state!(
         ᶜts[colidx],
         Y.c[colidx],
-        params,
+        thermo_params,
+        thermo_dispatcher,
         ᶜinterp,
         ᶜK[colidx],
         Y.f.w[colidx],
     )
-    thermo_params = CAP.thermodynamics_params(params)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
     return nothing
 end
@@ -591,7 +593,7 @@ function _Wfact!(W, Y, p, dtγ, t)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
-    (; energy_upwinding, tracer_upwinding) = p
+    (; energy_upwinding, tracer_upwinding, thermo_dispatcher) = p
 
     validate_flags!(Y, flags, energy_upwinding)
 
@@ -630,15 +632,16 @@ function _Wfact!(W, Y, p, dtγ, t)
         # operators, ᶠupwind_stencil is not available.
         @. ᶜK[colidx] =
             norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+        thermo_params = CAP.thermodynamics_params(params)
         thermo_state!(
             ᶜts[colidx],
             Y.c[colidx],
-            params,
+            thermo_params,
+            thermo_dispatcher,
             ᶜinterp,
             ᶜK[colidx],
             Y.f.w[colidx],
         )
-        thermo_params = CAP.thermodynamics_params(params)
         @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
         # ᶜinterp(ᶠw) =
