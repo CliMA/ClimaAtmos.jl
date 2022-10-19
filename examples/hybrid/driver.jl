@@ -103,6 +103,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         precip_model,
     ) = model_spec
 
+    thermo_dispatcher = CA.ThermoDispatcher(model_spec)
     compressibility_model = model_spec.compressibility_model
 
     radiation_cache = if radiation_mode isa Nothing
@@ -115,6 +116,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             idealized_insolation,
             model_spec.idealized_h2o,
             idealized_clouds,
+            thermo_dispatcher,
         )
     else
         radiation_model_cache(Y, params, radiation_mode)
@@ -169,6 +171,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
                 has_turbconv = !isnothing(turbconv_model),
             )
         ),
+        (; thermo_dispatcher),
         (; Δt = dt),
         (; compressibility_model),
         !isnothing(turbconv_model) ?
@@ -252,6 +255,7 @@ if parsed_args["turbconv"] == "edmf"
 end
 
 # Print tendencies:
+# @info "Model composition" p.model_spec...
 @info "Tendencies" p.tendency_knobs...
 
 ode_config = ode_configuration(Y, parsed_args, model_spec)
@@ -318,7 +322,7 @@ if !simulation.is_distributed && parsed_args["post_process"]
             FT(180),
         )
     elseif is_column_without_edmf(parsed_args)
-        custom_postprocessing(sol, simulation.output_dir)
+        custom_postprocessing(sol, simulation.output_dir, p)
     elseif is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
     elseif is_solid_body(parsed_args)

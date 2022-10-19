@@ -189,7 +189,7 @@ paperplots_held_suarez(::TotalEnergy, ::EquilMoistModel, args...) =
 
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10 (if the simulation lasts 10 days)
 function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, ᶜp, params) = p
+    (; ᶜts, ᶜp, params, thermo_dispatcher) = p
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -201,7 +201,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         iu = safe_index(ius, sol.t)
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
-        thermo_state!(ᶜts, Y, params, ᶜinterp)
+        thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
@@ -321,7 +321,7 @@ end
 
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, ᶜp, params, ᶜK) = p
+    (; ᶜts, ᶜp, params, ᶜK, thermo_dispatcher) = p
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -342,7 +342,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜw_phy = @. Geometry.project(Geometry.WAxis(), ᶜuvw_phy)
         ᶠw_phy = ᶠinterp.(ᶜw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+        thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp, ᶜK)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
         ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
@@ -604,7 +604,7 @@ calc_zonalave_timeave(x) =
 calc_zonalave_variance(x) = calc_zonalave_timeave((x .- mean(x, dims = 4)) .^ 2)
 
 function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, params) = p
+    (; ᶜts, params, thermo_dispatcher) = p
     thermo_params = CAP.thermodynamics_params(params)
     last_day = floor(Int, sol.t[end] / (24 * 3600))
 
@@ -640,7 +640,7 @@ function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
             Y = sol.u[i]
 
             # temperature
-            thermo_state!(ᶜts, Y, params, ᶜinterp)
+            thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -782,7 +782,7 @@ function postprocessing_edmf(sol, output_dir, fps)
 end
 
 function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, params, ᶜK) = p
+    (; ᶜts, params, ᶜK, thermo_dispatcher) = p
     thermo_params = CAP.thermodynamics_params(params)
     last_day = floor(Int, sol.t[end] / (24 * 3600))
 
@@ -825,7 +825,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
             # temperature
             ᶠw = Y.f.w
             @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-            thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+            thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp, ᶜK)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -979,8 +979,9 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     )
 end
 
-function custom_postprocessing(sol, output_dir)
+function custom_postprocessing(sol, output_dir, p)
     # TODO: remove closure over params
+    thermo_dispatcher = p.thermo_dispatcher
     thermo_params = CAP.thermodynamics_params(params)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
     n = length(sol.u)
@@ -1001,7 +1002,7 @@ function custom_postprocessing(sol, output_dir)
     )
 
     anim = @animate for Y in sol.u
-        ᶜts = thermo_state(Y, params, ᶜinterp)
+        ᶜts = thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
         plot(
             vec(TD.air_temperature.(thermo_params, ᶜts)),
             vec(Fields.coordinate_field(Y.c).z ./ 1000);

@@ -49,6 +49,7 @@ function radiation_model_cache(
     idealized_insolation = true,
     idealized_h2o = false,
     idealized_clouds = false,
+    thermo_dispatcher,
 )
     rrtmgp_params = CAP.rrtmgp_params(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -91,7 +92,7 @@ function radiation_model_cache(
         # kinetic energy to 0 when computing the pressure using total energy)
         pressure2ozone =
             Spline1D(input_center_pressure, input_center_volume_mixing_ratio_o3)
-        ᶜts = thermo_state(Y, params, ᶜinterp, 0)
+        ᶜts = thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp, 0)
         ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
         center_volume_mixing_ratio_o3 =
             RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
@@ -233,7 +234,7 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜts, T_sfc, params) = p
+    (; ᶜK, ᶜts, T_sfc, params, thermo_dispatcher) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -244,7 +245,7 @@ function rrtmgp_model_callback!(integrator)
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
-    thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+    thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp, ᶜK)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
