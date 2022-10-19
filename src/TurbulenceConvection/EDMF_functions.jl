@@ -755,7 +755,7 @@ function compute_up_tendencies!(
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
-    LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
+    LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
     Ic = CCO.InterpolateF2C()
     prog_bcs = (;
         bottom = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
