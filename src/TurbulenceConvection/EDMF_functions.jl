@@ -546,16 +546,16 @@ function get_GMV_CoVar(
     @. gmv_covar =
         tke_factor *
         area_en *
-        Icd(ϕ_en - wcomponent(CCG.WVector(ϕ_gm))) *
-        Icd(ψ_en - wcomponent(CCG.WVector(ψ_gm))) + area_en * covar_e
+        Icd(wcomponent(CCG.WVector(ϕ_en - ϕ_gm))) *
+        Icd(wcomponent(CCG.WVector(ψ_en - ψ_gm))) + area_en * covar_e
     @inbounds for i in 1:N_up
         ϕ_up = getproperty(aux_up[i], ϕ_sym)
         ψ_up = getproperty(aux_up[i], ψ_sym)
         @. gmv_covar +=
             tke_factor *
             aux_up_c[i].area *
-            Icd(ϕ_up - wcomponent(CCG.WVector(ϕ_gm))) *
-            Icd(ψ_up - wcomponent(CCG.WVector(ψ_gm)))
+            Icd(wcomponent(CCG.WVector(ϕ_up - ϕ_gm))) *
+            Icd(wcomponent(CCG.WVector(ψ_up - ψ_gm)))
     end
     return nothing
 end
@@ -648,7 +648,7 @@ function compute_up_tendencies!(
     Ic = CCO.InterpolateF2C()
 
     wvec = CC.Geometry.WVector
-    ∇c = CCO.DivergenceF2C()
+    div_c = CCO.DivergenceF2C()
     LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(FT(0)))
 
     # Solve for updraft area fraction
@@ -677,18 +677,18 @@ function compute_up_tendencies!(
         # TODO -∇c(wvec(LBF(Ic(w_up) * ρarea))) -> -∇c(w_up * LBF(ρarea))
         # TODO - entr_turb_dyn, detr - shoudl this be a vector
         @. tends_ρarea =
-            -∇c(LBF(Ic(w_up) * ρarea)) +
+            -div_c(w_up * LBF(ρarea)) +
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn) -
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn)
 
         @. tends_ρaθ_liq_ice =
-            -∇c(LBF(Ic(w_up) * ρaθ_liq_ice)) +
+            -div_c(w_up * LBF(ρaθ_liq_ice)) +
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * θ_liq_ice_en) -
             (ρaθ_liq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * θ_liq_ice_tendency_precip_formation)
 
         @. tends_ρaq_tot =
-            -∇c(LBF(Ic(w_up) * ρaq_tot)) +
+            -div_c(w_up * LBF(ρaq_tot)) +
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_tot_en) -
             (ρaq_tot * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * qt_tendency_precip_formation)
@@ -712,13 +712,13 @@ function compute_up_tendencies!(
             tends_ρaq_ice = tendencies_up[i].ρaq_ice
 
             @. tends_ρaq_liq =
-                -∇c(LBF(Ic(w_up) * ρaq_liq)) +
+                -div_c(w_up * LBF(ρaq_liq)) +
                 (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_liq_en) -
                 (ρaq_liq * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
                 (ρ_c * (ql_tendency_precip_formation + ql_tendency_noneq))
 
             @. tends_ρaq_ice =
-                -∇c(LBF(Ic(w_up) * ρaq_ice)) +
+                -div_c(w_up * ρaq_ice) +
                 (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_ice_en) -
                 (ρaq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
                 (ρ_c * (qi_tendency_precip_formation + qi_tendency_noneq))
@@ -752,11 +752,8 @@ function compute_up_tendencies!(
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
-    adv_bcs =
-        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
-    ∇f = CCO.DivergenceC2F(; adv_bcs...)
-
+    Ic = CCO.InterpolateF2C()
     prog_bcs = (;
         bottom = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
         top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
@@ -772,9 +769,9 @@ function compute_up_tendencies!(
         detr_w = aux_up[i].detr_turb_dyn
         buoy = aux_up[i].buoy
 
-        # TODO, improve later...
-        #@. tends_w = -(∇f(wvec(LBC(w_up * w_up))))
-        @. tends_w = -(grad_f(LBC(LA.norm_sqr(wvec(w_up)) / 2)))
+        #TODO - need horizontal terms too
+        #TODO - double check below line
+        @. tends_w = -grad_f(Ic(LA.norm_sqr(w_up) / 2))
         @. tends_w +=
             w_up * I0f(entr_w) *
             wcomponent(CCG.WVector(w_en - w_up)) +
@@ -1054,8 +1051,8 @@ function compute_covariance_entr(
                 a_up *
                 abs(Ic(wcomponent(CCG.WVector(w_up)))) *
                 detr_sc *
-                (Idc(ϕ_up) - Idc(ϕ_en)) *
-                (Idc(ψ_up) - Idc(ψ_en))
+                (Idc(wcomponent(CCG.WVector(ϕ_up - ϕ_en)))) *
+                (Idc(wcomponent(CCG.WVector(ψ_up - ψ_en))))
             ) + (
                 tke_factor *
                 ρ_c *
@@ -1063,10 +1060,10 @@ function compute_covariance_entr(
                 abs(Ic(wcomponent(CCG.WVector(w_up)))) *
                 eps_turb *
                 (
-                    (Idc(ϕ_en) - Idc(wcomponent(CCG.WVector(ϕ_gm)))) *
-                    (Idc(ψ_up) - Idc(ψ_en)) +
-                    (Idc(ψ_en) - Idc(wcomponent(CCG.WVector(ψ_gm)))) *
-                    (Idc(ϕ_up) - Idc(ϕ_en))
+                    (Idc(wcomponent(CCG.WVector(ϕ_en - ϕ_gm)))) *
+                    (Idc(wcomponent(CCG.WVector(ψ_up - ψ_en)))) +
+                    (Idc(wcomponent(CCG.WVector(ψ_en - ψ_gm)))) *
+                    (Idc(wcomponent(CCG.WVector(ϕ_up - ϕ_en))))
                 )
             )
 
@@ -1144,8 +1141,8 @@ function compute_en_tendencies!(
     )
 
     If = CCO.InterpolateC2F(; aeK_bcs...)
-    ∇f = CCO.GradientC2F(; prog_bcs...)
-    ∇c = CCO.DivergenceF2C()
+    grad_f = CCO.GradientC2F(; prog_bcs...)
+    div_c = CCO.DivergenceF2C()
 
     mixing_length = aux_tc.mixing_length
     min_area = edmf.minimum_area
@@ -1164,15 +1161,15 @@ function compute_en_tendencies!(
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
         @. D_env +=
-            Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
+            Int(a_up > min_area) * ρ_c * a_up * Ic(wcomponent(CCG.WVector(w_up))) * (entr_sc + turb_entr)
     end
 
     RB = CCO.RightBiasedC2F(; top = CCO.SetValue(FT(0)))
     @. tend_covar =
         press + buoy + shear + entr_gain + rain_src - D_env * covar -
         (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) *
-        prog_covar - ∇c(wvec(RB(prog_covar * Ic(w_en_f)))) +
-        ∇c(ρ_f * If(aeK) * ∇f(covar))
+        prog_covar - div_c(wvec(RB(prog_covar * Ic(w_en_f)))) +
+        div_c(ρ_f * If(aeK) * grad_f(covar))
 
     return nothing
 end
@@ -1226,7 +1223,7 @@ function update_diagnostic_covariances!(
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
         @. D_env +=
-            Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
+            Int(a_up > min_area) * ρ_c * a_up * Ic(wcomponent(CCG.WVector(w_up))) * (entr_sc + turb_entr)
     end
 
     @. covar =
