@@ -320,43 +320,43 @@ steps:
           slurm_mem: 20GB
         soft_fail: true
 
-  - group: "Performance"
-    steps:
+  #- group: "Performance"
+  #  steps:
 
-      - label: ":rocket: flame graph: perf target (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
-        artifact_paths: "flame_perf_target_rhoe/*"
-        agents:
-          slurm_mem: 20GB
+  #    - label: ":rocket: flame graph: perf target (ρe_tot)"
+  #      command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
+  #      artifact_paths: "flame_perf_target_rhoe/*"
+  #      agents:
+  #        slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: threaded perf target (ρe_tot)"
-        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
-        artifact_paths: "flame_perf_target_rhoe_threaded/*"
-        agents:
-          slurm_ntasks: 8
-          slurm_ntasks_per_node: 8
-          slurm_mem: 20GB
+  #    - label: ":rocket: flame graph: threaded perf target (ρe_tot)"
+  #      command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
+  #      artifact_paths: "flame_perf_target_rhoe_threaded/*"
+  #      agents:
+  #        slurm_ntasks: 8
+  #        slurm_ntasks_per_node: 8
+  #        slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: perf target callbacks"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
-        artifact_paths: "flame_perf_target_rhoe_callbacks/*"
-        agents:
-          slurm_mem: 20GB
+  #    - label: ":rocket: flame graph: perf target callbacks"
+  #      command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
+  #      artifact_paths: "flame_perf_target_rhoe_callbacks/*"
+  #      agents:
+  #        slurm_mem: 20GB
 
-      # Comment out the following job for now, until flame graph w/ changing ID is cleared
-      # - label: ":rocket: flame graph: perf target (ρe_tot) (Rosenbrock)"
-      #   command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_rosenbrock --ode_algo ODE.Rosenbrock23"
-      #   artifact_paths: "flame_perf_target_rhoe_rosenbrock/*"
-      #   agents:
-      #     slurm_mem: 20GB
+  #    # Comment out the following job for now, until flame graph w/ changing ID is cleared
+  #    # - label: ":rocket: flame graph: perf target (ρe_tot) (Rosenbrock)"
+  #    #   command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_rosenbrock --ode_algo ODE.Rosenbrock23"
+  #    #   artifact_paths: "flame_perf_target_rhoe_rosenbrock/*"
+  #    #   agents:
+  #    #     slurm_mem: 20GB
 
-      - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
+  #    - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
+  #      command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
 
-      - label: ":mag: Allocations: perf target"
-        command: "julia --color=yes --project=perf perf/allocs.jl"
-        agents:
-          slurm_mem: 20GB
+  #    - label: ":mag: Allocations: perf target"
+  #      command: "julia --color=yes --project=perf perf/allocs.jl"
+  #      agents:
+  #        slurm_mem: 20GB
 
   - wait: ~
     continue_on_failure: true
