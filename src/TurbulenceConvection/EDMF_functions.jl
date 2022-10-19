@@ -755,7 +755,7 @@ function compute_up_tendencies!(
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
-    LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
+    LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
     Ic = CCO.InterpolateF2C()
     prog_bcs = (;
         bottom = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
@@ -776,7 +776,7 @@ function compute_up_tendencies!(
         #TODO - double check below line
         #@. tends_w = -grad_f(Ic(LA.norm_sqr(w_up) / 2))
         #             -wcomponent(CCG.WVector(grad_f(LBC(LA.norm_sqr(wvec(w_up)) / 2))))
-        @. tends_w = -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up))) / 2)
+        @. tends_w = -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
         @. tends_w +=
             w_up * I0f(entr_w) *
             wcomponent(CCG.WVector(w_en - w_up)) +
