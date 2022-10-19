@@ -677,18 +677,21 @@ function compute_up_tendencies!(
         # TODO -∇c(wvec(LBF(Ic(w_up) * ρarea))) -> -∇c(w_up * LBF(ρarea))
         # TODO - entr_turb_dyn, detr - shoudl this be a vector
         @. tends_ρarea =
-            -div_c(w_up * LBF(ρarea)) +
+            -div_c(LBF(Ic(CCG.WVector(w_up)) * ρarea)) +
+            #-div_c(w_up * LBF(ρarea)) +
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn) -
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn)
 
         @. tends_ρaθ_liq_ice =
-            -div_c(w_up * LBF(ρaθ_liq_ice)) +
+            #-div_c(w_up * LBF(ρaθ_liq_ice)) +
+            -div_c(LBF(Ic(CCG.WVector(w_up)) * ρaθ_liq_ice)) +
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * θ_liq_ice_en) -
             (ρaθ_liq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * θ_liq_ice_tendency_precip_formation)
 
         @. tends_ρaq_tot =
-            -div_c(w_up * LBF(ρaq_tot)) +
+            #-div_c(w_up * LBF(ρaq_tot)) +
+            -div_c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot)) +
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn * q_tot_en) -
             (ρaq_tot * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * qt_tendency_precip_formation)
@@ -771,7 +774,9 @@ function compute_up_tendencies!(
 
         #TODO - need horizontal terms too
         #TODO - double check below line
-        @. tends_w = -grad_f(Ic(LA.norm_sqr(w_up) / 2))
+        #@. tends_w = -grad_f(Ic(LA.norm_sqr(w_up) / 2))
+        #             -wcomponent(CCG.WVector(grad_f(LBC(LA.norm_sqr(wvec(w_up)) / 2))))
+        @. tends_w = -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up))) / 2)
         @. tends_w +=
             w_up * I0f(entr_w) *
             wcomponent(CCG.WVector(w_en - w_up)) +
