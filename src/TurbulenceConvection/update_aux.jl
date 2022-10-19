@@ -159,7 +159,7 @@ function update_aux!(
     end
 
     @. aux_en.e_kin =
-        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(aux_en_f.w))) / 2
+        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(aux_en_f.w)))) / 2
 
     @inbounds for k in real_center_indices(grid)
         e_pot = geopotential(param_set, grid.zc.z[k])
