@@ -475,7 +475,7 @@ function _explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜρ = Y.c.ρ
         ᶜuₕ = Y.c.uₕ
         ᶠw = Y.f.w
-        (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+        (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶜω¹², ᶜw, ᶜu³, ᶠu¹², ᶠu³, ᶜf) = p
         # Mass conservation
         @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
 
