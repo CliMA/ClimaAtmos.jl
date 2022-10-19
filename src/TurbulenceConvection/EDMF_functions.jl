@@ -649,7 +649,7 @@ function compute_up_tendencies!(
 
     wvec = CC.Geometry.WVector
     div_c = CCO.DivergenceF2C()
-    LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(FT(0)))
+    LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
 
     # Solve for updraft area fraction
     @inbounds for i in 1:N_up
