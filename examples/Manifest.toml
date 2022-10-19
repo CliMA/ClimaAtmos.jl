@@ -2,7 +2,7 @@
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "4745d21c51014076b11a0a02c53d377a20961947"
+project_hash = "eed7709e9abc0d2f746b2705098cee73922602fd"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -74,9 +74,9 @@ version = "0.7.10"
 
 [[deps.ArtifactWrappers]]
 deps = ["Downloads", "Pkg"]
-git-tree-sha1 = "a441cb9044080134a141a67370f01c2baba8a24a"
+git-tree-sha1 = "760f4c06375735829b8c1b67560b608b9dba4c6a"
 uuid = "a14bc488-3040-4b00-9dc1-f6467924858a"
-version = "0.1.2"
+version = "0.2.0"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -167,9 +167,9 @@ version = "0.1.2"
 
 [[deps.CLIMAParameters]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "3f7f117335784536f2c07f54d1da0b60acb29c28"
+git-tree-sha1 = "8cb1d69b6b5fc41be48bea969a68763a17843f1e"
 uuid = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
-version = "0.6.6"
+version = "0.7.0"
 
 [[deps.CPUSummary]]
 deps = ["CpuId", "IfElse", "Static"]

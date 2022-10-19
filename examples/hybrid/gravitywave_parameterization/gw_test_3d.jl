@@ -51,7 +51,6 @@ using ArtifactWrappers
 function era_dataset_path()
     era_dataset = ArtifactWrapper(
         @__DIR__,
-        isempty(get(ENV, "CI", "")),
         "era-global",
         ArtifactFile[ArtifactFile(
             url = "https://caltech.box.com/shared/static/2489yvlwhnxsrl05jvqnch7fcrd0k1vw.nc",
