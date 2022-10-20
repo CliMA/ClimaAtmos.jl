@@ -181,9 +181,11 @@ function save_to_disk_func(integrator)
             ᶜK,
             col_integrated_rain,
             col_integrated_snow,
+            T_sfc,
+            q_sfc,
         ) = p
     else
-        (; ᶜts, ᶜp, params, ᶜK) = p
+        (; ᶜts, ᶜp, params, ᶜK, T_sfc, q_sfc) = p
     end
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -211,6 +213,8 @@ function save_to_disk_func(integrator)
         potential_temperature = ᶜθ,
         kinetic_energy = ᶜK,
         vorticity = ᶜvort,
+        sfc_temperature = T_sfc,
+        sfc_qt = q_sfc,
     )
 
     # cloudwater (liquid and ice), watervapor and RH for moist simulation
