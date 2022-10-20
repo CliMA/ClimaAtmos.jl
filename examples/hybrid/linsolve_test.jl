@@ -35,7 +35,7 @@ function verify_matrix(x, A, b, update_matrix = false; kwargs...)
             matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(x.c), i, j, h)
         J_col[ᶠ𝕄_indices, ᶠ𝕄_indices] .=
             matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(x.f), i, j, h)
-        for ᶜ𝕋_position in findall(is_tracer_var, propertynames(x.c))
+        for ᶜ𝕋_position in findall(CA.is_tracer_var, propertynames(x.c))
             ᶜ𝕋_offset =
                 DataLayouts.fieldtypeoffset(FT, eltype(x.c), ᶜ𝕋_position)
             ᶜ𝕋_indices = (Nv * ᶜ𝕋_offset + 1):(Nv * (ᶜ𝕋_offset + 1))
