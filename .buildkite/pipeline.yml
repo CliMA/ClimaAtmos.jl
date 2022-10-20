@@ -187,7 +187,7 @@ steps:
           slurm_ntasks: 2
 
       - label: ":computer: performance target checkbounds"
-        command: "julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_cb --enable_threading false --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_unthreaded_cb --enable_threading false --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded_cb/*"
         soft_fail: true
         agents:
@@ -255,22 +255,20 @@ steps:
   - group: "Performance targets"
     steps:
 
-      # TODO: add/exercise edmf code
-      # Comment out the following job for now, until flame graph w/ changing ID is cleared
-      # - label: ":computer: Unthreaded performance target (Rosenbrock)"
-      #   command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-      #   artifact_paths: "perf_target_unthreaded_rosenbrock/*"
-      #   agents:
-      #     slurm_mem: 20GB
+      - label: ":computer: Unthreaded performance target (Rosenbrock)"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        artifact_paths: "perf_target_unthreaded_rosenbrock/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: Unthreaded performance target"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: Threaded performance target"
-        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_threaded/*"
         agents:
           slurm_ntasks: 8
