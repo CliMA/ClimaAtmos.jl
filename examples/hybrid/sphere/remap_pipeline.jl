@@ -125,6 +125,8 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     nc_θ = defVar(nc, "potential_temperature", FT, cspace, ("time",))
     nc_K = defVar(nc, "kinetic_energy", FT, cspace, ("time",))
     nc_vort = defVar(nc, "vorticity", FT, cspace, ("time",))
+    nc_T_sfc = defVar(nc, "sfc_temperature", FT, hspace, ("time",))
+    nc_qt_sfc = defVar(nc, "sfc_qt", FT, hspace, ("time",))
     # define moist variables
     if :ρq_tot in propertynames(Y.c)
         nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
@@ -194,6 +196,8 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     nc_θ[:, 1] = diag.potential_temperature
     nc_K[:, 1] = diag.kinetic_energy
     nc_vort[:, 1] = diag.vorticity
+    nc_T_sfc[:, 1] = diag.sfc_temperature
+    nc_qt_sfc[:, 1] = diag.sfc_qt
 
     if :ρq_tot in propertynames(Y.c)
         nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
@@ -249,6 +253,8 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
         "potential_temperature",
         "kinetic_energy",
         "vorticity",
+        "sfc_temperature",
+        "sfc_qt",
     ]
     if :ρq_tot in propertynames(Y.c)
         moist_variables = [
