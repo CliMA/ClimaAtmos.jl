@@ -399,7 +399,7 @@ function precomputed_quantities!(Y, p, t, colidx)
     
     # Impose boundary condition on vertical velocity term.
     ᵇᶜuₕ = Fields.level(ᶠinterp.(ᶜuₕ[colidx]), ClimaCore.Utilities.half)
-    @. ᵇᶜu₃ = Geometry.Covariant3Vector(-1 * g¹³ / g³³ * ᵇᶜuₕ.components.data.:1)
+    @. ᵇᶜu₃ = Geometry.Covariant3Vector(-1 * (g¹³ * ᵇᶜuₕ.components.data.:1 + g²³ * ᵇᶜuₕ.components.data.:2) / g³³ )
     enforce_boundary = Operators.SetBoundaryOperator(bottom = Operators.SetValue(ᵇᶜu₃))
     @. ᶠw = enforce_boundary(ᶠw)
     
