@@ -44,23 +44,9 @@ end
 params = gravity_wave_cache(FT; Bm = 0.4, cmax = 150, kwv = 2π / 100e3)
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 
-# ERA5 data 1973 Jan: downloaded from Caltech box
-using Pkg.Artifacts
-using ArtifactWrappers
+include(joinpath(@__DIR__, "..", "..", "..", "artifacts", "artifact_funcs.jl"))
 
-function era_dataset_path()
-    era_dataset = ArtifactWrapper(
-        @__DIR__,
-        isempty(get(ENV, "CI", "")),
-        "era-global",
-        ArtifactFile[ArtifactFile(
-            url = "https://caltech.box.com/shared/static/2489yvlwhnxsrl05jvqnch7fcrd0k1vw.nc",
-            filename = "box-era5-monthly.nc",
-        ),],
-    )
-    return get_data_folder(era_dataset)
-end
-era_data = joinpath(era_dataset_path(), "box-era5-monthly.nc")
+era_data = joinpath(era_global_dataset_path(), "box-era5-monthly.nc")
 
 nt = NCDataset(era_data) do ds
     lon = ds["longitude"][:]

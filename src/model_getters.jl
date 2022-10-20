@@ -130,3 +130,18 @@ function surface_scheme(FT, parsed_args)
         surface_scheme
     end
 end
+
+"""
+    ThermoDispatcher(model_spec)
+
+A helper method for creating a thermodynamics dispatcher
+from the model specification struct.
+"""
+function ThermoDispatcher(model_spec)
+    (; energy_form, moisture_model, compressibility_model) = model_spec
+    return ThermoDispatcher(;
+        energy_form,
+        moisture_model,
+        compressibility_model,
+    )
+end

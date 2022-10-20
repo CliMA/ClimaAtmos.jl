@@ -45,23 +45,10 @@ end
 params = gravity_wave_cache(FT; Bm = 0.4, cmax = 150, kwv = 2π / 100e3)
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 
-# download ERA5 nc data: wind, temperature, geopotential height
-using Pkg.Artifacts
-using ArtifactWrappers
+include(joinpath(@__DIR__, "..", "..", "..", "artifacts", "artifact_funcs.jl"))
 
-function era_dataset_path()
-    era_dataset = ArtifactWrapper(
-        @__DIR__,
-        isempty(get(ENV, "CI", "")),
-        "era-single-column",
-        ArtifactFile[ArtifactFile(
-            url = "https://caltech.box.com/shared/static/of5wi39o643a333yy9vbx5pnf0za503g.nc",
-            filename = "box-single_column_test.nc",
-        ),],
-    )
-    return get_data_folder(era_dataset)
-end
-era_data = joinpath(era_dataset_path(), "box-single_column_test.nc")
+era_data =
+    joinpath(era_single_column_dataset_path(), "box-single_column_test.nc")
 
 nt = NCDataset(era_data) do ds
     # Dimensions:  longitude × latitude × level × time

@@ -45,6 +45,9 @@ steps:
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
 
+      - echo "--- Download artifacts"
+      - "julia --project=examples artifacts/download_artifacts.jl"
+
     agents:
       slurm_cpus_per_task: 8
     env:
@@ -183,12 +186,23 @@ steps:
         agents:
           slurm_ntasks: 2
 
+      - label: ":computer: performance target checkbounds"
+        command: "julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_cb --enable_threading false --forcing held_suarez --vert_diff true --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        artifact_paths: "perf_target_unthreaded_cb/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
   - group: "Milestones"
     steps:
 
       - label: ":computer: hydrostatic balance (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --job_id sphere_hydrostatic_balance_rhoe"
         artifact_paths: "sphere_hydrostatic_balance_rhoe/*"
+
+      - label: ":computer: Box hydrostatic balance (ρe_tot)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --perturb_initstate false --hyperdiff false --dt 20secs --t_end 1days --job_id box_hydrostatic_balance_rhoe"
+        artifact_paths: "box_hydrostatic_balance_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
@@ -353,10 +367,11 @@ steps:
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
 
-      - label: ":mag: Allocations: perf target"
-        command: "julia --color=yes --project=perf perf/allocs.jl"
-        agents:
-          slurm_mem: 20GB
+      # TODO: commented temporarily as this is 2x longer than any other job
+      # - label: ":mag: Allocations: perf target"
+      #   command: "julia --color=yes --project=perf perf/allocs.jl"
+      #   agents:
+      #     slurm_mem: 20GB
 
   - wait: ~
     continue_on_failure: true

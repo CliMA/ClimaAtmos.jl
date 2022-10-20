@@ -39,16 +39,15 @@ function get_edmf_cache(
     Y,
     turbconv_model,
     precip_model,
-    radiation,
     namelist,
     param_set,
     parsed_args,
 )
     tc_params = CAP.turbconv_params(param_set)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
-    case = Cases.get_case(namelist)
     FT = CC.Spaces.undertype(axes(Y.c))
     test_consistency = parsed_args["test_edmf_consistency"]
+    case = Cases.get_case(namelist)
     forcing =
         Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
     surf_ref_state = Cases.surface_ref_state(case, tc_params, namelist)
@@ -61,7 +60,6 @@ function get_edmf_cache(
         case,
         forcing,
         test_consistency,
-        radiation,
         surf_params,
         param_set,
         surf_ref_state,
@@ -72,8 +70,7 @@ end
 
 function init_tc!(Y, p, param_set, namelist)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_ref_state, surf_params, forcing, radiation, case) =
-        edmf_cache
+    (; edmf, param_set, surf_ref_state, surf_params, forcing, case) = edmf_cache
     tc_params = CAP.turbconv_params(param_set)
 
     FT = eltype(edmf)
@@ -97,7 +94,6 @@ function init_tc!(Y, p, param_set, namelist)
         set_grid_mean_from_thermo_state!(tc_params, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
         Cases.initialize_forcing(case, forcing, grid, state, tc_params)
-        Cases.initialize_radiation(case, radiation, grid, state, tc_params)
         initialize_edmf(edmf, grid, state, surf_params, tc_params, t, case)
     end
 end
@@ -106,7 +102,7 @@ end
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     (; edmf_cache, Δt) = p
     (; edmf, param_set, case, surf_params) = edmf_cache
-    (; radiation, forcing, precip_model, test_consistency) = edmf_cache
+    (; forcing, precip_model, test_consistency) = edmf_cache
     tc_params = CAP.turbconv_params(param_set)
     state = TC.tc_column_state(Y, p, Yₜ, colidx)
     grid = TC.Grid(state)
@@ -115,7 +111,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
         parent(state.aux.cent) .= NaN
     end
 
-    set_thermo_state_peq!(Y, p, colidx)
     assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
     aux_gm = TC.center_aux_grid_mean(state)
@@ -128,7 +123,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
     # treat them as auxiliary variables for now, until we disentangle the tendency computations.
     Cases.update_forcing(case, grid, state, t, tc_params)
-    Cases.update_radiation(radiation, grid, state, t, tc_params)
 
     TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
@@ -151,15 +145,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     TC.compute_turbconv_tendencies!(edmf, grid, state, tc_params, surf, Δt)
 
     # TODO: incrementally disable this and enable proper grid mean terms
-    compute_gm_tendencies!(
-        edmf,
-        grid,
-        state,
-        surf,
-        radiation,
-        forcing,
-        tc_params,
-    )
+    compute_gm_tendencies!(edmf, grid, state, surf, forcing, tc_params)
     return nothing
 end
 

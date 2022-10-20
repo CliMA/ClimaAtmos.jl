@@ -124,42 +124,6 @@ function compute_ref_state!(
     return nothing
 end
 
-
-function set_thermo_state_peq!(Y, p, colidx)
-    (; edmf_cache, params) = p
-    (; moisture_model, compressibility_model) = edmf_cache.edmf
-    thermo_params = CAP.thermodynamics_params(params)
-    ᶜts_gm = p.ᶜts[colidx]
-    ᶜρ = Y.c.ρ[colidx]
-    uₕ = Y.c.uₕ[colidx]
-    ᶜp = p.ᶜp[colidx]
-    C123 = CCG.Covariant123Vector
-    ᶜK = p.ᶜK[colidx]
-    ρe_tot = Y.c.ρe_tot[colidx]
-    ρq_tot = Y.c.ρq_tot[colidx]
-    zc = CC.Fields.coordinate_field(axes(ᶜρ)).z
-    grav = CAP.grav(params)
-
-    @assert moisture_model isa CA.EquilMoistModel "TODO: add non-equilibrium moisture model support"
-
-    if compressibility_model isa CA.CompressibleFluid
-        @. ᶜts_gm = TD.PhaseEquil_ρeq(
-            thermo_params,
-            ᶜρ,
-            ρe_tot / ᶜρ - ᶜK - grav * zc,
-            ρq_tot / ᶜρ,
-        )
-    elseif compressibility_model isa CA.AnelasticFluid
-        @. ᶜts_gm = TD.PhaseEquil_peq(
-            thermo_params,
-            ᶜp,
-            ρe_tot / ᶜρ - ᶜK - grav * zc,
-            ρq_tot / ᶜρ,
-        )
-    end
-    return nothing
-end
-
 function set_thermo_state_pθq!(Y, p, colidx)
     (; edmf_cache, params) = p
     thermo_params = CAP.thermodynamics_params(params)
@@ -239,7 +203,6 @@ function compute_gm_tendencies!(
     grid::TC.Grid,
     state::TC.State,
     surf::TC.SurfaceBase,
-    radiation,
     force::Cases.ForcingBase,
     param_set::APS,
 )
@@ -288,7 +251,7 @@ function compute_gm_tendencies!(
         @. ∇q_ice_gm = ∇c(wvec(RBq(prog_gm.q_ice)))
     end
 
-    # Apply forcing and radiation
+    # Apply forcing
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     # prog_gm_v = TC.grid_mean_v(state)
@@ -320,12 +283,6 @@ function compute_gm_tendencies!(
     if edmf.moisture_model isa CA.NonEquilMoistModel
         @. tendencies_gm.q_liq -= ∇q_liq_gm * aux_gm.subsidence
         @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
-    end
-    # Radiation
-    if radiation isa CA.RadiationDYCOMS_RF01 ||
-       radiation isa CA.RadiationTRMM_LBA
-        @. tendencies_gm.ρe_tot +=
-            ρ_c * TD.cv_m(thermo_params, ts_gm) * aux_gm.dTdt_rad
     end
     # LS advection
     @. tendencies_gm.ρq_tot += ρ_c * aux_gm.dqtdt_hadv

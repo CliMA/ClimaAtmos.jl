@@ -1,7 +1,7 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.5.0"
+version = "0.6.0"
 
 [deps]
 AtmosphericProfilesLibrary = "86bc3604-9858-485a-bdbe-831ec50de11d"
@@ -35,6 +35,7 @@ Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
+AtmosphericProfilesLibrary = "0.1"
 ClimaCore = "0.10"
 ClimaCorePlots = "0.2"
 ClimaCoreVTK = "0.6, 0.7"
