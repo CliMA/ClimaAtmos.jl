@@ -282,7 +282,6 @@ function save_to_disk_func(integrator)
             bulk_up_qt_tendency_precip_formation = tc_cent(
                 p,
             ).bulk.qt_tendency_precip_formation,
-            env_w = tc_cent(p).en.w,
             env_area = tc_cent(p).en.area,
             env_q_tot = tc_cent(p).en.q_tot,
             env_q_liq = tc_cent(p).en.q_liq,

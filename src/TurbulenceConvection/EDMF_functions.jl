@@ -105,17 +105,11 @@ function compute_sgs_flux!(
     @. h_tot_gm =
         TD.total_specific_enthalpy(thermo_params, ts_gm, prog_gm.ρe_tot / ρ_c)
     # Compute the mass flux and associated scalar fluxes
-    @. massflux = ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
+    @. massflux = ρ_f * Ifae(a_en) * (w_en - w_gm)
     @. massflux_h =
-        ρ_f *
-        Ifae(a_en) *
-        (w_en - wcomponent(CCG.WVector(w_gm))) *
-        (If(aux_en.h_tot) - If(h_tot_gm))
+        ρ_f * Ifae(a_en) * (w_en - w_gm) * (If(aux_en.h_tot) - If(h_tot_gm))
     @. massflux_qt =
-        ρ_f *
-        Ifae(a_en) *
-        (w_en - wcomponent(CCG.WVector(w_gm))) *
-        (If(aux_en.q_tot) - If(q_tot_gm))
+        ρ_f * Ifae(a_en) * (w_en - w_gm) * (If(aux_en.q_tot) - If(q_tot_gm))
     @inbounds for i in 1:N_up
         aux_up_f_i = aux_up_f[i]
         aux_up_i = aux_up[i]
@@ -123,18 +117,17 @@ function compute_sgs_flux!(
         Ifau = CCO.InterpolateC2F(; a_up_bcs...)
         a_up = aux_up[i].area
         w_up_i = prog_up_f[i].w
-        @. aux_up_f[i].massflux =
-            ρ_f * Ifau(a_up) * (w_up_i - wcomponent(CCG.WVector(w_gm)))
+        @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - w_gm)
         @. massflux_h +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - wcomponent(CCG.WVector(w_gm))) *
+                (w_up_i - w_gm) *
                 (If(aux_up[i].h_tot) - If(h_tot_gm))
             )
         @. massflux_qt +=
             ρ_f * (
                 Ifau(a_up) *
-                (w_up_i - wcomponent(CCG.WVector(w_gm))) *
+                (w_up_i - w_gm) *
                 (If(aux_up[i].q_tot) - If(q_tot_gm))
             )
     end
@@ -147,8 +140,7 @@ function compute_sgs_flux!(
         q_ice_en = aux_en.q_ice
         q_liq_gm = prog_gm.q_liq
         q_ice_gm = prog_gm.q_ice
-        @. massflux_en =
-            ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
+        @. massflux_en = ρ_f * Ifae(a_en) * (w_en - w_gm)
         @. massflux_ql = massflux_en * (If(q_liq_en) - If(q_liq_gm))
         @. massflux_qi = massflux_en * (If(q_ice_en) - If(q_ice_gm))
         @inbounds for i in 1:N_up
@@ -159,12 +151,12 @@ function compute_sgs_flux!(
             @. massflux_ql += massflux_up_i * (If(q_liq_up) - If(q_liq_gm))
             @. massflux_qi += massflux_up_i * (If(q_ice_up) - If(q_ice_gm))
         end
-        massflux_ql[kf_surf] = 0
-        massflux_qi[kf_surf] = 0
+        massflux_ql[kf_surf] = zero(eltype(massflux_ql))
+        massflux_qi[kf_surf] = zero(eltype(massflux_qi))
     end
 
-    massflux_h[kf_surf] = 0
-    massflux_qt[kf_surf] = 0
+    massflux_h[kf_surf] = zero(eltype(massflux_h))
+    massflux_qt[kf_surf] = zero(eltype(massflux_qt))
 
     diffusive_flux_h = aux_tc_f.diffusive_flux_h
     diffusive_flux_qt = aux_tc_f.diffusive_flux_qt
@@ -180,8 +172,10 @@ function compute_sgs_flux!(
 
     # apply surface BC as SGS flux at lowest level
     lg_surf = CC.Fields.local_geometry_field(axes(ρ_f))[kf_surf]
-    sgs_flux_h_tot[kf_surf] = surf.ρe_tot_flux
-    sgs_flux_q_tot[kf_surf] = surf.ρq_tot_flux
+    sgs_flux_h_tot[kf_surf] =
+        CCG.Covariant3Vector(CCG.WVector(surf.ρe_tot_flux), lg_surf)
+    sgs_flux_q_tot[kf_surf] =
+        CCG.Covariant3Vector(CCG.WVector(surf.ρq_tot_flux), lg_surf)
     sgs_flux_uₕ[kf_surf] =
         CCG.Covariant3Vector(wvec(FT(1)), lg_surf) ⊗
         CCG.Covariant12Vector(CCG.UVVector(surf.ρu_flux, surf.ρv_flux), lg_surf)
@@ -196,8 +190,8 @@ function compute_sgs_flux!(
         @. sgs_flux_q_liq = diffusive_flux_ql + massflux_ql
         @. sgs_flux_q_ice = diffusive_flux_qi + massflux_qi
 
-        sgs_flux_q_liq[kf_surf] = surf.ρq_liq_flux
-        sgs_flux_q_ice[kf_surf] = surf.ρq_ice_flux
+        sgs_flux_q_liq[kf_surf] = surf.ρq_liq_flux ##
+        sgs_flux_q_ice[kf_surf] = surf.ρq_ice_flux ##
     end
 
     return nothing
@@ -251,13 +245,13 @@ function compute_diffusive_fluxes(
 
     aeKMuₕ_bc = CCG.UVVector(aeKMu_bc, aeKMv_bc)
 
-    ∇q_tot_en = CCO.DivergenceC2F(;
-        bottom = CCO.SetDivergence(aeKHq_tot_bc),
-        top = CCO.SetDivergence(FT(0)),
+    ∇q_tot_en = CCO.GradientC2F(;
+        bottom = CCO.SetGradient(CCG.WVector(aeKHq_tot_bc)),
+        top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
     )
-    ∇h_tot_en = CCO.DivergenceC2F(;
-        bottom = CCO.SetDivergence(aeKHh_tot_bc),
-        top = CCO.SetDivergence(FT(0)),
+    ∇h_tot_en = CCO.GradientC2F(;
+        bottom = CCO.SetGradient(CCG.WVector(aeKHh_tot_bc)),
+        top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
     )
     # CCG.Covariant3Vector(FT(1)) ⊗ CCG.Covariant12Vector(FT(aeKMu_bc),FT(aeKMv_bc))
     local_geometry_surf = CC.Fields.local_geometry_field(axes(ρ_f))[kf_surf]
@@ -273,29 +267,27 @@ function compute_diffusive_fluxes(
         ),
     )
 
-    @. aux_tc_f.diffusive_flux_qt =
-        -aux_tc_f.ρ_ae_KH * ∇q_tot_en(wvec(aux_en.q_tot))
-    @. aux_tc_f.diffusive_flux_h =
-        -aux_tc_f.ρ_ae_KH * ∇h_tot_en(wvec(aux_en.h_tot))
+    @. aux_tc_f.diffusive_flux_qt = -aux_tc_f.ρ_ae_KH * ∇q_tot_en(aux_en.q_tot)
+    @. aux_tc_f.diffusive_flux_h = -aux_tc_f.ρ_ae_KH * ∇h_tot_en(aux_en.h_tot)
     @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * ∇uₕ_gm(prog_gm_uₕ)
 
     if edmf.moisture_model isa NonEquilMoistModel
         aeKHq_liq_bc = FT(0)
         aeKHq_ice_bc = FT(0)
 
-        ∇q_liq_en = CCO.DivergenceC2F(;
-            bottom = CCO.SetDivergence(aeKHq_liq_bc),
-            top = CCO.SetDivergence(FT(0)),
+        ∇q_liq_en = CCO.GradientC2F(;
+            bottom = CCO.SetGradient(CCG.WVector(aeKHq_liq_bc)),
+            top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
         )
-        ∇q_ice_en = CCO.DivergenceC2F(;
-            bottom = CCO.SetDivergence(aeKHq_ice_bc),
-            top = CCO.SetDivergence(FT(0)),
+        ∇q_ice_en = CCO.GradientC2F(;
+            bottom = CCO.SetGradient(CCG.WVector(aeKHq_ice_bc)),
+            top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
         )
 
         @. aux_tc_f.diffusive_flux_ql =
-            -aux_tc_f.ρ_ae_KH * ∇q_liq_en(wvec(aux_en.q_liq))
+            -aux_tc_f.ρ_ae_KH * ∇q_liq_en(aux_en.q_liq)
         @. aux_tc_f.diffusive_flux_qi =
-            -aux_tc_f.ρ_ae_KH * ∇q_ice_en(wvec(aux_en.q_ice))
+            -aux_tc_f.ρ_ae_KH * ∇q_ice_en(aux_en.q_ice)
     end
 
     return nothing
@@ -366,7 +358,10 @@ function set_edmf_surface_bc(
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * q_liq_surf
             prog_up[i].ρaq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * q_ice_surf
         end
-        prog_up_f[i].w[kf_surf] = w_surface_bc(surf)
+        prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
+            CCG.WVector(w_surface_bc(surf)),
+            CC.Fields.local_geometry_field(axes(prog_up_f))[kf_surf],
+        )
         ae_surf -= a_surf
     end
 
@@ -547,16 +542,16 @@ function get_GMV_CoVar(
     @. gmv_covar =
         tke_factor *
         area_en *
-        Icd(ϕ_en - wcomponent(CCG.WVector(ϕ_gm))) *
-        Icd(ψ_en - wcomponent(CCG.WVector(ψ_gm))) + area_en * covar_e
+        Icd(wcomponent(CCG.WVector(ϕ_en - ϕ_gm))) *
+        Icd(wcomponent(CCG.WVector(ψ_en - ψ_gm))) + area_en * covar_e
     @inbounds for i in 1:N_up
         ϕ_up = getproperty(aux_up[i], ϕ_sym)
         ψ_up = getproperty(aux_up[i], ψ_sym)
         @. gmv_covar +=
             tke_factor *
             aux_up_c[i].area *
-            Icd(ϕ_up - wcomponent(CCG.WVector(ϕ_gm))) *
-            Icd(ψ_up - wcomponent(CCG.WVector(ψ_gm)))
+            Icd(wcomponent(CCG.WVector(ϕ_up - ϕ_gm))) *
+            Icd(wcomponent(CCG.WVector(ψ_up - ψ_gm)))
     end
     return nothing
 end
@@ -652,7 +647,7 @@ function compute_up_tendencies!(
     ∇c = CCO.DivergenceF2C()
     w_bcs =
         (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
-    LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(FT(0)))
+    LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
 
     # Solve for updraft area fraction
     @inbounds for i in 1:N_up
@@ -678,20 +673,27 @@ function compute_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea =
-            -∇c(wvec(LBF(Ic(w_up) * ρarea))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn) -
-            (ρarea * Ic(w_up) * detr_turb_dyn)
+            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)) +
+            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn) -
+            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn)
 
         @. tends_ρaθ_liq_ice =
-            -∇c(wvec(LBF(Ic(w_up) * ρaθ_liq_ice))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn * θ_liq_ice_en) -
-            (ρaθ_liq_ice * Ic(w_up) * detr_turb_dyn) +
+            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaθ_liq_ice)) + (
+                ρarea *
+                Ic(wcomponent(CCG.WVector(w_up))) *
+                entr_turb_dyn *
+                θ_liq_ice_en
+            ) -
+            (ρaθ_liq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * θ_liq_ice_tendency_precip_formation)
 
         @. tends_ρaq_tot =
-            -∇c(wvec(LBF(Ic(w_up) * ρaq_tot))) +
-            (ρarea * Ic(w_up) * entr_turb_dyn * q_tot_en) -
-            (ρaq_tot * Ic(w_up) * detr_turb_dyn) +
+            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot)) + (
+                ρarea *
+                Ic(wcomponent(CCG.WVector(w_up))) *
+                entr_turb_dyn *
+                q_tot_en
+            ) - (ρaq_tot * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * qt_tendency_precip_formation)
 
         if edmf.moisture_model isa NonEquilMoistModel
@@ -713,15 +715,23 @@ function compute_up_tendencies!(
             tends_ρaq_ice = tendencies_up[i].ρaq_ice
 
             @. tends_ρaq_liq =
-                -∇c(wvec(LBF(Ic(w_up) * ρaq_liq))) +
-                (ρarea * Ic(w_up) * entr_turb_dyn * q_liq_en) -
-                (ρaq_liq * Ic(w_up) * detr_turb_dyn) +
+                -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_liq)) + (
+                    ρarea *
+                    Ic(wcomponent(CCG.WVector(w_up))) *
+                    entr_turb_dyn *
+                    q_liq_en
+                ) -
+                (ρaq_liq * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
                 (ρ_c * (ql_tendency_precip_formation + ql_tendency_noneq))
 
             @. tends_ρaq_ice =
-                -∇c(wvec(LBF(Ic(w_up) * ρaq_ice))) +
-                (ρarea * Ic(w_up) * entr_turb_dyn * q_ice_en) -
-                (ρaq_ice * Ic(w_up) * detr_turb_dyn) +
+                -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_ice)) + (
+                    ρarea *
+                    Ic(wcomponent(CCG.WVector(w_up))) *
+                    entr_turb_dyn *
+                    q_ice_en
+                ) -
+                (ρaq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
                 (ρ_c * (qi_tendency_precip_formation + qi_tendency_noneq))
 
             tends_ρaq_liq[kc_surf] = 0
@@ -769,11 +779,11 @@ function compute_up_tendencies!(
         detr_w = aux_up[i].detr_turb_dyn
         buoy = aux_up[i].buoy
 
-        @. tends_w =
-            -wcomponent(CCG.WVector(grad_f(LBC(LA.norm_sqr(wvec(w_up)) / 2))))
+        @. tends_w = -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
         @. tends_w +=
-            w_up * I0f(entr_w) * (w_en - w_up) + I0f(buoy) + nh_pressure
-        tends_w[kf_surf] = 0
+            w_up * I0f(entr_w) * (wcomponent(CCG.WVector(w_en - w_up))) +
+            CCG.Covariant3Vector(CCG.WVector(I0f(buoy) + nh_pressure))
+        tends_w[kf_surf] = zero(tends_w[kf_surf])
     end
 
     return nothing
@@ -823,7 +833,9 @@ function filter_updraft_vars(
     end
 
     @inbounds for i in 1:N_up
-        @. prog_up_f[i].w = max.(prog_up_f[i].w, 0)
+        @. prog_up_f[i].w = CCG.Covariant3Vector(
+            CCG.WVector(max(wcomponent(CCG.WVector(prog_up_f[i].w)), 0)),
+        )
         a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
         If = CCO.InterpolateC2F(; a_up_bcs...)
         @. prog_up_f[i].w =
@@ -861,12 +873,21 @@ function filter_updraft_vars(
 
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
-        @. prog_up[i].ρarea =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρarea)
-        @. prog_up[i].ρaθ_liq_ice =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaθ_liq_ice)
-        @. prog_up[i].ρaq_tot =
-            ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_tot)
+        @. prog_up[i].ρarea = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+            FT(0),
+            prog_up[i].ρarea,
+        )
+        @. prog_up[i].ρaθ_liq_ice = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+            FT(0),
+            prog_up[i].ρaθ_liq_ice,
+        )
+        @. prog_up[i].ρaq_tot = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+            FT(0),
+            prog_up[i].ρaq_tot,
+        )
 
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i)
@@ -877,10 +898,16 @@ function filter_updraft_vars(
     end
     if edmf.moisture_model isa NonEquilMoistModel
         @inbounds for i in 1:N_up
-            @. prog_up[i].ρaq_liq =
-                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_liq)
-            @. prog_up[i].ρaq_ice =
-                ifelse(Ic(prog_up_f[i].w) <= 0, FT(0), prog_up[i].ρaq_ice)
+            @. prog_up[i].ρaq_liq = ifelse(
+                Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+                FT(0),
+                prog_up[i].ρaq_liq,
+            )
+            @. prog_up[i].ρaq_ice = ifelse(
+                Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+                FT(0),
+                prog_up[i].ρaq_ice,
+            )
             ql_surf = ql_surface_bc(surf)
             qi_surf = qi_surface_bc(surf)
             prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf
@@ -933,7 +960,7 @@ function compute_covariance_shear(
     if is_tke
         uvw = face_aux_turbconv(state).uvw
         Shear² = center_aux_turbconv(state).Shear²
-        @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(wvec(ϕ_en)) # ϕ_en === ψ_en
+        @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(ϕ_en) # ϕ_en === ψ_en
         @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
         @. shear = ρ_c * area_en * k_eddy * Shear²
     else
@@ -943,8 +970,8 @@ function compute_covariance_shear(
             ρ_c *
             area_en *
             k_eddy *
-            LA.dot(∇c(If(ϕ_en)), k̂) *
-            LA.dot(∇c(If(ψ_en)), k̂)
+            LA.dot(∇c(If(wcomponent(CCG.WVector(ϕ_en)))), k̂) *
+            LA.dot(∇c(If(wcomponent(CCG.WVector(ψ_en)))), k̂)
     end
     return nothing
 end
@@ -982,8 +1009,8 @@ function compute_covariance_interdomain_src(
             tke_factor *
             a_up *
             (1 - a_up) *
-            (Ic(ϕ_up) - Ic(ϕ_en)) *
-            (Ic(ψ_up) - Ic(ψ_en))
+            (Ic(wcomponent(CCG.WVector(ϕ_up - ϕ_en)))) *
+            (Ic(wcomponent(CCG.WVector(ψ_up - ψ_en))))
     end
     return nothing
 end
@@ -1046,21 +1073,21 @@ function compute_covariance_entr(
                 tke_factor *
                 ρ_c *
                 a_up *
-                abs(Ic(w_up)) *
+                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
                 detr_sc *
-                (Idc(ϕ_up) - Idc(ϕ_en)) *
-                (Idc(ψ_up) - Idc(ψ_en))
+                (Idc(wcomponent(CCG.WVector(ϕ_up - ϕ_en)))) *
+                (Idc(wcomponent(CCG.WVector(ψ_up - ψ_en))))
             ) + (
                 tke_factor *
                 ρ_c *
                 a_up *
-                abs(Ic(w_up)) *
+                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
                 eps_turb *
                 (
-                    (Idc(ϕ_en) - Idc(wcomponent(CCG.WVector(ϕ_gm)))) *
-                    (Idc(ψ_up) - Idc(ψ_en)) +
-                    (Idc(ψ_en) - Idc(wcomponent(CCG.WVector(ψ_gm)))) *
-                    (Idc(ϕ_up) - Idc(ϕ_en))
+                    (Idc(wcomponent(CCG.WVector(ϕ_en - ϕ_gm)))) *
+                    (Idc(wcomponent(CCG.WVector(ψ_up - ψ_en)))) +
+                    (Idc(wcomponent(CCG.WVector(ψ_en - ψ_gm)))) *
+                    (Idc(wcomponent(CCG.WVector(ϕ_up - ϕ_en))))
                 )
             )
 
@@ -1069,7 +1096,7 @@ function compute_covariance_entr(
             tke_factor *
             ρ_c *
             a_up *
-            abs(Ic(w_up)) *
+            abs(Ic(wcomponent(CCG.WVector(w_up)))) *
             (entr_sc + eps_turb) *
             covar
 
@@ -1158,14 +1185,18 @@ function compute_en_tendencies!(
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
         @. D_env +=
-            Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
+            Int(a_up > min_area) *
+            ρ_c *
+            a_up *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            (entr_sc + turb_entr)
     end
 
-    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(FT(0)))
+    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(CCG.WVector(FT(0))))
     @. tend_covar =
         press + buoy + shear + entr_gain + rain_src - D_env * covar -
         (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) *
-        prog_covar - ∇c(wvec(RB(prog_covar * Ic(w_en_f)))) +
+        prog_covar - ∇c(RB(prog_covar * Ic(CCG.WVector(w_en_f)))) +
         ∇c(ρ_f * If(aeK) * ∇f(covar))
 
     return nothing
@@ -1220,7 +1251,11 @@ function update_diagnostic_covariances!(
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
         @. D_env +=
-            Int(a_up > min_area) * ρ_c * a_up * Ic(w_up) * (entr_sc + turb_entr)
+            Int(a_up > min_area) *
+            ρ_c *
+            a_up *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            (entr_sc + turb_entr)
     end
 
     @. covar =
@@ -1273,7 +1308,7 @@ function GMV_third_m(
     @inbounds for i in 1:N_up
         a_up = aux_up_c[i].area
         var_up = getproperty(aux_up[i], var)
-        @. ϕ_gm += a_up * Ic(var_up)
+        @. ϕ_gm += a_up * Ic(wcomponent(CCG.WVector(var_up)))
     end
 
     # w'w' ≈ 2/3 TKE (isotropic turbulence assumption)

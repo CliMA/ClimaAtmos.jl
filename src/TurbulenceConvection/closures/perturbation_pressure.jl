@@ -63,8 +63,11 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
         nh_pressure = aux_up_f[i].nh_pressure
 
         @. nh_pressure =
-            -α_b * Ifb(b_up) + α_a * w_up * ∇(wvec(Ifc(w_up))) -
-            α_d * (w_up - w_en) * abs(w_up - w_en) / H_up
+            -α_b * Ifb(b_up) +
+            α_a * wcomponent(CCG.WVector(w_up)) * ∇(Ifc(CCG.WVector(w_up))) -
+            α_d *
+            (wcomponent(CCG.WVector(w_up - w_en))) *
+            abs(wcomponent(CCG.WVector(w_up - w_en))) / H_up
     end
     return nothing
 end

@@ -1,4 +1,4 @@
-import ClimaCore: Fields, InputOutput
+import ClimaCore: Fields, InputOutput, Geometry
 using Plots
 
 function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
@@ -46,8 +46,18 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         plot!(p2, parent(D.bulk_up_q_tot)[:], zc; label = "$data_source")
         plot!(p3, parent(D.bulk_up_q_liq)[:], zc; label = "$data_source")
         plot!(p4, parent(D.bulk_up_q_ice)[:], zc; label = "$data_source")
-        plot!(p5a, parent(D.face_bulk_w)[:], zf; label = "$data_source")
-        plot!(p5b, parent(D.face_env_w)[:], zf; label = "$data_source")
+        plot!(
+            p5a,
+            parent(Geometry.WVector.(D.face_bulk_w))[:],
+            zf;
+            label = "$data_source",
+        )
+        plot!(
+            p5b,
+            parent(Geometry.WVector.(D.face_env_w))[:],
+            zf;
+            label = "$data_source",
+        )
         plot!(p6, parent(D.env_q_tot)[:], zc; label = "$data_source")
         plot!(p7, parent(D.env_q_liq)[:], zc; label = "$data_source")
         plot!(p8, parent(D.env_q_ice)[:], zc; label = "$data_source")
