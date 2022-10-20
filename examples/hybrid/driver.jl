@@ -139,7 +139,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             α_rayleigh_w = FT(α_rayleigh_w),
         ) : NamedTuple(),
         viscous_sponge ?
-        viscous_sponge_cache(
+        CA.viscous_sponge_cache(
             Y;
             zd_viscous = FT(zd_viscous),
             κ₂ = FT(κ₂_sponge),
@@ -192,7 +192,7 @@ end
 function additional_tendency!(Yₜ, Y, p, t)
     (; viscous_sponge, hyperdiff) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
+    viscous_sponge && CA.viscous_sponge_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
