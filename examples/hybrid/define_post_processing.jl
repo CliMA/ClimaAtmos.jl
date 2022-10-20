@@ -228,7 +228,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         iu = safe_index(ius, sol.t)
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
-        thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp)
+        thermo_state!(Y, p, ᶜinterp)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
@@ -369,7 +369,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜw_phy = @. Geometry.project(Geometry.WAxis(), ᶜuvw_phy)
         ᶠw_phy = ᶠinterp.(ᶜw_phy)
         @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-        thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp, ᶜK)
+        thermo_state!(Y, p, ᶜinterp)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
         ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
@@ -667,7 +667,7 @@ function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
             Y = sol.u[i]
 
             # temperature
-            thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp)
+            thermo_state!(Y, p, ᶜinterp)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -852,7 +852,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
             # temperature
             ᶠw = Y.f.w
             @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
-            thermo_state!(ᶜts, Y, thermo_params, thermo_dispatcher, ᶜinterp, ᶜK)
+            thermo_state!(Y, p, ᶜinterp)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
