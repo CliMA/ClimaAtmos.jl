@@ -401,7 +401,7 @@ function precomputed_quantities!(Y, p, t, colidx)
     ᵇᶜuₕ = Fields.level(ᶠinterp.(ᶜuₕ[colidx]), ClimaCore.Utilities.half)
     @. ᵇᶜu₃ = Geometry.Covariant3Vector(-1 * g¹³ / g³³ * ᵇᶜuₕ.components.data.:1)
     enforce_boundary = Operators.SetBoundaryOperator(bottom = Operators.SetValue(ᵇᶜu₃))
-    @. ᶠw = enforce_boundary(fw)
+    @. ᶠw = enforce_boundary(ᶠw)
     
 
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
