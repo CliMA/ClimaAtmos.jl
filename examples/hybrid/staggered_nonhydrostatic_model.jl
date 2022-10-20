@@ -88,7 +88,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     gⁱʲ = Fields.level(Fields.local_geometry_field(Y.f), ClimaCore.Utilities.half).gⁱʲ
-    g¹³ = gⁱʲ.components.data.:1
+    g¹³ = gⁱʲ.components.data.:3
     g²³ = gⁱʲ.components.data.:6
     g³³ = gⁱʲ.components.data.:9 
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
@@ -147,6 +147,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜω¹² = similar(Y.c, Geometry.Contravariant12Vector{FT}),
         ᶜu³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
+        ᵇᶜu₃ = similar(gⁱʲ, Geometry.Covariant3Vector{FT}),
         ᶜw = similar(Y.c, Geometry.Covariant3Vector{FT}),
         ᶜf,
         z_sfc,
@@ -394,7 +395,14 @@ end
 function precomputed_quantities!(Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜts, ᶜp, params, thermo_dispatcher) = p
+    (; ᶜuvw, ᶜK, ᶜts, ᶜp, ᵇᶜu₃, g¹³, g²³, g³³, params, thermo_dispatcher) = p
+    
+    # Impose boundary condition on vertical velocity term.
+    ¹ᶜuₕ = Fields.level(ᶠinterp(ᶜuₕ), ClimaCore.Utilities.half)
+    @. ᵇᶜu₃ = Geometry.Covariant3Vector(-1 * g¹³ / g³³ * ¹ᶜuₕ.components.data.:1)
+    enforce_boundary = Operators.SetBoundaryOperator(bottom = Operators.SetValue(ᵇᶜu₃))
+    @. ᶠw = apply_boundary_w(fw)
+    
 
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
