@@ -1169,11 +1169,11 @@ function compute_en_tendencies!(
             Int(a_up > min_area) * ρ_c * a_up * Ic(wcomponent(CCG.WVector(w_up))) * (entr_sc + turb_entr)
     end
 
-    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(FT(0)))
+    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(CCG.WVector(FT(0))))
     @. tend_covar =
         press + buoy + shear + entr_gain + rain_src - D_env * covar -
         (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) *
-        prog_covar - div_c(wvec(RB(prog_covar * Ic(w_en_f)))) +
+        prog_covar - div_c(RB(prog_covar * Ic(CCG.WVector(w_en_f)))) +
         div_c(ρ_f * If(aeK) * grad_f(covar))
 
     return nothing
