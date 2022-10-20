@@ -343,7 +343,12 @@ function saturated_surface_conditions(
     )
 
     # calculate all fluxes
-    tsf = SF.surface_conditions(sf_params, sc, SF.FVScheme(); noniterative_stable_sol = true)
+    tsf = SF.surface_conditions(
+        sf_params,
+        sc,
+        SF.FVScheme();
+        noniterative_stable_sol = true,
+    )
 
     E = SF.evaporation(sf_params, sc, tsf.Ch)
 
@@ -394,7 +399,7 @@ function saturated_surface_conditions(
     )
 
     # calculate all fluxes
-    tsf = SF.surface_conditions(sf_params, sc; noniterative_stable_sol = false)
+    tsf = SF.surface_conditions(sf_params, sc; noniterative_stable_sol = true)
 
     E = SF.evaporation(sf_params, sc, tsf.Ch)
 
