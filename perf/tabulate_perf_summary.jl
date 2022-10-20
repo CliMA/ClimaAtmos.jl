@@ -26,11 +26,9 @@ all metrics can be found in `get_summary`.
 
 ca_dir = joinpath(dirname(@__DIR__))
 
-function get_job_ids(buildkite_yaml; trigger = "benchmark.jl")
+function get_job_ids(buildkite_yaml; trigger = "--perf_summary true")
     buildkite_commands = readlines(buildkite_yaml)
     filter!(x -> occursin(trigger, x), buildkite_commands)
-    # TODO: can we filter this better?
-    filter!(x -> occursin("perf_target", x), buildkite_commands)
     @assert length(buildkite_commands) > 0 # sanity check
     job_ids = map(buildkite_commands) do bkcs
         strip(first(split(last(split(bkcs, "--job_id ")), " ")), '\"')
@@ -41,7 +39,7 @@ end
 function combine_PRs_performance_benchmarks(path)
     job_ids = get_job_ids(
         joinpath(ca_dir, ".buildkite", "pipeline.yml");
-        trigger = "benchmark.jl",
+        trigger = "--perf_summary true",
     )
     # Combine summaries into one dict
     summaries = OrderedCollections.OrderedDict()

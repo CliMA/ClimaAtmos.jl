@@ -250,6 +250,10 @@ function parse_commandline()
         help = "Apply parameterization for convective gravity wave forcing on horizontal mean flow"
         arg_type = Bool
         default = false
+        "--perf_summary"
+        help = "Flag for collecting performance summary information"
+        arg_type = Bool
+        default = false
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
