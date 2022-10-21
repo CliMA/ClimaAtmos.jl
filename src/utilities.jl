@@ -11,3 +11,7 @@ is_tracer_var(symbol) = !(
     is_momentum_var(symbol) ||
     is_edmf_var(symbol)
 )
+
+# we may be hitting a slow path:
+# https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
+fast_pow(x::FT, y::FT) where {FT <: AbstractFloat} = exp(y * log(x))
