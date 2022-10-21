@@ -175,6 +175,7 @@ steps:
       - label: ":computer: Use test env with latest deps"
         command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
         artifact_paths: "test_env/*"
+        soft_fail: true
         agents:
           slurm_mem: 20GB
 
@@ -189,7 +190,6 @@ steps:
       - label: ":computer: performance target checkbounds"
         command: "julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --job_id perf_target_checkbounds --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --microphy 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_checkbounds/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 
