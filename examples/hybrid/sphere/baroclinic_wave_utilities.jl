@@ -503,6 +503,10 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         uₕ_int_local,
     ) = p
 
+    if parent(dif_flux_energy_bc[colidx].components.data.:1)[1] < -1000
+        @info colidx
+    end
+    
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
