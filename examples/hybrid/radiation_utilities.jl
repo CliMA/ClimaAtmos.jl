@@ -92,7 +92,7 @@ function radiation_model_cache(
         # kinetic energy to 0 when computing the pressure using total energy)
         pressure2ozone =
             Spline1D(input_center_pressure, input_center_volume_mixing_ratio_o3)
-        ᶜts = thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp, 0)
+        ᶜts = CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp, 0)
         ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
         center_volume_mixing_ratio_o3 =
             RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
@@ -245,7 +245,7 @@ function rrtmgp_model_callback!(integrator)
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
-    thermo_state!(Y, p, ᶜinterp)
+    CA.thermo_state!(Y, p, ᶜinterp)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 

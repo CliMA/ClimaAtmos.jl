@@ -1,3 +1,9 @@
+#####
+##### Thermodynamic state functions
+#####
+
+import LinearAlgebra: norm_sqr
+import Thermodynamics as TD
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
@@ -39,7 +45,7 @@ thermo_state!(
     ᶜts,
     Y::Fields.FieldVector,
     thermo_params,
-    td::CA.ThermoDispatcher,
+    td::ThermoDispatcher,
     ᶜinterp,
     K = nothing,
 ) = thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, K, Y.f.w)
@@ -58,7 +64,7 @@ function thermo_state!(
     ᶜts,
     Yc::Fields.Field,
     thermo_params,
-    td::CA.ThermoDispatcher,
+    td::ThermoDispatcher,
     ᶜinterp,
     K = nothing,
     wf = nothing,
@@ -67,7 +73,7 @@ function thermo_state!(
     # Sometimes we want to zero out kinetic energy
     (; energy_form, moisture_model, compressibility_model) = td
     if energy_form isa TotalEnergy
-        if compressibility_model isa CA.CompressibleFluid
+        if compressibility_model isa CompressibleFluid
             if isnothing(K)
                 @assert !isnothing(wf)
                 C123 = Geometry.Covariant123Vector
@@ -75,7 +81,7 @@ function thermo_state!(
             end
             z = Fields.local_geometry_field(Yc).coordinates.z
             thermo_state_ρe_tot!(ᶜts, Yc, thermo_params, moisture_model, z, K)
-        elseif compressibility_model isa CA.AnelasticFluid
+        elseif compressibility_model isa AnelasticFluid
             @assert !isnothing(ᶜp)
             z = Fields.local_geometry_field(Yc).coordinates.z
             thermo_state_ρe_tot_anelastic!(
@@ -102,7 +108,7 @@ function thermo_state_ρe_tot_anelastic!(
     ᶜts,
     Yc,
     thermo_params,
-    ::CA.EquilMoistModel,
+    ::EquilMoistModel,
     z,
     ᶜK,
     ᶜp,
@@ -121,7 +127,7 @@ end
 thermo_state(
     Y::Fields.FieldVector,
     thermo_params,
-    td::CA.ThermoDispatcher,
+    td::ThermoDispatcher,
     ᶜinterp,
     K = nothing,
     ᶜp = nothing,
@@ -130,7 +136,7 @@ thermo_state(
 function thermo_state(
     Yc::Fields.Field,
     thermo_params,
-    td::CA.ThermoDispatcher,
+    td::ThermoDispatcher,
     ᶜinterp,
     K = nothing,
     wf = nothing,
