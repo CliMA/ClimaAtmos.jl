@@ -131,7 +131,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             disable_qt_hyperdiffusion,
         ),
         rayleigh_sponge ?
-        rayleigh_sponge_cache(
+        CA.rayleigh_sponge_cache(
             Y,
             dt;
             zd_rayleigh = FT(zd_rayleigh),
@@ -145,7 +145,8 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
         microphysics_cache(Y, microphysics_model),
-        forcing_cache(Y, forcing_type),
+        forcing_type isa CA.HeldSuarezForcing ? CA.held_suarez_cache(Y) :
+        NamedTuple(),
         radiation_cache,
         vert_diff ?
         vertical_diffusion_boundary_layer_cache(
@@ -199,8 +200,8 @@ function additional_tendency!(Yₜ, Y, p, t)
         (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
         (; microphy_0M, has_turbconv) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
-        rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
-        hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+        rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
+        hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
         if vert_diff
             (; coupled) = p
             !coupled && get_surface_fluxes!(Y, p, colidx)

@@ -1,7 +1,7 @@
 module ClimaAtmos
 
 include("Parameters.jl")
-import .Parameters
+import .Parameters as CAP
 
 include("types.jl")
 include("utilities.jl")
@@ -12,6 +12,8 @@ import .RRTMGPInterface as RRTMGPI
 include("TurbulenceConvection/TurbulenceConvection.jl")
 import .TurbulenceConvection as TC
 
+include(joinpath("tendencies", "held_suarez.jl"))
+include(joinpath("tendencies", "rayleigh_sponge.jl"))
 include(joinpath("tendencies", "viscous_sponge.jl"))
 include(joinpath("tendencies", "advection.jl"))
 
