@@ -149,7 +149,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         NamedTuple(),
         radiation_cache,
         vert_diff ?
-        vertical_diffusion_boundary_layer_cache(
+        CA.vertical_diffusion_boundary_layer_cache(
             Y,
             FT;
             model_spec.surface_scheme,
@@ -204,8 +204,8 @@ function additional_tendency!(Yₜ, Y, p, t)
         hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
         if vert_diff
             (; coupled) = p
-            !coupled && get_surface_fluxes!(Y, p, colidx)
-            vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+            !coupled && CA.get_surface_fluxes!(Y, p, colidx)
+            CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
         rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
