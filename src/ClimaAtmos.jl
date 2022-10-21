@@ -12,6 +12,8 @@ import .RRTMGPInterface as RRTMGPI
 include("TurbulenceConvection/TurbulenceConvection.jl")
 import .TurbulenceConvection as TC
 
+include("thermo_state.jl")
+
 include(joinpath("tendencies", "held_suarez.jl"))
 include(joinpath("tendencies", "rayleigh_sponge.jl"))
 include(joinpath("tendencies", "viscous_sponge.jl"))

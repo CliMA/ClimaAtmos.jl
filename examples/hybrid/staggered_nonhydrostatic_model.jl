@@ -76,8 +76,6 @@ const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
 
 const C123 = Geometry.Covariant123Vector
 
-include("thermo_state.jl")
-
 get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
     default_cache(Y, params, model_spec, spaces, numerics, simulation),
     additional_cache(Y, params, model_spec, simulation.dt),
@@ -100,7 +98,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
-    ts_type = thermo_state_type(Y.c, FT)
+    ts_type = CA.thermo_state_type(Y.c, FT)
     ghost_buffer = (
         c = Spaces.create_ghost_buffer(Y.c),
         f = Spaces.create_ghost_buffer(Y.f),
@@ -218,7 +216,7 @@ function implicit_tendency!(Yₜ, Y, p, t, colidx)
     thermo_params = CAP.thermodynamics_params(params)
     dt = simulation.dt
     @. ᶜK[colidx] = norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
-    thermo_state!(Y, p, ᶜinterp, colidx)
+    CA.thermo_state!(Y, p, ᶜinterp, colidx)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
     if p.tendency_knobs.has_turbconv
@@ -381,7 +379,7 @@ function precomputed_quantities!(Y, p, t, colidx)
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
     thermo_params = CAP.thermodynamics_params(params)
-    thermo_state!(Y, p, ᶜinterp, colidx)
+    CA.thermo_state!(Y, p, ᶜinterp, colidx)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
     return nothing
 end
@@ -517,7 +515,7 @@ function _Wfact!(W, Y, p, dtγ, t)
         @. ᶜK[colidx] =
             norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
         thermo_params = CAP.thermodynamics_params(params)
-        thermo_state!(Y, p, ᶜinterp, colidx)
+        CA.thermo_state!(Y, p, ᶜinterp, colidx)
         @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
         # ᶜinterp(ᶠw) =
