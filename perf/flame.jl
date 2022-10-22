@@ -39,12 +39,11 @@ end
 (; output_dir, job_id) = simulation
 
 import ProfileCanvas
-include("profile_canvas_patch.jl")
 
 if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
     output_dir = job_id
     mkpath(output_dir)
-    html_file(joinpath(output_dir, "flame.html"))
+    ProfileCanvas.html_file(joinpath(output_dir, "flame.html"))
 else
     ProfileCanvas.view(Profile.fetch())
 end
