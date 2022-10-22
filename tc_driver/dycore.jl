@@ -24,6 +24,58 @@ include(joinpath(@__DIR__, "dycore_variables.jl"))
 ####
 
 """
+    ref_state_profile(
+        ᶠz::Fields.ColumnField,
+        thermo_params::TD.Parameters.ThermodynamicsParameters,
+        ts_g::TD.ThermodynamicState,
+    )
+
+TODO: add better docs once the API converges
+
+A solution struct containing the reference state,
+which can be interpolated by calling `sol(z)` on
+the result.
+"""
+function ref_state_profile(
+    ᶠz::CC.Fields.ColumnField,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ts_g::TD.ThermodynamicState,
+)
+    ᶠz_space = axes(ᶠz)
+    FT = CC.Spaces.undertype(ᶠz_space)
+    q_tot_g = TD.total_specific_humidity(thermo_params, ts_g)
+    vertical_domain =
+        CC.Topologies.domain(CC.Spaces.vertical_topology(ᶠz_space))
+    z_span = (vertical_domain.coord_min.z, vertical_domain.coord_max.z)
+    ᶠz_surf = z_span[1]
+    grav = FT(TD.Parameters.grav(thermo_params))
+    Φ_g = grav * ᶠz_surf
+    mse_g = TD.moist_static_energy(thermo_params, ts_g, Φ_g)
+    Pg = TD.air_pressure(thermo_params, ts_g)
+
+    # We are integrating the log pressure so need to take the log of the
+    # surface pressure
+    logp = log(Pg)
+
+    # Form a right hand side for integrating the hydrostatic equation to
+    # determine the reference pressure
+    function minus_inv_scale_height(logp, u, z)
+        p_ = exp(logp)
+        Φ = grav * z
+        h = mse_g - Φ
+        ts = TD.PhaseEquil_phq(thermo_params, p_, h, q_tot_g)
+        R_m = TD.gas_constant_air(thermo_params, ts)
+        T = TD.air_temperature(thermo_params, ts)
+        return -grav / (T * R_m)
+    end
+
+    # Perform the integration
+    prob = ODE.ODEProblem(minus_inv_scale_height, logp, z_span)
+    sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
+    return sol
+end
+
+"""
     compute_ref_state!(
         state,
         grid::Grid,
@@ -64,34 +116,17 @@ function compute_ref_state!(
     ts_g,
 ) where {PS}
     thermo_params = TCP.thermodynamics_params(param_set)
-    FT = TC.float_type(p_c)
-    kf_surf = TC.kf_surface(grid)
-    qtg = TD.total_specific_humidity(thermo_params, ts_g)
-    Φ = TC.geopotential(param_set, grid.zf[kf_surf].z)
-    mse_g = TD.moist_static_energy(thermo_params, ts_g, Φ)
-    Pg = TD.air_pressure(thermo_params, ts_g)
-
-    # We are integrating the log pressure so need to take the log of the
-    # surface pressure
-    logp = log(Pg)
-
-    # Form a right hand side for integrating the hydrostatic equation to
-    # determine the reference pressure
-    function minus_inv_scale_height(logp, u, z)
-        p_ = exp(logp)
-        grav = FT(TCP.grav(param_set))
-        Φ = TC.geopotential(param_set, z)
-        h = TC.enthalpy(mse_g, Φ)
-        ts = TD.PhaseEquil_phq(thermo_params, p_, h, qtg)
-        R_m = TD.gas_constant_air(thermo_params, ts)
-        T = TD.air_temperature(thermo_params, ts)
-        return -FT(TCP.grav(param_set)) / (T * R_m)
-    end
+    FT = CC.Spaces.undertype(axes(ρ_c))
+    grav = FT(TD.Parameters.grav(thermo_params))
+    vertical_domain =
+        CC.Topologies.domain(CC.Spaces.vertical_topology(axes(ρ_f)))
+    ᶠz_surf = vertical_domain.coord_min.z
+    Φ_g = grav * ᶠz_surf
+    q_tot_g = TD.total_specific_humidity(thermo_params, ts_g)
+    mse_g = TD.moist_static_energy(thermo_params, ts_g, Φ_g)
 
     # Perform the integration
-    z_span = (grid.zmin, grid.zmax)
-    prob = ODE.ODEProblem(minus_inv_scale_height, logp, z_span)
-    sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
+    sol = ref_state_profile(ρ_f, thermo_params, ts_g)
 
     zc = CC.Fields.coordinate_field(axes(ρ_c)).z
     zf = CC.Fields.coordinate_field(axes(ρ_f)).z
@@ -109,7 +144,7 @@ function compute_ref_state!(
             thermo_params,
             p_c,
             TC.enthalpy(mse_g, TC.geopotential(param_set, zc)),
-            qtg,
+            q_tot_g,
         ),
     )
     @. ρ_f = TD.air_density(
@@ -118,7 +153,7 @@ function compute_ref_state!(
             thermo_params,
             p_f,
             TC.enthalpy(mse_g, TC.geopotential(param_set, zf)),
-            qtg,
+            q_tot_g,
         ),
     )
     return nothing

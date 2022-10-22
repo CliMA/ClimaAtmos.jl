@@ -204,7 +204,7 @@ function get_spaces_restart(Y)
     hspace = Spaces.horizontal_space(center_space)
     horizontal_mesh = hspace.topology.mesh
     quad = horizontal_mesh.ne + 1
-    vertical_mesh = center_space.vertical_topology.mesh
+    vertical_mesh = Spaces.vertical_topology(center_space).mesh
     z_max = vertical_mesh.domain.coord_max.z
     z_elem = length(vertical_mesh.faces) - 1
     return (; center_space, face_space, horizontal_mesh, quad, z_max, z_elem)
