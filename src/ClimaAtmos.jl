@@ -14,7 +14,8 @@ import .TurbulenceConvection as TC
 
 include("thermo_state.jl")
 
-include(joinpath("tendencies", "held_suarez.jl"))
+include(joinpath("tendencies", "forcing", "held_suarez.jl"))
+
 include(joinpath("tendencies", "microphysics.jl"))
 include(joinpath("tendencies", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("tendencies", "rayleigh_sponge.jl"))
