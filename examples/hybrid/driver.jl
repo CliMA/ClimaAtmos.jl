@@ -144,7 +144,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             zd_viscous = FT(zd_viscous),
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
-        microphysics_cache(Y, microphysics_model),
+        CA.microphysics_cache(Y, microphysics_model),
         forcing_type isa CA.HeldSuarezForcing ? CA.held_suarez_cache(Y) :
         NamedTuple(),
         radiation_cache,
@@ -207,7 +207,8 @@ function additional_tendency!(Yₜ, Y, p, t)
             !coupled && CA.get_surface_fluxes!(Y, p, colidx)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
-        microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
+        microphy_0M &&
+            CA.zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
         rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
@@ -227,7 +228,19 @@ if parsed_args["trunc_stack_traces"]
     ClimaCore.Fields.truncate_printing_field_types() = true
 end
 
-include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
+using Statistics: mean
+import SurfaceFluxes as SF
+using CloudMicrophysics
+const CCG = ClimaCore.Geometry
+import ClimaAtmos.TurbulenceConvection as TC
+import ClimaCore.Operators as CCO
+const CM = CloudMicrophysics
+import ClimaAtmos.Parameters as CAP
+
+include("staggered_nonhydrostatic_model.jl")
+include(joinpath("sphere", "topography.jl"))
+include("initial_conditions.jl")
+
 include(
     joinpath(
         "gravitywave_parameterization",
