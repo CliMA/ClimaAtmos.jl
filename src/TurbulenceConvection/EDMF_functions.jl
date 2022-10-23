@@ -406,19 +406,19 @@ end
 
 function a_up_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel, i::Int)
     a_surf = area_surface_bc(surf, edmf, i)
-    return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
+    return (; bottom = CCO.SetValue(a_surf), top = CCO.SetValue(0))
 end
 
 function a_bulk_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel)
     N_up = n_updrafts(edmf)
     a_surf = sum(i -> area_surface_bc(surf, edmf, i), 1:N_up)
-    return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
+    return (; bottom = CCO.SetValue(a_surf), top = CCO.SetValue(0))
 end
 
 function a_en_boundary_conditions(surf::SurfaceBase, edmf::EDMFModel)
     N_up = n_updrafts(edmf)
     a_surf = 1 - sum(i -> area_surface_bc(surf, edmf, i), 1:N_up)
-    return (; bottom = CCO.SetValue(a_surf), top = CCO.Extrapolate())
+    return (; bottom = CCO.SetValue(a_surf), top = CCO.SetValue(0))
 end
 
 function area_surface_bc(
