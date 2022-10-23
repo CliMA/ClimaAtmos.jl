@@ -428,7 +428,7 @@ function area_surface_bc(
 )::FT where {FT}
     N_up = n_updrafts(edmf)
     a_min = edmf.minimum_area
-    return surf.bflux > 0 ? edmf.surface_area / N_up : FT(0)
+    return surf.bflux > 0 ? edmf.surface_area / N_up : a_min / N_up
 end
 
 function w_surface_bc(::SurfaceBase{FT})::FT where {FT}
@@ -457,7 +457,7 @@ function θ_surface_bc(
     c_p = TD.cp_m(thermo_params, ts_gm[kc_surf])
     UnPack.@unpack ustar, zLL, oblength, ρLL = surface_helper(surf, grid, state)
 
-    surf.bflux > 0 || return FT(0)
+    surf.bflux > 0 || return aux_gm.θ_liq_ice[kc_surf]
     a_total = edmf.surface_area
     a_ = area_surface_bc(surf, edmf, i)
     ρθ_liq_ice_flux = surf.shf / c_p # assuming no ql,qi flux
