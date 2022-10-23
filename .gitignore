@@ -40,6 +40,7 @@ test/Manifest.toml
 *.nc
 *.mp4
 *.png
+*.hdf5
 
 # misc
 .DS_Store
