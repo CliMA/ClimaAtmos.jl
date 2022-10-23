@@ -36,10 +36,17 @@ function compressibility_model(parsed_args)
     end
 end
 
-function radiation_model(parsed_args)
+function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     radiation_name = parsed_args["rad"]
-    @assert radiation_name in
-            (nothing, "clearsky", "gray", "allsky", "allskywithclear")
+    @assert radiation_name in (
+        nothing,
+        "clearsky",
+        "gray",
+        "allsky",
+        "allskywithclear",
+        "DYCOMS_RF01",
+        "TRMM_LBA",
+    )
     return if radiation_name == "clearsky"
         RRTMGPI.ClearSkyRadiation()
     elseif radiation_name == "gray"
@@ -48,6 +55,10 @@ function radiation_model(parsed_args)
         RRTMGPI.AllSkyRadiation()
     elseif radiation_name == "allskywithclear"
         RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics()
+    elseif radiation_name == "DYCOMS_RF01"
+        RadiationDYCOMS_RF01{FT}()
+    elseif radiation_name == "TRMM_LBA"
+        RadiationTRMM_LBA(FT)
     else
         nothing
     end
@@ -112,10 +123,25 @@ function surface_scheme(FT, parsed_args)
     surface_scheme = parsed_args["surface_scheme"]
     @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
     return if surface_scheme == "bulk"
-        BulkSurfaceScheme{FT}(; Cd = FT(0.0044), Ch = FT(0.0044))
+        BulkSurfaceScheme()
     elseif surface_scheme == "monin_obukhov"
-        MoninObukhovSurface{FT}(; z0m = FT(1e-5), z0b = FT(1e-5))
+        MoninObukhovSurface()
     elseif surface_scheme == nothing
         surface_scheme
     end
+end
+
+"""
+    ThermoDispatcher(model_spec)
+
+A helper method for creating a thermodynamics dispatcher
+from the model specification struct.
+"""
+function ThermoDispatcher(model_spec)
+    (; energy_form, moisture_model, compressibility_model) = model_spec
+    return ThermoDispatcher(;
+        energy_form,
+        moisture_model,
+        compressibility_model,
+    )
 end

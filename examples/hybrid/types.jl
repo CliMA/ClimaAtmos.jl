@@ -33,7 +33,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
         energy_form = CA.energy_form(parsed_args),
         perturb_initstate = parsed_args["perturb_initstate"],
         idealized_h2o,
-        radiation_model = CA.radiation_model(parsed_args),
+        radiation_mode = CA.radiation_mode(parsed_args, FT),
         microphysics_model = CA.microphysics_model(parsed_args),
         precip_model,
         forcing_type = CA.forcing_type(parsed_args),
@@ -156,6 +156,27 @@ function get_spaces(parsed_args, params, comms_ctx)
             Meshes.Uniform()
         end
         make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+    elseif parsed_args["config"] == "box"
+        FT = eltype(params)
+        nh_poly = parsed_args["nh_poly"]
+        quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+        x_elem = Int(parsed_args["x_elem"])
+        x_max = FT(parsed_args["x_max"])
+        y_elem = Int(parsed_args["y_elem"])
+        y_max = FT(parsed_args["y_max"])
+        horizontal_mesh = periodic_rectangle_mesh(;
+            x_max = x_max,
+            y_max = y_max,
+            x_elem = x_elem,
+            y_elem = y_elem,
+        )
+        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+        z_stretch = if parsed_args["z_stretch"]
+            Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+        else
+            Meshes.Uniform()
+        end
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     end
     return (;
         center_space,
@@ -205,9 +226,11 @@ function get_state_fresh_start(parsed_args, spaces, params, model_spec)
     center_initial_condition = if is_baro_wave(parsed_args)
         center_initial_condition_baroclinic_wave
     elseif parsed_args["config"] == "sphere"
-        center_initial_condition_sphere
+        center_initial_condition_3d
     elseif parsed_args["config"] == "column"
         center_initial_condition_column
+    elseif parsed_args["config"] == "box"
+        center_initial_condition_3d
     end
 
     Y = init_state(

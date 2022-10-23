@@ -37,7 +37,7 @@ zd_viscous = parsed_args["zd_viscous"]
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
 @assert hyperdiff in (true, false)
-@assert parsed_args["config"] in ("sphere", "column")
+@assert parsed_args["config"] in ("sphere", "column", "box")
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
 
@@ -83,7 +83,7 @@ using ClimaTimeSteppers
 import Random
 Random.seed!(1234)
 
-!isnothing(model_spec.radiation_model) && include("radiation_utilities.jl")
+isnothing(model_spec.radiation_mode) || include("radiation_utilities.jl")
 
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -98,12 +98,29 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     (;
         microphysics_model,
         forcing_type,
-        radiation_model,
+        radiation_mode,
         turbconv_model,
         precip_model,
     ) = model_spec
 
+    thermo_dispatcher = CA.ThermoDispatcher(model_spec)
     compressibility_model = model_spec.compressibility_model
+
+    radiation_cache = if radiation_mode isa Nothing
+        (; radiation_model = radiation_mode)
+    elseif radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        radiation_model_cache(
+            Y,
+            params,
+            radiation_mode;
+            idealized_insolation,
+            model_spec.idealized_h2o,
+            idealized_clouds,
+            thermo_dispatcher,
+        )
+    else
+        radiation_model_cache(Y, params, radiation_mode)
+    end
 
     return merge(
         hyperdiffusion_cache(
@@ -114,7 +131,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             disable_qt_hyperdiffusion,
         ),
         rayleigh_sponge ?
-        rayleigh_sponge_cache(
+        CA.rayleigh_sponge_cache(
             Y,
             dt;
             zd_rayleigh = FT(zd_rayleigh),
@@ -122,24 +139,17 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             α_rayleigh_w = FT(α_rayleigh_w),
         ) : NamedTuple(),
         viscous_sponge ?
-        viscous_sponge_cache(
+        CA.viscous_sponge_cache(
             Y;
             zd_viscous = FT(zd_viscous),
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
-        microphysics_cache(Y, microphysics_model),
-        forcing_cache(Y, forcing_type),
-        isnothing(radiation_model) ? NamedTuple() :
-        rrtmgp_model_cache(
-            Y,
-            params,
-            radiation_model;
-            idealized_insolation,
-            model_spec.idealized_h2o,
-            idealized_clouds,
-        ),
+        CA.microphysics_cache(Y, microphysics_model),
+        forcing_type isa CA.HeldSuarezForcing ? CA.held_suarez_cache(Y) :
+        NamedTuple(),
+        radiation_cache,
         vert_diff ?
-        vertical_diffusion_boundary_layer_cache(
+        CA.vertical_diffusion_boundary_layer_cache(
             Y,
             FT;
             model_spec.surface_scheme,
@@ -153,7 +163,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
                 microphy_0M = microphysics_model isa Microphysics0Moment,
-                rad_flux = !isnothing(radiation_model),
+                rad_flux = !isnothing(radiation_mode),
                 vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
@@ -162,6 +172,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
                 has_turbconv = !isnothing(turbconv_model),
             )
         ),
+        (; thermo_dispatcher),
         (; Δt = dt),
         (; compressibility_model),
         !isnothing(turbconv_model) ?
@@ -182,22 +193,23 @@ end
 function additional_tendency!(Yₜ, Y, p, t)
     (; viscous_sponge, hyperdiff) = p.tendency_knobs
     hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    viscous_sponge && viscous_sponge_tendency!(Yₜ, Y, p, t)
+    viscous_sponge && CA.viscous_sponge_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
         (; microphy_0M, has_turbconv) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
-        rayleigh_sponge && rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
-        hs_forcing && held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+        rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
+        hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
         if vert_diff
             (; coupled) = p
-            !coupled && get_surface_fluxes!(Y, p, colidx)
-            vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+            !coupled && CA.get_surface_fluxes!(Y, p, colidx)
+            CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
-        microphy_0M && zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
-        rad_flux && rrtmgp_model_tendency!(Yₜ, Y, p, t, colidx)
+        microphy_0M &&
+            CA.zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
+        rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
@@ -216,7 +228,19 @@ if parsed_args["trunc_stack_traces"]
     ClimaCore.Fields.truncate_printing_field_types() = true
 end
 
-include(joinpath("sphere", "baroclinic_wave_utilities.jl"))
+using Statistics: mean
+import SurfaceFluxes as SF
+using CloudMicrophysics
+const CCG = ClimaCore.Geometry
+import ClimaAtmos.TurbulenceConvection as TC
+import ClimaCore.Operators as CCO
+const CM = CloudMicrophysics
+import ClimaAtmos.Parameters as CAP
+
+include("staggered_nonhydrostatic_model.jl")
+include(joinpath("sphere", "topography.jl"))
+include("initial_conditions.jl")
+
 include(
     joinpath(
         "gravitywave_parameterization",
@@ -244,6 +268,7 @@ if parsed_args["turbconv"] == "edmf"
 end
 
 # Print tendencies:
+# @info "Model composition" p.model_spec...
 @info "Tendencies" p.tendency_knobs...
 
 ode_config = ode_configuration(Y, parsed_args, model_spec)
@@ -262,6 +287,8 @@ end
 
 if simulation.is_distributed
     OrdinaryDiffEq.step!(integrator)
+    # GC.enable(false) # disabling GC causes a memory leak
+    GC.gc()
     ClimaComms.barrier(comms_ctx)
     if ClimaComms.iamroot(comms_ctx)
         @timev begin
@@ -271,6 +298,7 @@ if simulation.is_distributed
         walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
     end
     ClimaComms.barrier(comms_ctx)
+    GC.enable(true)
 else
     sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
@@ -307,10 +335,14 @@ if !simulation.is_distributed && parsed_args["post_process"]
             FT(180),
         )
     elseif is_column_without_edmf(parsed_args)
-        custom_postprocessing(sol, simulation.output_dir)
+        custom_postprocessing(sol, simulation.output_dir, p)
     elseif is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
-    elseif model_spec.forcing_type isa HeldSuarezForcing
+    elseif is_solid_body(parsed_args)
+        postprocessing(sol, simulation.output_dir, fps)
+    elseif is_box(parsed_args)
+        postprocessing_box(sol, simulation.output_dir)
+    else
         paperplots_held_suarez(
             model_spec,
             sol,
@@ -319,16 +351,32 @@ if !simulation.is_distributed && parsed_args["post_process"]
             FT(90),
             FT(180),
         )
-    else
-        postprocessing(sol, simulation.output_dir, fps)
     end
 end
 
 if parsed_args["debugging_tc"]
+    include(
+        joinpath(
+            @__DIR__,
+            "..",
+            "..",
+            "regression_tests",
+            "self_reference_or_path.jl",
+        ),
+    )
     include(joinpath(@__DIR__, "define_tc_quicklook_profiles.jl"))
+
+    main_branch_root = get_main_branch_buildkite_path()
+    @info "Comparing PR profiles against main with commit id: $(basename(main_branch_root))"
+    main_branch_data_path = joinpath(main_branch_root, simulation.job_id)
+    # check that data exists on the main branch path
+
+    day = floor(Int, simulation.t_end / (60 * 60 * 24))
+    sec = floor(Int, simulation.t_end % (60 * 60 * 24))
     plot_tc_profiles(
-        simulation.output_dir,
-        "day0." * string(Int(simulation.t_end)) * ".hdf5",
+        simulation.output_dir;
+        hdf5_filename = "day$day.$sec.hdf5",
+        main_branch_data_path,
     )
 end
 

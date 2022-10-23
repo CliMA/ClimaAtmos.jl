@@ -4,14 +4,10 @@ using ClimaCore:
 using NCDatasets
 using ClimaCoreTempestRemap
 
-using JLD2
-
-if haskey(ENV, "JLD2_DIR")
-    data_dir = ENV["JLD2_DIR"]
-elseif haskey(ENV, "HDF5_DIR")
+if haskey(ENV, "HDF5_DIR")
     data_dir = ENV["HDF5_DIR"]
 else
-    error("ENV[\"JLD2_DIR\"] or ENV[\"HDF5_DIR\"] require!")
+    error("ENV[\"HDF5_DIR\"] require!")
 end
 
 if haskey(ENV, "THERMO_VAR")
@@ -43,30 +39,16 @@ end
 
 const ᶜinterp = Operators.InterpolateF2C()
 
-ext = if haskey(ENV, "JLD2_DIR")
-    ".jld2"
-elseif haskey(ENV, "HDF5_DIR")
-    ".hdf5"
-end
+ext = ".hdf5"
 data_files = filter(x -> endswith(x, ext), readdir(data_dir, join = true))
 
-function remap2latlon(filein, nc_dir, nlat, nlon)
-    if split(filein, ".")[end] == "jld2"
-        datain = jldopen(filein)
-        t_now = datain["t"]
-        Y = datain["Y"]
-        diag = datain["diagnostic"]
-    elseif split(filein, ".")[end] == "hdf5"
+function create_weightfile(filein, nc_dir, nlat, nlon)
+    if split(filein, ".")[end] == "hdf5"
         reader = InputOutput.HDF5Reader(filein)
         Y = InputOutput.read_field(reader, "Y")
-        diag = InputOutput.read_field(reader, "diagnostics")
-        t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
     else
-        error("Input data is neither jld2 nor hdf5")
+        error("Input data is not hdf5")
     end
-
-    # float type
-    FT = eltype(Y)
 
     # reconstruct space, obtain Nq from space
     cspace = axes(Y.c)
@@ -80,8 +62,50 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     remap_tmpdir = nc_dir * "remaptmp/"
     mkpath(remap_tmpdir)
 
+    # write out our cubed sphere mesh
+    meshfile_cc = remap_tmpdir * "mesh_cubedsphere.g"
+    write_exodus(meshfile_cc, hspace.topology)
+
+    meshfile_rll = remap_tmpdir * "mesh_rll.g"
+    rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
+
+    meshfile_overlap = remap_tmpdir * "mesh_overlap.g"
+    overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
+
+    weightfile = remap_tmpdir * "remap_weights.nc"
+    remap_weights(
+        weightfile,
+        meshfile_cc,
+        meshfile_rll,
+        meshfile_overlap;
+        in_type = "cgll",
+        in_np = Nq,
+    )
+
+    return weightfile
+end
+
+function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
+    if split(filein, ".")[end] == "hdf5"
+        reader = InputOutput.HDF5Reader(filein)
+        Y = InputOutput.read_field(reader, "Y")
+        diag = InputOutput.read_field(reader, "diagnostics")
+        t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
+    else
+        error("Input data is not hdf5")
+    end
+
+    # float type
+    FT = eltype(Y)
+
+    # reconstruct space
+    cspace = axes(Y.c)
+    fspace = axes(Y.f)
+    hspace = cspace.horizontal_space
+
     ### create an nc file to store raw cg data 
     # create data
+    remap_tmpdir = nc_dir * "remaptmp/"
     datafile_cc = remap_tmpdir * "test.nc"
     nc = NCDataset(datafile_cc, "c")
     # defines the appropriate dimensions and variables for a space coordinate
@@ -101,6 +125,8 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     nc_θ = defVar(nc, "potential_temperature", FT, cspace, ("time",))
     nc_K = defVar(nc, "kinetic_energy", FT, cspace, ("time",))
     nc_vort = defVar(nc, "vorticity", FT, cspace, ("time",))
+    nc_T_sfc = defVar(nc, "sfc_temperature", FT, hspace, ("time",))
+    nc_qt_sfc = defVar(nc, "sfc_qt", FT, hspace, ("time",))
     # define moist variables
     if :ρq_tot in propertynames(Y.c)
         nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
@@ -170,6 +196,8 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     nc_θ[:, 1] = diag.potential_temperature
     nc_K[:, 1] = diag.kinetic_energy
     nc_vort[:, 1] = diag.vorticity
+    nc_T_sfc[:, 1] = diag.sfc_temperature
+    nc_qt_sfc[:, 1] = diag.sfc_qt
 
     if :ρq_tot in propertynames(Y.c)
         nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
@@ -211,25 +239,7 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
     end
     close(nc)
 
-    # write out our cubed sphere mesh
-    meshfile_cc = remap_tmpdir * "mesh_cubedsphere.g"
-    write_exodus(meshfile_cc, hspace.topology)
 
-    meshfile_rll = remap_tmpdir * "mesh_rll.g"
-    rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
-
-    meshfile_overlap = remap_tmpdir * "mesh_overlap.g"
-    overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
-
-    weightfile = remap_tmpdir * "remap_weights.nc"
-    remap_weights(
-        weightfile,
-        meshfile_cc,
-        meshfile_rll,
-        meshfile_overlap;
-        in_type = "cgll",
-        in_np = Nq,
-    )
 
     datafile_latlon = nc_dir * split(split(filein, "/")[end], ".")[1] * ".nc"
     dry_variables = [
@@ -243,6 +253,8 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         "potential_temperature",
         "kinetic_energy",
         "vorticity",
+        "sfc_temperature",
+        "sfc_qt",
     ]
     if :ρq_tot in propertynames(Y.c)
         moist_variables = [
@@ -289,10 +301,16 @@ function remap2latlon(filein, nc_dir, nlat, nlon)
         rad_flux_clear_variables,
     )
     apply_remap(datafile_latlon, datafile_cc, weightfile, netcdf_variables)
+    rm(datafile_cc)
+end
+
+function remove_tmpdir(nc_dir)
+    remap_tmpdir = nc_dir * "remaptmp/"
     rm(remap_tmpdir, recursive = true)
-
 end
 
+weightfile = create_weightfile(data_files[1], nc_dir, nlat, nlon)
 for data_file in data_files
-    remap2latlon(data_file, nc_dir, nlat, nlon)
+    remap2latlon(data_file, nc_dir, weightfile, nlat, nlon)
 end
+remove_tmpdir(nc_dir)

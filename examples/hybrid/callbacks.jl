@@ -17,17 +17,18 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     tc_callbacks =
         call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
 
-    additional_callbacks = if !isnothing(model_spec.radiation_model)
-        # TODO: better if-else criteria?
-        dt_rad = if parsed_args["config"] == "column"
-            dt
+    additional_callbacks =
+        if model_spec.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+            # TODO: better if-else criteria?
+            dt_rad = if parsed_args["config"] == "column"
+                dt
+            else
+                FT(time_to_seconds(parsed_args["dt_rad"]))
+            end
+            (call_every_dt(rrtmgp_model_callback!, dt_rad),)
         else
-            FT(time_to_seconds(parsed_args["dt_rad"]))
+            ()
         end
-        (call_every_dt(rrtmgp_model_callback!, dt_rad),)
-    else
-        ()
-    end
 
     if !isnothing(model_spec.turbconv_model)
         additional_callbacks = (additional_callbacks..., tc_callbacks)
@@ -56,10 +57,22 @@ function get_callbacks(parsed_args, simulation, model_spec, params)
     else
         call_every_dt(save_restart_func, dt_save_restart)
     end
+
+    gc_callback = if simulation.is_distributed
+        call_every_n_steps(
+            gc_func,
+            parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
+            skip_first = true,
+        )
+    else
+        nothing
+    end
+
     return ODE.CallbackSet(
         dss_cb,
         save_to_disk_callback,
         save_restart_callback,
+        gc_callback,
         additional_callbacks...,
     )
 end
@@ -79,13 +92,13 @@ end
 function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     next_t = Ref{typeof(dt)}()
     affect! = function (integrator)
+        f!(integrator)
+
         t = integrator.t
         t_end = integrator.sol.prob.tspan[2]
-        while t >= next_t[]
-            f!(integrator)
-            next_t[] =
-                (call_at_end && t < t_end) ? min(t_end, next_t[] + dt) :
-                next_t[] + dt
+        next_t[] = max(t, next_t[] + dt)
+        if call_at_end
+            next_t[] = min(next_t[], t_end)
         end
     end
     return ODE.DiscreteCallback(
@@ -138,7 +151,7 @@ function turb_conv_affect_filter!(integrator)
     tc_params = CAP.turbconv_params(param_set)
 
     Fields.bycolumn(axes(Y.c)) do colidx
-        state = TCU.tc_column_state(Y, p, nothing, colidx)
+        state = TC.tc_column_state(Y, p, nothing, colidx)
         grid = TC.Grid(state)
         surf = TCU.get_surface(surf_params, grid, state, t, tc_params)
         TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
@@ -168,9 +181,11 @@ function save_to_disk_func(integrator)
             ᶜK,
             col_integrated_rain,
             col_integrated_snow,
+            T_sfc,
+            q_sfc,
         ) = p
     else
-        (; ᶜts, ᶜp, params, ᶜK) = p
+        (; ᶜts, ᶜp, params, ᶜK, T_sfc, q_sfc) = p
     end
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -182,7 +197,7 @@ function save_to_disk_func(integrator)
     @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
 
     # thermo state
-    thermo_state!(ᶜts, Y, params, ᶜinterp, ᶜK)
+    CA.thermo_state!(Y, p, ᶜinterp)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
     ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
@@ -198,6 +213,8 @@ function save_to_disk_func(integrator)
         potential_temperature = ᶜθ,
         kinetic_energy = ᶜK,
         vorticity = ᶜvort,
+        sfc_temperature = T_sfc,
+        sfc_qt = q_sfc,
     )
 
     # cloudwater (liquid and ice), watervapor and RH for moist simulation
@@ -312,23 +329,23 @@ function save_to_disk_func(integrator)
         vert_diff_diagnostic = NamedTuple()
     end
 
-    if !isnothing(model_spec.radiation_model)
+    if model_spec.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         (; face_lw_flux_dn, face_lw_flux_up, face_sw_flux_dn, face_sw_flux_up) =
-            p.rrtmgp_model
+            p.radiation_model
         rad_diagnostic = (;
             lw_flux_down = RRTMGPI.array2field(FT.(face_lw_flux_dn), axes(Y.f)),
             lw_flux_up = RRTMGPI.array2field(FT.(face_lw_flux_up), axes(Y.f)),
             sw_flux_down = RRTMGPI.array2field(FT.(face_sw_flux_dn), axes(Y.f)),
             sw_flux_up = RRTMGPI.array2field(FT.(face_sw_flux_up), axes(Y.f)),
         )
-        if model_spec.radiation_model isa
+        if model_spec.radiation_mode isa
            RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
             (;
                 face_clear_lw_flux_dn,
                 face_clear_lw_flux_up,
                 face_clear_sw_flux_dn,
                 face_clear_sw_flux_up,
-            ) = p.rrtmgp_model
+            ) = p.radiation_model
             rad_clear_diagnostic = (;
                 clear_lw_flux_down = RRTMGPI.array2field(
                     FT.(face_clear_lw_flux_dn),
@@ -350,6 +367,14 @@ function save_to_disk_func(integrator)
         else
             rad_clear_diagnostic = NamedTuple()
         end
+    elseif model_spec.radiation_mode isa CA.RadiationDYCOMS_RF01
+        # TODO: add radiation diagnostics
+        rad_diagnostic = NamedTuple()
+        rad_clear_diagnostic = NamedTuple()
+    elseif model_spec.radiation_mode isa CA.RadiationTRMM_LBA
+        # TODO: add radiation diagnostics
+        rad_diagnostic = NamedTuple()
+        rad_clear_diagnostic = NamedTuple()
     else
         rad_diagnostic = NamedTuple()
         rad_clear_diagnostic = NamedTuple()
@@ -394,4 +419,25 @@ function save_restart_func(integrator)
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing
+end
+
+function gc_func(integrator)
+    full = true # whether to do a full GC
+    num_pre = Base.gc_num()
+    alloc_since_last = (num_pre.allocd + num_pre.deferred_alloc) / 2^20
+    live_pre = Base.gc_live_bytes() / 2^20
+    GC.gc(full)
+    live_post = Base.gc_live_bytes() / 2^20
+    num_post = Base.gc_num()
+    gc_time = (num_post.total_time - num_pre.total_time) / 10^9 # count in ns
+    @debug(
+        "GC",
+        t = integrator.t,
+        "alloc since last GC (MB)" = alloc_since_last,
+        "live mem pre (MB)" = live_pre,
+        "live mem post (MB)" = live_post,
+        "GC time (s)" = gc_time,
+        "# pause" = num_post.pause,
+        "# full_sweep" = num_post.full_sweep,
+    )
 end

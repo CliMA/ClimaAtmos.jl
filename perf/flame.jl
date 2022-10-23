@@ -39,12 +39,11 @@ end
 (; output_dir, job_id) = simulation
 
 import ProfileCanvas
-include("profile_canvas_patch.jl")
 
 if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
     output_dir = job_id
     mkpath(output_dir)
-    html_file(joinpath(output_dir, "flame.html"))
+    ProfileCanvas.html_file(joinpath(output_dir, "flame.html"))
 else
     ProfileCanvas.view(Profile.fetch())
 end
@@ -67,7 +66,7 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target_rhoe"] = 547248
+allocs_limit["flame_perf_target_rhoe"] = 143632
 allocs_limit["flame_perf_target_rhoe_threaded"] = 4440864
 allocs_limit["flame_perf_target_rhoe_callbacks"] = 12832664
 

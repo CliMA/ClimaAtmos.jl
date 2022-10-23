@@ -434,7 +434,6 @@ struct EDMFModel{
     N_up,
     FT,
     MM,
-    CM,
     TCM,
     PM,
     PFM,
@@ -451,7 +450,6 @@ struct EDMFModel{
     max_area::FT
     minimum_area::FT
     moisture_model::MM
-    compressibility_model::CM
     thermo_covariance_model::TCM
     precip_model::PM
     precip_fraction_model::PFM
@@ -512,12 +510,6 @@ function EDMFModel(
         "min_area";
         default = 1e-5,
     )
-
-    compressibility_model = if parsed_args["anelastic_dycore"]
-        AnelasticFluid()
-    else
-        CompressibleFluid()
-    end
 
     thermo_covariance_model_name = parse_namelist(
         namelist,
@@ -1004,7 +996,6 @@ function EDMFModel(
     DDS = typeof(detr_dim_scale)
     EC = typeof(entr_closure)
     MM = typeof(moisture_model)
-    CM = typeof(compressibility_model)
     TCM = typeof(thermo_covariance_model)
     PM = typeof(precip_model)
     PFM = typeof(precip_fraction_model)
@@ -1017,7 +1008,6 @@ function EDMFModel(
         n_updrafts,
         FT,
         MM,
-        CM,
         TCM,
         PM,
         PFM,
@@ -1034,7 +1024,6 @@ function EDMFModel(
         max_area,
         minimum_area,
         moisture_model,
-        compressibility_model,
         thermo_covariance_model,
         precip_model,
         precip_fraction_model,
@@ -1165,3 +1154,37 @@ Grid(state::State) = Grid(axes(state.prog.cent))
 float_type(state::State) = eltype(state.prog)
 # float_type(field::CC.Fields.Field) = CC.Spaces.undertype(axes(field))
 float_type(field::CC.Fields.Field) = eltype(parent(field))
+
+
+function tc_column_state(prog, p, tendencies, colidx)
+    prog_cent_column = CC.column(prog.c, colidx)
+    prog_face_column = CC.column(prog.f, colidx)
+    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
+    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
+    tends_cent_column = CC.column(tendencies.c, colidx)
+    tends_face_column = CC.column(tendencies.f, colidx)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    tends_column = CC.Fields.FieldVector(
+        cent = tends_cent_column,
+        face = tends_face_column,
+    )
+
+    return State(prog_column, aux_column, tends_column, p, colidx)
+end
+
+function tc_column_state(prog, p, tendencies::Nothing, colidx)
+    prog_cent_column = CC.column(prog.c, colidx)
+    prog_face_column = CC.column(prog.f, colidx)
+    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
+    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
+    prog_column =
+        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
+    aux_column =
+        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    tends_column = nothing
+
+    return State(prog_column, aux_column, tends_column, p, colidx)
+end

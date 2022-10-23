@@ -5,6 +5,8 @@ import ..EquilMoistModel
 import ..NonEquilMoistModel
 import ..AnelasticFluid
 import ..CompressibleFluid
+import ..RadiationDYCOMS_RF01
+import ..RadiationTRMM_LBA
 
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG

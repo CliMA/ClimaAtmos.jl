@@ -136,7 +136,8 @@ function update_aux!(
         end
     end
 
-    @. aux_en_f.w = toscalar(prog_gm_f.w) / (1 - Ifb(aux_bulk.area))
+    @. aux_en_f.w =
+        wcomponent(CCG.WVector(prog_gm_f.w)) / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
         @. aux_en_f.w -=
             Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))

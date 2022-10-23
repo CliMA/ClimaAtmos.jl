@@ -146,6 +146,14 @@ function parse_commandline()
         help = "number of elements per edge on a cubed sphere"
         arg_type = Int
         default = 6
+        "--x_elem"
+        help = "number of horizontal elements in the x-direction"
+        arg_type = Int
+        default = 6
+        "--y_elem"
+        help = "number of horizontal elements in the y-direction"
+        arg_type = Int
+        default = 6
         "--z_elem"
         help = "number of vertical elements"
         arg_type = Int
@@ -154,6 +162,14 @@ function parse_commandline()
         help = "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
         arg_type = Int
         default = 3
+        "--x_max"
+        help = "Model domain size, x direction. Default: 300km"
+        arg_type = Float64
+        default = Float64(300e3)
+        "--y_max"
+        help = "Model domain size, y direction. Default: 300km"
+        arg_type = Float64
+        default = Float64(300e3)
         "--z_max"
         help = "Model top height. Default: 30km"
         arg_type = Float64
@@ -232,6 +248,10 @@ function parse_commandline()
         default = false
         "--non_orographic_gravity_wave"
         help = "Apply parameterization for convective gravity wave forcing on horizontal mean flow"
+        arg_type = Bool
+        default = false
+        "--perf_summary"
+        help = "Flag for collecting performance summary information"
         arg_type = Bool
         default = false
     end

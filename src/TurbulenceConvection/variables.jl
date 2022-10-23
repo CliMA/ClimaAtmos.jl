@@ -4,8 +4,8 @@
 import ClimaCore.Geometry: ⊗
 
 # Helpers for adding empty thermodynamic state fields:
-thermo_state(FT, ::EquilMoistModel) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
-thermo_state(FT, ::NonEquilMoistModel) =
+thermo_state_zeros(FT, ::EquilMoistModel) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
+thermo_state_zeros(FT, ::NonEquilMoistModel) =
     TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
 
 ##### Auxiliary fields
@@ -28,7 +28,7 @@ cent_aux_vars_up_moisture(FT, ::NonEquilMoistModel) = (;
 )
 cent_aux_vars_up_moisture(FT, ::EquilMoistModel) = NamedTuple()
 cent_aux_vars_up(FT, local_geometry, edmf) = (;
-    ts = thermo_state(FT, edmf.moisture_model),
+    ts = thermo_state_zeros(FT, edmf.moisture_model),
     q_liq = FT(0),
     q_ice = FT(0),
     T = FT(0),
@@ -91,7 +91,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             Val(n_updrafts(edmf)),
         ),
         en = (;
-            ts = thermo_state(FT, edmf.moisture_model),
+            ts = thermo_state_zeros(FT, edmf.moisture_model),
             w = FT(0),
             area = FT(0),
             q_tot = FT(0),

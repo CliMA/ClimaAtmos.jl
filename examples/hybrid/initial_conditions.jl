@@ -227,7 +227,7 @@ function center_initial_condition_baroclinic_wave(
     return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
 end
 
-function center_initial_condition_sphere(
+function center_initial_condition_3d(
     local_geometry,
     params,
     energy_form,
