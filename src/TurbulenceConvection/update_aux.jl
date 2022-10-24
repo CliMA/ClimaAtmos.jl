@@ -107,8 +107,11 @@ function update_aux!(
                 aux_up[i].e_kin[k],
                 e_pot,
             )
-            aux_up[i].h_tot[k] =
-                total_enthalpy(param_set, aux_up[i].e_tot[k], ts_up_i)
+            aux_up[i].h_tot[k] = TD.total_specific_enthalpy(
+                thermo_params,
+                ts_up_i,
+                aux_up[i].e_tot[k],
+            )
         end
 
         #####

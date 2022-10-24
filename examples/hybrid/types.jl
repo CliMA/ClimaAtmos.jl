@@ -27,13 +27,15 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
 
     moisture_model = CA.moisture_model(parsed_args)
     precip_model = CA.precipitation_model(parsed_args, namelist)
+    radiation_mode = CA.radiation_mode(parsed_args, FT)
 
     model_spec = (;
         moisture_model,
         energy_form = CA.energy_form(parsed_args),
         perturb_initstate = parsed_args["perturb_initstate"],
         idealized_h2o,
-        radiation_mode = CA.radiation_mode(parsed_args, FT),
+        radiation_mode,
+        subsidence = CA.subsidence_model(parsed_args, radiation_mode, FT),
         microphysics_model = CA.microphysics_model(parsed_args),
         precip_model,
         forcing_type = CA.forcing_type(parsed_args),

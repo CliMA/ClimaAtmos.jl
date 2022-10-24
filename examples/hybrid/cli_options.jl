@@ -44,6 +44,9 @@ function parse_commandline()
         "--forcing"
         help = "Forcing [`nothing` (default), `held_suarez`]"
         arg_type = String
+        "--subsidence"
+        help = "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
+        arg_type = String
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool

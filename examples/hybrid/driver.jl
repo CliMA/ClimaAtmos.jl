@@ -145,6 +145,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
         CA.microphysics_cache(Y, microphysics_model),
+        CA.subsidence_cache(Y, model_spec.subsidence),
         forcing_type isa CA.HeldSuarezForcing ? CA.held_suarez_cache(Y) :
         NamedTuple(),
         radiation_cache,
@@ -202,6 +203,9 @@ function additional_tendency!(Yₜ, Y, p, t)
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
         hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+        if p.subsidence isa CA.Subsidence
+            CA.subsidence_tendency!(Yₜ, Y, p, t, colidx)
+        end
         if vert_diff
             (; coupled) = p
             !coupled && CA.get_surface_fluxes!(Y, p, colidx)

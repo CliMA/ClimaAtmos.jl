@@ -58,6 +58,7 @@ function compute_sgs_flux!(
     surf::SurfaceBase,
     param_set::APS,
 )
+    thermo_params = TCP.thermodynamics_params(param_set)
     N_up = n_updrafts(edmf)
     tendencies_gm = center_tendencies_grid_mean(state)
     FT = float_type(state)
@@ -101,7 +102,8 @@ function compute_sgs_flux!(
     # compute total enthalpies
     ts_en = center_aux_environment(state).ts
     ts_gm = center_aux_grid_mean_ts(state)
-    @. h_tot_gm = total_enthalpy(param_set, prog_gm.ρe_tot / ρ_c, ts_gm)
+    @. h_tot_gm =
+        TD.total_specific_enthalpy(thermo_params, ts_gm, prog_gm.ρe_tot / ρ_c)
     # Compute the mass flux and associated scalar fluxes
     @. massflux = ρ_f * Ifae(a_en) * (w_en - wcomponent(CCG.WVector(w_gm)))
     @. massflux_h =

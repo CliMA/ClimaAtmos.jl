@@ -17,6 +17,9 @@ struct Microphysics0Moment <: AbstractMicrophysicsModel end
 
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
+struct Subsidence{T} <: AbstractForcing
+    prof::T
+end
 
 abstract type AbstractSurfaceScheme end
 struct BulkSurfaceScheme <: AbstractSurfaceScheme end

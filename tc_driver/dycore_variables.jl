@@ -43,7 +43,6 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     dTdt_rad = FT(0), # horizontal advection temperature tendency
     dqtdt_rad = FT(0), # horizontal advection moisture tendency
     # From ForcingBase
-    subsidence = FT(0), #Large-scale subsidence
     dTdt_hadv = FT(0), #Horizontal advection of temperature
     dqtdt_hadv = FT(0), #Horizontal advection of moisture
     T_nudge = FT(0), #Reference T profile for relaxation tendency
@@ -53,8 +52,6 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     u_nudge = FT(0), #Reference u profile for relaxation tendency
     v_nudge = FT(0), #Reference v profile for relaxation tendency
     uₕ_g = CCG.Covariant12Vector(CCG.UVVector(FT(0), FT(0)), local_geometry), #Geostrophic u velocity
-    ∇MSE_gm = FT(0),
-    ∇q_tot_gm = FT(0),
     cent_aux_vars_gm_moisture(FT, edmf.moisture_model)...,
     θ_virt = FT(0),
     Ri = FT(0),

@@ -50,18 +50,6 @@ function geopotential(param_set, z::Real)
     return grav * z
 end
 
-# TODO: move to Thermodynamics.jl
-function total_enthalpy(param_set::APS, e_tot::FT, ts) where {FT}
-    thermo_params = TCP.thermodynamics_params(param_set)
-    Rm = TD.gas_constant_air(thermo_params, ts)
-    T = TD.air_temperature(thermo_params, ts)
-    return e_tot + Rm * T
-end
-
-function total_enthalpy(param_set::APS, e_tot::FT, p::FT, ρ::FT) where {FT}
-    return e_tot + p / ρ
-end
-
 function enthalpy(h_tot::FT, e_kin::FT, e_pot::FT) where {FT}
     return h_tot - e_kin - e_pot
 end

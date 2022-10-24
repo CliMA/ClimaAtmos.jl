@@ -84,6 +84,25 @@ function forcing_type(parsed_args)
     end
 end
 
+function subsidence_model(parsed_args, radiation_mode, FT)
+    subsidence = parsed_args["subsidence"]
+    subsidence == nothing && return nothing
+
+    prof = if subsidence == "Bomex"
+        APL.Bomex_subsidence(FT)
+    elseif subsidence == "LifeCycleTan2018"
+        APL.LifeCycleTan2018_subsidence(FT)
+    elseif subsidence == "Rico"
+        APL.Rico_subsidence(FT)
+    elseif subsidence == "DYCOMS"
+        @assert radiation_mode isa RadiationDYCOMS_RF01
+        z -> -z * radiation_mode.divergence
+    else
+        error("Uncaught case")
+    end
+    return Subsidence(prof)
+end
+
 function precipitation_model(parsed_args, namelist)
     namelist isa Nothing && return TC.NoPrecipitation()
 
