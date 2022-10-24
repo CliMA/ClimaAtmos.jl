@@ -2,7 +2,7 @@
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "eed7709e9abc0d2f746b2705098cee73922602fd"
+project_hash = "a431831ff0704e8bacff3cdd2115f621ad8f6c88"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -254,6 +254,12 @@ deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
 git-tree-sha1 = "2fb63d2573c4ba4aff1ed7829a6c91032be5d488"
 uuid = "cf7c7e5a-b407-4c48-9047-11a94a308626"
 version = "0.2.4"
+
+[[deps.ClimaCoreSpectra]]
+deps = ["ClimaCore", "FFTW"]
+git-tree-sha1 = "1a3bf3e0a9fe27b387f5148320b7b21a55838c3e"
+uuid = "c2caaa1d-32ae-4754-ba0d-80e7561362e9"
+version = "0.1.0"
 
 [[deps.ClimaCoreTempestRemap]]
 deps = ["ClimaCore", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll", "Test"]
