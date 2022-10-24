@@ -76,7 +76,7 @@ function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
         msg *= "  `How to merge pull requests (PR) that get approved but *break* regression tests`\n\n"
         msg *= "for how to merge this PR."
         @info msg
-        rethrow(err.error)
+        rethrow(err)
     end
     return computed_mse
 
