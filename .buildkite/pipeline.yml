@@ -99,15 +99,6 @@ steps:
     steps:
 
       - label: ":computer: MPI baroclinic wave (ρe_tot)"
-        key: "mpi_baro_wave"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt_save_restart 5days"
-        artifact_paths: "mpi_baroclinic_wave_rhoe/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 2
-
-      - label: ":computer: MPI baroclinic wave (ρe_tot)"
         key: "mpi_baro_wave_ARS343"
         command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --dt 580secs"
         artifact_paths: "mpi_baroclinic_wave_rhoe/*"
@@ -116,14 +107,23 @@ steps:
         agents:
           slurm_ntasks: 2
 
+      - label: ":computer: Prep restart for MPI"
+        key: "mpi_baro_wave_make_restart"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_make_restart --dt_save_restart 5days"
+        artifact_paths: "mpi_make_restart/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
       - label: ":computer: Test restart for MPI baroclinic wave"
         key: "restart_mpi_baro_wave"
-        depends_on: "mpi_baro_wave"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_baroclinic_wave_rhoe --t_end 20days"
+        depends_on: "mpi_baro_wave_make_restart"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id restart_mpi_baroclinic_wave_rhoe --t_end 20days"
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
-          RESTART_FILE: "mpi_baroclinic_wave_rhoe/restart/day5.0.hdf5"
+          RESTART_FILE: "mpi_make_restart/restart/day5.0.hdf5"
         agents:
           slurm_ntasks: 2
         timeout_in_minutes: 20
