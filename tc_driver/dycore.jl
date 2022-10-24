@@ -225,8 +225,11 @@ function assign_thermo_aux!(state, grid, moisture_model, param_set)
         aux_gm.T[k] = TD.air_temperature(thermo_params, ts)
         aux_gm.RH[k] = TD.relative_humidity(thermo_params, ts)
         aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
-        aux_gm.h_tot[k] =
-            TC.total_enthalpy(param_set, prog_gm.ρe_tot[k] / ρ_c[k], ts)
+        aux_gm.h_tot[k] = TD.total_specific_enthalpy(
+            thermo_params,
+            ts,
+            prog_gm.ρe_tot[k] / ρ_c[k],
+        )
         p_c[k] = TD.air_pressure(thermo_params, ts)
         aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
     end
@@ -242,20 +245,15 @@ function compute_gm_tendencies!(
     param_set::APS,
 )
     thermo_params = TCP.thermodynamics_params(param_set)
-    Ic = CCO.InterpolateF2C()
     R_d = TCP.R_d(param_set)
     T_0 = TCP.T_0(param_set)
     Lv_0 = TCP.LH_v0(param_set)
     tendencies_gm = TC.center_tendencies_grid_mean(state)
-    kc_toa = TC.kc_top_of_atmos(grid)
-    kf_surf = TC.kf_surface(grid)
     FT = TC.float_type(state)
     prog_gm = TC.center_prog_grid_mean(state)
     prog_gm_f = TC.face_prog_grid_mean(state)
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
-    ∇MSE_gm = TC.center_aux_grid_mean(state).∇MSE_gm
-    ∇q_tot_gm = TC.center_aux_grid_mean(state).∇q_tot_gm
     aux_en = TC.center_aux_environment(state)
     aux_en_f = TC.face_aux_environment(state)
     aux_up = TC.center_aux_updrafts(state)
@@ -266,25 +264,7 @@ function compute_gm_tendencies!(
     ts_gm = TC.center_aux_grid_mean_ts(state)
     ᶜK = TC.center_aux_grid_mean_e_kin(state)
 
-    MSE_gm_toa = aux_gm.h_tot[kc_toa] - ᶜK[kc_toa]
-    q_tot_gm_toa = prog_gm.ρq_tot[kc_toa] / ρ_c[kc_toa]
-    RBe = CCO.RightBiasedC2F(; top = CCO.SetValue(MSE_gm_toa))
-    RBq = CCO.RightBiasedC2F(; top = CCO.SetValue(q_tot_gm_toa))
     wvec = CC.Geometry.WVector
-    ∇c = CCO.DivergenceF2C()
-    @. ∇MSE_gm = ∇c(wvec(RBe(aux_gm.h_tot - ᶜK)))
-    @. ∇q_tot_gm = ∇c(wvec(RBq(prog_gm.ρq_tot / ρ_c)))
-
-    if edmf.moisture_model isa CA.NonEquilMoistModel
-        ∇q_liq_gm = TC.center_aux_grid_mean(state).∇q_liq_gm
-        ∇q_ice_gm = TC.center_aux_grid_mean(state).∇q_ice_gm
-        q_liq_gm_toa = prog_gm.q_liq[kc_toa]
-        q_ice_gm_toa = prog_gm.q_ice[kc_toa]
-        RBq_liq = CCO.RightBiasedC2F(; top = CCO.SetValue(q_liq_gm_toa))
-        RBq_ice = CCO.RightBiasedC2F(; top = CCO.SetValue(q_ice_gm_toa))
-        @. ∇q_liq_gm = ∇c(wvec(RBq(prog_gm.q_liq)))
-        @. ∇q_ice_gm = ∇c(wvec(RBq(prog_gm.q_ice)))
-    end
 
     # Apply forcing
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -312,13 +292,6 @@ function compute_gm_tendencies!(
     cv_v = TCP.cv_v(param_set)
     R_v = TCP.R_v(param_set)
 
-    # LS Subsidence
-    @. tendencies_gm.ρe_tot -= ρ_c * aux_gm.subsidence * ∇MSE_gm
-    @. tendencies_gm.ρq_tot -= ρ_c * aux_gm.subsidence * ∇q_tot_gm
-    if edmf.moisture_model isa CA.NonEquilMoistModel
-        @. tendencies_gm.q_liq -= ∇q_liq_gm * aux_gm.subsidence
-        @. tendencies_gm.q_ice -= ∇q_ice_gm * aux_gm.subsidence
-    end
     # LS advection
     @. tendencies_gm.ρq_tot += ρ_c * aux_gm.dqtdt_hadv
     # TODO: should `hv` be a thermo function?

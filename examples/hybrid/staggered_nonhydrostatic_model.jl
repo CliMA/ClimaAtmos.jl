@@ -136,6 +136,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
             ᶠfct_zalesak,
         ),
         spaces,
+        moisture_model = model_spec.moisture_model,
         Yₜ = similar(Y), # only needed when using increment formulation
         limiters,
         ᶜρh_kwargs...,

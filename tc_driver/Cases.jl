@@ -410,7 +410,6 @@ function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
     prof_ug = APL.Bomex_geostrophic_u(FT)
     prof_dTdt = APL.Bomex_dTdt(FT)
     prof_dqtdt = APL.Bomex_dqtdt(FT)
-    prof_subsidence = APL.Bomex_subsidence(FT)
 
     z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     @. aux_gm.uₕ_g = CCG.Covariant12Vector(CCG.UVVector(prof_ug(z), FT(0)))
@@ -419,8 +418,6 @@ function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
     @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z)
     # Set large-scale drying
     @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
-    #Set large scale subsidence
-    @. aux_gm.subsidence = prof_subsidence(z)
     return nothing
 end
 
@@ -523,7 +520,6 @@ function initialize_forcing(
     prof_ug = APL.LifeCycleTan2018_geostrophic_u(FT)
     prof_dTdt = APL.LifeCycleTan2018_dTdt(FT)
     prof_dqtdt = APL.LifeCycleTan2018_dqtdt(FT)
-    prof_subsidence = APL.LifeCycleTan2018_subsidence(FT)
 
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, x -> FT(0))
@@ -534,8 +530,6 @@ function initialize_forcing(
     @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z)
     # Set large-scale drying
     @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
-    #Set large scale subsidence
-    @. aux_gm.subsidence = prof_subsidence(z)
     return nothing
 end
 
@@ -645,7 +639,6 @@ function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
     prof_vg = APL.Rico_geostrophic_vg(FT)
     prof_dTdt = APL.Rico_dTdt(FT)
     prof_dqtdt = APL.Rico_dqtdt(FT)
-    prof_subsidence = APL.Rico_subsidence(FT)
 
     z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
@@ -653,7 +646,6 @@ function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
 
     @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z) # Set large-scale cooling
     @. aux_gm.dqtdt_hadv = prof_dqtdt(z) # Set large-scale moistening
-    @. aux_gm.subsidence = prof_subsidence(z) #Set large scale subsidence
     return nothing
 end
 
@@ -1067,10 +1059,6 @@ function initialize_forcing(
     TC.set_z!(aux_gm_uₕ_g, FT(7), FT(-5.5))
     z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
 
-    # large scale subsidence
-    divergence = forcing.divergence
-    @. aux_gm.subsidence = -z * divergence
-
     # no large-scale drying
     @. aux_gm.dqtdt_hadv = 0 #kg/(kg * s)
 end
@@ -1166,10 +1154,6 @@ function initialize_forcing(
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, FT(5), FT(-5.5))
     z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
-
-    # large scale subsidence
-    divergence = forcing.divergence
-    @. aux_gm.subsidence = -z * divergence
 
     # no large-scale drying
     @. aux_gm.dqtdt_hadv .= 0 #kg/(kg * s)
