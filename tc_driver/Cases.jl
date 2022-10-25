@@ -148,7 +148,6 @@ ForcingBase(case::AbstractCaseType, FT; kwargs...) =
 ##### Default case behavior:
 #####
 
-update_forcing(::AbstractCaseType, grid, state, t::Real, param_set) = nothing
 initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) =
     nothing
 
@@ -408,16 +407,9 @@ function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
 
     FT = TC.float_type(state)
     prof_ug = APL.Bomex_geostrophic_u(FT)
-    prof_dTdt = APL.Bomex_dTdt(FT)
-    prof_dqtdt = APL.Bomex_dqtdt(FT)
 
     z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     @. aux_gm.uₕ_g = CCG.Covariant12Vector(CCG.UVVector(prof_ug(z), FT(0)))
-
-    # Set large-scale cooling
-    @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z)
-    # Set large-scale drying
-    @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
     return nothing
 end
 
@@ -523,13 +515,7 @@ function initialize_forcing(
 
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, x -> FT(0))
-
-    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     # Geostrophic velocity profiles. vg = 0
-    # Set large-scale cooling
-    @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z)
-    # Set large-scale drying
-    @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
     return nothing
 end
 
@@ -643,9 +629,6 @@ function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
     z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, prof_ug, prof_vg)
-
-    @. aux_gm.dTdt_hadv = prof_dTdt(TD.exner(thermo_params, ts_gm), z) # Set large-scale cooling
-    @. aux_gm.dqtdt_hadv = prof_dqtdt(z) # Set large-scale moistening
     return nothing
 end
 
@@ -862,22 +845,6 @@ function initialize_forcing(::ARM_SGP, forcing, grid::Grid, state, param_set)
     return nothing
 end
 
-function update_forcing(::ARM_SGP, grid, state, t::Real, param_set)
-    thermo_params = TCP.thermodynamics_params(param_set)
-    aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    FT = TC.float_type(state)
-    @inbounds for k in real_center_indices(grid)
-        Π = TD.exner(thermo_params, ts_gm[k])
-        z = grid.zc[k].z
-        aux_gm.dTdt_hadv[k] = APL.ARM_SGP_dTdt(FT)(t, z)
-        aux_gm.dqtdt_hadv[k] = APL.ARM_SGP_dqtdt(FT)(Π, t, z)
-
-    end
-end
-
 #####
 ##### GATE_III
 #####
@@ -961,10 +928,6 @@ function initialize_forcing(::GATE_III, forcing, grid::Grid, state, param_set)
     FT = TC.float_type(state)
     aux_gm = TC.center_aux_grid_mean(state)
     z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
-    prof_dqtdt = APL.GATE_III_dqtdt(FT)
-    prof_dTdt = APL.GATE_III_dTdt(FT)
-    @. aux_gm.dqtdt_hadv = prof_dqtdt(z)
-    @. aux_gm.dTdt_hadv = prof_dTdt(z)
 end
 
 #####
@@ -1058,9 +1021,6 @@ function initialize_forcing(
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, FT(7), FT(-5.5))
     z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
-
-    # no large-scale drying
-    @. aux_gm.dqtdt_hadv = 0 #kg/(kg * s)
 end
 
 #####
@@ -1154,9 +1114,6 @@ function initialize_forcing(
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     TC.set_z!(aux_gm_uₕ_g, FT(5), FT(-5.5))
     z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
-
-    # no large-scale drying
-    @. aux_gm.dqtdt_hadv .= 0 #kg/(kg * s)
 end
 
 #####

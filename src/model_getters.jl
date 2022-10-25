@@ -103,6 +103,43 @@ function subsidence_model(parsed_args, radiation_mode, FT)
     return Subsidence(prof)
 end
 
+function large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
+    ls_adv = parsed_args["ls_adv"]
+    ls_adv == nothing && return nothing
+
+    (prof_dTdt₀, prof_dqtdt₀) = if ls_adv == "Bomex"
+        (APL.Bomex_dTdt(FT), APL.Bomex_dqtdt(FT))
+    elseif ls_adv == "LifeCycleTan2018"
+        (APL.LifeCycleTan2018_dTdt(FT), APL.LifeCycleTan2018_dqtdt(FT))
+    elseif ls_adv == "Rico"
+        (APL.Rico_dTdt(FT), APL.Rico_dqtdt(FT))
+    elseif ls_adv == "ARM_SGP"
+        (APL.ARM_SGP_dTdt(FT), APL.ARM_SGP_dqtdt(FT))
+    elseif ls_adv == "GATE_III"
+        (APL.GATE_III_dTdt(FT), APL.GATE_III_dqtdt(FT))
+    else
+        error("Uncaught case")
+    end
+    # See https://clima.github.io/AtmosphericProfilesLibrary.jl/dev/
+    # for which functions accept which arguments.
+    prof_dqtdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico", "GATE_III")
+        (thermo_params, ᶜts, t, z) -> prof_dqtdt₀(z)
+    elseif ls_adv == "ARM_SGP"
+        (thermo_params, ᶜts, t, z) ->
+            prof_dqtdt₀(TD.exner(thermo_params, ᶜts), t, z)
+    end
+    prof_dTdt = if ls_adv in ("Bomex", "LifeCycleTan2018", "Rico")
+        (thermo_params, ᶜts, t, z) ->
+            prof_dTdt₀(TD.exner(thermo_params, ᶜts), z)
+    elseif ls_adv == "ARM_SGP"
+        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(t, z)
+    elseif ls_adv == "GATE_III"
+        (thermo_params, ᶜts, t, z) -> prof_dTdt₀(z)
+    end
+
+    return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
+end
+
 function precipitation_model(parsed_args, namelist)
     namelist isa Nothing && return TC.NoPrecipitation()
 

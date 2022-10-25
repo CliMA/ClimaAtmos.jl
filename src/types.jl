@@ -20,6 +20,11 @@ struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
     prof::T
 end
+# TODO: is this a forcing?
+struct LargeScaleAdvection{PT, PQ}
+    prof_dTdt::PT # Set large-scale cooling
+    prof_dqtdt::PQ # Set large-scale drying
+end
 
 abstract type AbstractSurfaceScheme end
 struct BulkSurfaceScheme <: AbstractSurfaceScheme end

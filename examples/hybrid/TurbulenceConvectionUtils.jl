@@ -119,11 +119,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
 
-    # Update aux / pre-tendencies filters. TODO: combine these into a function that minimizes traversals
-    # Some of these methods should probably live in `compute_tendencies`, when written, but we'll
-    # treat them as auxiliary variables for now, until we disentangle the tendency computations.
-    Cases.update_forcing(case, grid, state, t, tc_params)
-
     TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
     TC.compute_precipitation_sink_tendencies(
