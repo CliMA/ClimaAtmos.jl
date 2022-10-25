@@ -379,10 +379,6 @@ function radiation_model_cache(
     )
 end
 
-# TODO: move to ClimaCore with test
-import ClimaCore: Spaces, Geometry
-Spaces.z_component(::Type{<:Geometry.XYZPoint}) = 9
-
 """
     radiation_tendency!(Yₜ, Y, p, t, colidx, self::CA.RadiationDYCOMS_RF01)
 
