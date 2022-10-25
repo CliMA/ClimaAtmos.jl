@@ -22,7 +22,6 @@ function name_aliases()
         "u_mean" => ("u_translational_mean",),
         "v_mean" => ("v_translational_mean",),
         "tke_mean" => ("tke_nd_mean",),
-        "total_flux_s" => ("s_flux_z",),
         "lwp_mean" => ("lwp",),
         "iwp_mean" => ("iwp",),
         "rwp_mean" => ("rwp",),
