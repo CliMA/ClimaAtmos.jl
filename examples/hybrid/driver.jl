@@ -147,6 +147,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         CA.microphysics_cache(Y, microphysics_model),
         CA.subsidence_cache(Y, model_spec.subsidence),
         CA.large_scale_advection_cache(Y, model_spec.ls_adv),
+        CA.edmf_coriolis_cache(Y, model_spec.edmf_coriolis),
         forcing_type isa CA.HeldSuarezForcing ? CA.held_suarez_cache(Y) :
         NamedTuple(),
         radiation_cache,
@@ -207,6 +208,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         if p.subsidence isa CA.Subsidence
             CA.subsidence_tendency!(Yₜ, Y, p, t, colidx)
         end
+        CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
         CA.large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
         if vert_diff
             (; coupled) = p

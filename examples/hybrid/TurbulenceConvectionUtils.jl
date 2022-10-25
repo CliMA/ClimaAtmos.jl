@@ -48,8 +48,6 @@ function get_edmf_cache(
     FT = CC.Spaces.undertype(axes(Y.c))
     test_consistency = parsed_args["test_edmf_consistency"]
     case = Cases.get_case(namelist)
-    forcing =
-        Cases.ForcingBase(case, FT; Cases.forcing_kwargs(case, namelist)...)
     surf_ref_state = Cases.surface_ref_state(case, tc_params, namelist)
     surf_params =
         Cases.surface_params(case, surf_ref_state, tc_params; Ri_bulk_crit)
@@ -58,7 +56,6 @@ function get_edmf_cache(
     return (;
         edmf,
         case,
-        forcing,
         test_consistency,
         surf_params,
         param_set,
@@ -70,7 +67,7 @@ end
 
 function init_tc!(Y, p, param_set, namelist)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_ref_state, surf_params, forcing, case) = edmf_cache
+    (; edmf, param_set, surf_ref_state, surf_params, case) = edmf_cache
     tc_params = CAP.turbconv_params(param_set)
 
     FT = eltype(edmf)
@@ -93,7 +90,6 @@ function init_tc!(Y, p, param_set, namelist)
         set_thermo_state_pθq!(Y, p, colidx)
         set_grid_mean_from_thermo_state!(tc_params, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
-        Cases.initialize_forcing(case, forcing, grid, state, tc_params)
         initialize_edmf(edmf, grid, state, surf_params, tc_params, t, case)
     end
 end
@@ -102,7 +98,7 @@ end
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     (; edmf_cache, Δt) = p
     (; edmf, param_set, case, surf_params) = edmf_cache
-    (; forcing, precip_model, test_consistency) = edmf_cache
+    (; precip_model, test_consistency) = edmf_cache
     tc_params = CAP.turbconv_params(param_set)
     state = TC.tc_column_state(Y, p, Yₜ, colidx)
     grid = TC.Grid(state)
@@ -140,7 +136,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     TC.compute_turbconv_tendencies!(edmf, grid, state, tc_params, surf, Δt)
 
     # TODO: incrementally disable this and enable proper grid mean terms
-    compute_gm_tendencies!(edmf, grid, state, surf, forcing, tc_params)
+    compute_gm_tendencies!(edmf, grid, state, surf, tc_params)
     return nothing
 end
 

@@ -140,6 +140,39 @@ function large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
+function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
+    edmf_coriolis = parsed_args["edmf_coriolis"]
+    edmf_coriolis == nothing && return nothing
+    (prof_u, prof_v) = if edmf_coriolis == "Bomex"
+        (APL.Bomex_geostrophic_u(FT), z -> FT(0))
+    elseif edmf_coriolis == "LifeCycleTan2018"
+        (APL.LifeCycleTan2018_geostrophic_u(FT), z -> FT(0))
+    elseif edmf_coriolis == "Rico"
+        (APL.Rico_geostrophic_ug(FT), APL.Rico_geostrophic_vg(FT))
+    elseif edmf_coriolis == "ARM_SGP"
+        (z -> FT(10), z -> FT(0))
+    elseif edmf_coriolis == "DYCOMS_RF01"
+        (z -> FT(7), z -> FT(-5.5))
+    elseif edmf_coriolis == "DYCOMS_RF02"
+        (z -> FT(5), z -> FT(-5.5))
+    elseif edmf_coriolis == "GABLS"
+        (APL.GABLS_geostrophic_ug(FT), APL.GABLS_geostrophic_vg(FT))
+    else
+        error("Uncaught case")
+    end
+
+    coriolis_params = Dict()
+    coriolis_params["Bomex"] = FT(0.376e-4)
+    coriolis_params["LifeCycleTan2018"] = FT(0.376e-4)
+    coriolis_params["Rico"] = FT(4.5e-5)
+    coriolis_params["ARM_SGP"] = FT(8.5e-5)
+    coriolis_params["DYCOMS_RF01"] = FT(0) # TODO: check this
+    coriolis_params["DYCOMS_RF02"] = FT(0) # TODO: check this
+    coriolis_params["GABLS"] = FT(1.39e-4)
+    coriolis_param = coriolis_params[edmf_coriolis]
+    return EDMFCoriolis(prof_u, prof_v, coriolis_param)
+end
+
 function precipitation_model(parsed_args, namelist)
     namelist isa Nothing && return TC.NoPrecipitation()
 

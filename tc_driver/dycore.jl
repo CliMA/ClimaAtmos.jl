@@ -241,7 +241,6 @@ function compute_gm_tendencies!(
     grid::TC.Grid,
     state::TC.State,
     surf::TC.SurfaceBase,
-    force::Cases.ForcingBase,
     param_set::APS,
 )
     tendencies_gm = TC.center_tendencies_grid_mean(state)
@@ -251,25 +250,9 @@ function compute_gm_tendencies!(
     aux_bulk = TC.center_aux_bulk(state)
     ρ_c = prog_gm.ρ
     aux_tc = TC.center_aux_turbconv(state)
-
-    wvec = CC.Geometry.WVector
-
-    # Apply forcing
-    prog_gm_uₕ = TC.grid_mean_uₕ(state)
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
     tendencies_gm_uₕ = TC.tendencies_grid_mean_uₕ(state)
 
-    # Coriolis
-    coriolis_param = force.coriolis_param
-    # TODO: union split over sphere or box
-    # lat = CC.Fields.coordinate_field(axes(ρ_c)).lat
-    coords = CC.Fields.coordinate_field(axes(ρ_c))
-    coriolis_fn(coord) = CCG.WVector(coriolis_param)
-    f = @. CCG.Contravariant3Vector(coriolis_fn(coords))
-
-    C123 = CCG.Covariant123Vector
-    C12 = CCG.Contravariant12Vector
-    @. tendencies_gm_uₕ -= f × (C12(C123(prog_gm_uₕ)) - C12(C123(aux_gm_uₕ_g)))
+    wvec = CC.Geometry.WVector
 
     # Apply precipitation tendencies
     @. tendencies_gm.ρq_tot +=
