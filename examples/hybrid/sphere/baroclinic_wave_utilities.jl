@@ -396,12 +396,25 @@ function saturated_surface_conditions(
         state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
         z0m = z0m,
         z0b = z0b,
+        gustiness = FT(2.0)
     )
 
     # calculate all fluxes
     tsf = SF.surface_conditions(sf_params, sc; noniterative_stable_sol = true)
 
     E = SF.evaporation(sf_params, sc, tsf.Ch)
+
+    if tsf.lhf > 1000
+        @info tsf
+        @info z_int
+        @info (uₕ_int.u, uₕ_int.v)
+        @info ts_int
+        @info z_sfc
+        @info ts_sfc
+        @info z0m
+        @info z0b
+        @info sf_params
+    end
 
     return (;
         shf = tsf.shf,
@@ -456,6 +469,23 @@ function get_surface_fluxes!(Y, p, colidx)
             params,
             coupled,
         )
+
+    if parent(surface_conditions[colidx].lhf)[1] > 1e3
+        @info colidx
+        @info surface_conditions[colidx]
+        @info p.surface_scheme
+        @info surf_args
+        @info T_sfc[colidx]
+        @info ρ_sfc[colidx]
+        @info q_sfc[colidx]
+        @info Spaces.level(ᶜts[colidx], 1)
+        @info uₕ_int_local[colidx]
+        @info z_bottom[colidx]
+        @info z_sfc[colidx]
+        @info params
+        @info coupled
+    end
+
     if diffuse_momentum
         ρτxz = surface_conditions[colidx].ρτxz
         ρτyz = surface_conditions[colidx].ρτyz
@@ -502,10 +532,6 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         z_bottom,
         uₕ_int_local,
     ) = p
-
-    if parent(dif_flux_energy_bc[colidx].components.data.:1)[1] < -1000
-        @info colidx
-    end
     
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
