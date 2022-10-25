@@ -47,6 +47,9 @@ function parse_commandline()
         "--subsidence"
         help = "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
         arg_type = String
+        "--ls_adv"
+        help = "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
+        arg_type = String
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool

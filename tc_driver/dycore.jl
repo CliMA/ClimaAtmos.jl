@@ -244,36 +244,20 @@ function compute_gm_tendencies!(
     force::Cases.ForcingBase,
     param_set::APS,
 )
-    thermo_params = TCP.thermodynamics_params(param_set)
-    R_d = TCP.R_d(param_set)
-    T_0 = TCP.T_0(param_set)
-    Lv_0 = TCP.LH_v0(param_set)
     tendencies_gm = TC.center_tendencies_grid_mean(state)
-    FT = TC.float_type(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    prog_gm_f = TC.face_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     aux_en = TC.center_aux_environment(state)
-    aux_en_f = TC.face_aux_environment(state)
-    aux_up = TC.center_aux_updrafts(state)
     aux_bulk = TC.center_aux_bulk(state)
-    p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     aux_tc = TC.center_aux_turbconv(state)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    ᶜK = TC.center_aux_grid_mean_e_kin(state)
 
     wvec = CC.Geometry.WVector
 
     # Apply forcing
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    # prog_gm_v = TC.grid_mean_v(state)
     tendencies_gm_uₕ = TC.tendencies_grid_mean_uₕ(state)
-    # tendencies_gm_v = TC.tendencies_grid_mean_v(state)
-    prog_gm_u = TC.physical_grid_mean_u(state)
-    prog_gm_v = TC.physical_grid_mean_v(state)
 
     # Coriolis
     coriolis_param = force.coriolis_param
@@ -285,29 +269,7 @@ function compute_gm_tendencies!(
 
     C123 = CCG.Covariant123Vector
     C12 = CCG.Contravariant12Vector
-    lg = CC.Fields.local_geometry_field(axes(ρ_c))
     @. tendencies_gm_uₕ -= f × (C12(C123(prog_gm_uₕ)) - C12(C123(aux_gm_uₕ_g)))
-
-    cp_v = TCP.cp_v(param_set)
-    cv_v = TCP.cv_v(param_set)
-    R_v = TCP.R_v(param_set)
-
-    # LS advection
-    @. tendencies_gm.ρq_tot += ρ_c * aux_gm.dqtdt_hadv
-    # TODO: should `hv` be a thermo function?
-    #     (hv = cv_v * (aux_gm.T - T_0) + Lv_0 - R_v * T_0)
-    if !(Cases.force_type(force) <: Cases.ForcingDYCOMS_RF01)
-        @. tendencies_gm.ρe_tot +=
-            ρ_c * (
-                TD.cp_m(thermo_params, ts_gm) * aux_gm.dTdt_hadv +
-                (cv_v * (aux_gm.T - T_0) + Lv_0 - R_v * T_0) *
-                aux_gm.dqtdt_hadv
-            )
-    end
-    if edmf.moisture_model isa CA.NonEquilMoistModel
-        @. tendencies_gm.q_liq += aux_gm.dqldt
-        @. tendencies_gm.q_ice += aux_gm.dqidt
-    end
 
     # Apply precipitation tendencies
     @. tendencies_gm.ρq_tot +=
