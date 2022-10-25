@@ -212,17 +212,10 @@ function center_initial_condition_baroclinic_wave(
     end
     # TODO: Include ability to handle nonzero initial cloud condensate
 
-    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
     tc_kwargs = if turbconv_model isa Nothing
         NamedTuple()
     elseif turbconv_model isa TC.EDMFModel
-        (;
-            ρθ_liq_ice = FT(0),
-            ρq_tot = FT(0),
-            u = FT(0),
-            v = FT(0),
-            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
-        )
+        TC.cent_prognostic_vars_edmf(FT, turbconv_model)
     end
     return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
 end
@@ -291,17 +284,10 @@ function center_initial_condition_3d(
     end
     # TODO: Include ability to handle nonzero initial cloud condensate
 
-    # TODO: synchronize `ρθ_liq_ice`, `u`, `v`, `uₕ`, `ρ` with TC
     tc_kwargs = if turbconv_model isa Nothing
         NamedTuple()
     elseif turbconv_model isa TC.EDMFModel
-        (;
-            ρθ_liq_ice = FT(0),
-            ρq_tot = FT(0),
-            u = FT(0),
-            v = FT(0),
-            TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
-        )
+        TC.cent_prognostic_vars_edmf(FT, turbconv_model)
     end
     return (; ρ, ᶜ𝔼_kwarg..., uₕ, moisture_kwargs..., tc_kwargs...)
 end
