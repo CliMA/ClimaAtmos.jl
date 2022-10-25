@@ -119,7 +119,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
 
     TC.compute_precipitation_sink_tendencies(
         precip_model,
-        edmf,
+        edmf.precip_fraction_model,
         grid,
         state,
         tc_params,
@@ -127,7 +127,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     )
     TC.compute_precipitation_advection_tendencies(
         precip_model,
-        edmf,
+        edmf.precip_fraction_model,
         grid,
         state,
         tc_params,
