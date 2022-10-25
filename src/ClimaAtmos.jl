@@ -12,6 +12,7 @@ import .RRTMGPInterface as RRTMGPI
 include("TurbulenceConvection/TurbulenceConvection.jl")
 import .TurbulenceConvection as TC
 
+include("ref_state.jl")
 include("thermo_state.jl")
 
 include(joinpath("tendencies", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
