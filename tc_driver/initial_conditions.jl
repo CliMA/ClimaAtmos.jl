@@ -67,25 +67,22 @@ function initialize_updrafts(edmf, grid, state, surf)
     ρ_c = prog_gm.ρ
     a_min = edmf.minimum_area
     @inbounds for i in 1:N_up
-        @inbounds for k in TC.real_face_indices(grid)
-            prog_up_f[i].w[k] = zero(eltype(prog_up_f[i].w))
-        end
+        lg = CC.Fields.local_geometry_field(axes(prog_up_f[i].w))
+        @. prog_up_f[i].w =
+            CC.Geometry.Covariant3Vector(CC.Geometry.WVector(FT(0)), lg)
 
-        @inbounds for k in TC.real_center_indices(grid)
-            aux_up[i].buoy[k] = 0
-            # Simple treatment for now, revise when multiple updraft closures
-            # become more well defined
-            aux_up[i].area[k] = a_min
-            aux_up[i].q_tot[k] = aux_gm.q_tot[k]
-            aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
-            aux_up[i].q_liq[k] = aux_gm.q_liq[k]
-            aux_up[i].q_ice[k] = aux_gm.q_ice[k]
-            aux_up[i].T[k] = aux_gm.T[k]
-            prog_up[i].ρarea[k] = ρ_c[k] * aux_up[i].area[k]
-            prog_up[i].ρaq_tot[k] = prog_up[i].ρarea[k] * aux_up[i].q_tot[k]
-            prog_up[i].ρaθ_liq_ice[k] =
-                prog_up[i].ρarea[k] * aux_up[i].θ_liq_ice[k]
-        end
+        @. aux_up[i].buoy = 0
+        # Simple treatment for now, revise when multiple updraft closures
+        # become more well defined
+        @. aux_up[i].area = a_min
+        @. aux_up[i].q_tot = aux_gm.q_tot
+        @. aux_up[i].θ_liq_ice = aux_gm.θ_liq_ice
+        @. aux_up[i].q_liq = aux_gm.q_liq
+        @. aux_up[i].q_ice = aux_gm.q_ice
+        @. aux_up[i].T = aux_gm.T
+        @. prog_up[i].ρarea = ρ_c * aux_up[i].area
+        @. prog_up[i].ρaq_tot = prog_up[i].ρarea * aux_up[i].q_tot
+        @. prog_up[i].ρaθ_liq_ice = prog_up[i].ρarea * aux_up[i].θ_liq_ice
         if edmf.entr_closure isa TC.PrognosticNoisyRelaxationProcess
             @. prog_up[i].ε_nondim = 0
             @. prog_up[i].δ_nondim = 0

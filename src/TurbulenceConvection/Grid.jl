@@ -1,33 +1,3 @@
-
-"""
-    TCMeshFromGCMMesh(gcm_mesh; z_max)
-
-Returns a case-specific subset of the expected GCM mesh between the surface and z_max
- - `gcm_mesh` :: a ClimaCore mesh for expected GCM grid
- - `z_max`    :: maximum height for a specific TC case
-"""
-function TCMeshFromGCMMesh(gcm_mesh; z_max::FT) where {FT <: AbstractFloat}
-    gcm_grid = Grid(gcm_mesh)
-    k_star = kf_top_of_atmos(gcm_grid)
-    for k in real_face_indices(gcm_grid)
-        if gcm_grid.zf[k].z > z_max || z_max ≈ gcm_grid.zf[k].z
-            k_star = k
-            break
-        end
-    end
-    z₀ = zf_surface(gcm_grid).z
-    z₁ = gcm_grid.zf[k_star].z
-    domain = CC.Domains.IntervalDomain(
-        CC.Geometry.ZPoint{FT}(z₀),
-        CC.Geometry.ZPoint{FT}(z₁),
-        boundary_tags = (:bottom, :top),
-    )
-    faces = map(1:(k_star.i)) do k
-        CC.Geometry.ZPoint{FT}(gcm_grid.zf[CCO.PlusHalf(k)].z)
-    end
-    return CC.Meshes.IntervalMesh(domain, faces)
-end
-
 struct Grid{FT, NZ, CS, FS, SC, SF}
     zmin::FT
     zmax::FT
@@ -91,7 +61,6 @@ zc_toa(grid::Grid) = grid.zc[kc_top_of_atmos(grid)]
 zf_toa(grid::Grid) = grid.zf[kf_top_of_atmos(grid)]
 
 real_center_indices(grid::Grid) = CenterIndices(grid)
-real_face_indices(grid::Grid) = FaceIndices(grid)
 
 struct FaceIndices{Nstart, Nstop, G}
     grid::G
@@ -156,8 +125,6 @@ center_space(grid::Grid) = grid.cs
 #=
     findfirst_center
     findlast_center
-    findfirst_face
-    findlast_face
 
 Grid-aware find-first / find-last indices with
 surface/toa (respectively) as the default index
@@ -177,21 +144,6 @@ z_findfirst_center(f::F, grid::Grid) where {F} =
     grid.zc[findfirst_center(f, grid)].z
 z_findlast_center(f::F, grid::Grid) where {F} =
     grid.zc[findlast_center(f, grid)].z
-
-function findfirst_face(f::F, grid::Grid) where {F}
-    RI = real_face_indices(grid)
-    k = findfirst(f, RI)
-    return RI[isnothing(k) ? kf_surface(grid).i : k]
-end
-function findlast_face(f::F, grid::Grid) where {F}
-    RI = real_face_indices(grid)
-    k = findlast(f, RI)
-    return RI[isnothing(k) ? kf_top_of_atmos(grid).i : k]
-end
-z_findfirst_face(f::F, grid::Grid) where {F} =
-    grid.zf[findfirst_face(f, grid)].z
-z_findlast_face(f::F, grid::Grid) where {F} = grid.zf[findlast_face(f, grid)].z
-
 
 Base.eltype(::Grid{FT}) where {FT} = FT
 
