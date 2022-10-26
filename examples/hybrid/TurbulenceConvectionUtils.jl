@@ -71,7 +71,10 @@ function init_tc!(Y, p, param_set, namelist)
     tc_params = CAP.turbconv_params(param_set)
 
     FT = eltype(edmf)
+    thermo_params = CAP.thermodynamics_params(p.params)
 
+    ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])
+    sol = CA.ref_state_profile(ᶠspace_1, thermo_params, surf_ref_state)
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
         state = TC.tc_column_state(Y, p, nothing, colidx)
@@ -79,7 +82,21 @@ function init_tc!(Y, p, param_set, namelist)
         grid = TC.Grid(state)
         FT = eltype(grid)
         t = FT(0)
-        compute_ref_state!(state, grid, tc_params; ts_g = surf_ref_state)
+
+        CA.compute_ref_state!(
+            sol,
+            p.ᶜp[colidx],
+            Y.c.ρ[colidx],
+            thermo_params,
+            surf_ref_state,
+        )
+        CA.compute_ref_state!(
+            sol,
+            p.edmf_cache.aux.face.p[colidx],
+            p.edmf_cache.aux.face.ρ[colidx],
+            thermo_params,
+            surf_ref_state,
+        )
 
         # TODO: convert initialize_profiles to set prognostic state, not aux state
         Cases.initialize_profiles(case, grid, tc_params, state)
