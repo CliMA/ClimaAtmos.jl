@@ -52,7 +52,6 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     frac_turb_entr = FT(0),
     entr_turb_dyn = FT(0),
     detr_turb_dyn = FT(0),
-    Π_groups = ntuple(i -> FT(0), n_Π_groups(edmf)),
 )
 cent_aux_vars_edmf_bulk_moisture(FT, ::NonEquilMoistModel) = (;
     ql_tendency_precip_formation = FT(0),
@@ -203,12 +202,6 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 ##### Prognostic fields
 
 # Center only
-cent_prognostic_vars_up_noisy_relaxation(
-    ::Type{FT},
-    ::PrognosticNoisyRelaxationProcess,
-) where {FT} = (; ε_nondim = FT(0), δ_nondim = FT(0))
-cent_prognostic_vars_up_noisy_relaxation(::Type{FT}, _) where {FT} =
-    NamedTuple()
 cent_prognostic_vars_up_moisture(::Type{FT}, ::EquilMoistModel) where {FT} =
     NamedTuple()
 cent_prognostic_vars_up_moisture(::Type{FT}, ::NonEquilMoistModel) where {FT} =
@@ -217,7 +210,6 @@ cent_prognostic_vars_up(::Type{FT}, edmf) where {FT} = (;
     ρarea = FT(0),
     ρaθ_liq_ice = FT(0),
     ρaq_tot = FT(0),
-    cent_prognostic_vars_up_noisy_relaxation(FT, edmf.entr_closure)...,
     cent_prognostic_vars_up_moisture(FT, edmf.moisture_model)...,
 )
 
