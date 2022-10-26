@@ -286,13 +286,13 @@ function compute_gm_tendencies!(
     TC.compute_sgs_flux!(edmf, grid, state, surf, param_set)
 
     ∇sgs = CCO.DivergenceF2C()
-    @. tendencies_gm.ρe_tot += -∇sgs(wvec(aux_gm_f.sgs_flux_h_tot))
-    @. tendencies_gm.ρq_tot += -∇sgs(wvec(aux_gm_f.sgs_flux_q_tot))
+    @. tendencies_gm.ρe_tot += -∇sgs(aux_gm_f.sgs_flux_h_tot)
+    @. tendencies_gm.ρq_tot += -∇sgs(aux_gm_f.sgs_flux_q_tot)
     @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
 
     if edmf.moisture_model isa CA.NonEquilMoistModel
-        @. tendencies_gm.q_liq += -∇sgs(wvec(aux_gm_f.sgs_flux_q_liq)) / ρ_c
-        @. tendencies_gm.q_ice += -∇sgs(wvec(aux_gm_f.sgs_flux_q_ice)) / ρ_c
+        @. tendencies_gm.q_liq += -∇sgs(aux_gm_f.sgs_flux_q_liq) / ρ_c
+        @. tendencies_gm.q_ice += -∇sgs(aux_gm_f.sgs_flux_q_ice) / ρ_c
     end
 
     return nothing

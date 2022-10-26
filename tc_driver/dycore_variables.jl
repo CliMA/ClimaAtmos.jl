@@ -37,12 +37,14 @@ cent_aux_vars(FT, local_geometry, edmf) = (;
 )
 
 # Face only
-face_aux_vars_gm_moisture(FT, ::CA.NonEquilMoistModel) =
-    (; sgs_flux_q_liq = FT(0), sgs_flux_q_ice = FT(0))
+face_aux_vars_gm_moisture(FT, ::CA.NonEquilMoistModel) = (;
+    sgs_flux_q_liq = CCG.Covariant3Vector(FT(0)),
+    sgs_flux_q_ice = CCG.Covariant3Vector(FT(0)),
+)
 face_aux_vars_gm_moisture(FT, ::CA.EquilMoistModel) = NamedTuple()
 face_aux_vars_gm(FT, local_geometry, edmf) = (;
-    sgs_flux_h_tot = FT(0),
-    sgs_flux_q_tot = FT(0),
+    sgs_flux_h_tot = CCG.Covariant3Vector(FT(0)),
+    sgs_flux_q_tot = CCG.Covariant3Vector(FT(0)),
     face_aux_vars_gm_moisture(FT, edmf.moisture_model)...,
     sgs_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
                   CCG.Covariant12Vector(FT(0), FT(0)),

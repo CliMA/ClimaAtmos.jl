@@ -68,7 +68,7 @@ function initialize_updrafts(edmf, grid, state, surf)
     a_min = edmf.minimum_area
     @inbounds for i in 1:N_up
         @inbounds for k in TC.real_face_indices(grid)
-            prog_up_f[i].w[k] = 0
+            prog_up_f[i].w[k] = zero(eltype(prog_up_f[i].w))
         end
 
         @inbounds for k in TC.real_center_indices(grid)

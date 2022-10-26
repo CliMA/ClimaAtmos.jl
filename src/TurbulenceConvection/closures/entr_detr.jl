@@ -222,10 +222,14 @@ function compute_entr_detr!(
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
         # TODO: should we interpolate in local or covariant basis?
-        @. m_entr_detr = a_up * (Ic(w_up) - wcomponent(CCG.WVector(Ic(w_gm))))
+        @. m_entr_detr =
+            a_up * (
+                Ic(wcomponent(CCG.WVector(w_up))) -
+                wcomponent(CCG.WVector(Ic(w_gm)))
+            )
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
-        @. w_up_c = Ic(w_up)
-        @. w_en_c = Ic(w_en)
+        @. w_up_c = Ic(wcomponent(CCG.WVector(w_up)))
+        @. w_en_c = Ic(wcomponent(CCG.WVector(w_en)))
         @inbounds for k in real_center_indices(grid)
             # entrainment
 
@@ -363,10 +367,14 @@ function compute_entr_detr!(
         w_en = aux_en_f.w
         w_gm = prog_gm_f.w
         # TODO: should we interpolate in local or covariant basis?
-        @. m_entr_detr = a_up * (Ic(w_up) - Ic(wcomponent(CCG.WVector(w_gm))))
+        @. m_entr_detr =
+            a_up * (
+                Ic(wcomponent(CCG.WVector(w_up))) -
+                Ic(wcomponent(CCG.WVector(w_gm)))
+            )
         @. ∇m_entr_detr = ∇c(wvec(LB(m_entr_detr)))
-        @. w_up_c = Ic(w_up)
-        @. w_en_c = Ic(w_en)
+        @. w_up_c = Ic(wcomponent(CCG.WVector(w_up)))
+        @. w_en_c = Ic(wcomponent(CCG.WVector(w_en)))
 
         @inbounds for k in real_center_indices(grid)
             # entrainment
