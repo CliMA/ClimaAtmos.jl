@@ -26,6 +26,12 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dqtdt::PQ # Set large-scale drying
 end
 
+struct EDMFCoriolis{U, V, FT}
+    prof_ug::U
+    prof_vg::V
+    coriolis_param::FT
+end
+
 abstract type AbstractSurfaceScheme end
 struct BulkSurfaceScheme <: AbstractSurfaceScheme end
 struct MoninObukhovSurface <: AbstractSurfaceScheme end # TODO: unify with MoninObukhovSurface in TC
@@ -38,8 +44,7 @@ Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
 Base.broadcastable(x::AbstractForcing) = Ref(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
-    "Large-scale divergence (same as in ForcingBase)"
-    # TODO: make sure in sync with large_scale_divergence
+    "Large-scale divergence"
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
     kappa::FT = 85.0

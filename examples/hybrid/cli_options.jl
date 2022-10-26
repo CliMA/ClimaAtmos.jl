@@ -50,6 +50,9 @@ function parse_commandline()
         "--ls_adv"
         help = "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
         arg_type = String
+        "--edmf_coriolis"
+        help = "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
+        arg_type = String
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `true`]"
         arg_type = Bool

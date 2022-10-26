@@ -18,6 +18,7 @@ include(joinpath("tendencies", "forcing", "large_scale_advection.jl")) # TODO: s
 include(joinpath("tendencies", "forcing", "subsidence.jl"))
 include(joinpath("tendencies", "forcing", "held_suarez.jl"))
 
+include(joinpath("tendencies", "edmf_coriolis.jl"))
 include(joinpath("tendencies", "microphysics.jl"))
 include(joinpath("tendencies", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("tendencies", "rayleigh_sponge.jl"))

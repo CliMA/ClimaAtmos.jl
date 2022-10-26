@@ -21,7 +21,6 @@ import ..TurbulenceConvection as TC
 import ..TurbulenceConvection.Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
 
-using ..TurbulenceConvection: pyinterp
 using ..TurbulenceConvection: Grid
 using ..TurbulenceConvection: real_center_indices
 using ..TurbulenceConvection: real_face_indices
@@ -76,31 +75,6 @@ struct DYCOMS_RF02 <: AbstractCaseType end
 struct GABLS <: AbstractCaseType end
 
 #####
-##### Forcing types
-#####
-
-struct ForcingNone end
-struct ForcingStandard end
-struct ForcingDYCOMS_RF01 end
-struct ForcingLES end
-
-"""
-    ForcingBase
-
-LES-driven forcing
-
-$(DocStringExtensions.FIELDS)
-"""
-Base.@kwdef struct ForcingBase{T, FT}
-    "Coriolis parameter"
-    coriolis_param::FT = 0
-    "Large-scale divergence (same as in RadiationDYCOMS_RF01)"
-    divergence::FT = 0
-end
-
-force_type(::ForcingBase{T}) where {T} = T
-
-#####
 ##### Case methods
 #####
 
@@ -119,37 +93,6 @@ get_case(::Val{:DYCOMS_RF02}) = DYCOMS_RF02()
 get_case(::Val{:GABLS}) = GABLS()
 
 get_case_name(case_type::AbstractCaseType) = string(case_type)
-
-#####
-##### Case configurations
-#####
-
-get_forcing_type(::AbstractCaseType) = ForcingStandard # default
-get_forcing_type(::Soares) = ForcingNone
-get_forcing_type(::Nieuwstadt) = ForcingNone
-get_forcing_type(::DYCOMS_RF01) = ForcingDYCOMS_RF01
-get_forcing_type(::DYCOMS_RF02) = ForcingDYCOMS_RF01
-get_forcing_type(::TRMM_LBA) = ForcingNone
-
-large_scale_divergence(::Union{DYCOMS_RF01, DYCOMS_RF02}) = 3.75e-6
-
-forcing_kwargs(::AbstractCaseType, namelist) =
-    (; coriolis_param = namelist["forcing"]["coriolis"])
-forcing_kwargs(case::DYCOMS_RF01, namelist) =
-    (; divergence = large_scale_divergence(case))
-forcing_kwargs(case::DYCOMS_RF02, namelist) =
-    (; divergence = large_scale_divergence(case))
-les_data_kwarg(::AbstractCaseType, namelist) = ()
-
-ForcingBase(case::AbstractCaseType, FT; kwargs...) =
-    ForcingBase{get_forcing_type(case), FT}(; kwargs...)
-
-#####
-##### Default case behavior:
-#####
-
-initialize_forcing(::AbstractCaseType, forcing, grid::Grid, state, param_set) =
-    nothing
 
 #####
 ##### Pressure helper functions for making initial profiles hydrostatic.
@@ -398,21 +341,6 @@ function surface_params(case::Bomex, surf_ref_state, param_set; Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-function initialize_forcing(::Bomex, forcing, grid::Grid, state, param_set)
-    thermo_params = TCP.thermodynamics_params(param_set)
-    prog_gm = TC.center_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    p_c = TC.center_aux_grid_mean_p(state)
-
-    FT = TC.float_type(state)
-    prof_ug = APL.Bomex_geostrophic_u(FT)
-
-    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
-    @. aux_gm.uₕ_g = CCG.Covariant12Vector(CCG.UVVector(prof_ug(z), FT(0)))
-    return nothing
-end
-
 #####
 ##### life_cycle_Tan2018
 #####
@@ -493,30 +421,6 @@ function surface_params(
     ustar::FT = 0.28 # m/s
     kwargs = (; zrough, Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
-end
-
-function initialize_forcing(
-    ::life_cycle_Tan2018,
-    forcing,
-    grid::Grid,
-    state,
-    param_set,
-)
-    thermo_params = TCP.thermodynamics_params(param_set)
-    prog_gm = TC.center_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    p_c = TC.center_aux_grid_mean_p(state)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-
-    FT = TC.float_type(state)
-    prof_ug = APL.LifeCycleTan2018_geostrophic_u(FT)
-    prof_dTdt = APL.LifeCycleTan2018_dTdt(FT)
-    prof_dqtdt = APL.LifeCycleTan2018_dqtdt(FT)
-
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    TC.set_z!(aux_gm_uₕ_g, prof_ug, x -> FT(0))
-    # Geostrophic velocity profiles. vg = 0
-    return nothing
 end
 
 #####
@@ -611,25 +515,6 @@ function surface_params(case::Rico, surf_ref_state, param_set; kwargs...)
     qsurface = TD.q_vap_saturation(thermo_params, ts)
     kwargs = (; zrough, Tsurface, qsurface, cm, ch, kwargs...)
     return TC.FixedSurfaceCoeffs(FT; kwargs...)
-end
-
-function initialize_forcing(::Rico, forcing, grid::Grid, state, param_set)
-    thermo_params = TCP.thermodynamics_params(param_set)
-    prog_gm = TC.center_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    p_c = TC.center_aux_grid_mean_p(state)
-
-    FT = TC.float_type(state)
-    prof_ug = APL.Rico_geostrophic_ug(FT)
-    prof_vg = APL.Rico_geostrophic_vg(FT)
-    prof_dTdt = APL.Rico_dTdt(FT)
-    prof_dqtdt = APL.Rico_dqtdt(FT)
-
-    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    TC.set_z!(aux_gm_uₕ_g, prof_ug, prof_vg)
-    return nothing
 end
 
 #####
@@ -838,13 +723,6 @@ function surface_params(case::ARM_SGP, surf_ref_state, param_set; Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-function initialize_forcing(::ARM_SGP, forcing, grid::Grid, state, param_set)
-    FT = TC.float_type(state)
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    TC.set_z!(aux_gm_uₕ_g, FT(10), FT(0))
-    return nothing
-end
-
 #####
 ##### GATE_III
 #####
@@ -924,12 +802,6 @@ function surface_params(case::GATE_III, surf_ref_state, param_set; kwargs...)
     return TC.FixedSurfaceCoeffs(FT; kwargs...)
 end
 
-function initialize_forcing(::GATE_III, forcing, grid::Grid, state, param_set)
-    FT = TC.float_type(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    z = CC.Fields.coordinate_field(axes(aux_gm.uₕ_g)).z
-end
-
 #####
 ##### DYCOMS_RF01
 #####
@@ -1005,22 +877,6 @@ function surface_params(
 
     kwargs = (; zrough, Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.VariableFrictionVelocity; kwargs...)
-end
-
-function initialize_forcing(
-    ::DYCOMS_RF01,
-    forcing,
-    grid::Grid,
-    state,
-    param_set,
-)
-    aux_gm = TC.center_aux_grid_mean(state)
-    FT = TC.float_type(state)
-
-    # geostrophic velocity profiles
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    TC.set_z!(aux_gm_uₕ_g, FT(7), FT(-5.5))
-    z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
 end
 
 #####
@@ -1099,23 +955,6 @@ function surface_params(
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
-function initialize_forcing(
-    ::DYCOMS_RF02,
-    forcing,
-    grid::Grid,
-    state,
-    param_set,
-)
-    FT = TC.float_type(state)
-    # the same as in DYCOMS_RF01
-    aux_gm = TC.center_aux_grid_mean(state)
-
-    # geostrophic velocity profiles
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    TC.set_z!(aux_gm_uₕ_g, FT(5), FT(-5.5))
-    z = CC.Fields.coordinate_field(axes(aux_gm_uₕ_g)).z
-end
-
 #####
 ##### GABLS
 #####
@@ -1172,19 +1011,6 @@ function surface_params(case::GABLS, surf_ref_state, param_set; kwargs...)
 
     kwargs = (; Tsurface, qsurface, zrough, kwargs...)
     return TC.MoninObukhovSurface(FT; kwargs...)
-end
-
-function initialize_forcing(::GABLS, forcing, grid::Grid, state, param_set)
-    FT = TC.float_type(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-
-    prof_ug = APL.GABLS_geostrophic_ug(FT)
-    prof_vg = APL.GABLS_geostrophic_vg(FT)
-
-    # Geostrophic velocity profiles.
-    aux_gm_uₕ_g = TC.grid_mean_uₕ_g(state)
-    TC.set_z!(aux_gm_uₕ_g, prof_ug, prof_vg)
-    return nothing
 end
 
 end # module Cases
