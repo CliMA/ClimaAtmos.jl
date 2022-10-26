@@ -23,7 +23,6 @@ const APS = TCP.AbstractTurbulenceConvectionParameters
 
 using ..TurbulenceConvection: Grid
 using ..TurbulenceConvection: real_center_indices
-using ..TurbulenceConvection: real_face_indices
 using ..TurbulenceConvection: get_inversion
 
 #=
