@@ -114,7 +114,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
         tracers = filter(CA.is_tracer_var, propertynames(Y.c))
         make_limiter =
             ᶜρc_name ->
-                Limiters.QuasiMonotoneLimiter(getproperty(Y.c, ᶜρc_name), Y.c.ρ)
+                Limiters.QuasiMonotoneLimiter(getproperty(Y.c, ᶜρc_name))
         limiters = NamedTuple{tracers}(map(make_limiter, tracers))
     else
         limiters = nothing
