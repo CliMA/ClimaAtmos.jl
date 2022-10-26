@@ -48,9 +48,8 @@ include("types.jl")
 import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
-import .TurbulenceConvectionUtils as TCU
 namelist = if turbconv == "edmf"
-    nl = TCU.NameList.default_namelist(case_name)
+    nl = NameList.default_namelist(case_name)
     nl
 else
     nothing
@@ -180,7 +179,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         (; compressibility_model),
         !isnothing(turbconv_model) ?
         (;
-            edmf_cache = TCU.get_edmf_cache(
+            edmf_cache = get_edmf_cache(
                 Y,
                 turbconv_model,
                 precip_model,
@@ -218,7 +217,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         microphy_0M &&
             CA.zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
         rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
+        has_turbconv && sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
     (; non_orographic_gravity_wave) = p.tendency_knobs
@@ -272,7 +271,7 @@ end
 
 p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
 if parsed_args["turbconv"] == "edmf"
-    TCU.init_tc!(Y, p, params, namelist)
+    init_tc!(Y, p, params, namelist)
 end
 
 # Print tendencies:

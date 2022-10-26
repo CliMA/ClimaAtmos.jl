@@ -153,7 +153,7 @@ function turb_conv_affect_filter!(integrator)
     Fields.bycolumn(axes(Y.c)) do colidx
         state = TC.tc_column_state(Y, p, nothing, colidx)
         grid = TC.Grid(state)
-        surf = TCU.get_surface(surf_params, grid, state, t, tc_params)
+        surf = get_surface(surf_params, grid, state, t, tc_params)
         TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
     end
 

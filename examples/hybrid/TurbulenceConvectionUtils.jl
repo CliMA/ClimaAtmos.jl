@@ -1,4 +1,4 @@
-module TurbulenceConvectionUtils
+# module TurbulenceConvectionUtils
 
 using LinearAlgebra, StaticArrays
 import ClimaAtmos
@@ -18,7 +18,6 @@ import TerminalLoggers
 const ca_dir = pkgdir(ClimaAtmos)
 
 include(joinpath(ca_dir, "tc_driver", "Cases.jl"))
-import .Cases
 
 include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
 include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
@@ -47,10 +46,9 @@ function get_edmf_cache(
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     FT = CC.Spaces.undertype(axes(Y.c))
     test_consistency = parsed_args["test_edmf_consistency"]
-    case = Cases.get_case(namelist)
-    surf_ref_state = Cases.surface_ref_state(case, tc_params, namelist)
-    surf_params =
-        Cases.surface_params(case, surf_ref_state, tc_params; Ri_bulk_crit)
+    case = get_case(namelist)
+    surf_ref_state = surface_ref_state(case, tc_params, namelist)
+    surf_params = surface_params(case, surf_ref_state, tc_params; Ri_bulk_crit)
     edmf = turbconv_model
     @info "EDMFModel: \n$(summary(edmf))"
     return (;
@@ -82,7 +80,7 @@ function init_tc!(Y, p, param_set, namelist)
         compute_ref_state!(state, grid, tc_params; ts_g = surf_ref_state)
 
         # TODO: convert initialize_profiles to set prognostic state, not aux state
-        Cases.initialize_profiles(case, grid, tc_params, state)
+        initialize_profiles(case, grid, tc_params, state)
 
         # Temporarily, we'll re-populate ρq_tot based on initial aux q_tot
         q_tot = edmf_cache.aux.cent.q_tot[colidx]
@@ -140,4 +138,4 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     return nothing
 end
 
-end # module
+# end # module
