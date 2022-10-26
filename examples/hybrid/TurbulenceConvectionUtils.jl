@@ -48,13 +48,18 @@ function get_edmf_cache(
     FT = CC.Spaces.undertype(axes(Y.c))
     test_consistency = parsed_args["test_edmf_consistency"]
     case = Cases.get_case(namelist)
+    thermo_params = CAP.thermodynamics_params(param_set)
     surf_ref_state = Cases.surface_ref_state(case, tc_params, namelist)
     surf_params =
         Cases.surface_params(case, surf_ref_state, tc_params; Ri_bulk_crit)
     edmf = turbconv_model
+    ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])
+    logpressure_fun =
+        CA.log_pressure_profile(ᶠspace_1, thermo_params, surf_ref_state)
     @info "EDMFModel: \n$(summary(edmf))"
     return (;
         edmf,
+        logpressure_fun,
         case,
         test_consistency,
         surf_params,
@@ -65,35 +70,38 @@ function get_edmf_cache(
     )
 end
 
-function init_tc!(Y, p, param_set, namelist)
+function init_tc!(Y, p, params, namelist)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_ref_state, surf_params, case) = edmf_cache
-    tc_params = CAP.turbconv_params(param_set)
+    (; edmf, param_set, surf_ref_state, logpressure_fun, surf_params, case) =
+        edmf_cache
+    tc_params = CAP.turbconv_params(params)
 
     FT = eltype(edmf)
-    thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])
-    sol = CA.ref_state_profile(ᶠspace_1, thermo_params, surf_ref_state)
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
         state = TC.tc_column_state(Y, p, nothing, colidx)
+        thermo_params = CAP.thermodynamics_params(params)
 
         grid = TC.Grid(state)
         FT = eltype(grid)
         t = FT(0)
 
-        CA.compute_ref_state!(
-            sol,
-            p.ᶜp[colidx],
+        CA.compute_ref_pressure!(p.ᶜp[colidx], logpressure_fun)
+        CA.compute_ref_pressure!(
+            p.edmf_cache.aux.face.p[colidx],
+            logpressure_fun,
+        )
+
+        CA.compute_ref_density!(
             Y.c.ρ[colidx],
+            p.ᶜp[colidx],
             thermo_params,
             surf_ref_state,
         )
-        CA.compute_ref_state!(
-            sol,
-            p.edmf_cache.aux.face.p[colidx],
+        CA.compute_ref_density!(
             p.edmf_cache.aux.face.ρ[colidx],
+            p.edmf_cache.aux.face.p[colidx],
             thermo_params,
             surf_ref_state,
         )
@@ -113,9 +121,10 @@ end
 
 
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
-    (; edmf_cache, Δt) = p
+    (; edmf_cache, Δt, compressibility_model) = p
     (; edmf, param_set, case, surf_params) = edmf_cache
-    (; precip_model, test_consistency) = edmf_cache
+    (; precip_model, test_consistency, logpressure_fun) = edmf_cache
+    thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
     state = TC.tc_column_state(Y, p, Yₜ, colidx)
     grid = TC.Grid(state)
@@ -124,6 +133,15 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
         parent(state.aux.cent) .= NaN
     end
 
+    if compressibility_model isa CA.AnelasticFluid
+        # TODO: how should this be computed if compressible?
+        # pressure at cell centers have been populated, we need
+        # pressure BCs
+        CA.compute_ref_pressure!(
+            p.edmf_cache.aux.face.p[colidx],
+            logpressure_fun,
+        )
+    end
     assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
     aux_gm = TC.center_aux_grid_mean(state)
