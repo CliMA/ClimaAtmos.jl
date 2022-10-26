@@ -3,9 +3,6 @@
 
 Computes diagnostic precipitation fraction
 """
-compute_precip_fraction(edmf::EDMFModel, state::State) =
-    compute_precip_fraction(edmf.precip_fraction_model, state)
-
 compute_precip_fraction(
     precip_fraction_model::PrescribedPrecipFraction,
     ::State,
@@ -25,7 +22,7 @@ Computes the rain and snow advection (down) tendency
 """
 compute_precipitation_advection_tendencies(
     ::AbstractPrecipitationModel,
-    edmf::EDMFModel,
+    precip_fraction_model::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
@@ -33,7 +30,7 @@ compute_precipitation_advection_tendencies(
 
 function compute_precipitation_advection_tendencies(
     ::Clima1M,
-    edmf::EDMFModel,
+    precip_fraction_model::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
@@ -52,7 +49,7 @@ function compute_precipitation_advection_tendencies(
     term_vel_rain = aux_tc.term_vel_rain
     term_vel_snow = aux_tc.term_vel_snow
 
-    precip_fraction = compute_precip_fraction(edmf, state)
+    precip_fraction = compute_precip_fraction(precip_fraction_model, state)
 
     q_rai = prog_pr.q_rai #./ precip_fraction
     q_sno = prog_pr.q_sno #./ precip_fraction
@@ -79,7 +76,7 @@ due to rain evaporation, snow deposition and sublimation and snow melt
 """
 compute_precipitation_sink_tendencies(
     ::AbstractPrecipitationModel,
-    edmf::EDMFModel,
+    ::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
@@ -88,7 +85,7 @@ compute_precipitation_sink_tendencies(
 
 function compute_precipitation_sink_tendencies(
     ::Clima1M,
-    edmf::EDMFModel,
+    precip_fraction_model::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
@@ -104,7 +101,7 @@ function compute_precipitation_sink_tendencies(
     tendencies_pr = center_tendencies_precipitation(state)
     ts_gm = center_aux_grid_mean_ts(state)
 
-    precip_fraction = compute_precip_fraction(edmf, state)
+    precip_fraction = compute_precip_fraction(precip_fraction_model, state)
 
     FT = float_type(state)
 
@@ -118,21 +115,10 @@ function compute_precipitation_sink_tendencies(
         ts = ts_gm[k]
         q = TD.PhasePartition(thermo_params, ts)
         qv = TD.vapor_specific_humidity(thermo_params, ts)
-
-        Π_m = TD.exner(thermo_params, ts)
-        c_pm = TD.cp_m(thermo_params, ts)
-        c_vm = TD.cv_m(thermo_params, ts)
-        R_m = TD.gas_constant_air(thermo_params, ts)
-        R_v = TCP.R_v(param_set)
-        L_v0 = TCP.LH_v0(param_set)
-        L_s0 = TCP.LH_s0(param_set)
-        L_v = TD.latent_heat_vapor(thermo_params, ts)
-        L_s = TD.latent_heat_sublim(thermo_params, ts)
         L_f = TD.latent_heat_fusion(thermo_params, ts)
 
         I_l = TD.internal_energy_liquid(thermo_params, ts)
         I_i = TD.internal_energy_ice(thermo_params, ts)
-        I = TD.internal_energy(thermo_params, ts)
         Φ = geopotential(param_set, grid.zc.z[k])
 
         α_evp = TCP.microph_scaling(param_set)
