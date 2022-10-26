@@ -3,6 +3,7 @@ space_string(::Spaces.FaceExtrudedFiniteDifferenceSpace) = "(Face field)"
 space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
 
 import ClimaCoreTempestRemap: def_space_coord
+import ClimaCoreSpectra: power_spectrum_1d, power_spectrum_2d
 
 function process_name(s::AbstractString)
     # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
@@ -618,6 +619,53 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         png(
             plot_wv,
             output_dir * "/bw-vert_intg_water_vapor-day" * string(day) * ".png",
+        )
+
+        # Spectrum calculation
+        mass_weight = ones(FT, 1) # only 1 level
+        # First compute 1d spectrum of u-component
+        u_1d_spectrum, freqs = power_spectrum_1d(
+            FT,
+            u,
+            similar(mass_weight),
+            lat,
+            lon,
+            mass_weight,
+        )
+        # Then compute 2d spectrum of u-component
+        u_2d_spectrum, wave_numbers, spherical, mesh_info =
+            power_spectrum_2d(FT, u[:, :, 1, 1], mass_weight) # use first level, 1500m, for default CI config
+        # size(u) = (180, 90, 10, 1) (10 vert levels for CI default config, 1 component)
+        # Now repeat with v-component, i.e., compute 1d spectrum of v-component
+        v_1d_spectrum, freqs = power_spectrum_1d(
+            FT,
+            v,
+            similar(mass_weight),
+            lat,
+            lon,
+            mass_weight,
+        )
+        # Then compute 2d spectrum of v-component
+        v_2d_spectrum, wave_numbers, spherical, mesh_info =
+            power_spectrum_2d(FT, v[:, :, 1, 1], mass_weight) # use first level, 1500m
+
+        spectrum_1d = 0.5 .* (u_1d_spectrum + v_1d_spectrum)
+        spectrum_2d = 0.5 .* (u_2d_spectrum + v_2d_spectrum)
+        plot_spectrum = Plots.contourf(
+            collect(0:1:(mesh_info.num_fourier))[:],
+            collect(0:1:(mesh_info.num_spherical))[:],
+            (spectrum_2d[:, :, 1])', # dimensions of spectrum_2d are [m,n,k], where in this case there is only one vert level
+            xlabel = "m",
+            ylabel = "n",
+            color = :balance,
+            title = "2d spectrum (1500m) day " * string(day),
+        )
+        png(
+            plot_spectrum,
+            joinpath(
+                output_dir,
+                "bw-2dspectrum1500-day" * string(day) * ".png",
+            ),
         )
 
         rm(datafile_latlon; force = true)
