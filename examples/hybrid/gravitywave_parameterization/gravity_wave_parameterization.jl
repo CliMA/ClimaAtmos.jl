@@ -1,4 +1,5 @@
 function gravity_wave_cache(
+    ::SingleColumnModel,
     Y,
     ::Type{FT};
     source_height = FT(15000),
@@ -13,10 +14,57 @@ function gravity_wave_cache(
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
-
+    gw_F_S0 = similar(Fields.level(Y.c.ρ, 1))  # there must be a better way...
+    gw_F_S0 .= F_S0
     return (;
         gw_source_height = source_height,
-        gw_F_S0 = F_S0,
+        gw_source_ampl = gw_F_S0,
+        gw_Bm = Bm,
+        gw_c = c,
+        gw_cw = cw,
+        gw_c0 = c0,
+        gw_nk = length(kwv),
+        gw_k = kwv,
+        gw_k2 = kwv .^ 2,
+        ᶜbuoyancy_frequency = similar(Y.c.ρ),
+        ᶜdTdz = similar(Y.c.ρ),
+    )
+end
+
+function gravity_wave_cache(
+    ::SphericalModel,
+    Y,
+    ::Type{FT};
+    source_pressure = FT(3e4),
+    Bm = FT(0.4), # as in GFDL code
+    Bt_0 = FT(0.0003),
+    Bt_n = FT(0.0003),
+    Bt_s = FT(0.0003),
+    ϕ0_n = FT(30),
+    ϕ0_s = FT(-30),
+    dϕ_n = FT(5),
+    dϕ_s = FT(-5),
+    dc = FT(0.6),
+    cmax = FT(99.6),
+    c0 = FT(0),
+    kwv = FT(2π / 100e5),
+    cw = FT(40.0),
+) where {FT}
+
+    nc = Int(floor(FT(2 * cmax / dc + 1)))
+    c = [FT((n - 1) * dc - cmax) for n in 1:nc]
+
+    ᶜlocal_geometry = Fields.local_geometry_field(Fields.level(Y.c, 1))
+    lat = ᶜlocal_geometry.coordinates.lat
+    source_ampl = @. Bt_0 +
+       Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
+       Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s))
+
+    # compute spatio variant source F_S0
+
+    return (;
+        gw_source_pressure = source_pressure,
+        gw_source_ampl = source_ampl,
         gw_Bm = Bm,
         gw_c = c,
         gw_cw = cw,
@@ -31,18 +79,13 @@ end
 
 function gravity_wave_tendency!(Yₜ, Y, p, t)
     #unpack
-    (;
-        gw_source_height,
-        gw_Bm,
-        gw_F_S0,
-        gw_c,
-        gw_cw,
-        gw_c0,
-        gw_nk,
-        gw_k,
-        gw_k2,
-    ) = p
-    (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params) = p
+    (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params, model_config) = p
+    (; gw_Bm, gw_source_ampl, gw_c, gw_cw, gw_c0, gw_nk, gw_k, gw_k2) = p
+    if model_config isa SingleColumnModel
+        (; gw_source_height) = p
+    elseif model_config isa SphericalModel
+        (; gw_source_pressure) = p
+    end
     ᶜρ = Y.c.ρ
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
@@ -67,29 +110,42 @@ function gravity_wave_tendency!(Yₜ, Y, p, t)
     # .     may be calculated
     #
 
-    # source level: get the index of the level that is closest to the source height (GFDL uses the fist level below instead)
-    source_level = argmin(
-        abs.(
-            unique(parent(Fields.coordinate_field(Y.c).z) .- gw_source_height)
-        ),
-    )
+    # source level: get the index of the level that is closest to the source height/pressure (GFDL uses the fist level below instead)
+    if model_config isa SingleColumnModel
+        source_level = similar(Fields.level(Y.c.ρ, 1))
+        Fields.bycolumn(axes(ᶜρ)) do colidx
+            parent(source_level[colidx]) .= argmin(
+                abs.(
+                    parent(Fields.coordinate_field(Y.c).z[colidx]) .-
+                    gw_source_height
+                ),
+            )[1]
+        end
+    elseif model_config isa SphericalModel
+        (; ᶜp) = p
+        source_level = similar(Fields.level(Y.c.ρ, 1))
+        Fields.bycolumn(axes(ᶜρ)) do colidx
+            parent(source_level[colidx]) .=
+                argmin(abs.(parent(ᶜp[colidx]) .- gw_source_pressure))[1]
+        end
+    end
     ᶠz = Fields.coordinate_field(Y.f).z
 
-    # TODO: prepare input variables for gravity_wave_forcing()
-    #       1. grab column wise data
-    #       2. convert coviant uv to physical uv
-    # need to make everything an array befere
+    # prepare physical uv input variables for gravity_wave_forcing()
     u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
+    # a place holder to store physical forcing on uv
     uforcing = ones(axes(u_phy))
     vforcing = similar(v_phy)
-    # bycolume
+
+    # GW parameterization applied bycolume
     Fields.bycolumn(axes(ᶜρ)) do colidx
         parent(uforcing[colidx]) .= gravity_wave_forcing(
+            model_config,
             parent(u_phy[colidx]),
-            source_level,
-            gw_F_S0,
+            Int(parent(source_level[colidx])[1]),
+            parent(gw_source_ampl[colidx])[1],
             gw_Bm,
             gw_c,
             gw_cw,
@@ -102,9 +158,10 @@ function gravity_wave_tendency!(Yₜ, Y, p, t)
             parent(ᶠz[colidx]),
         )
         parent(vforcing[colidx]) .= gravity_wave_forcing(
+            model_config,
             parent(v_phy[colidx]),
-            source_level,
-            gw_F_S0,
+            Int(parent(source_level[colidx])[1]),
+            parent(gw_source_ampl[colidx])[1],
             gw_Bm,
             gw_c,
             gw_cw,
@@ -119,15 +176,17 @@ function gravity_wave_tendency!(Yₜ, Y, p, t)
 
     end
 
+    # physical uv forcing converted to Covariant12Vector and added up to uₕ tendencies
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
 
 end
 
 function gravity_wave_forcing(
+    model_config,
     ᶜu,
     source_level,
-    F_S0,
+    source_ampl,  # F_S0 for single columne and source_ampl (F/ρ) as GFDL for sphere
     Bm,
     c,
     cw,
@@ -156,8 +215,8 @@ function gravity_wave_forcing(
     if (Bsum == 0.0)
         error("zero flux input at source level")
     end
-    # define the intermittency factor eps. Assumes constant Δc.
-    eps = (F_S0 / ᶜρ[source_level] / nk) / Bsum # in GFDL code: eps = (ampl * 1.5 / nk) / Bsum, ampl is equivalent to F_S)/ρ_source 
+    eps =
+        calc_intermitency(model_config, ᶜρ[source_level], source_ampl, nk, Bsum)
 
     ᶜdz = ᶠz[2:end] - ᶠz[1:(end - 1)]
     wave_forcing = zeros(nc)
@@ -237,4 +296,26 @@ function gravity_wave_forcing(
     end # ink 
 
     return gwf
+end
+
+# calculate the intermittency factor eps -> assuming constant Δc.
+
+function calc_intermitency(
+    ::SingleColumnModel,
+    ρ_source_level,
+    source_ampl,
+    nk,
+    Bsum,
+)
+    return (source_ampl / ρ_source_level / nk) / Bsum
+end
+
+function calc_intermitency(
+    ::SphericalModel,
+    ρ_source_level,
+    source_ampl,
+    nk,
+    Bsum,
+)
+    return source_ampl * 1.5 / nk / Bsum
 end

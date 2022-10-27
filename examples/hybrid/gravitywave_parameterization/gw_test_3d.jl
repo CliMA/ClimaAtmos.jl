@@ -3,6 +3,7 @@ using Dates
 using Interpolations
 using Statistics
 using Plots
+import ClimaAtmos: SingleColumnModel, SphericalModel
 include("gravity_wave_parameterization.jl")
 const FT = Float64
 
@@ -11,6 +12,7 @@ const FT = Float64
 
 face_z = 0:1e3:0.47e5
 center_z = 0.5 .* (face_z[1:(end - 1)] .+ face_z[2:end])
+model_config = SingleColumnModel()
 
 # compute the source parameters
 function gravity_wave_cache(
@@ -125,6 +127,7 @@ Jan_ρ = mean(center_ρ_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_uforcing = zeros(length(lat), length(center_z))
 for j in 1:length(lat)
     Jan_uforcing[j, :] = gravity_wave_forcing(
+        model_config,
         Jan_u[j, :],
         source_level,
         params.gw_F_S0,

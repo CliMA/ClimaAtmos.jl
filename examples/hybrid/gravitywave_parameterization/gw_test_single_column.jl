@@ -3,6 +3,7 @@ using Dates
 using Interpolations
 using Statistics
 using Plots
+import ClimaAtmos: SingleColumnModel, SphericalModel
 include("gravity_wave_parameterization.jl")
 
 const FT = Float64
@@ -12,6 +13,7 @@ const FT = Float64
 
 face_z = FT.(0:1e3:0.5e5)
 center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
+model_config = SingleColumnModel()
 
 # compute the source parameters
 function gravity_wave_cache(
@@ -128,6 +130,7 @@ Jan_u = mean(center_u_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_bf = mean(center_bf_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_ρ = mean(center_ρ_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_uforcing = gravity_wave_forcing(
+    model_config,
     Jan_u,
     source_level,
     params.gw_F_S0,
@@ -152,6 +155,7 @@ April_u = mean(center_u_mean[:, month .== 4], dims = 2)[:, 1]
 April_bf = mean(center_bf_mean[:, month .== 4], dims = 2)[:, 1]
 April_ρ = mean(center_ρ_mean[:, month .== 4], dims = 2)[:, 1]
 April_uforcing = gravity_wave_forcing(
+    model_config,
     April_u,
     source_level,
     params.gw_F_S0,
@@ -176,6 +180,7 @@ July_u = mean(center_u_mean[:, month .== 7], dims = 2)[:, 1]
 July_bf = mean(center_bf_mean[:, month .== 7], dims = 2)[:, 1]
 July_ρ = mean(center_ρ_mean[:, month .== 7], dims = 2)[:, 1]
 July_uforcing = gravity_wave_forcing(
+    model_config,
     July_u,
     source_level,
     params.gw_F_S0,
@@ -200,6 +205,7 @@ Oct_u = mean(center_u_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_bf = mean(center_bf_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_ρ = mean(center_ρ_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_uforcing = gravity_wave_forcing(
+    model_config,
     Oct_u,
     source_level,
     params.gw_F_S0,
