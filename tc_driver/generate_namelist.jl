@@ -30,9 +30,6 @@ export default_namelist, namelist_to_toml_file
 
 using ArgParse
 
-import StaticArrays
-const SA = StaticArrays
-
 import Random
 
 import JSON
@@ -169,14 +166,7 @@ function default_namelist(
     namelist_defaults["microphysics"]["precipitation_model"] = "None"
 
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["updraft_number"] = 1
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment"] = "moisture_deficit"  # {"moisture_deficit", "NN", "NN_nonlocal", "Linear", "FNO", "RF"}
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entr_dim_scale"] = "buoy_vel" # {"buoy_vel", "inv_z", "none"}
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["detr_dim_scale"] = "buoy_vel" # {"buoy_vel", "inv_z", "none"}
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entr_pi_subset"] =
-        ntuple(i -> i, 6) # or, e.g., (1, 3, 6)
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pi_norm_consts"] =
-        [478.298, 1.0, 1.0, 1.0, 1.0, 1.0] # normalization constants for Pi groups
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["stochastic_entrainment"] = "deterministic"  # {"deterministic", "noisy_relaxation_process", "lognormal_scaling", "prognostic_noisy_relaxation_process"}
+    # namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment"] = "moisture_deficit"  # not currently used
 
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_closure_buoy"] = "normalmode"
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_closure_drag"] = "normalmode"
@@ -189,110 +179,6 @@ function default_namelist(
     namelist_defaults["stats_io"]["frequency"] = 60.0
     namelist_defaults["stats_io"]["skip"] = false
     namelist_defaults["stats_io"]["calibrate_io"] = false # limit io for calibration when `true`
-
-    # nn parameters
-    #! format: off
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["nn_arc"] = (6, 5, 4, 2) # [#inputs, #neurons in L1, #neurons in L2, ...., #outputs]
-
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["nn_ent_params"] =
-        [-1.2791038,
-        -1.1564382,
-        1.2115442,
-        0.3241886,
-        0.4968626,
-        -1.1304279,
-        0.1335658,
-        -1.5348452,
-        -0.661436,
-        -1.7114845,
-        0.5861781,
-        -0.0008509,
-        1.8417425,
-        -0.0692783,
-        -0.1800616,
-        0.4822386,
-        0.1193081,
-        0.4175962,
-        -1.7491715,
-        0.0331383,
-        -1.1470715,
-        0.1166774,
-        -0.5425564,
-        -0.3332106,
-        -1.3615489,
-        -0.2109712,
-        -0.1836716,
-        -1.7316646,
-        -0.5677241,
-        1.5717871,
-        -0.2886485,
-        0.2341374,
-        -1.1329331,
-        -0.5656705,
-        -0.7084822,
-        0.0904796,
-        -0.2447465,
-        -0.8655097,
-        0.1487832,
-        1.737286,
-        0.3335405,
-        1.2600883,
-        0.1105,
-        -0.9467368,
-        -0.1319687,
-        -0.3314595,
-        1.2015113,
-        -0.5082856,
-        -1.3685998,
-        -1.6377497,
-        0.0398038,
-        0.6748809,
-        1.1398398,
-        -1.1689684,
-        -0.9930153,
-        0.8116707,
-        -0.006826,
-        0.0822948,
-        -0.7905997,
-        -0.3131524,
-        -0.4061444,
-        1.6651008,
-        1.555821,
-        0.1941005,
-        1.0823169,
-        -0.3608865,
-        0.7003173,
-        0.2197592,
-        -0.1367713]
-
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["nn_ent_biases"] = true
-
-    # m=100 random features, d=6 input Pi groups
-    # RF: parameters to optimize, 2 x (m + 1 + d)
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["rf_opt_ent_params"] =
-        vec(cat(randn(2,100), # vec(cat(randn(2, m),
-                    ones(2,7), dims=2)) # ones(2, d + 1), dims=2))
-
-    # RF: fixed realizations of random variables, 2 x m x (1 + d)
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["rf_fix_ent_params"] =
-        vec(cat(2*pi*rand(2,100,1), # vec(cat(2*pi*rand(2, m, 1),
-                    randn(2,100,6), dims=3)) # randn(2, m, d), dims=3))
-
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["linear_ent_params"] =
-        SA.SVector{14}(rand(14))
-
-    # General stochastic entrainment/detrainment parameters
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["general_stochastic_ent_params"] =
-    SA.SVector(
-        0.1, 0.1,   # ε_σ², δ_σ²
-        0.05, 0.05  # ε_λ, δ_λ
-    )
-
-    # For FNO add here
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["fno_ent_width"] = 2
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["fno_ent_n_modes"] = 2
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["fno_ent_params"] =
-        SA.SVector{50}(rand(50))
 
     #! format: on
 

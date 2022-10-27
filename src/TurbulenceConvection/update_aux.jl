@@ -381,15 +381,7 @@ function update_aux!(
             param_set,
         )
     end
-    compute_entr_detr!(
-        state,
-        grid,
-        edmf,
-        param_set,
-        surf,
-        Δt,
-        edmf.entr_closure,
-    )
+    compute_entr_detr!(state, grid, edmf, edmf.entr_closure)
     compute_nh_pressure!(state, grid, edmf, surf)
 
     #####
