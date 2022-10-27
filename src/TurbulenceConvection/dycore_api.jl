@@ -82,6 +82,5 @@ physical_grid_mean_uₕ(state) = CCG.UVVector.(grid_mean_uₕ(state))
 physical_grid_mean_u(state) = map(x -> x.u, physical_grid_mean_uₕ(state))
 physical_grid_mean_v(state) = map(x -> x.v, physical_grid_mean_uₕ(state))
 grid_mean_uₕ(state) = center_prog_grid_mean(state).uₕ
-grid_mean_uₕ_g(state) = center_aux_grid_mean(state).uₕ_g
 
 tendencies_grid_mean_uₕ(state) = center_tendencies_grid_mean(state).uₕ
