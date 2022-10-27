@@ -74,14 +74,21 @@ end
 Computes the tendencies to θ_liq_ice, q_tot, q_rain and q_snow
 due to rain evaporation, snow deposition and sublimation and snow melt
 """
-compute_precipitation_sink_tendencies(
+function compute_precipitation_sink_tendencies(
     ::AbstractPrecipitationModel,
     ::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
     Δt::Real,
-) = nothing
+)
+    FT = float_type(state)
+    aux_tc = center_aux_turbconv(state)
+    @. aux_tc.qt_tendency_precip_sinks = FT(0)
+    @. aux_tc.e_tot_tendency_precip_sinks = FT(0)
+
+    nothing
+end
 
 function compute_precipitation_sink_tendencies(
     ::Clima1M,
