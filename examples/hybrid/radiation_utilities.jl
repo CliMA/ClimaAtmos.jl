@@ -245,6 +245,7 @@ function rrtmgp_model_callback!(integrator)
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
     @. ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+    @info "radiation_utilities.jl L248: I call thermo_state!"
     CA.thermo_state!(Y, p, ᶜinterp)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)

@@ -60,7 +60,7 @@ Interpolation `ᶜinterp` is used to interpolate vertical
 velocity when computing kinetic energy (assuming it's not
 given) when using the total energy formulation.
 =#
-function thermo_state!(
+function thermo_state!(  # breaks with nans
     ᶜts,
     Yc::Fields.Field,
     thermo_params,
@@ -84,7 +84,8 @@ function thermo_state!(
         elseif compressibility_model isa AnelasticFluid
             @assert !isnothing(ᶜp)
             z = Fields.local_geometry_field(Yc).coordinates.z
-            thermo_state_ρe_tot_anelastic!(
+            @info "Maybe I break here?"
+            thermo_state_ρe_tot_anelastic!(  # breaks here
                 ᶜts,
                 Yc,
                 thermo_params,
@@ -113,6 +114,17 @@ function thermo_state_ρe_tot_anelastic!(
     ᶜK,
     ᶜp,
 )
+    @show Yc.ρq_tot ./ Yc.ρ
+    if any(isnan.(parent(Yc.ρq_tot ./ Yc.ρ)))
+        @show Yc.ρq_tot ./ Yc.ρ
+        if any(isnan.(parent(Yc.ρq_tot)))
+            @show Yc.ρq_tot
+        end
+        if any(isnan.(parent(Yc.ρ)))
+            @show Yc.ρ
+        end
+        error("ρq_tot is NaN")
+    end
     grav = TD.Parameters.grav(thermo_params)
     @. ᶜts = TD.PhaseEquil_peq(
         thermo_params,
@@ -145,6 +157,7 @@ function thermo_state(
     FT = Spaces.undertype(axes(Yc))
     ts_type = thermo_state_type(Yc, FT)
     ts = similar(Yc, ts_type)
+    @info "thermo_state.jl L159: I call thermo_state!"
     thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, K, wf, ᶜp)
     return ts
 end

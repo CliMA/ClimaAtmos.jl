@@ -175,10 +175,14 @@ function implicit_tendency!(Yₜ, Y, p, t)
     end
 end
 
-function remaining_tendency!(Yₜ, Y, p, t)
+function remaining_tendency!(Yₜ, Y, p, t)  # breaks here
     (; compressibility_model) = p
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
+        @info "remaining tendency L182"
+        if any(isnan.(parent(Y.c.ρq_tot)))
+            @show "ρq_tot is nan"
+        end
         @nvtx "precomputed quantities" color = colorant"orange" begin
             precomputed_quantities!(Y, p, t)
         end
@@ -210,6 +214,7 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     (; compressibility_model) = p
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
+        @info "remaining_tendency_increment L214"
         @nvtx "precomputed quantities" color = colorant"orange" begin
             precomputed_quantities!(Y, p, t)
         end
@@ -262,6 +267,7 @@ function precomputed_quantities!(Y, p, t, colidx)
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
     thermo_params = CAP.thermodynamics_params(params)
+    @info "staggered_nonhydrostatic_model.jl L265: I call thermo_state!"
     CA.thermo_state!(Y, p, ᶜinterp, colidx)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
     return nothing
@@ -398,6 +404,7 @@ function _Wfact!(W, Y, p, dtγ, t)
         @. ᶜK[colidx] =
             norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
         thermo_params = CAP.thermodynamics_params(params)
+        @info "define_post_processing.jl L402: I call thermo_state!"
         CA.thermo_state!(Y, p, ᶜinterp, colidx)
         @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 

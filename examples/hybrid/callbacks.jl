@@ -197,6 +197,7 @@ function save_to_disk_func(integrator)
     @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
 
     # thermo state
+    @info "callbacks.jl L200: I call thermo state"
     CA.thermo_state!(Y, p, ᶜinterp)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     ᶜT = @. TD.air_temperature(thermo_params, ᶜts)

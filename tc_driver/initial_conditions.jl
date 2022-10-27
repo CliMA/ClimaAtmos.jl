@@ -87,6 +87,9 @@ function initialize_updrafts(edmf, grid, state, surf)
         a_surf = TC.area_surface_bc(surf, edmf, i)
         aux_up[i].area[kc_surf] = a_surf
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
+
+        # @. aux_up_f[i].nh_pressure = FT(0)
+        # @. aux_up_f[i].massflux = FT(0)
     end
     return
 end
