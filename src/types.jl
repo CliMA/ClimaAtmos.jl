@@ -15,6 +15,11 @@ struct InternalEnergy <: AbstractEnergyFormulation end
 abstract type AbstractMicrophysicsModel end
 struct Microphysics0Moment <: AbstractMicrophysicsModel end
 
+abstract type AbstractModelConfig end
+struct SingleColumnModel <: AbstractModelConfig end
+struct SphericalModel <: AbstractModelConfig end
+struct BoxModel <: AbstractModelConfig end
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
