@@ -23,7 +23,6 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     T = FT(0),
     buoy = FT(0),
     cloud_fraction = FT(0),
-    uₕ_g = CCG.Covariant12Vector(CCG.UVVector(FT(0), FT(0)), local_geometry), #Geostrophic u velocity
     cent_aux_vars_gm_moisture(FT, edmf.moisture_model)...,
     θ_virt = FT(0),
     Ri = FT(0),
