@@ -132,29 +132,6 @@ function compute_sgs_flux!(
             )
     end
 
-    if edmf.moisture_model isa NonEquilMoistModel
-        massflux_en = aux_tc_f.massflux_en
-        massflux_ql = aux_tc_f.massflux_ql
-        massflux_qi = aux_tc_f.massflux_qi
-        q_liq_en = aux_en.q_liq
-        q_ice_en = aux_en.q_ice
-        q_liq_gm = prog_gm.q_liq
-        q_ice_gm = prog_gm.q_ice
-        @. massflux_en = ρ_f * Ifae(a_en) * (w_en - w_gm)
-        @. massflux_ql = massflux_en * (If(q_liq_en) - If(q_liq_gm))
-        @. massflux_qi = massflux_en * (If(q_ice_en) - If(q_ice_gm))
-        @inbounds for i in 1:N_up
-            aux_up_f_i = aux_up_f[i]
-            q_liq_up = aux_up[i].q_liq
-            q_ice_up = aux_up[i].q_ice
-            massflux_up_i = aux_up_f[i].massflux
-            @. massflux_ql += massflux_up_i * (If(q_liq_up) - If(q_liq_gm))
-            @. massflux_qi += massflux_up_i * (If(q_ice_up) - If(q_ice_gm))
-        end
-        massflux_ql[kf_surf] = zero(eltype(massflux_ql))
-        massflux_qi[kf_surf] = zero(eltype(massflux_qi))
-    end
-
     massflux_h[kf_surf] = zero(eltype(massflux_h))
     massflux_qt[kf_surf] = zero(eltype(massflux_qt))
 
@@ -179,20 +156,6 @@ function compute_sgs_flux!(
     sgs_flux_uₕ[kf_surf] =
         CCG.Covariant3Vector(wvec(FT(1)), lg_surf) ⊗
         CCG.Covariant12Vector(CCG.UVVector(surf.ρu_flux, surf.ρv_flux), lg_surf)
-
-    if edmf.moisture_model isa NonEquilMoistModel
-        diffusive_flux_ql = aux_tc_f.diffusive_flux_ql
-        diffusive_flux_qi = aux_tc_f.diffusive_flux_qi
-
-        sgs_flux_q_liq = aux_gm_f.sgs_flux_q_liq
-        sgs_flux_q_ice = aux_gm_f.sgs_flux_q_ice
-
-        @. sgs_flux_q_liq = diffusive_flux_ql + massflux_ql
-        @. sgs_flux_q_ice = diffusive_flux_qi + massflux_qi
-
-        sgs_flux_q_liq[kf_surf] = surf.ρq_liq_flux ##
-        sgs_flux_q_ice[kf_surf] = surf.ρq_ice_flux ##
-    end
 
     return nothing
 end
@@ -271,25 +234,6 @@ function compute_diffusive_fluxes(
     @. aux_tc_f.diffusive_flux_h = -aux_tc_f.ρ_ae_KH * ∇h_tot_en(aux_en.h_tot)
     @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * ∇uₕ_gm(prog_gm_uₕ)
 
-    if edmf.moisture_model isa NonEquilMoistModel
-        aeKHq_liq_bc = FT(0)
-        aeKHq_ice_bc = FT(0)
-
-        ∇q_liq_en = CCO.GradientC2F(;
-            bottom = CCO.SetGradient(CCG.WVector(aeKHq_liq_bc)),
-            top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
-        )
-        ∇q_ice_en = CCO.GradientC2F(;
-            bottom = CCO.SetGradient(CCG.WVector(aeKHq_ice_bc)),
-            top = CCO.SetGradient(CCG.Covariant3Vector(FT(0))),
-        )
-
-        @. aux_tc_f.diffusive_flux_ql =
-            -aux_tc_f.ρ_ae_KH * ∇q_liq_en(aux_en.q_liq)
-        @. aux_tc_f.diffusive_flux_qi =
-            -aux_tc_f.ρ_ae_KH * ∇q_ice_en(aux_en.q_ice)
-    end
-
     return nothing
 end
 
@@ -352,12 +296,6 @@ function set_edmf_surface_bc(
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
         prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
-        if edmf.moisture_model isa NonEquilMoistModel
-            q_liq_surf = FT(0)
-            q_ice_surf = FT(0)
-            prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * q_liq_surf
-            prog_up[i].ρaq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * q_ice_surf
-        end
         prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
             CCG.WVector(w_surface_bc(surf)),
             CC.Fields.local_geometry_field(axes(prog_up_f))[kf_surf],
@@ -666,48 +604,6 @@ function compute_up_tendencies!(
             ) - (ρaq_tot * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * qt_tendency_precip_formation)
 
-        if edmf.moisture_model isa NonEquilMoistModel
-
-            q_liq_up = aux_up_i.q_liq
-            q_ice_up = aux_up_i.q_ice
-            q_liq_en = aux_en.q_liq
-            q_ice_en = aux_en.q_ice
-
-            ql_tendency_noneq = aux_up_i.ql_tendency_noneq
-            qi_tendency_noneq = aux_up_i.qi_tendency_noneq
-            ql_tendency_precip_formation = aux_up_i.ql_tendency_precip_formation
-            qi_tendency_precip_formation = aux_up_i.qi_tendency_precip_formation
-
-            ρaq_liq = prog_up[i].ρaq_liq
-            ρaq_ice = prog_up[i].ρaq_ice
-
-            tends_ρaq_liq = tendencies_up[i].ρaq_liq
-            tends_ρaq_ice = tendencies_up[i].ρaq_ice
-
-            @. tends_ρaq_liq =
-                -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_liq)) + (
-                    ρarea *
-                    Ic(wcomponent(CCG.WVector(w_up))) *
-                    entr_turb_dyn *
-                    q_liq_en
-                ) -
-                (ρaq_liq * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
-                (ρ_c * (ql_tendency_precip_formation + ql_tendency_noneq))
-
-            @. tends_ρaq_ice =
-                -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_ice)) + (
-                    ρarea *
-                    Ic(wcomponent(CCG.WVector(w_up))) *
-                    entr_turb_dyn *
-                    q_ice_en
-                ) -
-                (ρaq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
-                (ρ_c * (qi_tendency_precip_formation + qi_tendency_noneq))
-
-            tends_ρaq_liq[kc_surf] = 0
-            tends_ρaq_ice[kc_surf] = 0
-        end
-
         tends_ρarea[kc_surf] = 0
         tends_ρaθ_liq_ice[kc_surf] = 0
         tends_ρaq_tot[kc_surf] = 0
@@ -776,12 +672,6 @@ function filter_updraft_vars(
             prog_up[i].ρarea[k] = min(prog_up[i].ρarea[k], ρ_c[k] * a_max)
         end
     end
-    if edmf.moisture_model isa NonEquilMoistModel
-        @inbounds for i in 1:N_up
-            prog_up[i].ρaq_liq .= max.(prog_up[i].ρaq_liq, 0)
-            prog_up[i].ρaq_ice .= max.(prog_up[i].ρaq_ice, 0)
-        end
-    end
 
     @inbounds for i in 1:N_up
         @. prog_up_f[i].w = CCG.Covariant3Vector(
@@ -805,22 +695,6 @@ function filter_updraft_vars(
             end
         end
     end
-    if edmf.moisture_model isa NonEquilMoistModel
-        @inbounds for k in real_center_indices(grid)
-            @inbounds for i in 1:N_up
-                is_surface_center(grid, k) && continue
-                prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
-                # this is needed to make sure Rico is unchanged.
-                # TODO : look into it further to see why
-                # a similar filtering of ρaθ_liq_ice breaks the simulation
-                if prog_up[i].ρarea[k] / ρ_c[k] < a_min
-                    prog_up[i].ρaq_liq[k] = 0
-                    prog_up[i].ρaq_ice[k] = 0
-                end
-            end
-        end
-    end
-
 
     Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
@@ -846,24 +720,6 @@ function filter_updraft_vars(
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
         prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
-    end
-    if edmf.moisture_model isa NonEquilMoistModel
-        @inbounds for i in 1:N_up
-            @. prog_up[i].ρaq_liq = ifelse(
-                Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
-                FT(0),
-                prog_up[i].ρaq_liq,
-            )
-            @. prog_up[i].ρaq_ice = ifelse(
-                Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
-                FT(0),
-                prog_up[i].ρaq_ice,
-            )
-            ql_surf = ql_surface_bc(surf)
-            qi_surf = qi_surface_bc(surf)
-            prog_up[i].ρaq_liq[kc_surf] = prog_up[i].ρarea[kc_surf] * ql_surf
-            prog_up[i].ρaq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * qi_surf
-        end
     end
     return nothing
 end

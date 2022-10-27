@@ -507,10 +507,8 @@ function EDMFModel(
             "Something went wrong. Invalid environmental buoyancy gradient closure type '$en_sgs_name'",
         )
     end
-    if moisture_model isa NonEquilMoistModel && en_thermo == "quadrature"
-        error(
-            "SGS quadratures are not yet implemented for non-equilibrium moisture. Please use the option: mean.",
-        )
+    if !(moisture_model isa EquilMoistModel)
+        error("SGS model only supports equilibrium moisture choice.")
     end
 
     # entr closure

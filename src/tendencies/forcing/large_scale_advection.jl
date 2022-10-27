@@ -55,12 +55,5 @@ function large_scale_advection_tendency!(
             TD.cp_m(thermo_params, ᶜts) * ᶜdTdt_hadv +
             (cv_v * (ᶜT - T_0) + Lv_0 - R_v * T_0) * ᶜdqtdt_hadv
         )
-
-    #=
-    if moisture_model isa NonEquilMoistModel
-        @. tendencies_gm.q_liq += aux_gm.dqldt
-        @. tendencies_gm.q_ice += aux_gm.dqidt
-    end
-    =#
     return nothing
 end
