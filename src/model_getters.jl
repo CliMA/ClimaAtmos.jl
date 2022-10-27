@@ -10,6 +10,17 @@ function moisture_model(parsed_args)
     end
 end
 
+function model_config(parsed_args)
+    config = parsed_args["config"]
+    return if config == "sphere"
+        SphericalModel()
+    elseif config == "column"
+        SingleColumnModel()
+    elseif config == "box"
+        BoxModel()
+    end
+end
+
 function energy_form(parsed_args)
     energy_name = parsed_args["energy_name"]
     @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")

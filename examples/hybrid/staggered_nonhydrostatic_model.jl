@@ -137,6 +137,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
         ),
         spaces,
         moisture_model = model_spec.moisture_model,
+        model_config = model_spec.model_config,
         Yₜ = similar(Y), # only needed when using increment formulation
         limiters,
         ᶜρh_kwargs...,

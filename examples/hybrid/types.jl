@@ -14,7 +14,10 @@ import ClimaAtmos:
     Microphysics0Moment,
     HeldSuarezForcing,
     BulkSurfaceScheme,
-    MoninObukhovSurface
+    MoninObukhovSurface,
+    SingleColumnModel,
+    SphericalModel,
+    BoxModel
 
 import ClimaCore: InputOutput
 
@@ -31,6 +34,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
 
     model_spec = (;
         moisture_model,
+        model_config = CA.model_config(parsed_args),
         energy_form = CA.energy_form(parsed_args),
         perturb_initstate = parsed_args["perturb_initstate"],
         idealized_h2o,

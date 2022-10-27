@@ -31,7 +31,7 @@ function parse_commandline()
         arg_type = String
         default = "6hours"
         "--config" # TODO: add box
-        help = "Spatial configuration [`sphere` (default), `column`]"
+        help = "Spatial configuration [`sphere` (default), `column`, `box`]"
         arg_type = String
         default = "sphere"
         "--moist"
