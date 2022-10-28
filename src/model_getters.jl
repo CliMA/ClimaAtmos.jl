@@ -75,12 +75,12 @@ function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function microphysics_model(parsed_args)
-    microphysics_name = parsed_args["microphy"]
-    @assert microphysics_name in (nothing, "0M")
-    return if microphysics_name == nothing
+function precipitation_model(parsed_args)
+    precip_model = parsed_args["precip_model"]
+    @assert precip_model in (nothing, "0M")
+    return if precip_model == nothing
         nothing
-    elseif microphysics_name == "0M"
+    elseif precip_model == "0M"
         Microphysics0Moment()
     end
 end

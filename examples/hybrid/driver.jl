@@ -96,7 +96,7 @@ jacobi_flags(::PotentialTemperature) =
 function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     FT = typeof(dt)
     (;
-        microphysics_model,
+        precipitation_model,
         forcing_type,
         radiation_mode,
         turbconv_model,
@@ -144,7 +144,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             zd_viscous = FT(zd_viscous),
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
-        CA.microphysics_cache(Y, microphysics_model),
+        CA.precipitation_cache(Y, precipitation_model),
         CA.subsidence_cache(Y, model_spec.subsidence),
         CA.large_scale_advection_cache(Y, model_spec.ls_adv),
         CA.edmf_coriolis_cache(Y, model_spec.edmf_coriolis),
@@ -165,7 +165,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         (;
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
-                microphy_0M = microphysics_model isa Microphysics0Moment,
+                microphy_0M = precipitation_model isa Microphysics0Moment,
                 rad_flux = !isnothing(radiation_mode),
                 vert_diff,
                 rayleigh_sponge,
@@ -215,8 +215,7 @@ function additional_tendency!(Yₜ, Y, p, t)
             !coupled && CA.get_surface_fluxes!(Y, p, colidx)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
-        microphy_0M &&
-            CA.zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
+        CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
         rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end

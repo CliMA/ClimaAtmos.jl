@@ -42,7 +42,7 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
         subsidence = CA.subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = CA.large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = CA.edmf_coriolis(parsed_args, FT),
-        microphysics_model = CA.microphysics_model(parsed_args),
+        precipitation_model = CA.precipitation_model(parsed_args),
         precip_model,
         forcing_type = CA.forcing_type(parsed_args),
         turbconv_model = CA.turbconv_model(

@@ -1,5 +1,5 @@
 #####
-##### 0-Moment Microphysics
+##### Precipitation models
 #####
 
 import CloudMicrophysics as CM
@@ -8,11 +8,21 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
-microphysics_cache(Y, ::Nothing) = NamedTuple()
+#####
+##### No Precipitation
+#####
 
-function microphysics_cache(Y, ::Microphysics0Moment)
+precipitation_cache(Y, precip_model::Nothing) = (; precip_model)
+precipitation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+
+#####
+##### 0-Moment
+#####
+
+function precipitation_cache(Y, precip_model::Microphysics0Moment)
     FT = Spaces.undertype(axes(Y.c))
     return (;
+        precip_model,
         ᶜS_ρq_tot = similar(Y.c, FT),
         ᶜλ = similar(Y.c, FT),
         ᶜ3d_rain = similar(Y.c, FT),
@@ -22,7 +32,7 @@ function microphysics_cache(Y, ::Microphysics0Moment)
     )
 end
 
-function zero_moment_microphysics_tendency!(Yₜ, Y, p, t, colidx)
+function precipitation_tendency!(Yₜ, Y, p, t, colidx, ::Microphysics0Moment)
     FT = Spaces.undertype(axes(Y.c))
     (;
         ᶜts,
