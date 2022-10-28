@@ -20,7 +20,7 @@ include(joinpath("tendencies", "forcing", "subsidence.jl"))
 include(joinpath("tendencies", "forcing", "held_suarez.jl"))
 
 include(joinpath("tendencies", "edmf_coriolis.jl"))
-include(joinpath("tendencies", "microphysics.jl"))
+include(joinpath("tendencies", "precipitation.jl"))
 include(joinpath("tendencies", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("tendencies", "rayleigh_sponge.jl"))
 include(joinpath("tendencies", "viscous_sponge.jl"))
