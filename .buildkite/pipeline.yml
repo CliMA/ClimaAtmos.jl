@@ -368,12 +368,6 @@ steps:
       - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
 
-      # TODO: commented temporarily as this is 2x longer than any other job
-      # - label: ":mag: Allocations: perf target"
-      #   command: "julia --color=yes --project=perf perf/allocs.jl"
-      #   agents:
-      #     slurm_mem: 20GB
-
   - wait: ~
     continue_on_failure: true
 
