@@ -170,3 +170,11 @@ steps:
         artifact_paths: "longrun_compressible_edmf_trmm/*"
         agents:
           slurm_mem: 20GB
+
+  - group: "Performance"
+    steps:
+
+      - label: ":mag: Allocations: perf target"
+        command: "julia --color=yes --project=perf perf/allocs.jl"
+        agents:
+          slurm_mem: 20GB
