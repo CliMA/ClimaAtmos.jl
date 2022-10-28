@@ -344,6 +344,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":mag::rocket: Invalidations"
+        command: "julia --color=yes --project=perf perf/invalidations.jl --job_id invalidations"
+        artifact_paths: "invalidations/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":rocket: flame graph: threaded perf target (ρe_tot)"
         command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
         artifact_paths: "flame_perf_target_rhoe_threaded/*"
