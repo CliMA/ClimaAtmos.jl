@@ -11,7 +11,6 @@ import ClimaTimeSteppers
 import Thermodynamics
 import SurfaceFluxes
 import CloudMicrophysics
-import DiffEqOperators
 
 dirs_to_monitor = [
     pkgdir(ClimaAtmos),
@@ -26,7 +25,6 @@ dirs_to_monitor = [
     pkgdir(Thermodynamics),
     pkgdir(SurfaceFluxes),
     pkgdir(CloudMicrophysics),
-    pkgdir(DiffEqOperators),
 ]
 @info "`dirs_to_monitor` (Pre)  = $dirs_to_monitor"
 dirs_to_monitor_filtered = filter(x -> x isa String, dirs_to_monitor)
