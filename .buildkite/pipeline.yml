@@ -334,7 +334,6 @@ steps:
         artifact_paths: "edmf_bomex_consistency/*"
         agents:
           slurm_mem: 20GB
-        soft_fail: true
 
   - group: "Performance"
     steps:
