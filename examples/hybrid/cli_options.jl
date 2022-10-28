@@ -38,8 +38,8 @@ function parse_commandline()
         help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
         arg_type = String
         default = "dry"
-        "--microphy"
-        help = "Microphysics model [`nothing` (default), `0M`]"
+        "--precip_model"
+        help = "Precipitation model [`nothing` (default), `0M`]"
         arg_type = String
         "--forcing"
         help = "Forcing [`nothing` (default), `held_suarez`]"

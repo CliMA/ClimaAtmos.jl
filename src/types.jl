@@ -12,8 +12,8 @@ struct PotentialTemperature <: AbstractEnergyFormulation end
 struct TotalEnergy <: AbstractEnergyFormulation end
 struct InternalEnergy <: AbstractEnergyFormulation end
 
-abstract type AbstractMicrophysicsModel end
-struct Microphysics0Moment <: AbstractMicrophysicsModel end
+abstract type AbstractPrecipitationModel end
+struct Microphysics0Moment <: AbstractPrecipitationModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -45,7 +45,7 @@ struct MoninObukhovSurface <: AbstractSurfaceScheme end # TODO: unify with Monin
 Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)
 Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
-Base.broadcastable(x::AbstractMicrophysicsModel) = Ref(x)
+Base.broadcastable(x::AbstractPrecipitationModel) = Ref(x)
 Base.broadcastable(x::AbstractForcing) = Ref(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
