@@ -1,3 +1,4 @@
+include("remap_helpers.jl")
 
 space_string(::Spaces.FaceExtrudedFiniteDifferenceSpace) = "(Face field)"
 space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
@@ -222,6 +223,14 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
 
+    # create a temporary dir for intermediate data
+    remap_tmpdir = joinpath(output_dir, "remaptmp")
+    mkpath(remap_tmpdir)
+    weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
+    cspace = axes(sol.u[1].c)
+    fspace = axes(sol.u[1].f)
+    create_weightfile(weightfile, cspace, fspace, nlat, nlon)
+
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
     for day in days
@@ -235,17 +244,6 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
-
-        # space info to generate nc raw data
-        cspace = axes(Y.c)
-        hspace = cspace.horizontal_space
-        Nq = Spaces.Quadratures.degrees_of_freedom(
-            cspace.horizontal_space.quadrature_style,
-        )
-
-        # create a temporary dir for intermediate data
-        remap_tmpdir = output_dir * "/remaptmp/"
-        mkpath(remap_tmpdir)
 
         ### create an nc file to store raw cg data
         # create data
@@ -266,26 +264,6 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
             nc_ω[:, 1] = ᶜvort
         end
 
-        # write out our cubed sphere mesh
-        meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
-        write_exodus(meshfile_cc, hspace.topology)
-
-        meshfile_rll = remap_tmpdir * "/mesh_rll.g"
-        rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
-
-        meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
-        overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
-
-        weightfile = remap_tmpdir * "/remap_weights.nc"
-        remap_weights(
-            weightfile,
-            meshfile_cc,
-            meshfile_rll,
-            meshfile_overlap;
-            in_type = "cgll",
-            in_np = Nq,
-        )
-
         datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
         apply_remap(
             datafile_latlon,
@@ -294,8 +272,9 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
             ["pres", "T", "vort"],
         )
 
-        rm(remap_tmpdir, recursive = true)
+        rm(datafile_cc)
     end
+    rm(weightfile)
 
     # create plots as in the paper
     for day in days
@@ -354,6 +333,14 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
 
+    # create a temporary dir for intermediate data
+    remap_tmpdir = joinpath(output_dir, "remaptmp")
+    mkpath(remap_tmpdir)
+    weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
+    cspace = axes(sol.u[1].c)
+    fspace = axes(sol.u[1].f)
+    create_weightfile(weightfile, cspace, fspace, nlat, nlon)
+
     # obtain pressure, temperature, and vorticity at cg points;
     # and remap them onto lat lon
     for day in days
@@ -381,17 +368,6 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
         Spaces.weighted_dss!(ᶜvort)
-
-        # space info to generate nc raw data
-        cspace = axes(Y.c)
-        hspace = cspace.horizontal_space
-        Nq = Spaces.Quadratures.degrees_of_freedom(
-            cspace.horizontal_space.quadrature_style,
-        )
-
-        # create a temporary dir for intermediate data
-        remap_tmpdir = output_dir * "/remaptmp/"
-        mkpath(remap_tmpdir)
 
         ### create an nc file to store raw cg data
         # create data
@@ -427,26 +403,6 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
 
         end
 
-        # write out our cubed sphere mesh
-        meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
-        write_exodus(meshfile_cc, hspace.topology)
-
-        meshfile_rll = remap_tmpdir * "/mesh_rll.g"
-        rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
-
-        meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
-        overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
-
-        weightfile = remap_tmpdir * "/remap_weights.nc"
-        remap_weights(
-            weightfile,
-            meshfile_cc,
-            meshfile_rll,
-            meshfile_overlap;
-            in_type = "cgll",
-            in_np = Nq,
-        )
-
         datafile_latlon = output_dir * "/bw-remapped_day" * string(day) * ".nc"
         apply_remap(
             datafile_latlon,
@@ -466,8 +422,9 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             ],
         )
 
-        rm(remap_tmpdir, recursive = true)
+        rm(datafile_cc)
     end
+    rm(weightfile)
 
     # create plots as in the reference
     for day in days
@@ -683,18 +640,17 @@ function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
     thermo_params = CAP.thermodynamics_params(params)
     last_day = floor(Int, sol.t[end] / (24 * 3600))
 
+    # create a temporary dir for intermediate data
+    remap_tmpdir = joinpath(output_dir, "remaptmp")
+    mkpath(remap_tmpdir)
+    weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
+    cspace = axes(sol.u[1].c)
+    fspace = axes(sol.u[1].f)
+    create_weightfile(weightfile, cspace, fspace, nlat, nlon)
+
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
     Y = sol.u[1]
-    cspace = axes(Y.c)
-    hspace = cspace.horizontal_space
-    Nq = Spaces.Quadratures.degrees_of_freedom(
-        cspace.horizontal_space.quadrature_style,
-    )
-
-    # create a temporary dir for intermediate data
-    remap_tmpdir = output_dir * "/remaptmp/"
-    mkpath(remap_tmpdir)
 
     # create an nc file to store raw cg data
     # create data
@@ -731,26 +687,6 @@ function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
 
     end
 
-    ### write out our cubed sphere mesh
-    meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
-    write_exodus(meshfile_cc, hspace.topology)
-
-    meshfile_rll = remap_tmpdir * "/mesh_rll.g"
-    rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
-
-    meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
-    overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
-
-    weightfile = remap_tmpdir * "/remap_weights.nc"
-    remap_weights(
-        weightfile,
-        meshfile_cc,
-        meshfile_rll,
-        meshfile_overlap;
-        in_type = "cgll",
-        in_np = Nq,
-    )
-
     ### remap to lat/lon
     datafile_latlon = output_dir * "/hs-remapped.nc"
     apply_remap(
@@ -760,7 +696,8 @@ function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    rm(datafile_cc)
+    rm(weightfile)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"
@@ -864,15 +801,14 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     ### save raw data into nc -> in preparation for remapping
     # space info to generate nc raw data
     Y = sol.u[1]
-    cspace = axes(Y.c)
-    hspace = cspace.horizontal_space
-    Nq = Spaces.Quadratures.degrees_of_freedom(
-        cspace.horizontal_space.quadrature_style,
-    )
 
     # create a temporary dir for intermediate data
-    remap_tmpdir = output_dir * "/remaptmp/"
+    remap_tmpdir = joinpath(output_dir, "remaptmp")
     mkpath(remap_tmpdir)
+    weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
+    cspace = axes(sol.u[1].c)
+    fspace = axes(sol.u[1].f)
+    create_weightfile(weightfile, cspace, fspace, nlat, nlon)
 
     # create an nc file to store raw cg data
     # create data
@@ -916,26 +852,6 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
 
     end
 
-    ### write out our cubed sphere mesh
-    meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
-    write_exodus(meshfile_cc, hspace.topology)
-
-    meshfile_rll = remap_tmpdir * "/mesh_rll.g"
-    rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
-
-    meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
-    overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
-
-    weightfile = remap_tmpdir * "/remap_weights.nc"
-    remap_weights(
-        weightfile,
-        meshfile_cc,
-        meshfile_rll,
-        meshfile_overlap;
-        in_type = "cgll",
-        in_np = Nq,
-    )
-
     ### remap to lat/lon
     datafile_latlon = output_dir * "/hs-remapped.nc"
     apply_remap(
@@ -945,7 +861,8 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         ["PotentialTemperature", "T", "u", "qt"],
     )
 
-    rm(remap_tmpdir, recursive = true)
+    rm(datafile_cc)
+    rm(weightfile)
 
     ### load remapped data and create statistics for plots
     datafile_latlon = output_dir * "/hs-remapped.nc"

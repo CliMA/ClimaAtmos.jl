@@ -333,14 +333,7 @@ include(joinpath(@__DIR__, "define_post_processing.jl"))
 if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
-        paperplots_baro_wave(
-            model_spec,
-            sol,
-            simulation.output_dir,
-            p,
-            FT(90),
-            FT(180),
-        )
+        paperplots_baro_wave(model_spec, sol, simulation.output_dir, p, 90, 180)
     elseif is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
     elseif is_column_edmf(parsed_args)
@@ -355,8 +348,8 @@ if !simulation.is_distributed && parsed_args["post_process"]
             sol,
             simulation.output_dir,
             p,
-            FT(90),
-            FT(180),
+            90,
+            180,
         )
     end
 end
