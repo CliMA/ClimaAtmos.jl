@@ -132,20 +132,6 @@ function compute_gm_tendencies!(
             aux_en.e_tot_tendency_precip_formation +
             aux_tc.e_tot_tendency_precip_sinks
         )
-    if edmf.moisture_model isa CA.NonEquilMoistModel
-        @. tendencies_gm.q_liq +=
-            aux_bulk.ql_tendency_precip_formation +
-            aux_en.ql_tendency_precip_formation
-        @. tendencies_gm.q_ice +=
-            aux_bulk.qi_tendency_precip_formation +
-            aux_en.qi_tendency_precip_formation
-
-        # Additionally apply cloud liquid and ice formation tendencies
-        @. tendencies_gm.q_liq +=
-            aux_bulk.ql_tendency_noneq + aux_en.ql_tendency_noneq
-        @. tendencies_gm.q_ice +=
-            aux_bulk.qi_tendency_noneq + aux_en.qi_tendency_noneq
-    end
 
     TC.compute_sgs_flux!(edmf, grid, state, surf, param_set)
 
@@ -153,11 +139,6 @@ function compute_gm_tendencies!(
     @. tendencies_gm.ρe_tot += -∇sgs(aux_gm_f.sgs_flux_h_tot)
     @. tendencies_gm.ρq_tot += -∇sgs(aux_gm_f.sgs_flux_q_tot)
     @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
-
-    if edmf.moisture_model isa CA.NonEquilMoistModel
-        @. tendencies_gm.q_liq += -∇sgs(aux_gm_f.sgs_flux_q_liq) / ρ_c
-        @. tendencies_gm.q_ice += -∇sgs(aux_gm_f.sgs_flux_q_ice) / ρ_c
-    end
 
     return nothing
 end

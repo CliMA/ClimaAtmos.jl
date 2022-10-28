@@ -4,9 +4,7 @@
 import ClimaCore.Geometry: ⊗
 
 # Helpers for adding empty thermodynamic state fields:
-thermo_state_zeros(FT, ::EquilMoistModel) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
-thermo_state_zeros(FT, ::NonEquilMoistModel) =
-    TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
+thermo_state_zeros(FT) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
 
 ##### Auxiliary fields
 
@@ -20,15 +18,8 @@ cent_aux_vars_en_2m(FT) = (;
     interdomain = FT(0),
     rain_src = FT(0),
 )
-cent_aux_vars_up_moisture(FT, ::NonEquilMoistModel) = (;
-    ql_tendency_precip_formation = FT(0),
-    qi_tendency_precip_formation = FT(0),
-    ql_tendency_noneq = FT(0),
-    qi_tendency_noneq = FT(0),
-)
-cent_aux_vars_up_moisture(FT, ::EquilMoistModel) = NamedTuple()
 cent_aux_vars_up(FT, local_geometry, edmf) = (;
-    ts = thermo_state_zeros(FT, edmf.moisture_model),
+    ts = thermo_state_zeros(FT),
     q_liq = FT(0),
     q_ice = FT(0),
     T = FT(0),
@@ -44,7 +35,6 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     θ_liq_ice_tendency_precip_formation = FT(0),
     e_tot_tendency_precip_formation = FT(0),
     qt_tendency_precip_formation = FT(0),
-    cent_aux_vars_up_moisture(FT, edmf.moisture_model)...,
     entr_sc = FT(0),
     detr_sc = FT(0),
     ε_nondim = FT(0),  # nondimensional entrainment
@@ -53,20 +43,6 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     entr_turb_dyn = FT(0),
     detr_turb_dyn = FT(0),
 )
-cent_aux_vars_edmf_bulk_moisture(FT, ::NonEquilMoistModel) = (;
-    ql_tendency_precip_formation = FT(0),
-    qi_tendency_precip_formation = FT(0),
-    ql_tendency_noneq = FT(0),
-    qi_tendency_noneq = FT(0),
-)
-cent_aux_vars_edmf_bulk_moisture(FT, ::EquilMoistModel) = NamedTuple()
-cent_aux_vars_edmf_en_moisture(FT, ::NonEquilMoistModel) = (;
-    ql_tendency_precip_formation = FT(0),
-    qi_tendency_precip_formation = FT(0),
-    ql_tendency_noneq = FT(0),
-    qi_tendency_noneq = FT(0),
-)
-cent_aux_vars_edmf_en_moisture(FT, ::EquilMoistModel) = NamedTuple()
 cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         ϕ_temporary = FT(0),
@@ -83,14 +59,13 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             cloud_fraction = FT(0),
             e_tot_tendency_precip_formation = FT(0),
             qt_tendency_precip_formation = FT(0),
-            cent_aux_vars_edmf_bulk_moisture(FT, edmf.moisture_model)...,
         ),
         up = ntuple(
             i -> cent_aux_vars_up(FT, local_geometry, edmf),
             Val(n_updrafts(edmf)),
         ),
         en = (;
-            ts = thermo_state_zeros(FT, edmf.moisture_model),
+            ts = thermo_state_zeros(FT),
             area = FT(0),
             q_tot = FT(0),
             q_liq = FT(0),
@@ -113,7 +88,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             #θ_liq_ice_tendency_precip_formation = FT(0),
             e_tot_tendency_precip_formation = FT(0),
             qt_tendency_precip_formation = FT(0),
-            cent_aux_vars_edmf_en_moisture(FT, edmf.moisture_model)...,
             unsat = (; q_tot = FT(0), θ_dry = FT(0), θ_virt = FT(0)),
             sat = (;
                 T = FT(0),
@@ -167,14 +141,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 # Face only
 face_aux_vars_up(FT, local_geometry) =
     (; nh_pressure = FT(0), massflux = CCG.Covariant3Vector(FT(0)))
-face_aux_vars_edmf_moisture(FT, ::NonEquilMoistModel) = (;
-    massflux_en = CCG.Covariant3Vector(FT(0)), # TODO: is this the right place for this?
-    massflux_ql = CCG.Covariant3Vector(FT(0)),
-    massflux_qi = CCG.Covariant3Vector(FT(0)),
-    diffusive_flux_ql = CCG.Covariant3Vector(FT(0)),
-    diffusive_flux_qi = CCG.Covariant3Vector(FT(0)),
-)
-face_aux_vars_edmf_moisture(FT, ::EquilMoistModel) = NamedTuple()
 face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
         bulk = (; w = CCG.Covariant3Vector(FT(0))),
@@ -192,7 +158,6 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         ϕ_temporary = CCG.Covariant3Vector(FT(0)),
         diffusive_flux_h = CCG.Covariant3Vector(FT(0)),
         diffusive_flux_qt = CCG.Covariant3Vector(FT(0)),
-        face_aux_vars_edmf_moisture(FT, edmf.moisture_model)...,
         diffusive_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
                             CCG.Covariant12Vector(FT(0), FT(0)),
         uvw = CCG.Covariant123Vector(CCG.WVector(FT(0)), local_geometry),
@@ -202,17 +167,8 @@ face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
 ##### Prognostic fields
 
 # Center only
-cent_prognostic_vars_up_moisture(::Type{FT}, ::EquilMoistModel) where {FT} =
-    NamedTuple()
-cent_prognostic_vars_up_moisture(::Type{FT}, ::NonEquilMoistModel) where {FT} =
-    (; ρaq_liq = FT(0), ρaq_ice = FT(0))
-cent_prognostic_vars_up(::Type{FT}, edmf) where {FT} = (;
-    ρarea = FT(0),
-    ρaθ_liq_ice = FT(0),
-    ρaq_tot = FT(0),
-    cent_prognostic_vars_up_moisture(FT, edmf.moisture_model)...,
-)
-
+cent_prognostic_vars_up(::Type{FT}, edmf) where {FT} =
+    (; ρarea = FT(0), ρaθ_liq_ice = FT(0), ρaq_tot = FT(0))
 cent_prognostic_vars_en(::Type{FT}, edmf) where {FT} = (;
     ρatke = FT(0),
     cent_prognostic_vars_en_thermo(FT, edmf.thermo_covariance_model)...,

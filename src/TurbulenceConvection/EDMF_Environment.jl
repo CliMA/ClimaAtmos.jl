@@ -24,17 +24,6 @@ function microphysics(
     @inbounds for k in real_center_indices(grid)
         # condensation
         ts = ts_env[k]
-        if edmf.moisture_model isa NonEquilMoistModel
-            mph_neq = noneq_moisture_sources(
-                param_set,
-                aux_en.area[k],
-                ρ_c[k],
-                Δt,
-                ts,
-            )
-            aux_en.ql_tendency_noneq[k] = mph_neq.ql_tendency * aux_en.area[k]
-            aux_en.qi_tendency_noneq[k] = mph_neq.qi_tendency * aux_en.area[k]
-        end
         # autoconversion and accretion
         mph = precipitation_formation(
             param_set,
@@ -71,12 +60,6 @@ function microphysics(
             mph.qt_tendency * aux_en.area[k]
         aux_en.e_tot_tendency_precip_formation[k] =
             mph.e_tot_tendency * aux_en.area[k]
-        if edmf.moisture_model isa NonEquilMoistModel
-            aux_en.ql_tendency_precip_formation[k] =
-                mph.ql_tendency * aux_en.area[k]
-            aux_en.qi_tendency_precip_formation[k] =
-                mph.qi_tendency * aux_en.area[k]
-        end
         tendencies_pr.q_rai[k] += mph.qr_tendency * aux_en.area[k]
         tendencies_pr.q_sno[k] += mph.qs_tendency * aux_en.area[k]
     end
@@ -302,12 +285,6 @@ function microphysics(
     # a python dict would be nicer, but its 30% slower than this (for python 2.7. It might not be the case for python 3)
 
     epsilon = 10e-14 # eps(float)
-
-    if edmf.moisture_model isa NonEquilMoistModel
-        error(
-            "The SGS quadrature microphysics is not compatible with non-equilibrium moisture",
-        )
-    end
 
     # initialize the quadrature points and their labels
 

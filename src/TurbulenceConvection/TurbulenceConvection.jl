@@ -2,7 +2,6 @@ module TurbulenceConvection
 
 # Import ClimaAtmos types
 import ..EquilMoistModel
-import ..NonEquilMoistModel
 import ..AnelasticFluid
 import ..CompressibleFluid
 import ..RadiationDYCOMS_RF01
@@ -23,7 +22,6 @@ import Thermodynamics as TD
 import Distributions
 import FastGaussQuadrature
 import CloudMicrophysics as CM
-import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.Microphysics1M as CM1
 import UnPack
