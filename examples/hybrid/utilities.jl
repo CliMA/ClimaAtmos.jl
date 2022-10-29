@@ -31,6 +31,13 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
         Y = sol.u[1]
         center_space = axes(Y.c)
         face_space = axes(Y.f)
+        horz_space = ClimaCore.Spaces.horizontal_space(center_space)
+        horz_topology = horz_space.topology
+        Nq = ClimaCore.Spaces.Quadratures.degrees_of_freedom(
+            horz_space.quadrature_style,
+        )
+        nlocalelems = Topologies.nlocalelems(horz_topology)
+        ncols_per_process = nlocalelems * Nq * Nq
         Yc_type =
             Fields.Field{typeof(Fields.field_values(Y.c)), typeof(center_space)}
         Yf_type =
@@ -63,7 +70,7 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
             "walltime (seconds)" = walltime,
             scaling_file
         )
-        JLD2.jldsave(scaling_file; nprocs, walltime)
+        JLD2.jldsave(scaling_file; nprocs, ncols_per_process, walltime)
     end
     return nothing
 end
