@@ -1,4 +1,6 @@
 import ClimaCore
+import ClimaAtmos
+const ca_dir = pkgdir(ClimaAtmos)
 using ClimaCore:
     Geometry, Meshes, Domains, Topologies, Spaces, Operators, InputOutput
 using NCDatasets
@@ -42,6 +44,8 @@ const ᶜinterp = Operators.InterpolateF2C()
 ext = ".hdf5"
 data_files = filter(x -> endswith(x, ext), readdir(data_dir, join = true))
 
+include(joinpath(ca_dir, "examples", "hybrid", "remap_helpers.jl"))
+
 function create_weightfile(filein, nc_dir, nlat, nlon)
     if split(filein, ".")[end] == "hdf5"
         reader = InputOutput.HDF5Reader(filein)
@@ -49,39 +53,11 @@ function create_weightfile(filein, nc_dir, nlat, nlon)
     else
         error("Input data is not hdf5")
     end
-
-    # reconstruct space, obtain Nq from space
-    cspace = axes(Y.c)
-    fspace = axes(Y.f)
-    hspace = cspace.horizontal_space
-    Nq = Spaces.Quadratures.degrees_of_freedom(
-        cspace.horizontal_space.quadrature_style,
-    )
-
     # create a temporary dir for intermediate data
     remap_tmpdir = nc_dir * "remaptmp/"
     mkpath(remap_tmpdir)
-
-    # write out our cubed sphere mesh
-    meshfile_cc = remap_tmpdir * "mesh_cubedsphere.g"
-    write_exodus(meshfile_cc, hspace.topology)
-
-    meshfile_rll = remap_tmpdir * "mesh_rll.g"
-    rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
-
-    meshfile_overlap = remap_tmpdir * "mesh_overlap.g"
-    overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
-
     weightfile = remap_tmpdir * "remap_weights.nc"
-    remap_weights(
-        weightfile,
-        meshfile_cc,
-        meshfile_rll,
-        meshfile_overlap;
-        in_type = "cgll",
-        in_np = Nq,
-    )
-
+    create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon)
     return weightfile
 end
 
