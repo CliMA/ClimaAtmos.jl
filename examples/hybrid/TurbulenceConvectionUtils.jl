@@ -115,14 +115,14 @@ function init_tc!(Y, p, params, namelist)
         set_thermo_state_pθq!(Y, p, colidx)
         set_grid_mean_from_thermo_state!(tc_params, state, grid)
         assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
-        initialize_edmf(edmf, grid, state, surf_params, tc_params, t, case)
+        initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
     end
 end
 
 
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     (; edmf_cache, Δt, compressibility_model) = p
-    (; edmf, param_set, case, surf_params, surf_ref_state) = edmf_cache
+    (; edmf, param_set, surf_params, surf_ref_state) = edmf_cache
     (; precip_model, test_consistency, logpressure_fun) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)

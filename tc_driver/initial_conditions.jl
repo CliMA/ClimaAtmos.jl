@@ -11,7 +11,6 @@ function initialize_edmf(
     surf_params,
     param_set::APS,
     t::Real,
-    case,
 )
     thermo_params = TCP.thermodynamics_params(param_set)
     initialize_covariance(edmf, grid, state)
