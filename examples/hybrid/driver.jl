@@ -96,7 +96,7 @@ jacobi_flags(::PotentialTemperature) =
 function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     FT = typeof(dt)
     (;
-        precipitation_model,
+        precip_model,
         forcing_type,
         radiation_mode,
         turbconv_model,
@@ -144,7 +144,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             zd_viscous = FT(zd_viscous),
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
-        CA.precipitation_cache(Y, precipitation_model),
+        CA.precipitation_cache(Y, precip_model),
         CA.subsidence_cache(Y, model_spec.subsidence),
         CA.large_scale_advection_cache(Y, model_spec.ls_adv),
         CA.edmf_coriolis_cache(Y, model_spec.edmf_coriolis),
@@ -165,7 +165,6 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         (;
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
-                microphy_0M = precipitation_model isa Microphysics0Moment,
                 rad_flux = !isnothing(radiation_mode),
                 vert_diff,
                 rayleigh_sponge,
@@ -201,7 +200,7 @@ function additional_tendency!(Yₜ, Y, p, t)
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
-        (; microphy_0M, has_turbconv) = p.tendency_knobs
+        (; has_turbconv) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
         hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)

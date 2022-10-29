@@ -293,7 +293,6 @@ function save_to_disk_func(integrator)
             env_e_kin = tc_cent(p).en.e_kin,
             env_h_tot = tc_cent(p).en.h_tot,
             env_RH = tc_cent(p).en.RH,
-            env_s = tc_cent(p).en.s,
             env_temperature = tc_cent(p).en.T,
             env_buoyancy = tc_cent(p).en.buoy,
             env_cloud_fraction = tc_cent(p).en.cloud_fraction,

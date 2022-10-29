@@ -12,8 +12,8 @@ import ClimaCore.Fields as Fields
 ##### No Precipitation
 #####
 
-precipitation_cache(Y, precip_model::Nothing) = (; precip_model)
-precipitation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+precipitation_cache(Y, precip_model::NoPrecipitation) = (; precip_model)
+precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 
 #####
 ##### 0-Moment
@@ -98,5 +98,19 @@ function precipitation_tendency!(Yₜ, Y, p, t, colidx, ::Microphysics0Moment)
                 TD.internal_energy_ice(thermo_params, ᶜts[colidx])
             )
     end
+    return nothing
+end
+
+
+#####
+##### 1-Moment
+#####
+# TODO: move 1-moment microphysics cache / tendency here
+function precipitation_cache(Y, precip_model::Microphysics1Moment)
+    FT = Spaces.undertype(axes(Y.c))
+    return (; precip_model)
+end
+
+function precipitation_tendency!(Yₜ, Y, p, t, colidx, ::Microphysics1Moment)
     return nothing
 end

@@ -6,6 +6,9 @@ import ..AnelasticFluid
 import ..CompressibleFluid
 import ..RadiationDYCOMS_RF01
 import ..RadiationTRMM_LBA
+import ..AbstractPrecipitationModel
+import ..Microphysics0Moment
+import ..Microphysics1Moment
 
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG

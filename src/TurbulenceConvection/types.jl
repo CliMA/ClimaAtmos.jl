@@ -181,11 +181,6 @@ struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
     covar_lim::FT
 end
 
-abstract type AbstractPrecipitationModel end
-struct NoPrecipitation <: AbstractPrecipitationModel end
-struct Clima0M <: AbstractPrecipitationModel end
-struct Clima1M <: AbstractPrecipitationModel end
-
 abstract type AbstractPrecipFractionModel end
 struct PrescribedPrecipFraction{FT} <: AbstractPrecipFractionModel
     prescribed_precip_frac_value::FT

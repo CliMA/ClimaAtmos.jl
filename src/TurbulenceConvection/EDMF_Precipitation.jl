@@ -29,7 +29,7 @@ compute_precipitation_advection_tendencies(
 ) = nothing
 
 function compute_precipitation_advection_tendencies(
-    ::Clima1M,
+    ::Microphysics1Moment,
     precip_fraction_model::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
@@ -91,7 +91,7 @@ function compute_precipitation_sink_tendencies(
 end
 
 function compute_precipitation_sink_tendencies(
-    ::Clima1M,
+    ::Microphysics1Moment,
     precip_fraction_model::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
