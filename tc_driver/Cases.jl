@@ -175,13 +175,11 @@ function initialize_profiles(::Soares, grid::Grid, param_set, state; kwargs...)
     # Fill in the grid mean state
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
-        aux_gm.tke[k] = prof_tke(z)
-        p_c[k] = prof_p(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
+    @. aux_gm.tke = prof_tke(z)
+    @. p_c = prof_p(z)
 end
 
 function surface_params(case::Soares, surf_ref_state, param_set; Ri_bulk_crit)
@@ -244,12 +242,10 @@ function initialize_profiles(
     # Fill in the grid mean state
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
-        aux_gm.tke[k] = prof_tke(z)
-        p_c[k] = prof_p(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
+    @. aux_gm.tke = prof_tke(z)
+    @. p_c = prof_p(z)
 end
 
 function surface_params(
@@ -312,13 +308,11 @@ function initialize_profiles(::Bomex, grid::Grid, param_set, state; kwargs...)
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.tke[k] = prof_tke(z)
-        p_c[k] = prof_p(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. aux_gm.tke = prof_tke(z)
+    @. p_c = prof_p(z)
 end
 
 function surface_params(case::Bomex, surf_ref_state, param_set; Ri_bulk_crit)
@@ -383,13 +377,11 @@ function initialize_profiles(
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.tke[k] = prof_tke(z)
-        p_c[k] = prof_p(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. aux_gm.tke = prof_tke(z)
+    @. p_c = prof_p(z)
 end
 
 function surface_params(
@@ -462,12 +454,10 @@ function initialize_profiles(::Rico, grid::Grid, param_set, state; kwargs...)
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        p_c[k] = prof_p(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. p_c = prof_p(z)
 
     # Need to get θ_virt
     @inbounds for k in real_center_indices(grid)
@@ -991,15 +981,14 @@ function initialize_profiles(::GABLS, grid::Grid, param_set, state; kwargs...)
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        #Set wind velocity profile
-        aux_gm.θ_liq_ice[k] = prof_θ_liq_ice(z)
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.tke[k] = APL.GABLS_tke(FT)(z)
-        aux_gm.Hvar[k] = aux_gm.tke[k]
-        p_c[k] = prof_p(z)
-    end
+    prof_tke = APL.GABLS_tke(FT)
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    #Set wind velocity profile
+    @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. aux_gm.tke = prof_tke(z)
+    @. aux_gm.Hvar = aux_gm.tke
+    @. p_c = prof_p(z)
 end
 
 function surface_params(case::GABLS, surf_ref_state, param_set; kwargs...)

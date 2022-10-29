@@ -665,12 +665,10 @@ function filter_updraft_vars(
     a_max = edmf.max_area
 
     @inbounds for i in 1:N_up
-        prog_up[i].ρarea .= max.(prog_up[i].ρarea, 0)
-        prog_up[i].ρaθ_liq_ice .= max.(prog_up[i].ρaθ_liq_ice, 0)
-        prog_up[i].ρaq_tot .= max.(prog_up[i].ρaq_tot, 0)
-        @inbounds for k in real_center_indices(grid)
-            prog_up[i].ρarea[k] = min(prog_up[i].ρarea[k], ρ_c[k] * a_max)
-        end
+        @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0)
+        @. prog_up[i].ρaθ_liq_ice = max(prog_up[i].ρaθ_liq_ice, 0)
+        @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0)
+        @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max)
     end
 
     @inbounds for i in 1:N_up
@@ -683,8 +681,8 @@ function filter_updraft_vars(
             Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].w
     end
 
-    @inbounds for k in real_center_indices(grid)
-        @inbounds for i in 1:N_up
+    @inbounds for i in 1:N_up
+        @inbounds for k in real_center_indices(grid)
             is_surface_center(grid, k) && continue
             prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
             # this is needed to make sure Rico is unchanged.
