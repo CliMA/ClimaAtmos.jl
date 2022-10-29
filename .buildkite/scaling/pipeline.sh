@@ -93,10 +93,24 @@ else
     launcher="mpiexec --map-by node:PE=$cpus_per_proc --bind-to core"
 fi
 
-if [[ $nprocs -gt 4 ]]; then
-    time="01:00:00"
+if [[ "$res" == "low" ]]; then
+    time="00:59:00"
+elif [[ "$res" == "mid" ]]; then
+    if [[ $nprocs -gt 2 ]]; then
+        time="00:59:00"
+    else
+        time="02:59:00"
+    fi
 else
-    time="04:00:00"
+    if [[ $nprocs -gt 8 ]]; then
+        time="00:59:00"
+    elif [[ $nprocs -ge 4 ]]; then
+        time="02:30:00"
+    elif [[ $nprocs -ge 2 ]]; then
+        time="04:00:00"
+    else
+        time="08:00:00"
+    fi
 fi
 
 
