@@ -77,11 +77,14 @@ end
 
 function precipitation_model(parsed_args)
     precip_model = parsed_args["precip_model"]
-    @assert precip_model in (nothing, "0M")
     return if precip_model == nothing
-        nothing
+        NoPrecipitation()
     elseif precip_model == "0M"
         Microphysics0Moment()
+    elseif precip_model == "1M"
+        Microphysics1Moment()
+    else
+        error("Invalid precip_model $(precip_model)")
     end
 end
 
@@ -183,31 +186,6 @@ function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     coriolis_param = coriolis_params[edmf_coriolis]
     return EDMFCoriolis(prof_u, prof_v, coriolis_param)
 end
-
-function precipitation_model(parsed_args, namelist)
-    namelist isa Nothing && return TC.NoPrecipitation()
-
-    precip_name = TC.parse_namelist(
-        namelist,
-        "microphysics",
-        "precipitation_model";
-        default = "None",
-        valid_options = ["None", "cutoff", "clima_1m"],
-    )
-    # TODO: use parsed_args
-    # precip_name = parsed_args["precipitation_model"]
-    # TODO: move to grid mean model
-    return if precip_name == "None"
-        TC.NoPrecipitation()
-    elseif precip_name == "cutoff"
-        TC.CutoffPrecipitation()
-    elseif precip_name == "clima_1m"
-        TC.Clima1M()
-    else
-        error("Invalid precip_name $(precip_name)")
-    end
-end
-
 
 function turbconv_model(FT, moisture_model, precip_model, parsed_args, namelist)
     turbconv = parsed_args["turbconv"]

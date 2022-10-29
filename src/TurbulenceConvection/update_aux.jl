@@ -528,7 +528,7 @@ function update_aux!(
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
     # TODO: use dispatch
-    if edmf.precip_model isa Clima1M
+    if edmf.precip_model isa Microphysics1Moment
         # helper to calculate the rain velocity
         # TODO: assuming w_gm = 0
         # TODO: verify translation

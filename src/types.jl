@@ -13,7 +13,9 @@ struct TotalEnergy <: AbstractEnergyFormulation end
 struct InternalEnergy <: AbstractEnergyFormulation end
 
 abstract type AbstractPrecipitationModel end
+struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
+struct Microphysics1Moment <: AbstractPrecipitationModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end

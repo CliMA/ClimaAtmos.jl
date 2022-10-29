@@ -88,7 +88,7 @@ function precipitation_formation(
         I = TD.internal_energy(thermo_params, ts)
         Φ = geopotential(param_set, z)
 
-        if precip_model isa Clima0M
+        if precip_model isa Microphysics0Moment
             qsat = TD.q_vap_saturation(thermo_params, ts)
             λ = TD.liquid_fraction(thermo_params, ts)
 
@@ -108,7 +108,7 @@ function precipitation_formation(
             e_tot_tendency += (λ * I_l + (1 - λ) * I_i + Φ) * S_qt
         end
 
-        if precip_model isa Clima1M
+        if precip_model isa Microphysics1Moment
             T = TD.air_temperature(thermo_params, ts)
             T_fr = TCP.T_freeze(param_set)
             c_vl = TCP.cv_l(param_set)
