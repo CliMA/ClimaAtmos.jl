@@ -27,6 +27,11 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
+      - echo "--- Instantiate perf"
+      - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=perf -e 'using Pkg; Pkg.status()'"
+
     agents:
       slurm_cpus_per_task: 8
     env:
