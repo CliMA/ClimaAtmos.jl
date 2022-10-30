@@ -39,7 +39,7 @@ function get_surface(
         ts_sfc,
         scheme,
     )
-    zi = TC.get_inversion(grid, state, param_set, Ri_bulk_crit)
+    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
     convective_vel = TC.get_wstar(bflux, zi) # yair here zi in TRMM should be adjusted
 
     u_sfc = SA.SVector{2, FT}(0, 0)
@@ -128,7 +128,7 @@ function get_surface(
     lhf = result.lhf
     shf = result.shf
 
-    zi = TC.get_inversion(grid, state, param_set, Ri_bulk_crit)
+    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
     convective_vel = TC.get_wstar(result.buoy_flux, zi)
     return TC.SurfaceBase{FT}(;
         cm = result.Cd,
@@ -191,7 +191,7 @@ function get_surface(
     result = SF.surface_conditions(surf_flux_params, sc, scheme)
     lhf = result.lhf
     shf = result.shf
-    zi = TC.get_inversion(grid, state, param_set, Ri_bulk_crit)
+    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
     convective_vel = TC.get_wstar(result.buoy_flux, zi)
     return TC.SurfaceBase{FT}(;
         cm = result.Cd,

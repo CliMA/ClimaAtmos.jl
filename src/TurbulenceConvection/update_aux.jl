@@ -162,7 +162,7 @@ function update_aux!(
         aux_en.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts_en)
         aux_en.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_en)
         rho = TD.air_density(thermo_params, ts_en)
-        aux_en.buoy[k] = buoyancy_c(param_set, ρ_c[k], rho)
+        aux_en.buoy[k] = buoyancy_c(thermo_params, ρ_c[k], rho)
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
     end
 
@@ -198,7 +198,7 @@ function update_aux!(
             aux_up[i].q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_up)
             aux_up[i].T[k] = TD.air_temperature(thermo_params, ts_up)
             ρ = TD.air_density(thermo_params, ts_up)
-            aux_up[i].buoy[k] = buoyancy_c(param_set, ρ_c[k], ρ)
+            aux_up[i].buoy[k] = buoyancy_c(thermo_params, ρ_c[k], ρ)
             aux_up[i].RH[k] = TD.relative_humidity(thermo_params, ts_up)
         end
         aux_gm.buoy[k] = (1.0 - aux_bulk.area[k]) * aux_en.buoy[k]
