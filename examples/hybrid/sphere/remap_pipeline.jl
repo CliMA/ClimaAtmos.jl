@@ -1,6 +1,5 @@
 import ClimaCore
 import ClimaAtmos
-const ca_dir = pkgdir(ClimaAtmos)
 using ClimaCore:
     Geometry, Meshes, Domains, Topologies, Spaces, Operators, InputOutput
 using NCDatasets
@@ -38,7 +37,7 @@ const ᶜinterp = Operators.InterpolateF2C()
 ext = ".hdf5"
 data_files = filter(x -> endswith(x, ext), readdir(data_dir, join = true))
 
-include(joinpath(ca_dir, "examples", "hybrid", "remap_helpers.jl"))
+include(joinpath(pkgdir(ClimaAtmos), "examples", "hybrid", "remap_helpers.jl"))
 
 function create_weightfile(filein, nc_dir, nlat, nlon)
     if split(filein, ".")[end] == "hdf5"
@@ -87,7 +86,7 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     nc_rho = defVar(nc, "rho", FT, cspace, ("time",))
     thermo_var = if :ρe_tot in propertynames(Y.c)
         "e_tot"
-    elseif :ρθ
+    elseif :ρθ in propertynames(Y.c)
         "theta"
     else
         error("Unfound thermodynamic variable")
