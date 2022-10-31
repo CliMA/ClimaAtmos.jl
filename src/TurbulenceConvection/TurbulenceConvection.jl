@@ -35,6 +35,12 @@ const ice_type = CM.CommonTypes.IceType()
 const rain_type = CM.CommonTypes.RainType()
 const snow_type = CM.CommonTypes.SnowType()
 
+# TODO: This is type piracy, move this into CloudMicrophysics
+Base.broadcastable(x::CM.CommonTypes.LiquidType) = Ref(x)
+Base.broadcastable(x::CM.CommonTypes.IceType) = Ref(x)
+Base.broadcastable(x::CM.CommonTypes.RainType) = Ref(x)
+Base.broadcastable(x::CM.CommonTypes.SnowType) = Ref(x)
+
 include("Parameters.jl")
 import .Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
