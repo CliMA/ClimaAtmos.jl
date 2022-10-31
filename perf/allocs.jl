@@ -63,6 +63,7 @@ for clio in cli_options
         process_filename = function process_fn(fn)
             fn = "ClimaAtmos.jl/" * last(split(fn, "climaatmos-ci/"))
             fn = last(split(fn, "depot/cpu/packages/"))
+            fn = "ClimaAtmos.jl/" * last(split(fn, "longruns/"))
             return fn
         end,
     )
