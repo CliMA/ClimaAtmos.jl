@@ -109,7 +109,7 @@ steps:
 
       - label: ":computer: Prep restart for MPI"
         key: "mpi_baro_wave_make_restart"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_make_restart --dt_save_restart 5days"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_make_restart --dt_save_restart 5days --dt_save_to_disk 5days"
         artifact_paths: "mpi_make_restart/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -137,6 +137,21 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
+
+      - label: ":computer: Prep for calling remap pipeline"
+        key: "prep_remap"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id prep_remap --dt_save_to_disk 5days"
+        artifact_paths: "prep_remap/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 2
+
+      - label: ":computer: Exercise remap pipeline"
+        key: "remap_pipeline"
+        depends_on: "mpi_baro_wave_make_restart"
+        command: "julia --color=yes --project=examples examples/hybrid/sphere/remap_pipeline.jl --data_dir prep_remap/ --out_dir remap_pipeline_output"
+        artifact_paths: "remap_pipeline_output/*"
 
   - group: "Sphere Examples"
     steps:

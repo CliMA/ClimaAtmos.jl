@@ -1,3 +1,19 @@
+#=
+Here's a sketch of what this pipeline does:
+
+Inputs:
+ - data_dir/day0.0.1.hdf5
+ - data_dir/day0.2.0.hdf5
+ - data_dir/day0.3.0.hdf5
+ - ...
+ - tmpdir/weightsfile.nc
+Apply remap pipeline:
+ - tmpdir[/myid()]/test.nc -> remap -> out_dir/day0.0.1.nc, rm(tmpdir[/myid()]/test.nc)
+ - tmpdir[/myid()]/test.nc -> remap -> out_dir/day0.2.0.nc, rm(tmpdir[/myid()]/test.nc)
+ - tmpdir[/myid()]/test.nc -> remap -> out_dir/day0.3.0.nc, rm(tmpdir[/myid()]/test.nc)
+rm(tmpdir/weightsfile.nc)
+=#
+
 import ClimaCore
 import ClimaAtmos
 using ClimaCore:
@@ -5,84 +21,51 @@ using ClimaCore:
 using NCDatasets
 using ClimaCoreTempestRemap
 
-if haskey(ENV, "HDF5_DIR")
-    data_dir = ENV["HDF5_DIR"]
-else
-    error("ENV[\"HDF5_DIR\"] require!")
-end
-
-if haskey(ENV, "NC_DIR")
-    nc_dir = ENV["NC_DIR"]
-else
-    nc_dir = data_dir * "/nc/"
-end
-mkpath(nc_dir)
-
-if haskey(ENV, "NLAT")
-    nlat = NLAT
-else
-    nlat = 90
-    println("NLAT is default to 90.")
-end
-
-if haskey(ENV, "NLON")
-    nlon = NLON
-else
-    nlon = 180
-    println("NLON is default to 180.")
-end
-
-const ᶜinterp = Operators.InterpolateF2C()
-
-ext = ".hdf5"
-data_files = filter(x -> endswith(x, ext), readdir(data_dir, join = true))
-
 include(joinpath(pkgdir(ClimaAtmos), "examples", "hybrid", "remap_helpers.jl"))
 
-function create_weightfile(filein, nc_dir, nlat, nlon)
-    if split(filein, ".")[end] == "hdf5"
-        reader = InputOutput.HDF5Reader(filein)
-        Y = InputOutput.read_field(reader, "Y")
-    else
-        error("Input data is not hdf5")
-    end
-    # create a temporary dir for intermediate data
-    remap_tmpdir = nc_dir * "remaptmp/"
-    mkpath(remap_tmpdir)
-    weightfile = remap_tmpdir * "remap_weights.nc"
+function create_weightfile(filein, remap_tmpdir, nlat, nlon)
+    @assert endswith(filein, "hdf5")
+    reader = InputOutput.HDF5Reader(filein)
+    Y = InputOutput.read_field(reader, "Y")
+    weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
     create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon)
     return weightfile
 end
 
-function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
-    if split(filein, ".")[end] == "hdf5"
-        reader = InputOutput.HDF5Reader(filein)
-        Y = InputOutput.read_field(reader, "Y")
-        diag = InputOutput.read_field(reader, "diagnostics")
-        t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
+function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
+    @assert endswith(filein, "hdf5")
+    reader = InputOutput.HDF5Reader(filein)
+    Y = InputOutput.read_field(reader, "Y")
+    diag = InputOutput.read_field(reader, "diagnostics")
+    t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
+
+    remap_tmpsubdir = if @isdefined pmap
+        subdir = joinpath(remap_tmpdir, myid())
+        mkpath(subdir)
+        subdir
     else
-        error("Input data is not hdf5")
+        remap_tmpdir
     end
 
     # float type
     FT = eltype(Y)
+    ᶜinterp = Operators.InterpolateF2C()
 
     # reconstruct space
     cspace = axes(Y.c)
     fspace = axes(Y.f)
     hspace = cspace.horizontal_space
 
-    ### create an nc file to store raw cg data 
+    ### create an nc file to store raw cg data
     # create data
-    remap_tmpdir = nc_dir * "remaptmp/"
-    datafile_cc = remap_tmpdir * "test.nc"
+    datafile_cc = joinpath(remap_tmpsubdir, "test.nc")
     nc = NCDataset(datafile_cc, "c")
     # defines the appropriate dimensions and variables for a space coordinate
     def_space_coord(nc, cspace, type = "cgll")
     def_space_coord(nc, fspace, type = "cgll")
     # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
     nc_time = def_time_coord(nc)
-    # define variables for the prognostic states 
+    # define variables for the prognostic states
     nc_rho = defVar(nc, "rho", FT, cspace, ("time",))
     thermo_var = if :ρe_tot in propertynames(Y.c)
         "e_tot"
@@ -214,8 +197,8 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     close(nc)
 
 
-
-    datafile_latlon = nc_dir * split(split(filein, "/")[end], ".")[1] * ".nc"
+    datafile_latlon =
+        joinpath(out_dir, first(splitext(basename(filein))) * ".nc")
     dry_variables = [
         "rho",
         thermo_var,
@@ -278,13 +261,45 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     rm(datafile_cc)
 end
 
-function remove_tmpdir(nc_dir)
-    remap_tmpdir = nc_dir * "remaptmp/"
-    rm(remap_tmpdir, recursive = true)
+import ArgParse
+function parse_commandline()
+    s = ArgParse.ArgParseSettings()
+    ArgParse.@add_arg_table s begin
+        "--data_dir"
+        help = "Data directory"
+        arg_type = String
+        "--out_dir"
+        help = "Output data directory"
+        arg_type = String
+        "--nlat"
+        help = "Number of latitude points"
+        arg_type = Int
+        default = 90
+        "--nlon"
+        help = "Number of longitude points"
+        arg_type = Int
+        default = 180
+    end
+    parsed_args = ArgParse.parse_args(ARGS, s)
+    return (s, parsed_args)
 end
 
-weightfile = create_weightfile(data_files[1], nc_dir, nlat, nlon)
-for data_file in data_files
-    remap2latlon(data_file, nc_dir, weightfile, nlat, nlon)
+(s, parsed_args) = parse_commandline()
+data_dir = parsed_args["data_dir"]
+out_dir = parsed_args["out_dir"]
+nlat = parsed_args["nlat"]
+nlon = parsed_args["nlon"]
+if isnothing(out_dir)
+    out_dir = joinpath(data_dir, "remap")
 end
-remove_tmpdir(nc_dir)
+mkpath(out_dir)
+
+data_files = filter(x -> endswith(x, ".hdf5"), readdir(data_dir, join = true))
+
+remap_tmpdir = joinpath(data_dir, "remaptmp")
+mkpath(remap_tmpdir)
+weightfile = create_weightfile(data_files[1], remap_tmpdir, nlat, nlon)
+for data_file in data_files
+    remap2latlon(data_file, out_dir, remap_tmpdir, weightfile, nlat, nlon)
+end
+rm(remap_tmpdir; recursive = true)
