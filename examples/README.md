@@ -76,7 +76,6 @@ Commonly used command line arguements for experiment setups are [here](https://c
 `remap_pipeline.jl` remaps CG output onto lat/lon using the `TempestRemapping` subpackage. One needs to specify the following environment variables:
 * `JLD2_DIR`: the directory of saved `jld2` files from the simulation;
 * `HDF5_DIR`: the directory of saved `hdf5` files from the simulation;
-* `THERMO_VAR`: either `e_tot` or `theta` based on the thermodynamic variable of the simulation;
 * `NC_DIR`: the directory where remapped `nc` files will be saved in; if not specified, a subdirectory named `nc` will be created under `JLD2_DIR`;
 * `NLAT` and `NLON`: the number of evenly distributed grids in latitudes and longitudes; if not specified, they are default to `90` and `180` respectively.
 

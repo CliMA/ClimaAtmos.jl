@@ -1,6 +1,5 @@
 import ClimaCore
 import ClimaAtmos
-const ca_dir = pkgdir(ClimaAtmos)
 using ClimaCore:
     Geometry, Meshes, Domains, Topologies, Spaces, Operators, InputOutput
 using NCDatasets
@@ -10,12 +9,6 @@ if haskey(ENV, "HDF5_DIR")
     data_dir = ENV["HDF5_DIR"]
 else
     error("ENV[\"HDF5_DIR\"] require!")
-end
-
-if haskey(ENV, "THERMO_VAR")
-    hs_thermo = ENV["THERMO_VAR"]
-else
-    error("ENV[\"THERMO_VAR\"] require (\"e_tot\" or \"theta\")")
 end
 
 if haskey(ENV, "NC_DIR")
@@ -44,7 +37,7 @@ const ᶜinterp = Operators.InterpolateF2C()
 ext = ".hdf5"
 data_files = filter(x -> endswith(x, ext), readdir(data_dir, join = true))
 
-include(joinpath(ca_dir, "examples", "hybrid", "remap_helpers.jl"))
+include(joinpath(pkgdir(ClimaAtmos), "examples", "hybrid", "remap_helpers.jl"))
 
 function create_weightfile(filein, nc_dir, nlat, nlon)
     if split(filein, ".")[end] == "hdf5"
@@ -91,7 +84,14 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     nc_time = def_time_coord(nc)
     # define variables for the prognostic states 
     nc_rho = defVar(nc, "rho", FT, cspace, ("time",))
-    nc_thermo = defVar(nc, ENV["THERMO_VAR"], FT, cspace, ("time",))
+    thermo_var = if :ρe_tot in propertynames(Y.c)
+        "e_tot"
+    elseif :ρθ in propertynames(Y.c)
+        "theta"
+    else
+        error("Unfound thermodynamic variable")
+    end
+    nc_thermo = defVar(nc, thermo_var, FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
     nc_v = defVar(nc, "v", FT, cspace, ("time",))
     nc_w = defVar(nc, "w", FT, cspace, ("time",))
@@ -151,12 +151,10 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     # density
     nc_rho[:, 1] = Y.c.ρ
     # thermodynamics
-    if ENV["THERMO_VAR"] == "e_tot"
+    if :ρe_tot in propertynames(Y.c)
         nc_thermo[:, 1] = Y.c.ρe_tot ./ Y.c.ρ
-    elseif ENV["THERMO_VAR"] == "theta"
+    elseif :ρθ in propertynames(Y.c)
         nc_thermo[:, 1] = Y.c.ρθ ./ Y.c.ρ
-    else
-        error("Invalid ENV[[\"THERMO_VAR\"]!")
     end
     # physical horizontal velocity
     uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), Y.c.uₕ)
@@ -220,7 +218,7 @@ function remap2latlon(filein, nc_dir, weightfile, nlat, nlon)
     datafile_latlon = nc_dir * split(split(filein, "/")[end], ".")[1] * ".nc"
     dry_variables = [
         "rho",
-        ENV["THERMO_VAR"],
+        thermo_var,
         "u",
         "v",
         "w",
