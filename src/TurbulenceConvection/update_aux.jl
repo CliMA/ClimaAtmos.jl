@@ -513,15 +513,10 @@ function update_aux!(
         Val(:q_tot),
     )
     # TODO defined again in compute_covariance_shear and compute_covaraince
-    @inbounds for k in real_center_indices(grid)
-        aux_en_2m.tke.rain_src[k] = 0
-        aux_en_2m.Hvar.rain_src[k] =
-            ρ_c[k] * aux_en.area[k] * 2 * aux_en.Hvar_rain_dt[k]
-        aux_en_2m.QTvar.rain_src[k] =
-            ρ_c[k] * aux_en.area[k] * 2 * aux_en.QTvar_rain_dt[k]
-        aux_en_2m.HQTcov.rain_src[k] =
-            ρ_c[k] * aux_en.area[k] * aux_en.HQTcov_rain_dt[k]
-    end
+    @. aux_en_2m.tke.rain_src = 0
+    @. aux_en_2m.Hvar.rain_src = ρ_c * aux_en.area * 2 * aux_en.Hvar_rain_dt
+    @. aux_en_2m.QTvar.rain_src = ρ_c * aux_en.area * 2 * aux_en.QTvar_rain_dt
+    @. aux_en_2m.HQTcov.rain_src = ρ_c * aux_en.area * aux_en.HQTcov_rain_dt
 
     get_GMV_CoVar(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
 
@@ -538,20 +533,18 @@ function update_aux!(
 
         #precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
 
-        @inbounds for k in real_center_indices(grid)
-            term_vel_rain[k] = CM1.terminal_velocity(
-                microphys_params,
-                rain_type,
-                ρ_c[k],
-                prog_pr.q_rai[k],
-            )# / precip_fraction)
-            term_vel_snow[k] = CM1.terminal_velocity(
-                microphys_params,
-                snow_type,
-                ρ_c[k],
-                prog_pr.q_sno[k],
-            )# / precip_fraction)
-        end
+        @. term_vel_rain = CM1.terminal_velocity(
+            microphys_params,
+            rain_type,
+            ρ_c,
+            prog_pr.q_rai,
+        )# / precip_fraction)
+        @. term_vel_snow = CM1.terminal_velocity(
+            microphys_params,
+            snow_type,
+            ρ_c,
+            prog_pr.q_sno,
+        )# / precip_fraction)
     end
 
     ### Diagnostic thermodynamiccovariances
@@ -578,14 +571,10 @@ function update_aux!(
             param_set,
             Val(:HQTcov),
         )
-        @inbounds for k in real_center_indices(grid)
-            aux_en.Hvar[k] = max(aux_en.Hvar[k], 0)
-            aux_en.QTvar[k] = max(aux_en.QTvar[k], 0)
-            aux_en.HQTcov[k] =
-                max(aux_en.HQTcov[k], -sqrt(aux_en.Hvar[k] * aux_en.QTvar[k]))
-            aux_en.HQTcov[k] =
-                min(aux_en.HQTcov[k], sqrt(aux_en.Hvar[k] * aux_en.QTvar[k]))
-        end
+        @. aux_en.Hvar = max(aux_en.Hvar, 0)
+        @. aux_en.QTvar = max(aux_en.QTvar, 0)
+        @. aux_en.HQTcov = max(aux_en.HQTcov, -sqrt(aux_en.Hvar * aux_en.QTvar))
+        @. aux_en.HQTcov = min(aux_en.HQTcov, sqrt(aux_en.Hvar * aux_en.QTvar))
         ae_surf = 1 - aux_bulk.area[kc_surf]
         aux_en.Hvar[kc_surf] =
             ae_surf *

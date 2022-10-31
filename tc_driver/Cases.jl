@@ -470,28 +470,22 @@ function initialize_profiles(
     @. aux_gm.q_tot = prof_q_tot(z)
     @. p_c = prof_p(z)
 
+    z = CC.Fields.coordinate_field(axes(p_c)).z
     # Need to get θ_virt
-    @inbounds for k in real_center_indices(grid)
-        # Thermo state field cache is not yet
-        # defined, so we can't use it yet.
-        ts = TD.PhaseEquil_pθq(
-            thermo_params,
-            p_c[k],
-            aux_gm.θ_liq_ice[k],
-            aux_gm.q_tot[k],
-        )
-        aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
-    end
+    # Thermo state field cache is not yet
+    # defined, so we can't use it yet.
+    @. aux_gm.θ_virt = TD.virtual_pottemp(
+        thermo_params,
+        TD.PhaseEquil_pθq(thermo_params, p_c, aux_gm.θ_liq_ice, aux_gm.q_tot),
+    )
     zi = FT(0.6) * get_inversion(grid, state, thermo_params, FT(0.2))
 
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        aux_gm.tke[k] = if z <= zi
-            1 - z / zi
-        else
-            FT(0)
-        end
+    prof_tke = z -> if z <= zi
+        1 - z / zi
+    else
+        FT(0)
     end
+    @. aux_gm.tke = prof_tke(z)
 end
 
 function surface_params(case::Rico, surf_thermo_state, thermo_params; kwargs...)
@@ -582,19 +576,16 @@ function initialize_profiles(
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        p_c[k] = prof_p(z)
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        phase_part = TD.PhasePartition(aux_gm.q_tot[k], FT(0), FT(0)) # initial state is not saturated
-        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
-            thermo_params,
-            prof_T(z),
-            p_c[k],
-            phase_part,
-        )
-        aux_gm.tke[k] = prof_tke(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    @. p_c = prof_p(z)
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. aux_gm.θ_liq_ice = TD.liquid_ice_pottemp_given_pressure(
+        thermo_params,
+        prof_T(z),
+        p_c,
+        TD.PhasePartition(aux_gm.q_tot, FT(0), FT(0)), # initial state is not saturated,
+    )
+    @. aux_gm.tke = prof_tke(z)
 end
 
 function surface_params(
@@ -679,22 +670,21 @@ function initialize_profiles(
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-    @inbounds for k in real_center_indices(grid)
-        z = grid.zc[k].z
-        # TODO figure out how to use ts here
-        p_c[k] = prof_p(z)
-        phase_part = TD.PhasePartition(aux_gm.q_tot[k], aux_gm.q_liq[k], FT(0))
-        Π = TD.exner_given_pressure(thermo_params, p_c[k], phase_part)
-        aux_gm.q_tot[k] = prof_q_tot(z)
-        aux_gm.T[k] = prof_θ_liq_ice(z) * Π
-        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp_given_pressure(
-            thermo_params,
-            aux_gm.T[k],
-            p_c[k],
-            phase_part,
-        )
-        aux_gm.tke[k] = prof_tke(z)
-    end
+    z = CC.Fields.coordinate_field(axes(p_c)).z
+    # TODO figure out how to use ts here
+    p_c = prof_p(z)
+    phase_part = TD.PhasePartition(aux_gm.q_tot[k], aux_gm.q_liq[k], FT(0))
+    @. aux_gm.q_tot = prof_q_tot(z)
+    @. aux_gm.T =
+        prof_θ_liq_ice(z) *
+        TD.exner_given_pressure(thermo_params, p_c, phase_part)
+    aux_gm.θ_liq_ice = TD.liquid_ice_pottemp_given_pressure(
+        thermo_params,
+        aux_gm.T,
+        p_c,
+        TD.PhasePartition(aux_gm.q_tot, aux_gm.q_liq, FT(0)),
+    )
+    aux_gm.tke[k] = prof_tke(z)
 end
 
 function surface_params(

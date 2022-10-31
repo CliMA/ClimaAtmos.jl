@@ -154,8 +154,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
 
-    aux_gm = TC.center_aux_grid_mean(state)
-
     surf = get_surface(surf_params, grid, state, t, tc_params)
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
