@@ -1,3 +1,11 @@
+#####
+##### Hyperdiffusion
+#####
+
+import ClimaCore.Geometry as Geometry
+import ClimaCore.Fields as Fields
+import ClimaCore.Spaces as Spaces
+
 function hyperdiffusion_cache(
     Y,
     ::Type{FT};
@@ -29,19 +37,26 @@ function hyperdiffusion_cache(
     )
 end
 
-function hyperdiffusion_tendency!(Yₜ, Y, P, t)
-    @nvtx "hyperdiffusion tendency" color = colorant"yellow" begin
-        if P.use_tempest_mode
-            hyperdiffusion_tendency_tempest!(Yₜ, Y, P, t)
-        else
-            hyperdiffusion_tendency_clima!(Yₜ, Y, P, t)
-        end
+function hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    # @nvtx "hyperdiffusion tendency" color = colorant"yellow" begin
+    if p.use_tempest_mode
+        hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
+    else
+        hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
     end
+    # end
 end
 
 function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
+    divₕ = Operators.Divergence()
+    wdivₕ = Operators.WeakDivergence()
+    gradₕ = Operators.Gradient()
+    wgradₕ = Operators.WeakGradient()
+    curlₕ = Operators.Curl()
+    wcurlₕ = Operators.WeakCurl()
+
     (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
     (;
         ghost_buffer,
@@ -78,22 +93,20 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
     is_2d_pt && (@. ᶜχuₕ =
         Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ))))
 
-    @nvtx "dss_hyperdiffusion_tendency" color = colorant"green" begin
-        Spaces.weighted_dss_start!(ᶜχ, ghost_buffer.χ)
-        is_ρq_tot &&
-            (Spaces.weighted_dss_start!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-        Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
+    # @nvtx "dss_hyperdiffusion_tendency" color = colorant"green" begin
+    Spaces.weighted_dss_start!(ᶜχ, ghost_buffer.χ)
+    is_ρq_tot && (Spaces.weighted_dss_start!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+    Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
 
-        Spaces.weighted_dss_internal!(ᶜχ, ghost_buffer.χ)
-        is_ρq_tot &&
-            (Spaces.weighted_dss_internal!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-        Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
+    Spaces.weighted_dss_internal!(ᶜχ, ghost_buffer.χ)
+    is_ρq_tot &&
+        (Spaces.weighted_dss_internal!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+    Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
 
-        Spaces.weighted_dss_ghost!(ᶜχ, ghost_buffer.χ)
-        is_ρq_tot &&
-            (Spaces.weighted_dss_ghost!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-        Spaces.weighted_dss_ghost!(ᶜχuₕ, ghost_buffer.χuₕ)
-    end
+    Spaces.weighted_dss_ghost!(ᶜχ, ghost_buffer.χ)
+    is_ρq_tot && (Spaces.weighted_dss_ghost!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+    Spaces.weighted_dss_ghost!(ᶜχuₕ, ghost_buffer.χuₕ)
+    # end
 
     @. ᵗρs -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
     if is_ρq_tot
@@ -124,6 +137,14 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
 end
 
 function hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
+
+    divₕ = Operators.Divergence()
+    wdivₕ = Operators.WeakDivergence()
+    gradₕ = Operators.Gradient()
+    wgradₕ = Operators.WeakGradient()
+    curlₕ = Operators.Curl()
+    wcurlₕ = Operators.WeakCurl()
+
     !(:ρθ in propertynames(Y.c)) &&
         (error("use_tempest_mode must be false when not using ρθ"))
     ᶜρ = Y.c.ρ

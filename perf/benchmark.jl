@@ -18,6 +18,7 @@ catch err
     end
 end
 
+import ClimaAtmos as CA
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 ODE.step!(integrator) # compile first
@@ -46,7 +47,7 @@ trials["linsolve"] = get_trial(linsolve, (X, W, u), "linsolve");
 trials["implicit_tendency!"] = get_trial(f.f1, f1_args, "implicit_tendency!");
 trials["remaining_tendency!"] = get_trial(f.f2, f2_args, "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(additional_tendency!, (X, u, p, t), "additional_tendency!");
-trials["hyperdiffusion_tendency!"] = get_trial(hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
+trials["hyperdiffusion_tendency!"] = get_trial(CA.hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
 trials["step!"] = get_trial(ODE.step!, (integrator, ), "step!");
 #! format: on
 
