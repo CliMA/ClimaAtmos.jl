@@ -272,22 +272,6 @@ Base.one(::T) where {T <: Geometry.AxisTensor} = one(T)
 Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} =
     T(axes(T), S(one(T′)))
 
-# Allow StencilCoefs to be expanded.
-function Base.convert(
-    T::Type{<:Operators.StencilCoefs{lbw′, ubw′}},
-    coefs::Operators.StencilCoefs{lbw, ubw},
-) where {lbw, ubw, lbw′, ubw′}
-    if lbw′ <= lbw && ubw′ >= ubw
-        zero_val = zero(eltype(T))
-        lpadding = ntuple(_ -> zero_val, lbw - lbw′)
-        rpadding = ntuple(_ -> zero_val, ubw′ - ubw)
-        return T((lpadding..., coefs.coefs..., rpadding...))
-    else
-        error("Cannot convert a StencilCoefs object with bandwidths $lbw and \
-              $ubw to a StencilCoefs object with bandwidths $lbw′ and $ubw′")
-    end
-end
-
 # In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if
 # this is not the case, the additional term should be added to the
 # result of this function.
