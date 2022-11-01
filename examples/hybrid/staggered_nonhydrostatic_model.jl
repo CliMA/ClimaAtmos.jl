@@ -180,7 +180,7 @@ function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin
-            precomputed_quantities!(Y, p, t)
+            CA.precomputed_quantities!(Y, p, t)
         end
         if compressibility_model isa CA.CompressibleFluid
             @nvtx "horizontal" color = colorant"orange" begin
@@ -211,7 +211,7 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin
-            precomputed_quantities!(Y, p, t)
+            CA.precomputed_quantities!(Y, p, t)
         end
         if compressibility_model isa CA.CompressibleFluid
             @nvtx "horizontal" color = colorant"orange" begin
@@ -247,24 +247,6 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
         end
     end
     return Y⁺
-end
-
-function precomputed_quantities!(Y, p, t)
-    Fields.bycolumn(axes(Y.c)) do colidx
-        precomputed_quantities!(Y, p, t, colidx)
-    end
-end
-function precomputed_quantities!(Y, p, t, colidx)
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜts, ᶜp, params, thermo_dispatcher) = p
-
-    @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
-    @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
-    thermo_params = CAP.thermodynamics_params(params)
-    CA.thermo_state!(Y, p, ᶜinterp, colidx)
-    @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
-    return nothing
 end
 
 # Allow one() to be called on vectors.
