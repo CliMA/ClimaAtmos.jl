@@ -77,7 +77,7 @@ ENV["GKSwstype"] = "100"
 Plots.GRBackend()
 plt1 = plot(
     log2.(nprocs_clima_atmos),
-    sypd_clima_atmos,
+    log2.(sypd_clima_atmos),
     markershape = :circle,
     markercolor = :blue,
     xticks = (
@@ -85,14 +85,23 @@ plt1 = plot(
         [string(i) for i in nprocs_clima_atmos],
     ),
     xlabel = "# of MPI processes",
-    ylabel = "SYPD",
+    ylabel = "log₂(SYPD)",
     title = "Simulated years per day",
     label = "ClimaAtmos (Float32)",
     legend = :topleft,
     grid = :true,
     left_margin = 10mm,
+    right_margin = 10mm,
     bottom_margin = 10mm,
     top_margin = 10mm,
+    annotations = [
+        (
+            log2.(nprocs_clima_atmos) .+ 0.5,
+            log2.(sypd_clima_atmos),
+            [string(trunc(i, digits = 5)) for i in sypd_clima_atmos],
+            5,
+        ),
+    ],
 )
 Plots.png(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 Plots.pdf(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
