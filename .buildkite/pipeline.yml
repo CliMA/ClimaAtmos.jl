@@ -153,6 +153,14 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/sphere/remap_pipeline.jl --data_dir prep_remap/ --out_dir remap_pipeline_output"
         artifact_paths: "remap_pipeline_output/*"
 
+      - label: ":computer: Exercise parallel remap pipeline"
+        key: "parallel_remap_pipeline"
+        depends_on: "mpi_baro_wave_make_restart"
+        command: "julia -p 4 --color=yes --project=examples examples/hybrid/sphere/remap_pipeline_parallel.jl --data_dir prep_remap/ --out_dir parallel_remap_pipeline_output"
+        artifact_paths: "parallel_remap_pipeline_output/*"
+        agents:
+          slurm_ntasks: 5
+
   - group: "Sphere Examples"
     steps:
 
