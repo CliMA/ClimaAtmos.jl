@@ -10,7 +10,6 @@ import Thermodynamics as TD
 using ClimaCore.Utilities: half
 
 include("schur_complement_W.jl")
-include("hyperdiffusion.jl")
 
 # Note: FT must be defined before `include("staggered_nonhydrostatic_model.jl")`
 

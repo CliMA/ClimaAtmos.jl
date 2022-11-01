@@ -123,7 +123,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     end
 
     return merge(
-        hyperdiffusion_cache(
+        CA.hyperdiffusion_cache(
             Y,
             FT;
             κ₄ = FT(κ₄),
@@ -194,7 +194,7 @@ end
 
 function additional_tendency!(Yₜ, Y, p, t)
     (; viscous_sponge, hyperdiff) = p.tendency_knobs
-    hyperdiff && hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    hyperdiff && CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
     viscous_sponge && CA.viscous_sponge_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
