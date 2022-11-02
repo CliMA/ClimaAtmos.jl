@@ -1,3 +1,11 @@
+#####
+##### Gravity wave parameterization
+#####
+
+import ClimaAtmos.Spaces as Spaces
+import ClimaAtmos.Fields as Fields
+import ClimaAtmos.Geometry as Geometry
+
 function gravity_wave_cache(
     ::SingleColumnModel,
     Y,
@@ -81,15 +89,18 @@ function gravity_wave_tendency!(Yₜ, Y, p, t)
     #unpack
     (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params, model_config) = p
     (; gw_Bm, gw_source_ampl, gw_c, gw_cw, gw_c0, gw_nk, gw_k, gw_k2) = p
+    (; ᶜgradᵥ, ᶠinterp) = p.operators
+
     if model_config isa SingleColumnModel
         (; gw_source_height) = p
     elseif model_config isa SphericalModel
         (; gw_source_pressure) = p
     end
     ᶜρ = Y.c.ρ
+    FT = Spaces.undertype(axes(Y.c))
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
-    grav = FT(CAP.grav(params))
+    grav = CAP.grav(params)
 
     # compute buoyancy frequency
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
@@ -199,6 +210,7 @@ function gravity_wave_forcing(
     ᶠz,
 )
 
+    FT = eltype(ᶠz)
     nc = length(c)
 
     # define wave momentum flux (B0) at source level for each phase
@@ -252,7 +264,7 @@ function gravity_wave_forcing(
                             # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
                             # breaking, then add its momentum flux to the accumulated sum at
                             # this level.
-                            # set mask=0.0 to remove phase speed band c[n] from the set of active 
+                            # set mask=0.0 to remove phase speed band c[n] from the set of active
                             # waves moving upwards to the next level.
                             if c_hat0[n] * c_hat <= 0.0
                                 mask[n] = 0.0
@@ -276,7 +288,7 @@ function gravity_wave_forcing(
 
             # TODO: GFDL option to dump remaining flux at the top of the model
 
-            # compute the gravity wave momentum flux forcing 
+            # compute the gravity wave momentum flux forcing
             # obtained across the entire wave spectrum at this level.
             if k > source_level
                 rbh = sqrt(ᶜρ[k] * ᶜρ[k - 1])
@@ -293,7 +305,7 @@ function gravity_wave_forcing(
             gwf[k] = gwf[k] + wave_forcing[k]
         end
 
-    end # ink 
+    end # ink
 
     return gwf
 end

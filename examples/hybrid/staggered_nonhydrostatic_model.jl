@@ -119,6 +119,7 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
         simulation,
         operators = (;
             ᶜdivᵥ,
+            ᶜgradᵥ,
             ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ),
             ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ),
             ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp),

@@ -160,7 +160,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             coupled,
         ) : NamedTuple(),
         model_spec.non_orographic_gravity_wave ?
-        gravity_wave_cache(model_spec.model_config, Y, FT) : NamedTuple(),
+        CA.gravity_wave_cache(model_spec.model_config, Y, FT) : NamedTuple(),
         (;
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
@@ -219,7 +219,7 @@ function additional_tendency!(Yₜ, Y, p, t)
     end
     # TODO: make bycolumn-able
     (; non_orographic_gravity_wave) = p.tendency_knobs
-    non_orographic_gravity_wave && gravity_wave_tendency!(Yₜ, Y, p, t)
+    non_orographic_gravity_wave && CA.gravity_wave_tendency!(Yₜ, Y, p, t)
 end
 
 ################################################################################
@@ -244,14 +244,6 @@ import ClimaAtmos.Parameters as CAP
 
 include("staggered_nonhydrostatic_model.jl")
 include("initial_conditions.jl")
-
-include(
-    joinpath(
-        "gravitywave_parameterization",
-        "gravity_wave_parameterization.jl",
-    ),
-)
-
 
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
