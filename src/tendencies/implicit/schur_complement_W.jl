@@ -2,7 +2,7 @@
 ##### Schur Complement for wfact
 #####
 
-using LinearAlgebra
+import LinearAlgebra
 
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
@@ -89,7 +89,7 @@ function SchurComplementW(Y, transform, flags, test = false)
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
     S_column_arrays = [
-        Tridiagonal(
+        LinearAlgebra.Tridiagonal(
             Array{FT}(undef, N - 1),
             Array{FT}(undef, N),
             Array{FT}(undef, N - 1),
@@ -183,14 +183,15 @@ the large -I block in A.
 
 # Function required by OrdinaryDiffEq.jl
 linsolve!(::Type{Val{:init}}, f, u0; kwargs...) = _linsolve!
-_linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
+_linsolve!(x, A, b, update_matrix = false; kwargs...) =
+    LinearAlgebra.ldiv!(x, A, b)
 
 # Function required by Krylov.jl (x and b can be AbstractVectors)
 # See https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a
 # related issue that requires the same workaround.
 function LinearAlgebra.ldiv!(x, A::SchurComplementW, b)
     A.temp1 .= b
-    ldiv!(A.temp2, A, A.temp1)
+    LinearAlgebra.ldiv!(A.temp2, A, A.temp1)
     x .= A.temp2
 end
 

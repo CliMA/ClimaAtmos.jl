@@ -37,10 +37,11 @@ f2_args =
 include("benchmark_utils.jl")
 
 import OrderedCollections
+import LinearAlgebra as LA
 trials = OrderedCollections.OrderedDict()
 #! format: off
 trials["Wfact"] = get_trial(f.f1.Wfact, (W, u, p, dt, t), "Wfact");
-trials["linsolve"] = get_trial(ldiv!, (X, W, u), "linsolve");
+trials["linsolve"] = get_trial(LA.ldiv!, (X, W, u), "linsolve");
 trials["implicit_tendency!"] = get_trial(f.f1, f1_args, "implicit_tendency!");
 trials["remaining_tendency!"] = get_trial(f.f2, f2_args, "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(additional_tendency!, (X, u, p, t), "additional_tendency!");
