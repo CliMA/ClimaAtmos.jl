@@ -14,7 +14,7 @@ export JULIA_CUDA_USE_BINARYBUILDER=false
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
 export HDF5_DIR=/central/groups/esm/{username}/ClimaAtmos_remap/
 CA_EXAMPLE=$HOME'/Documents/ClimaAtmos.jl/examples/'
-DRIVER=$CA_EXAMPLE'hybrid/sphere/remap_pipeline.jl'
+DRIVER=$CA_EXAMPLE'post_processing/remap/remap_pipeline.jl'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.build("HDF5")'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
@@ -45,7 +45,7 @@ using ClimaCore:
 using NCDatasets
 using ClimaCoreTempestRemap
 
-include(joinpath(pkgdir(ClimaAtmos), "examples", "hybrid", "remap_helpers.jl"))
+include(joinpath(@__DIR__, "remap_helpers.jl"))
 
 function create_weightfile(filein, remap_tmpdir, nlat, nlon)
     @assert endswith(filein, "hdf5")

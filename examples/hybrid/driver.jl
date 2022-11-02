@@ -318,7 +318,9 @@ using Test
 import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
-include(joinpath(@__DIR__, "define_post_processing.jl"))
+include(
+    joinpath(pkgdir(ClimaAtmos), "post_processing", "post_processing_funcs.jl"),
+)
 if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
@@ -353,7 +355,13 @@ if parsed_args["debugging_tc"]
             "self_reference_or_path.jl",
         ),
     )
-    include(joinpath(@__DIR__, "define_tc_quicklook_profiles.jl"))
+    include(
+        joinpath(
+            pkgdir(ClimaAtmos),
+            "post_processing",
+            "define_tc_quicklook_profiles.jl",
+        ),
+    )
 
     main_branch_root = get_main_branch_buildkite_path()
     @info "Comparing PR profiles against main with commit id: $(basename(main_branch_root))"

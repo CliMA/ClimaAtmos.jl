@@ -1,4 +1,4 @@
-include("remap_helpers.jl")
+include(joinpath(@__DIR__, "remap", "remap_helpers.jl"))
 
 space_string(::Spaces.FaceExtrudedFiniteDifferenceSpace) = "(Face field)"
 space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
