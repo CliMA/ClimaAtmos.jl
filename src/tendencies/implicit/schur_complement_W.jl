@@ -50,13 +50,19 @@ function bidiag_ntuple(::Type{FT}, ::Val{N}) where {FT, N}
     )
 end
 
+# TODO: remove this
+function _FieldFromNamedTuple(space, nt::NamedTuple)
+    cmv(z) = nt
+    return cmv.(Fields.coordinate_field(space))
+end
+
 function SchurComplementW(Y, transform, flags, test = false)
     @assert length(filter(isequal(:ρ), propertynames(Y.c))) == 1
     @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
     @assert length(filter(is_momentum_var, propertynames(Y.c))) == 1
     @assert length(filter(is_momentum_var, propertynames(Y.f))) == 1
 
-    FT = eltype(Y)
+    FT = Spaces.undertype(axes(Y.c))
     dtγ_ref = Ref(zero(FT))
 
     bidiag_type = Operators.StencilCoefs{-half, half, NTuple{2, FT}}
@@ -73,9 +79,11 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
     ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
 
-    cf = Fields.coordinate_field(axes(Y.c))
-    named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = named_tuple_field.(cf)
+    # TODO: can we make this work instead?
+    # cf = Fields.coordinate_field(axes(Y.c))
+    # named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
+    # ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = named_tuple_field.(cf)
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = _FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
@@ -201,29 +209,29 @@ function LinearAlgebra.ldiv!(
             changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
         @warn str maxlog = 1
     end
-    @nvtx "linsolve" color = colorant"lime" begin
+    # @nvtx "linsolve" color = colorant"lime" begin
 
-        # Compute Schur complement
-        Fields.bycolumn(axes(x.c)) do colidx
-            _ldiv_serial!(
-                x.c[colidx],
-                x.f[colidx],
-                b.c[colidx],
-                b.f[colidx],
-                dtγ,
-                transform,
-                cond,
-                ∂ᶜρₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-                ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
-                ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
-                ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
-                S[colidx],
-                S_column_arrays[Threads.threadid()], # can / should this be colidx?
-            )
-        end
+    # Compute Schur complement
+    Fields.bycolumn(axes(x.c)) do colidx
+        _ldiv_serial!(
+            x.c[colidx],
+            x.f[colidx],
+            b.c[colidx],
+            b.f[colidx],
+            dtγ,
+            transform,
+            cond,
+            ∂ᶜρₜ∂ᶠ𝕄[colidx],
+            ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+            ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
+            ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
+            ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
+            S[colidx],
+            S_column_arrays[Threads.threadid()], # can / should this be colidx?
+        )
     end
+    # end
 end
 
 function _ldiv_serial!(

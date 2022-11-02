@@ -66,11 +66,6 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
     top = Operators.FirstOrderOneSided(),
 )
 
-const ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp)
-const ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp)
-const ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ)
-const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
-
 const C123 = Geometry.Covariant123Vector
 
 get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
@@ -119,10 +114,15 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
     pnc = propertynames(Y.c)
     ᶜρh_kwargs =
         :ρe_tot in pnc || :ρe_int in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
+
     return (;
         simulation,
         operators = (;
             ᶜdivᵥ,
+            ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ),
+            ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ),
+            ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp),
+            ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp),
             ᶠinterp,
             ᶠcurlᵥ,
             ᶜinterp,

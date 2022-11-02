@@ -280,17 +280,17 @@ function ode_configuration(Y, parsed_args, model_spec)
             is_imex_CTS_algo ||
             ode_algorithm_type in (ODE.Rosenbrock23, ODE.Rosenbrock32)
         )
-        W = SchurComplementW(
+        W = CA.SchurComplementW(
             Y,
             use_transform,
             jacobian_flags,
             test_implicit_solver,
         )
         jac_kwargs =
-            use_transform ? (; jac_prototype = W, Wfact_t = Wfact!) :
-            (; jac_prototype = W, Wfact = Wfact!)
+            use_transform ? (; jac_prototype = W, Wfact_t = CA.Wfact!) :
+            (; jac_prototype = W, Wfact = CA.Wfact!)
 
-        alg_kwargs = (; linsolve = linsolve!)
+        alg_kwargs = (; linsolve = CA.linsolve!)
         if ode_algorithm_type <: Union{
             ODE.OrdinaryDiffEqNewtonAlgorithm,
             ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
