@@ -83,7 +83,8 @@ function SchurComplementW(Y, transform, flags, test = false)
     # cf = Fields.coordinate_field(axes(Y.c))
     # named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
     # ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = named_tuple_field.(cf)
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = _FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
+        _FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))

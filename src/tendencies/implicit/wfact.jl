@@ -20,7 +20,14 @@ function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, opera
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * one(ᶠw)))
     return nothing
 end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, operators, ::Val{:first_order})
+function vertical_transport_jac!(
+    ∂ᶜρcₜ∂ᶠw,
+    ᶠw,
+    ᶜρ,
+    ᶜρc,
+    operators,
+    ::Val{:first_order},
+)
     (; ᶜdivᵥ_stencil, ᶠinterp, ᶠupwind1) = operators
     # To convert ᶠw to ᶠw_data, we extract the third vector component.
     to_scalar(vector) = vector.u₃
@@ -68,7 +75,7 @@ end
 
 function Wfact!(W, Y, p, dtγ, t)
     # @nvtx "Wfact!" color = colorant"green" begin
-        _Wfact!(W, Y, p, dtγ, t)
+    _Wfact!(W, Y, p, dtγ, t)
     # end
 end
 
