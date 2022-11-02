@@ -123,12 +123,12 @@ function dss_callback(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
     @nvtx "dss callback" color = colorant"yellow" begin
-        Spaces.weighted_dss_start!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_start!(Y.f, ghost_buffer.f)
-        Spaces.weighted_dss_internal!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_internal!(Y.f, ghost_buffer.f)
-        Spaces.weighted_dss_ghost!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_ghost!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_internal2!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_internal2!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_ghost2!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_ghost2!(Y.f, ghost_buffer.f)
     end
     # ODE.u_modified!(integrator, false) # TODO: try this
 end
@@ -205,7 +205,7 @@ function save_to_disk_func(integrator)
     # vorticity
     curl_uh = @. curlₕ(Y.c.uₕ)
     ᶜvort = Geometry.WVector.(curl_uh)
-    Spaces.weighted_dss!(ᶜvort)
+    Spaces.weighted_dss2!(ᶜvort)
 
     dry_diagnostic = (;
         pressure = ᶜp,

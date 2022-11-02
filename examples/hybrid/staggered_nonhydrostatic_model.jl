@@ -92,15 +92,15 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
     ts_type = CA.thermo_state_type(Y.c, FT)
     ghost_buffer = (
-        c = Spaces.create_ghost_buffer(Y.c),
-        f = Spaces.create_ghost_buffer(Y.f),
-        χ = Spaces.create_ghost_buffer(Y.c.ρ), # for hyperdiffusion
-        χw = Spaces.create_ghost_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
-        χuₕ = Spaces.create_ghost_buffer(Y.c.uₕ), # for hyperdiffusion
+        c = Spaces.create_dss_buffer(Y.c),
+        f = Spaces.create_dss_buffer(Y.f),
+        χ = Spaces.create_dss_buffer(Y.c.ρ), # for hyperdiffusion
+        χw = Spaces.create_dss_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
+        χuₕ = Spaces.create_dss_buffer(Y.c.uₕ), # for hyperdiffusion
     )
     (:ρq_tot in propertynames(Y.c)) && (
         ghost_buffer =
-            (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
+            (ghost_buffer..., ᶜχρq_tot = Spaces.create_dss_buffer(Y.c.ρ))
     )
     if apply_limiter
         tracers = filter(CA.is_tracer_var, propertynames(Y.c))
@@ -192,12 +192,12 @@ function remaining_tendency!(Yₜ, Y, p, t)
             additional_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "dss_remaining_tendency" color = colorant"blue" begin
-            Spaces.weighted_dss_start!(Yₜ.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_start!(Yₜ.f, p.ghost_buffer.f)
-            Spaces.weighted_dss_internal!(Yₜ.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_internal!(Yₜ.f, p.ghost_buffer.f)
-            Spaces.weighted_dss_ghost!(Yₜ.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_ghost!(Yₜ.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_start2!(Yₜ.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_start2!(Yₜ.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_internal2!(Yₜ.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_internal2!(Yₜ.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_ghost2!(Yₜ.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_ghost2!(Yₜ.f, p.ghost_buffer.f)
         end
     end
     return Yₜ
@@ -236,12 +236,12 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
             @. Y⁺ += dtγ * Yₜ
         end
         @nvtx "dss_remaining_tendency increment" color = colorant"blue" begin
-            Spaces.weighted_dss_start!(Y⁺.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_start!(Y⁺.f, p.ghost_buffer.f)
-            Spaces.weighted_dss_internal!(Y⁺.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_internal!(Y⁺.f, p.ghost_buffer.f)
-            Spaces.weighted_dss_ghost!(Y⁺.c, p.ghost_buffer.c)
-            Spaces.weighted_dss_ghost!(Y⁺.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_start2!(Y⁺.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_start2!(Y⁺.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_internal2!(Y⁺.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_internal2!(Y⁺.f, p.ghost_buffer.f)
+            Spaces.weighted_dss_ghost2!(Y⁺.c, p.ghost_buffer.c)
+            Spaces.weighted_dss_ghost2!(Y⁺.f, p.ghost_buffer.f)
         end
     end
     return Y⁺

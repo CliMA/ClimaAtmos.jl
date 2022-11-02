@@ -94,18 +94,18 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
         Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ))))
 
     # @nvtx "dss_hyperdiffusion_tendency" color = colorant"green" begin
-    Spaces.weighted_dss_start!(ᶜχ, ghost_buffer.χ)
-    is_ρq_tot && (Spaces.weighted_dss_start!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-    Spaces.weighted_dss_start!(ᶜχuₕ, ghost_buffer.χuₕ)
+    Spaces.weighted_dss_start2!(ᶜχ, ghost_buffer.χ)
+    is_ρq_tot && (Spaces.weighted_dss_start2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+    Spaces.weighted_dss_start2!(ᶜχuₕ, ghost_buffer.χuₕ)
 
-    Spaces.weighted_dss_internal!(ᶜχ, ghost_buffer.χ)
+    Spaces.weighted_dss_internal2!(ᶜχ, ghost_buffer.χ)
     is_ρq_tot &&
-        (Spaces.weighted_dss_internal!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-    Spaces.weighted_dss_internal!(ᶜχuₕ, ghost_buffer.χuₕ)
+        (Spaces.weighted_dss_internal2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+    Spaces.weighted_dss_internal2!(ᶜχuₕ, ghost_buffer.χuₕ)
 
-    Spaces.weighted_dss_ghost!(ᶜχ, ghost_buffer.χ)
-    is_ρq_tot && (Spaces.weighted_dss_ghost!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-    Spaces.weighted_dss_ghost!(ᶜχuₕ, ghost_buffer.χuₕ)
+    Spaces.weighted_dss_ghost2!(ᶜχ, ghost_buffer.χ)
+    is_ρq_tot && (Spaces.weighted_dss_ghost2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+    Spaces.weighted_dss_ghost2!(ᶜχuₕ, ghost_buffer.χuₕ)
     # end
 
     @. ᵗρs -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
@@ -157,22 +157,22 @@ function hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
     is_3d_pt = !is_2d_pt
 
     @. ᶜχ = wdivₕ(gradₕ(ᶜρ)) # ᶜχρ
-    Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
+    Spaces.weighted_dss2!(ᶜχ, ghost_buffer.χ)
     @. Yₜ.c.ρ -= κ₄ * wdivₕ(gradₕ(ᶜχ))
 
     @. ᶜχ = wdivₕ(gradₕ(Y.c.ρθ)) # ᶜχρθ
-    Spaces.weighted_dss!(ᶜχ, ghost_buffer.χ)
+    Spaces.weighted_dss2!(ᶜχ, ghost_buffer.χ)
     @. Yₜ.c.ρθ -= κ₄ * wdivₕ(gradₕ(ᶜχ))
 
     (; ᶠχw_data) = p
     @. ᶠχw_data = wdivₕ(gradₕ(Y.f.w.components.data.:1))
-    Spaces.weighted_dss!(ᶠχw_data, ghost_buffer.χ)
+    Spaces.weighted_dss2!(ᶠχw_data, ghost_buffer.χ)
     @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠχw_data))
 
     if is_ρq_tot
         (; ᶜχρq_tot) = p
         @. ᶜχρq_tot = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
-        Spaces.weighted_dss!(ᶜχρq_tot, ghost_buffer.χ)
+        Spaces.weighted_dss2!(ᶜχρq_tot, ghost_buffer.χ)
         @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
         @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
     end
@@ -182,7 +182,7 @@ function hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
             wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
                 wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
             )
-        Spaces.weighted_dss!(ᶜχuₕ, ghost_buffer.χuₕ)
+        Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
         @. Yₜ.c.uₕ -=
             κ₄ * (
                 divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
@@ -192,7 +192,7 @@ function hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
             )
     elseif is_2d_pt
         @. ᶜχuₕ = Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜuₕ)))
-        Spaces.weighted_dss!(ᶜχuₕ, ghost_buffer.χuₕ)
+        Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
         @. Yₜ.c.uₕ -=
             κ₄ *
             divergence_damping_factor *
