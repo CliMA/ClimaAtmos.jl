@@ -249,11 +249,6 @@ function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
     return Y⁺
 end
 
-# Allow one() to be called on vectors.
-Base.one(::T) where {T <: Geometry.AxisTensor} = one(T)
-Base.one(::Type{T}) where {T′, A, S, T <: Geometry.AxisTensor{T′, 1, A, S}} =
-    T(axes(T), S(one(T′)))
-
 # In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if
 # this is not the case, the additional term should be added to the
 # result of this function.

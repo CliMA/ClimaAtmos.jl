@@ -304,8 +304,18 @@ function ode_configuration(Y, parsed_args, model_spec)
             alg_kwargs = (; alg_kwargs..., nlsolve)
         elseif is_imex_CTS_algo
             newtons_method = NewtonsMethod(;
-                linsolve = linsolve!,
                 max_iters = parsed_args["max_newton_iters"],
+                krylov_method = parsed_args["use_krylov_method"] ?
+                                KrylovMethod(;
+                    jacobian_free_jvp = ForwardDiffJVP(;
+                        step_adjustment = FT(
+                            parsed_args["jvp_step_adjustment"],
+                        ),
+                    ),
+                    forcing_term = ConstantForcing(
+                        FT(parsed_args["krylov_forcing"]),
+                    ),
+                ) : nothing,
             )
             alg_kwargs = (; newtons_method)
         end

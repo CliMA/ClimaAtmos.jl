@@ -26,12 +26,9 @@ X = similar(integrator.u)
 
 (; sol, cache, u, p, dt, t) = integrator
 f = sol.prob.f
-if integrator isa CTS.DistributedODEIntegrator
-    W = cache.newtons_method_cache.j
-    linsolve = cache.newtons_method_cache.linsolve!
-else
-    (; W, linsolve) = cache
-end
+W =
+    integrator isa CTS.DistributedODEIntegrator ? cache.newtons_method_cache.j :
+    cache.W
 f1_args =
     f.f1 isa CTS.ForwardEulerODEFunction ? (copy(u), u, p, t, dt) : (X, u, p, t)
 f2_args =
@@ -43,7 +40,7 @@ import OrderedCollections
 trials = OrderedCollections.OrderedDict()
 #! format: off
 trials["Wfact"] = get_trial(f.f1.Wfact, (W, u, p, dt, t), "Wfact");
-trials["linsolve"] = get_trial(linsolve, (X, W, u), "linsolve");
+trials["linsolve"] = get_trial(ldiv!, (X, W, u), "linsolve");
 trials["implicit_tendency!"] = get_trial(f.f1, f1_args, "implicit_tendency!");
 trials["remaining_tendency!"] = get_trial(f.f2, f2_args, "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(additional_tendency!, (X, u, p, t), "additional_tendency!");

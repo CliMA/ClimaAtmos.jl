@@ -11,7 +11,7 @@ function FieldFromNamedTuple(space, nt::NamedTuple)
     return cmv.(Fields.coordinate_field(space))
 end
 
-struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
+struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A, T}
     # whether this struct is used to compute Wfact_t or Wfact
     transform::Bool
 
@@ -35,6 +35,10 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A}
 
     # whether to test the Jacobian and linear solver
     test::Bool
+
+    # cache that is used to evaluate ldiv!
+    temp1::T
+    temp2::T
 end
 
 function tracer_variables(::Type{FT}, ᶜ𝕋_names) where {FT}
@@ -93,6 +97,7 @@ function SchurComplementW(Y, transform, flags, test = false)
         typeof(∂ᶜ𝕋ₜ∂ᶠ𝕄_field),
         typeof(S),
         typeof(S_column_arrays),
+        typeof(Y),
     }(
         transform,
         flags,
@@ -106,6 +111,8 @@ function SchurComplementW(Y, transform, flags, test = false)
         S,
         S_column_arrays,
         test,
+        similar(Y),
+        similar(Y),
     )
 end
 
@@ -165,12 +172,27 @@ Note: The matrix S = A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I is th
 the large -I block in A.
 =#
 
+# Function required by OrdinaryDiffEq.jl
 linsolve!(::Type{Val{:init}}, f, u0; kwargs...) = _linsolve!
+_linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
+
+# Function required by Krylov.jl (x and b can be AbstractVectors)
+# See https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a
+# related issue that requires the same workaround.
+function LinearAlgebra.ldiv!(x, A::SchurComplementW, b)
+    A.temp1 .= b
+    ldiv!(A.temp2, A, A.temp1)
+    x .= A.temp2
+end
 
 include("linsolve_test.jl")
 call_verify_matrix() = false
 
-function _linsolve!(x, A, b, update_matrix = false; kwargs...)
+function LinearAlgebra.ldiv!(
+    x::Fields.FieldVector,
+    A::SchurComplementW,
+    b::Fields.FieldVector,
+)
     (; dtγ_ref, S, S_column_arrays, transform) = A
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = A
     dtγ = dtγ_ref[]
@@ -186,7 +208,7 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
 
         # Compute Schur complement
         Fields.bycolumn(axes(x.c)) do colidx
-            _linsolve_serial!(
+            _ldiv_serial!(
                 x.c[colidx],
                 x.f[colidx],
                 b.c[colidx],
@@ -212,7 +234,7 @@ function _linsolve!(x, A, b, update_matrix = false; kwargs...)
     end
 end
 
-function _linsolve_serial!(
+function _ldiv_serial!(
     xc,
     xf,
     bc,
