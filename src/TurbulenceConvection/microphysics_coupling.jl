@@ -86,7 +86,7 @@ function precipitation_formation(
         I_l = TD.internal_energy_liquid(thermo_params, ts)
         I_i = TD.internal_energy_ice(thermo_params, ts)
         I = TD.internal_energy(thermo_params, ts)
-        Φ = geopotential(param_set, z)
+        Φ = geopotential(thermo_params, z)
 
         if precip_model isa Microphysics0Moment
             qsat = TD.q_vap_saturation(thermo_params, ts)

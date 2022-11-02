@@ -74,53 +74,53 @@ function get_edmf_cache(
     )
 end
 
-function init_tc!(Y, p, params, namelist)
-    (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_thermo_state, logpressure_fun, surf_params, case) =
-        edmf_cache
+function init_tc!(Y, p, params)
+    CC.Fields.bycolumn(axes(Y.c)) do colidx
+        init_tc!(Y, p, params, colidx)
+    end
+end
+
+function init_tc!(Y, p, params, colidx)
+
+    (; edmf, surf_thermo_state, logpressure_fun, surf_params, case) =
+        p.edmf_cache
     tc_params = CAP.turbconv_params(params)
 
     FT = eltype(edmf)
+    # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
+    state = TC.tc_column_state(Y, p, nothing, colidx)
+    thermo_params = CAP.thermodynamics_params(params)
 
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
-        state = TC.tc_column_state(Y, p, nothing, colidx)
-        thermo_params = CAP.thermodynamics_params(params)
+    grid = TC.Grid(state)
+    FT = eltype(grid)
+    t = FT(0)
 
-        grid = TC.Grid(state)
-        FT = eltype(grid)
-        t = FT(0)
+    CA.compute_ref_pressure!(p.ᶜp[colidx], logpressure_fun)
+    CA.compute_ref_pressure!(p.edmf_cache.aux.face.p[colidx], logpressure_fun)
 
-        CA.compute_ref_pressure!(p.ᶜp[colidx], logpressure_fun)
-        CA.compute_ref_pressure!(
-            p.edmf_cache.aux.face.p[colidx],
-            logpressure_fun,
-        )
+    CA.compute_ref_density!(
+        Y.c.ρ[colidx],
+        p.ᶜp[colidx],
+        thermo_params,
+        surf_thermo_state,
+    )
+    CA.compute_ref_density!(
+        p.edmf_cache.aux.face.ρ[colidx],
+        p.edmf_cache.aux.face.p[colidx],
+        thermo_params,
+        surf_thermo_state,
+    )
 
-        CA.compute_ref_density!(
-            Y.c.ρ[colidx],
-            p.ᶜp[colidx],
-            thermo_params,
-            surf_thermo_state,
-        )
-        CA.compute_ref_density!(
-            p.edmf_cache.aux.face.ρ[colidx],
-            p.edmf_cache.aux.face.p[colidx],
-            thermo_params,
-            surf_thermo_state,
-        )
+    # TODO: convert initialize_profiles to set prognostic state, not aux state
+    Cases.initialize_profiles(case, grid, thermo_params, state)
 
-        # TODO: convert initialize_profiles to set prognostic state, not aux state
-        Cases.initialize_profiles(case, grid, thermo_params, state)
-
-        # Temporarily, we'll re-populate ρq_tot based on initial aux q_tot
-        q_tot = edmf_cache.aux.cent.q_tot[colidx]
-        @. Y.c.ρq_tot[colidx] = Y.c.ρ[colidx] * q_tot
-        set_thermo_state_pθq!(Y, p, colidx)
-        set_grid_mean_from_thermo_state!(tc_params, state, grid)
-        assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
-        initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
-    end
+    # Temporarily, we'll re-populate ρq_tot based on initial aux q_tot
+    q_tot = p.edmf_cache.aux.cent.q_tot[colidx]
+    @. Y.c.ρq_tot[colidx] = Y.c.ρ[colidx] * q_tot
+    set_thermo_state_pθq!(Y, p, colidx)
+    set_grid_mean_from_thermo_state!(thermo_params, state, grid)
+    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
+    initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
 end
 
 
@@ -152,7 +152,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
             surf_thermo_state,
         )
     end
-    assign_thermo_aux!(state, grid, edmf.moisture_model, tc_params)
+    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
     surf = get_surface(surf_params, grid, state, t, tc_params)
 
