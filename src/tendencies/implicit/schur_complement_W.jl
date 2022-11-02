@@ -1,15 +1,13 @@
-using LinearAlgebra
+#####
+##### Schur Complement for wfact
+#####
 
-using ClimaCore: Spaces, Fields, Operators
+import LinearAlgebra
+
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Operators as Operators
 using ClimaCore.Utilities: half
-
-const compose = Operators.ComposeStencils()
-const apply = Operators.ApplyStencil()
-
-function FieldFromNamedTuple(space, nt::NamedTuple)
-    cmv(z) = nt
-    return cmv.(Fields.coordinate_field(space))
-end
 
 struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A, T}
     # whether this struct is used to compute Wfact_t or Wfact
@@ -52,13 +50,19 @@ function bidiag_ntuple(::Type{FT}, ::Val{N}) where {FT, N}
     )
 end
 
+# TODO: remove this
+function _FieldFromNamedTuple(space, nt::NamedTuple)
+    cmv(z) = nt
+    return cmv.(Fields.coordinate_field(space))
+end
+
 function SchurComplementW(Y, transform, flags, test = false)
     @assert length(filter(isequal(:ρ), propertynames(Y.c))) == 1
-    @assert length(filter(CA.is_energy_var, propertynames(Y.c))) == 1
-    @assert length(filter(CA.is_momentum_var, propertynames(Y.c))) == 1
-    @assert length(filter(CA.is_momentum_var, propertynames(Y.f))) == 1
+    @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
+    @assert length(filter(is_momentum_var, propertynames(Y.c))) == 1
+    @assert length(filter(is_momentum_var, propertynames(Y.f))) == 1
 
-    FT = eltype(Y)
+    FT = Spaces.undertype(axes(Y.c))
     dtγ_ref = Ref(zero(FT))
 
     bidiag_type = Operators.StencilCoefs{-half, half, NTuple{2, FT}}
@@ -73,14 +77,19 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶜ𝔼 = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
-    ᶜ𝕋_names = filter(CA.is_tracer_var, propertynames(Y.c))
+    ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
+
+    # TODO: can we make this work instead?
+    # cf = Fields.coordinate_field(axes(Y.c))
+    # named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
+    # ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = named_tuple_field.(cf)
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
-        FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
+        _FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
     S_column_arrays = [
-        Tridiagonal(
+        LinearAlgebra.Tridiagonal(
             Array{FT}(undef, N - 1),
             Array{FT}(undef, N),
             Array{FT}(undef, N - 1),
@@ -174,19 +183,17 @@ the large -I block in A.
 
 # Function required by OrdinaryDiffEq.jl
 linsolve!(::Type{Val{:init}}, f, u0; kwargs...) = _linsolve!
-_linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
+_linsolve!(x, A, b, update_matrix = false; kwargs...) =
+    LinearAlgebra.ldiv!(x, A, b)
 
 # Function required by Krylov.jl (x and b can be AbstractVectors)
 # See https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a
 # related issue that requires the same workaround.
 function LinearAlgebra.ldiv!(x, A::SchurComplementW, b)
     A.temp1 .= b
-    ldiv!(A.temp2, A, A.temp1)
+    LinearAlgebra.ldiv!(A.temp2, A, A.temp1)
     x .= A.temp2
 end
-
-include("linsolve_test.jl")
-call_verify_matrix() = false
 
 function LinearAlgebra.ldiv!(
     x::Fields.FieldVector,
@@ -204,34 +211,29 @@ function LinearAlgebra.ldiv!(
             changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
         @warn str maxlog = 1
     end
-    @nvtx "linsolve" color = colorant"lime" begin
+    # @nvtx "linsolve" color = colorant"lime" begin
 
-        # Compute Schur complement
-        Fields.bycolumn(axes(x.c)) do colidx
-            _ldiv_serial!(
-                x.c[colidx],
-                x.f[colidx],
-                b.c[colidx],
-                b.f[colidx],
-                dtγ,
-                transform,
-                cond,
-                ∂ᶜρₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-                ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
-                ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
-                ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
-                S[colidx],
-                S_column_arrays[Threads.threadid()], # can / should this be colidx?
-            )
-        end
-
-        # Verify correctness (if needed, but too expensive for runs)
-        if call_verify_matrix()
-            verify_matrix(x, A, b, update_matrix = false; kwargs...)
-        end
+    # Compute Schur complement
+    Fields.bycolumn(axes(x.c)) do colidx
+        _ldiv_serial!(
+            x.c[colidx],
+            x.f[colidx],
+            b.c[colidx],
+            b.f[colidx],
+            dtγ,
+            transform,
+            cond,
+            ∂ᶜρₜ∂ᶠ𝕄[colidx],
+            ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+            ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
+            ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
+            ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
+            S[colidx],
+            S_column_arrays[Threads.threadid()], # can / should this be colidx?
+        )
     end
+    # end
 end
 
 function _ldiv_serial!(
@@ -256,6 +258,8 @@ function _ldiv_serial!(
     # than 2 diagonals per Jacobian block.
     FT = eltype(eltype(S_column))
     I = Ref(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
+    compose = Operators.ComposeStencils()
+    apply = Operators.ApplyStencil()
     if cond
         @. S_column = dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
     else
@@ -269,13 +273,13 @@ function _ldiv_serial!(
 
     xᶜρ = xc.ρ
     bᶜρ = bc.ρ
-    ᶜ𝔼_name = filter(CA.is_energy_var, propertynames(xc))[1]
+    ᶜ𝔼_name = filter(is_energy_var, propertynames(xc))[1]
     xᶜ𝔼 = getproperty(xc, ᶜ𝔼_name)
     bᶜ𝔼 = getproperty(bc, ᶜ𝔼_name)
-    ᶜ𝕄_name = filter(CA.is_momentum_var, propertynames(xc))[1]
+    ᶜ𝕄_name = filter(is_momentum_var, propertynames(xc))[1]
     xᶜ𝕄 = getproperty(xc, ᶜ𝕄_name)
     bᶜ𝕄 = getproperty(bc, ᶜ𝕄_name)
-    ᶠ𝕄_name = filter(CA.is_momentum_var, propertynames(xf))[1]
+    ᶠ𝕄_name = filter(is_momentum_var, propertynames(xf))[1]
     xᶠ𝕄 = getproperty(xf, ᶠ𝕄_name).components.data.:1
     bᶠ𝕄 = getproperty(bf, ᶠ𝕄_name).components.data.:1
 
@@ -292,18 +296,18 @@ function _ldiv_serial!(
     @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝕄 = -bᶜ𝕄
-    for ᶜ𝕋_name in filter(CA.is_tracer_var, propertynames(xc))
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(xc))
         xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)
         bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)
         ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
         @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
     end
-    for var_name in filter(CA.is_edmf_var, propertynames(xc))
+    for var_name in filter(is_edmf_var, propertynames(xc))
         xᶜ𝕋 = getproperty(xc, var_name)
         bᶜ𝕋 = getproperty(bc, var_name)
         @. xᶜ𝕋 = -bᶜ𝕋
     end
-    for var_name in filter(CA.is_edmf_var, propertynames(xf))
+    for var_name in filter(is_edmf_var, propertynames(xf))
         xᶠ𝕋 = getproperty(xf, var_name)
         bᶠ𝕋 = getproperty(bf, var_name)
         @. xᶠ𝕋 = -bᶠ𝕋
