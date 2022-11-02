@@ -1,15 +1,9 @@
 using LinearAlgebra
 
-using ClimaCore: Spaces, Fields, Operators
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Operators as Operators
 using ClimaCore.Utilities: half
-
-const compose = Operators.ComposeStencils()
-const apply = Operators.ApplyStencil()
-
-function FieldFromNamedTuple(space, nt::NamedTuple)
-    cmv(z) = nt
-    return cmv.(Fields.coordinate_field(space))
-end
 
 struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A, T}
     # whether this struct is used to compute Wfact_t or Wfact
@@ -74,6 +68,12 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
     ᶜ𝕋_names = filter(CA.is_tracer_var, propertynames(Y.c))
+
+    function FieldFromNamedTuple(space, nt::NamedTuple)
+        cmv(z) = nt
+        return cmv.(Fields.coordinate_field(space))
+    end
+
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
         FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
@@ -185,9 +185,6 @@ function LinearAlgebra.ldiv!(x, A::SchurComplementW, b)
     x .= A.temp2
 end
 
-include("linsolve_test.jl")
-call_verify_matrix() = false
-
 function LinearAlgebra.ldiv!(
     x::Fields.FieldVector,
     A::SchurComplementW,
@@ -226,11 +223,6 @@ function LinearAlgebra.ldiv!(
                 S_column_arrays[Threads.threadid()], # can / should this be colidx?
             )
         end
-
-        # Verify correctness (if needed, but too expensive for runs)
-        if call_verify_matrix()
-            verify_matrix(x, A, b, update_matrix = false; kwargs...)
-        end
     end
 end
 
@@ -256,6 +248,8 @@ function _ldiv_serial!(
     # than 2 diagonals per Jacobian block.
     FT = eltype(eltype(S_column))
     I = Ref(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
+    compose = Operators.ComposeStencils()
+    apply = Operators.ApplyStencil()
     if cond
         @. S_column = dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
     else
