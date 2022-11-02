@@ -1,4 +1,6 @@
 using Dates: DateTime, @dateformat_str
+using NCDatasets
+using Dierckx
 import ClimaCore: InputOutput
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -115,7 +117,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
 
     if topography == "DCMIP200"
-        warp_function = topography_dcmip200
+        warp_function = CA.topography_dcmip200
     elseif topography == "NoWarp"
         warp_function = nothing
     end
