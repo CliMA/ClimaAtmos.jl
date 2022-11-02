@@ -52,9 +52,9 @@ end
 
 function SchurComplementW(Y, transform, flags, test = false)
     @assert length(filter(isequal(:ρ), propertynames(Y.c))) == 1
-    @assert length(filter(CA.is_energy_var, propertynames(Y.c))) == 1
-    @assert length(filter(CA.is_momentum_var, propertynames(Y.c))) == 1
-    @assert length(filter(CA.is_momentum_var, propertynames(Y.f))) == 1
+    @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
+    @assert length(filter(is_momentum_var, propertynames(Y.c))) == 1
+    @assert length(filter(is_momentum_var, propertynames(Y.f))) == 1
 
     FT = eltype(Y)
     dtγ_ref = Ref(zero(FT))
@@ -71,7 +71,7 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶜ𝔼 = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶜρ = Fields.Field(bidiag_type, axes(Y.f))
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
-    ᶜ𝕋_names = filter(CA.is_tracer_var, propertynames(Y.c))
+    ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
 
     cf = Fields.coordinate_field(axes(Y.c))
     named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
@@ -263,13 +263,13 @@ function _ldiv_serial!(
 
     xᶜρ = xc.ρ
     bᶜρ = bc.ρ
-    ᶜ𝔼_name = filter(CA.is_energy_var, propertynames(xc))[1]
+    ᶜ𝔼_name = filter(is_energy_var, propertynames(xc))[1]
     xᶜ𝔼 = getproperty(xc, ᶜ𝔼_name)
     bᶜ𝔼 = getproperty(bc, ᶜ𝔼_name)
-    ᶜ𝕄_name = filter(CA.is_momentum_var, propertynames(xc))[1]
+    ᶜ𝕄_name = filter(is_momentum_var, propertynames(xc))[1]
     xᶜ𝕄 = getproperty(xc, ᶜ𝕄_name)
     bᶜ𝕄 = getproperty(bc, ᶜ𝕄_name)
-    ᶠ𝕄_name = filter(CA.is_momentum_var, propertynames(xf))[1]
+    ᶠ𝕄_name = filter(is_momentum_var, propertynames(xf))[1]
     xᶠ𝕄 = getproperty(xf, ᶠ𝕄_name).components.data.:1
     bᶠ𝕄 = getproperty(bf, ᶠ𝕄_name).components.data.:1
 
@@ -286,18 +286,18 @@ function _ldiv_serial!(
     @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝕄 = -bᶜ𝕄
-    for ᶜ𝕋_name in filter(CA.is_tracer_var, propertynames(xc))
+    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(xc))
         xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)
         bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)
         ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
         @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
     end
-    for var_name in filter(CA.is_edmf_var, propertynames(xc))
+    for var_name in filter(is_edmf_var, propertynames(xc))
         xᶜ𝕋 = getproperty(xc, var_name)
         bᶜ𝕋 = getproperty(bc, var_name)
         @. xᶜ𝕋 = -bᶜ𝕋
     end
-    for var_name in filter(CA.is_edmf_var, propertynames(xf))
+    for var_name in filter(is_edmf_var, propertynames(xf))
         xᶠ𝕋 = getproperty(xf, var_name)
         bᶠ𝕋 = getproperty(bf, var_name)
         @. xᶠ𝕋 = -bᶠ𝕋

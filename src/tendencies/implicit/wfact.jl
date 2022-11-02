@@ -2,6 +2,10 @@
 ##### Wfact
 #####
 
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
+
 # In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if
 # this is not the case, the additional term should be added to the
 # result of this function.
@@ -63,7 +67,7 @@ function Wfact!(W, Y, p, dtγ, t)
 end
 
 function _Wfact!(W, Y, p, dtγ, t)
-    p.apply_moisture_filter && affect_filter!(Y)
+    # p.apply_moisture_filter && affect_filter!(Y)
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
     ᶜρ = Y.c.ρ
@@ -110,7 +114,7 @@ function _Wfact!(W, Y, p, dtγ, t)
         @. ᶜK[colidx] =
             norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
         thermo_params = CAP.thermodynamics_params(params)
-        CA.thermo_state!(Y, p, ᶜinterp, colidx)
+        thermo_state!(Y, p, ᶜinterp, colidx)
         @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
         # ᶜinterp(ᶠw) =
@@ -343,7 +347,7 @@ function _Wfact!(W, Y, p, dtγ, t)
             @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx].coefs.:2 -= p.ᶠβ_rayleigh_w[colidx]
         end
 
-        for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
             ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
             ᶜρc = getproperty(Y.c, ᶜρc_name)
             # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
