@@ -3,8 +3,8 @@ using Dates
 using Interpolations
 using Statistics
 using Plots
-import ClimaAtmos: SingleColumnModel, SphericalModel
-include("gravity_wave_parameterization.jl")
+import ClimaAtmos
+import ClimaAtmos as CA
 
 const FT = Float64
 # single column test Figure 6 of the Alexander and Dunkerton (1999) paper:
@@ -13,7 +13,7 @@ const FT = Float64
 
 face_z = FT.(0:1e3:0.5e5)
 center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
-model_config = SingleColumnModel()
+model_config = CA.SingleColumnModel()
 
 # compute the source parameters
 function gravity_wave_cache(
@@ -47,7 +47,7 @@ end
 params = gravity_wave_cache(FT; Bm = 0.4, cmax = 150, kwv = 2π / 100e3)
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 
-include(joinpath(@__DIR__, "..", "..", "..", "artifacts", "artifact_funcs.jl"))
+include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
 era_data =
     joinpath(era_single_column_dataset_path(), "box-single_column_test.nc")
@@ -129,7 +129,7 @@ mkpath(output_dir)
 Jan_u = mean(center_u_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_bf = mean(center_bf_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_ρ = mean(center_ρ_mean[:, month .== 1], dims = 2)[:, 1]
-Jan_uforcing = gravity_wave_forcing(
+Jan_uforcing = CA.gravity_wave_forcing(
     model_config,
     Jan_u,
     source_level,
@@ -154,7 +154,7 @@ png(
 April_u = mean(center_u_mean[:, month .== 4], dims = 2)[:, 1]
 April_bf = mean(center_bf_mean[:, month .== 4], dims = 2)[:, 1]
 April_ρ = mean(center_ρ_mean[:, month .== 4], dims = 2)[:, 1]
-April_uforcing = gravity_wave_forcing(
+April_uforcing = CA.gravity_wave_forcing(
     model_config,
     April_u,
     source_level,
@@ -179,7 +179,7 @@ png(
 July_u = mean(center_u_mean[:, month .== 7], dims = 2)[:, 1]
 July_bf = mean(center_bf_mean[:, month .== 7], dims = 2)[:, 1]
 July_ρ = mean(center_ρ_mean[:, month .== 7], dims = 2)[:, 1]
-July_uforcing = gravity_wave_forcing(
+July_uforcing = CA.gravity_wave_forcing(
     model_config,
     July_u,
     source_level,
@@ -204,7 +204,7 @@ png(
 Oct_u = mean(center_u_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_bf = mean(center_bf_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_ρ = mean(center_ρ_mean[:, month .== 10], dims = 2)[:, 1]
-Oct_uforcing = gravity_wave_forcing(
+Oct_uforcing = CA.gravity_wave_forcing(
     model_config,
     Oct_u,
     source_level,

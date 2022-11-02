@@ -2,9 +2,9 @@ using NCDatasets
 using Dates
 using Interpolations
 using Statistics
+import ClimaAtmos
+import ClimaAtmos as CA
 using Plots
-import ClimaAtmos: SingleColumnModel, SphericalModel
-include("gravity_wave_parameterization.jl")
 const FT = Float64
 
 # test Figure 8 of the Alexander and Dunkerton (1999) paper:
@@ -12,7 +12,7 @@ const FT = Float64
 
 face_z = 0:1e3:0.47e5
 center_z = 0.5 .* (face_z[1:(end - 1)] .+ face_z[2:end])
-model_config = SingleColumnModel()
+model_config = CA.SingleColumnModel()
 
 # compute the source parameters
 function gravity_wave_cache(
@@ -46,7 +46,7 @@ end
 params = gravity_wave_cache(FT; Bm = 0.4, cmax = 150, kwv = 2π / 100e3)
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 
-include(joinpath(@__DIR__, "..", "..", "..", "artifacts", "artifact_funcs.jl"))
+include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
 era_data = joinpath(era_global_dataset_path(), "box-era5-monthly.nc")
 
@@ -126,7 +126,7 @@ Jan_bf = mean(center_bf_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_ρ = mean(center_ρ_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_uforcing = zeros(length(lat), length(center_z))
 for j in 1:length(lat)
-    Jan_uforcing[j, :] = gravity_wave_forcing(
+    Jan_uforcing[j, :] = CA.gravity_wave_forcing(
         model_config,
         Jan_u[j, :],
         source_level,

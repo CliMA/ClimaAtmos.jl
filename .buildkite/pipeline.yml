@@ -86,13 +86,13 @@ steps:
         artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=examples examples/hybrid/gravitywave_parameterization/gw_test_3d.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave_parameterization/gw_test_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=examples examples/hybrid/gravitywave_parameterization/gw_test_single_column.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave_parameterization/gw_test_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
   - group: "MPI Examples"

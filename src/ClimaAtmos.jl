@@ -25,6 +25,7 @@ include(joinpath("tendencies", "forcing", "large_scale_advection.jl")) # TODO: s
 include(joinpath("tendencies", "forcing", "subsidence.jl"))
 include(joinpath("tendencies", "forcing", "held_suarez.jl"))
 
+include(joinpath("tendencies", "gravity_wave_parameterization.jl"))
 include(joinpath("tendencies", "hyperdiffusion.jl"))
 include(joinpath("tendencies", "edmf_coriolis.jl"))
 include(joinpath("tendencies", "precipitation.jl"))
