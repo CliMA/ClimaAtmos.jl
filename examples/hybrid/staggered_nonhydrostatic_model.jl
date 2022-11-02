@@ -9,8 +9,6 @@ import Thermodynamics as TD
 
 using ClimaCore.Utilities: half
 
-include("schur_complement_W.jl")
-
 # Note: FT must be defined before `include("staggered_nonhydrostatic_model.jl")`
 
 # Functions on which the model depends:

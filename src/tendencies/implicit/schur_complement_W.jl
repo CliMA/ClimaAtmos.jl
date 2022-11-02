@@ -1,3 +1,7 @@
+#####
+##### Schur Complement for wfact
+#####
+
 using LinearAlgebra
 
 import ClimaCore.Spaces as Spaces
@@ -69,13 +73,9 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = Fields.Field(tridiag_type, axes(Y.f))
     ᶜ𝕋_names = filter(CA.is_tracer_var, propertynames(Y.c))
 
-    function FieldFromNamedTuple(space, nt::NamedTuple)
-        cmv(z) = nt
-        return cmv.(Fields.coordinate_field(space))
-    end
-
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
-        FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
+    cf = Fields.coordinate_field(axes(Y.c))
+    named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = named_tuple_field.(cf)
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))

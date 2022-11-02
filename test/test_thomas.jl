@@ -1,11 +1,6 @@
 using Test
 using LinearAlgebra
-using ClimaAtmos
-using NVTX
-using Colors
-include("../examples/hybrid/nvtx.jl")
-include("../examples/hybrid/schur_complement_W.jl")
-
+using ClimaAtmos: thomas_algorithm!
 
 @testset "Thomas algorithm tests for Float32 and Float64" begin
     FT = Float64
