@@ -45,8 +45,6 @@ include("Parameters.jl")
 import .Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
 
-up_sum(vals::AbstractArray) = reshape(sum(vals; dims = 1), size(vals, 2))
-
 function parse_namelist(
     namelist,
     keys...;
@@ -144,10 +142,8 @@ end
 
 include("Grid.jl")
 include("dycore_api.jl")
-include("diagnostics.jl")
 include("Fields.jl")
 include("types.jl")
-include("name_aliases.jl")
 include("Operators.jl")
 
 include("microphysics_coupling.jl")

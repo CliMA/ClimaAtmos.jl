@@ -51,15 +51,6 @@ kc_top_of_atmos(grid::Grid) = Cent(n_cells(grid))
 kf_top_of_atmos(grid::Grid) = CCO.PlusHalf(n_cells(grid) + 1)
 
 is_surface_center(grid::Grid, k) = k == kc_surface(grid)
-is_toa_center(grid::Grid, k) = k == kc_top_of_atmos(grid)
-is_surface_face(grid::Grid, k) = k == kf_surface(grid)
-is_toa_face(grid::Grid, k) = k == kf_top_of_atmos(grid)
-
-zc_surface(grid::Grid) = grid.zc[kc_surface(grid)]
-zf_surface(grid::Grid) = grid.zf[kf_surface(grid)]
-zc_toa(grid::Grid) = grid.zc[kc_top_of_atmos(grid)]
-zf_toa(grid::Grid) = grid.zf[kf_top_of_atmos(grid)]
-
 real_center_indices(grid::Grid) = CenterIndices(grid)
 
 struct FaceIndices{Nstart, Nstop, G}
@@ -119,59 +110,19 @@ Base.iterate(
 ) where {Nstart, Nstop, T <: FaceIndices{Nstart, Nstop}} =
     state < Nstart ? nothing : (CCO.PlusHalf(state), state - 1)
 
-face_space(grid::Grid) = grid.fs
-center_space(grid::Grid) = grid.cs
-
 #=
-    findfirst_center
     findlast_center
 
 Grid-aware find-first / find-last indices with
 surface/toa (respectively) as the default index
 =#
 
-function findfirst_center(f::Function, grid::Grid)
-    RI = real_center_indices(grid)
-    k = findfirst(f, RI)
-    return RI[isnothing(k) ? kc_surface(grid).i : k]
-end
 function findlast_center(f::Function, grid::Grid)
     RI = real_center_indices(grid)
     k = findlast(f, RI)
     return RI[isnothing(k) ? kc_top_of_atmos(grid).i : k]
 end
-z_findfirst_center(f::F, grid::Grid) where {F} =
-    grid.zc[findfirst_center(f, grid)].z
 z_findlast_center(f::F, grid::Grid) where {F} =
     grid.zc[findlast_center(f, grid)].z
 
 Base.eltype(::Grid{FT}) where {FT} = FT
-
-function number_of_columns(space::CC.Spaces.SpectralElementSpace1D)
-    Nh = CC.Topologies.nlocalelems(space)
-    Nq = CC.Spaces.Quadratures.degrees_of_freedom(
-        CC.Spaces.quadrature_style(space),
-    )
-    return Nh * Nq
-end
-function number_of_columns(space::CC.Spaces.SpectralElementSpace2D)
-    Nh = CC.Topologies.nlocalelems(space)
-    Nq = CC.Spaces.Quadratures.degrees_of_freedom(
-        CC.Spaces.quadrature_style(space),
-    )
-    return Nh * Nq * Nq
-end
-number_of_columns(space::CC.Spaces.ExtrudedFiniteDifferenceSpace) =
-    number_of_columns(space.horizontal_space)
-
-function column_idx_type(space::CC.Spaces.AbstractSpace)
-    colidxtype = nothing
-    CC.Fields.bycolumn(space) do colidx
-        if colidxtype == nothing
-            colidxtype = typeof(colidx)
-        else
-            colidxtype = typejoin(colidxtype, typeof(colidx))
-        end
-    end
-    return colidxtype
-end
