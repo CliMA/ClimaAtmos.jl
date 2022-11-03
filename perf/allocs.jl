@@ -16,7 +16,6 @@ dirs_to_monitor = [
     pkgdir(ClimaAtmos),
     example_dir,
     joinpath(example_dir, "hybrid"),
-    joinpath(example_dir, "hybrid", "sphere"),
     pkgdir(ClimaCore),
     pkgdir(SciMLBase),
     pkgdir(DiffEqBase),
