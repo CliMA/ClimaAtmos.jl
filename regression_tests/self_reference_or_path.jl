@@ -85,6 +85,15 @@ This is very similar to `self_reference_or_path`, except that it always returns 
 function get_main_branch_buildkite_path()
     # TODO: Combine this method with `self_reference_or_path`, above.
     cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
+    if !ispath(cluster_data_prefix)
+        if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
+            error("No path found for comparison against main")
+        else
+            @warn "Buildkite reference data is not available locally; skipping \
+                   comparison against main"
+            return ""
+        end
+    end
 
     buildkite_paths = readdir(cluster_data_prefix; join = true)
     filter!(buildkite_paths) do path
@@ -116,5 +125,7 @@ function get_main_branch_buildkite_path()
 
     most_recent_max_counter_ind = argmax(ref_counters)
     main_branch_data_path = buildkite_paths[most_recent_max_counter_ind]
+    @info "Comparing PR profiles against main with commit id: \
+           $(basename(main_branch_data_path))"
     return main_branch_data_path
 end

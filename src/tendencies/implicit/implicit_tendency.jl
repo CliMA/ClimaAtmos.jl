@@ -79,7 +79,7 @@ function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
 end
 =#
 
-function implicit_tendency!(Yₜ, Y, p, t, colidx)
+function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     FT = Spaces.undertype(axes(Y.c))
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
@@ -94,11 +94,6 @@ function implicit_tendency!(Yₜ, Y, p, t, colidx)
     @. ᶜK[colidx] = norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
     thermo_state!(Y, p, ᶜinterp, colidx)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
-
-    if p.tendency_knobs.has_turbconv
-        parent(Yₜ.c.turbconv[colidx]) .= FT(0)
-        parent(Yₜ.f.turbconv[colidx]) .= FT(0)
-    end
 
     vertical_transport!(
         Yₜ.c.ρ[colidx],
