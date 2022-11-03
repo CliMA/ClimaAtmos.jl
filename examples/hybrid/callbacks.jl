@@ -1,4 +1,7 @@
 import ClimaCore.DataLayouts as DL
+import ClimaAtmos.RRTMGPI as RRTMGPI
+import Thermodynamics as TD
+import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
@@ -8,6 +11,8 @@ import OrdinaryDiffEq as ODE
 import ClimaAtmos.Parameters as CAP
 import DiffEqCallbacks as DEQ
 import ClimaCore: InputOutput
+import Dates
+using Insolation: instantaneous_zenith_angle
 
 function get_callbacks(parsed_args, simulation, model_spec, params)
     FT = eltype(params)
@@ -162,6 +167,136 @@ function turb_conv_affect_filter!(integrator)
     # to support supplying a continuous representation of the
     # solution.
     ODE.u_modified!(integrator, false)
+end
+
+function rrtmgp_model_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    (; ᶜK, ᶜts, T_sfc, params, thermo_dispatcher) = p
+    (; idealized_insolation, idealized_h2o, idealized_clouds) = p
+    (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
+    (; ᶜinterp) = p.operators
+    thermo_params = CAP.thermodynamics_params(params)
+    insolation_params = CAP.insolation_params(params)
+
+    radiation_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
+
+    C123 = Geometry.Covariant123Vector
+    ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
+    ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
+    @. ᶜK = LinearAlgebra.norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+    CA.thermo_state!(Y, p, ᶜinterp)
+    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
+
+    if !(radiation_model.radiation_mode isa RRTMGPI.GrayRadiation)
+        ᶜvmr_h2o = RRTMGPI.array2field(
+            radiation_model.center_volume_mixing_ratio_h2o,
+            axes(Y.c),
+        )
+        if idealized_h2o
+            # slowly increase the relative humidity from 0 to 0.6 to account for
+            # the fact that we have a very unrealistic initial condition
+            max_relative_humidity = FT(0.6)
+            t_increasing_humidity = FT(60 * 60 * 24 * 30)
+            if t < t_increasing_humidity
+                max_relative_humidity *= t / t_increasing_humidity
+            end
+
+            # temporarily store ᶜq_tot in ᶜvmr_h2o
+            ᶜq_tot = ᶜvmr_h2o
+            @. ᶜq_tot =
+                max_relative_humidity * TD.q_vap_saturation(thermo_params, ᶜts)
+
+            # filter ᶜq_tot so that it is monotonically decreasing with z
+            for i in 2:Spaces.nlevels(axes(ᶜq_tot))
+                level = Fields.field_values(Spaces.level(ᶜq_tot, i))
+                prev_level = Fields.field_values(Spaces.level(ᶜq_tot, i - 1))
+                @. level = min(level, prev_level)
+            end
+
+            # assume that ᶜq_vap = ᶜq_tot when computing ᶜvmr_h2o
+            @. ᶜvmr_h2o = TD.shum_to_mixing_ratio(ᶜq_tot, ᶜq_tot)
+        else
+            @. ᶜvmr_h2o = TD.vol_vapor_mixing_ratio(
+                thermo_params,
+                TD.PhasePartition(thermo_params, ᶜts),
+            )
+        end
+    end
+
+    if !idealized_insolation
+        current_datetime = p.simulation.start_date + Dates.Second(round(Int, t)) # current time
+        max_zenith_angle = FT(π) / 2 - eps(FT)
+        irradiance = FT(CAP.tot_solar_irrad(params))
+        au = FT(CAP.astro_unit(params))
+
+        bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
+        if eltype(bottom_coords) <: Geometry.LatLongZPoint
+            solar_zenith_angle = RRTMGPI.array2field(
+                radiation_model.solar_zenith_angle,
+                axes(bottom_coords),
+            )
+            weighted_irradiance = RRTMGPI.array2field(
+                radiation_model.weighted_irradiance,
+                axes(bottom_coords),
+            )
+            ref_insolation_params = Ref(insolation_params)
+            @. insolation_tuple = instantaneous_zenith_angle(
+                current_datetime,
+                Float64(bottom_coords.long),
+                Float64(bottom_coords.lat),
+                ref_insolation_params,
+            ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
+            @. solar_zenith_angle =
+                min(first(insolation_tuple), max_zenith_angle)
+            @. weighted_irradiance =
+                irradiance * (au / last(insolation_tuple))^2
+        else
+            # assume that the latitude and longitude are both 0 for flat space
+            insolation_tuple = instantaneous_zenith_angle(
+                current_datetime,
+                0.0,
+                0.0,
+                insolation_params,
+            )
+            radiation_model.solar_zenith_angle .=
+                min(first(insolation_tuple), max_zenith_angle)
+            radiation_model.weighted_irradiance .=
+                irradiance * (au / last(insolation_tuple))^2
+        end
+    end
+
+    if !idealized_clouds && !(
+        radiation_model.radiation_mode isa RRTMGPI.GrayRadiation ||
+        radiation_model.radiation_mode isa RRTMGPI.ClearSkyRadiation
+    )
+        ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+        ᶜlwp = RRTMGPI.array2field(
+            radiation_model.center_cloud_liquid_water_path,
+            axes(Y.c),
+        )
+        ᶜiwp = RRTMGPI.array2field(
+            radiation_model.center_cloud_ice_water_path,
+            axes(Y.c),
+        )
+        ᶜfrac = RRTMGPI.array2field(
+            radiation_model.center_cloud_fraction,
+            axes(Y.c),
+        )
+        # multiply by 1000 to convert from kg/m^2 to g/m^2
+        @. ᶜlwp =
+            1000 * Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts) * ᶜΔz
+        @. ᶜiwp =
+            1000 * Y.c.ρ * TD.ice_specific_humidity(thermo_params, ᶜts) * ᶜΔz
+        @. ᶜfrac =
+            ifelse(TD.has_condensate(thermo_params, ᶜts), FT(1), FT(0) * ᶜΔz)
+    end
+
+    RRTMGPI.update_fluxes!(radiation_model)
+    RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
 end
 
 function save_to_disk_func(integrator)

@@ -108,7 +108,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     radiation_cache = if radiation_mode isa Nothing
         (; radiation_model = radiation_mode)
     elseif radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        radiation_model_cache(
+        CA.radiation_model_cache(
             Y,
             params,
             radiation_mode;
@@ -116,9 +116,11 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             model_spec.idealized_h2o,
             idealized_clouds,
             thermo_dispatcher,
+            data_loader,
+            ᶜinterp,
         )
     else
-        radiation_model_cache(Y, params, radiation_mode)
+        CA.radiation_model_cache(Y, params, radiation_mode)
     end
 
     return merge(
@@ -214,7 +216,8 @@ function additional_tendency!(Yₜ, Y, p, t)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
-        rad_flux && radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
+        rad_flux &&
+            CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
