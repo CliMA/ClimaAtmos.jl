@@ -76,16 +76,16 @@ scaling_efficiency_clima_atmos =
 ENV["GKSwstype"] = "100"
 Plots.GRBackend()
 plt1 = plot(
-    log2.(nprocs_clima_atmos),
-    log2.(sypd_clima_atmos),
+    nprocs_clima_atmos,
+    sypd_clima_atmos,
     markershape = :circle,
     markercolor = :blue,
-    xticks = (
-        log2.(nprocs_clima_atmos),
-        [string(i) for i in nprocs_clima_atmos],
-    ),
+    xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
+    xaxis = :log,
+    yaxis = :log,
+    minorgrid = true,
     xlabel = "# of MPI processes",
-    ylabel = "log₂(SYPD)",
+    ylabel = "SYPD",
     title = "Simulated years per day",
     label = "ClimaAtmos (Float32)",
     legend = :topleft,
@@ -94,28 +94,18 @@ plt1 = plot(
     right_margin = 10mm,
     bottom_margin = 10mm,
     top_margin = 10mm,
-    annotations = [
-        (
-            log2.(nprocs_clima_atmos) .+ 0.5,
-            log2.(sypd_clima_atmos),
-            [string(trunc(i, digits = 5)) for i in sypd_clima_atmos],
-            5,
-        ),
-    ],
 )
 Plots.png(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 Plots.pdf(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 
 Plots.GRBackend()
 plt2 = plot(
-    log2.(nprocs_clima_atmos),
+    nprocs_clima_atmos,
     cpu_hours_clima_atmos,
     markershape = :circle,
     markercolor = :blue,
-    xticks = (
-        log2.(nprocs_clima_atmos),
-        [string(i) for i in nprocs_clima_atmos],
-    ),
+    xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
+    xaxis = :log,
     xlabel = "# of MPI processes",
     ylabel = "CPU hours",
     title = "Scaling data (T_int = $t_int)",
@@ -132,14 +122,12 @@ Plots.pdf(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
 
 Plots.GRBackend()
 plt3 = plot(
-    log2.(nprocs_clima_atmos),
+    nprocs_clima_atmos,
     scaling_efficiency_clima_atmos,
     markershape = :circle,
     markercolor = :blue,
-    xticks = (
-        log2.(nprocs_clima_atmos),
-        [string(i) for i in nprocs_clima_atmos],
-    ),
+    xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
+    xaxis = :log,
     xlabel = "# of MPI processes",
     ylabel = "Efficiency (T1/N)/TN",
     title = "Scaling efficiency (T_int = $t_int)",
@@ -149,25 +137,18 @@ plt3 = plot(
     left_margin = 10mm,
     bottom_margin = 10mm,
     top_margin = 10mm,
-    annotations = [
-        (
-            log2.(nprocs_clima_atmos),
-            scaling_efficiency_clima_atmos .- 5,
-            [string(i) * "%" for i in scaling_efficiency_clima_atmos],
-            4,
-        ),
-    ],
 )
 Plots.png(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
 Plots.pdf(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
 
 Plots.GRBackend()
 plt4 = plot(
-    log2.(ncols_per_process),
+    ncols_per_process,
     scaling_efficiency_clima_atmos,
     markershape = :circle,
     markercolor = :blue,
-    xticks = (log2.(ncols_per_process), [string(i) for i in ncols_per_process]),
+    xaxis = :log,
+    minorticks = true,
     xlabel = "# of columns per process (with 45 levels)",
     ylabel = "Efficiency (T1/N)/TN",
     title = "Scaling efficiency (T_int = $t_int)",
@@ -177,14 +158,6 @@ plt4 = plot(
     left_margin = 10mm,
     bottom_margin = 10mm,
     top_margin = 10mm,
-    annotations = [
-        (
-            ncols_per_process,
-            scaling_efficiency_clima_atmos .- 5,
-            [string(i) * "%" for i in scaling_efficiency_clima_atmos],
-            4,
-        ),
-    ],
 )
 Plots.png(
     plt4,
