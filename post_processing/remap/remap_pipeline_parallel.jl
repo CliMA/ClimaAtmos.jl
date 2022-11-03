@@ -7,11 +7,9 @@ julia -p 4 remap_pipeline_parallel.jl
 using Distributed
 @everywhere using Pkg
 @everywhere begin
-    ca_dir = joinpath(@__DIR__, "..", "..", "..")
+    ca_dir = joinpath(@__DIR__, "..", "..")
     Pkg.activate(joinpath(ca_dir, "examples"))
-    include(
-        joinpath(ca_dir, "examples", "hybrid", "sphere", "remap_pipeline.jl"),
-    )
+    include(joinpath(@__DIR__, "remap_pipeline.jl"))
 end
 (; remap_tmpdir, data_files, out_dir, nlat, nlon) = get_params()
 
