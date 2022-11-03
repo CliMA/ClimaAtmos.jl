@@ -2,10 +2,6 @@ import ClimaCore: Fields, InputOutput, Geometry
 using Plots
 
 function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
-
-    PR_filename = joinpath(folder, hdf5_filename)
-    main_filename = joinpath(main_branch_data_path, hdf5_filename)
-
     args =
         (; tickfontsize = 13, guidefontsize = 16, legendfontsize = 10, lw = 3)
 
@@ -89,8 +85,12 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         plot!(p16, parent(D.env_HQTcov)[:], zc; label = "$data_source")
     end
 
+    PR_filename = joinpath(folder, hdf5_filename)
     add_to_plots!(PR_filename; data_source = "PR")
-    add_to_plots!(main_filename; data_source = "main")
+    if ispath(main_branch_data_path)
+        main_filename = joinpath(main_branch_data_path, hdf5_filename)
+        add_to_plots!(main_filename; data_source = "main")
+    end
 
     more_args = (;
         size = (2400.0, 1500.0),

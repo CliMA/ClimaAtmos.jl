@@ -169,7 +169,12 @@ end
 function implicit_tendency!(Yₜ, Y, p, t)
     @nvtx "implicit tendency" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
-            CA.implicit_tendency!(Yₜ, Y, p, t, colidx)
+            CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
+
+            if p.tendency_knobs.has_turbconv
+                parent(Yₜ.c.turbconv[colidx]) .= zero(eltype(Yₜ))
+                parent(Yₜ.f.turbconv[colidx]) .= zero(eltype(Yₜ))
+            end
         end
     end
 end
