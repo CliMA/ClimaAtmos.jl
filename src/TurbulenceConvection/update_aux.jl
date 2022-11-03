@@ -70,7 +70,7 @@ function update_aux!(
         #####
         ##### Set primitive variables
         #####
-        e_pot = geopotential(param_set, grid.zc.z[k])
+        e_pot = geopotential(thermo_params, grid.zc.z[k])
         @inbounds for i in 1:N_up
             if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
                 aux_up[i].θ_liq_ice[k] =
@@ -138,7 +138,7 @@ function update_aux!(
         LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
 
     @inbounds for k in real_center_indices(grid)
-        e_pot = geopotential(param_set, grid.zc.z[k])
+        e_pot = geopotential(thermo_params, grid.zc.z[k])
 
         #####
         ##### decompose_environment

@@ -39,8 +39,7 @@ function set_thermo_state_pθq!(Y, p, colidx)
     nothing
 end
 
-function set_grid_mean_from_thermo_state!(param_set, state, grid)
-    thermo_params = TCP.thermodynamics_params(param_set)
+function set_grid_mean_from_thermo_state!(thermo_params, state, grid)
     Ic = CCO.InterpolateF2C()
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     ts_gm = TC.center_aux_grid_mean_ts(state)
@@ -60,7 +59,7 @@ function set_grid_mean_from_thermo_state!(param_set, state, grid)
             thermo_params,
             ts_gm,
             LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(prog_gm_f.w))) / 2,
-            TC.geopotential(param_set, grid.zc.z),
+            TC.geopotential(thermo_params, grid.zc.z),
         )
 
     @. prog_gm.ρq_tot = ρ_c * aux_gm.q_tot
@@ -69,34 +68,27 @@ function set_grid_mean_from_thermo_state!(param_set, state, grid)
     return nothing
 end
 
-function assign_thermo_aux!(state, grid, moisture_model, param_set)
+function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
-    thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    ts_gm = TC.center_aux_grid_mean_ts(state)
+    ᶜts = TC.center_aux_grid_mean_ts(state)
     p_c = TC.center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
     @. ρ_f = If(ρ_c)
 
-    @inbounds for k in TC.real_center_indices(grid)
-        ts = ts_gm[k]
-        aux_gm.q_tot[k] = prog_gm.ρq_tot[k] / ρ_c[k]
-        aux_gm.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts)
-        aux_gm.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts)
-        aux_gm.T[k] = TD.air_temperature(thermo_params, ts)
-        aux_gm.RH[k] = TD.relative_humidity(thermo_params, ts)
-        aux_gm.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts)
-        aux_gm.h_tot[k] = TD.total_specific_enthalpy(
-            thermo_params,
-            ts,
-            prog_gm.ρe_tot[k] / ρ_c[k],
-        )
-        p_c[k] = TD.air_pressure(thermo_params, ts)
-        aux_gm.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts)
-    end
+    @. aux_gm.q_tot = prog_gm.ρq_tot / ρ_c
+    @. aux_gm.q_liq = TD.liquid_specific_humidity(thermo_params, ᶜts)
+    @. aux_gm.q_ice = TD.ice_specific_humidity(thermo_params, ᶜts)
+    @. aux_gm.T = TD.air_temperature(thermo_params, ᶜts)
+    @. aux_gm.RH = TD.relative_humidity(thermo_params, ᶜts)
+    @. aux_gm.θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ᶜts)
+    @. aux_gm.h_tot =
+        TD.total_specific_enthalpy(thermo_params, ᶜts, prog_gm.ρe_tot / ρ_c)
+    @. p_c = TD.air_pressure(thermo_params, ᶜts)
+    @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ᶜts)
     return
 end
 

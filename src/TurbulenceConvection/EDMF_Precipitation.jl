@@ -126,7 +126,7 @@ function compute_precipitation_sink_tendencies(
 
         I_l = TD.internal_energy_liquid(thermo_params, ts)
         I_i = TD.internal_energy_ice(thermo_params, ts)
-        Φ = geopotential(param_set, grid.zc.z[k])
+        Φ = geopotential(thermo_params, grid.zc.z[k])
 
         α_evp = TCP.microph_scaling(param_set)
         α_dep_sub = TCP.microph_scaling_dep_sub(param_set)
