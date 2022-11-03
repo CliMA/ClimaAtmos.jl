@@ -69,145 +69,153 @@ function radiation_model_cache(
     else
         latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    input_data =
-        NC.Dataset(rrtmgp_artifact(joinpath("atmos_state", "clearsky_as.nc")))
-    if radiation_mode isa RRTMGPI.GrayRadiation
-        kwargs = (;
-            lapse_rate = 3.5,
-            optical_thickness_parameter = (@. 7.2 +
-                                              (1.8 - 7.2) * sind(latitude)^2),
-        )
-    else
-        # the pressure and ozone concentrations are provided for each of 100
-        # sites, which we average across
-        n = input_data.dim["layer"]
-        input_center_pressure =
-            vec(mean(reshape(input_data["pres_layer"][:, :], n, :); dims = 2))
-        # the first values along the third dimension of the ozone concentration
-        # data are the present-day values
-        input_center_volume_mixing_ratio_o3 =
-            vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
-
-        # interpolate the ozone concentrations to our initial pressures (set the
-        # kinetic energy to 0 when computing the pressure using total energy)
-        pressure2ozone =
-            Spline1D(input_center_pressure, input_center_volume_mixing_ratio_o3)
-        ᶜts = CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp, 0)
-        ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
-        center_volume_mixing_ratio_o3 =
-            RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
-
-        # the first value for each global mean volume mixing ratio is the
-        # present-day value
-        input_vmr(name) =
-            input_data[name][1] * parse(FT, input_data[name].attrib["units"])
-        kwargs = (;
-            use_global_means_for_well_mixed_gases = true,
-            center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
-            center_volume_mixing_ratio_o3,
-            volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
-            volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
-            volume_mixing_ratio_co = input_vmr("carbon_monoxide_GM"),
-            volume_mixing_ratio_ch4 = input_vmr("methane_GM"),
-            volume_mixing_ratio_o2 = input_vmr("oxygen_GM"),
-            volume_mixing_ratio_n2 = input_vmr("nitrogen_GM"),
-            volume_mixing_ratio_ccl4 = input_vmr("carbon_tetrachloride_GM"),
-            volume_mixing_ratio_cfc11 = input_vmr("cfc11_GM"),
-            volume_mixing_ratio_cfc12 = input_vmr("cfc12_GM"),
-            volume_mixing_ratio_cfc22 = input_vmr("hcfc22_GM"),
-            volume_mixing_ratio_hfc143a = input_vmr("hfc143a_GM"),
-            volume_mixing_ratio_hfc125 = input_vmr("hfc125_GM"),
-            volume_mixing_ratio_hfc23 = input_vmr("hfc23_GM"),
-            volume_mixing_ratio_hfc32 = input_vmr("hfc32_GM"),
-            volume_mixing_ratio_hfc134a = input_vmr("hfc134a_GM"),
-            volume_mixing_ratio_cf4 = input_vmr("cf4_GM"),
-            volume_mixing_ratio_no2 = 1e-8, # not available in input_data
-            latitude,
-        )
-        if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
+    data_loader(joinpath("atmos_state", "clearsky_as.nc")) do input_data
+        if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
-                kwargs...,
-                center_cloud_liquid_effective_radius = 12,
-                center_cloud_ice_effective_radius = 95,
-                ice_roughness = 2,
+                lapse_rate = 3.5,
+                optical_thickness_parameter = (@. 7.2 +
+                                                  (1.8 - 7.2) *
+                                                  sind(latitude)^2),
             )
-            ᶜz = Fields.coordinate_field(Y.c).z
-            ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
-            if idealized_clouds # icy cloud on top and wet cloud on bottom
-                ᶜis_bottom_cloud = Fields.Field(
-                    DataLayouts.replace_basetype(Fields.field_values(ᶜz), Bool),
-                    axes(Y.c),
-                ) # need to fix several ClimaCore bugs in order to simplify this
-                ᶜis_top_cloud = similar(ᶜis_bottom_cloud)
-                @. ᶜis_bottom_cloud = ᶜz > 1e3 && ᶜz < 1.5e3
-                @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
+        else
+            # the pressure and ozone concentrations are provided for each of 100
+            # sites, which we average across
+            n = input_data.dim["layer"]
+            input_center_pressure = vec(
+                mean(reshape(input_data["pres_layer"][:, :], n, :); dims = 2),
+            )
+            # the first values along the third dimension of the ozone concentration
+            # data are the present-day values
+            input_center_volume_mixing_ratio_o3 =
+                vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
+
+            # interpolate the ozone concentrations to our initial pressures (set the
+            # kinetic energy to 0 when computing the pressure using total energy)
+            pressure2ozone = Spline1D(
+                input_center_pressure,
+                input_center_volume_mixing_ratio_o3,
+            )
+            ᶜts =
+                CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp, 0)
+            ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
+            center_volume_mixing_ratio_o3 =
+                RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
+
+            # the first value for each global mean volume mixing ratio is the
+            # present-day value
+            input_vmr(name) =
+                input_data[name][1] *
+                parse(FT, input_data[name].attrib["units"])
+            kwargs = (;
+                use_global_means_for_well_mixed_gases = true,
+                center_volume_mixing_ratio_h2o = NaN, # initialize in tendency
+                center_volume_mixing_ratio_o3,
+                volume_mixing_ratio_co2 = input_vmr("carbon_dioxide_GM"),
+                volume_mixing_ratio_n2o = input_vmr("nitrous_oxide_GM"),
+                volume_mixing_ratio_co = input_vmr("carbon_monoxide_GM"),
+                volume_mixing_ratio_ch4 = input_vmr("methane_GM"),
+                volume_mixing_ratio_o2 = input_vmr("oxygen_GM"),
+                volume_mixing_ratio_n2 = input_vmr("nitrogen_GM"),
+                volume_mixing_ratio_ccl4 = input_vmr("carbon_tetrachloride_GM"),
+                volume_mixing_ratio_cfc11 = input_vmr("cfc11_GM"),
+                volume_mixing_ratio_cfc12 = input_vmr("cfc12_GM"),
+                volume_mixing_ratio_cfc22 = input_vmr("hcfc22_GM"),
+                volume_mixing_ratio_hfc143a = input_vmr("hfc143a_GM"),
+                volume_mixing_ratio_hfc125 = input_vmr("hfc125_GM"),
+                volume_mixing_ratio_hfc23 = input_vmr("hfc23_GM"),
+                volume_mixing_ratio_hfc32 = input_vmr("hfc32_GM"),
+                volume_mixing_ratio_hfc134a = input_vmr("hfc134a_GM"),
+                volume_mixing_ratio_cf4 = input_vmr("cf4_GM"),
+                volume_mixing_ratio_no2 = 1e-8, # not available in input_data
+                latitude,
+            )
+            if !(radiation_mode isa RRTMGPI.ClearSkyRadiation)
                 kwargs = (;
                     kwargs...,
-                    center_cloud_liquid_water_path = RRTMGPI.field2array(
-                        @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
-                    ),
-                    center_cloud_ice_water_path = RRTMGPI.field2array(
-                        @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
-                    ),
-                    center_cloud_fraction = RRTMGPI.field2array(
-                        @. ifelse(
-                            ᶜis_bottom_cloud || ᶜis_top_cloud,
-                            FT(1),
-                            FT(0) * ᶜΔz,
-                        )
-                    ),
+                    center_cloud_liquid_effective_radius = 12,
+                    center_cloud_ice_effective_radius = 95,
+                    ice_roughness = 2,
                 )
-            else
-                kwargs = (;
-                    kwargs...,
-                    center_cloud_liquid_water_path = NaN, # initialized in callback
-                    center_cloud_ice_water_path = NaN, # initialized in callback
-                    center_cloud_fraction = NaN, # initialized in callback
-                )
+                ᶜz = Fields.coordinate_field(Y.c).z
+                ᶜΔz = Fields.local_geometry_field(Y.c).∂x∂ξ.components.data.:9
+                if idealized_clouds # icy cloud on top and wet cloud on bottom
+                    ᶜis_bottom_cloud = Fields.Field(
+                        DataLayouts.replace_basetype(
+                            Fields.field_values(ᶜz),
+                            Bool,
+                        ),
+                        axes(Y.c),
+                    ) # need to fix several ClimaCore bugs in order to simplify this
+                    ᶜis_top_cloud = similar(ᶜis_bottom_cloud)
+                    @. ᶜis_bottom_cloud = ᶜz > 1e3 && ᶜz < 1.5e3
+                    @. ᶜis_top_cloud = ᶜz > 4e3 && ᶜz < 5e3
+                    kwargs = (;
+                        kwargs...,
+                        center_cloud_liquid_water_path = RRTMGPI.field2array(
+                            @. ifelse(ᶜis_bottom_cloud, FT(0.002) * ᶜΔz, FT(0))
+                        ),
+                        center_cloud_ice_water_path = RRTMGPI.field2array(
+                            @. ifelse(ᶜis_top_cloud, FT(0.001) * ᶜΔz, FT(0))
+                        ),
+                        center_cloud_fraction = RRTMGPI.field2array(
+                            @. ifelse(
+                                ᶜis_bottom_cloud || ᶜis_top_cloud,
+                                FT(1),
+                                FT(0) * ᶜΔz,
+                            )
+                        ),
+                    )
+                else
+                    kwargs = (;
+                        kwargs...,
+                        center_cloud_liquid_water_path = NaN, # initialized in callback
+                        center_cloud_ice_water_path = NaN, # initialized in callback
+                        center_cloud_fraction = NaN, # initialized in callback
+                    )
+                end
             end
         end
-    end
 
-    if RRTMGPI.requires_z(interpolation) ||
-       RRTMGPI.requires_z(bottom_extrapolation)
-        kwargs = (;
+        if RRTMGPI.requires_z(interpolation) ||
+           RRTMGPI.requires_z(bottom_extrapolation)
+            kwargs = (;
+                kwargs...,
+                center_z = RRTMGPI.field2array(Fields.coordinate_field(Y.c).z),
+                face_z = RRTMGPI.field2array(Fields.coordinate_field(Y.f).z),
+            )
+        end
+
+        if idealized_insolation # perpetual equinox with no diurnal cycle
+            solar_zenith_angle = FT(π) / 3
+            weighted_irradiance =
+                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
+                   (4 * cos(solar_zenith_angle))
+        else
+            solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
+        end
+
+        radiation_model = RRTMGPI.RRTMGPModel(
+            rrtmgp_params,
+            data_loader,
+            Float64,
+            RRTMGP.Device.array_type();
+            ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
+            domain_nlay = Spaces.nlevels(axes(Y.c)),
+            radiation_mode,
+            interpolation,
+            bottom_extrapolation,
+            add_isothermal_boundary_layer = true,
+            center_pressure = NaN, # initialized in callback
+            center_temperature = NaN, # initialized in callback
+            surface_temperature = NaN, # initialized in callback
+            surface_emissivity = 1,
+            direct_sw_surface_albedo = 0.38,
+            diffuse_sw_surface_albedo = 0.38,
+            solar_zenith_angle,
+            weighted_irradiance,
             kwargs...,
-            center_z = RRTMGPI.field2array(Fields.coordinate_field(Y.c).z),
-            face_z = RRTMGPI.field2array(Fields.coordinate_field(Y.f).z),
         )
     end
-
-    if idealized_insolation # perpetual equinox with no diurnal cycle
-        solar_zenith_angle = FT(π) / 3
-        weighted_irradiance =
-            @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-               (4 * cos(solar_zenith_angle))
-    else
-        solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
-    end
-
-    radiation_model = RRTMGPI.RRTMGPModel(
-        rrtmgp_params,
-        data_loader,
-        Float64,
-        RRTMGP.Device.array_type();
-        ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
-        domain_nlay = Spaces.nlevels(axes(Y.c)),
-        radiation_mode,
-        interpolation,
-        bottom_extrapolation,
-        add_isothermal_boundary_layer = true,
-        center_pressure = NaN, # initialized in callback
-        center_temperature = NaN, # initialized in callback
-        surface_temperature = NaN, # initialized in callback
-        surface_emissivity = 1,
-        direct_sw_surface_albedo = 0.38,
-        diffuse_sw_surface_albedo = 0.38,
-        solar_zenith_angle,
-        weighted_irradiance,
-        kwargs...,
-    )
-    close(input_data)
     return (;
         idealized_insolation,
         idealized_h2o,
