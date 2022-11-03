@@ -97,6 +97,7 @@ function turbconv_cache(
         surf_thermo_state,
         aux = get_aux(edmf, Y, FT),
         precip_model,
+        Y_filtered = similar(Y),
     )
     return (; edmf_cache = cache, turbconv_model)
 end
@@ -152,11 +153,17 @@ end
 
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt, compressibility_model) = p
-    (; edmf, param_set, surf_params, surf_thermo_state) = edmf_cache
+    (; edmf, param_set, surf_params, surf_thermo_state, Y_filtered) = edmf_cache
     (; precip_model, test_consistency, ᶠp₀, ᶜp₀) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
-    state = TC.tc_column_state(Y, p, Yₜ, colidx)
+
+    # Note: We could also do Y_filtered .= Y further upstream if needed.
+    Y_filtered.c[colidx] .= Y.c[colidx]
+    Y_filtered.f[colidx] .= Y.f[colidx]
+
+    state = TC.tc_column_state(Y_filtered, p, Yₜ, colidx)
+
     grid = TC.Grid(state)
     if test_consistency
         parent(state.aux.face) .= NaN
@@ -196,6 +203,14 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     # TODO: incrementally disable this and enable proper grid mean terms
     compute_gm_tendencies!(edmf, grid, state, surf, tc_params)
+
+    # Note: This "filter relaxation tendency" can be scaled down if needed, but
+    # it must be present in order to prevent Y and Y_filtered from diverging
+    # during each timestep.
+    Yₜ.c.turbconv[colidx] .+=
+        (Y_filtered.c.turbconv[colidx] .- Y.c.turbconv[colidx]) ./ Δt
+    Yₜ.f.turbconv[colidx] .+=
+        (Y_filtered.f.turbconv[colidx] .- Y.f.turbconv[colidx]) ./ Δt
     return nothing
 end
 
