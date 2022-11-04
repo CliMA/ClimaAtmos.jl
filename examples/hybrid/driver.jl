@@ -254,7 +254,7 @@ import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
 
-if simulation.restart
+@time "Allocating Y" if simulation.restart
     (Y, t_start) = get_state_restart(comms_ctx)
     spaces = get_spaces_restart(Y)
 else
@@ -265,20 +265,23 @@ end
 
 p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
 if parsed_args["turbconv"] == "edmf"
-    TCU.init_tc!(Y, p, params)
+    @time "init_tc!" TCU.init_tc!(Y, p, params)
 end
 
 # Print tendencies:
 # @info "Model composition" p.model_spec...
 @info "Tendencies" p.tendency_knobs...
 
-ode_config = ode_configuration(Y, parsed_args, model_spec)
+@time "ode_configuration" ode_config =
+    ode_configuration(Y, parsed_args, model_spec)
 
 include("callbacks.jl")
 
-callback = get_callbacks(parsed_args, simulation, model_spec, params)
+@time "get_callbacks" callback =
+    get_callbacks(parsed_args, simulation, model_spec, params)
 tspan = (t_start, simulation.t_end)
-integrator = get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
+@time "get_integrator" integrator =
+    get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
