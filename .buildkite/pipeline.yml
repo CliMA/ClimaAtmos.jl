@@ -40,6 +40,11 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
+      - echo "--- Instantiate ode compat examples"
+      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.status()'"
+
       - echo "--- Instantiate perf"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
@@ -165,7 +170,7 @@ steps:
     steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) IMEXEuler"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 40hours --dt 60secs --ode_algo ODE.IMEXEuler --max_newton_iters 2 --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
+        command: "julia --color=yes --project=ode_compat_examples examples/hybrid/driver.jl --t_end 40hours --dt 60secs --ode_algo ODE.IMEXEuler --max_newton_iters 2 --job_id sphere_baroclinic_wave_rhoe_IMEXEuler"
         artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) Float64"
@@ -283,7 +288,7 @@ steps:
     steps:
 
       - label: ":computer: Unthreaded performance target (Rosenbrock)"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded_rosenbrock/*"
         agents:
           slurm_mem: 20GB
