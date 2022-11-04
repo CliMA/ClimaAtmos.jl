@@ -1,5 +1,5 @@
 import ClimaCore.DataLayouts as DL
-import ClimaAtmos.RRTMGPI as RRTMGPI
+import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
 import LinearAlgebra
 import ClimaCore.Fields
