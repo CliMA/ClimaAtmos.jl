@@ -334,7 +334,7 @@ function get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
     show_progress_bar = isinteractive()
 
-    problem = if parsed_args["split_ode"]
+    @time "Define problem" problem = if parsed_args["split_ode"]
         remaining_func =
             startswith(parsed_args["ode_algo"], "ODE.") ?
             remaining_tendency! :
@@ -375,7 +375,7 @@ function get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     else
         [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
     end # ensure that tspan[2] is always saved
-    integrator =
+    @time "Define integrator" integrator =
         ODE.init(problem, ode_algo; saveat, callback, dt, integrator_kwargs...)
     return integrator
 end
