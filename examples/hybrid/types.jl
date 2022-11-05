@@ -329,7 +329,7 @@ function ode_configuration(Y, parsed_args, model_spec)
     return (; jac_kwargs, alg_kwargs, ode_algorithm)
 end
 
-function get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
+function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     (; jac_kwargs, alg_kwargs, ode_algorithm) = ode_config
     (; dt) = p.simulation
     FT = eltype(tspan)
@@ -377,7 +377,12 @@ function get_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     else
         [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
     end # ensure that tspan[2] is always saved
-    @time "Define integrator" integrator =
-        ODE.init(problem, ode_algo; saveat, callback, dt, integrator_kwargs...)
+    args = (problem, ode_algo)
+    kwargs = (; saveat, callback, dt, integrator_kwargs...)
+    return (args, kwargs)
+end
+
+function get_integrator(args, kwargs)
+    @time "Define integrator" integrator = ODE.init(args...; kwargs...)
     return integrator
 end
