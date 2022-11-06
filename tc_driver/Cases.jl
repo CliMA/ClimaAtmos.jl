@@ -170,7 +170,7 @@ function initialize_profiles(
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
     thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_falg)
+    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
     p_c = TC.center_aux_grid_mean_p(state)
 
@@ -754,7 +754,7 @@ function initialize_profiles(
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_T
-    thermo_falg = "temperature"
+    thermo_flag = "temperature"
     params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
     prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
