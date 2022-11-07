@@ -199,9 +199,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
         hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
-        if p.subsidence isa CA.Subsidence
-            CA.subsidence_tendency!(Yₜ, Y, p, t, colidx)
-        end
+        CA.subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
         CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
         CA.large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
         if vert_diff
