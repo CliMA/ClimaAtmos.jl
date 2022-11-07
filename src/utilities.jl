@@ -16,6 +16,32 @@ is_tracer_var(symbol) = !(
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
 fast_pow(x::FT, y::FT) where {FT <: AbstractFloat} = exp(y * log(x))
 
+"""
+    time_from_filename(file)
+
+Returns the time (Float64) from a given filename
+
+## Example
+```
+time_from_filename("day4.46906.hdf5")
+392506.0
+```
+"""
+function time_from_filename(file)
+    arr = split(basename(file), ".")
+    day = parse(Float64, replace(arr[1], "day" => ""))
+    sec = parse(Float64, arr[2])
+    return day * (60 * 60 * 24) + sec
+end
+
+"""
+    sort_files_by_time(files)
+
+Sorts an array of files by the time,
+determined by the filename.
+"""
+sort_files_by_time(files) =
+    permute!(files, sortperm(time_from_filename.(files)))
 
 #####
 ##### State debugging tools

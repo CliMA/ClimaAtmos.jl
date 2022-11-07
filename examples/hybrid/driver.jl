@@ -332,15 +332,11 @@ if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
         paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
-    elseif is_column_without_edmf(parsed_args)
-        custom_postprocessing(sol, simulation.output_dir, p)
-    elseif is_column_edmf(parsed_args)
-        postprocessing_edmf(sol, simulation.output_dir, fps)
     elseif is_solid_body(parsed_args)
         postprocessing(sol, simulation.output_dir, fps)
     elseif is_box(parsed_args)
         postprocessing_box(sol, simulation.output_dir)
-    else
+    elseif atmos.forcing_type isa CA.HeldSuarezForcing
         paperplots_held_suarez(atmos, sol, simulation.output_dir, p, 90, 180)
     end
 end
@@ -371,6 +367,12 @@ if parsed_args["debugging_tc"]
 
     day = floor(Int, simulation.t_end / (60 * 60 * 24))
     sec = floor(Int, simulation.t_end % (60 * 60 * 24))
+
+    plot_tc_contours(
+        simulation.output_dir;
+        main_branch_data_path,
+        name_match = simulation.job_id,
+    )
     plot_tc_profiles(
         simulation.output_dir;
         hdf5_filename = "day$day.$sec.hdf5",
