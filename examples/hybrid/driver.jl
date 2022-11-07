@@ -107,9 +107,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
     thermo_dispatcher = CA.ThermoDispatcher(model_spec)
     compressibility_model = model_spec.compressibility_model
 
-    radiation_cache = if radiation_mode isa Nothing
-        (; radiation_model = radiation_mode)
-    elseif radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+    radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
             Y,
             params,
@@ -168,7 +166,6 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         (;
             tendency_knobs = (;
                 hs_forcing = forcing_type isa HeldSuarezForcing,
-                rad_flux = !isnothing(radiation_mode),
                 vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
@@ -202,7 +199,7 @@ function additional_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
-        (; rad_flux, vert_diff, hs_forcing) = p.tendency_knobs
+        (; vert_diff, hs_forcing) = p.tendency_knobs
         (; has_turbconv) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
@@ -218,8 +215,7 @@ function additional_tendency!(Yₜ, Y, p, t)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
-        rad_flux &&
-            CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
+        CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
