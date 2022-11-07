@@ -227,24 +227,26 @@ function get_state_restart(comms_ctx)
     return (Y, t_start)
 end
 
+import ClimaAtmos.InitialConditions as ICs
+
 function get_state_fresh_start(parsed_args, spaces, params, model_spec)
     (; center_space, face_space) = spaces
     FT = eltype(params)
     t_start = FT(0)
 
     center_initial_condition = if is_baro_wave(parsed_args)
-        center_initial_condition_baroclinic_wave
+        ICs.center_initial_condition_baroclinic_wave
     elseif parsed_args["config"] == "sphere"
-        center_initial_condition_3d
+        ICs.center_initial_condition_3d
     elseif parsed_args["config"] == "column"
-        center_initial_condition_column
+        ICs.center_initial_condition_column
     elseif parsed_args["config"] == "box"
-        center_initial_condition_3d
+        ICs.center_initial_condition_box
     end
 
     Y = init_state(
         center_initial_condition,
-        face_initial_condition,
+        ICs.face_initial_condition,
         center_space,
         face_space,
         params,
