@@ -149,8 +149,7 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         CA.subsidence_cache(Y, model_spec.subsidence),
         CA.large_scale_advection_cache(Y, model_spec.ls_adv),
         CA.edmf_coriolis_cache(Y, model_spec.edmf_coriolis),
-        forcing_type isa CA.HeldSuarezForcing ? CA.held_suarez_cache(Y) :
-        NamedTuple(),
+        CA.forcing_cache(Y, forcing_type),
         radiation_cache,
         vert_diff ?
         CA.vertical_diffusion_boundary_layer_cache(
@@ -165,7 +164,6 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         CA.gravity_wave_cache(model_spec.model_config, Y, FT) : NamedTuple(),
         (;
             tendency_knobs = (;
-                hs_forcing = forcing_type isa HeldSuarezForcing,
                 vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
@@ -195,10 +193,10 @@ function additional_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
-        (; vert_diff, hs_forcing) = p.tendency_knobs
+        (; vert_diff) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
-        hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+        CA.forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
         CA.subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
         CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
         CA.large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
