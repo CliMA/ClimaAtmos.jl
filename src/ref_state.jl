@@ -9,20 +9,6 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Topologies as Topologies
 
 """
-    compute_ref_pressure!(p::Fields.ColumnField, logpressure_fun)
-
-Computes the hydrostatically balanced reference pressure, given
- - `logpressure_fun` a callable object by `logpressure_fun(z)`,
-    which returns the log of the pressure
- - `p` the air pressure field (output)
-"""
-function compute_ref_pressure!(p::Fields.ColumnField, logpressure_fun)
-    z = Fields.coordinate_field(axes(p)).z
-    @. p .= exp(logpressure_fun(z))
-    return nothing
-end
-
-"""
     compute_ref_density!(
         ρ::Fields.ColumnField,
         p::Fields.ColumnField,

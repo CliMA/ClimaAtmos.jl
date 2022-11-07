@@ -58,12 +58,18 @@ function get_edmf_cache(
     )
     edmf = turbconv_model
     ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])
+    ᶜspace_1 = axes(Y.c[CC.Fields.ColumnIndex((1, 1), 1)])
     logpressure_fun =
         CA.log_pressure_profile(ᶠspace_1, thermo_params, surf_thermo_state)
+    ᶠz = CC.Fields.coordinate_field(ᶠspace_1).z
+    ᶜz = CC.Fields.coordinate_field(ᶜspace_1).z
+    ᶠp₀ = @. exp(logpressure_fun(ᶠz))
+    ᶜp₀ = @. exp(logpressure_fun(ᶜz))
     @info "EDMFModel: \n$(summary(edmf))"
     return (;
         edmf,
-        logpressure_fun,
+        ᶠp₀,
+        ᶜp₀,
         case,
         test_consistency,
         surf_params,
@@ -82,8 +88,7 @@ end
 
 function init_tc!(Y, p, params, colidx)
 
-    (; edmf, surf_thermo_state, logpressure_fun, surf_params, case) =
-        p.edmf_cache
+    (; edmf, surf_thermo_state, ᶠp₀, ᶜp₀, surf_params, case) = p.edmf_cache
     tc_params = CAP.turbconv_params(params)
 
     FT = eltype(edmf)
@@ -95,8 +100,8 @@ function init_tc!(Y, p, params, colidx)
     FT = eltype(grid)
     t = FT(0)
 
-    CA.compute_ref_pressure!(p.ᶜp[colidx], logpressure_fun)
-    CA.compute_ref_pressure!(p.edmf_cache.aux.face.p[colidx], logpressure_fun)
+    @. p.ᶜp[colidx] = ᶜp₀
+    @. p.edmf_cache.aux.face.p[colidx] = ᶠp₀
 
     CA.compute_ref_density!(
         Y.c.ρ[colidx],
@@ -127,7 +132,7 @@ end
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
     (; edmf_cache, Δt, compressibility_model) = p
     (; edmf, param_set, surf_params, surf_thermo_state) = edmf_cache
-    (; precip_model, test_consistency, logpressure_fun) = edmf_cache
+    (; precip_model, test_consistency, ᶠp₀, ᶜp₀) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
     state = TC.tc_column_state(Y, p, Yₜ, colidx)
@@ -141,10 +146,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
         # TODO: how should this be computed if compressible?
         # pressure at cell centers have been populated, we need
         # pressure BCs
-        CA.compute_ref_pressure!(
-            p.edmf_cache.aux.face.p[colidx],
-            logpressure_fun,
-        )
+        @. p.edmf_cache.aux.face.p[colidx] = ᶠp₀
         CA.compute_ref_density!(
             p.edmf_cache.aux.face.ρ[colidx],
             p.edmf_cache.aux.face.p[colidx],
