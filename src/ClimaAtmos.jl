@@ -17,6 +17,8 @@ include("ref_state.jl")
 include("thermo_state.jl")
 include("precomputed_quantities.jl")
 
+include(joinpath("InitialConditions", "InitialConditions.jl"))
+
 include(joinpath("tendencies", "implicit", "wfact.jl"))
 include(joinpath("tendencies", "implicit", "schur_complement_W.jl"))
 include(joinpath("tendencies", "implicit", "implicit_tendency.jl"))
