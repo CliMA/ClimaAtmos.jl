@@ -171,23 +171,19 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
                 viscous_sponge,
                 hyperdiff,
                 non_orographic_gravity_wave = model_spec.non_orographic_gravity_wave,
-                has_turbconv = !isnothing(turbconv_model),
             )
         ),
         (; thermo_dispatcher),
         (; Δt = dt),
         (; compressibility_model),
-        !isnothing(turbconv_model) ?
-        (;
-            edmf_cache = TCU.get_edmf_cache(
-                Y,
-                turbconv_model,
-                precip_model,
-                namelist,
-                params,
-                parsed_args,
-            )
-        ) : NamedTuple(),
+        TCU.turbconv_cache(
+            Y,
+            turbconv_model,
+            precip_model,
+            namelist,
+            params,
+            parsed_args,
+        ),
         (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
     )
 end
@@ -200,7 +196,6 @@ function additional_tendency!(Yₜ, Y, p, t)
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         (; vert_diff, hs_forcing) = p.tendency_knobs
-        (; has_turbconv) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
         hs_forcing && CA.held_suarez_tendency!(Yₜ, Y, p, t, colidx)
@@ -216,7 +211,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         end
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        has_turbconv && TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
+        TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
     end
     # TODO: make bycolumn-able
     (; non_orographic_gravity_wave) = p.tendency_knobs

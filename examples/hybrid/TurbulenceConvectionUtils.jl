@@ -26,6 +26,25 @@ include(joinpath(ca_dir, "tc_driver", "initial_conditions.jl"))
 include(joinpath(ca_dir, "tc_driver", "generate_namelist.jl"))
 import .NameList
 
+#####
+##### No TurbulenceConvection scheme
+#####
+
+turbconv_cache(
+    Y,
+    turbconv_model::Nothing,
+    precip_model,
+    namelist,
+    param_set,
+    parsed_args,
+) = (; turbconv_model)
+
+sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+
+#####
+##### EDMF
+#####
+
 function get_aux(edmf, Y, ::Type{FT}) where {FT}
     fspace = axes(Y.f)
     cspace = axes(Y.c)
@@ -35,9 +54,9 @@ function get_aux(edmf, Y, ::Type{FT}) where {FT}
     return aux
 end
 
-function get_edmf_cache(
+function turbconv_cache(
     Y,
-    turbconv_model,
+    turbconv_model::TC.EDMFModel,
     precip_model,
     namelist,
     param_set,
@@ -66,8 +85,9 @@ function get_edmf_cache(
     ᶠp₀ = @. exp(logpressure_fun(ᶠz))
     ᶜp₀ = @. exp(logpressure_fun(ᶜz))
     @info "EDMFModel: \n$(summary(edmf))"
-    return (;
+    cache = (;
         edmf,
+        turbconv_model,
         ᶠp₀,
         ᶜp₀,
         case,
@@ -78,6 +98,7 @@ function get_edmf_cache(
         aux = get_aux(edmf, Y, FT),
         precip_model,
     )
+    return (; edmf_cache = cache, turbconv_model)
 end
 
 function init_tc!(Y, p, params)
@@ -129,7 +150,7 @@ function init_tc!(Y, p, params, colidx)
 end
 
 
-function sgs_flux_tendency!(Yₜ, Y, p, t, colidx)
+function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt, compressibility_model) = p
     (; edmf, param_set, surf_params, surf_thermo_state) = edmf_cache
     (; precip_model, test_consistency, ᶠp₀, ᶜp₀) = edmf_cache

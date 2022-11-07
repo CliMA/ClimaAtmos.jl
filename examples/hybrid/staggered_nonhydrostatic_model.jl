@@ -171,7 +171,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
         Fields.bycolumn(axes(Y.c)) do colidx
             CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
-            if p.tendency_knobs.has_turbconv
+            if p.turbconv_model isa CA.TurbulenceConvection.EDMFModel
                 parent(Yₜ.c.turbconv[colidx]) .= zero(eltype(Yₜ))
                 parent(Yₜ.f.turbconv[colidx]) .= zero(eltype(Yₜ))
             end
