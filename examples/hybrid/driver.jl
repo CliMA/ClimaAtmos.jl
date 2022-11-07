@@ -269,6 +269,11 @@ include("callbacks.jl")
 tspan = (t_start, simulation.t_end)
 @time "args_integrator" integrator_args, integrator_kwargs =
     args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
+
+if haskey(ENV, "CI_PERF_SKIP_INIT") # for performance analysis
+    throw(:exit_profile_init)
+end
+
 @time "get_integrator" integrator =
     get_integrator(integrator_args, integrator_kwargs)
 
