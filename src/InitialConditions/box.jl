@@ -8,6 +8,7 @@ function center_initial_condition_box(
     energy_form,
     moisture_model,
     turbconv_model,
+    precip_model,
     perturb_initstate,
 )
 

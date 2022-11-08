@@ -8,6 +8,7 @@ function center_initial_condition_column(
     energy_form,
     moisture_model,
     turbconv_model,
+    precip_model,
     perturb_initstate,
 )
     thermo_params = CAP.thermodynamics_params(params)
@@ -40,10 +41,23 @@ function center_initial_condition_column(
             TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
         )
     end
+    precip_kwargs =
+        if precip_model isa NoPrecipitation &&
+           !(turbconv_model isa TC.EDMFModel)
+            NamedTuple()
+        else
+            (; q_rai = FT(0), q_sno = FT(0))
+            # TODO: make TC flexible to the precip type
+            # elseif precip_model isa Microphysics0Moment
+            #     (; q_rai = FT(0), q_sno = FT(0))
+            # elseif precip_model isa Microphysics1Moment
+            #     (; q_rai = FT(0), q_sno = FT(0))
+        end
 
     return (;
         ρ,
         𝔼_kwarg...,
+        precip_kwargs...,
         uₕ = Geometry.Covariant12Vector(FT(0), FT(0)),
         tc_kwargs...,
     )

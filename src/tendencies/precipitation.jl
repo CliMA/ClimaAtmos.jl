@@ -2,6 +2,7 @@
 ##### Precipitation models
 #####
 
+import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics as CM
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces

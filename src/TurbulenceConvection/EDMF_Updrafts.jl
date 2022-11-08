@@ -16,8 +16,7 @@ function compute_precipitation_formation_tendencies(
     aux_gm = center_aux_grid_mean(state)
     aux_up = center_aux_updrafts(state)
     aux_bulk = center_aux_bulk(state)
-    prog_pr = center_prog_precipitation(state)
-    tendencies_pr = center_tendencies_precipitation(state)
+    tendencies_gm = center_tendencies_grid_mean(state)
     p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
 
@@ -39,8 +38,8 @@ function compute_precipitation_formation_tendencies(
             mph = precipitation_formation(
                 param_set,
                 precip_model,
-                prog_pr.q_rai[k],
-                prog_pr.q_sno[k],
+                prog_gm.q_rai[k],
+                prog_gm.q_sno[k],
                 aux_up[i].area[k],
                 ρ_c[k],
                 FT(grid.zc[k].z),
@@ -54,8 +53,8 @@ function compute_precipitation_formation_tendencies(
                 mph.θ_liq_ice_tendency * aux_up[i].area[k]
             aux_up[i].e_tot_tendency_precip_formation[k] =
                 mph.e_tot_tendency * aux_up[i].area[k]
-            tendencies_pr.q_rai[k] += mph.qr_tendency * aux_up[i].area[k]
-            tendencies_pr.q_sno[k] += mph.qs_tendency * aux_up[i].area[k]
+            tendencies_gm.q_rai[k] += mph.qr_tendency * aux_up[i].area[k]
+            tendencies_gm.q_sno[k] += mph.qs_tendency * aux_up[i].area[k]
         end
     end
     # TODO - to be deleted once we sum all tendencies elsewhere

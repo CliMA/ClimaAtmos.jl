@@ -181,7 +181,6 @@ cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
             i -> cent_prognostic_vars_up(FT, edmf),
             Val(n_updrafts(edmf)),
         ),
-        pr = (; q_rai = FT(0), q_sno = FT(0)),
     )
 )
 # cent_prognostic_vars_edmf(FT, edmf) = (;) # could also use this for empty model

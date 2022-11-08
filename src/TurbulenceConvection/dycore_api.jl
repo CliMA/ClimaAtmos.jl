@@ -51,7 +51,6 @@ prognostic_turbconv(state, fl) = prognostic(state, fl).turbconv
 center_prog_updrafts(state) = prognostic_turbconv(state, CentField()).up
 face_prog_updrafts(state) = prognostic_turbconv(state, FaceField()).up
 center_prog_environment(state) = prognostic_turbconv(state, CentField()).en
-center_prog_precipitation(state) = prognostic_turbconv(state, CentField()).pr
 
 #= Auxiliary fields for TurbulenceConvection =#
 aux_turbconv(state, fl) = aux(state, fl).turbconv
@@ -74,8 +73,6 @@ face_tendencies_turbconv(state) = tendencies_turbconv(state, FaceField())
 center_tendencies_updrafts(state) = tendencies_turbconv(state, CentField()).up
 center_tendencies_environment(state) =
     tendencies_turbconv(state, CentField()).en
-center_tendencies_precipitation(state) =
-    tendencies_turbconv(state, CentField()).pr
 face_tendencies_updrafts(state) = tendencies_turbconv(state, FaceField()).up
 
 physical_grid_mean_uₕ(state) = CCG.UVVector.(grid_mean_uₕ(state))

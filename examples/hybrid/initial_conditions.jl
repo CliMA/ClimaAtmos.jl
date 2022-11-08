@@ -11,7 +11,7 @@ function init_state(
     atmos,
     perturb_initstate,
 )
-    (; energy_form, moisture_model, turbconv_model) = atmos
+    (; energy_form, moisture_model, turbconv_model, precip_model) = atmos
     ᶜlocal_geometry = Fields.local_geometry_field(center_space)
     ᶠlocal_geometry = Fields.local_geometry_field(face_space)
     c =
@@ -21,6 +21,7 @@ function init_state(
             energy_form,
             moisture_model,
             turbconv_model,
+            precip_model,
             perturb_initstate,
         )
     f = face_initial_condition.(ᶠlocal_geometry, params, turbconv_model)
