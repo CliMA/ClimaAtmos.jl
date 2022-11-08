@@ -18,6 +18,14 @@ using Dierckx: Spline1D
 using StatsBase: mean
 
 #####
+##### No Radiation
+#####
+
+radiation_model_cache(Y, params, radiation_mode::Nothing; kwargs...) =
+    (; radiation_model = radiation_mode)
+radiation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+
+#####
 ##### RRTMGP Radiation
 #####
 

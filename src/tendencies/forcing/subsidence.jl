@@ -7,7 +7,17 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 
+#####
+##### No subsidence
+#####
+
 subsidence_cache(Y, subsidence::Nothing) = (; subsidence)
+subsidence_tendency!(Yₜ, Y, p, t, colidx, subsidence::Nothing) = nothing
+
+#####
+##### Subsidence
+#####
+
 function subsidence_cache(Y, subsidence::Subsidence)
     FT = Spaces.undertype(axes(Y.c))
     toa(f) = Spaces.level(f, Spaces.nlevels(axes(f)))
@@ -24,7 +34,7 @@ function subsidence_cache(Y, subsidence::Subsidence)
     )
 end
 
-function subsidence_tendency!(Yₜ, Y, p, t, colidx)
+function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
     (; moisture_model) = p
     thermo_params = CAP.thermodynamics_params(p.params)
     subsidence_profile = p.subsidence.prof

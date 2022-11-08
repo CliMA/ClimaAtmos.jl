@@ -1,13 +1,25 @@
 #####
-##### Held-Suarez forcing
+##### Held-Suarez
 #####
 
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
-function held_suarez_cache(Y)
+#####
+##### No forcing
+#####
+
+forcing_cache(Y, forcing_type::Nothing) = (; forcing_type)
+forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+
+#####
+##### Held-Suarez forcing
+#####
+
+function forcing_cache(Y, forcing_type::HeldSuarezForcing)
     FT = Spaces.undertype(axes(Y.c))
     return (;
+        forcing_type,
         ᶜσ = similar(Y.c, FT),
         ᶜheight_factor = similar(Y.c, FT),
         ᶜΔρT = similar(Y.c, FT),
@@ -15,7 +27,7 @@ function held_suarez_cache(Y)
     )
 end
 
-function held_suarez_tendency!(Yₜ, Y, p, t, colidx)
+function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     (; T_sfc, z_sfc, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
 
     FT = Spaces.undertype(axes(Y.c))
