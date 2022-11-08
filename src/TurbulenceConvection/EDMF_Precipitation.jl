@@ -18,59 +18,6 @@ function compute_precip_fraction(
 end
 
 """
-Computes the rain and snow advection (down) tendency
-"""
-compute_precipitation_advection_tendencies(
-    ::AbstractPrecipitationModel,
-    precip_fraction_model::AbstractPrecipFractionModel,
-    grid::Grid,
-    state::State,
-    param_set::APS,
-) = nothing
-
-function compute_precipitation_advection_tendencies(
-    ::Microphysics1Moment,
-    precip_fraction_model::AbstractPrecipFractionModel,
-    grid::Grid,
-    state::State,
-    param_set::APS,
-)
-    FT = float_type(state)
-
-    tendencies_pr = center_tendencies_precipitation(state)
-    prog_pr = center_prog_precipitation(state)
-    aux_tc = center_aux_turbconv(state)
-    prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-
-    # helper to calculate the rain velocity
-    # TODO: assuming w_gm = 0
-    # TODO: verify translation
-    term_vel_rain = aux_tc.term_vel_rain
-    term_vel_snow = aux_tc.term_vel_snow
-
-    precip_fraction = compute_precip_fraction(precip_fraction_model, state)
-
-    q_rai = prog_pr.q_rai #./ precip_fraction
-    q_sno = prog_pr.q_sno #./ precip_fraction
-
-    If = CCO.DivergenceF2C()
-    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(FT(0)))
-    ∇ = CCO.DivergenceF2C(; bottom = CCO.Extrapolate())
-    wvec = CC.Geometry.WVector
-
-    # TODO - some positivity limiters are needed
-    @. aux_tc.qr_tendency_advection =
-        ∇(wvec(RB(ρ_c * q_rai * term_vel_rain))) / ρ_c# * precip_fraction
-    @. aux_tc.qs_tendency_advection =
-        ∇(wvec(RB(ρ_c * q_sno * term_vel_snow))) / ρ_c# * precip_fraction
-
-    @. tendencies_pr.q_rai += aux_tc.qr_tendency_advection
-    @. tendencies_pr.q_sno += aux_tc.qs_tendency_advection
-    return nothing
-end
-
-"""
 Computes the tendencies to θ_liq_ice, q_tot, q_rain and q_snow
 due to rain evaporation, snow deposition and sublimation and snow melt
 """
