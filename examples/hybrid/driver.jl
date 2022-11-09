@@ -398,3 +398,27 @@ if parsed_args["regression_test"]
         simulation.output_dir,
     )
 end
+
+# Zip and clean up output
+if atmos.model_config isa CA.SingleColumnModel
+    try
+        files = filter(
+            x -> endswith(x, ".hdf5"),
+            readdir(simulation.output_dir, join = true),
+        )
+        files = basename.(files)
+        cd(simulation.output_dir) do
+            run(
+                pipeline(
+                    Cmd(["zip", "hdf5files", files...]),
+                    stdout = IOBuffer(),
+                ),
+            )
+            for f in files
+                rm(f)
+            end
+        end
+    catch
+        @warn "Failed to zip hdf5 files."
+    end
+end
