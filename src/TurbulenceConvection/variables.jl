@@ -103,16 +103,12 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
         qr_tendency_evap = FT(0),
         qs_tendency_melt = FT(0),
         qs_tendency_dep_sub = FT(0),
-        qr_tendency_advection = FT(0),
-        qs_tendency_advection = FT(0),
         en_2m = (;
             tke = cent_aux_vars_en_2m(FT),
             Hvar = cent_aux_vars_en_2m(FT),
             QTvar = cent_aux_vars_en_2m(FT),
             HQTcov = cent_aux_vars_en_2m(FT),
         ),
-        term_vel_rain = FT(0),
-        term_vel_snow = FT(0),
         KM = FT(0),
         KH = FT(0),
         mixing_length = FT(0),
@@ -185,7 +181,6 @@ cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
             i -> cent_prognostic_vars_up(FT, edmf),
             Val(n_updrafts(edmf)),
         ),
-        pr = (; q_rai = FT(0), q_sno = FT(0)),
     )
 )
 # cent_prognostic_vars_edmf(FT, edmf) = (;) # could also use this for empty model

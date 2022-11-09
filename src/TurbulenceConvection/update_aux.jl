@@ -522,31 +522,6 @@ function update_aux!(
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
-    # TODO: use dispatch
-    if edmf.precip_model isa Microphysics1Moment
-        # helper to calculate the rain velocity
-        # TODO: assuming w_gm = 0
-        # TODO: verify translation
-        term_vel_rain = aux_tc.term_vel_rain
-        term_vel_snow = aux_tc.term_vel_snow
-        prog_pr = center_prog_precipitation(state)
-
-        #precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
-
-        @. term_vel_rain = CM1.terminal_velocity(
-            microphys_params,
-            rain_type,
-            ρ_c,
-            prog_pr.q_rai,
-        )# / precip_fraction)
-        @. term_vel_snow = CM1.terminal_velocity(
-            microphys_params,
-            snow_type,
-            ρ_c,
-            prog_pr.q_sno,
-        )# / precip_fraction)
-    end
-
     ### Diagnostic thermodynamiccovariances
     if edmf.thermo_covariance_model isa DiagnosticThermoCovariances
         flux1 = surf.shf / TD.cp_m(thermo_params, ts_gm[kc_surf])

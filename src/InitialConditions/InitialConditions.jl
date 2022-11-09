@@ -13,6 +13,7 @@ import ..TotalEnergy
 import ..InternalEnergy
 import ..EquilMoistModel
 import ..NonEquilMoistModel
+import ..NoPrecipitation
 
 function face_initial_condition(local_geometry, params, turbconv_model)
     z = local_geometry.coordinates.z

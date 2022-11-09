@@ -191,13 +191,6 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         tc_params,
         Δt,
     )
-    TC.compute_precipitation_advection_tendencies(
-        precip_model,
-        edmf.precip_fraction_model,
-        grid,
-        state,
-        tc_params,
-    )
 
     TC.compute_turbconv_tendencies!(edmf, grid, state, tc_params, surf, Δt)
 
