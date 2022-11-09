@@ -49,18 +49,18 @@ trials["hyperdiffusion_tendency!"] = get_trial(CA.hyperdiffusion_tendency!, (X, 
 trials["step!"] = get_trial(ODE.step!, (integrator, ), "step!");
 #! format: on
 
-summary = OrderedCollections.OrderedDict()
+table_summary = OrderedCollections.OrderedDict()
 for k in keys(trials)
-    summary[k] = get_summary(trials[k])
+    table_summary[k] = get_summary(trials[k])
 end
-tabulate_summary(summary)
+tabulate_summary(table_summary)
 
 if get(ENV, "BUILDKITE", "") == "true"
-    # Export summary
+    # Export table_summary
     import JSON
     job_id = parsed_args["job_id"]
     path = ca_dir
     open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
-        JSON.print(io, summary)
+        JSON.print(io, table_summary)
     end
 end

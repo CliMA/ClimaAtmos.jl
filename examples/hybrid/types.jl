@@ -23,10 +23,8 @@ import ClimaAtmos:
 
 import ClimaCore: InputOutput
 
-function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
+function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
     # should this live in the radiation model?
-    idealized_h2o = parsed_args["idealized_h2o"]
-    @assert idealized_h2o in (true, false)
     non_orographic_gravity_wave = parsed_args["non_orographic_gravity_wave"]
     @assert non_orographic_gravity_wave in (true, false)
 
@@ -34,12 +32,10 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
     precip_model = CA.precipitation_model(parsed_args)
     radiation_mode = CA.radiation_mode(parsed_args, FT)
 
-    model_spec = (;
+    atmos = CA.AtmosModel(;
         moisture_model,
         model_config = CA.model_config(parsed_args),
         energy_form = CA.energy_form(parsed_args),
-        perturb_initstate = parsed_args["perturb_initstate"],
-        idealized_h2o,
         radiation_mode,
         subsidence = CA.subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = CA.large_scale_advection_model(parsed_args, FT),
@@ -55,11 +51,10 @@ function get_model_spec(::Type{FT}, parsed_args, namelist) where {FT}
         ),
         compressibility_model = CA.compressibility_model(parsed_args),
         surface_scheme = CA.surface_scheme(FT, parsed_args),
-        C_E = FT(parsed_args["C_E"]),
         non_orographic_gravity_wave,
     )
 
-    return model_spec
+    return atmos
 end
 
 function get_numerics(parsed_args)
@@ -143,7 +138,7 @@ function get_spaces(parsed_args, params, comms_ctx)
                 h_space,
                 z_max,
                 z_elem,
-                z_stretch,
+                z_stretch;
                 surface_warp = warp_function,
             )
         end
@@ -198,7 +193,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     )
 end
 
-# get_state(simulation, parsed_args, spaces, params, model_spec)
+# get_state(simulation, parsed_args, spaces, params, atmos)
 function get_state(simulation, args...)
     if simulation.restart
         return get_state_restart(comms_ctx)
@@ -229,7 +224,7 @@ end
 
 import ClimaAtmos.InitialConditions as ICs
 
-function get_state_fresh_start(parsed_args, spaces, params, model_spec)
+function get_state_fresh_start(parsed_args, spaces, params, atmos)
     (; center_space, face_space) = spaces
     FT = eltype(params)
     t_start = FT(0)
@@ -243,6 +238,7 @@ function get_state_fresh_start(parsed_args, spaces, params, model_spec)
     elseif parsed_args["config"] == "box"
         ICs.center_initial_condition_box
     end
+    perturb_initstate = parsed_args["perturb_initstate"]
 
     Y = init_state(
         center_initial_condition,
@@ -250,7 +246,8 @@ function get_state_fresh_start(parsed_args, spaces, params, model_spec)
         center_space,
         face_space,
         params,
-        model_spec,
+        atmos,
+        perturb_initstate,
     )
     return (Y, t_start)
 end
@@ -259,11 +256,11 @@ import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 #=
 (; jac_kwargs, alg_kwargs, ode_algorithm) =
-    ode_config(Y, parsed_args, model_spec)
+    ode_config(Y, parsed_args, atmos)
 =#
-function ode_configuration(Y, parsed_args, model_spec)
+function ode_configuration(Y, parsed_args, atmos)
     test_implicit_solver = false # makes solver extremely slow when set to `true`
-    jacobian_flags = jacobi_flags(model_spec.energy_form)
+    jacobian_flags = jacobi_flags(atmos.energy_form)
     ode_algorithm = if startswith(parsed_args["ode_algo"], "ODE.")
         @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
         getproperty(ODE, Symbol(split(parsed_args["ode_algo"], ".")[2]))

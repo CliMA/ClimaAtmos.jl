@@ -184,11 +184,8 @@ end
 
 # Dispatcher:
 # baroclinic wave
-paperplots_baro_wave(model_spec, args...) = paperplots_baro_wave(
-    model_spec.energy_form,
-    model_spec.moisture_model,
-    args...,
-)
+paperplots_baro_wave(atmos, args...) =
+    paperplots_baro_wave(atmos.energy_form, atmos.moisture_model, args...)
 
 paperplots_baro_wave(::PotentialTemperature, ::DryModel, args...) =
     paperplots_dry_baro_wave(args...)
@@ -198,11 +195,8 @@ paperplots_baro_wave(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_baro_wave_ρe(args...)
 
 # held-suarez
-paperplots_held_suarez(model_spec, args...) = paperplots_held_suarez(
-    model_spec.energy_form,
-    model_spec.moisture_model,
-    args...,
-)
+paperplots_held_suarez(atmos, args...) =
+    paperplots_held_suarez(atmos.energy_form, atmos.moisture_model, args...)
 
 paperplots_held_suarez(::PotentialTemperature, ::DryModel, args...) =
     paperplots_dry_held_suarez(args...)

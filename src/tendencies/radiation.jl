@@ -36,12 +36,12 @@ function radiation_model_cache(
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
-    idealized_h2o = false,
     idealized_clouds = false,
     thermo_dispatcher,
     data_loader,
     ᶜinterp,
 )
+    (; idealized_h2o) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
     rrtmgp_params = CAP.rrtmgp_params(params)
     thermo_params = CAP.thermodynamics_params(params)

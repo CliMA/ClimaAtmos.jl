@@ -61,14 +61,15 @@ include("parameter_set.jl")
 # TODO: unify parsed_args and namelist
 params = create_parameter_set(FT, parsed_args, namelist)
 
-model_spec = get_model_spec(FT, parsed_args, namelist)
+atmos = get_atmos(FT, parsed_args, namelist)
+@info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
 
 diffuse_momentum =
     vert_diff &&
-    !(model_spec.forcing_type isa HeldSuarezForcing) &&
-    !isnothing(model_spec.surface_scheme)
+    !(atmos.forcing_type isa HeldSuarezForcing) &&
+    !isnothing(atmos.surface_scheme)
 
 # TODO: use import istead of using
 using Colors
@@ -84,7 +85,7 @@ using ClimaTimeSteppers
 import Random
 Random.seed!(1234)
 
-isnothing(model_spec.radiation_mode) || include("radiation_utilities.jl")
+isnothing(atmos.radiation_mode) || include("radiation_utilities.jl")
 
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -94,7 +95,14 @@ jacobi_flags(::PotentialTemperature) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 
 # TODO: flip order so that NamedTuple() is fallback.
-function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
+function additional_cache(
+    Y,
+    parsed_args,
+    params,
+    atmos,
+    dt;
+    use_tempest_mode = false,
+)
     FT = typeof(dt)
     (;
         precip_model,
@@ -102,10 +110,10 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
         radiation_mode,
         turbconv_model,
         precip_model,
-    ) = model_spec
+    ) = atmos
 
-    thermo_dispatcher = CA.ThermoDispatcher(model_spec)
-    compressibility_model = model_spec.compressibility_model
+    thermo_dispatcher = CA.ThermoDispatcher(atmos)
+    compressibility_model = atmos.compressibility_model
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
@@ -113,7 +121,6 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             params,
             radiation_mode;
             idealized_insolation,
-            model_spec.idealized_h2o,
             idealized_clouds,
             thermo_dispatcher,
             data_loader,
@@ -146,29 +153,29 @@ function additional_cache(Y, params, model_spec, dt; use_tempest_mode = false)
             κ₂ = FT(κ₂_sponge),
         ) : NamedTuple(),
         CA.precipitation_cache(Y, precip_model),
-        CA.subsidence_cache(Y, model_spec.subsidence),
-        CA.large_scale_advection_cache(Y, model_spec.ls_adv),
-        CA.edmf_coriolis_cache(Y, model_spec.edmf_coriolis),
+        CA.subsidence_cache(Y, atmos.subsidence),
+        CA.large_scale_advection_cache(Y, atmos.ls_adv),
+        CA.edmf_coriolis_cache(Y, atmos.edmf_coriolis),
         CA.forcing_cache(Y, forcing_type),
         radiation_cache,
         vert_diff ?
         CA.vertical_diffusion_boundary_layer_cache(
             Y,
             FT;
-            model_spec.surface_scheme,
-            model_spec.C_E,
+            atmos.surface_scheme,
+            C_E = FT(parsed_args["C_E"]),
             diffuse_momentum,
             coupled,
         ) : NamedTuple(),
-        model_spec.non_orographic_gravity_wave ?
-        CA.gravity_wave_cache(model_spec.model_config, Y, FT) : NamedTuple(),
+        atmos.non_orographic_gravity_wave ?
+        CA.gravity_wave_cache(atmos.model_config, Y, FT) : NamedTuple(),
         (;
             tendency_knobs = (;
                 vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
                 hyperdiff,
-                non_orographic_gravity_wave = model_spec.non_orographic_gravity_wave,
+                non_orographic_gravity_wave = atmos.non_orographic_gravity_wave,
             )
         ),
         (; thermo_dispatcher),
@@ -246,26 +253,24 @@ enable_threading() = enable_clima_core_threading
     spaces = get_spaces_restart(Y)
 else
     spaces = get_spaces(parsed_args, params, comms_ctx)
-    (Y, t_start) =
-        get_state_fresh_start(parsed_args, spaces, params, model_spec)
+    (Y, t_start) = get_state_fresh_start(parsed_args, spaces, params, atmos)
 end
 
-p = get_cache(Y, params, spaces, model_spec, numerics, simulation)
+p = get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation)
 if parsed_args["turbconv"] == "edmf"
     @time "init_tc!" TCU.init_tc!(Y, p, params)
 end
 
 # Print tendencies:
-# @info "Model composition" p.model_spec...
+# @info "Model composition" p.atmos...
 @info "Tendencies" p.tendency_knobs...
 
-@time "ode_configuration" ode_config =
-    ode_configuration(Y, parsed_args, model_spec)
+@time "ode_configuration" ode_config = ode_configuration(Y, parsed_args, atmos)
 
 include("callbacks.jl")
 
 @time "get_callbacks" callback =
-    get_callbacks(parsed_args, simulation, model_spec, params)
+    get_callbacks(parsed_args, simulation, atmos, params)
 tspan = (t_start, simulation.t_end)
 @time "args_integrator" integrator_args, integrator_kwargs =
     args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
@@ -326,7 +331,7 @@ include(
 if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
-        paperplots_baro_wave(model_spec, sol, simulation.output_dir, p, 90, 180)
+        paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
     elseif is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
     elseif is_column_edmf(parsed_args)
@@ -336,14 +341,7 @@ if !simulation.is_distributed && parsed_args["post_process"]
     elseif is_box(parsed_args)
         postprocessing_box(sol, simulation.output_dir)
     else
-        paperplots_held_suarez(
-            model_spec,
-            sol,
-            simulation.output_dir,
-            p,
-            90,
-            180,
-        )
+        paperplots_held_suarez(atmos, sol, simulation.output_dir, p, 90, 180)
     end
 end
 

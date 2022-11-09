@@ -81,3 +81,51 @@ Base.@kwdef struct ThermoDispatcher{EF, MM, CM}
     compressibility_model::CM
 end
 Base.broadcastable(x::ThermoDispatcher) = Ref(x)
+
+
+Base.@kwdef struct AtmosModel{MC, MM, EF, PM, F, S, RM, LA, EC, TCM, CM, SS, GW}
+    model_config::MC = nothing
+    moisture_model::MM = nothing
+    energy_form::EF = nothing
+    precip_model::PM = nothing
+    forcing_type::F = nothing
+    subsidence::S = nothing
+    radiation_mode::RM = nothing
+    ls_adv::LA = nothing
+    edmf_coriolis::EC = nothing
+    turbconv_model::TCM = nothing
+    compressibility_model::CM = nothing
+    surface_scheme::SS = nothing
+    non_orographic_gravity_wave::GW = nothing
+end
+
+function Base.summary(io::IO, atmos::AtmosModel)
+    pns = string.(propertynames(atmos))
+    buf = maximum(length.(pns))
+    keys = propertynames(atmos)
+    vals = repeat.(" ", map(s -> buf - length(s) + 2, pns))
+    bufs = (; zip(keys, vals)...)
+    print(io, '\n')
+    for pn in propertynames(atmos)
+        prop = getproperty(atmos, pn)
+        # Skip some data:
+        prop isa Bool && continue
+        prop isa NTuple && continue
+        prop isa Int && continue
+        prop isa Float64 && continue
+        prop isa Float32 && continue
+        s = string(
+            "  ", # needed for some reason
+            getproperty(bufs, pn),
+            '`',
+            string(pn),
+            '`',
+            "::",
+            '`',
+            typeof(prop),
+            '`',
+            '\n',
+        )
+        print(io, s)
+    end
+end
