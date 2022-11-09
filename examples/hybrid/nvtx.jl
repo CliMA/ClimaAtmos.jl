@@ -2,7 +2,6 @@ using NVTX, Colors
 
 if NVTX.isactive()
     NVTX.enable_gc_hooks()
-    const nvtx_domain = NVTX.Domain("ClimaAtmos")
     # makes output on buildkite a bit nicer
     if ClimaComms.iamroot(comms_ctx)
         atexit() do
@@ -10,17 +9,16 @@ if NVTX.isactive()
         end
     end
 end
+# for compatibility until we move everything into src:
 macro nvtx(message, args...)
-    block = args[end]
-    kwargs = [Expr(:kw, arg.args...) for arg in args[1:(end - 1)]]
+    expr = args[end]
+    args = args[1:(end - 1)]
     quote
-        range =
-            NVTX.isactive() ?
-            NVTX.range_start(nvtx_domain; message = $message, $(kwargs...)) :
-            nothing
-        $(esc(block))
-        if !isnothing(range)
-            NVTX.range_end(range)
-        end
+        NVTX.@range(
+            $message,
+            domain = NVTX.Domain(ClimaAtmos),
+            $(args...),
+            $(esc(expr))
+        )
     end
 end

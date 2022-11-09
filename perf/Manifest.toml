@@ -209,7 +209,7 @@ uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.4"
 
 [[deps.ClimaAtmos]]
-deps = ["AtmosphericProfilesLibrary", "ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "CloudMicrophysics", "Dierckx", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "OrdinaryDiffEq", "Pkg", "Printf", "RRTMGP", "Random", "StaticArrays", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics"]
+deps = ["AtmosphericProfilesLibrary", "ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "CloudMicrophysics", "Colors", "Dierckx", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "NVTX", "OrdinaryDiffEq", "Pkg", "Printf", "RRTMGP", "Random", "StaticArrays", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.8.0"
@@ -421,9 +421,9 @@ version = "0.1.0+0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterfaceCore", "ChainRulesCore", "DataStructures", "Distributions", "DocStringExtensions", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "MuladdMacro", "Parameters", "PreallocationTools", "Printf", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "Setfield", "SimpleNonlinearSolve", "SparseArrays", "Static", "StaticArrays", "Statistics", "Tricks", "ZygoteRules"]
-git-tree-sha1 = "82ca50c8e8b25d154378e826c11dead0b82b48cb"
+git-tree-sha1 = "9f5c00eff244df424479bcd43bd5549eae6a7037"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.110.1"
+version = "6.111.0"
 
 [[deps.DiffEqCallbacks]]
 deps = ["DataStructures", "DiffEqBase", "ForwardDiff", "LinearAlgebra", "Markdown", "NLsolve", "Parameters", "RecipesBase", "RecursiveArrayTools", "SciMLBase", "StaticArrays"]
@@ -841,9 +841,9 @@ version = "1.0.0"
 
 [[deps.JET]]
 deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "Revise", "Test"]
-git-tree-sha1 = "60b6bc7ae5b6b0027d4f9112dd6e675504fc4dd8"
+git-tree-sha1 = "f60a47ded35018de001e861131eaef1419ef389a"
 uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
-version = "0.6.20"
+version = "0.6.21"
 
 [[deps.JLD2]]
 deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "TranscodingStreams", "UUIDs"]
@@ -880,6 +880,12 @@ deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
 git-tree-sha1 = "847da597e4271c88bb54b8c7dfbeac44ea85ace4"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
 version = "0.9.18"
+
+[[deps.JuliaNVTXCallbacks_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "af433a10f3942e882d3c671aacb203e006a5808f"
+uuid = "9c1d0b0a-7046-5b2e-a33f-ea22f176ac7e"
+version = "0.2.1+0"
 
 [[deps.KLU]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
@@ -1202,10 +1208,16 @@ uuid = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
 version = "4.5.1"
 
 [[deps.NVTX]]
-deps = ["Colors"]
-git-tree-sha1 = "a678eb1db3b1566082c84b7d5685928a70b863fa"
+deps = ["Colors", "JuliaNVTXCallbacks_jll", "Libdl", "NVTX_jll"]
+git-tree-sha1 = "333aefe868195c7b74065933f481701ce2d10170"
 uuid = "5da4648a-3479-48b8-97b9-01cb529c0a1f"
-version = "0.2.0"
+version = "0.3.0"
+
+[[deps.NVTX_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "6356167fecf7011357b1f48a0af4294e9a7ad163"
+uuid = "e98f9f5b-d649-5603-91fd-7774390e6439"
+version = "3.1.0+1"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
