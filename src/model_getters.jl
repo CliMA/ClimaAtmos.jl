@@ -48,6 +48,8 @@ function compressibility_model(parsed_args)
 end
 
 function radiation_mode(parsed_args, ::Type{FT}) where {FT}
+    idealized_h2o = parsed_args["idealized_h2o"]
+    @assert idealized_h2o in (true, false)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
@@ -59,13 +61,13 @@ function radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "TRMM_LBA",
     )
     return if radiation_name == "clearsky"
-        RRTMGPI.ClearSkyRadiation()
+        RRTMGPI.ClearSkyRadiation(idealized_h2o)
     elseif radiation_name == "gray"
-        RRTMGPI.GrayRadiation()
+        RRTMGPI.GrayRadiation(idealized_h2o)
     elseif radiation_name == "allsky"
-        RRTMGPI.AllSkyRadiation()
+        RRTMGPI.AllSkyRadiation(idealized_h2o)
     elseif radiation_name == "allskywithclear"
-        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics()
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(idealized_h2o)
     elseif radiation_name == "DYCOMS_RF01"
         RadiationDYCOMS_RF01{FT}()
     elseif radiation_name == "TRMM_LBA"
@@ -210,13 +212,13 @@ function surface_scheme(FT, parsed_args)
 end
 
 """
-    ThermoDispatcher(model_spec)
+    ThermoDispatcher(atmos)
 
 A helper method for creating a thermodynamics dispatcher
 from the model specification struct.
 """
-function ThermoDispatcher(model_spec)
-    (; energy_form, moisture_model, compressibility_model) = model_spec
+function ThermoDispatcher(atmos)
+    (; energy_form, moisture_model, compressibility_model) = atmos
     return ThermoDispatcher(;
         energy_form,
         moisture_model,

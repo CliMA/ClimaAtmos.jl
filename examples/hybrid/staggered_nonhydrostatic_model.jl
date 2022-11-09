@@ -68,12 +68,20 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
 
 const C123 = Geometry.Covariant123Vector
 
-get_cache(Y, params, spaces, model_spec, numerics, simulation) = merge(
-    default_cache(Y, params, model_spec, spaces, numerics, simulation),
-    additional_cache(Y, params, model_spec, simulation.dt),
+get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation) = merge(
+    default_cache(Y, parsed_args, params, atmos, spaces, numerics, simulation),
+    additional_cache(Y, parsed_args, params, atmos, simulation.dt),
 )
 
-function default_cache(Y, params, model_spec, spaces, numerics, simulation)
+function default_cache(
+    Y,
+    parsed_args,
+    params,
+    atmos,
+    spaces,
+    numerics,
+    simulation,
+)
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -134,8 +142,8 @@ function default_cache(Y, params, model_spec, spaces, numerics, simulation)
             ᶠfct_zalesak,
         ),
         spaces,
-        moisture_model = model_spec.moisture_model,
-        model_config = model_spec.model_config,
+        moisture_model = atmos.moisture_model,
+        model_config = atmos.model_config,
         Yₜ = similar(Y), # only needed when using increment formulation
         limiters,
         ᶜρh_kwargs...,

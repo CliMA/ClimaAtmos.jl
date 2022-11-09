@@ -93,10 +93,18 @@ parent_array_type(::Type{<:Base.ReshapedArray{T, N, P}}) where {T, N, P} =
     parent_array_type(P)
 
 abstract type AbstractRRTMGPMode end
-struct GrayRadiation <: AbstractRRTMGPMode end
-struct ClearSkyRadiation <: AbstractRRTMGPMode end
-struct AllSkyRadiation <: AbstractRRTMGPMode end
-struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode end
+struct GrayRadiation <: AbstractRRTMGPMode
+    idealized_h2o::Bool
+end
+struct ClearSkyRadiation <: AbstractRRTMGPMode
+    idealized_h2o::Bool
+end
+struct AllSkyRadiation <: AbstractRRTMGPMode
+    idealized_h2o::Bool
+end
+struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
+    idealized_h2o::Bool
+end
 
 """
     abstract type AbstractInterpolation
