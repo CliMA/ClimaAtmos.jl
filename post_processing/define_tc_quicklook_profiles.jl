@@ -195,10 +195,16 @@ function hdf5_files(path, name_match)
     filter!(x -> occursin(name_match, x), files)
 end
 
-function plot_tc_contours(folder; main_branch_data_path, name_match)
-    PR_filenames = CA.sort_files_by_time(hdf5_files(folder, name_match))
-    main_filenames = if ispath(main_branch_data_path)
+function get_main_filenames(main_branch_data_path, name_match, zip_file)
+    if ispath(main_branch_data_path)
         files = hdf5_files(main_branch_data_path, name_match)
+        # NOTE: `hdf5files` must match `hdf5files`
+        if isempty(files) && isfile(joinpath(main_branch_data_path, zip_file))
+            cd(main_branch_data_path) do
+                run(pipeline(Cmd(["unzip", zip_file]); stdout = IOBuffer()))
+            end
+            files = hdf5_files(main_branch_data_path, name_match)
+        end
         if any(isfile.(files))
             CA.sort_files_by_time(files)
         else
@@ -207,6 +213,12 @@ function plot_tc_contours(folder; main_branch_data_path, name_match)
     else
         nothing
     end
+end
+
+function plot_tc_contours(folder; main_branch_data_path, name_match, zip_file)
+    PR_filenames = CA.sort_files_by_time(hdf5_files(folder, name_match))
+    main_filenames =
+        get_main_filenames(main_branch_data_path, name_match, zip_file)
     _plot_tc_contours(folder; PR_filenames, main_filenames)
 end
 
