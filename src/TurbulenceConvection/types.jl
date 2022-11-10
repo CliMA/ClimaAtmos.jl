@@ -353,13 +353,10 @@ Base.@kwdef struct SurfaceBase{FT}
     bflux::FT = 0
     ustar::FT = 0
     ρq_tot_flux::FT = 0
-    ρq_liq_flux::FT = 0
-    ρq_ice_flux::FT = 0
     ρe_tot_flux::FT = 0
     ρu_flux::FT = 0
     ρv_flux::FT = 0
     obukhov_length::FT = 0
-    wstar::FT = 0
 end
 
 struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}

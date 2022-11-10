@@ -48,12 +48,6 @@ function get_inversion(grid::Grid, state::State, thermo_params, Ri_bulk_crit)
 
     return h
 end
-# Teixiera convective tau
-function get_mixing_tau(zi::FT, wstar::FT) where {FT}
-    # return 0.5 * zi / wstar
-    #return zi / (max(wstar, FT(1e-5)))
-    return zi / (wstar + FT(0.001))
-end
 
 # MO scaling of near surface tke and scalar variance
 function get_surface_tke(
