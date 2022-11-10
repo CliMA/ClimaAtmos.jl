@@ -75,9 +75,6 @@ function get_surface(
         ρv_flux = surf_params.zero_uv_fluxes ? FT(0) : result.ρτyz,
         ρe_tot_flux = shf + lhf,
         ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
-        wstar = convective_vel,
-        ρq_liq_flux = FT(0),
-        ρq_ice_flux = FT(0),
     )
 end
 
@@ -128,8 +125,6 @@ function get_surface(
     lhf = result.lhf
     shf = result.shf
 
-    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
-    convective_vel = TC.get_wstar(result.buoy_flux, zi)
     return TC.SurfaceBase{FT}(;
         cm = result.Cd,
         ch = result.Ch,
@@ -142,9 +137,6 @@ function get_surface(
         ρe_tot_flux = shf + lhf,
         ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
         bflux = result.buoy_flux,
-        wstar = convective_vel,
-        ρq_liq_flux = FT(0),
-        ρq_ice_flux = FT(0),
     )
 end
 
@@ -192,7 +184,6 @@ function get_surface(
     lhf = result.lhf
     shf = result.shf
     zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
-    convective_vel = TC.get_wstar(result.buoy_flux, zi)
     return TC.SurfaceBase{FT}(;
         cm = result.Cd,
         ch = result.Ch,
@@ -205,8 +196,5 @@ function get_surface(
         ρe_tot_flux = shf + lhf,
         ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
         bflux = result.buoy_flux,
-        wstar = convective_vel,
-        ρq_liq_flux = FT(0),
-        ρq_ice_flux = FT(0),
     )
 end
