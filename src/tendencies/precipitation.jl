@@ -49,6 +49,7 @@ function compute_precipitation_cache!(
             TD.PhasePartition(thermo_params, ᶜts[colidx]),
         )
 end
+
 function compute_precipitation_cache!(
     Y,
     p,
@@ -56,10 +57,15 @@ function compute_precipitation_cache!(
     ::Microphysics0Moment,
     ::TC.EDMFModel,
 )
-
-    FT = Spaces.undertype(axes(Y.c))
     (; ᶜS_ρq_tot) = p
-    @. ᶜS_ρq_tot[colidx] = FT(0)
+    qt_tendency_precip_formation_en =
+        p.edmf_cache.aux.cent.turbconv.en.qt_tendency_precip_formation[colidx]
+    qt_tendency_precip_formation_bulk =
+        p.edmf_cache.aux.cent.turbconv.bulk.qt_tendency_precip_formation[colidx]
+
+    @. ᶜS_ρq_tot[colidx] =
+        Y.c.ρ[colidx] *
+        (qt_tendency_precip_formation_bulk + qt_tendency_precip_formation_en)
 end
 
 function precipitation_tendency!(
@@ -142,19 +148,42 @@ end
 # TODO: move 1-moment microphysics cache / tendency here
 function precipitation_cache(Y, precip_model::Microphysics1Moment)
     FT = Spaces.undertype(axes(Y.c))
-    return (; precip_model)
+
+    return (;
+        precip_model,
+        ᶜS_ρq_tot = similar(Y.c, FT),
+        ᶜS_ρe_tot = similar(Y.c, FT),
+    )
 end
 
-function precipitation_tendency!(
-    Yₜ,
+function compute_precipitation_cache!(
     Y,
     p,
-    t,
     colidx,
-    precip_model::Microphysics1Moment,
+    ::Microphysics1Moment,
+    ::TC.EDMFModel,
 )
-    precipitation_advection_tendency!(Yₜ, Y, p, colidx, precip_model)
-    return nothing
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p
+
+    qt_tendency_precip_formation_en =
+        p.edmf_cache.aux.cent.turbconv.en.qt_tendency_precip_formation[colidx]
+    qt_tendency_precip_formation_bulk =
+        p.edmf_cache.aux.cent.turbconv.bulk.qt_tendency_precip_formation[colidx]
+
+    e_tot_tendency_precip_formation_en =
+        p.edmf_cache.aux.cent.turbconv.en.e_tot_tendency_precip_formation[colidx]
+    e_tot_tendency_precip_formation_bulk =
+        p.edmf_cache.aux.cent.turbconv.bulk.e_tot_tendency_precip_formation[colidx]
+
+    @. ᶜS_ρq_tot[colidx] =
+        Y.c.ρ[colidx] *
+        (qt_tendency_precip_formation_bulk + qt_tendency_precip_formation_en)
+    @. ᶜS_ρe_tot[colidx] =
+        Y.c.ρ[colidx] * (
+            e_tot_tendency_precip_formation_bulk +
+            e_tot_tendency_precip_formation_en
+        )
+
 end
 
 """
@@ -223,5 +252,37 @@ function precipitation_advection_tendency!(
                 ),
             ),
         ) / ρ_c
+    return nothing
+end
+
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    precip_model::Microphysics1Moment,
+)
+    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p
+    compute_precipitation_cache!(
+        Y,
+        p,
+        colidx,
+        precip_model,
+        p.atmos.turbconv_model,
+    )
+
+    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+
+    if :ρe_tot in propertynames(Y.c)
+        @. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]
+    else
+        error(
+            "1-moment microphysics can only be coupled to ρe_tot energy variable",
+        )
+    end
+
+    precipitation_advection_tendency!(Yₜ, Y, p, colidx, precip_model)
     return nothing
 end

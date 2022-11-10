@@ -129,19 +129,8 @@ function compute_explicit_gm_tendencies!(
     aux_tc = TC.center_aux_turbconv(state)
 
     # Apply precipitation tendencies
-    @. tendencies_gm.ρq_tot +=
-        ρ_c * (
-            aux_bulk.qt_tendency_precip_formation +
-            aux_en.qt_tendency_precip_formation +
-            aux_tc.qt_tendency_precip_sinks
-        )
-
-    @. tendencies_gm.ρe_tot +=
-        ρ_c * (
-            aux_bulk.e_tot_tendency_precip_formation +
-            aux_en.e_tot_tendency_precip_formation +
-            aux_tc.e_tot_tendency_precip_sinks
-        )
+    @. tendencies_gm.ρq_tot += ρ_c * aux_tc.qt_tendency_precip_sinks
+    @. tendencies_gm.ρe_tot += ρ_c * aux_tc.e_tot_tendency_precip_sinks
 
     return nothing
 end
