@@ -380,25 +380,6 @@ if parsed_args["debugging_tc"]
     )
 end
 
-if parsed_args["regression_test"]
-    # Test results against main branch
-    include(
-        joinpath(
-            @__DIR__,
-            "..",
-            "..",
-            "regression_tests",
-            "regression_tests.jl",
-        ),
-    )
-    perform_regression_tests(
-        simulation.job_id,
-        sol.u[end],
-        all_best_mse,
-        simulation.output_dir,
-    )
-end
-
 # Zip and clean up output
 if atmos.model_config isa CA.SingleColumnModel
     try
@@ -421,4 +402,23 @@ if atmos.model_config isa CA.SingleColumnModel
     catch
         @warn "Failed to zip hdf5 files."
     end
+end
+
+if parsed_args["regression_test"]
+    # Test results against main branch
+    include(
+        joinpath(
+            @__DIR__,
+            "..",
+            "..",
+            "regression_tests",
+            "regression_tests.jl",
+        ),
+    )
+    perform_regression_tests(
+        simulation.job_id,
+        sol.u[end],
+        all_best_mse,
+        simulation.output_dir,
+    )
 end
