@@ -1,5 +1,6 @@
 import ClimaCore: Fields, InputOutput, Geometry
 using Plots
+import ClimaAtmos as CA
 
 function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     args =
@@ -123,6 +124,140 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     output_filename = joinpath(
         folder,
         "____________________________________final_profiles.png",
+    )
+    png(p, output_filename)
+end
+
+function get_contours(input_filenames, plots; data_source, have_main)
+    files_found = map(x -> isfile(x), input_filenames)
+    if !all(files_found)
+        @warn "Some data files were missing in data source `$data_source`."
+        @warn "$(count(files_found)) files found out of $(length(input_filenames))"
+        @warn "Filtering out only found files."
+        input_filenames = filter(isfile, input_filenames)
+    end
+
+    data = map(input_filenames) do input_filename
+        reader = InputOutput.HDF5Reader(input_filename)
+        Y = InputOutput.read_field(reader, "Y")
+        D = InputOutput.read_field(reader, "diagnostics")
+        (Y, D)
+    end
+    (Ys, Ds) = first.(data), last.(data)
+    t = CA.time_from_filename.(input_filenames)
+
+    zc = parent(Fields.coordinate_field(first(Ys).c).z)[:]
+    zf = parent(Fields.coordinate_field(first(Ys).f).z)[:]
+
+    K = collect(keys(plots))
+    n = length(K)
+    width_to_height_ratio = have_main ? 22 / 18 : 22 / 18
+    fig_height = 1800
+    left_side = data_source == "main"
+    l_margin = left_side ? 40 : -20
+    r_margin = left_side ? -20 : -20
+
+    contours = map(enumerate(K)) do (i, name)
+        fn = plots[name].fn
+        cdata = hcat(fn.(Ds)...)
+        Plots.contourf!(
+            plots[name].plot,
+            t ./ 3600,
+            zc ./ 10^3,
+            cdata;
+            xticks = i == n,
+            yticks = left_side,
+            colorbar = !left_side,
+            c = :viridis,
+            xlabel = i == n ? "Time (hours)" : "",
+            ylabel = left_side ? "Height (km)" : "",
+            left_margin = l_margin * Plots.PlotMeasures.px,
+            right_margin = r_margin * Plots.PlotMeasures.px,
+            bottom_margin = 0 * Plots.PlotMeasures.px,
+            top_margin = 0 * Plots.PlotMeasures.px,
+            size = (width_to_height_ratio * fig_height, fig_height), # extra space for colorbar
+            title = "$name ($data_source)",
+        )
+    end
+    return contours
+end
+
+function hdf5_files(path, name_match)
+    files = filter(x -> endswith(x, ".hdf5"), readdir(path, join = true))
+    filter!(x -> occursin(name_match, x), files)
+end
+
+function plot_tc_contours(folder; main_branch_data_path, name_match)
+    PR_filenames = CA.sort_files_by_time(hdf5_files(folder, name_match))
+    main_filenames = if ispath(main_branch_data_path)
+        files = hdf5_files(main_branch_data_path, name_match)
+        if any(isfile.(files))
+            CA.sort_files_by_time(files)
+        else
+            nothing
+        end
+    else
+        nothing
+    end
+    _plot_tc_contours(folder; PR_filenames, main_filenames)
+end
+
+function get_plots(vars)
+    plots = map(vars) do name_fn
+        name = first(name_fn)
+        fn = last(name_fn)
+        cplot = Plots.contourf()
+        Pair(name, (; plot = cplot, fn))
+    end
+    plots = Dict(plots...)
+    return plots
+end
+
+function _plot_tc_contours(folder; PR_filenames, main_filenames)
+
+    vars = [
+        ("area fraction", D -> parent(D.bulk_up_area)[:]),
+        ("up qt", D -> parent(D.bulk_up_q_tot)[:]),
+        ("up ql", D -> parent(D.bulk_up_q_liq)[:]),
+        ("up qi", D -> parent(D.bulk_up_q_ice)[:]),
+        ("up w", D -> parent(Geometry.WVector.(D.face_bulk_w))[:]),
+        ("en qt", D -> parent(D.env_q_tot)[:]),
+        ("en TKE", D -> parent(D.env_TKE)[:]),
+        # ("up qr", D-> parent(D.)[:])
+    ]
+
+    have_main = main_filenames ≠ nothing
+    contours_PR = get_contours(
+        PR_filenames,
+        get_plots(vars);
+        data_source = "PR",
+        have_main,
+    )
+    if have_main
+        contours_main = get_contours(
+            main_filenames,
+            get_plots(vars);
+            data_source = "main",
+            have_main,
+        )
+        # TODO: get and reset clims
+
+        P = map(collect(zip(contours_main, contours_PR))) do z
+            Plots.plot(z...; layout = Plots.grid(1, 2; widths = [0.45, 0.55]))
+        end
+        p = Plots.plot(P...; layout = Plots.grid(2 * length(contours_main), 1))
+    else
+        @warn "No main branch to compare against"
+        p = Plots.plot(
+            contours_PR...;
+            layout = Plots.grid(length(contours_PR), 1),
+        )
+    end
+
+    # Save output
+    output_filename = joinpath(
+        folder,
+        "____________________________________final_contours.png",
     )
     png(p, output_filename)
 end
