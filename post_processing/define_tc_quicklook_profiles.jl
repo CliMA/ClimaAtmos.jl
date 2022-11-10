@@ -1,4 +1,5 @@
 import ClimaCore: Fields, InputOutput, Geometry
+ENV["GKSwstype"] = "nul";
 using Plots
 import ClimaAtmos as CA
 
@@ -146,36 +147,43 @@ function get_contours(input_filenames, plots; data_source, have_main)
     (Ys, Ds) = first.(data), last.(data)
     t = CA.time_from_filename.(input_filenames)
 
-    zc = parent(Fields.coordinate_field(first(Ys).c).z)[:]
-    zf = parent(Fields.coordinate_field(first(Ys).f).z)[:]
-
     K = collect(keys(plots))
     n = length(K)
-    width_to_height_ratio = have_main ? 22 / 18 : 22 / 18
-    fig_height = 1800
+    fig_width = 4500
+    fig_height = 3000
     left_side = data_source == "main"
-    l_margin = left_side ? 40 : -20
-    r_margin = left_side ? -20 : -20
+    if have_main
+        l_margin = left_side ? 100 : 0
+        r_margin = left_side ? 0 : 0 # else case doesn't seem to be working
+    else
+        l_margin = 100
+        r_margin = -100
+    end
+    parent_data(data) = parent(data)[:]
 
     contours = map(enumerate(K)) do (i, name)
         fn = plots[name].fn
-        cdata = hcat(fn.(Ds)...)
+        space = axes(fn(first(Ds)))
+        z = parent(Fields.coordinate_field(space).z)[:]
+        Ds_parent = parent_data.(fn.(Ds))
+        cdata = hcat(Ds_parent...)
         Plots.contourf!(
             plots[name].plot,
             t ./ 3600,
-            zc ./ 10^3,
+            z ./ 10^3,
             cdata;
             xticks = i == n,
-            yticks = left_side,
-            colorbar = !left_side,
+            yticks = !have_main || left_side,
+            colorbar = !have_main || !left_side,
             c = :viridis,
             xlabel = i == n ? "Time (hours)" : "",
-            ylabel = left_side ? "Height (km)" : "",
+            ylabel = left_side || !have_main ? "Height (km)" : "",
             left_margin = l_margin * Plots.PlotMeasures.px,
             right_margin = r_margin * Plots.PlotMeasures.px,
-            bottom_margin = 0 * Plots.PlotMeasures.px,
+            bottom_margin = i == n ? 50 * Plots.PlotMeasures.px :
+                            0 * Plots.PlotMeasures.px,
             top_margin = 0 * Plots.PlotMeasures.px,
-            size = (width_to_height_ratio * fig_height, fig_height), # extra space for colorbar
+            size = (fig_width, fig_height), # extra space for colorbar
             title = "$name ($data_source)",
         )
     end
@@ -216,13 +224,13 @@ end
 function _plot_tc_contours(folder; PR_filenames, main_filenames)
 
     vars = [
-        ("area fraction", D -> parent(D.bulk_up_area)[:]),
-        ("up qt", D -> parent(D.bulk_up_q_tot)[:]),
-        ("up ql", D -> parent(D.bulk_up_q_liq)[:]),
-        ("up qi", D -> parent(D.bulk_up_q_ice)[:]),
-        ("up w", D -> parent(Geometry.WVector.(D.face_bulk_w))[:]),
-        ("en qt", D -> parent(D.env_q_tot)[:]),
-        ("en TKE", D -> parent(D.env_TKE)[:]),
+        ("area fraction", D -> D.bulk_up_area),
+        ("up qt", D -> D.bulk_up_q_tot),
+        ("up ql", D -> D.bulk_up_q_liq),
+        ("up qi", D -> D.bulk_up_q_ice),
+        ("up w", D -> Geometry.WVector.(D.face_bulk_w)),
+        ("en qt", D -> D.env_q_tot),
+        ("en TKE", D -> D.env_TKE),
         # ("up qr", D-> parent(D.)[:])
     ]
 
@@ -241,11 +249,16 @@ function _plot_tc_contours(folder; PR_filenames, main_filenames)
             have_main,
         )
         # TODO: get and reset clims
-
-        P = map(collect(zip(contours_main, contours_PR))) do z
-            Plots.plot(z...; layout = Plots.grid(1, 2; widths = [0.45, 0.55]))
-        end
-        p = Plots.plot(P...; layout = Plots.grid(2 * length(contours_main), 1))
+        @warn "Only showing main clims for contour plots"
+        P = Iterators.flatten(collect(zip(contours_main, contours_PR)))
+        p = Plots.plot(
+            P...;
+            layout = Plots.grid(
+                length(contours_main),
+                2;
+                widths = [0.45, 0.55],
+            ),
+        )
     else
         @warn "No main branch to compare against"
         p = Plots.plot(
