@@ -1,6 +1,6 @@
 import ClimaCore: Fields, InputOutput, Geometry
 ENV["GKSwstype"] = "nul";
-using Plots
+import Plots
 import ClimaAtmos as CA
 
 function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
@@ -8,23 +8,23 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         (; tickfontsize = 13, guidefontsize = 16, legendfontsize = 10, lw = 3)
 
     # initialize all plot panes
-    p1 = plot(; title = "area fraction", args...)
-    p2 = plot(; title = "up qt", args...)
-    p3 = plot(; title = "up ql", args...)
-    p4 = plot(; title = "up qi", args...)
-    p5a = plot(; title = "up w", args...)
-    p5b = plot(; title = "en w", args...)
-    p6 = plot(; title = "en qt", args...)
-    p7 = plot(; title = "en ql", args...)
-    p8 = plot(; title = "en qi", args...)
-    p9 = plot(; title = "buoy", args...)
-    p10 = plot(; title = "T", args...)
-    p11 = plot(; title = "CF", args...)
-    p12 = plot(; title = "en RH", args...)
-    p13 = plot(; title = "en TKE", args...)
-    p14 = plot(; title = "en Hvar", args...)
-    p15 = plot(; title = "en QTvar", args...)
-    p16 = plot(; title = "en HQTcov", args...)
+    p1 = Plots.plot(; title = "area fraction", args...)
+    p2 = Plots.plot(; title = "up qt", args...)
+    p3 = Plots.plot(; title = "up ql", args...)
+    p4 = Plots.plot(; title = "up qi", args...)
+    p5a = Plots.plot(; title = "up w", args...)
+    p5b = Plots.plot(; title = "en w", args...)
+    p6 = Plots.plot(; title = "en qt", args...)
+    p7 = Plots.plot(; title = "en ql", args...)
+    p8 = Plots.plot(; title = "en qi", args...)
+    p9 = Plots.plot(; title = "buoy", args...)
+    p10 = Plots.plot(; title = "T", args...)
+    p11 = Plots.plot(; title = "CF", args...)
+    p12 = Plots.plot(; title = "en RH", args...)
+    p13 = Plots.plot(; title = "en TKE", args...)
+    p14 = Plots.plot(; title = "en Hvar", args...)
+    p15 = Plots.plot(; title = "en QTvar", args...)
+    p16 = Plots.plot(; title = "en HQTcov", args...)
 
     function add_to_plots!(input_filename; data_source)
         if !isfile(input_filename)
@@ -100,7 +100,7 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         left_margin = 20.0 * Plots.PlotMeasures.px,
         layout = (4, 5),
     )
-    p = plot(
+    p = Plots.plot(
         p1,
         p2,
         p3,
@@ -126,10 +126,21 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         folder,
         "____________________________________final_profiles.png",
     )
-    png(p, output_filename)
+    Plots.png(p, output_filename)
 end
 
-function get_contours(input_filenames, plots; data_source, have_main)
+"""
+    get_contours(vars, input_filenames; data_source, have_main)
+
+An array of contour plots, given
+ - `vars::Tuple{String,Function}` a Tuple of variable name and function
+    that obtains the field given the diagnostics
+ - `input_filenames::Array{String}` an array of input filenames
+ - `data_source::String` a string containing the data source
+ - `have_main::Bool` indicates whether the main branch data is available
+    in order to adjust the margins
+"""
+function get_contours(vars, input_filenames; data_source, have_main)
     files_found = map(x -> isfile(x), input_filenames)
     if !all(files_found)
         @warn "Some data files were missing in data source `$data_source`."
@@ -148,7 +159,8 @@ function get_contours(input_filenames, plots; data_source, have_main)
     t = CA.time_from_filename.(input_filenames)
 
     clims = Dict()
-    K = collect(keys(plots))
+    contours = get_empty_contours(vars)
+    K = collect(keys(contours))
     n = length(K)
     fig_width = 4500
     fig_height = 3000
@@ -162,15 +174,15 @@ function get_contours(input_filenames, plots; data_source, have_main)
     end
     parent_data(data) = parent(data)[:]
 
-    contours = map(enumerate(K)) do (i, name)
-        fn = plots[name].fn
+    for (i, name) in enumerate(K)
+        fn = contours[name].fn
         space = axes(fn(first(Ds)))
         z = parent(Fields.coordinate_field(space).z)[:]
         Ds_parent = parent_data.(fn.(Ds))
         cdata = hcat(Ds_parent...)
         clims[name] = (minimum(cdata), maximum(cdata))
         Plots.contourf!(
-            plots[name].plot,
+            contours[name].plot,
             t ./ 3600,
             z ./ 10^3,
             cdata;
@@ -197,7 +209,9 @@ hdf5_files(path) = filter(x -> endswith(x, ".hdf5"), readdir(path, join = true))
 function zip_and_cleanup_output(path, zip_file)
     files = basename.(hdf5_files(path))
     cd(path) do
-        run(pipeline(Cmd(["zip", zip_file, files...]), stdout = IOBuffer()))
+        if !isfile(zip_file)
+            run(pipeline(Cmd(["zip", zip_file, files...]), stdout = IOBuffer()))
+        end
         # TODO: we can't seem to find the zip file when trying to unzip
         # for f in files
         #     rm(f)
@@ -211,6 +225,7 @@ function unzip_main(main_branch_data_path, zip_file)
         if !isempty(files)
             @info "HDF5 files already in path"
         elseif isfile(joinpath(main_branch_data_path, zip_file))
+            @info "Unzipping files in `$main_branch_data_path`"
             cd(main_branch_data_path) do
                 run(pipeline(Cmd(["unzip", zip_file]); stdout = IOBuffer()))
             end
@@ -237,13 +252,27 @@ function get_main_filenames(main_branch_data_path)
     end
 end
 
+function debug_filenames(filenames, data_source)
+    filenames == nothing && return
+    println("---------------- Files for $data_source")
+    for f in filenames
+        println("    File: $f")
+    end
+    println("---- Additional info")
+    @show allunique(filenames)
+    @show allunique(hdf5_files(dirname(first(filenames))))
+    println("----------------")
+end
+
 function plot_tc_contours(folder; main_branch_data_path)
     PR_filenames = CA.sort_files_by_time(hdf5_files(folder))
     main_filenames = get_main_filenames(main_branch_data_path)
+    debug_filenames(PR_filenames, "PR")
+    debug_filenames(main_filenames, "main")
     _plot_tc_contours(folder; PR_filenames, main_filenames)
 end
 
-function get_plots(vars)
+function get_empty_contours(vars)
     plots = map(vars) do name_fn
         name = first(name_fn)
         fn = last(name_fn)
@@ -254,18 +283,26 @@ function get_plots(vars)
     return plots
 end
 
+union_clims(a::Tuple{T, T}, b::Tuple{T, T}) where {T} =
+    (min(first(a), first(b)), max(last(a), last(b)))
+
+is_trivial_clims(tup::Tuple{T, T}) where {T} = tup[1] == tup[2] && tup[1] == 0
+
 function union_clims(a::Dict, b::Dict)
-    clims = Dict()
+    clims_dict = Dict()
     for k in union(keys(a), keys(b))
-        clims[k] = if haskey(a, k) && haskey(b, k)
-            (minimum(first(a[k]), first(b[k])), maximum(last(a[k]), last(b[k])))
+        clims_tup = if haskey(a, k) && haskey(b, k)
+            union_clims(a[k], b[k])
         elseif haskey(a, k)
             a[k]
         else
             b[k]
         end
+        # Avoid https://github.com/JuliaPlots/Plots.jl/issues/3924
+        clims_dict[k] =
+            is_trivial_clims(clims_tup) ? NamedTuple() : (; clims = clims_tup)
     end
-    return clims
+    return clims_dict
 end
 
 function _plot_tc_contours(folder; PR_filenames, main_filenames)
@@ -282,26 +319,22 @@ function _plot_tc_contours(folder; PR_filenames, main_filenames)
     ]
 
     have_main = main_filenames ≠ nothing
-    contours_PR, clims_PR = get_contours(
-        PR_filenames,
-        get_plots(vars);
-        data_source = "PR",
-        have_main,
-    )
+    contours_PR, clims_PR =
+        get_contours(vars, PR_filenames; data_source = "PR", have_main)
     if have_main
-        contours_main, clims_main = get_contours(
-            main_filenames,
-            get_plots(vars);
-            data_source = "main",
-            have_main,
-        )
+        contours_main, clims_main =
+            get_contours(vars, main_filenames; data_source = "main", have_main)
         clims = union_clims(clims_main, clims_PR)
         for k in keys(contours_main)
-            Plots.contourf!(contours_main[k].plot; clims = clims[k])
+            Plots.contourf!(contours_main[k].plot; clims[k]...)
         end
         for k in keys(contours_PR)
-            Plots.contourf!(contours_PR[k].plot; clims = clims[k])
+            Plots.contourf!(contours_PR[k].plot; clims[k]...)
         end
+        # Get array of plots from dict of NamedTuples
+        contours_main =
+            map(k -> contours_main[k].plot, collect(keys(contours_main)))
+        contours_PR = map(k -> contours_PR[k].plot, collect(keys(contours_PR)))
         P = Iterators.flatten(collect(zip(contours_main, contours_PR)))
         p = Plots.plot(
             P...;
@@ -313,6 +346,8 @@ function _plot_tc_contours(folder; PR_filenames, main_filenames)
         )
     else
         @warn "No main branch to compare against"
+        # Get array of plots from dict of NamedTuples
+        contours_PR = map(k -> contours_PR[k].plot, collect(keys(contours_PR)))
         p = Plots.plot(
             contours_PR...;
             layout = Plots.grid(length(contours_PR), 1),
@@ -324,5 +359,5 @@ function _plot_tc_contours(folder; PR_filenames, main_filenames)
         folder,
         "____________________________________final_contours.png",
     )
-    png(p, output_filename)
+    Plots.png(p, output_filename)
 end
