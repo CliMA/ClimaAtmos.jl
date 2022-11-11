@@ -21,6 +21,17 @@ function model_config(parsed_args)
     end
 end
 
+function coupling_type(parsed_args)
+    coupled = parsed_args["coupled"]
+    return if coupled == true
+        Coupled()
+    elseif coupled == false
+        Decoupled()
+    else
+        error("Uncaught coupled type.")
+    end
+end
+
 function energy_form(parsed_args)
     energy_name = parsed_args["energy_name"]
     @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")

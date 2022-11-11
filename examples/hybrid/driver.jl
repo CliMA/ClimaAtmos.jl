@@ -20,7 +20,6 @@ fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
-coupled = parsed_args["coupled"]
 hyperdiff = parsed_args["hyperdiff"]
 disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
@@ -165,7 +164,7 @@ function additional_cache(
             atmos.surface_scheme,
             C_E = FT(parsed_args["C_E"]),
             diffuse_momentum,
-            coupled,
+            atmos.coupling,
         ) : NamedTuple(),
         atmos.non_orographic_gravity_wave ?
         CA.gravity_wave_cache(atmos.model_config, Y, FT) : NamedTuple(),
@@ -207,8 +206,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
         CA.large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
         if vert_diff
-            (; coupled) = p
-            !coupled && CA.get_surface_fluxes!(Y, p, colidx)
+            CA.get_surface_fluxes!(Y, p, colidx, p.atmos.coupling)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)

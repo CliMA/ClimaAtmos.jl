@@ -2,6 +2,7 @@
 ##### Vertical diffusion boundary layer parameterization
 #####
 
+import StaticArrays
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Utilities: half
 import LinearAlgebra: norm
@@ -22,7 +23,7 @@ function vertical_diffusion_boundary_layer_cache(
     surface_scheme = nothing,
     C_E::FT = FT(0),
     diffuse_momentum = true,
-    coupled = false,
+    coupling,
 ) where {FT}
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
 
@@ -42,27 +43,78 @@ function vertical_diffusion_boundary_layer_cache(
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
     surface_normal = Geometry.WVector.(ones(axes(Fields.level(Y.c, 1))))
 
-    surface_scheme_params = if surface_scheme isa BulkSurfaceScheme
-        (;
-            Cd = ones(axes(Fields.level(Y.f, half))) .* FT(0.0044),
-            Ch = ones(axes(Fields.level(Y.f, half))) .* FT(0.0044),
+    sfc_conditions =
+        similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
+    ts_type = thermo_state_type(Y.c, FT)
+    ts_inst = thermo_state_instance(Y.c, FT)
+
+    # TODO: replace with (TODO add support for) Base.zero / similar
+    sfc_input_kwargs = if surface_scheme isa BulkSurfaceScheme
+
+        sfc_inputs_type = typeof(
+            SF.Coefficients{FT}(;
+                state_in = SF.InteriorValues(
+                    FT(0),
+                    StaticArrays.SVector(FT(0), FT(0)),
+                    ts_inst,
+                ),
+                state_sfc = SF.SurfaceValues(
+                    FT(0),
+                    StaticArrays.SVector(FT(0), FT(0)),
+                    ts_inst,
+                ),
+                z0m = FT(0),
+                z0b = FT(0),
+                Cd = FT(0),
+                Ch = FT(0),
+            ),
         )
+        sfc_inputs = similar(Fields.level(Y.f, half), sfc_inputs_type)
+        fill!(sfc_inputs.Cd, FT(0.0044)) #FT(0.001)
+        fill!(sfc_inputs.Ch, FT(0.0044)) #FT(0.0001)
+        (; sfc_inputs)
     elseif surface_scheme isa MoninObukhovSurface
-        (;
-            z0m = ones(axes(Fields.level(Y.f, half))) .* FT(1e-5),
-            z0b = ones(axes(Fields.level(Y.f, half))) .* FT(1e-5),
+
+        sfc_inputs_type = typeof(
+            SF.ValuesOnly{FT}(;
+                state_in = SF.InteriorValues(
+                    FT(0),
+                    StaticArrays.SVector(FT(0), FT(0)),
+                    ts_inst,
+                ),
+                state_sfc = SF.SurfaceValues(
+                    FT(0),
+                    StaticArrays.SVector(FT(0), FT(0)),
+                    ts_inst,
+                ),
+                z0m = FT(0),
+                z0b = FT(0),
+            ),
         )
-    elseif isnothing(surface_scheme)
+        sfc_inputs = similar(Fields.level(Y.f, half), sfc_inputs_type)
+        fill!(sfc_inputs.z0m, FT(1e-5))
+        fill!(sfc_inputs.z0b, FT(1e-5))
+        (; sfc_inputs)
+    else
         NamedTuple()
     end
 
     return (;
         surface_scheme,
+        sfc_input_kwargs...,
+        sfc_conditions,
         C_E,
         ᶠp = similar(Y.f, FT),
         ᶠK_E = similar(Y.f, FT),
-        surface_conditions = similar(z_bottom, cond_type),
-        uₕ_int_local = similar(Spaces.level(Y.c.uₕ, 1), Geometry.UVVector{FT}),
+        ts_sfc = similar(Spaces.level(Y.f, half), ts_type),
+        uₕ_int_phys = similar(
+            Spaces.level(Y.c.uₕ, 1),
+            typeof(Geometry.UVVector(FT(0), FT(0))),
+        ),
+        uₕ_int_phys_vec = similar(
+            Spaces.level(Y.c.uₕ, 1),
+            StaticArrays.SVector{2, FT},
+        ),
         dif_flux_uₕ,
         dif_flux_uₕ_bc = similar(dif_flux_uₕ),
         dif_flux_energy,
@@ -70,8 +122,7 @@ function vertical_diffusion_boundary_layer_cache(
         dif_flux_energy_bc = similar(dif_flux_energy),
         dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
         diffuse_momentum,
-        surface_scheme_params...,
-        coupled,
+        coupling,
         surface_normal,
         z_bottom,
     )
@@ -84,132 +135,132 @@ function eddy_diffusivity_coefficient(C_E::FT, norm_v_a, z_a, p) where {FT}
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
 
-function get_surface_density_and_humidity(T_sfc, ts_int, params)
-    thermo_params = CAP.thermodynamics_params(params)
-    T_int = TD.air_temperature(thermo_params, ts_int)
-    Rm_int = TD.gas_constant_air(thermo_params, ts_int)
-    ρ_sfc =
+set_surface_density_and_humidity!(::Coupled, args...) = nothing
+
+function set_surface_density_and_humidity!(
+    ::Decoupled,
+    ρ_sfc,
+    q_sfc,
+    T_sfc,
+    ts_int,
+    thermo_params,
+)
+    @. ρ_sfc =
         TD.air_density(thermo_params, ts_int) *
-        (T_sfc / T_int)^(TD.cv_m(thermo_params, ts_int) / Rm_int)
-    q_sfc =
+        (
+            T_sfc / TD.air_temperature(thermo_params, ts_int)
+        )^(
+            TD.cv_m(thermo_params, ts_int) /
+            TD.gas_constant_air(thermo_params, ts_int)
+        )
+    @. q_sfc =
         TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
-    return ρ_sfc, q_sfc
+    return nothing
 end
 
-surface_args(::BulkSurfaceScheme, p, colidx) = (p.Cd[colidx], p.Ch[colidx])
-
-function saturated_surface_conditions(
+function set_surface_inputs!(
+    sfc_inputs,
     surface_scheme::BulkSurfaceScheme,
-    Cd,
-    Ch,
-    T_sfc::FT,
+    T_sfc,
     ρ_sfc,
     q_sfc,
+    ts_sfc,
     ts_int,
-    uₕ_int,
+    uₕ_int_phys_vec,
     z_int,
     z_sfc,
-    params,
-    coupled,
-) where {FT}
-
-    # parameters
-    thermo_params = CAP.thermodynamics_params(params)
-    sf_params = CAP.surface_fluxes_params(params)
+    thermo_params,
+    coupling,
+)
+    FT = Spaces.undertype(axes(T_sfc))
 
     # get the near-surface thermal state
-    if !coupled
-        ρ_sfc, q_sfc = get_surface_density_and_humidity(T_sfc, ts_int, params)
-    end
-    ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+    set_surface_density_and_humidity!(
+        coupling,
+        ρ_sfc,
+        q_sfc,
+        T_sfc,
+        ts_int,
+        thermo_params,
+    )
+    @. ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
 
     # wrap state values
-    sc = SF.Coefficients{FT}(;
-        state_in = SF.InteriorValues(z_int, (uₕ_int.u, uₕ_int.v), ts_int),
-        state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
-        z0m = FT(0),
-        z0b = FT(0),
-        Cd = Cd, #FT(0.001),
-        Ch = Ch, #FT(0.0001),
+    @. sfc_inputs = SF.Coefficients(
+        SF.InteriorValues(z_int, uₕ_int_phys_vec, ts_int), # state_in
+        SF.SurfaceValues(                                  # state_sfc
+            z_sfc,
+            StaticArrays.SVector(FT(0), FT(0)),
+            ts_sfc,
+        ),
+        sfc_inputs.Cd,                                     # Cd
+        sfc_inputs.Ch,                                     # Ch
+        FT(0),                                             # z0m
+        FT(0),                                             # z0b
+        FT(1),                                             # gustiness
     )
-
-    # calculate all fluxes
-    tsf = SF.surface_conditions(sf_params, sc, SF.FVScheme())
-
-    E = SF.evaporation(sf_params, sc, tsf.Ch)
-
-    return (;
-        shf = tsf.shf,
-        lhf = tsf.lhf,
-        E = E,
-        ρτxz = tsf.ρτxz,
-        ρτyz = tsf.ρτyz,
-    )
+    return nothing
 end
 
-saturated_surface_conditions(::Nothing, args...) = nothing
+set_surface_inputs!(sfc_inputs, ::Nothing, args...) = nothing
 
-surface_args(::MoninObukhovSurface, p, colidx) = (p.z0m[colidx], p.z0b[colidx])
-
-function saturated_surface_conditions(
+function set_surface_inputs!(
+    sfc_inputs,
     surface_scheme::MoninObukhovSurface,
-    z0m,
-    z0b,
-    T_sfc::FT,
+    T_sfc,
     ρ_sfc,
     q_sfc,
+    ts_sfc,
     ts_int,
-    uₕ_int,
+    uₕ_int_phys_vec,
     z_int,
     z_sfc,
-    params,
-    coupled,
-) where {FT}
-
-    # parameters
-    thermo_params = CAP.thermodynamics_params(params)
-    sf_params = CAP.surface_fluxes_params(params)
+    thermo_params,
+    coupling,
+)
+    FT = Spaces.undertype(axes(T_sfc))
 
     # get the near-surface thermal state
-    if !coupled
-        ρ_sfc, q_sfc = get_surface_density_and_humidity(T_sfc, ts_int, params)
-    end
-    ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+    set_surface_density_and_humidity!(
+        coupling,
+        ρ_sfc,
+        q_sfc,
+        T_sfc,
+        ts_int,
+        thermo_params,
+    )
+    @. ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
 
     # wrap state values
-    sc = SF.ValuesOnly{FT}(;
-        state_in = SF.InteriorValues(z_int, (uₕ_int.u, uₕ_int.v), ts_int),
-        state_sfc = SF.SurfaceValues(z_sfc, (FT(0), FT(0)), ts_sfc),
-        z0m = z0m,
-        z0b = z0b,
+    @. sfc_inputs = SF.ValuesOnly(
+        SF.InteriorValues(z_int, uₕ_int_phys_vec, ts_int), # state_in
+        SF.SurfaceValues(                                  # state_sfc
+            z_sfc,
+            StaticArrays.SVector(FT(0), FT(0)),
+            ts_sfc,
+        ),
+        sfc_inputs.z0m,                                    # z0m
+        sfc_inputs.z0b,                                    # z0b
+        FT(-1),                                            # L_MO_init
+        FT(1),                                             # gustiness
     )
 
-    # calculate all fluxes
-    tsf = SF.surface_conditions(sf_params, sc)
-
-    E = SF.evaporation(sf_params, sc, tsf.Ch)
-
-    return (;
-        shf = tsf.shf,
-        lhf = tsf.lhf,
-        E = E,
-        ρτxz = tsf.ρτxz,
-        ρτyz = tsf.ρτyz,
-    )
 end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     Fields.bycolumn(axes(Y.c.uₕ)) do colidx
-        (; coupled) = p
-        !coupled && get_surface_fluxes!(Y, p, colidx)
+        get_surface_fluxes!(Y, p, colidx, p.atmos.coupling)
         vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
     end
 end
 
-function get_surface_fluxes!(Y, p, colidx)
+get_surface_fluxes!(Y, p, colidx, ::Coupled) = nothing
+
+function get_surface_fluxes!(Y, p, colidx, ::Decoupled)
     (; z_sfc, ᶜts, T_sfc, ρ_sfc, q_sfc) = p
     (;
-        surface_conditions,
+        sfc_conditions,
+        sfc_inputs,
         dif_flux_uₕ,
         dif_flux_uₕ_bc,
         dif_flux_energy,
@@ -218,33 +269,49 @@ function get_surface_fluxes!(Y, p, colidx)
         dif_flux_ρq_tot_bc,
         diffuse_momentum,
         z_bottom,
+        ts_sfc,
+        uₕ_int_phys_vec,
+        uₕ_int_phys,
         params,
-        coupled,
+        coupling,
     ) = p
-    (; uₕ_int_local, surface_normal) = p
+    (; surface_normal) = p
 
     uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
-    @. uₕ_int_local[colidx] = Geometry.UVVector(uₕ_int)
 
-    surf_args = surface_args(p.surface_scheme, p, colidx)
+    # TODO: Remove use of parent
+    @. uₕ_int_phys[colidx] = Geometry.UVVector(uₕ_int)
+    @. uₕ_int_phys_vec[colidx] = StaticArrays.SVector(
+        uₕ_int_phys[colidx].components.data.:1,
+        uₕ_int_phys[colidx].components.data.:2,
+    )
 
-    surface_conditions[colidx] .=
-        saturated_surface_conditions.(
-            p.surface_scheme,
-            surf_args...,
-            T_sfc[colidx],
-            ρ_sfc[colidx],
-            q_sfc[colidx],
-            Spaces.level(ᶜts[colidx], 1),
-            uₕ_int_local[colidx],
-            z_bottom[colidx],
-            z_sfc[colidx],
-            params,
-            coupled,
-        )
+    # parameters
+    thermo_params = CAP.thermodynamics_params(params)
+
+    set_surface_inputs!(
+        sfc_inputs[colidx],
+        p.surface_scheme,
+        T_sfc[colidx],
+        ρ_sfc[colidx],
+        q_sfc[colidx],
+        ts_sfc[colidx],
+        Spaces.level(ᶜts[colidx], 1),
+        uₕ_int_phys_vec[colidx],
+        z_bottom[colidx],
+        z_sfc[colidx],
+        thermo_params,
+        coupling,
+    )
+
+    # calculate all fluxes (saturated surface conditions)
+    sf_params = CAP.surface_fluxes_params(params)
+    @. sfc_conditions[colidx] =
+        SF.surface_conditions(sf_params, sfc_inputs[colidx])
+
     if diffuse_momentum
-        ρτxz = surface_conditions[colidx].ρτxz
-        ρτyz = surface_conditions[colidx].ρτyz
+        ρτxz = sfc_conditions[colidx].ρτxz
+        ρτyz = sfc_conditions[colidx].ρτyz
         ρ_1 = Fields.level(Y.c.ρ[colidx], 1)
         @. dif_flux_uₕ[colidx] =
             Geometry.Contravariant3Vector(surface_normal[colidx]) ⊗
@@ -258,7 +325,7 @@ function get_surface_fluxes!(Y, p, colidx)
             @. dif_flux_energy[colidx] *= 0
         else
             @. dif_flux_energy[colidx] = Geometry.WVector(
-                surface_conditions[colidx].shf + surface_conditions[colidx].lhf,
+                sfc_conditions[colidx].shf + sfc_conditions[colidx].lhf,
             )
         end
         @. dif_flux_energy_bc[colidx] = -dif_flux_energy[colidx]
@@ -268,8 +335,13 @@ function get_surface_fluxes!(Y, p, colidx)
         if isnothing(p.surface_scheme)
             @. dif_flux_ρq_tot[colidx] *= 0
         else
-            @. dif_flux_ρq_tot[colidx] =
-                Geometry.WVector(surface_conditions[colidx].E)
+            @. dif_flux_ρq_tot[colidx] = Geometry.WVector(
+                SF.evaporation(
+                    sf_params,
+                    sfc_inputs[colidx],
+                    sfc_conditions[colidx].Ch,
+                ),
+            )
         end
         @. dif_flux_ρq_tot_bc[colidx] = -dif_flux_ρq_tot[colidx]
     end
@@ -287,13 +359,11 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         diffuse_momentum,
         ᶠp,
         z_bottom,
-        uₕ_int_local,
     ) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
     uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
-    @. uₕ_int_local[colidx] = Geometry.UVVector(uₕ_int)
     @. ᶠp[colidx] = ᶠinterp(ᶜp[colidx])
     @. ᶠK_E[colidx] = eddy_diffusivity_coefficient(
         C_E,

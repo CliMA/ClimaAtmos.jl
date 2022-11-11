@@ -22,6 +22,10 @@ struct SingleColumnModel <: AbstractModelConfig end
 struct SphericalModel <: AbstractModelConfig end
 struct BoxModel <: AbstractModelConfig end
 
+abstract type AbstractCoupling end
+struct Coupled <: AbstractCoupling end
+struct Decoupled <: AbstractCoupling end
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -83,8 +87,24 @@ end
 Base.broadcastable(x::ThermoDispatcher) = Ref(x)
 
 
-Base.@kwdef struct AtmosModel{MC, MM, EF, PM, F, S, RM, LA, EC, TCM, CM, SS, GW}
+Base.@kwdef struct AtmosModel{
+    MC,
+    C,
+    MM,
+    EF,
+    PM,
+    F,
+    S,
+    RM,
+    LA,
+    EC,
+    TCM,
+    CM,
+    SS,
+    GW,
+}
     model_config::MC = nothing
+    coupling::C = nothing
     moisture_model::MM = nothing
     energy_form::EF = nothing
     precip_model::PM = nothing
