@@ -18,7 +18,6 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     FT = eltype(params)
     (; dt) = simulation
 
-    callback_filters = call_every_n_steps(affect_filter!; skip_first = true)
     tc_callbacks =
         call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
 
@@ -37,10 +36,6 @@ function get_callbacks(parsed_args, simulation, atmos, params)
 
     if !isnothing(atmos.turbconv_model)
         additional_callbacks = (additional_callbacks..., tc_callbacks)
-    end
-    if atmos.moisture_model isa EquilMoistModel &&
-       parsed_args["apply_moisture_filter"]
-        additional_callbacks = (additional_callbacks..., callback_filters)
     end
 
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
@@ -119,11 +114,6 @@ function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     )
 end
 
-function affect_filter!(Y::Fields.FieldVector)
-    @. Y.c.ρq_tot = max(Y.c.ρq_tot, 0)
-    return nothing
-end
-
 function dss_callback(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
@@ -138,17 +128,8 @@ function dss_callback(integrator)
     # ODE.u_modified!(integrator, false) # TODO: try this
 end
 
-
-function affect_filter!(integrator)
-    (; apply_moisture_filter) = integrator.p
-    affect_filter!(integrator.u)
-    # We're lying to OrdinaryDiffEq.jl, in order to avoid
-    # paying for an additional tendency call, which is required
-    # to support supplying a continuous representation of the solution.
-    ODE.u_modified!(integrator, false)
-end
-
 function turb_conv_affect_filter!(integrator)
+    p = integrator.p
     (; edmf_cache, Δt) = p
     (; edmf, param_set, aux, case, surf_params) = edmf_cache
     t = integrator.t
