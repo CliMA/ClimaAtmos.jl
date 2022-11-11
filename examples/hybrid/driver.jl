@@ -189,7 +189,6 @@ function additional_cache(
             params,
             parsed_args,
         ),
-        (; apply_moisture_filter = parsed_args["apply_moisture_filter"]),
     )
 end
 

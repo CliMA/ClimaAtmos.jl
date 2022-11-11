@@ -84,7 +84,6 @@ end
 
 function Wfact!(W, Y, p, dtγ, t, colidx)
 
-    # p.apply_moisture_filter && affect_filter!(Y)
     (; ᶠgradᵥ, ᶠinterp, ᶠinterp_stencil, ᶠupwind1, ᶠgradᵥ_stencil) = p.operators
     (; ᶜinterp, ᶜinterp_stencil, ᶠupwind3, ᶜdivᵥ_stencil) = p.operators
 
