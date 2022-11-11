@@ -129,6 +129,7 @@ function dss_callback(integrator)
 end
 
 function turb_conv_affect_filter!(integrator)
+    p = integrator.p
     (; edmf_cache, Δt) = p
     (; edmf, param_set, aux, case, surf_params) = edmf_cache
     t = integrator.t
