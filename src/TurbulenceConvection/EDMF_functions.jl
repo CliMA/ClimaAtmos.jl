@@ -11,39 +11,33 @@ function update_cloud_frac(edmf::EDMFModel, grid::Grid, state::State)
         a_up_bulk * aux_bulk.cloud_fraction
 end
 
-function compute_turbconv_tendencies!(
+function compute_implicit_turbconv_tendencies!(
     edmf::EDMFModel,
     grid::Grid,
     state::State,
-    param_set::APS,
-    surf::SurfaceBase,
-    Δt::Real,
 )
-    compute_up_tendencies!(edmf, grid, state, param_set, surf)
-    compute_en_tendencies!(edmf, grid, state, param_set, Val(:tke), Val(:ρatke))
+    compute_implicit_up_tendencies!(edmf, grid, state)
+    compute_implicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
 
     if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        compute_en_tendencies!(
+        compute_implicit_en_tendencies!(
             edmf,
             grid,
             state,
-            param_set,
             Val(:Hvar),
             Val(:ρaHvar),
         )
-        compute_en_tendencies!(
+        compute_implicit_en_tendencies!(
             edmf,
             grid,
             state,
-            param_set,
             Val(:QTvar),
             Val(:ρaQTvar),
         )
-        compute_en_tendencies!(
+        compute_implicit_en_tendencies!(
             edmf,
             grid,
             state,
-            param_set,
             Val(:HQTcov),
             Val(:ρaHQTcov),
         )
@@ -51,6 +45,42 @@ function compute_turbconv_tendencies!(
 
     return nothing
 end
+
+function compute_explicit_turbconv_tendencies!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+)
+    compute_explicit_up_tendencies!(edmf, grid, state)
+    compute_explicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
+
+    if edmf.thermo_covariance_model isa PrognosticThermoCovariances
+        compute_explicit_en_tendencies!(
+            edmf,
+            grid,
+            state,
+            Val(:Hvar),
+            Val(:ρaHvar),
+        )
+        compute_explicit_en_tendencies!(
+            edmf,
+            grid,
+            state,
+            Val(:QTvar),
+            Val(:ρaQTvar),
+        )
+        compute_explicit_en_tendencies!(
+            edmf,
+            grid,
+            state,
+            Val(:HQTcov),
+            Val(:ρaHQTcov),
+        )
+    end
+
+    return nothing
+end
+
 function compute_sgs_flux!(
     edmf::EDMFModel,
     grid::Grid,
@@ -513,12 +543,70 @@ function compute_plume_scale_height(
     return max(updraft_top, H_up_min)
 end
 
-function compute_up_tendencies!(
+function compute_implicit_up_tendencies!(
     edmf::EDMFModel,
     grid::Grid,
     state::State,
-    param_set::APS,
-    surf::SurfaceBase,
+)
+    N_up = n_updrafts(edmf)
+    kc_surf = kc_surface(grid)
+    kf_surf = kf_surface(grid)
+    FT = float_type(state)
+
+    prog_up = center_prog_updrafts(state)
+    prog_up_f = face_prog_updrafts(state)
+    tendencies_up = center_tendencies_updrafts(state)
+    tendencies_up_f = face_tendencies_updrafts(state)
+
+    # Solve for updraft area fraction
+
+    Ic = CCO.InterpolateF2C()
+    ∇c = CCO.DivergenceF2C()
+    LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
+
+    @inbounds for i in 1:N_up
+        w_up = prog_up_f[i].w
+
+        ρarea = prog_up[i].ρarea
+        ρaθ_liq_ice = prog_up[i].ρaθ_liq_ice
+        ρaq_tot = prog_up[i].ρaq_tot
+
+        tends_ρarea = tendencies_up[i].ρarea
+        tends_ρaθ_liq_ice = tendencies_up[i].ρaθ_liq_ice
+        tends_ρaq_tot = tendencies_up[i].ρaq_tot
+
+        @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
+        @. tends_ρaθ_liq_ice += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaθ_liq_ice))
+        @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
+
+        tends_ρarea[kc_surf] = 0
+        tends_ρaθ_liq_ice[kc_surf] = 0
+        tends_ρaq_tot[kc_surf] = 0
+    end
+
+    # Solve for updraft velocity
+
+    LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
+    prog_bcs = (;
+        bottom = CCO.SetGradient(CCG.WVector(FT(0))),
+        top = CCO.SetGradient(CCG.WVector(FT(0))),
+    )
+    grad_f = CCO.GradientC2F(; prog_bcs...)
+
+    @inbounds for i in 1:N_up
+        w_up = prog_up_f[i].w
+        tends_w = tendencies_up_f[i].w
+        @. tends_w += -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
+        tends_w[kf_surf] = zero(tends_w[kf_surf])
+    end
+
+    return nothing
+end
+
+function compute_explicit_up_tendencies!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
 )
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
@@ -534,38 +622,17 @@ function compute_up_tendencies!(
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
-    aux_gm_f = face_aux_grid_mean(state)
     ρ_c = prog_gm.ρ
-    ρ_f = aux_gm_f.ρ
-    au_lim = edmf.max_area
-
-    @inbounds for i in 1:N_up
-        aux_up_i = aux_up[i]
-        @. aux_up_i.entr_turb_dyn = aux_up_i.entr_sc + aux_up_i.frac_turb_entr
-        @. aux_up_i.detr_turb_dyn = aux_up_i.detr_sc + aux_up_i.frac_turb_entr
-    end
-
-    UB = CCO.UpwindBiasedProductC2F(
-        bottom = CCO.SetValue(FT(0)),
-        top = CCO.SetValue(FT(0)),
-    )
-    Ic = CCO.InterpolateF2C()
-
-    wvec = CC.Geometry.WVector
-    ∇c = CCO.DivergenceF2C()
-    w_bcs =
-        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
-    LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
 
     # Solve for updraft area fraction
+
+    Ic = CCO.InterpolateF2C()
+
     @inbounds for i in 1:N_up
         aux_up_i = aux_up[i]
         w_up = prog_up_f[i].w
-        a_up = aux_up_i.area
-        q_tot_up = aux_up_i.q_tot
         q_tot_en = aux_en.q_tot
         θ_liq_ice_en = aux_en.θ_liq_ice
-        θ_liq_ice_up = aux_up_i.θ_liq_ice
         entr_turb_dyn = aux_up_i.entr_turb_dyn
         detr_turb_dyn = aux_up_i.detr_turb_dyn
         θ_liq_ice_tendency_precip_formation =
@@ -580,13 +647,12 @@ function compute_up_tendencies!(
         tends_ρaθ_liq_ice = tendencies_up[i].ρaθ_liq_ice
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
-        @. tends_ρarea =
-            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)) +
+        @. tends_ρarea +=
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn) -
             (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn)
 
-        @. tends_ρaθ_liq_ice =
-            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaθ_liq_ice)) + (
+        @. tends_ρaθ_liq_ice +=
+            (
                 ρarea *
                 Ic(wcomponent(CCG.WVector(w_up))) *
                 entr_turb_dyn *
@@ -595,8 +661,8 @@ function compute_up_tendencies!(
             (ρaθ_liq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
             (ρ_c * θ_liq_ice_tendency_precip_formation)
 
-        @. tends_ρaq_tot =
-            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot)) + (
+        @. tends_ρaq_tot +=
+            (
                 ρarea *
                 Ic(wcomponent(CCG.WVector(w_up))) *
                 entr_turb_dyn *
@@ -615,12 +681,6 @@ function compute_up_tendencies!(
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
-    LBC = CCO.LeftBiasedF2C(; bottom = CCO.SetValue(FT(0)))
-    prog_bcs = (;
-        bottom = CCO.SetGradient(wvec(FT(0))),
-        top = CCO.SetGradient(wvec(FT(0))),
-    )
-    grad_f = CCO.GradientC2F(; prog_bcs...)
 
     @inbounds for i in 1:N_up
         w_up = prog_up_f[i].w
@@ -630,7 +690,6 @@ function compute_up_tendencies!(
         entr_w = aux_up[i].entr_turb_dyn
         buoy = aux_up[i].buoy
 
-        @. tends_w = -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
         @. tends_w +=
             w_up * I0f(entr_w) * (wcomponent(CCG.WVector(w_en - w_up))) +
             CCG.Covariant3Vector(CCG.WVector(I0f(buoy) + nh_pressure))
@@ -910,43 +969,31 @@ function compute_covariance_entr(
     return nothing
 end
 
-function compute_en_tendencies!(
+function compute_implicit_en_tendencies!(
     edmf::EDMFModel,
     grid::Grid,
     state::State,
-    param_set::APS,
     ::Val{covar_sym},
     ::Val{prog_sym},
 ) where {covar_sym, prog_sym}
-    N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kc_toa = kc_top_of_atmos(grid)
     aux_gm_f = face_aux_grid_mean(state)
     prog_en = center_prog_environment(state)
-    prog_gm = center_prog_grid_mean(state)
-    aux_en_2m = center_aux_environment_2m(state)
     tendencies_en = center_tendencies_environment(state)
     tend_covar = getproperty(tendencies_en, prog_sym)
     prog_covar = getproperty(prog_en, prog_sym)
-    aux_up_f = face_aux_updrafts(state)
-    prog_up_f = face_prog_updrafts(state)
     aux_en = center_aux_environment(state)
     covar = getproperty(aux_en, covar_sym)
-    aux_covar = getproperty(aux_en_2m, covar_sym)
-    aux_up = center_aux_updrafts(state)
     w_en_f = face_aux_environment(state).w
-    ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
-    c_d = mixing_length_params(edmf).c_d
     is_tke = covar_sym == :tke
     FT = float_type(state)
 
-    ρ_ae_K = face_aux_turbconv(state).ρ_ae_K
     KM = center_aux_turbconv(state).KM
     KH = center_aux_turbconv(state).KH
     aux_tc = center_aux_turbconv(state)
     aux_bulk = center_aux_bulk(state)
-    D_env = aux_tc.ϕ_temporary
     aeK = aux_tc.ψ_temporary
     a_bulk = aux_bulk.area
     if is_tke
@@ -955,29 +1002,58 @@ function compute_en_tendencies!(
         @. aeK = (1 - a_bulk) * KH
     end
 
+    aeK_bcs =
+        (; bottom = CCO.SetValue(aeK[kc_surf]), top = CCO.SetValue(aeK[kc_toa]))
+    prog_bcs = (;
+        bottom = CCO.SetGradient(CCG.WVector(FT(0))),
+        top = CCO.SetGradient(CCG.WVector(FT(0))),
+    )
+
+    Ic = CCO.InterpolateF2C()
+    If = CCO.InterpolateC2F(; aeK_bcs...)
+    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(CCG.WVector(FT(0))))
+    ∇c = CCO.DivergenceF2C()
+    ∇f = CCO.GradientC2F(; prog_bcs...)
+
+    @. tend_covar +=
+        -∇c(RB(prog_covar * Ic(CCG.WVector(w_en_f)))) +
+        ∇c(ρ_f * If(aeK) * ∇f(covar))
+
+    return nothing
+end
+
+function compute_explicit_en_tendencies!(
+    edmf::EDMFModel,
+    grid::Grid,
+    state::State,
+    ::Val{covar_sym},
+    ::Val{prog_sym},
+) where {covar_sym, prog_sym}
+    N_up = n_updrafts(edmf)
+    prog_en = center_prog_environment(state)
+    prog_gm = center_prog_grid_mean(state)
+    aux_en_2m = center_aux_environment_2m(state)
+    tendencies_en = center_tendencies_environment(state)
+    tend_covar = getproperty(tendencies_en, prog_sym)
+    prog_covar = getproperty(prog_en, prog_sym)
+    prog_up_f = face_prog_updrafts(state)
+    aux_en = center_aux_environment(state)
+    covar = getproperty(aux_en, covar_sym)
+    aux_covar = getproperty(aux_en_2m, covar_sym)
+    aux_up = center_aux_updrafts(state)
+    ρ_c = prog_gm.ρ
+    c_d = mixing_length_params(edmf).c_d
+    aux_tc = center_aux_turbconv(state)
+    D_env = aux_tc.ϕ_temporary
+
     press = aux_covar.press
     buoy = aux_covar.buoy
     shear = aux_covar.shear
     entr_gain = aux_covar.entr_gain
     rain_src = aux_covar.rain_src
-
-    wvec = CC.Geometry.WVector
-    aeK_bcs =
-        (; bottom = CCO.SetValue(aeK[kc_surf]), top = CCO.SetValue(aeK[kc_toa]))
-    prog_bcs = (;
-        bottom = CCO.SetGradient(wvec(FT(0))),
-        top = CCO.SetGradient(wvec(FT(0))),
-    )
-
-    If = CCO.InterpolateC2F(; aeK_bcs...)
-    ∇f = CCO.GradientC2F(; prog_bcs...)
-    ∇c = CCO.DivergenceF2C()
-
-    mixing_length = aux_tc.mixing_length
     min_area = edmf.minimum_area
 
     Ic = CCO.InterpolateF2C()
-    area_en = aux_en.area
     tke_en = aux_en.tke
 
     parent(D_env) .= 0
@@ -997,12 +1073,9 @@ function compute_en_tendencies!(
             (entr_sc + turb_entr)
     end
 
-    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(CCG.WVector(FT(0))))
-    @. tend_covar =
+    @. tend_covar +=
         press + buoy + shear + entr_gain + rain_src - D_env * covar -
-        (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) *
-        prog_covar - ∇c(RB(prog_covar * Ic(CCG.WVector(w_en_f)))) +
-        ∇c(ρ_f * If(aeK) * ∇f(covar))
+        (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) * prog_covar
 
     return nothing
 end

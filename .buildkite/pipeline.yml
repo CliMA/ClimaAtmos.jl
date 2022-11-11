@@ -323,7 +323,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":balloon: Compressible single column EDMF Bomex (Newton's method)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id compressible_edmf_bomex --dt 40secs --t_end 6hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id compressible_edmf_bomex --dt 35secs --t_end 6hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "compressible_edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -331,7 +331,12 @@ steps:
       - label: ":balloon: Compressible single column EDMF Bomex (JFNK)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id compressible_edmf_bomex_jfnk --quicklook_reference_job_id compressible_edmf_bomex --dt 40secs --t_end 6hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "compressible_edmf_bomex_jfnk/*"
-        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: Compressible single column EDMF Bomex (JFNK with IMEX EDMF)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --imex_edmf_turbconv true --imex_edmf_gm true --use_krylov_method true --job_id compressible_edmf_bomex_jfnk_imex --quicklook_reference_job_id compressible_edmf_bomex --dt 40secs --t_end 6hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        artifact_paths: "compressible_edmf_bomex_jfnk_imex/*"
         agents:
           slurm_mem: 20GB
 

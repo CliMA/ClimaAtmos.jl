@@ -121,14 +121,30 @@ function parse_commandline()
         help = "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
         arg_type = Int
         default = 1
-        "--use_krylov_method"
-        help = "Whether to use a Krylov method to solve the linear system in Newton's method (only for ODE algorithms from ClimaTimeSteppers.jl)"
+        "--use_newton_rtol"
+        help = "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"
         arg_type = Bool
         default = false
-        "--krylov_forcing"
-        help = "Relative tolerance for the Krylov method (only used if `use_krylov_method` is `true`)"
+        "--newton_rtol"
+        help = "Relative tolerance of Newton's method (only for ClimaTimeSteppers.jl; only used when `use_newton_rtol` is `true`)"
+        arg_type = Float64
+        default = Float64(1e-5)
+        "--use_krylov_method"
+        help = "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
+        arg_type = Bool
+        default = false
+        "--krylov_rtol"
+        help = "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
         arg_type = Float64
         default = Float64(0.1)
+        "--use_dynamic_krylov_rtol"
+        help = "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
+        arg_type = Bool
+        default = false
+        "--eisenstat_walker_forcing_alpha"
+        help = "Value of alpha to use for Eisenstat-Walker forcing (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` and `use_dynamic_krylov_rtol` are `true`)"
+        arg_type = Float64
+        default = Float64(2)
         "--jvp_step_adjustment"
         help = "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
         arg_type = Float64
@@ -258,6 +274,14 @@ function parse_commandline()
         help = "Apply a horizontal limiter to every tracer [`true` (default), `false`]"
         arg_type = Bool
         default = true
+        "--imex_edmf_turbconv"
+        help = "Whether to split EDMF's `compute_turbconv_tendencies!` into implicit and explicit components"
+        arg_type = Bool
+        default = false
+        "--imex_edmf_gm"
+        help = "Whether to split EDMF's `compute_gm_tendencies!` into implicit and explicit components"
+        arg_type = Bool
+        default = false
         "--debugging_tc"
         help = "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
         arg_type = Bool

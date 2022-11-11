@@ -92,7 +92,7 @@ function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     return
 end
 
-function compute_gm_tendencies!(
+function compute_implicit_gm_tendencies!(
     edmf::TC.EDMFModel,
     grid::TC.Grid,
     state::TC.State,
@@ -102,13 +102,32 @@ function compute_gm_tendencies!(
     tendencies_gm = TC.center_tendencies_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
+    ρ_c = prog_gm.ρ
+    tendencies_gm_uₕ = TC.tendencies_grid_mean_uₕ(state)
+
+    TC.compute_sgs_flux!(edmf, grid, state, surf, param_set)
+
+    ∇sgs = CCO.DivergenceF2C()
+    @. tendencies_gm.ρe_tot += -∇sgs(aux_gm_f.sgs_flux_h_tot)
+    @. tendencies_gm.ρq_tot += -∇sgs(aux_gm_f.sgs_flux_q_tot)
+    @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
+
+    return nothing
+end
+
+function compute_explicit_gm_tendencies!(
+    edmf::TC.EDMFModel,
+    grid::TC.Grid,
+    state::TC.State,
+    surf::TC.SurfaceBase,
+    param_set::APS,
+)
+    tendencies_gm = TC.center_tendencies_grid_mean(state)
+    prog_gm = TC.center_prog_grid_mean(state)
     aux_en = TC.center_aux_environment(state)
     aux_bulk = TC.center_aux_bulk(state)
     ρ_c = prog_gm.ρ
     aux_tc = TC.center_aux_turbconv(state)
-    tendencies_gm_uₕ = TC.tendencies_grid_mean_uₕ(state)
-
-    wvec = CC.Geometry.WVector
 
     # Apply precipitation tendencies
     @. tendencies_gm.ρq_tot +=
@@ -124,13 +143,6 @@ function compute_gm_tendencies!(
             aux_en.e_tot_tendency_precip_formation +
             aux_tc.e_tot_tendency_precip_sinks
         )
-
-    TC.compute_sgs_flux!(edmf, grid, state, surf, param_set)
-
-    ∇sgs = CCO.DivergenceF2C()
-    @. tendencies_gm.ρe_tot += -∇sgs(aux_gm_f.sgs_flux_h_tot)
-    @. tendencies_gm.ρq_tot += -∇sgs(aux_gm_f.sgs_flux_q_tot)
-    @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
 
     return nothing
 end

@@ -211,6 +211,11 @@ function compute_entr_detr!(
                 aux_up[i].detr_sc[k] = FT(0)
                 aux_up[i].frac_turb_entr[k] = FT(0)
             end
+
+            aux_up[i].entr_turb_dyn[k] =
+                aux_up[i].entr_sc[k] + aux_up[i].frac_turb_entr[k]
+            aux_up[i].detr_turb_dyn[k] =
+                aux_up[i].detr_sc[k] + aux_up[i].frac_turb_entr[k]
         end
     end
 end

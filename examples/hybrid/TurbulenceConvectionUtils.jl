@@ -39,7 +39,8 @@ turbconv_cache(
     parsed_args,
 ) = (; turbconv_model)
 
-sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 #####
 ##### EDMF
@@ -65,6 +66,8 @@ function turbconv_cache(
     tc_params = CAP.turbconv_params(param_set)
     Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     FT = CC.Spaces.undertype(axes(Y.c))
+    imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
+    imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
     case = Cases.get_case(namelist["meta"]["casename"])
     thermo_params = CAP.thermodynamics_params(param_set)
@@ -92,6 +95,8 @@ function turbconv_cache(
         ᶠp₀,
         ᶜp₀,
         case,
+        imex_edmf_turbconv,
+        imex_edmf_gm,
         test_consistency,
         surf_params,
         param_set,
@@ -151,12 +156,66 @@ function init_tc!(Y, p, params, colidx)
     initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
 end
 
+# TODO: Split update_aux! and other functions into implicit and explicit parts.
 
-function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
+function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt, compressibility_model) = p
     (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
         edmf_cache
-    (; precip_model, test_consistency, ᶠp₀, ᶜp₀) = edmf_cache
+    (; imex_edmf_turbconv, imex_edmf_gm, test_consistency, ᶠp₀) = edmf_cache
+    thermo_params = CAP.thermodynamics_params(param_set)
+    tc_params = CAP.turbconv_params(param_set)
+
+    imex_edmf_turbconv || imex_edmf_gm || return nothing
+
+    Y_filtered.c[colidx] .= Y.c[colidx]
+    Y_filtered.f[colidx] .= Y.f[colidx]
+
+    state = TC.tc_column_state(Y_filtered, p, Yₜ, colidx)
+
+    grid = TC.Grid(state)
+    if test_consistency
+        parent(state.aux.face) .= NaN
+        parent(state.aux.cent) .= NaN
+    end
+
+    if compressibility_model isa CA.AnelasticFluid
+        @. p.edmf_cache.aux.face.p[colidx] = ᶠp₀
+        CA.compute_ref_density!(
+            p.edmf_cache.aux.face.ρ[colidx],
+            p.edmf_cache.aux.face.p[colidx],
+            thermo_params,
+            surf_ref_thermo_state,
+        )
+    end
+    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
+
+    surf = get_surface(surf_params, grid, state, t, tc_params)
+
+    TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+
+    TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
+
+    imex_edmf_turbconv &&
+        TC.compute_implicit_turbconv_tendencies!(edmf, grid, state)
+
+    imex_edmf_gm &&
+        compute_implicit_gm_tendencies!(edmf, grid, state, surf, tc_params)
+
+    # Note: The "filter relaxation tendency" should not be included in the
+    # implicit tendency because its derivative with respect to Y is
+    # discontinuous, which means that including it would make the linear
+    # linear equation being solved by Newton's method ill-conditioned.
+
+    return nothing
+end
+
+function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
+    (; edmf_cache, Δt, compressibility_model) = p
+    (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
+        edmf_cache
+    (; precip_model, imex_edmf_turbconv, imex_edmf_gm, test_consistency, ᶠp₀) =
+        edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
 
@@ -201,10 +260,17 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         Δt,
     )
 
-    TC.compute_turbconv_tendencies!(edmf, grid, state, tc_params, surf, Δt)
+    # Ensure that, when a tendency is not computed with an IMEX formulation,
+    # both its implicit and its explicit components are computed here.
+
+    TC.compute_explicit_turbconv_tendencies!(edmf, grid, state)
+    imex_edmf_turbconv ||
+        TC.compute_implicit_turbconv_tendencies!(edmf, grid, state)
 
     # TODO: incrementally disable this and enable proper grid mean terms
-    compute_gm_tendencies!(edmf, grid, state, surf, tc_params)
+    compute_explicit_gm_tendencies!(edmf, grid, state, surf, tc_params)
+    imex_edmf_gm ||
+        compute_implicit_gm_tendencies!(edmf, grid, state, surf, tc_params)
 
     # Note: This "filter relaxation tendency" can be scaled down if needed, but
     # it must be present in order to prevent Y and Y_filtered from diverging
@@ -213,6 +279,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         (Y_filtered.c.turbconv[colidx] .- Y.c.turbconv[colidx]) ./ Δt
     Yₜ.f.turbconv[colidx] .+=
         (Y_filtered.f.turbconv[colidx] .- Y.f.turbconv[colidx]) ./ Δt
+
     return nothing
 end
 
