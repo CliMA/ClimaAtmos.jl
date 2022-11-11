@@ -358,7 +358,6 @@ if parsed_args["debugging_tc"]
             "define_tc_quicklook_profiles.jl",
         ),
     )
-    zip_file = "hdf5files"
 
     main_branch_root = get_main_branch_buildkite_path()
     quicklook_reference_job_id =
@@ -369,39 +368,17 @@ if parsed_args["debugging_tc"]
     day = floor(Int, simulation.t_end / (60 * 60 * 24))
     sec = floor(Int, simulation.t_end % (60 * 60 * 24))
 
-    plot_tc_contours(
-        simulation.output_dir;
-        main_branch_data_path,
-        name_match = simulation.job_id,
-        zip_file,
-    )
+    zip_file = "hdf5files"
+    unzip_main(main_branch_data_path, zip_file)
+
+    plot_tc_contours(simulation.output_dir; main_branch_data_path)
     plot_tc_profiles(
         simulation.output_dir;
         hdf5_filename = "day$day.$sec.hdf5",
         main_branch_data_path,
     )
-    # Zip and clean up output
     if atmos.model_config isa CA.SingleColumnModel
-        try
-            files = filter(
-                x -> endswith(x, ".hdf5"),
-                readdir(simulation.output_dir, join = true),
-            )
-            files = basename.(files)
-            cd(simulation.output_dir) do
-                run(
-                    pipeline(
-                        Cmd(["zip", zip_file, files...]),
-                        stdout = IOBuffer(),
-                    ),
-                )
-                for f in files
-                    rm(f)
-                end
-            end
-        catch
-            @warn "Failed to zip hdf5 files."
-        end
+        zip_and_cleanup_output(simulation.output_dir, zip_file)
     end
 end
 

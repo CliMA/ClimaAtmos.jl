@@ -192,21 +192,41 @@ function get_contours(input_filenames, plots; data_source, have_main)
     return contours, clims
 end
 
-function hdf5_files(path, name_match)
-    files = filter(x -> endswith(x, ".hdf5"), readdir(path, join = true))
-    filter!(x -> occursin(name_match, x), files)
+hdf5_files(path) = filter(x -> endswith(x, ".hdf5"), readdir(path, join = true))
+
+function zip_and_cleanup_output(path, zip_file)
+    files = basename.(hdf5_files(path))
+    cd(path) do
+        run(pipeline(Cmd(["zip", zip_file, files...]), stdout = IOBuffer()))
+        # TODO: we can't seem to find the zip file when trying to unzip
+        # for f in files
+        #     rm(f)
+        # end
+    end
 end
 
-function get_main_filenames(main_branch_data_path, name_match, zip_file)
+function unzip_main(main_branch_data_path, zip_file)
     if ispath(main_branch_data_path)
-        files = hdf5_files(main_branch_data_path, name_match)
-        # NOTE: `hdf5files` must match `hdf5files`
-        if isempty(files) && isfile(joinpath(main_branch_data_path, zip_file))
+        files = hdf5_files(main_branch_data_path)
+        if !isempty(files)
+            @info "HDF5 files already in path"
+        elseif isfile(joinpath(main_branch_data_path, zip_file))
             cd(main_branch_data_path) do
                 run(pipeline(Cmd(["unzip", zip_file]); stdout = IOBuffer()))
             end
-            files = hdf5_files(main_branch_data_path, name_match)
+            files = hdf5_files(main_branch_data_path)
+            @assert !isempty(files)
+        else
+            @warn "Zip file does not exist"
         end
+    else
+        @warn "Path $main_branch_data_path not found."
+    end
+end
+
+function get_main_filenames(main_branch_data_path)
+    if ispath(main_branch_data_path)
+        files = hdf5_files(main_branch_data_path)
         if any(isfile.(files))
             CA.sort_files_by_time(files)
         else
@@ -217,10 +237,9 @@ function get_main_filenames(main_branch_data_path, name_match, zip_file)
     end
 end
 
-function plot_tc_contours(folder; main_branch_data_path, name_match, zip_file)
-    PR_filenames = CA.sort_files_by_time(hdf5_files(folder, name_match))
-    main_filenames =
-        get_main_filenames(main_branch_data_path, name_match, zip_file)
+function plot_tc_contours(folder; main_branch_data_path)
+    PR_filenames = CA.sort_files_by_time(hdf5_files(folder))
+    main_filenames = get_main_filenames(main_branch_data_path)
     _plot_tc_contours(folder; PR_filenames, main_filenames)
 end
 
