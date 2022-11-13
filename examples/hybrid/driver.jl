@@ -398,3 +398,10 @@ if parsed_args["regression_test"]
         simulation.output_dir,
     )
 end
+
+if parsed_args["check_conservation"]
+    @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 10 * eps(FT)
+    @test sum(sol.u[1].c.ρe_tot) +
+          (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈
+          sum(sol.u[end].c.ρe_tot) rtol = 10 * eps(FT)
+end

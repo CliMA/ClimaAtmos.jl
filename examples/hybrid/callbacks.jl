@@ -20,6 +20,11 @@ function get_callbacks(parsed_args, simulation, atmos, params)
 
     tc_callbacks =
         call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
+    flux_accumulation_callback = call_every_n_steps(
+        flux_accumulation!;
+        skip_first = true,
+        call_at_end = true,
+    )
 
     additional_callbacks =
         if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
@@ -36,6 +41,11 @@ function get_callbacks(parsed_args, simulation, atmos, params)
 
     if !isnothing(atmos.turbconv_model)
         additional_callbacks = (additional_callbacks..., tc_callbacks)
+    end
+
+    if parsed_args["check_conservation"]
+        additional_callbacks =
+            (flux_accumulation_callback, additional_callbacks...)
     end
 
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
@@ -148,6 +158,23 @@ function turb_conv_affect_filter!(integrator)
     # to support supplying a continuous representation of the
     # solution.
     ODE.u_modified!(integrator, false)
+end
+
+horizontal_integral_at_boundary(f, lev) = sum(
+    Spaces.level(f, lev) ./ Fields.dz_field(axes(Spaces.level(f, lev))) .* 2,
+)
+
+function flux_accumulation!(integrator)
+    p = integrator.p
+    if !isnothing(p.radiation_model)
+        (; ᶠradiation_flux, net_energy_flux_toa, net_energy_flux_sfc, Δt) = p
+        nlevels = Spaces.nlevels(axes(Y.c))
+        net_energy_flux_toa[] +=
+            horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
+            Δt
+        net_energy_flux_sfc[] +=
+            horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+    end
 end
 
 function rrtmgp_model_callback!(integrator)

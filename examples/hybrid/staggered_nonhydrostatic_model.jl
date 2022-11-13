@@ -123,6 +123,11 @@ function default_cache(
     ᶜρh_kwargs =
         :ρe_tot in pnc || :ρe_int in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
 
+    net_energy_flux_toa = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
+    net_energy_flux_toa[] = Geometry.WVector(FT(0))
+    net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
+    net_energy_flux_sfc[] = Geometry.WVector(FT(0))
+
     return (;
         simulation,
         operators = (;
@@ -172,6 +177,8 @@ function default_cache(
         energy_upwinding,
         tracer_upwinding,
         ghost_buffer = ghost_buffer,
+        net_energy_flux_toa,
+        net_energy_flux_sfc,
     )
 end
 
