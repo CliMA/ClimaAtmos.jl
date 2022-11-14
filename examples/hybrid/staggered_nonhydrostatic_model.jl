@@ -142,6 +142,7 @@ function default_cache(
             ᶠfct_zalesak,
         ),
         spaces,
+        atmos,
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
         Yₜ = similar(Y), # only needed when using increment formulation

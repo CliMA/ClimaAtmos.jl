@@ -19,6 +19,18 @@ function thermo_state_type(Yc::Fields.Field, ::Type{FT}) where {FT}
     end
 end
 
+# TODO: replace with zero(thermo_state_type) when supported
+function thermo_state_instance(Yc::Fields.Field, ::Type{FT}) where {FT}
+    pns = propertynames(Yc)
+    return if (:ρq_liq in pns && :ρq_ice in pns && :ρq_tot in pns)
+        TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
+    elseif :ρq_tot in pns
+        TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
+    else
+        TD.PhaseDry{FT}(0, 0)
+    end
+end
+
 #= High-level wrapper =#
 function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp, colidx)
     ᶜts = p.ᶜts[colidx]
