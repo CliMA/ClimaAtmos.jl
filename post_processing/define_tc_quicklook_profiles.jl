@@ -267,8 +267,8 @@ end
 function plot_tc_contours(folder; main_branch_data_path)
     PR_filenames = CA.sort_files_by_time(hdf5_files(folder))
     main_filenames = get_main_filenames(main_branch_data_path)
-    debug_filenames(PR_filenames, "PR")
-    debug_filenames(main_filenames, "main")
+    # debug_filenames(PR_filenames, "PR")
+    # debug_filenames(main_filenames, "main")
     _plot_tc_contours(folder; PR_filenames, main_filenames)
 end
 
