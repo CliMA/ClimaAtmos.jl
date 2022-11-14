@@ -333,7 +333,7 @@ if !simulation.is_distributed && parsed_args["post_process"]
         postprocessing(sol, simulation.output_dir, fps)
     elseif is_box(parsed_args)
         postprocessing_box(sol, simulation.output_dir)
-    elseif atmos.forcing_type isa CA.HeldSuarezForcing
+    elseif atmos.model_config isa CA.SphericalModel
         paperplots_held_suarez(atmos, sol, simulation.output_dir, p, 90, 180)
     end
 end
