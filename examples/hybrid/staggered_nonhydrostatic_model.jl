@@ -143,6 +143,7 @@ function default_cache(
         ),
         spaces,
         atmos,
+        test_dycore_consistency = parsed_args["test_dycore_consistency"],
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
         Yₜ = similar(Y), # only needed when using increment formulation
@@ -176,6 +177,7 @@ function default_cache(
 end
 
 function implicit_tendency!(Yₜ, Y, p, t)
+    p.test_dycore_consistency && CA.fill_with_nans!(p)
     @nvtx "implicit tendency" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
             CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
@@ -189,6 +191,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
 end
 
 function remaining_tendency!(Yₜ, Y, p, t)
+    p.test_dycore_consistency && CA.fill_with_nans!(p)
     (; compressibility_model) = p
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
@@ -219,6 +222,7 @@ function remaining_tendency!(Yₜ, Y, p, t)
 end
 
 function remaining_tendency_increment!(Y⁺, Y, p, t, dtγ)
+    p.test_dycore_consistency && CA.fill_with_nans!(p)
     (; Yₜ, limiters) = p
     (; compressibility_model) = p
     @nvtx "remaining tendency increment" color = colorant"yellow" begin
