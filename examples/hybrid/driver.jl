@@ -209,9 +209,9 @@ function additional_tendency!(Yₜ, Y, p, t)
             CA.get_surface_fluxes!(Y, p, colidx, p.atmos.coupling)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
-        CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able
     (; non_orographic_gravity_wave) = p.tendency_knobs
