@@ -266,6 +266,10 @@ function parse_commandline()
         help = "Test edmf equation consistency [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--test_dycore_consistency"
+        help = "Test dycore consistency [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--non_orographic_gravity_wave"
         help = "Apply parameterization for convective gravity wave forcing on horizontal mean flow"
         arg_type = Bool
