@@ -144,7 +144,7 @@ end
 ##### Soares
 #####
 
-function surface_thermo_state(::Soares, thermo_params)
+function surface_reference_thermo_state(::Soares, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1000.0 * 100.0
     qtg::FT = 5.0e-3
@@ -169,7 +169,7 @@ function initialize_profiles(
     prof_tke = APL.Soares_tke(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -190,12 +190,12 @@ end
 
 function surface_params(
     case::Soares,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
+    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
     Tsurface::FT = 300.0
@@ -214,7 +214,7 @@ end
 ##### Nieuwstadt
 #####
 
-function surface_thermo_state(::Nieuwstadt, thermo_params)
+function surface_reference_thermo_state(::Nieuwstadt, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1000.0 * 100.0
     Tg::FT = 300.0
@@ -239,7 +239,7 @@ function initialize_profiles(
     prof_q_tot = nothing
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -259,12 +259,12 @@ end
 
 function surface_params(
     case::Nieuwstadt,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
+    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
     Tsurface::FT = 300.0
@@ -282,7 +282,7 @@ end
 ##### Bomex
 #####
 
-function surface_thermo_state(::Bomex, thermo_params)
+function surface_reference_thermo_state(::Bomex, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1.015e5 #Pressure at ground
     Tg::FT = 300.4 #Temperature at ground
@@ -308,7 +308,7 @@ function initialize_profiles(
     prof_tke = APL.Bomex_tke(FT)
 
     # Solve the initial value problem
-    p_0::FT = FT(1.015e5) # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1.015e5) # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -329,12 +329,12 @@ end
 
 function surface_params(
     case::Bomex,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
+    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     zrough::FT = 1.0e-4
     qsurface::FT = 22.45e-3 # kg/kg
@@ -354,7 +354,7 @@ end
 ##### life_cycle_Tan2018
 #####
 
-function surface_thermo_state(::life_cycle_Tan2018, thermo_params)
+function surface_reference_thermo_state(::life_cycle_Tan2018, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1.015e5  #Pressure at ground
     Tg::FT = 300.4  #Temperature at ground
@@ -379,7 +379,7 @@ function initialize_profiles(
     prof_tke = APL.LifeCycleTan2018_tke(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -400,12 +400,12 @@ end
 
 function surface_params(
     case::life_cycle_Tan2018,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
+    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     zrough::FT = 1.0e-4 # not actually used, but initialized to reasonable value
     qsurface::FT = 22.45e-3 # kg/kg
@@ -431,7 +431,7 @@ end
 ##### Rico
 #####
 
-function surface_thermo_state(::Rico, thermo_params)
+function surface_reference_thermo_state(::Rico, thermo_params)
     molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1.0154e5  #Pressure at ground
@@ -459,7 +459,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Rico_θ_liq_ice(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -493,8 +493,13 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(case::Rico, surf_thermo_state, thermo_params; kwargs...)
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
+function surface_params(
+    case::Rico,
+    surf_ref_thermo_state,
+    thermo_params;
+    kwargs...,
+)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
 
     zrough::FT = 0.00015
@@ -519,7 +524,7 @@ end
 ##### TRMM_LBA
 #####
 
-function surface_thermo_state(::TRMM_LBA, thermo_params)
+function surface_reference_thermo_state(::TRMM_LBA, thermo_params)
     molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 991.3 * 100  #Pressure at ground
@@ -570,7 +575,7 @@ function initialize_profiles(
     prof_q_tot = TRMM_q_tot_profile(FT, thermo_params)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(991.3 * 100)    # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(991.3 * 100)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_T
@@ -595,11 +600,11 @@ end
 
 function surface_params(
     case::TRMM_LBA,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     # zrough = 1.0e-4 # not actually used, but initialized to reasonable value
     qsurface::FT = 22.45e-3 # kg/kg
@@ -638,7 +643,7 @@ end
 ##### ARM_SGP
 #####
 
-function surface_thermo_state(::ARM_SGP, thermo_params)
+function surface_reference_thermo_state(::ARM_SGP, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 970.0 * 100 #Pressure at ground
     Tg::FT = 299.0   # surface values for reference state (RS) which outputs  p, ρ
@@ -664,7 +669,7 @@ function initialize_profiles(
     prof_tke = APL.ARM_SGP_tke(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(970 * 100)    # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(970 * 100)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -694,11 +699,11 @@ end
 
 function surface_params(
     case::ARM_SGP,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     qsurface::FT = 15.2e-3 # kg/kg
     θ_surface::FT = 299.0
@@ -728,7 +733,7 @@ end
 ##### GATE_III
 #####
 
-function surface_thermo_state(::GATE_III, thermo_params)
+function surface_reference_thermo_state(::GATE_III, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1013.0 * 100  #Pressure at ground
     Tg::FT = 299.184   # surface values for reference state (RS) which outputs p, ρ
@@ -755,7 +760,7 @@ function initialize_profiles(
     prof_u = APL.GATE_III_u(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1013 * 100)    # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1013 * 100)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_T
@@ -784,11 +789,11 @@ end
 
 function surface_params(
     case::GATE_III,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     kwargs...,
 )
-    p_f_surf = TD.air_pressure(thermo_params, surf_thermo_state)
+    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
 
     qsurface::FT = 16.5 / 1000.0 # kg/kg
@@ -808,7 +813,7 @@ end
 ##### DYCOMS_RF01
 #####
 
-function surface_thermo_state(::DYCOMS_RF01, thermo_params)
+function surface_reference_thermo_state(::DYCOMS_RF01, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1017.8 * 100.0
     qtg::FT = 9.0 / 1000.0
@@ -837,7 +842,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Dycoms_RF01_θ_liq_ice(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -862,11 +867,11 @@ end
 
 function surface_params(
     case::DYCOMS_RF01,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    FT = eltype(surf_thermo_state)
+    FT = eltype(surf_ref_thermo_state)
     zrough::FT = 1.0e-4
     ustar::FT = 0.28 # just to initialize grid mean covariances
     shf::FT = 15.0 # sensible heat flux
@@ -883,7 +888,7 @@ end
 ##### DYCOMS_RF02
 #####
 
-function surface_thermo_state(::DYCOMS_RF02, thermo_params)
+function surface_reference_thermo_state(::DYCOMS_RF02, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1017.8 * 100.0
     qtg::FT = 9.0 / 1000.0
@@ -912,7 +917,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Dycoms_RF02_θ_liq_ice(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -937,11 +942,11 @@ end
 
 function surface_params(
     case::DYCOMS_RF02,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
 )
-    FT = eltype(surf_thermo_state)
+    FT = eltype(surf_ref_thermo_state)
     zrough::FT = 1.0e-4  #TODO - not needed?
     ustar::FT = 0.25
     shf::FT = 16.0 # sensible heat flux
@@ -957,7 +962,7 @@ end
 ##### GABLS
 #####
 
-function surface_thermo_state(::GABLS, thermo_params)
+function surface_reference_thermo_state(::GABLS, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1.0e5  #Pressure at ground,
     Tg::FT = 265.0  #Temperature at ground,
@@ -983,7 +988,7 @@ function initialize_profiles(
     prof_q_tot = APL.GABLS_q_tot(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1.0e5)         # TODO - duplicated from surface_thermo_state
+    p_0::FT = FT(1.0e5)         # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -1006,11 +1011,11 @@ end
 
 function surface_params(
     case::GABLS,
-    surf_thermo_state,
+    surf_ref_thermo_state,
     thermo_params;
     kwargs...,
 )
-    FT = eltype(surf_thermo_state)
+    FT = eltype(surf_ref_thermo_state)
     Tsurface = t -> 265 - (FT(0.25) / 3600) * t
     qsurface::FT = 0.0
     zrough::FT = 0.1

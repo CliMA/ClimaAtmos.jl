@@ -68,10 +68,11 @@ function turbconv_cache(
     test_consistency = parsed_args["test_edmf_consistency"]
     case = Cases.get_case(namelist["meta"]["casename"])
     thermo_params = CAP.thermodynamics_params(param_set)
-    surf_thermo_state = Cases.surface_thermo_state(case, thermo_params)
+    surf_ref_thermo_state =
+        Cases.surface_reference_thermo_state(case, thermo_params)
     surf_params = Cases.surface_params(
         case,
-        surf_thermo_state,
+        surf_ref_thermo_state,
         thermo_params;
         Ri_bulk_crit,
     )
@@ -79,7 +80,7 @@ function turbconv_cache(
     ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])
     ᶜspace_1 = axes(Y.c[CC.Fields.ColumnIndex((1, 1), 1)])
     logpressure_fun =
-        CA.log_pressure_profile(ᶠspace_1, thermo_params, surf_thermo_state)
+        CA.log_pressure_profile(ᶠspace_1, thermo_params, surf_ref_thermo_state)
     ᶠz = CC.Fields.coordinate_field(ᶠspace_1).z
     ᶜz = CC.Fields.coordinate_field(ᶜspace_1).z
     ᶠp₀ = @. exp(logpressure_fun(ᶠz))
@@ -94,7 +95,7 @@ function turbconv_cache(
         test_consistency,
         surf_params,
         param_set,
-        surf_thermo_state,
+        surf_ref_thermo_state,
         aux = get_aux(edmf, Y, FT),
         precip_model,
         Y_filtered = similar(Y),
@@ -110,7 +111,7 @@ end
 
 function init_tc!(Y, p, params, colidx)
 
-    (; edmf, surf_thermo_state, ᶠp₀, ᶜp₀, surf_params, case) = p.edmf_cache
+    (; edmf, surf_ref_thermo_state, ᶠp₀, ᶜp₀, surf_params, case) = p.edmf_cache
     tc_params = CAP.turbconv_params(params)
 
     FT = eltype(edmf)
@@ -129,13 +130,13 @@ function init_tc!(Y, p, params, colidx)
         Y.c.ρ[colidx],
         p.ᶜp[colidx],
         thermo_params,
-        surf_thermo_state,
+        surf_ref_thermo_state,
     )
     CA.compute_ref_density!(
         p.edmf_cache.aux.face.ρ[colidx],
         p.edmf_cache.aux.face.p[colidx],
         thermo_params,
-        surf_thermo_state,
+        surf_ref_thermo_state,
     )
 
     # TODO: convert initialize_profiles to set prognostic state, not aux state
@@ -153,7 +154,8 @@ end
 
 function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt, compressibility_model) = p
-    (; edmf, param_set, surf_params, surf_thermo_state, Y_filtered) = edmf_cache
+    (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
+        edmf_cache
     (; precip_model, test_consistency, ᶠp₀, ᶜp₀) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
@@ -179,7 +181,7 @@ function sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
             p.edmf_cache.aux.face.ρ[colidx],
             p.edmf_cache.aux.face.p[colidx],
             thermo_params,
-            surf_thermo_state,
+            surf_ref_thermo_state,
         )
     end
     assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
