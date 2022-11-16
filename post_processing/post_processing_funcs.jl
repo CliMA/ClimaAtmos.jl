@@ -618,6 +618,36 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
                 "bw-2dspectrum1500-day" * string(day) * ".png",
             ),
         )
+        plot_spectrum_n_integrated = Plots.plot(
+            collect(0:1:(mesh_info.num_fourier))[:], # plot against the zonal wavenumber, m
+            sum(spectrum_2d[:, :, 1], dims = 2), # sum along the total wavenumber, n
+            xlabel = "zonal wavenumber (m)",
+            ylabel = "KE spectrum",
+            color = :balance,
+            title = "zonal wavenumber KE spectrum (1500m) day " * string(day),
+        )
+        png(
+            plot_spectrum_n_integrated,
+            joinpath(
+                output_dir,
+                "bw-n_integrated_ke_spectrum1500-day" * string(day) * ".png",
+            ),
+        )
+        plot_spectrum_m_integrated = Plots.plot(
+            collect(0:1:(mesh_info.num_spherical))[:], # plot against the total wavenumber, n
+            (sum(spectrum_2d[:, :, 1], dims = 1))', # sum along the zonal wavenumber, m
+            xlabel = "total wavenumber (n)",
+            ylabel = "KE spectrum",
+            color = :balance,
+            title = "total wavenumber KE spectrum (1500m) day " * string(day),
+        )
+        png(
+            plot_spectrum_m_integrated,
+            joinpath(
+                output_dir,
+                "bw-m_integrated_ke_spectrum1500-day" * string(day) * ".png",
+            ),
+        )
 
         rm(datafile_latlon; force = true)
     end
