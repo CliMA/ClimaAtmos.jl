@@ -90,6 +90,15 @@ all_best_mse["edmf_soares"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_soares"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_soares"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
 #
+all_best_mse["edmf_nieuwstadt"] = OrderedCollections.OrderedDict()
+all_best_mse["edmf_nieuwstadt"][(:c, :ρ)] = 0.0
+all_best_mse["edmf_nieuwstadt"][(:c, :ρe_tot)] = 0.0
+all_best_mse["edmf_nieuwstadt"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :en, :ρatke)] = 0.0
+all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
+all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
+all_best_mse["edmf_nieuwstadt"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
+#
 all_best_mse["compressible_edmf_bomex"] = OrderedCollections.OrderedDict()
 all_best_mse["compressible_edmf_bomex"][(:c, :ρ)] = 0.0
 all_best_mse["compressible_edmf_bomex"][(:c, :ρe_tot)] = 0.0

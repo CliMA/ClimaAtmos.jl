@@ -104,9 +104,13 @@ get_case_name(case_type::AbstractCaseType) = string(case_type)
 function dp_dz!(p, params, z)
     (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag) = params
 
-    FT = eltype(prof_q_tot(z))
+    FT = eltype(prof_thermo_var(z))
 
-    q_tot = prof_q_tot(z)
+    q_tot = if prof_q_tot ≠ nothing
+        prof_q_tot(z)
+    else
+        FT(0)
+    end
     q = TD.PhasePartition(q_tot)
 
     R_m = TD.gas_constant_air(thermo_params, q)
@@ -232,6 +236,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Nieuwstadt_θ_liq_ice(FT)
     prof_u = APL.Nieuwstadt_u(FT)
     prof_tke = APL.Nieuwstadt_tke(FT)
+    prof_q_tot = nothing
 
     # Solve the initial value problem for pressure
     p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_thermo_state
