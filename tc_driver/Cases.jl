@@ -679,22 +679,25 @@ function initialize_profiles(
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
+    p_c = TC.center_aux_grid_mean_p(state)
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
-    z = CC.Fields.coordinate_field(axes(p_c)).z
+    z = CC.Fields.coordinate_field(axes(prog_gm_uₕ)).z
     # TODO figure out how to use ts here
-    p_c = prof_p(z)
-    phase_part = TD.PhasePartition(aux_gm.q_tot[k], aux_gm.q_liq[k], FT(0))
+    @. p_c = prof_p(z)
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.T =
-        prof_θ_liq_ice(z) *
-        TD.exner_given_pressure(thermo_params, p_c, phase_part)
-    aux_gm.θ_liq_ice = TD.liquid_ice_pottemp_given_pressure(
+        prof_θ_liq_ice(z) * TD.exner_given_pressure(
+            thermo_params,
+            p_c,
+            TD.PhasePartition(aux_gm.q_tot, aux_gm.q_liq, FT(0)),
+        )
+    @. aux_gm.θ_liq_ice = TD.liquid_ice_pottemp_given_pressure(
         thermo_params,
         aux_gm.T,
         p_c,
         TD.PhasePartition(aux_gm.q_tot, aux_gm.q_liq, FT(0)),
     )
-    aux_gm.tke[k] = prof_tke(z)
+    @. aux_gm.tke = prof_tke(z)
 end
 
 function surface_params(
