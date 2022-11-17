@@ -9,7 +9,7 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 using ClimaCore.Utilities: half
 
-struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A, T}
+struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, J6, J7, S, A, T}
     # whether this struct is used to compute Wfact_t or Wfact
     transform::Bool
 
@@ -19,13 +19,17 @@ struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, S, A, T}
     # reference to dtγ, which is specified by the ODE solver
     dtγ_ref::FT
 
-    # nonzero blocks of the Jacobian
+    # nonzero blocks of the "dycore Jacobian"
     ∂ᶜρₜ∂ᶠ𝕄::J1
     ∂ᶜ𝔼ₜ∂ᶠ𝕄::J2
     ∂ᶠ𝕄ₜ∂ᶜ𝔼::J3
     ∂ᶠ𝕄ₜ∂ᶜρ::J3
     ∂ᶠ𝕄ₜ∂ᶠ𝕄::J4
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_field::J5
+
+    # nonzero blocks of the "TC Jacobian"
+    ∂ᶜTCₜ∂ᶜTC::J6
+    ∂ᶠTCₜ∂ᶠTC::J7
 
     # cache for the Schur complement linear solve
     S::S
@@ -86,6 +90,33 @@ function SchurComplementW(Y, transform, flags, test = false)
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
         _FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
 
+    if any(is_turbconv_var, propertynames(Y.c))
+        ᶜTC = Y.c.turbconv
+        ᶠTC = Y.f.turbconv
+
+        ∂ᶜTCₜ∂ᶜTC_type =
+            DataLayouts.replace_basetype(FT, tridiag_type, eltype(ᶜTC))
+        ∂ᶠTCₜ∂ᶠTC_type =
+            DataLayouts.replace_basetype(FT, tridiag_type, eltype(ᶠTC))
+
+        ∂ᶜTCₜ∂ᶜTC = similar(ᶜTC, ∂ᶜTCₜ∂ᶜTC_type)
+        ∂ᶠTCₜ∂ᶠTC = similar(ᶠTC, ∂ᶠTCₜ∂ᶠTC_type)
+
+        for var_prop_chain in Fields.property_chains(ᶜTC)
+            ∂ᶜvarₜ∂ᶜvar =
+                Fields.single_field(∂ᶜTCₜ∂ᶜTC, var_prop_chain, identity)
+            ∂ᶜvarₜ∂ᶜvar .= Ref(tridiag_type((0, 0, 0)))
+        end
+        for var_prop_chain in Fields.property_chains(ᶠTC)
+            ∂ᶠvarₜ∂ᶠvar =
+                Fields.single_field(∂ᶠTCₜ∂ᶠTC, var_prop_chain, identity)
+            ∂ᶠvarₜ∂ᶠvar .= Ref(tridiag_type((0, 0, 0)))
+        end
+    else
+        ∂ᶜTCₜ∂ᶜTC = nothing
+        ∂ᶠTCₜ∂ᶠTC = nothing
+    end
+
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
     S_column_arrays = [
@@ -104,6 +135,8 @@ function SchurComplementW(Y, transform, flags, test = false)
         typeof(∂ᶠ𝕄ₜ∂ᶜρ),
         typeof(∂ᶠ𝕄ₜ∂ᶠ𝕄),
         typeof(∂ᶜ𝕋ₜ∂ᶠ𝕄_field),
+        typeof(∂ᶜTCₜ∂ᶜTC),
+        typeof(∂ᶠTCₜ∂ᶠTC),
         typeof(S),
         typeof(S_column_arrays),
         typeof(Y),
@@ -117,6 +150,8 @@ function SchurComplementW(Y, transform, flags, test = false)
         ∂ᶠ𝕄ₜ∂ᶜρ,
         ∂ᶠ𝕄ₜ∂ᶠ𝕄,
         ∂ᶜ𝕋ₜ∂ᶠ𝕄_field,
+        ∂ᶜTCₜ∂ᶜTC,
+        ∂ᶠTCₜ∂ᶠTC,
         S,
         S_column_arrays,
         test,
@@ -137,40 +172,50 @@ x = [xᶜρ
      ⋮
      xᶜ𝕋[i]
      ⋮
-     xᶠ𝕄],
+     xᶜTC
+     xᶠ𝕄
+     xᶠTC],
 b = [bᶜρ
      bᶜ𝔼
      bᶜ𝕄
      ⋮
      bᶜ𝕋[i]
      ⋮
-     bᶠ𝕄], and
+     bᶜTC
+     bᶠ𝕄
+     bᶠTC], and
 A = -I + dtγ J =
-    [    -I            0       0  ⋯  0  ⋯  dtγ ∂ᶜρₜ∂ᶠ𝕄
-          0           -I       0  ⋯  0  ⋯  dtγ ∂ᶜ𝔼ₜ∂ᶠ𝕄
-          0            0      -I  ⋯  0  ⋯       0
-          ⋮            ⋮        ⋮  ⋱  ⋮          ⋮
-          0            0       0  ⋯ -I  ⋯  dtγ ∂ᶜ𝕋[i]ₜ∂ᶠ𝕄
-          ⋮            ⋮        ⋮     ⋮  ⋱       ⋮
-     dtγ ∂ᶠ𝕄ₜ∂ᶜρ  dtγ ∂ᶠ𝕄ₜ∂ᶜ𝔼  0  ⋯  0  ⋯  dtγ ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I].
+    [    -I            0       0  ⋯  0  ⋯       0            dtγ ∂ᶜρₜ∂ᶠ𝕄         0
+          0           -I       0  ⋯  0  ⋯       0            dtγ ∂ᶜ𝔼ₜ∂ᶠ𝕄         0
+          0            0      -I  ⋯  0  ⋯       0                 0              0
+          ⋮            ⋮        ⋮  ⋱  ⋮          ⋮                 ⋮               ⋮
+          0            0       0  ⋯ -I  ⋯       0            dtγ ∂ᶜ𝕋[i]ₜ∂ᶠ𝕄       0
+          ⋮            ⋮        ⋮     ⋮  ⋱       ⋮                 ⋮               ⋮
+          0            0       0  ⋯  0  ⋯  dtγ ∂ᶜTCₜ∂ᶜTC - I      0               0
+     dtγ ∂ᶠ𝕄ₜ∂ᶜρ  dtγ ∂ᶠ𝕄ₜ∂ᶜ𝔼  0  ⋯  0  ⋯       0            dtγ ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I      0
+          0            0       0  ⋯  0  ⋯       0                 0          dtγ ∂ᶠTCₜ∂ᶠTC - I].
 
 To simplify our notation, let us denote
-A = [-I    0    0  ⋯  0  ⋯  Aρ𝕄
-      0   -I    0  ⋯  0  ⋯  A𝔼𝕄
-      0    0   -I  ⋯  0  ⋯   0
-      ⋮    ⋮     ⋮  ⋱  ⋮      ⋮
-      0    0    0  ⋯ -I  ⋯  A𝕋𝕄[i]
-      ⋮    ⋮     ⋮     ⋮  ⋱   ⋮
-     A𝕄ρ A𝕄𝔼   0  ⋯  0  ⋯  A𝕄𝕄 - I]
+A = [-I    0    0  ⋯  0  ⋯   0       Aρ𝕄      0
+      0   -I    0  ⋯  0  ⋯   0       A𝔼𝕄      0
+      0    0   -I  ⋯  0  ⋯   0        0        0
+      ⋮    ⋮     ⋮  ⋱  ⋮      ⋮        ⋮        ⋮
+      0    0    0  ⋯ -I  ⋯   0       A𝕋𝕄[i]    0
+      ⋮    ⋮     ⋮     ⋮  ⋱   0        ⋮        ⋮
+      0    0    0  ⋯  0  ⋯  AᶜTC - I  0        0
+     A𝕄ρ A𝕄𝔼   0  ⋯  0  ⋯    0      A𝕄𝕄 - I  0
+      0    0    0  ⋯  0  ⋯    0       0       AᶠTC - I]
 
 If A x = b, then
     -xᶜρ + Aρ𝕄 xᶠ𝕄 = bᶜρ ==> xᶜρ = -bᶜρ + Aρ𝕄 xᶠ𝕄                   (1)
     -xᶜ𝔼 + A𝔼𝕄 xᶠ𝕄 = bᶜ𝔼 ==> xᶜ𝔼 = -bᶜ𝔼 + A𝔼𝕄 xᶠ𝕄                   (2)
     -xᶜ𝕄 = bᶜ𝕄 ==> xᶜ𝕄 = -bᶜ𝕄                                       (3)
     -xᶜ𝕋[i] + A𝕋𝕄[i] xᶠ𝕄 = bᶜ𝕋[i] ==> xᶜ𝕋[i] = -bᶜ𝕋[i] + A𝕋𝕄[i] xᶠ𝕄  (4)
-    A𝕄ρ xᶜρ + A𝕄𝔼 xᶜ𝔼 + (A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄                        (5)
+    (AᶜTC - I) xᶜTC = bᶜTC                                            (5)
+    A𝕄ρ xᶜρ + A𝕄𝔼 xᶜ𝔼 + (A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄                        (6)
+    (AᶠTC - I) xᶠTC = bᶠTC                                            (7)
 
-Substituting (1) and (2) into (5) gives us
+Substituting (1) and (2) into (6) gives us
     A𝕄ρ (-bᶜρ + Aρ𝕄 xᶠ𝕄) + A𝕄𝔼 (-bᶜ𝔼 + A𝔼𝕄 xᶠ𝕄) + (A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄 ==>
     (A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I) xᶠ𝕄 = bᶠ𝕄 + A𝕄ρ bᶜρ + A𝕄𝔼 bᶜ𝔼 ==>
     xᶠ𝕄 = (A𝕄ρ Aρ𝕄 + A𝕄𝔼 A𝔼𝕄 + A𝕄𝕄 - I) \ (bᶠ𝕄 + A𝕄ρ bᶜρ + A𝕄𝔼 bᶜ𝔼)
@@ -202,6 +247,7 @@ function LinearAlgebra.ldiv!(
 )
     (; dtγ_ref, S, S_column_arrays, transform) = A
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = A
+    (; ∂ᶜTCₜ∂ᶜTC, ∂ᶠTCₜ∂ᶠTC) = A
     dtγ = dtγ_ref[]
     cond = Operators.bandwidths(eltype(∂ᶜ𝔼ₜ∂ᶠ𝕄)) != (-half, half)
     if cond
@@ -229,6 +275,8 @@ function LinearAlgebra.ldiv!(
             ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
             ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
             ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
+            isnothing(∂ᶜTCₜ∂ᶜTC) ? nothing : ∂ᶜTCₜ∂ᶜTC[colidx],
+            isnothing(∂ᶠTCₜ∂ᶠTC) ? nothing : ∂ᶠTCₜ∂ᶠTC[colidx],
             S[colidx],
             S_column_arrays[Threads.threadid()], # can / should this be colidx?
         )
@@ -250,6 +298,8 @@ function _ldiv_serial!(
     ∂ᶠ𝕄ₜ∂ᶜρ,
     ∂ᶠ𝕄ₜ∂ᶠ𝕄,
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_field,
+    ∂ᶜTCₜ∂ᶜTC,
+    ∂ᶠTCₜ∂ᶠTC,
     S_column,
     S_column_array,
 )
@@ -302,15 +352,45 @@ function _ldiv_serial!(
         ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
         @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
     end
-    for var_name in filter(is_edmf_var, propertynames(xc))
-        xᶜ𝕋 = getproperty(xc, var_name)
-        bᶜ𝕋 = getproperty(bc, var_name)
-        @. xᶜ𝕋 = -bᶜ𝕋
-    end
-    for var_name in filter(is_edmf_var, propertynames(xf))
-        xᶠ𝕋 = getproperty(xf, var_name)
-        bᶠ𝕋 = getproperty(bf, var_name)
-        @. xᶠ𝕋 = -bᶠ𝕋
+    if any(is_turbconv_var, propertynames(xc))
+        xᶜTC = xc.turbconv
+        xᶠTC = xf.turbconv
+        bᶜTC = bc.turbconv
+        bᶠTC = bf.turbconv
+        for var_prop_chain in Fields.property_chains(xᶜTC)
+            xᶜvar = Fields.single_field(xᶜTC, var_prop_chain, identity)
+            bᶜvar = Fields.single_field(bᶜTC, var_prop_chain, identity)
+            xᶜvar .= bᶜvar
+            xᶜvar_view = parent(xᶜvar)
+            ∂ᶜvarₜ∂ᶜvar =
+                Fields.single_field(∂ᶜTCₜ∂ᶜTC, var_prop_chain, identity)
+            @views ∂ᶜvarₜ∂ᶜvar_array = LinearAlgebra.Tridiagonal(
+                S_column_array.dl[1:(end - 1)],
+                S_column_array.d[1:(end - 1)],
+                S_column_array.du[1:(end - 1)],
+            )
+            @views ∂ᶜvarₜ∂ᶜvar_array.dl .=
+                dtγ .* parent(∂ᶜvarₜ∂ᶜvar.coefs.:1)[2:end]
+            ∂ᶜvarₜ∂ᶜvar_array.d .= dtγ .* parent(∂ᶜvarₜ∂ᶜvar.coefs.:2) .- 1
+            @views ∂ᶜvarₜ∂ᶜvar_array.du .=
+                dtγ .* parent(∂ᶜvarₜ∂ᶜvar.coefs.:3)[1:(end - 1)]
+            thomas_algorithm!(∂ᶜvarₜ∂ᶜvar_array, xᶜvar_view)
+        end
+        for var_prop_chain in Fields.property_chains(xᶠTC)
+            xᶠvar = Fields.single_field(xᶠTC, var_prop_chain, identity)
+            bᶠvar = Fields.single_field(bᶠTC, var_prop_chain, identity)
+            xᶠvar .= bᶠvar
+            xᶠvar_view = parent(xᶠvar)
+            ∂ᶠvarₜ∂ᶠvar =
+                Fields.single_field(∂ᶠTCₜ∂ᶠTC, var_prop_chain, identity)
+            ∂ᶠvarₜ∂ᶠvar_array = S_column_array
+            @views ∂ᶠvarₜ∂ᶠvar_array.dl .=
+                dtγ .* parent(∂ᶠvarₜ∂ᶠvar.coefs.:1)[2:end]
+            ∂ᶠvarₜ∂ᶠvar_array.d .= dtγ .* parent(∂ᶠvarₜ∂ᶠvar.coefs.:2) .- 1
+            @views ∂ᶠvarₜ∂ᶠvar_array.du .=
+                dtγ .* parent(∂ᶠvarₜ∂ᶠvar.coefs.:3)[1:(end - 1)]
+            thomas_algorithm!(∂ᶠvarₜ∂ᶠvar_array, xᶠvar_view)
+        end
     end
     # Apply transform (if needed)
     if transform
