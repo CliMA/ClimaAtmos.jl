@@ -307,17 +307,31 @@ function ode_configuration(Y, parsed_args, atmos)
         elseif is_imex_CTS_algo
             newtons_method = NewtonsMethod(;
                 max_iters = parsed_args["max_newton_iters"],
-                krylov_method = parsed_args["use_krylov_method"] ?
-                                KrylovMethod(;
-                    jacobian_free_jvp = ForwardDiffJVP(;
-                        step_adjustment = FT(
-                            parsed_args["jvp_step_adjustment"],
+                krylov_method = if parsed_args["use_krylov_method"]
+                    KrylovMethod(;
+                        jacobian_free_jvp = ForwardDiffJVP(;
+                            step_adjustment = FT(
+                                parsed_args["jvp_step_adjustment"],
+                            ),
                         ),
-                    ),
-                    forcing_term = ConstantForcing(
-                        FT(parsed_args["krylov_forcing"]),
-                    ),
-                ) : nothing,
+                        forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
+                            α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
+                            EisenstatWalkerForcing(; α)
+                        else
+                            ConstantForcing(FT(parsed_args["krylov_rtol"]))
+                        end,
+                    )
+                else
+                    nothing
+                end,
+                convergence_checker = if parsed_args["use_newton_rtol"]
+                    norm_condition = MaximumRelativeError(
+                        FT(parsed_args["newton_rtol"]),
+                    )
+                    ConvergenceChecker(; norm_condition)
+                else
+                    nothing
+                end,
             )
             alg_kwargs = (; newtons_method)
         end

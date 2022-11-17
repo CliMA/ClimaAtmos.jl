@@ -134,6 +134,18 @@ all_best_mse["compressible_edmf_bomex_jfnk"][(:c, :turbconv, :up, 1, :ρaθ_liq_
 all_best_mse["compressible_edmf_bomex_jfnk"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
 all_best_mse["compressible_edmf_bomex_jfnk"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
 #
+all_best_mse["compressible_edmf_bomex_jfnk_imex"] = OrderedCollections.OrderedDict()
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :ρ)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :ρe_tot)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :ρq_tot)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :turbconv, :en, :ρatke)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
+all_best_mse["compressible_edmf_bomex_jfnk_imex"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
+#
 all_best_mse["edmf_dycoms_rf01"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρ)] = 0.0
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρe_tot)] = 0.0

@@ -210,7 +210,7 @@ function additional_tendency!(Yₜ, Y, p, t)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        TCU.sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        TCU.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able

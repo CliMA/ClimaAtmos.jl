@@ -185,6 +185,14 @@ function implicit_tendency!(Yₜ, Y, p, t)
             if p.turbconv_model isa CA.TurbulenceConvection.EDMFModel
                 parent(Yₜ.c.turbconv[colidx]) .= zero(eltype(Yₜ))
                 parent(Yₜ.f.turbconv[colidx]) .= zero(eltype(Yₜ))
+                TCU.implicit_sgs_flux_tendency!(
+                    Yₜ,
+                    Y,
+                    p,
+                    t,
+                    colidx,
+                    p.turbconv_model,
+                )
             end
         end
     end
