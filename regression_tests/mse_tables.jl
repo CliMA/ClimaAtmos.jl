@@ -69,6 +69,18 @@ all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
 all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
 #
+all_best_mse["edmf_arm_sgp"] = OrderedCollections.OrderedDict()
+all_best_mse["edmf_arm_sgp"][(:c, :ρ)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :ρe_tot)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :ρq_tot)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :turbconv, :en, :ρatke)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
+all_best_mse["edmf_arm_sgp"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
+#
 all_best_mse["edmf_rico"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_rico"][(:c, :ρ)] = 0.0
 all_best_mse["edmf_rico"][(:c, :ρe_tot)] = 0.0
