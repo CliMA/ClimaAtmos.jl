@@ -389,6 +389,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: Single column EDMF ARM_SGP"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --ls_adv ARM_SGP --edmf_coriolis ARM_SGP --moist equil --turbconv edmf --turbconv_case ARM_SGP --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 88 --z_stretch false --z_max 4400 --job_id edmf_arm_sgp --dt 2secs --t_end 14.5hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        artifact_paths: "edmf_arm_sgp/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":dart: EDMF Consistency test Bomex"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex_consistency --dt 6secs --t_end 6hours --anelastic_dycore true --apply_limiter false --test_edmf_consistency true --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "edmf_bomex_consistency/*"
