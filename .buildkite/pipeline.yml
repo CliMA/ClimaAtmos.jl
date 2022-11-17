@@ -329,19 +329,19 @@ steps:
     steps:
 
       - label: ":computer: Unthreaded performance target (Rosenbrock)"
-        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --FLOAT_TYPE Float64 --turbconv edmf --turbconv_case Bomex --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded_rosenbrock/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: Unthreaded performance target"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_unthreaded --FLOAT_TYPE Float64 --turbconv edmf --turbconv_case Bomex --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_unthreaded/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: Threaded performance target"
-        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_threaded --FLOAT_TYPE Float64 --turbconv edmf --turbconv_case Bomex --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
         artifact_paths: "perf_target_threaded/*"
         agents:
           slurm_ntasks: 8
