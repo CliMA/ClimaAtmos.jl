@@ -106,7 +106,6 @@ function vertical_diffusion_boundary_layer_cache(
         C_E,
         ᶠp = similar(Y.f, FT),
         ᶠK_E = similar(Y.f, FT),
-        ts_sfc = similar(Spaces.level(Y.f, half), ts_type),
         uₕ_int_phys = similar(
             Spaces.level(Y.c.uₕ, 1),
             typeof(Geometry.UVVector(FT(0), FT(0))),
@@ -135,17 +134,10 @@ function eddy_diffusivity_coefficient(C_E::FT, norm_v_a, z_a, p) where {FT}
     return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
 end
 
-set_surface_density_and_humidity!(::Coupled, args...) = nothing
+set_surface_thermo_state!(::Coupled, args...) = nothing
 
-function set_surface_density_and_humidity!(
-    ::Decoupled,
-    ρ_sfc,
-    q_sfc,
-    T_sfc,
-    ts_int,
-    thermo_params,
-)
-    @. ρ_sfc =
+function surface_thermo_state(thermo_params, T_sfc, ts_int)
+    ρ_sfc =
         TD.air_density(thermo_params, ts_int) *
         (
             T_sfc / TD.air_temperature(thermo_params, ts_int)
@@ -153,8 +145,19 @@ function set_surface_density_and_humidity!(
             TD.cv_m(thermo_params, ts_int) /
             TD.gas_constant_air(thermo_params, ts_int)
         )
-    @. q_sfc =
+    q_sfc =
         TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
+    return TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+end
+
+function set_surface_thermo_state!(
+    ::Decoupled,
+    ts_sfc,
+    T_sfc,
+    ts_int,
+    thermo_params,
+)
+    @. ts_sfc = surface_thermo_state(thermo_params, T_sfc, ts_int)
     return nothing
 end
 
@@ -162,8 +165,6 @@ function set_surface_inputs!(
     sfc_inputs,
     surface_scheme::BulkSurfaceScheme,
     T_sfc,
-    ρ_sfc,
-    q_sfc,
     ts_sfc,
     ts_int,
     uₕ_int_phys_vec,
@@ -175,15 +176,7 @@ function set_surface_inputs!(
     FT = Spaces.undertype(axes(T_sfc))
 
     # get the near-surface thermal state
-    set_surface_density_and_humidity!(
-        coupling,
-        ρ_sfc,
-        q_sfc,
-        T_sfc,
-        ts_int,
-        thermo_params,
-    )
-    @. ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+    set_surface_thermo_state!(coupling, ts_sfc, T_sfc, ts_int, thermo_params)
 
     # wrap state values
     @. sfc_inputs = SF.Coefficients(
@@ -208,8 +201,6 @@ function set_surface_inputs!(
     sfc_inputs,
     surface_scheme::MoninObukhovSurface,
     T_sfc,
-    ρ_sfc,
-    q_sfc,
     ts_sfc,
     ts_int,
     uₕ_int_phys_vec,
@@ -221,15 +212,7 @@ function set_surface_inputs!(
     FT = Spaces.undertype(axes(T_sfc))
 
     # get the near-surface thermal state
-    set_surface_density_and_humidity!(
-        coupling,
-        ρ_sfc,
-        q_sfc,
-        T_sfc,
-        ts_int,
-        thermo_params,
-    )
-    @. ts_sfc = TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+    set_surface_thermo_state!(coupling, ts_sfc, T_sfc, ts_int, thermo_params)
 
     # wrap state values
     @. sfc_inputs = SF.ValuesOnly(
@@ -257,7 +240,7 @@ end
 get_surface_fluxes!(Y, p, colidx, ::Coupled) = nothing
 
 function get_surface_fluxes!(Y, p, colidx, ::Decoupled)
-    (; z_sfc, ᶜts, T_sfc, ρ_sfc, q_sfc) = p
+    (; z_sfc, ᶜts, T_sfc) = p
     (;
         sfc_conditions,
         sfc_inputs,
@@ -293,8 +276,6 @@ function get_surface_fluxes!(Y, p, colidx, ::Decoupled)
         sfc_inputs[colidx],
         p.surface_scheme,
         T_sfc[colidx],
-        ρ_sfc[colidx],
-        q_sfc[colidx],
         ts_sfc[colidx],
         Spaces.level(ᶜts[colidx], 1),
         uₕ_int_phys_vec[colidx],

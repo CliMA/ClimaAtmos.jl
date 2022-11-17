@@ -163,8 +163,7 @@ function default_cache(
         ᶜf,
         z_sfc,
         T_sfc,
-        ρ_sfc = similar(T_sfc, FT),
-        q_sfc = similar(T_sfc, FT),
+        ts_sfc = similar(Spaces.level(Y.f, half), ts_type),
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
