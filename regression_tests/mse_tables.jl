@@ -73,7 +73,6 @@ all_best_mse["edmf_arm_sgp"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_arm_sgp"][(:c, :ρ)] = 0.0
 all_best_mse["edmf_arm_sgp"][(:c, :ρe_tot)] = 0.0
 all_best_mse["edmf_arm_sgp"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["edmf_arm_sgp"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["edmf_arm_sgp"][(:c, :ρq_tot)] = 0.0
 all_best_mse["edmf_arm_sgp"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["edmf_arm_sgp"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
