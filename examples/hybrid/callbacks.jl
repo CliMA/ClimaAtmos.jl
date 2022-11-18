@@ -298,10 +298,10 @@ function save_to_disk_func(integrator)
             col_integrated_rain,
             col_integrated_snow,
             T_sfc,
-            q_sfc,
+            ts_sfc,
         ) = p
     else
-        (; ᶜts, ᶜp, params, ᶜK, T_sfc, q_sfc) = p
+        (; ᶜts, ᶜp, params, ᶜK, T_sfc, ts_sfc) = p
     end
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -323,6 +323,7 @@ function save_to_disk_func(integrator)
     ᶜvort = Geometry.WVector.(curl_uh)
     Spaces.weighted_dss!(ᶜvort)
 
+    q_sfc = @. TD.total_specific_humidity(thermo_params, ts_sfc)
     dry_diagnostic = (;
         pressure = ᶜp,
         temperature = ᶜT,
