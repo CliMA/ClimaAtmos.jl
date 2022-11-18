@@ -66,7 +66,7 @@ function get_surface(
     return TC.SurfaceBase{FT}(;
         shf = shf,
         lhf = lhf,
-        ustar = TC.fixed_ustar(surf_params) ? surf_params.ustar : result.ustar,
+        ustar = result.ustar,
         bflux = bflux,
         obukhov_length = result.L_MO,
         cm = result.Cd,
