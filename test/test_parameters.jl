@@ -49,7 +49,7 @@ end
             "Soares",
             "Nieuwstadt",
             "Bomex",
-            "life_cycle_Tan2018",
+            "LifeCycleTan2018",
             "Rico",
             "TRMM_LBA",
             "ARM_SGP",

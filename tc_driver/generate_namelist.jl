@@ -131,8 +131,8 @@ function default_namelist(
         namelist = Nieuwstadt(namelist_defaults)
     elseif case_name == "Bomex"
         namelist = Bomex(namelist_defaults)
-    elseif case_name == "life_cycle_Tan2018"
-        namelist = life_cycle_Tan2018(namelist_defaults)
+    elseif case_name == "LifeCycleTan2018"
+        namelist = LifeCycleTan2018(namelist_defaults)
     elseif case_name == "Rico"
         namelist = Rico(namelist_defaults)
     elseif case_name == "TRMM_LBA"
@@ -171,9 +171,9 @@ function Bomex(namelist_defaults)
     namelist["meta"]["casename"] = "Bomex"
     return namelist
 end
-function life_cycle_Tan2018(namelist_defaults)
+function LifeCycleTan2018(namelist_defaults)
     namelist = deepcopy(namelist_defaults)
-    namelist["meta"]["casename"] = "life_cycle_Tan2018"
+    namelist["meta"]["casename"] = "LifeCycleTan2018"
     return namelist
 end
 function Rico(namelist_defaults)
