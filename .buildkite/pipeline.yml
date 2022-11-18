@@ -400,6 +400,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: Single column EDMF LifeCycleTan2018"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence LifeCycleTan2018 --edmf_coriolis LifeCycleTan2018 --ls_adv LifeCycleTan2018 --turbconv edmf --turbconv_case LifeCycleTan2018 --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 75 --z_stretch false --z_max 3e3 --job_id edmf_life_cycle_tan2018 --dt 6secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        artifact_paths: "edmf_life_cycle_tan2018/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":dart: EDMF Consistency test Bomex"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --job_id edmf_bomex_consistency --dt 6secs --t_end 6hours --anelastic_dycore true --apply_limiter false --test_edmf_consistency true --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "edmf_bomex_consistency/*"

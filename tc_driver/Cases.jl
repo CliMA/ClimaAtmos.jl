@@ -52,7 +52,7 @@ struct Nieuwstadt <: AbstractCaseType end
 struct Bomex <: AbstractCaseType end
 
 """ [Tan2018](@cite) """
-struct life_cycle_Tan2018 <: AbstractCaseType end
+struct LifeCycleTan2018 <: AbstractCaseType end
 
 struct Rico <: AbstractCaseType end
 
@@ -81,7 +81,7 @@ get_case(casename::String) = get_case(Val(Symbol(casename)))
 get_case(::Val{:Soares}) = Soares()
 get_case(::Val{:Nieuwstadt}) = Nieuwstadt()
 get_case(::Val{:Bomex}) = Bomex()
-get_case(::Val{:life_cycle_Tan2018}) = life_cycle_Tan2018()
+get_case(::Val{:LifeCycleTan2018}) = LifeCycleTan2018()
 get_case(::Val{:Rico}) = Rico()
 get_case(::Val{:TRMM_LBA}) = TRMM_LBA()
 get_case(::Val{:ARM_SGP}) = ARM_SGP()
@@ -351,10 +351,10 @@ function surface_params(
 end
 
 #####
-##### life_cycle_Tan2018
+##### LifeCycleTan2018
 #####
 
-function surface_reference_thermo_state(::life_cycle_Tan2018, thermo_params)
+function surface_reference_thermo_state(::LifeCycleTan2018, thermo_params)
     FT = eltype(thermo_params)
     Pg::FT = 1.015e5  #Pressure at ground
     Tg::FT = 300.4  #Temperature at ground
@@ -362,7 +362,7 @@ function surface_reference_thermo_state(::life_cycle_Tan2018, thermo_params)
     return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
 end
 function initialize_profiles(
-    ::life_cycle_Tan2018,
+    ::LifeCycleTan2018,
     grid::Grid,
     thermo_params,
     state;
@@ -399,7 +399,7 @@ function initialize_profiles(
 end
 
 function surface_params(
-    case::life_cycle_Tan2018,
+    case::LifeCycleTan2018,
     surf_ref_thermo_state,
     thermo_params;
     Ri_bulk_crit,
