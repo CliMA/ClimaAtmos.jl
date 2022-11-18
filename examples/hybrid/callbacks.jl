@@ -48,6 +48,8 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     end
     save_to_disk_callback = if dt_save_to_disk == Inf
         nothing
+    elseif simulation.restart
+        call_every_dt(save_to_disk_func, dt_save_to_disk; skip_first = true)
     else
         call_every_dt(save_to_disk_func, dt_save_to_disk)
     end
