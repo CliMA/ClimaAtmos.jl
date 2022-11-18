@@ -258,6 +258,8 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --job_id sphere_held_suarez_rhoe_equilmoist --regression_test true --dt 450secs"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky radiation monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --job_id sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 5days"
