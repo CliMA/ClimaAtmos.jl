@@ -60,6 +60,10 @@ function parse_commandline()
         "--surface_scheme"
         help = "Surface flux scheme [`nothing` (default), `bulk`, `monin_obukhov`]"
         arg_type = String
+        "--surface_thermo_state_type"
+        help = "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
+        arg_type = String
+        default = "GCMSurfaceThermoState"
         "--C_E"
         help = "Bulk transfer coefficient"
         arg_type = Float64

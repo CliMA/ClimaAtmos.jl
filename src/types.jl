@@ -43,11 +43,19 @@ struct EDMFCoriolis{U, V, FT}
     coriolis_param::FT
 end
 
+abstract type AbstractSurfaceThermoState end
+struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
+
 abstract type AbstractSurfaceScheme end
-struct BulkSurfaceScheme <: AbstractSurfaceScheme end
-struct MoninObukhovSurface <: AbstractSurfaceScheme end # TODO: unify with MoninObukhovSurface in TC
+struct BulkSurfaceScheme{T} <: AbstractSurfaceScheme
+    sfc_thermo_state_type::T
+end
+struct MoninObukhovSurface{T} <: AbstractSurfaceScheme
+    sfc_thermo_state_type::T
+end # TODO: unify with MoninObukhovSurface in TC
 
 # Define broadcasting for types
+Base.broadcastable(x::AbstractSurfaceThermoState) = Ref(x)
 Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)
 Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
