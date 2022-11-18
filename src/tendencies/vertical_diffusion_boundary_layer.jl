@@ -40,7 +40,6 @@ function vertical_diffusion_boundary_layer_cache(
         Ref(Geometry.WVector(FT(0)))
     end
 
-    cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
     surface_normal = Geometry.WVector.(ones(axes(Fields.level(Y.c, 1))))
 
     sfc_conditions =

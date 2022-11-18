@@ -254,7 +254,6 @@ Base.@kwdef struct FixedSurfaceFlux{
     cq::FT = FT(0)
     Ri_bulk_crit::FT = FT(0)
     ustar::FT = FT(0)
-    zero_uv_fluxes::Bool = false
 end
 
 function FixedSurfaceFlux(
