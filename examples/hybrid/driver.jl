@@ -206,7 +206,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
         CA.large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
         if vert_diff
-            CA.get_surface_fluxes!(Y, p, colidx, p.atmos.coupling)
+            CA.get_surface_fluxes!(Y, p, t, colidx, p.atmos.coupling)
             CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         end
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)

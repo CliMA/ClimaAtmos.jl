@@ -210,13 +210,21 @@ function turbconv_model(FT, moisture_model, precip_model, parsed_args, namelist)
     end
 end
 
+function surface_thermo_state_type(parsed_args)
+    dict = Dict()
+    dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
+    return dict[parsed_args["surface_thermo_state_type"]]
+end
+
+
 function surface_scheme(FT, parsed_args)
     surface_scheme = parsed_args["surface_scheme"]
+    sfc_thermo_state_type = surface_thermo_state_type(parsed_args)
     @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
     return if surface_scheme == "bulk"
-        BulkSurfaceScheme()
+        BulkSurfaceScheme(sfc_thermo_state_type)
     elseif surface_scheme == "monin_obukhov"
-        MoninObukhovSurface()
+        MoninObukhovSurface(sfc_thermo_state_type)
     elseif surface_scheme == nothing
         surface_scheme
     end
