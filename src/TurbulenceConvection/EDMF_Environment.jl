@@ -89,18 +89,20 @@ function quad_loop(
     # θl - liquid ice potential temperature
     # _mean and ′ - subdomain mean and (co)variances
     # q_rai, q_sno - grid mean precipitation
-    UnPack.@unpack qt′qt′,
-    qt_mean,
-    θl′θl′,
-    θl_mean,
-    θl′qt′,
-    subdomain_area,
-    q_rai,
-    q_sno,
-    ρ_c,
-    p_c,
-    zc,
-    precip_frac = vars
+    (;
+        qt′qt′,
+        qt_mean,
+        θl′θl′,
+        θl_mean,
+        θl′qt′,
+        subdomain_area,
+        q_rai,
+        q_sno,
+        ρ_c,
+        p_c,
+        zc,
+        precip_frac,
+    ) = vars
 
     FT = eltype(ρ_c)
 

@@ -1,5 +1,3 @@
-using UnPack
-
 using OrdinaryDiffEq:
     AbstractNLSolver,
     isnewton,
@@ -30,7 +28,7 @@ function ODE.calc_tderivative!(
     repeat_step,
 )
     @inbounds begin
-        @unpack fsalfirst, linsolve_tmp = cache
+        (; fsalfirst, linsolve_tmp) = cache
         @.. linsolve_tmp = fsalfirst
     end
     return nothing
@@ -92,7 +90,7 @@ function nlsolve!(
         update_W!(nlsolver, integrator, cache, γW, repeat_step)
     end
 
-    @unpack maxiters, κ, fast_convergence_cutoff = nlsolver
+    (; maxiters, κ, fast_convergence_cutoff) = nlsolver
 
     initialize!(nlsolver, integrator)
     nlsolver.status = Divergence
