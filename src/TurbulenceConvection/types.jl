@@ -351,12 +351,24 @@ Base.@kwdef struct SurfaceBase{FT}
     ch::FT = 0
     bflux::FT = 0
     ustar::FT = 0
-    ρq_tot_flux::FT = 0
-    ρe_tot_flux::FT = 0
     ρu_flux::FT = 0
     ρv_flux::FT = 0
     obukhov_length::FT = 0
 end
+
+shf(surf::SurfaceBase) = surf.shf
+lhf(surf::SurfaceBase) = surf.lhf
+cm(surf::SurfaceBase) = surf.cm
+ch(surf::SurfaceBase) = surf.ch
+bflux(surf::SurfaceBase) = surf.bflux
+get_ustar(surf::SurfaceBase) = surf.ustar
+get_ρe_tot_flux(surf::SurfaceBase, thermo_params, ts_in) = shf(surf) + lhf(surf)
+get_ρq_tot_flux(surf::SurfaceBase, thermo_params, ts_in) =
+    lhf(surf) / TD.latent_heat_vapor(thermo_params, ts_in)
+get_ρu_flux(surf::SurfaceBase) = surf.ρu_flux
+get_ρv_flux(surf::SurfaceBase) = surf.ρv_flux
+obukhov_length(surf::SurfaceBase) = surf.obukhov_length
+
 
 struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}
     surface_area::FT

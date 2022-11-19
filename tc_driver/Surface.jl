@@ -73,8 +73,6 @@ function get_surface(
         ch = result.Ch,
         ρu_flux = result.ρτxz,
         ρv_flux = result.ρτyz,
-        ρe_tot_flux = shf + lhf,
-        ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
     )
 end
 
@@ -99,7 +97,6 @@ function get_surface(
     zc_surf = grid.zc[kc_surf].z
     cm = surf_params.cm(zc_surf)
     ch = surf_params.ch(zc_surf)
-    Ri_bulk_crit = surf_params.Ri_bulk_crit
     thermo_params = TCP.thermodynamics_params(param_set)
 
     scheme = SF.FVScheme()
@@ -122,20 +119,16 @@ function get_surface(
         z0b = zrough,
     )
     result = SF.surface_conditions(surf_flux_params, sc, scheme)
-    lhf = result.lhf
-    shf = result.shf
 
     return TC.SurfaceBase{FT}(;
         cm = result.Cd,
         ch = result.Ch,
         obukhov_length = result.L_MO,
-        lhf = lhf,
-        shf = shf,
+        lhf = result.lhf,
+        shf = result.shf,
         ustar = result.ustar,
         ρu_flux = result.ρτxz,
         ρv_flux = result.ρτyz,
-        ρe_tot_flux = shf + lhf,
-        ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
         bflux = result.buoy_flux,
     )
 end
@@ -161,7 +154,6 @@ function get_surface(
     Tsurface = TC.surface_temperature(surf_params, t)
     qsurface = TC.surface_q_tot(surf_params, t)
     zrough = surf_params.zrough
-    Ri_bulk_crit = surf_params.Ri_bulk_crit
     thermo_params = TCP.thermodynamics_params(param_set)
 
     scheme = SF.FVScheme()
@@ -181,20 +173,15 @@ function get_surface(
         z0b = zrough,
     )
     result = SF.surface_conditions(surf_flux_params, sc, scheme)
-    lhf = result.lhf
-    shf = result.shf
-    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
     return TC.SurfaceBase{FT}(;
         cm = result.Cd,
         ch = result.Ch,
         obukhov_length = result.L_MO,
-        lhf = lhf,
-        shf = shf,
+        lhf = result.lhf,
+        shf = result.shf,
         ustar = result.ustar,
         ρu_flux = result.ρτxz,
         ρv_flux = result.ρτyz,
-        ρe_tot_flux = shf + lhf,
-        ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
         bflux = result.buoy_flux,
     )
 end
