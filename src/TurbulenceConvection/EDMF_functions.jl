@@ -183,9 +183,11 @@ function compute_sgs_flux!(
         CCG.Covariant3Vector(CCG.WVector(surf.ρe_tot_flux), lg_surf)
     sgs_flux_q_tot[kf_surf] =
         CCG.Covariant3Vector(CCG.WVector(surf.ρq_tot_flux), lg_surf)
+    ρu_flux = edmf.zero_uv_fluxes ? FT(0) : surf.ρu_flux
+    ρv_flux = edmf.zero_uv_fluxes ? FT(0) : surf.ρv_flux
     sgs_flux_uₕ[kf_surf] =
         CCG.Covariant3Vector(wvec(FT(1)), lg_surf) ⊗
-        CCG.Covariant12Vector(CCG.UVVector(surf.ρu_flux, surf.ρv_flux), lg_surf)
+        CCG.Covariant12Vector(CCG.UVVector(ρu_flux, ρv_flux), lg_surf)
 
     return nothing
 end
@@ -233,8 +235,10 @@ function compute_diffusive_fluxes(
 
     aeKHq_tot_bc = -surf.ρq_tot_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KH[kf_surf]
     aeKHh_tot_bc = -surf.ρe_tot_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KH[kf_surf]
-    aeKMu_bc = -surf.ρu_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
-    aeKMv_bc = -surf.ρv_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
+    ρu_flux = edmf.zero_uv_fluxes ? FT(0) : surf.ρu_flux
+    ρv_flux = edmf.zero_uv_fluxes ? FT(0) : surf.ρv_flux
+    aeKMu_bc = -ρu_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
+    aeKMv_bc = -ρv_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
 
     aeKMuₕ_bc = CCG.UVVector(aeKMu_bc, aeKMv_bc)
 

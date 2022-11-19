@@ -625,15 +625,7 @@ function surface_params(
                 0,
                 cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)),
             )^FT(1.5)
-    kwargs = (;
-        Tsurface,
-        qsurface,
-        shf,
-        lhf,
-        ustar,
-        Ri_bulk_crit,
-        zero_uv_fluxes = true,
-    )
+    kwargs = (; Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 
@@ -719,15 +711,7 @@ function surface_params(
     shf = Dierckx.Spline1D(t_Sur_in, SH; k = 1)
     lhf = Dierckx.Spline1D(t_Sur_in, LH; k = 1)
 
-    kwargs = (;
-        Tsurface,
-        qsurface,
-        shf,
-        lhf,
-        ustar,
-        Ri_bulk_crit,
-        zero_uv_fluxes = true,
-    )
+    kwargs = (; Tsurface, qsurface, shf, lhf, ustar, Ri_bulk_crit)
     return TC.FixedSurfaceFlux(FT, TC.FixedFrictionVelocity; kwargs...)
 end
 

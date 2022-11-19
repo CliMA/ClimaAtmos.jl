@@ -71,8 +71,8 @@ function get_surface(
         obukhov_length = result.L_MO,
         cm = result.Cd,
         ch = result.Ch,
-        ρu_flux = surf_params.zero_uv_fluxes ? FT(0) : result.ρτxz,
-        ρv_flux = surf_params.zero_uv_fluxes ? FT(0) : result.ρτyz,
+        ρu_flux = result.ρτxz,
+        ρv_flux = result.ρτyz,
         ρe_tot_flux = shf + lhf,
         ρq_tot_flux = lhf / TD.latent_heat_vapor(thermo_params, ts_in),
     )

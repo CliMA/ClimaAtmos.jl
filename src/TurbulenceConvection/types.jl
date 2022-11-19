@@ -254,7 +254,6 @@ Base.@kwdef struct FixedSurfaceFlux{
     cq::FT = FT(0)
     Ri_bulk_crit::FT = FT(0)
     ustar::FT = FT(0)
-    zero_uv_fluxes::Bool = false
 end
 
 function FixedSurfaceFlux(
@@ -373,6 +372,7 @@ struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}
     pressure_model_params::PMP
     entr_closure::EC
     H_up_min::FT # minimum updraft top to avoid zero division in pressure drag and turb-entr
+    zero_uv_fluxes::Bool
 end
 function EDMFModel(
     ::Type{FT},
@@ -382,6 +382,8 @@ function EDMFModel(
     parsed_args,
 ) where {FT}
 
+    tc_case = parsed_args["turbconv_case"]
+    zero_uv_fluxes = any(tcc -> tcc == tc_case, ["TRMM_LBA", "ARM_SGP"])
     # Set the number of updrafts (1)
     n_updrafts = parse_namelist(
         namelist,
@@ -716,6 +718,7 @@ function EDMFModel(
         pressure_model_params,
         entr_closure,
         H_up_min,
+        zero_uv_fluxes,
     )
 end
 
