@@ -58,7 +58,6 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 ArgParse = "1.1"
@@ -103,7 +102,6 @@ StatsBase = "0.33"
 SurfaceFluxes = "0.4"
 TerminalLoggers = "0.1"
 Thermodynamics = "0.10"
-UnPack = "1"
 julia = "1.7"
 
 [extras]

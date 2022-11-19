@@ -29,7 +29,6 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 SurfaceFluxes = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 AtmosphericProfilesLibrary = "0.1"
@@ -52,7 +51,6 @@ StaticArrays = "1"
 StatsBase = "0.33"
 SurfaceFluxes = "0.4"
 Thermodynamics = "0.10"
-UnPack = "1"
 julia = "1.7"
 
 [extras]

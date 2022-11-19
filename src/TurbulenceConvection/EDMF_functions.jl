@@ -420,7 +420,7 @@ function θ_surface_bc(
     kc_surf = kc_surface(grid)
     ts_gm = center_aux_grid_mean_ts(state)
     c_p = TD.cp_m(thermo_params, ts_gm[kc_surf])
-    UnPack.@unpack ustar, zLL, oblength, ρLL = surface_helper(surf, grid, state)
+    (; ustar, zLL, oblength, ρLL) = surface_helper(surf, grid, state)
 
     surf.bflux > 0 || return FT(0)
     a_total = edmf.surface_area
@@ -453,7 +453,7 @@ function q_surface_bc(
     surf.bflux > 0 || return aux_gm.q_tot[kc_surf]
     a_total = edmf.surface_area
     a_ = area_surface_bc(surf, edmf, i)
-    UnPack.@unpack ustar, zLL, oblength, ρLL = surface_helper(surf, grid, state)
+    (; ustar, zLL, oblength, ρLL) = surface_helper(surf, grid, state)
     ρq_tot_flux = surf.ρq_tot_flux
     qt_var = get_surface_variance(
         ρq_tot_flux / ρLL,
