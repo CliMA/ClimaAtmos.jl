@@ -15,8 +15,6 @@ function get_surface(
     kf_surf = TC.kf_surface(grid)
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
-    aux_gm = TC.center_aux_grid_mean(state)
-    prog_gm = TC.center_prog_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     p_f_surf = aux_gm_f.p[kf_surf]
     Tsurface = TC.surface_temperature(surf_params, t)
@@ -62,18 +60,7 @@ function get_surface(
     else
         SF.Fluxes{FT}(; kwargs...)
     end
-    result = SF.surface_conditions(surf_flux_params, sc, scheme)
-    return TC.SurfaceBase{FT}(;
-        shf = shf,
-        lhf = lhf,
-        ustar = result.ustar,
-        bflux = bflux,
-        obukhov_length = result.L_MO,
-        cm = result.Cd,
-        ch = result.Ch,
-        ρu_flux = result.ρτxz,
-        ρv_flux = result.ρτyz,
-    )
+    return SF.surface_conditions(surf_flux_params, sc, scheme)
 end
 
 function get_surface(
@@ -88,8 +75,6 @@ function get_surface(
     kc_surf = TC.kc_surface(grid)
     kf_surf = TC.kf_surface(grid)
     aux_gm_f = TC.face_aux_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    prog_gm = TC.center_prog_grid_mean(state)
     Tsurface = TC.surface_temperature(surf_params, t)
     qsurface = TC.surface_q_tot(surf_params, t)
     p_f_surf = aux_gm_f.p[kf_surf]
@@ -118,19 +103,7 @@ function get_surface(
         z0m = zrough,
         z0b = zrough,
     )
-    result = SF.surface_conditions(surf_flux_params, sc, scheme)
-
-    return TC.SurfaceBase{FT}(;
-        cm = result.Cd,
-        ch = result.Ch,
-        obukhov_length = result.L_MO,
-        lhf = result.lhf,
-        shf = result.shf,
-        ustar = result.ustar,
-        ρu_flux = result.ρτxz,
-        ρv_flux = result.ρτyz,
-        bflux = result.buoy_flux,
-    )
+    return SF.surface_conditions(surf_flux_params, sc, scheme)
 end
 
 function get_surface(
@@ -146,8 +119,6 @@ function get_surface(
     FT = TC.float_type(state)
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
-    prog_gm = TC.center_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
     p_f_surf = aux_gm_f.p[kf_surf]
     ts_gm = TC.center_aux_grid_mean_ts(state)
@@ -172,16 +143,5 @@ function get_surface(
         z0m = zrough,
         z0b = zrough,
     )
-    result = SF.surface_conditions(surf_flux_params, sc, scheme)
-    return TC.SurfaceBase{FT}(;
-        cm = result.Cd,
-        ch = result.Ch,
-        obukhov_length = result.L_MO,
-        lhf = result.lhf,
-        shf = result.shf,
-        ustar = result.ustar,
-        ρu_flux = result.ρτxz,
-        ρv_flux = result.ρτyz,
-        bflux = result.buoy_flux,
-    )
+    return SF.surface_conditions(surf_flux_params, sc, scheme)
 end

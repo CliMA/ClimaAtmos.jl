@@ -2,7 +2,7 @@ function update_aux!(
     edmf::EDMFModel,
     grid::Grid,
     state::State,
-    surf::SurfaceBase,
+    surf,
     param_set::APS,
     t::Real,
     Δt::Real,

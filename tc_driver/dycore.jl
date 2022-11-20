@@ -95,7 +95,7 @@ function compute_implicit_gm_tendencies!(
     edmf::TC.EDMFModel,
     grid::TC.Grid,
     state::TC.State,
-    surf::TC.SurfaceBase,
+    surf,
     param_set::APS,
 )
     tendencies_gm = TC.center_tendencies_grid_mean(state)
@@ -118,7 +118,7 @@ function compute_explicit_gm_tendencies!(
     edmf::TC.EDMFModel,
     grid::TC.Grid,
     state::TC.State,
-    surf::TC.SurfaceBase,
+    surf,
     param_set::APS,
 )
     tendencies_gm = TC.center_tendencies_grid_mean(state)
