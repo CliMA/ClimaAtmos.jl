@@ -22,7 +22,7 @@ function update_aux!(
     c_m = mixing_length_params(edmf).c_m
     KM = center_aux_turbconv(state).KM
     KH = center_aux_turbconv(state).KH
-    obukhov_length = surf.obukhov_length
+    oblength = obukhov_length(surf)
     FT = float_type(state)
     prog_gm = center_prog_grid_mean(state)
     prog_gm_f = face_prog_grid_mean(state)
@@ -423,13 +423,13 @@ function update_aux!(
             FT(eps(FT)),
         )
         aux_tc.prandtl_nvec[k] =
-            turbulent_Prandtl_number(mix_len_params, obukhov_length, ∇_Ri)
+            turbulent_Prandtl_number(mix_len_params, oblength, ∇_Ri)
 
         ml_model = MinDisspLen{FT}(;
             z = FT(grid.zc[k].z),
-            obukhov_length = obukhov_length,
+            obukhov_length = oblength,
             tke_surf = aux_en.tke[kc_surf],
-            ustar = surf.ustar,
+            ustar = get_ustar(surf),
             Pr = aux_tc.prandtl_nvec[k],
             p = p_c[k],
             ∇b = bg,
@@ -524,11 +524,11 @@ function update_aux!(
 
     ### Diagnostic thermodynamiccovariances
     if edmf.thermo_covariance_model isa DiagnosticThermoCovariances
-        flux1 = surf.shf / TD.cp_m(thermo_params, ts_gm[kc_surf])
-        flux2 = surf.ρq_tot_flux
+        flux1 = shf(surf) / TD.cp_m(thermo_params, ts_gm[kc_surf])
+        flux2 = get_ρq_tot_flux(surf, thermo_params, ts_gm[kc_surf])
         zLL::FT = grid.zc[kc_surf].z
-        ustar = surf.ustar
-        oblength = surf.obukhov_length
+        ustar = get_ustar(surf)
+        oblength = obukhov_length(surf)
         prog_gm = center_prog_grid_mean(state)
         ρLL = prog_gm.ρ[kc_surf]
         update_diagnostic_covariances!(edmf, grid, state, param_set, Val(:Hvar))
