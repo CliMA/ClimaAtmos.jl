@@ -344,30 +344,18 @@ latent_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
 fixed_ustar(::FixedSurfaceFlux{FT, FixedFrictionVelocity}) where {FT} = true
 fixed_ustar(::FixedSurfaceFlux{FT, VariableFrictionVelocity}) where {FT} = false
 
-Base.@kwdef struct SurfaceBase{FT}
-    shf::FT = 0
-    lhf::FT = 0
-    cm::FT = 0
-    ch::FT = 0
-    bflux::FT = 0
-    ustar::FT = 0
-    ρu_flux::FT = 0
-    ρv_flux::FT = 0
-    obukhov_length::FT = 0
-end
-
-shf(surf::SurfaceBase) = surf.shf
-lhf(surf::SurfaceBase) = surf.lhf
-cm(surf::SurfaceBase) = surf.cm
-ch(surf::SurfaceBase) = surf.ch
-bflux(surf::SurfaceBase) = surf.bflux
-get_ustar(surf::SurfaceBase) = surf.ustar
-get_ρe_tot_flux(surf::SurfaceBase, thermo_params, ts_in) = shf(surf) + lhf(surf)
-get_ρq_tot_flux(surf::SurfaceBase, thermo_params, ts_in) =
+shf(surf) = surf.shf
+lhf(surf) = surf.lhf
+cm(surf) = surf.Cd
+ch(surf) = surf.Ch
+bflux(surf) = surf.buoy_flux
+get_ustar(surf) = surf.ustar
+get_ρe_tot_flux(surf, thermo_params, ts_in) = shf(surf) + lhf(surf)
+get_ρq_tot_flux(surf, thermo_params, ts_in) =
     lhf(surf) / TD.latent_heat_vapor(thermo_params, ts_in)
-get_ρu_flux(surf::SurfaceBase) = surf.ρu_flux
-get_ρv_flux(surf::SurfaceBase) = surf.ρv_flux
-obukhov_length(surf::SurfaceBase) = surf.obukhov_length
+get_ρu_flux(surf) = surf.ρτxz
+get_ρv_flux(surf) = surf.ρτyz
+obukhov_length(surf) = surf.L_MO
 
 
 struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}

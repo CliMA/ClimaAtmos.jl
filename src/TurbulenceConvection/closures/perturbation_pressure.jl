@@ -3,7 +3,7 @@
         state::State,
         grid::Grid,
         edmf::EDMFModel,
-        surf::SurfaceBase,
+        surf,
     )
 
 Computes the
@@ -16,7 +16,7 @@ for all updrafts, following [He2020](@cite), given:
  - `state`: state
  - `grid`: grid
  - `edmf`: EDMF model
- - `surf`: surface model
+ - `surf`: `SurfaceFluxes.SurfaceFluxConditions`
 """
 function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
 
