@@ -87,7 +87,7 @@ function get_surface(
     scheme = SF.FVScheme()
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
-    ts_sfc = TD.PhaseEquil_pθq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts_sfc = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
     ts_in = TC.center_aux_grid_mean_ts(state)[kc_surf]
     u_sfc = SA.SVector{2, FT}(0, 0)
     # TODO: make correct with topography

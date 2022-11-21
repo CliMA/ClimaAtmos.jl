@@ -510,7 +510,7 @@ function surface_params(
     cm = zc_surf -> cm0 * grid_adjust(zc_surf)
     ch = zc_surf -> ch0 * grid_adjust(zc_surf)
     cq = zc_surf -> cq0 * grid_adjust(zc_surf) # TODO: not yet used..
-    Tsurface::FT = 299.8
+    Tsurface::FT = 301.10523249821375
 
     # For Rico we provide values of transfer coefficients
     ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, FT(0)) # TODO: is this correct?
