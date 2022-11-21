@@ -178,6 +178,12 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --idealized_insolation false --vert_diff true --surface_scheme monin_obukhov --moist equil --rad allskywithclear --precip_model 0M --job_id sphere_aquaplanet_rhoe_equilmoist_allsky --dt 400secs --t_end 5days --regression_test true"
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky/*"
 
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist with EDMF"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist dry --anelastic_dycore false --job_id sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --vert_diff true --surface_scheme bulk --regression_test true --dt 1secs --t_end 20secs --FLOAT_TYPE Float64 --turbconv edmf --turbconv_case Soares --config sphere --precip_model 0M --z_stretch false --apply_limiter false --dt_save_to_sol 10secs --dt_save_to_disk 10secs"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf/*"
+        agents:
+          slurm_mem: 20GB
+
   - group: "Sphere Examples (Gravity wave)"
     steps:
 
