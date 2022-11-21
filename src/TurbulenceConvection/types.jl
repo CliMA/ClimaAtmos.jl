@@ -264,18 +264,16 @@ Base.@kwdef struct MoninObukhovSurface{FT, TS} <: AbstractSurfaceParameters{FT}
     ts::TS
 end
 
-float_or_func(s::Function, t::Real) = s(t)
-float_or_func(s::Dierckx.Spline1D, t::Real) = s(t)
-float_or_func(s::Real, t::Real) = s
+const_or_func(s::Function, t::Real) = s(t)
+const_or_func(s::Dierckx.Spline1D, t::Real) = s(t)
+const_or_func(s, t::Real) = s
 
-surface_temperature(s::AbstractSurfaceParameters, t::Real = 0) =
-    float_or_func(s.Tsurface, t)
-surface_q_tot(s::AbstractSurfaceParameters, t::Real = 0) =
-    float_or_func(s.qsurface, t)
+surface_thermo_state(s::AbstractSurfaceParameters, thermo_params, t::Real = 0) =
+    const_or_func(s.ts, t)
 sensible_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
-    float_or_func(s.shf, t)
+    const_or_func(s.shf, t)
 latent_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
-    float_or_func(s.lhf, t)
+    const_or_func(s.lhf, t)
 
 fixed_ustar(::FixedSurfaceFluxAndFrictionVelocity) = true
 fixed_ustar(::FixedSurfaceFlux) = false

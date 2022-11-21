@@ -12,19 +12,14 @@ function get_surface(
     FT = TC.float_type(state)
     surf_flux_params = TCP.surface_fluxes_params(param_set)
     kc_surf = TC.kc_surface(grid)
-    kf_surf = TC.kf_surface(grid)
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
-    aux_gm_f = TC.face_aux_grid_mean(state)
-    p_f_surf = aux_gm_f.p[kf_surf]
-    Tsurface = TC.surface_temperature(surf_params, t)
-    qsurface = TC.surface_q_tot(surf_params, t)
     shf = TC.sensible_heat_flux(surf_params, t)
     lhf = TC.latent_heat_flux(surf_params, t)
     zrough = surf_params.zrough
     thermo_params = TCP.thermodynamics_params(param_set)
 
-    ts_sfc = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts_sfc = TC.surface_thermo_state(surf_params, thermo_params, t)
     ts_in = TC.center_aux_grid_mean_ts(state)[kc_surf]
     scheme = SF.FVScheme()
 
@@ -61,11 +56,6 @@ function get_surface(
     FT = TC.float_type(state)
     surf_flux_params = TCP.surface_fluxes_params(param_set)
     kc_surf = TC.kc_surface(grid)
-    kf_surf = TC.kf_surface(grid)
-    aux_gm_f = TC.face_aux_grid_mean(state)
-    Tsurface = TC.surface_temperature(surf_params, t)
-    qsurface = TC.surface_q_tot(surf_params, t)
-    p_f_surf = aux_gm_f.p[kf_surf]
     zrough = surf_params.zrough
     zc_surf = grid.zc[kc_surf].z
     cm = surf_params.cm(zc_surf)
@@ -75,7 +65,7 @@ function get_surface(
     scheme = SF.FVScheme()
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
-    ts_sfc = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts_sfc = TC.surface_thermo_state(surf_params, thermo_params, t)
     ts_in = TC.center_aux_grid_mean_ts(state)[kc_surf]
     u_sfc = SA.SVector{2, FT}(0, 0)
     # TODO: make correct with topography
@@ -103,20 +93,15 @@ function get_surface(
 )
     surf_flux_params = TCP.surface_fluxes_params(param_set)
     kc_surf = TC.kc_surface(grid)
-    kf_surf = TC.kf_surface(grid)
     FT = TC.float_type(state)
     z_sfc = FT(0)
     z_in = grid.zc[kc_surf].z
-    aux_gm_f = TC.face_aux_grid_mean(state)
-    p_f_surf = aux_gm_f.p[kf_surf]
     ts_gm = TC.center_aux_grid_mean_ts(state)
-    Tsurface = TC.surface_temperature(surf_params, t)
-    qsurface = TC.surface_q_tot(surf_params, t)
     zrough = surf_params.zrough
     thermo_params = TCP.thermodynamics_params(param_set)
 
     scheme = SF.FVScheme()
-    ts_sfc = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts_sfc = TC.surface_thermo_state(surf_params, thermo_params, t)
     ts_in = ts_gm[kc_surf]
 
     u_sfc = SA.SVector{2, FT}(0, 0)
