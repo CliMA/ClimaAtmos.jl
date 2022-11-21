@@ -21,24 +21,12 @@ function get_surface(
     qsurface = TC.surface_q_tot(surf_params, t)
     shf = TC.sensible_heat_flux(surf_params, t)
     lhf = TC.latent_heat_flux(surf_params, t)
-    Ri_bulk_crit = surf_params.Ri_bulk_crit
     zrough = surf_params.zrough
     thermo_params = TCP.thermodynamics_params(param_set)
 
     ts_sfc = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
     ts_in = TC.center_aux_grid_mean_ts(state)[kc_surf]
     scheme = SF.FVScheme()
-
-    bflux = SF.compute_buoyancy_flux(
-        surf_flux_params,
-        shf,
-        lhf,
-        ts_in,
-        ts_sfc,
-        scheme,
-    )
-    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
-    convective_vel = TC.get_wstar(bflux, zi) # yair here zi in TRMM should be adjusted
 
     u_sfc = SA.SVector{2, FT}(0, 0)
     # TODO: make correct with topography
@@ -53,7 +41,7 @@ function get_surface(
         lhf = lhf,
         z0m = zrough,
         z0b = zrough,
-        gustiness = convective_vel,
+        gustiness = FT(1),
     )
     sc = if TC.fixed_ustar(surf_params)
         SF.FluxesAndFrictionVelocity{FT}(; kwargs..., ustar = surf_params.ustar)

@@ -230,102 +230,38 @@ end
 quadrature_order(::SGSQuadrature{N}) where {N} = N
 quad_type(::SGSQuadrature{N}) where {N} = N
 
-abstract type FrictionVelocityType end
-struct FixedFrictionVelocity <: FrictionVelocityType end
-struct VariableFrictionVelocity <: FrictionVelocityType end
-
 abstract type AbstractSurfaceParameters{FT <: Real} end
 
 const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
 
-Base.@kwdef struct FixedSurfaceFlux{
-    FT,
-    FVT <: FrictionVelocityType,
-    TS,
-    QS,
-    SHF,
-    LHF,
-} <: AbstractSurfaceParameters{FT}
-    zrough::FT = FT(0)
-    Tsurface::TS = FT(0)
-    qsurface::QS = FT(0)
-    shf::SHF = FT(0)
-    lhf::LHF = FT(0)
-    cq::FT = FT(0)
-    Ri_bulk_crit::FT = FT(0)
-    ustar::FT = FT(0)
-end
-
-function FixedSurfaceFlux(
-    ::Type{FT},
-    ::Type{FVT};
-    Tsurface::FloatOrFunc{FT},
-    qsurface::FloatOrFunc{FT},
-    shf::FloatOrFunc{FT},
-    lhf::FloatOrFunc{FT},
-    kwargs...,
-) where {FT, FVT}
-    TS = typeof(Tsurface)
-    QS = typeof(qsurface)
-    SHF = typeof(shf)
-    LHF = typeof(lhf)
-    return FixedSurfaceFlux{FT, FVT, TS, QS, SHF, LHF}(;
-        Tsurface,
-        qsurface,
-        shf,
-        lhf,
-        kwargs...,
-    )
-end
-
-Base.@kwdef struct FixedSurfaceCoeffs{FT, TS, QS, CH, CM} <:
+Base.@kwdef struct FixedSurfaceFlux{FT, TS, SHF, LHF} <:
                    AbstractSurfaceParameters{FT}
-    zrough::FT = FT(0)
-    Tsurface::TS = FT(0)
-    qsurface::QS = FT(0)
-    ch::CH = FT(0)
-    cm::CM = FT(0)
-    Ri_bulk_crit::FT = FT(0)
+    zrough::FT
+    ts::TS
+    shf::SHF
+    lhf::LHF
 end
 
-function FixedSurfaceCoeffs(
-    ::Type{FT};
-    Tsurface::FloatOrFunc{FT},
-    qsurface::FloatOrFunc{FT},
-    ch::FloatOrFunc{FT},
-    cm::FloatOrFunc{FT},
-    kwargs...,
-) where {FT}
-    TS = typeof(Tsurface)
-    QS = typeof(qsurface)
-    CH = typeof(ch)
-    CM = typeof(cm)
-    return FixedSurfaceCoeffs{FT, TS, QS, CH, CM}(;
-        Tsurface,
-        qsurface,
-        ch,
-        cm,
-        kwargs...,
-    )
-end
-
-Base.@kwdef struct MoninObukhovSurface{FT, TS, QS} <:
+Base.@kwdef struct FixedSurfaceFluxAndFrictionVelocity{FT, TS, SHF, LHF} <:
                    AbstractSurfaceParameters{FT}
-    zrough::FT = FT(0)
-    Tsurface::TS = FT(0)
-    qsurface::QS = FT(0)
-    Ri_bulk_crit::FT = FT(0)
+    zrough::FT
+    ts::TS
+    shf::SHF
+    lhf::LHF
+    ustar::FT
 end
 
-function MoninObukhovSurface(
-    ::Type{FT};
-    Tsurface::FloatOrFunc{FT},
-    qsurface::FloatOrFunc{FT},
-    kwargs...,
-) where {FT}
-    TS = typeof(Tsurface)
-    QS = typeof(qsurface)
-    return MoninObukhovSurface{FT, TS, QS}(; Tsurface, qsurface, kwargs...)
+Base.@kwdef struct FixedSurfaceCoeffs{FT, TS, CH, CM} <:
+                   AbstractSurfaceParameters{FT}
+    zrough::FT
+    ts::TS
+    ch::CH
+    cm::CM
+end
+
+Base.@kwdef struct MoninObukhovSurface{FT, TS} <: AbstractSurfaceParameters{FT}
+    zrough::FT
+    ts::TS
 end
 
 float_or_func(s::Function, t::Real) = s(t)
@@ -341,8 +277,8 @@ sensible_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
 latent_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
     float_or_func(s.lhf, t)
 
-fixed_ustar(::FixedSurfaceFlux{FT, FixedFrictionVelocity}) where {FT} = true
-fixed_ustar(::FixedSurfaceFlux{FT, VariableFrictionVelocity}) where {FT} = false
+fixed_ustar(::FixedSurfaceFluxAndFrictionVelocity) = true
+fixed_ustar(::FixedSurfaceFlux) = false
 
 shf(surf) = surf.shf
 lhf(surf) = surf.lhf
