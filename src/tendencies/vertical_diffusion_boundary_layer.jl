@@ -259,44 +259,46 @@ function get_surface_fluxes!(Y, p, t, colidx, ::Decoupled)
     ) = p
     (; surface_normal) = p
 
-    uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
-
-    # TODO: Remove use of parent
-    @. uₕ_int_phys[colidx] = Geometry.UVVector(uₕ_int)
-    @. uₕ_int_phys_vec[colidx] = StaticArrays.SVector(
-        uₕ_int_phys[colidx].components.data.:1,
-        uₕ_int_phys[colidx].components.data.:2,
-    )
-
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
 
-    (; sfc_thermo_state_type) = p.surface_scheme
-    # get the near-surface thermal state
-    set_surface_thermo_state!(
-        coupling,
-        sfc_thermo_state_type,
-        ts_sfc[colidx],
-        T_sfc[colidx],
-        Spaces.level(ᶜts[colidx], 1),
-        thermo_params,
-        t,
-    )
+    if !(p.surface_scheme isa Nothing)
+        uₕ_int = Spaces.level(Y.c.uₕ[colidx], 1)
 
-    set_surface_inputs!(
-        sfc_inputs[colidx],
-        p.surface_scheme,
-        ts_sfc[colidx],
-        Spaces.level(ᶜts[colidx], 1),
-        uₕ_int_phys_vec[colidx],
-        z_bottom[colidx],
-        z_sfc[colidx],
-    )
+        # TODO: Remove use of parent
+        @. uₕ_int_phys[colidx] = Geometry.UVVector(uₕ_int)
+        @. uₕ_int_phys_vec[colidx] = StaticArrays.SVector(
+            uₕ_int_phys[colidx].components.data.:1,
+            uₕ_int_phys[colidx].components.data.:2,
+        )
 
-    # calculate all fluxes (saturated surface conditions)
-    sf_params = CAP.surface_fluxes_params(params)
-    @. sfc_conditions[colidx] =
-        SF.surface_conditions(sf_params, sfc_inputs[colidx])
+        (; sfc_thermo_state_type) = p.surface_scheme
+        # get the near-surface thermal state
+        set_surface_thermo_state!(
+            coupling,
+            sfc_thermo_state_type,
+            p.ts_sfc[colidx],
+            T_sfc[colidx],
+            Spaces.level(ᶜts[colidx], 1),
+            thermo_params,
+            t,
+        )
+
+        set_surface_inputs!(
+            p.sfc_inputs[colidx],
+            p.surface_scheme,
+            p.ts_sfc[colidx],
+            Spaces.level(ᶜts[colidx], 1),
+            uₕ_int_phys_vec[colidx],
+            z_bottom[colidx],
+            z_sfc[colidx],
+        )
+
+        # calculate all fluxes (saturated surface conditions)
+        sf_params = CAP.surface_fluxes_params(params)
+        @. sfc_conditions[colidx] =
+            SF.surface_conditions(sf_params, p.sfc_inputs[colidx])
+    end
 
     if diffuse_momentum
         ρτxz = sfc_conditions[colidx].ρτxz

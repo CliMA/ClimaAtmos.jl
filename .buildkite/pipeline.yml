@@ -232,6 +232,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":computer: no surface scheme"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id no_surface --surface_scheme nothing --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
+        artifact_paths: "no_surface/*"
+        agents:
+          slurm_mem: 20GB
+
   - group: "Milestones"
     steps:
 
