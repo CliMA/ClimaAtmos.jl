@@ -127,6 +127,12 @@ Base.@kwdef struct AtmosModel{
     non_orographic_gravity_wave::GW = nothing
 end
 
+Base.broadcastable(x::AtmosModel) = Ref(x)
+
+is_compressible(atmos::AtmosModel) =
+    atmos.compressibility_model isa CompressibleFluid
+is_anelastic(atmos::AtmosModel) = atmos.compressibility_model isa AnelasticFluid
+
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))
     buf = maximum(length.(pns))

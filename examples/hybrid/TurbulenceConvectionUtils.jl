@@ -1,6 +1,7 @@
 module TurbulenceConvectionUtils
 
 using LinearAlgebra
+using LinearAlgebra: norm_sqr
 import ClimaAtmos
 import ClimaAtmos.Parameters as CAP
 import ClimaCore as CC
@@ -32,7 +33,7 @@ import .NameList
 turbconv_cache(
     Y,
     turbconv_model::Nothing,
-    precip_model,
+    atmos,
     namelist,
     param_set,
     parsed_args,
@@ -45,11 +46,13 @@ explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 ##### EDMF
 #####
 
-function get_aux(edmf, Y, ::Type{FT}) where {FT}
+function get_aux(atmos, edmf, Y, ::Type{FT}) where {FT}
     fspace = axes(Y.f)
     cspace = axes(Y.c)
-    aux_cent_fields = TC.FieldFromNamedTuple(cspace, cent_aux_vars, FT, edmf)
-    aux_face_fields = TC.FieldFromNamedTuple(fspace, face_aux_vars, FT, edmf)
+    aux_cent_fields =
+        TC.FieldFromNamedTuple(cspace, cent_aux_vars, FT, atmos, edmf)
+    aux_face_fields =
+        TC.FieldFromNamedTuple(fspace, face_aux_vars, FT, atmos, edmf)
     aux = CC.Fields.FieldVector(cent = aux_cent_fields, face = aux_face_fields)
     return aux
 end
@@ -57,7 +60,7 @@ end
 function turbconv_cache(
     Y,
     turbconv_model::TC.EDMFModel,
-    precip_model,
+    atmos,
     namelist,
     param_set,
     parsed_args,
@@ -100,8 +103,7 @@ function turbconv_cache(
         surf_params,
         param_set,
         surf_ref_thermo_state,
-        aux = get_aux(edmf, Y, FT),
-        precip_model,
+        aux = get_aux(atmos, edmf, Y, FT),
         Y_filtered = similar(Y),
     )
     return (; edmf_cache = cache, turbconv_model)
@@ -115,7 +117,7 @@ end
 
 function init_tc!(Y, p, params, colidx)
 
-    (; edmf, surf_ref_thermo_state, ᶠp₀, ᶜp₀, surf_params, case) = p.edmf_cache
+    (; edmf, surf_ref_thermo_state, surf_params, case) = p.edmf_cache
     tc_params = CAP.turbconv_params(params)
 
     FT = eltype(edmf)
@@ -127,8 +129,8 @@ function init_tc!(Y, p, params, colidx)
     FT = eltype(grid)
     t = FT(0)
 
-    @. p.ᶜp[colidx] = ᶜp₀
-    @. p.edmf_cache.aux.face.p[colidx] = ᶠp₀
+    @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
+    @. p.edmf_cache.aux.face.p[colidx] = p.edmf_cache.ᶠp₀
 
     CA.compute_ref_density!(
         Y.c.ρ[colidx],
@@ -158,10 +160,10 @@ end
 # TODO: Split update_aux! and other functions into implicit and explicit parts.
 
 function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
-    (; edmf_cache, Δt, compressibility_model) = p
+    (; edmf_cache, Δt) = p
     (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
         edmf_cache
-    (; imex_edmf_turbconv, imex_edmf_gm, test_consistency, ᶠp₀) = edmf_cache
+    (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
 
@@ -178,8 +180,8 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    if compressibility_model isa CA.AnelasticFluid
-        @. p.edmf_cache.aux.face.p[colidx] = ᶠp₀
+    if CA.is_anelastic(p.atmos)
+        @. p.edmf_cache.aux.face.p[colidx] = p.edmf_cache.ᶠp₀
         CA.compute_ref_density!(
             p.edmf_cache.aux.face.ρ[colidx],
             p.edmf_cache.aux.face.p[colidx],
@@ -217,11 +219,10 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 end
 
 function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
-    (; edmf_cache, Δt, compressibility_model) = p
+    (; edmf_cache, Δt) = p
     (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
         edmf_cache
-    (; precip_model, imex_edmf_turbconv, imex_edmf_gm, test_consistency, ᶠp₀) =
-        edmf_cache
+    (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
 
@@ -237,11 +238,11 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    if compressibility_model isa CA.AnelasticFluid
+    if CA.is_anelastic(p.atmos)
         # TODO: how should this be computed if compressible?
         # pressure at cell centers have been populated, we need
         # pressure BCs
-        @. p.edmf_cache.aux.face.p[colidx] = ᶠp₀
+        @. p.edmf_cache.aux.face.p[colidx] = p.edmf_cache.ᶠp₀
         CA.compute_ref_density!(
             p.edmf_cache.aux.face.ρ[colidx],
             p.edmf_cache.aux.face.p[colidx],
@@ -265,7 +266,7 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
     TC.compute_precipitation_sink_tendencies(
-        precip_model,
+        p.precip_model,
         edmf.precip_fraction_model,
         grid,
         state,
