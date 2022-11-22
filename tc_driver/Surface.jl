@@ -145,3 +145,19 @@ function get_surface(
     )
     return SF.surface_conditions(surf_flux_params, sc, scheme)
 end
+
+using ClimaCore.Utilities: half
+import ClimaAtmos: SingleColumnModel, SphericalModel
+get_surface(::SingleColumnModel, args...) = get_surface(args...)
+function get_surface(
+    ::SphericalModel,
+    surf_params::TC.FixedSurfaceFlux,
+    grid::TC.Grid,
+    state::TC.State,
+    args...,
+)
+    # TODO: remove this kludge
+    sfc_conditions = state.p.sfc_conditions[state.colidx]
+    sfc_conditions_inst = CC.Fields._first(sfc_conditions)
+    return sfc_conditions_inst
+end

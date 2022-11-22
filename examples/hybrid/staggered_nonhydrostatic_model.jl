@@ -98,6 +98,10 @@ function default_cache(
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
+
+    sfc_conditions =
+        similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
+
     ts_type = CA.thermo_state_type(Y.c, FT)
     ghost_buffer = (
         c = Spaces.create_ghost_buffer(Y.c),
@@ -166,6 +170,7 @@ function default_cache(
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
+        sfc_conditions,
         z_sfc,
         T_sfc,
         ts_sfc = similar(Spaces.level(Y.f, half), ts_type),

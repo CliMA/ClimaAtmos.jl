@@ -43,8 +43,6 @@ function vertical_diffusion_boundary_layer_cache(
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
     surface_normal = Geometry.WVector.(ones(axes(Fields.level(Y.c, 1))))
 
-    sfc_conditions =
-        similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
     ts_type = thermo_state_type(Y.c, FT)
     ts_inst = thermo_state_instance(Y.c, FT)
 
@@ -102,7 +100,6 @@ function vertical_diffusion_boundary_layer_cache(
     return (;
         surface_scheme,
         sfc_input_kwargs...,
-        sfc_conditions,
         C_E,
         ᶠp = similar(Y.f, FT),
         ᶠK_E = similar(Y.f, FT),

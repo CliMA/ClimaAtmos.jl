@@ -189,7 +189,14 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     end
     assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
-    surf = get_surface(surf_params, grid, state, t, tc_params)
+    surf = get_surface(
+        p.atmos.model_config,
+        surf_params,
+        grid,
+        state,
+        t,
+        tc_params,
+    )
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
 
@@ -244,7 +251,14 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     end
     assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
-    surf = get_surface(surf_params, grid, state, t, tc_params)
+    surf = get_surface(
+        p.atmos.model_config,
+        surf_params,
+        grid,
+        state,
+        t,
+        tc_params,
+    )
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
 
