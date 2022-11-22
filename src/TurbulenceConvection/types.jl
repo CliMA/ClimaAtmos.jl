@@ -237,6 +237,7 @@ const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
 Base.@kwdef struct FixedSurfaceFlux{FT, TS, SHF, LHF} <:
                    AbstractSurfaceParameters{FT}
     zrough::FT
+    Ri_bulk_crit::FT
     ts::TS
     shf::SHF
     lhf::LHF
@@ -245,6 +246,7 @@ end
 Base.@kwdef struct FixedSurfaceFluxAndFrictionVelocity{FT, TS, SHF, LHF} <:
                    AbstractSurfaceParameters{FT}
     zrough::FT
+    Ri_bulk_crit::FT
     ts::TS
     shf::SHF
     lhf::LHF

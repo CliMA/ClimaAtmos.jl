@@ -3,7 +3,10 @@ import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
 
 function get_surface(
-    surf_params::TC.FixedSurfaceFlux,
+    surf_params::Union{
+        TC.FixedSurfaceFlux,
+        TC.FixedSurfaceFluxAndFrictionVelocity,
+    },
     grid::TC.Grid,
     state::TC.State,
     t::Real,
@@ -17,6 +20,7 @@ function get_surface(
     shf = TC.sensible_heat_flux(surf_params, t)
     lhf = TC.latent_heat_flux(surf_params, t)
     zrough = surf_params.zrough
+    (; Ri_bulk_crit) = surf_params
     thermo_params = TCP.thermodynamics_params(param_set)
 
     ts_sfc = TC.surface_thermo_state(surf_params, thermo_params, t)
@@ -29,6 +33,20 @@ function get_surface(
     u_in = SA.SVector{2, FT}(uₕ_gm_surf.u, uₕ_gm_surf.v)
     vals_sfc = SF.SurfaceValues(z_sfc, u_sfc, ts_sfc)
     vals_int = SF.InteriorValues(z_in, u_in, ts_in)
+
+    bflux = SF.compute_buoyancy_flux(
+        surf_flux_params,
+        shf,
+        lhf,
+        ts_in,
+        ts_sfc,
+        scheme,
+    )
+    # TODO: can we remove this non-local function?
+    #       Replacing gustiness with 1 impacts Soares and Nieuwstadt
+    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
+    convective_vel = TC.get_wstar(bflux, zi) # yair here zi in TRMM should be adjusted
+
     kwargs = (;
         state_in = vals_int,
         state_sfc = vals_sfc,
@@ -36,9 +54,9 @@ function get_surface(
         lhf = lhf,
         z0m = zrough,
         z0b = zrough,
-        gustiness = FT(1),
+        gustiness = convective_vel,
     )
-    sc = if TC.fixed_ustar(surf_params)
+    sc = if surf_params isa TC.FixedSurfaceFluxAndFrictionVelocity
         SF.FluxesAndFrictionVelocity{FT}(; kwargs..., ustar = surf_params.ustar)
     else
         SF.Fluxes{FT}(; kwargs...)
