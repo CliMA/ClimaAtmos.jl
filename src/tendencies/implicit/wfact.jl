@@ -382,5 +382,66 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
             tracer_upwinding,
         )
     end
+
+    ## ϕ'ϕ  ∂(Kρa(∂TC))
+    block = W.∂ᶜTCₜ∂ᶜTC.en.ρatke
+
+    state = TC.tc_column_state(Y, p, nothing, colidx)
+    grid = TC.Grid(state)
+    covar_sym = :tke
+
+    kc_surf = TC.kc_surface(grid)
+    kc_toa = TC.kc_top_of_atmos(grid)
+    aux_gm_f = TC.face_aux_grid_mean(state)
+    aux_en = TC.center_aux_environment(state)
+    covar = getproperty(aux_en, covar_sym)
+    ρ_f = aux_gm_f.ρ
+    is_tke = covar_sym == :tke
+
+    KM = TC.center_aux_turbconv(state).KM
+    KH = TC.center_aux_turbconv(state).KH
+    aux_tc = TC.center_aux_turbconv(state)
+    aux_bulk = TC.center_aux_bulk(state)
+    aeK = aux_tc.ψ_temporary
+    a_bulk = aux_bulk.area
+    if is_tke
+        @. aeK = (1 - a_bulk) * KM
+    else
+        @. aeK = (1 - a_bulk) * KH
+    end
+
+    aeK_bcs = (;
+        bottom = Operators.SetValue(aeK[kc_surf]),
+        top = Operators.SetValue(aeK[kc_toa]),
+    )
+    prog_bcs = (;
+        bottom = Operators.SetGradient(Geometry.WVector(FT(0))),
+        top = Operators.SetGradient(Geometry.WVector(FT(0))),
+    )
+
+    If = Operators.InterpolateC2F(; aeK_bcs...)
+    ∇c = Operators.DivergenceF2C()
+    ∇f = Operators.GradientC2F(; prog_bcs...)
+    ∇c_stencil = Operators.Operator2Stencil(∇c)
+    ∇f_stencil = Operators.Operator2Stencil(∇f)
+
+    @. block[colidx] = compose(
+        ∇c_stencil(Geometry.WVector(ρ_f * If(aeK))),
+        to_scalar_coefs(∇f_stencil(one(covar))),
+    )
     return nothing
 end
+
+#=
+If = CCO.InterpolateC2F(; aeK_bcs...)
+∇c = CCO.DivergenceF2C()
+∇f = CCO.GradientC2F(; prog_bcs...)
+∇c_stencil = Operator2Stencil(∇c)
+
+@. tend_covar += ∇c(ρ_f * If(aeK) * ∇f(covar))
+
+∂covarₜ/∂covar = ∂covarₜ/∂(∇f(covar)) * ∂(∇f(covar))/∂covar =
+    = ∂(∇c(ρ_f * If(aeK) * ∇f(covar)))/∂(∇f(covar)) * ∂(∇f(covar))/∂covar =
+    = ∇c_stencil(ρ_f * If(aeK)) * ∇f_stencil(one(covar))
+
+=#
