@@ -103,13 +103,7 @@ function additional_cache(
     use_tempest_mode = false,
 )
     FT = typeof(dt)
-    (;
-        precip_model,
-        forcing_type,
-        radiation_mode,
-        turbconv_model,
-        precip_model,
-    ) = atmos
+    (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
 
     thermo_dispatcher = CA.ThermoDispatcher(atmos)
     compressibility_model = atmos.compressibility_model
@@ -183,7 +177,7 @@ function additional_cache(
         TCU.turbconv_cache(
             Y,
             turbconv_model,
-            precip_model,
+            atmos,
             namelist,
             params,
             parsed_args,

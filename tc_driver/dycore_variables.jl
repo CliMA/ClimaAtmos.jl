@@ -27,13 +27,13 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     q_tot = FT(0),
     h_tot = FT(0),
 )
-cent_aux_vars(FT, local_geometry, edmf) = (;
+cent_aux_vars(FT, local_geometry, atmos, edmf) = (;
     cent_aux_vars_gm(FT, local_geometry, edmf)...,
     TC.cent_aux_vars_edmf(FT, local_geometry, edmf)...,
 )
 
 # Face only
-face_aux_vars_gm(FT, local_geometry, edmf) = (;
+face_aux_vars_gm(FT, local_geometry, atmos, edmf) = (;
     sgs_flux_h_tot = CCG.Covariant3Vector(FT(0)),
     sgs_flux_q_tot = CCG.Covariant3Vector(FT(0)),
     sgs_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
@@ -41,7 +41,7 @@ face_aux_vars_gm(FT, local_geometry, edmf) = (;
     p = FT(0),
     ρ = FT(0),
 )
-face_aux_vars(FT, local_geometry, edmf) = (;
-    face_aux_vars_gm(FT, local_geometry, edmf)...,
+face_aux_vars(FT, local_geometry, atmos, edmf) = (;
+    face_aux_vars_gm(FT, local_geometry, atmos, edmf)...,
     TC.face_aux_vars_edmf(FT, local_geometry, edmf)...,
 )
