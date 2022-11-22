@@ -17,7 +17,14 @@ function initialize_edmf(
     aux_gm = TC.center_aux_grid_mean(state)
     ts_gm = TC.center_aux_grid_mean_ts(state)
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ts_gm)
-    surf = get_surface(surf_params, grid, state, t, param_set)
+    surf = get_surface(
+        state.p.atmos.model_config,
+        surf_params,
+        grid,
+        state,
+        t,
+        param_set,
+    )
     initialize_updrafts(edmf, grid, state, surf)
     TC.set_edmf_surface_bc(edmf, grid, state, surf, param_set)
     return
