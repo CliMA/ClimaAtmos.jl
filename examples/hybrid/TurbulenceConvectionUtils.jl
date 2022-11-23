@@ -66,8 +66,8 @@ function turbconv_cache(
     parsed_args,
 )
     tc_params = CAP.turbconv_params(param_set)
-    Ri_bulk_crit = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     FT = CC.Spaces.undertype(axes(Y.c))
+    Ri_bulk_crit::FT = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
     imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
@@ -78,7 +78,7 @@ function turbconv_cache(
     surf_params = Cases.surface_params(
         case,
         surf_ref_thermo_state,
-        thermo_params;
+        thermo_params,
         Ri_bulk_crit,
     )
     edmf = turbconv_model
