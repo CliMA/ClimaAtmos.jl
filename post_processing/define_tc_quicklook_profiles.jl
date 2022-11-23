@@ -210,33 +210,36 @@ function zip_and_cleanup_output(path, zip_file)
     files = basename.(hdf5_files(path))
     cd(path) do
         if !isfile(zip_file)
-            run(pipeline(Cmd(["zip", zip_file, files...]), stdout = IOBuffer()))
+            zipname = first(splitext(basename(zip_file)))
+            run(pipeline(Cmd(["zip", zipname, files...]), stdout = IOBuffer()))
         end
-        # TODO: we can't seem to find the zip file when trying to unzip
-        # for f in files
-        #     rm(f)
-        # end
+        for f in files
+            rm(f)
+        end
     end
 end
 
-function unzip_main(main_branch_data_path, zip_file)
-    if ispath(main_branch_data_path)
-        files = hdf5_files(main_branch_data_path)
-        if !isempty(files)
-            @info "HDF5 files already in path"
-        elseif isfile(joinpath(main_branch_data_path, zip_file))
-            @info "Unzipping files in `$main_branch_data_path`"
-            cd(main_branch_data_path) do
-                run(pipeline(Cmd(["unzip", zip_file]); stdout = IOBuffer()))
-            end
-            files = hdf5_files(main_branch_data_path)
-            @assert !isempty(files)
-        else
-            @warn "Zip file does not exist"
-        end
-    else
-        @warn "Path $main_branch_data_path not found."
+function unzip_file_in_path(path, zip_file, unzip_path)
+    if !ispath(path)
+        @warn "Path $path not found."
+        return nothing
     end
+    if !isfile(joinpath(path, zip_file))
+        @warn "Zip file does not exist"
+        @show path
+        @show zip_file
+        @show readdir(path, join = true)
+        return nothing
+    end
+
+    cp(joinpath(path, zip_file), joinpath(unzip_path, zip_file))
+    @info "Unzipping files in `$path`"
+    cd(unzip_path) do
+        zipname = first(splitext(basename(zip_file)))
+        run(pipeline(Cmd(["unzip", zipname]); stdout = IOBuffer()))
+    end
+    files = hdf5_files(unzip_path)
+    @assert !isempty(files)
 end
 
 function get_main_filenames(main_branch_data_path)
