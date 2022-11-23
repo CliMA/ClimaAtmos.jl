@@ -90,9 +90,25 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
+      
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 150secs --t_end 400days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 64
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e5, 10)"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 400days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 10days"
+        artifact_paths: "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 64
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e5, 10) Float64"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --rad clearsky --moist equil --vert_diff true --surface_scheme monin_obukhov --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3e3 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 35e3 --alpha_rayleigh_w 10 --alpha_rayleigh_uh 0 --dt 150secs --t_end 800days --dt_save_to_disk 10days --job_id longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --FLOAT_TYPE Float64"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --rad clearsky --moist equil --vert_diff true --surface_scheme monin_obukhov --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3e3 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 35e3 --alpha_rayleigh_w 10 --alpha_rayleigh_uh 0 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --FLOAT_TYPE Float64"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -143,25 +159,9 @@ steps:
         agents:
           slurm_ntasks: 32
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 150secs --t_end 400days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 64
-
       - label: ":computer: aquaplanet (ρe_tot) equilmoist high resolution allsky radiation float64"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad allskywithclear --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 150secs --dt_rad 1hours --idealized_insolation false --t_end 365days --job_id longrun_aquaplanet_rhoe_equil_highres_allsky_ft64 --dt_save_to_disk 10days --FLOAT_TYPE Float64"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_allsky_ft64/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 96
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 200days --job_id longrun_hs_rhoe_equilmoist_highres_hightop --dt_save_to_disk 10days"
-        artifact_paths: "longrun_hs_rhoe_equilmoist_highres_hightop/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
