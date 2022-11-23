@@ -86,15 +86,12 @@ function turbconv_cache(
     ᶜspace_1 = axes(Y.c[CC.Fields.ColumnIndex((1, 1), 1)])
     logpressure_fun =
         CA.log_pressure_profile(ᶠspace_1, thermo_params, surf_ref_thermo_state)
-    ᶠz = CC.Fields.coordinate_field(ᶠspace_1).z
     ᶜz = CC.Fields.coordinate_field(ᶜspace_1).z
-    ᶠp₀ = @. exp(logpressure_fun(ᶠz))
     ᶜp₀ = @. exp(logpressure_fun(ᶜz))
     @info "EDMFModel: \n$(summary(edmf))"
     cache = (;
         edmf,
         turbconv_model,
-        ᶠp₀,
         ᶜp₀,
         case,
         imex_edmf_turbconv,
@@ -130,7 +127,6 @@ function init_tc!(Y, p, params, colidx)
     t = FT(0)
 
     @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
-    @. p.edmf_cache.aux.face.p[colidx] = p.edmf_cache.ᶠp₀
 
     CA.compute_ref_density!(
         Y.c.ρ[colidx],
@@ -138,12 +134,9 @@ function init_tc!(Y, p, params, colidx)
         thermo_params,
         surf_ref_thermo_state,
     )
-    CA.compute_ref_density!(
-        p.edmf_cache.aux.face.ρ[colidx],
-        p.edmf_cache.aux.face.p[colidx],
-        thermo_params,
-        surf_ref_thermo_state,
-    )
+    # TODO: can we simply remove this?
+    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
+    @. p.edmf_cache.aux.face.ρ[colidx] = If(Y.c.ρ[colidx])
 
     # TODO: convert initialize_profiles to set prognostic state, not aux state
     Cases.initialize_profiles(case, grid, thermo_params, state)
@@ -180,15 +173,6 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    if CA.is_anelastic(p.atmos)
-        @. p.edmf_cache.aux.face.p[colidx] = p.edmf_cache.ᶠp₀
-        CA.compute_ref_density!(
-            p.edmf_cache.aux.face.ρ[colidx],
-            p.edmf_cache.aux.face.p[colidx],
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-    end
     assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
     surf = get_surface(
@@ -238,18 +222,6 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    if CA.is_anelastic(p.atmos)
-        # TODO: how should this be computed if compressible?
-        # pressure at cell centers have been populated, we need
-        # pressure BCs
-        @. p.edmf_cache.aux.face.p[colidx] = p.edmf_cache.ᶠp₀
-        CA.compute_ref_density!(
-            p.edmf_cache.aux.face.ρ[colidx],
-            p.edmf_cache.aux.face.p[colidx],
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-    end
     assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
     surf = get_surface(
