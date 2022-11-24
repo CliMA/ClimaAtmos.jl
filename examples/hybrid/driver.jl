@@ -359,15 +359,29 @@ if parsed_args["debugging_tc"]
     day = floor(Int, simulation.t_end / (60 * 60 * 24))
     sec = floor(Int, simulation.t_end % (60 * 60 * 24))
 
-    zip_file = "hdf5files"
-    unzip_main(main_branch_data_path, zip_file)
-
-    plot_tc_contours(simulation.output_dir; main_branch_data_path)
-    plot_tc_profiles(
+    zip_file = "hdf5files.zip"
+    mktempdir(
         simulation.output_dir;
-        hdf5_filename = "day$day.$sec.hdf5",
-        main_branch_data_path,
-    )
+        prefix = "temp_unzip_path_",
+    ) do temp_main_branch_path
+        # Unzip files to temp directory, to avoid collisions with other jobs
+        unzip_file_in_path(
+            main_branch_data_path,
+            zip_file,
+            temp_main_branch_path,
+        )
+        # hdf5 files from the main branch are in `temp_dir`
+
+        plot_tc_contours(
+            simulation.output_dir;
+            main_branch_data_path = temp_main_branch_path,
+        )
+        plot_tc_profiles(
+            simulation.output_dir;
+            hdf5_filename = "day$day.$sec.hdf5",
+            main_branch_data_path = temp_main_branch_path,
+        )
+    end
     if atmos.model_config isa CA.SingleColumnModel
         zip_and_cleanup_output(simulation.output_dir, zip_file)
     end

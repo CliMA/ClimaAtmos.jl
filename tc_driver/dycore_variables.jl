@@ -38,7 +38,6 @@ face_aux_vars_gm(FT, local_geometry, atmos, edmf) = (;
     sgs_flux_q_tot = CCG.Covariant3Vector(FT(0)),
     sgs_flux_uₕ = CCG.Covariant3Vector(FT(0)) ⊗
                   CCG.Covariant12Vector(FT(0), FT(0)),
-    p = FT(0),
     ρ = FT(0),
 )
 face_aux_vars(FT, local_geometry, atmos, edmf) = (;
