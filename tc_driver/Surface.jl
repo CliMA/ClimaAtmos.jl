@@ -142,7 +142,7 @@ import ClimaAtmos: SingleColumnModel, SphericalModel
 get_surface(::SingleColumnModel, args...) = get_surface(args...)
 function get_surface(
     ::SphericalModel,
-    surf_params::TC.FixedSurfaceFlux,
+    surf_params,
     grid::TC.Grid,
     state::TC.State,
     args...,
