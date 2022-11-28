@@ -132,6 +132,8 @@ Base.broadcastable(x::AtmosModel) = Ref(x)
 is_compressible(atmos::AtmosModel) =
     atmos.compressibility_model isa CompressibleFluid
 is_anelastic(atmos::AtmosModel) = atmos.compressibility_model isa AnelasticFluid
+is_column(atmos::AtmosModel) = atmos.model_config isa SingleColumnModel
+is_anelastic_column(atmos::AtmosModel) = is_anelastic(atmos) && is_column(atmos)
 
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))
