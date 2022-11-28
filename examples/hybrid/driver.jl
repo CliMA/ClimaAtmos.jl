@@ -233,7 +233,6 @@ const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
 include("staggered_nonhydrostatic_model.jl")
-include("initial_conditions.jl")
 
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]

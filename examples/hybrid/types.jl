@@ -241,7 +241,7 @@ function get_state_fresh_start(parsed_args, spaces, params, atmos)
     end
     perturb_initstate = parsed_args["perturb_initstate"]
 
-    Y = init_state(
+    Y = ICs.init_state(
         center_initial_condition,
         ICs.face_initial_condition,
         center_space,
