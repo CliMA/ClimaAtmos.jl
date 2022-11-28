@@ -32,6 +32,14 @@ function coupling_type(parsed_args)
     end
 end
 
+function perf_mode(parsed_args)
+    return if parsed_args["perf_mode"] == "PerfExperimental"
+        PerfExperimental()
+    else
+        PerfStandard()
+    end
+end
+
 function energy_form(parsed_args)
     energy_name = parsed_args["energy_name"]
     @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")

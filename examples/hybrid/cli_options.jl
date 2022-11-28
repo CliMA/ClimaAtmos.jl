@@ -310,6 +310,10 @@ function parse_commandline()
         help = "Flag for collecting performance summary information"
         arg_type = Bool
         default = false
+        "--perf_mode"
+        help = "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
+        arg_type = String
+        default = "PerfStandard"
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

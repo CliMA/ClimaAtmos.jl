@@ -95,9 +95,18 @@ end
 Base.broadcastable(x::ThermoDispatcher) = Ref(x)
 
 
+# TODO: remove AbstractPerformanceMode and all subtypes
+# This is temporarily needed to investigate performance of
+# our handling of tracers.
+abstract type AbstractPerformanceMode end
+struct PerfExperimental <: AbstractPerformanceMode end
+struct PerfStandard <: AbstractPerformanceMode end
+Base.broadcastable(x::AbstractPerformanceMode) = Ref(x)
+
 Base.@kwdef struct AtmosModel{
     MC,
     C,
+    PEM,
     MM,
     EF,
     PM,
@@ -113,6 +122,7 @@ Base.@kwdef struct AtmosModel{
 }
     model_config::MC = nothing
     coupling::C = nothing
+    perf_mode::PEM = nothing
     moisture_model::MM = nothing
     energy_form::EF = nothing
     precip_model::PM = nothing
