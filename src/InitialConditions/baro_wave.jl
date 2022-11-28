@@ -103,16 +103,8 @@ function center_initial_condition_baroclinic_wave(
     # Initial values computed from the thermodynamic state
     ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot)
     ρ = TD.air_density(thermo_params, ts)
-    if atmos.energy_form isa PotentialTemperature
-        ᶜ𝔼_kwarg = (; ρθ = ρ * TD.liquid_ice_pottemp(thermo_params, ts))
-    elseif atmos.energy_form isa TotalEnergy
-        K = norm_sqr(uₕ_local) / 2
-        ᶜ𝔼_kwarg = (;
-            ρe_tot = ρ * (TD.internal_energy(thermo_params, ts) + K + grav * z)
-        )
-    elseif atmos.energy_form isa InternalEnergy
-        ᶜ𝔼_kwarg = (; ρe_int = ρ * TD.internal_energy(thermo_params, ts))
-    end
+    ᶜ𝔼_kwarg =
+        energy_vars(thermo_params, ts, norm_sqr(uₕ_local) / 2, grav * z, atmos)
     # TODO: Include ability to handle nonzero initial cloud condensate
 
     return (;
