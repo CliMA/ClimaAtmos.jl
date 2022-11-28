@@ -120,6 +120,7 @@ function center_initial_condition_baroclinic_wave(
         ᶜ𝔼_kwarg...,
         uₕ,
         moisture_vars(thermo_params, ts, atmos)...,
+        precipitation_vars(FT, atmos)...,
         turbconv_vars(FT, atmos)...,
     )
 end

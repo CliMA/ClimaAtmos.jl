@@ -36,6 +36,7 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
         moisture_model,
         model_config = CA.model_config(parsed_args),
         coupling = CA.coupling_type(parsed_args),
+        perf_mode = CA.perf_mode(parsed_args),
         energy_form = CA.energy_form(parsed_args),
         radiation_mode,
         subsidence = CA.subsidence_model(parsed_args, radiation_mode, FT),

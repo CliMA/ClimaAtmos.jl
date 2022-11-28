@@ -33,8 +33,8 @@ function center_initial_condition_column(
     return (;
         ρ,
         𝔼_kwarg...,
-        precipitation_vars(FT, atmos)...,
         uₕ = Geometry.Covariant12Vector(FT(0), FT(0)),
+        precipitation_vars(FT, atmos)...,
         turbconv_vars(FT, atmos)...,
     )
 end

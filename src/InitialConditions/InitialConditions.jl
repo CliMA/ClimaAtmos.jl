@@ -17,6 +17,9 @@ import ..EquilMoistModel
 import ..NonEquilMoistModel
 import ..NoPrecipitation
 import ..AbstractPrecipitationModel
+import ..AbstractPerformanceMode
+import ..PerfStandard
+import ..PerfExperimental
 
 moisture_vars(thermo_params, ts, atmos::AtmosModel) =
     moisture_vars(thermo_params, ts, atmos.moisture_model)
@@ -41,9 +44,18 @@ turbconv_vars(FT, turbconv_model::TC.EDMFModel) = (;
     TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
 )
 
+# TODO: Remove dependence on perf mode
 precipitation_vars(FT, atmos::AtmosModel) =
+    precipitation_vars(FT, atmos, atmos.perf_mode)
+
+# TODO: Remove. Currently, adding tracers hurts performance
+precipitation_vars(FT, atmos::AtmosModel, ::PerfExperimental) =
+    (; q_rai = FT(0), q_sno = FT(0))
+
+precipitation_vars(FT, atmos::AtmosModel, ::PerfStandard) =
     precipitation_vars(FT, atmos.precip_model, atmos.turbconv_model)
-precipitation_vars(FT, ::NoPrecipitation, turbconv_model::Nothing) =
+
+precipitation_vars(FT, ::AbstractPrecipitationModel, turbconv_model::Nothing) =
     NamedTuple()
 
 # TODO: have precip vars only with Microphysics1Moment
