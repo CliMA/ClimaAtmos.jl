@@ -2,7 +2,7 @@ import ClimaAtmos
 
 include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
 
-function create_parameter_set(::Type{FT}, parsed_args, namelist) where {FT}
+function create_parameter_set(::Type{FT}, parsed_args) where {FT}
     toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
     dt = FT(time_to_seconds(parsed_args["dt"]))
     return if is_column_edmf(parsed_args)

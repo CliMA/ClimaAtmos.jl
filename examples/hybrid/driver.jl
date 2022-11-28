@@ -58,7 +58,7 @@ end
 
 include("parameter_set.jl")
 # TODO: unify parsed_args and namelist
-params = create_parameter_set(FT, parsed_args, namelist)
+params = create_parameter_set(FT, parsed_args)
 
 atmos = get_atmos(FT, parsed_args, namelist)
 @info "AtmosModel: \n$(summary(atmos))"
