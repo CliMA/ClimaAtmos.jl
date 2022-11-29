@@ -322,7 +322,7 @@ function save_to_disk_func(integrator)
     (; output_dir) = p.simulation
     Y = u
 
-    if :ᶜS_ρq_tot in propertynames(p)
+    if p.atmos.precip_model isa Microphysics0Moment
         (;
             ᶜts,
             ᶜp,
@@ -386,8 +386,7 @@ function save_to_disk_func(integrator)
             relative_humidity = ᶜRH,
         )
         # precipitation
-        if :ᶜS_ρq_tot in propertynames(p)
-
+        if p.atmos.precip_model isa Microphysics0Moment
             @. ᶜS_ρq_tot =
                 Y.c.ρ * CM.Microphysics0M.remove_precipitation(
                     cm_params,
