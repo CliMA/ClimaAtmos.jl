@@ -256,7 +256,7 @@ steps:
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
-      
+
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist check conservation float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
@@ -373,6 +373,12 @@ steps:
       - label: ":balloon: Compressible single column EDMF TRMM_LBA"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --rad TRMM_LBA --turbconv edmf --turbconv_case TRMM_LBA --precip_model 1M --dt_save_to_sol 5mins --z_elem 82 --z_stretch false --z_max 16400 --rayleigh_sponge true --zd_rayleigh 15000 --job_id compressible_edmf_trmm --dt 0.1secs --t_end 1hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 1mins"
         artifact_paths: "compressible_edmf_trmm/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: Single column EDMF TRMM_LBA 0-moment micro"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --rad TRMM_LBA --turbconv edmf --turbconv_case TRMM_LBA --precip_model 0M --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --dt_save_to_disk 3hours --z_elem 82 --z_stretch false --z_max 16400 --job_id edmf_trmm_0_moment --dt 1secs --t_end 6hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        artifact_paths: "edmf_trmm_0_moment/*"
         agents:
           slurm_mem: 20GB
 

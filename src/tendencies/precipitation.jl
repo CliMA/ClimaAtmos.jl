@@ -49,6 +49,18 @@ function compute_precipitation_cache!(
             TD.PhasePartition(thermo_params, ᶜts[colidx]),
         )
 end
+function compute_precipitation_cache!(
+    Y,
+    p,
+    colidx,
+    ::Microphysics0Moment,
+    ::TC.EDMFModel,
+)
+
+    FT = Spaces.undertype(axes(Y.c))
+    (; ᶜS_ρq_tot) = p
+    @. ᶜS_ρq_tot[colidx] = FT(0)
+end
 
 function precipitation_tendency!(
     Yₜ,
