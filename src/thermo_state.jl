@@ -2,6 +2,7 @@
 ##### Thermodynamic state functions
 #####
 
+import RootSolvers as RS
 import LinearAlgebra: norm_sqr
 import Thermodynamics as TD
 import ClimaCore.Geometry as Geometry
@@ -258,6 +259,7 @@ function thermo_state_ρe_tot!(
         Yc.ρ,
     )
 end
+
 function thermo_state_ρe_tot!(
     ts,
     Yc,
@@ -268,19 +270,38 @@ function thermo_state_ρe_tot!(
     ᶠw;
     time,
 )
+    FT = Spaces.undertype(axes(z))
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
-    @. ts = TD.PhaseEquil_ρeq(
-        thermo_params,
-        Yc.ρ,
-        internal_energy(
-            Yc,
-            (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2),
-            g,
-            z,
-        ) / Yc.ρ,
-        Yc.ρq_tot / Yc.ρ,
-    )
+    if time > 0
+        @. ts = TD.PhaseEquil_ρeq(
+            thermo_params,
+            Yc.ρ,
+            internal_energy(
+                Yc,
+                (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2),
+                g,
+                z,
+            ) / Yc.ρ,
+            Yc.ρq_tot / Yc.ρ,
+            nothing,
+            FT(0.0005),
+            RS.NewtonsMethod,
+            ts.T,
+        )
+    else
+        @. ts = TD.PhaseEquil_ρeq(
+            thermo_params,
+            Yc.ρ,
+            internal_energy(
+                Yc,
+                (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2),
+                g,
+                z,
+            ) / Yc.ρ,
+            Yc.ρq_tot / Yc.ρ,
+        )
+    end
 end
 
 function thermo_state_ρe_tot!(
