@@ -161,7 +161,7 @@ cat << EOM
     - label: ":chart_with_upwards_trend:"
       key: "cpu_scaling_plots_$res-resolution"
       command:
-        - "julia --color=yes --project=examples post_processing/plot_scaling_results.jl --job_id sphere_held_suarez_${res}_res_rhoe"
+        - "julia --color=yes --project=examples post_processing/plot_scaling_results.jl sphere_held_suarez_${res}_res_rhoe"
       artifact_paths:
         - "${res}-resolution_*.png"
         - "${res}-resolution_*.pdf"
