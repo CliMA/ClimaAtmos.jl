@@ -190,32 +190,17 @@ function update_aux!(
     @inbounds for k in real_center_indices(grid)
         a_bulk_c = aux_bulk.area[k]
         @inbounds for i in 1:N_up
-            if aux_up[i].area[k] < edmf.minimum_area &&
-               k > kc_surf &&
-               aux_up[i].area[k - 1] > 0.0
-                qt = aux_up[i].q_tot[k - 1]
-                h = aux_up[i].θ_liq_ice[k - 1]
-                ts_up = if edmf.moisture_model isa DryModel
-                    TD.PhaseDry_pθ(thermo_params, p_c[k], h)
-                elseif edmf.moisture_model isa EquilMoistModel
-                    TD.PhaseEquil_pθq(thermo_params, p_c[k], h, qt)
-                elseif edmf.moisture_model isa NonEquilMoistModel
-                    error("Unsupported moisture model")
-                end
-
-            else
-                ts_up = if edmf.moisture_model isa DryModel
-                    TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
-                elseif edmf.moisture_model isa EquilMoistModel
-                    TD.PhaseEquil_pθq(
-                        thermo_params,
-                        p_c[k],
-                        aux_up[i].θ_liq_ice[k],
-                        aux_up[i].q_tot[k],
-                    )
-                elseif edmf.moisture_model isa NonEquilMoistModel
-                    error("Unsupported moisture model")
-                end
+            ts_up = if edmf.moisture_model isa DryModel
+                TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
+            elseif edmf.moisture_model isa EquilMoistModel
+                TD.PhaseEquil_pθq(
+                    thermo_params,
+                    p_c[k],
+                    aux_up[i].θ_liq_ice[k],
+                    aux_up[i].q_tot[k],
+                )
+            elseif edmf.moisture_model isa NonEquilMoistModel
+                error("Unsupported moisture model")
             end
             aux_up[i].q_liq[k] =
                 TD.liquid_specific_humidity(thermo_params, ts_up)
