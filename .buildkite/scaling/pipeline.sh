@@ -14,7 +14,7 @@ mpi_impl="openmpi"
 # set up environment and agents
 cat << EOM
 env:
-  JULIA_VERSION: "1.8.1"
+  JULIA_VERSION: "1.8.3"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   MPI_IMPL: "$mpi_impl"
