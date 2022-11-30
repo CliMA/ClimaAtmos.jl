@@ -256,108 +256,145 @@ end
 
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
-#=
-(; jac_kwargs, alg_kwargs, ode_algorithm) =
-    ode_config(Y, parsed_args, atmos)
-=#
-function ode_configuration(Y, parsed_args, atmos)
-    test_implicit_solver = false # makes solver extremely slow when set to `true`
-    jacobian_flags = jacobi_flags(atmos.energy_form)
-    ode_algorithm = if startswith(parsed_args["ode_algo"], "ODE.")
-        @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
-        getproperty(ODE, Symbol(split(parsed_args["ode_algo"], ".")[2]))
-    else
-        getproperty(CTS, Symbol(parsed_args["ode_algo"]))
-    end
 
-    ode_algorithm_type =
-        ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
-    is_imex_CTS_algo = ode_algorithm_type <: ClimaTimeSteppers.IMEXARKAlgorithm
-    if ode_algorithm_type <: Union{
-        ODE.OrdinaryDiffEqImplicitAlgorithm,
-        ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
-    } || is_imex_CTS_algo
-        use_transform = !(
-            is_imex_CTS_algo ||
-            ode_algorithm_type in (ODE.Rosenbrock23, ODE.Rosenbrock32)
-        )
+is_implicit(::Type{<:ODE.OrdinaryDiffEqImplicitAlgorithm}) = true
+is_implicit(::Type{<:ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm}) = true
+is_implicit(::Type{<:CTS.IMEXARKAlgorithm}) = true
+is_implicit(::Type{<:Any}) = false
+is_implicit(x::Function) = is_implicit(typeof(x()))
+is_implicit(x) = is_implicit(typeof(x))
+
+is_imex_CTS_algo(::Type{<:Any}) = false
+is_imex_CTS_algo(::Type{<:CTS.IMEXARKAlgorithm}) = true
+is_imex_CTS_algo(x) = is_imex_CTS_algo(typeof(x))
+is_imex_CTS_algo(x::Function) = is_imex_CTS_algo(typeof(x()))
+is_rosenbrock(::Type{<:ODE.Rosenbrock23}) = true
+is_rosenbrock(::Type{<:ODE.Rosenbrock32}) = false
+is_rosenbrock(::Type{<:Any}) = false
+is_rosenbrock(x::Function) = is_rosenbrock(typeof(x()))
+is_rosenbrock(x) = is_rosenbrock(typeof(x))
+
+is_ordinary_diffeq_newton(x::Function) = is_ordinary_diffeq_newton(typeof(x()))
+is_ordinary_diffeq_newton(x) = is_ordinary_diffeq_newton(typeof(x))
+is_ordinary_diffeq_newton(::Type{T}) where {T} =
+    T <: Union{
+        ODE.OrdinaryDiffEqNewtonAlgorithm,
+        ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
+    }
+
+use_transform(ode_algo_type) =
+    !(is_imex_CTS_algo(ode_algo_type) || is_rosenbrock(ode_algo_type))
+
+function jac_kwargs(ode_algo, Y, energy_form)
+    ode_algo_type = typeof(ode_algo)
+    if is_implicit(ode_algo_type)
         W = CA.SchurComplementW(
             Y,
-            use_transform,
-            jacobian_flags,
-            test_implicit_solver,
+            use_transform(ode_algo_type),
+            jacobi_flags(energy_form),
         )
-        jac_kwargs =
-            use_transform ? (; jac_prototype = W, Wfact_t = CA.Wfact!) :
-            (; jac_prototype = W, Wfact = CA.Wfact!)
-
-        alg_kwargs = (; linsolve = CA.linsolve!)
-        if ode_algorithm_type <: Union{
-            ODE.OrdinaryDiffEqNewtonAlgorithm,
-            ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
-        }
-            if parsed_args["max_newton_iters"] == 1
-                error("OridinaryDiffEq requires at least 2 Newton iterations")
-            end
-            # κ like a relative tolerance; its default value in ODE is 0.01
-            nlsolve = ODE.NLNewton(;
-                κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
-                max_iter = parsed_args["max_newton_iters"],
-            )
-            alg_kwargs = (; alg_kwargs..., nlsolve)
-        elseif is_imex_CTS_algo
-            newtons_method = NewtonsMethod(;
-                max_iters = parsed_args["max_newton_iters"],
-                krylov_method = if parsed_args["use_krylov_method"]
-                    KrylovMethod(;
-                        jacobian_free_jvp = ForwardDiffJVP(;
-                            step_adjustment = FT(
-                                parsed_args["jvp_step_adjustment"],
-                            ),
-                        ),
-                        forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
-                            α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
-                            EisenstatWalkerForcing(; α)
-                        else
-                            ConstantForcing(FT(parsed_args["krylov_rtol"]))
-                        end,
-                    )
-                else
-                    nothing
-                end,
-                convergence_checker = if parsed_args["use_newton_rtol"]
-                    norm_condition = MaximumRelativeError(
-                        FT(parsed_args["newton_rtol"]),
-                    )
-                    ConvergenceChecker(; norm_condition)
-                else
-                    nothing
-                end,
-            )
-            alg_kwargs = (; newtons_method)
-        end
+        use_transform(ode_algo_type) ?
+        (; jac_prototype = W, Wfact_t = CA.Wfact!) :
+        (; jac_prototype = W, Wfact = CA.Wfact!)
     else
-        jac_kwargs = alg_kwargs = ()
+        NamedTuple()
     end
-    return (; jac_kwargs, alg_kwargs, ode_algorithm)
 end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
-    (; jac_kwargs, alg_kwargs, ode_algorithm) = ode_config
+additional_integrator_kwargs(::DiffEqBase.AbstractODEAlgorithm) = (;
+    adaptive = false,
+    progress = isinteractive(),
+    progress_steps = isinteractive() ? 1 : 1000,
+)
+additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
+    kwargshandle = ODE.KeywordArgSilent, # allow custom kwargs
+    adjustfinal = true,
+    # TODO: enable progress bars in ClimaTimeSteppers
+)
+is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+is_cts_algo(::CTS.DistributedODEAlgorithm) = true
+
+#=
+ode_algo = get_ode_algorithm(Y, parsed_args, atmos)
+=#
+function get_ode_algorithm(Y, parsed_args, atmos)
+    alg_name = parsed_args["ode_algo"]
+    ode_algo_type = if startswith(alg_name, "ODE.")
+        @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
+        getproperty(ODE, Symbol(split(alg_name, ".")[2]))
+    else
+        getproperty(CTS, Symbol(alg_name))
+    end
+    @info "`ode_algo_type`=$ode_algo_type"
+
+    if !is_implicit(ode_algo_type)
+        @info "Using explicit time stepper"
+        return ode_algo_type()
+    end
+    if is_ordinary_diffeq_newton(ode_algo_type)
+        @info "Using OrdinaryDiffEq time stepper"
+        if parsed_args["max_newton_iters"] == 1
+            error("OridinaryDiffEq requires at least 2 Newton iterations")
+        end
+        # κ like a relative tolerance; its default value in ODE is 0.01
+        nlsolve = ODE.NLNewton(;
+            κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
+            max_iter = parsed_args["max_newton_iters"],
+        )
+        return ode_algo_type(; linsolve = CA.linsolve!, nlsolve)
+    elseif is_imex_CTS_algo(ode_algo_type)
+        @info "Using ClimaTimeSteppers time stepper"
+        newtons_method = NewtonsMethod(;
+            max_iters = parsed_args["max_newton_iters"],
+            krylov_method = if parsed_args["use_krylov_method"]
+                KrylovMethod(;
+                    jacobian_free_jvp = ForwardDiffJVP(;
+                        step_adjustment = FT(
+                            parsed_args["jvp_step_adjustment"],
+                        ),
+                    ),
+                    forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
+                        α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
+                        EisenstatWalkerForcing(; α)
+                    else
+                        ConstantForcing(FT(parsed_args["krylov_rtol"]))
+                    end,
+                )
+            else
+                nothing
+            end,
+            convergence_checker = if parsed_args["use_newton_rtol"]
+                norm_condition =
+                    MaximumRelativeError(FT(parsed_args["newton_rtol"]))
+                ConvergenceChecker(; norm_condition)
+            else
+                nothing
+            end,
+        )
+        return ode_algo_type(newtons_method)
+    else
+        @show ode_algo_type
+        @show is_implicit(ode_algo_type)
+        @show is_ordinary_diffeq_newton(ode_algo_type)
+        @show is_imex_CTS_algo(ode_algo_type)
+        error("Uncaught case.")
+    end
+end
+
+function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; dt) = p.simulation
     FT = eltype(tspan)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-    show_progress_bar = isinteractive()
 
     @time "Define problem" problem = if parsed_args["split_ode"]
         remaining_func =
-            startswith(parsed_args["ode_algo"], "ODE.") ?
-            remaining_tendency! :
+            is_cts_algo(ode_algo) ? remaining_tendency! :
             ForwardEulerODEFunction(remaining_tendency_increment!)
+
         ODE.SplitODEProblem(
             ODE.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs...,
+                jac_kwargs(ode_algo, Y, atmos.energy_form)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
             ),
             remaining_func,
@@ -368,21 +405,6 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     else
         ODE.ODEProblem(remaining_tendency!, Y, tspan, p)
     end
-    if startswith(parsed_args["ode_algo"], "ODE.")
-        ode_algo = ode_algorithm(; alg_kwargs...)
-        integrator_kwargs = (;
-            adaptive = false,
-            progress = show_progress_bar,
-            progress_steps = isinteractive() ? 1 : 1000,
-        )
-    else
-        ode_algo = ode_algorithm(alg_kwargs...)
-        integrator_kwargs = (;
-            kwargshandle = KeywordArgSilent, # allow custom kwargs
-            adjustfinal = true,
-            # TODO: enable progress bars in ClimaTimeSteppers
-        )
-    end
     saveat = if dt_save_to_sol == Inf
         tspan[2]
     elseif tspan[2] % dt_save_to_sol == 0
@@ -391,7 +413,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
         [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
     end # ensure that tspan[2] is always saved
     args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt, integrator_kwargs...)
+    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
     return (args, kwargs)
 end
 
