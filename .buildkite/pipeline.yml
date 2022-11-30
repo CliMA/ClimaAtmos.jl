@@ -383,13 +383,13 @@ steps:
           slurm_mem: 20GB
 
       - label: ":balloon: Single column EDMF GABLS"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --edmf_coriolis GABLS --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist dry --edmf_coriolis GABLS --turbconv edmf --turbconv_case GABLS --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id edmf_gabls --dt 4secs --t_end 9hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "edmf_gabls/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":balloon: Compressible single column EDMF GABLS"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --edmf_coriolis GABLS --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist dry --edmf_coriolis GABLS --turbconv edmf --turbconv_case GABLS --dt_save_to_sol 5mins --z_elem 8 --z_stretch false --z_max 400 --job_id compressible_edmf_gabls --dt 4secs --t_end 9hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "compressible_edmf_gabls/*"
         agents:
           slurm_mem: 20GB
@@ -401,7 +401,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":balloon: SCM EDMF: Nieuwstadt"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Nieuwstadt --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 75 --z_stretch false --z_max 3750 --job_id edmf_nieuwstadt --dt 1secs --t_end 8hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist dry --turbconv edmf --turbconv_case Nieuwstadt --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 75 --z_stretch false --z_max 3750 --job_id edmf_nieuwstadt --dt 1secs --t_end 8hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "edmf_nieuwstadt/*"
         agents:
           slurm_mem: 20GB

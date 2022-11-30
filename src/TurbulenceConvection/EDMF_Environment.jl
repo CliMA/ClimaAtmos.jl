@@ -178,7 +178,13 @@ function quad_loop(
             end
 
             # condensation
-            ts = thermo_state_pθq(param_set, p_c, h_hat, qt_hat)
+            ts = if edmf.moisture_model isa DryModel
+                TD.PhaseDry_pθ(thermo_params, p_c, h_hat)
+            elseif edmf.moisture_model isa EquilMoistModel
+                TD.PhaseEquil_pθq(thermo_params, p_c, h_hat, qt_hat)
+            elseif edmf.moisture_model isa NonEquilMoistModel
+                error("Unsupported moisture model")
+            end
             q_liq_en = TD.liquid_specific_humidity(thermo_params, ts)
             q_ice_en = TD.ice_specific_humidity(thermo_params, ts)
             T = TD.air_temperature(thermo_params, ts)

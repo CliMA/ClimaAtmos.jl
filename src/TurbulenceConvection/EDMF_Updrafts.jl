@@ -22,12 +22,6 @@ function compute_precipitation_formation_tendencies(
 
     precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
 
-    if !(edmf.moisture_model isa EquilMoistModel)
-        error(
-            "Something went wrong in EDMF_Updrafts. The expected moisture model is Equilibrium",
-        )
-    end
-
     @inbounds for i in 1:N_up
         @inbounds for k in real_center_indices(grid)
             T_up = aux_up[i].T[k]

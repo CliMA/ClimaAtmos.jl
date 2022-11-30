@@ -102,7 +102,7 @@ function default_cache(
     sfc_conditions =
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
 
-    ts_type = CA.thermo_state_type(Y.c, FT)
+    ts_type = CA.thermo_state_type(atmos.moisture_model, FT)
     ghost_buffer = (
         c = Spaces.create_ghost_buffer(Y.c),
         f = Spaces.create_ghost_buffer(Y.f),

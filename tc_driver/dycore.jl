@@ -29,12 +29,16 @@ function set_thermo_state_pθq!(Y, p, colidx)
     ᶜts_gm = p.ᶜts[colidx]
     ᶜρ = Y.c.ρ[colidx]
     ᶜp = p.ᶜp[colidx]
-    ρq_tot = Y.c.ρq_tot[colidx]
     θ_liq_ice = edmf_cache.aux.cent.θ_liq_ice[colidx]
 
-    @assert moisture_model isa CA.EquilMoistModel "TODO: add non-equilibrium moisture model support"
-
-    @. ᶜts_gm = TD.PhaseEquil_pθq(thermo_params, ᶜp, θ_liq_ice, ρq_tot / ᶜρ)
+    if moisture_model isa CA.DryModel
+        @. ᶜts_gm = TD.PhaseDry_pθ(thermo_params, ᶜp, θ_liq_ice)
+    elseif moisture_model isa CA.EquilMoistModel
+        ρq_tot = Y.c.ρq_tot[colidx]
+        @. ᶜts_gm = TD.PhaseEquil_pθq(thermo_params, ᶜp, θ_liq_ice, ρq_tot / ᶜρ)
+    else
+        error("TODO: add non-equilibrium moisture model support")
+    end
     nothing
 end
 

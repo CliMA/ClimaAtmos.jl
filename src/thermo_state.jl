@@ -8,26 +8,18 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
-function thermo_state_type(Yc::Fields.Field, ::Type{FT}) where {FT}
-    pns = propertynames(Yc)
-    return if (:ρq_liq in pns && :ρq_ice in pns && :ρq_tot in pns)
-        TD.PhaseNonEquil{FT}
-    elseif :ρq_tot in pns
-        TD.PhaseEquil{FT}
-    else
+function thermo_state_type(
+    moisture_model::AbstractMoistureModel,
+    ::Type{FT},
+) where {FT}
+    return if moisture_model isa DryModel
         TD.PhaseDry{FT}
-    end
-end
-
-# TODO: replace with zero(thermo_state_type) when supported
-function thermo_state_instance(Yc::Fields.Field, ::Type{FT}) where {FT}
-    pns = propertynames(Yc)
-    return if (:ρq_liq in pns && :ρq_ice in pns && :ρq_tot in pns)
-        TD.PhaseNonEquil{FT}(0, 0, TD.PhasePartition(FT(0), FT(0), FT(0)))
-    elseif :ρq_tot in pns
-        TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
+    elseif moisture_model isa EquilMoistModel
+        TD.PhaseEquil{FT}
+    elseif moisture_model isa EquilMoistModel
+        TD.PhaseNonEquil{FT}
     else
-        TD.PhaseDry{FT}(0, 0)
+        error("Unsupported moisture model")
     end
 end
 
@@ -120,18 +112,25 @@ function thermo_state_ρe_tot_anelastic!(
     ᶜts,
     Yc,
     thermo_params,
-    ::EquilMoistModel,
+    moisture_model,
     z,
     ᶜK,
     ᶜp,
 )
     grav = TD.Parameters.grav(thermo_params)
-    @. ᶜts = TD.PhaseEquil_peq(
-        thermo_params,
-        ᶜp,
-        Yc.ρe_tot / Yc.ρ - ᶜK - grav * z,
-        Yc.ρq_tot / Yc.ρ,
-    )
+    if moisture_model isa DryModel
+        @. ᶜts =
+            TD.PhaseDry_pe(thermo_params, ᶜp, Yc.ρe_tot / Yc.ρ - ᶜK - grav * z)
+    elseif moisture_model isa EquilMoistModel
+        @. ᶜts = TD.PhaseEquil_peq(
+            thermo_params,
+            ᶜp,
+            Yc.ρe_tot / Yc.ρ - ᶜK - grav * z,
+            Yc.ρq_tot / Yc.ρ,
+        )
+    else
+        error("Unsupported moisture model")
+    end
     return nothing
 end
 
@@ -155,7 +154,7 @@ function thermo_state(
     ᶜp = nothing,
 )
     FT = Spaces.undertype(axes(Yc))
-    ts_type = thermo_state_type(Yc, FT)
+    ts_type = thermo_state_type(td.moisture_model, FT)
     ts = similar(Yc, ts_type)
     thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, K, wf, ᶜp)
     return ts

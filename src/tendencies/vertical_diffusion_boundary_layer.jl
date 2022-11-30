@@ -19,12 +19,12 @@ import ClimaCore.Operators as Operators
 
 function vertical_diffusion_boundary_layer_cache(
     Y,
+    atmos,
     ::Type{FT};
-    surface_scheme = nothing,
     C_E::FT = FT(0),
     diffuse_momentum = true,
-    coupling,
 ) where {FT}
+    (; surface_scheme, coupling) = atmos
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
 
     dif_flux_uₕ =
@@ -43,8 +43,8 @@ function vertical_diffusion_boundary_layer_cache(
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
     surface_normal = Geometry.WVector.(ones(axes(Fields.level(Y.c, 1))))
 
-    ts_type = thermo_state_type(Y.c, FT)
-    ts_inst = thermo_state_instance(Y.c, FT)
+    ts_type = thermo_state_type(atmos.moisture_model, FT)
+    ts_inst = zero(ts_type)
 
     # TODO: replace with (TODO add support for) Base.zero / similar
     sfc_input_kwargs = if surface_scheme isa BulkSurfaceScheme
