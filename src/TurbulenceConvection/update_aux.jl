@@ -151,7 +151,13 @@ function update_aux!(
         aux_en.h_tot[k] = val1 * aux_gm.h_tot[k] - val2 * aux_bulk.h_tot[k]
 
         h_en = enthalpy(aux_en.h_tot[k], e_pot, aux_en.e_kin[k])
-        ts_env[k] = thermo_state_phq(param_set, p_c[k], h_en, aux_en.q_tot[k])
+        ts_env[k] = if edmf.moisture_model isa DryModel
+            TD.PhaseDry_ph(thermo_params, p_c[k], h_en)
+        elseif edmf.moisture_model isa EquilMoistModel
+            TD.PhaseEquil_phq(thermo_params, p_c[k], h_en, aux_en.q_tot[k])
+        elseif edmf.moisture_model isa NonEquilMoistModel
+            error("Add support got non-equilibrium thermo states")
+        end
         ts_en = ts_env[k]
         aux_en.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts_en)
         aux_en.e_tot[k] =

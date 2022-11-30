@@ -1,6 +1,7 @@
 module TurbulenceConvection
 
 # Import ClimaAtmos types
+import ..DryModel
 import ..EquilMoistModel
 import ..AnelasticFluid
 import ..CompressibleFluid
