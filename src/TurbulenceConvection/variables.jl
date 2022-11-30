@@ -4,7 +4,9 @@
 import ClimaCore.Geometry: ⊗
 
 # Helpers for adding empty thermodynamic state fields:
-thermo_state_zeros(FT) = TD.PhaseEquil{FT}(0, 0, 0, 0, 0)
+thermo_state_zeros(::DryModel, FT) = zero(TD.PhaseDry{FT})
+thermo_state_zeros(::EquilMoistModel, FT) = zero(TD.PhaseEquil{FT})
+thermo_state_zeros(::NonEquilMoistModel, FT) = zero(TD.PhaseNonEquil{FT})
 
 ##### Auxiliary fields
 
@@ -41,7 +43,7 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     entr_turb_dyn = FT(0),
     detr_turb_dyn = FT(0),
 )
-cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
+cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
     turbconv = (;
         ϕ_temporary = FT(0),
         ψ_temporary = FT(0),
@@ -59,11 +61,11 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
             qt_tendency_precip_formation = FT(0),
         ),
         up = ntuple(
-            i -> cent_aux_vars_up(FT, local_geometry, edmf),
-            Val(n_updrafts(edmf)),
+            i -> cent_aux_vars_up(FT, local_geometry, atmos.turbconv_model),
+            Val(n_updrafts(atmos.turbconv_model)),
         ),
         en = (;
-            ts = thermo_state_zeros(FT),
+            ts = thermo_state_zeros(atmos.moisture_model, FT),
             area = FT(0),
             q_tot = FT(0),
             q_liq = FT(0),

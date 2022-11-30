@@ -438,7 +438,10 @@ function EDMFModel(
         )
     end
     if !(moisture_model isa EquilMoistModel)
-        error("SGS model only supports equilibrium moisture choice.")
+        @warn string(
+            "SGS model only supports equilibrium moisture choice.",
+            "EDMF will carry zeros, but avoid saturation adjustment calls.",
+        )
     end
 
     # entr closure

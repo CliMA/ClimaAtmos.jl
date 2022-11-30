@@ -154,11 +154,10 @@ function additional_cache(
         vert_diff ?
         CA.vertical_diffusion_boundary_layer_cache(
             Y,
+            atmos,
             FT;
-            atmos.surface_scheme,
             C_E = FT(parsed_args["C_E"]),
             diffuse_momentum,
-            atmos.coupling,
         ) : NamedTuple(),
         atmos.non_orographic_gravity_wave ?
         CA.gravity_wave_cache(atmos.model_config, Y, FT) : NamedTuple(),

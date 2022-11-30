@@ -83,12 +83,18 @@ function update_aux!(
                 aux_up[i].area[k] = 0
                 aux_up[i].e_kin[k] = e_kin[k]
             end
-            ts_up_i = thermo_state_pθq(
-                param_set,
-                p_c[k],
-                aux_up[i].θ_liq_ice[k],
-                aux_up[i].q_tot[k],
-            )
+            ts_up_i = if edmf.moisture_model isa DryModel
+                TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
+            elseif edmf.moisture_model isa EquilMoistModel
+                TD.PhaseEquil_pθq(
+                    thermo_params,
+                    p_c[k],
+                    aux_up[i].θ_liq_ice[k],
+                    aux_up[i].q_tot[k],
+                )
+            elseif edmf.moisture_model isa NonEquilMoistModel
+                error("Unsupported moisture model")
+            end
             aux_up[i].e_tot[k] = TD.total_energy(
                 thermo_params,
                 ts_up_i,
@@ -190,14 +196,27 @@ function update_aux!(
                aux_up[i].area[k - 1] > 0.0
                 qt = aux_up[i].q_tot[k - 1]
                 h = aux_up[i].θ_liq_ice[k - 1]
-                ts_up = thermo_state_pθq(param_set, p_c[k], h, qt)
+                ts_up = if edmf.moisture_model isa DryModel
+                    TD.PhaseDry_pθ(thermo_params, p_c[k], h)
+                elseif edmf.moisture_model isa EquilMoistModel
+                    TD.PhaseEquil_pθq(thermo_params, p_c[k], h, qt)
+                elseif edmf.moisture_model isa NonEquilMoistModel
+                    error("Unsupported moisture model")
+                end
+
             else
-                ts_up = thermo_state_pθq(
-                    param_set,
-                    p_c[k],
-                    aux_up[i].θ_liq_ice[k],
-                    aux_up[i].q_tot[k],
-                )
+                ts_up = if edmf.moisture_model isa DryModel
+                    TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
+                elseif edmf.moisture_model isa EquilMoistModel
+                    TD.PhaseEquil_pθq(
+                        thermo_params,
+                        p_c[k],
+                        aux_up[i].θ_liq_ice[k],
+                        aux_up[i].q_tot[k],
+                    )
+                elseif edmf.moisture_model isa NonEquilMoistModel
+                    error("Unsupported moisture model")
+                end
             end
             aux_up[i].q_liq[k] =
                 TD.liquid_specific_humidity(thermo_params, ts_up)
@@ -418,7 +437,7 @@ function update_aux!(
                 "Something went wrong. The buoyancy gradient model is not specified",
             )
         end
-        bg = buoyancy_gradients(param_set, bg_model)
+        bg = buoyancy_gradients(param_set, edmf.moisture_model, bg_model)
 
         # Limiting stratification scale (Deardorff, 1976)
         # compute ∇Ri and Pr

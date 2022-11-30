@@ -1,6 +1,7 @@
 """
     buoyancy_gradients(
         param_set,
+        moisture_model,
         bg_model::EnvBuoyGrad{FT, EBG}
     ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
 
@@ -11,6 +12,7 @@ over the conserved thermodynamic variables.
 """
 function buoyancy_gradients(
     param_set::APS,
+    moisture_model,
     bg_model::EnvBuoyGrad{FT, EBG},
 ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
 
@@ -26,12 +28,19 @@ function buoyancy_gradients(
     ∂b∂θv = g * (R_d * bg_model.ρ / bg_model.p) * Π
 
     if bg_model.en_cld_frac > 0.0
-        ts_sat = thermo_state_pθq(
-            param_set,
-            bg_model.p,
-            bg_model.θ_liq_ice_sat,
-            bg_model.qt_sat,
-        )
+        ts_sat = if moisture_model isa DryModel
+            TD.PhaseDry_pθ(thermo_params, bg_model.p, bg_model.θ_liq_ice_sat)
+        elseif moisture_model isa EquilMoistModel
+            TD.PhaseEquil_pθq(
+                thermo_params,
+                bg_model.p,
+                bg_model.θ_liq_ice_sat,
+                bg_model.qt_sat,
+            )
+        elseif moisture_model isa NonEquilMoistModel
+            error("Unsupported moisture model")
+        end
+
         phase_part = TD.PhasePartition(thermo_params, ts_sat)
         lh = TD.latent_heat_liq_ice(thermo_params, phase_part)
         cp_m = TD.cp_m(thermo_params, ts_sat)
