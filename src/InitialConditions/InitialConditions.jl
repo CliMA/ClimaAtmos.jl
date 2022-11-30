@@ -21,6 +21,24 @@ import ..AbstractPerformanceMode
 import ..PerfStandard
 import ..PerfExperimental
 
+energy_vars(thermo_params, ts, K, Φ, atmos) =
+    energy_vars(thermo_params, ts, K, Φ, atmos.energy_form)
+
+energy_vars(thermo_params, ts, K, Φ, ::PotentialTemperature) = (;
+    ρθ = TD.air_density(thermo_params, ts) *
+         TD.liquid_ice_pottemp(thermo_params, ts)
+)
+
+energy_vars(thermo_params, ts, K, Φ, ::TotalEnergy) = (;
+    ρe_tot = TD.air_density(thermo_params, ts) *
+             (TD.internal_energy(thermo_params, ts) + K + Φ)
+)
+
+energy_vars(thermo_params, ts, K, Φ, ::InternalEnergy) = (;
+    ρe_int = TD.air_density(thermo_params, ts) *
+             TD.internal_energy(thermo_params, ts)
+)
+
 moisture_vars(thermo_params, ts, atmos::AtmosModel) =
     moisture_vars(thermo_params, ts, atmos.moisture_model)
 moisture_vars(thermo_params, ts, ::DryModel) = NamedTuple()
