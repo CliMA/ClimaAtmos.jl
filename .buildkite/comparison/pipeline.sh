@@ -108,7 +108,7 @@ cat << EOM
     - label: ":computer: comparison plots ($res-resolution simulations)"
       key: "cpu_comparison_plots_$res-resolution"
       command:
-        - "julia --color=yes --project=examples post_processing/comparison_plots.jl --job_id comparison_sphere_held_suarez_${res}_res_rhoe"
+        - "julia --color=yes --project=examples post_processing/comparison_plots.jl comparison_sphere_held_suarez_${res}_res_rhoe"
       artifact_paths:
         - "$res-resolution_comparison.*"
         - "$res-resolution_sypd.*"

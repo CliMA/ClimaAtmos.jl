@@ -2,14 +2,7 @@ using Plots
 using Plots.PlotMeasures
 using JLD2
 
-include("cli_options.jl")
-if !(@isdefined parsed_args)
-    (s, parsed_args) = parse_commandline()
-end
-
-job_id =
-    isnothing(parsed_args["job_id"]) ? job_id_from_parsed_args(s, parsed_args) :
-    parsed_args["job_id"]
+job_id = ARGS[1]
 output_dir = "./"
 
 secs_per_hour = 60 * 60
