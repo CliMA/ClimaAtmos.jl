@@ -277,37 +277,38 @@ end
 
 @info "Running" job_id = simulation.job_id output_dir = simulation.output_dir tspan
 
-if simulation.is_distributed
-    OrdinaryDiffEq.step!(integrator)
-    # GC.enable(false) # disabling GC causes a memory leak
-    GC.gc()
-    ClimaComms.barrier(comms_ctx)
-    if ClimaComms.iamroot(comms_ctx)
-        @timev begin
-            walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+struct SimulationResults{S, E, WT}
+    sol::S
+    sol_err::E
+    walltime::WT
+end
+function perform_solve!(integrator, simulation, comms_ctx)
+    try
+        if simulation.is_distributed
+            OrdinaryDiffEq.step!(integrator)
+            # GC.enable(false) # disabling GC causes a memory leak
+            GC.gc()
+            ClimaComms.barrier(comms_ctx)
+            if ClimaComms.iamroot(comms_ctx)
+                @timev begin
+                    walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+                end
+            else
+                walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+            end
+            ClimaComms.barrier(comms_ctx)
+            GC.enable(true)
+            return SimulationResults(sol, nothing, walltime)
+        else
+            sol = @timev OrdinaryDiffEq.solve!(integrator)
+            return SimulationResults(sol, nothing, nothing)
         end
-    else
-        walltime = @elapsed sol = OrdinaryDiffEq.solve!(integrator)
+    catch sol_err
+        return SimulationResults(nothing, sol_err, walltime)
     end
-    ClimaComms.barrier(comms_ctx)
-    GC.enable(true)
-else
-    sol = @timev OrdinaryDiffEq.solve!(integrator)
 end
 
-@assert last(sol.t) == simulation.t_end
-
-verify_callbacks(sol.t)
-
-if simulation.is_distributed
-    export_scaling_file(
-        sol,
-        simulation.output_dir,
-        walltime,
-        comms_ctx,
-        ClimaComms.nprocs(comms_ctx),
-    )
-end
+sol_res = perform_solve!(integrator, simulation, comms_ctx)
 
 import JSON
 using Test
@@ -317,18 +318,6 @@ using ClimaCorePlots, Plots
 include(
     joinpath(pkgdir(ClimaAtmos), "post_processing", "post_processing_funcs.jl"),
 )
-if !simulation.is_distributed && parsed_args["post_process"]
-    ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if is_baro_wave(parsed_args)
-        paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
-    elseif is_solid_body(parsed_args)
-        postprocessing(sol, simulation.output_dir, fps)
-    elseif is_box(parsed_args)
-        postprocessing_box(sol, simulation.output_dir)
-    elseif atmos.model_config isa CA.SphericalModel
-        paperplots_held_suarez(atmos, sol, simulation.output_dir, p, 90, 180)
-    end
-end
 
 if parsed_args["debugging_tc"]
     include(
@@ -385,6 +374,38 @@ if parsed_args["debugging_tc"]
     end
 end
 
+# Throw crashing error
+isnothing(sol_res.sol_err) || rethrow(sol_res.sol_err.error)
+# Simulation did not crash
+(; sol, walltime) = sol_res
+
+if simulation.is_distributed
+    export_scaling_file(
+        sol,
+        simulation.output_dir,
+        walltime,
+        comms_ctx,
+        ClimaComms.nprocs(comms_ctx),
+    )
+end
+
+@assert last(sol.t) == simulation.t_end
+
+verify_callbacks(sol.t)
+
+
+if !simulation.is_distributed && parsed_args["post_process"]
+    ENV["GKSwstype"] = "nul" # avoid displaying plots
+    if is_baro_wave(parsed_args)
+        paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
+    elseif is_solid_body(parsed_args)
+        postprocessing(sol, simulation.output_dir, fps)
+    elseif is_box(parsed_args)
+        postprocessing_box(sol, simulation.output_dir)
+    elseif atmos.model_config isa CA.SphericalModel
+        paperplots_held_suarez(atmos, sol, simulation.output_dir, p, 90, 180)
+    end
+end
 
 if parsed_args["regression_test"]
     # Test results against main branch
