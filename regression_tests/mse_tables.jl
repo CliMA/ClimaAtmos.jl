@@ -206,7 +206,6 @@ all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :en, :ρatke)] = 0.0
 all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:f, :w, :components, :data, 1)] = 0.0
 all_best_mse["edmf_trmm_0_moment"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
 #
 all_best_mse["compressible_edmf_trmm"] = OrderedCollections.OrderedDict()
