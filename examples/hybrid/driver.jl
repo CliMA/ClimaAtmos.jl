@@ -376,7 +376,10 @@ if parsed_args["debugging_tc"]
 end
 
 # Throw crashing error
-isnothing(sol_res.sol_err) || rethrow(sol_res.sol_err.error)
+(; sol_err) = sol_res
+if !isnothing(sol_err)
+    hasproperty(sol_err, :error) ? rethrow(sol_err.error) : rethrow(sol_err)
+end
 # Simulation did not crash
 (; sol, walltime) = sol_res
 
