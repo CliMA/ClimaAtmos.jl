@@ -304,7 +304,8 @@ function perform_solve!(integrator, simulation, comms_ctx)
             return SimulationResults(sol, nothing, nothing)
         end
     catch sol_err
-        return SimulationResults(nothing, sol_err, walltime)
+        @warn "The simulation has crashed, rethrowing the error later."
+        return SimulationResults(nothing, sol_err, nothing)
     end
 end
 
