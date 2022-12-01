@@ -254,15 +254,54 @@ function get_state_fresh_start(parsed_args, spaces, params, atmos)
     return (Y, t_start)
 end
 
+ode_algorithm_type(ode_algorithm) =
+    ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
+
+is_imex_CTS_algo(ode_algorithm) =
+    ode_algorithm_type(ode_algorithm) <: ClimaTimeSteppers.IMEXARKAlgorithm
+
+is_implicit(ode_algorithm) =
+    ode_algorithm_type(ode_algorithm) <: Union{
+        ODE.OrdinaryDiffEqImplicitAlgorithm,
+        ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
+    } || is_imex_CTS_algo(ode_algorithm)
+
+
+use_transform(ode_algorithm) = !(
+    is_imex_CTS_algo(ode_algorithm) || ode_algorithm_type(ode_algorithm) in
+    (ODE.Rosenbrock23, ODE.Rosenbrock32)
+)
+
+is_ordinary_diffeq_newton(ode_algorithm) =
+    ode_algorithm_type(ode_algorithm) <: Union{
+        ODE.OrdinaryDiffEqNewtonAlgorithm,
+        ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
+    }
+
+function jac_kwargs(ode_algorithm, Y, energy_form)
+    if is_implicit(ode_algorithm)
+        W = CA.SchurComplementW(
+            Y,
+            use_transform(ode_algorithm),
+            jacobi_flags(energy_form),
+        )
+        if use_transform(ode_algorithm)
+            return (; jac_prototype = W, Wfact_t = CA.Wfact!)
+        else
+            return (; jac_prototype = W, Wfact = CA.Wfact!)
+        end
+    else
+        return NamedTuple()
+    end
+end
+
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 #=
-(; jac_kwargs, alg_kwargs, ode_algorithm) =
+(; ode_algorithm, alg_kwargs) =
     ode_config(Y, parsed_args, atmos)
 =#
 function ode_configuration(Y, parsed_args, atmos)
-    test_implicit_solver = false # makes solver extremely slow when set to `true`
-    jacobian_flags = jacobi_flags(atmos.energy_form)
     ode_algorithm = if startswith(parsed_args["ode_algo"], "ODE.")
         @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
         getproperty(ODE, Symbol(split(parsed_args["ode_algo"], ".")[2]))
@@ -270,80 +309,57 @@ function ode_configuration(Y, parsed_args, atmos)
         getproperty(CTS, Symbol(parsed_args["ode_algo"]))
     end
 
-    ode_algorithm_type =
-        ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
-    is_imex_CTS_algo = ode_algorithm_type <: ClimaTimeSteppers.IMEXARKAlgorithm
-    if ode_algorithm_type <: Union{
-        ODE.OrdinaryDiffEqImplicitAlgorithm,
-        ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
-    } || is_imex_CTS_algo
-        use_transform = !(
-            is_imex_CTS_algo ||
-            ode_algorithm_type in (ODE.Rosenbrock23, ODE.Rosenbrock32)
-        )
-        W = CA.SchurComplementW(
-            Y,
-            use_transform,
-            jacobian_flags,
-            test_implicit_solver,
-        )
-        jac_kwargs =
-            use_transform ? (; jac_prototype = W, Wfact_t = CA.Wfact!) :
-            (; jac_prototype = W, Wfact = CA.Wfact!)
-
-        alg_kwargs = (; linsolve = CA.linsolve!)
-        if ode_algorithm_type <: Union{
-            ODE.OrdinaryDiffEqNewtonAlgorithm,
-            ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
-        }
-            if parsed_args["max_newton_iters"] == 1
-                error("OridinaryDiffEq requires at least 2 Newton iterations")
-            end
-            # κ like a relative tolerance; its default value in ODE is 0.01
-            nlsolve = ODE.NLNewton(;
-                κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
-                max_iter = parsed_args["max_newton_iters"],
-            )
-            alg_kwargs = (; alg_kwargs..., nlsolve)
-        elseif is_imex_CTS_algo
-            newtons_method = NewtonsMethod(;
-                max_iters = parsed_args["max_newton_iters"],
-                krylov_method = if parsed_args["use_krylov_method"]
-                    KrylovMethod(;
-                        jacobian_free_jvp = ForwardDiffJVP(;
-                            step_adjustment = FT(
-                                parsed_args["jvp_step_adjustment"],
-                            ),
-                        ),
-                        forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
-                            α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
-                            EisenstatWalkerForcing(; α)
-                        else
-                            ConstantForcing(FT(parsed_args["krylov_rtol"]))
-                        end,
-                    )
-                else
-                    nothing
-                end,
-                convergence_checker = if parsed_args["use_newton_rtol"]
-                    norm_condition = MaximumRelativeError(
-                        FT(parsed_args["newton_rtol"]),
-                    )
-                    ConvergenceChecker(; norm_condition)
-                else
-                    nothing
-                end,
-            )
-            alg_kwargs = (; newtons_method)
+    if !is_implicit(ode_algorithm)
+        return (; ode_algorithm, alg_kwargs = NamedTuple())
+    elseif is_ordinary_diffeq_newton(ode_algorithm)
+        if parsed_args["max_newton_iters"] == 1
+            error("OridinaryDiffEq requires at least 2 Newton iterations")
         end
+        # κ like a relative tolerance; its default value in ODE is 0.01
+        nlsolve = ODE.NLNewton(;
+            κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
+            max_iter = parsed_args["max_newton_iters"],
+        )
+        return (;
+            ode_algorithm,
+            alg_kwargs = (; linsolve = CA.linsolve!, nlsolve),
+        )
+    elseif is_imex_CTS_algo(ode_algorithm)
+        newtons_method = NewtonsMethod(;
+            max_iters = parsed_args["max_newton_iters"],
+            krylov_method = if parsed_args["use_krylov_method"]
+                KrylovMethod(;
+                    jacobian_free_jvp = ForwardDiffJVP(;
+                        step_adjustment = FT(
+                            parsed_args["jvp_step_adjustment"],
+                        ),
+                    ),
+                    forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
+                        α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
+                        EisenstatWalkerForcing(; α)
+                    else
+                        ConstantForcing(FT(parsed_args["krylov_rtol"]))
+                    end,
+                )
+            else
+                nothing
+            end,
+            convergence_checker = if parsed_args["use_newton_rtol"]
+                norm_condition =
+                    MaximumRelativeError(FT(parsed_args["newton_rtol"]))
+                ConvergenceChecker(; norm_condition)
+            else
+                nothing
+            end,
+        )
+        return (; ode_algorithm, alg_kwargs = (; newtons_method))
     else
-        jac_kwargs = alg_kwargs = ()
+        return (; ode_algorithm, alg_kwargs = (; linsolve = CA.linsolve!))
     end
-    return (; jac_kwargs, alg_kwargs, ode_algorithm)
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
-    (; jac_kwargs, alg_kwargs, ode_algorithm) = ode_config
+    (; alg_kwargs, ode_algorithm) = ode_config
     (; dt) = p.simulation
     FT = eltype(tspan)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -357,7 +373,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
         ODE.SplitODEProblem(
             ODE.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs...,
+                jac_kwargs(ode_algorithm, Y, atmos.energy_form)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
             ),
             remaining_func,
