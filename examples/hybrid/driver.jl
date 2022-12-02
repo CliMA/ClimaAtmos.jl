@@ -277,9 +277,9 @@ end
 
 @info "Running" job_id = simulation.job_id output_dir = simulation.output_dir tspan
 
-struct SimulationResults{S, E, WT}
+struct SimulationResults{S, RT, WT}
     sol::S
-    sol_err::E
+    ret_code::RT
     walltime::WT
 end
 function perform_solve!(integrator, simulation, comms_ctx)
@@ -298,14 +298,15 @@ function perform_solve!(integrator, simulation, comms_ctx)
             end
             ClimaComms.barrier(comms_ctx)
             GC.enable(true)
-            return SimulationResults(sol, nothing, walltime)
+            return SimulationResults(sol, :success, walltime)
         else
             sol = @timev OrdinaryDiffEq.solve!(integrator)
-            return SimulationResults(sol, nothing, nothing)
+            return SimulationResults(sol, :success, nothing)
         end
-    catch sol_err
-        @warn "The simulation has crashed, rethrowing the error later."
-        return SimulationResults(nothing, sol_err, nothing)
+    catch ret_code
+        @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
+            (ret_code, catch_backtrace())
+        return SimulationResults(nothing, :simulation_crashed, nothing)
     end
 end
 
@@ -375,13 +376,15 @@ if parsed_args["debugging_tc"]
     end
 end
 
-# Throw crashing error
-(; sol_err) = sol_res
-if !isnothing(sol_err)
-    hasproperty(sol_err, :error) ? rethrow(sol_err.error) : rethrow(sol_err)
+if sol_res.ret_code == :simulation_crashed
+    error(
+        "The ClimaAtmos simulationhas crashed. See the stack trace for details.",
+    )
 end
 # Simulation did not crash
 (; sol, walltime) = sol_res
+@assert last(sol.t) == simulation.t_end
+verify_callbacks(sol.t)
 
 if simulation.is_distributed
     export_scaling_file(
@@ -392,11 +395,6 @@ if simulation.is_distributed
         ClimaComms.nprocs(comms_ctx),
     )
 end
-
-@assert last(sol.t) == simulation.t_end
-
-verify_callbacks(sol.t)
-
 
 if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
