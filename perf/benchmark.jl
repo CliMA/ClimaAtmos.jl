@@ -22,17 +22,23 @@ import ClimaAtmos as CA
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 ODE.step!(integrator) # compile first
-X = similar(integrator.u)
 
-(; sol, cache, u, p, dt, t) = integrator
-f = sol.prob.f
-W =
-    integrator isa CTS.DistributedODEIntegrator ? cache.newtons_method_cache.j :
-    cache.W
-f1_args =
-    f.f1 isa CTS.ForwardEulerODEFunction ? (copy(u), u, p, t, dt) : (X, u, p, t)
-f2_args =
-    f.f2 isa CTS.ForwardEulerODEFunction ? (copy(u), u, p, t, dt) : (X, u, p, t)
+(; sol, u, p, dt, t) = integrator
+
+get_W(i::CTS.DistributedODEIntegrator) = i.cache.newtons_method_cache.j
+get_W(i) = i.cache.W
+f_args(i, f::CTS.ForwardEulerODEFunction) = (copy(i.u), i.u, i.p, i.t, i.dt)
+f_args(i, f) = (similar(i.u), i.u, i.p, i.t)
+implicit_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.f1)
+implicit_args(i) = f_args(i, i.f.f1)
+remaining_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.f2)
+remaining_args(i) = f_args(i, i.f.f2)
+wfact_fun(i) = i.sol.prob.f.f1.Wfact
+implicit_fun(i) = i.sol.prob.f.f1
+remaining_fun(i) = i.sol.prob.f.f2
+
+W = get_W(integrator)
+X = similar(u)
 
 include("benchmark_utils.jl")
 
@@ -40,10 +46,10 @@ import OrderedCollections
 import LinearAlgebra as LA
 trials = OrderedCollections.OrderedDict()
 #! format: off
-trials["Wfact"] = get_trial(f.f1.Wfact, (W, u, p, dt, t), "Wfact");
+trials["Wfact"] = get_trial(wfact_fun(integrator), (W, u, p, dt, t), "Wfact");
 trials["linsolve"] = get_trial(LA.ldiv!, (X, W, u), "linsolve");
-trials["implicit_tendency!"] = get_trial(f.f1, f1_args, "implicit_tendency!");
-trials["remaining_tendency!"] = get_trial(f.f2, f2_args, "remaining_tendency!");
+trials["implicit_tendency!"] = get_trial(implicit_fun(integrator), implicit_args(integrator), "implicit_tendency!");
+trials["remaining_tendency!"] = get_trial(remaining_fun(integrator), remaining_args(integrator), "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(additional_tendency!, (X, u, p, t), "additional_tendency!");
 trials["hyperdiffusion_tendency!"] = get_trial(CA.hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
 trials["step!"] = get_trial(ODE.step!, (integrator, ), "step!");
