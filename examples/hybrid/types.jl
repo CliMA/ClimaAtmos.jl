@@ -308,6 +308,7 @@ function ode_configuration(Y, parsed_args, atmos)
     else
         getproperty(CTS, Symbol(parsed_args["ode_algo"]))
     end
+    @info "Using ODE algo: `$ode_algorithm`"
 
     if !is_implicit(ode_algorithm)
         return (; ode_algorithm, alg_kwargs = NamedTuple())
