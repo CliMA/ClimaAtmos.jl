@@ -361,7 +361,6 @@ end
 function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     (; alg_kwargs, ode_algorithm) = ode_config
     (; dt) = p.simulation
-    FT = eltype(tspan)
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
     show_progress_bar = isinteractive()
 
@@ -374,7 +373,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
             ODE.ODEFunction(
                 implicit_tendency!;
                 jac_kwargs(ode_algorithm, Y, atmos.energy_form)...,
-                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= FT(0)),
+                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             ),
             remaining_func,
             Y,
