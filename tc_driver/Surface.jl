@@ -42,9 +42,7 @@ function get_surface(
         ts_sfc,
         scheme,
     )
-    # TODO: can we remove this non-local function?
-    #       Replacing gustiness with 1 impacts Soares and Nieuwstadt
-    zi = TC.get_inversion(grid, state, thermo_params, Ri_bulk_crit)
+    zi = FT(1000) # TODO: extract from CLIMAParameters
     convective_vel = TC.get_wstar(bflux, zi) # yair here zi in TRMM should be adjusted
 
     kwargs = (;
