@@ -28,5 +28,3 @@ is_column_edmf(parsed_args) = all((
     parsed_args["rad"] == "TRMM_LBA" ||
     parsed_args["rad"] == nothing,
 ))
-
-is_box(parsed_args) = all((parsed_args["config"] == "box",))
