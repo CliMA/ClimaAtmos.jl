@@ -400,12 +400,20 @@ if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if is_baro_wave(parsed_args)
         paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
+    elseif is_column_without_edmf(parsed_args)
+        custom_postprocessing(sol, simulation.output_dir, p)
+    elseif is_column_edmf(parsed_args)
+        postprocessing_edmf(sol, simulation.output_dir, fps)
     elseif is_solid_body(parsed_args)
         postprocessing(sol, simulation.output_dir, fps)
-    elseif is_box(parsed_args)
+    elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)
     elseif atmos.model_config isa CA.SphericalModel
         paperplots_held_suarez(atmos, sol, simulation.output_dir, p, 90, 180)
+    elseif atmos.forcing_type isa CA.HeldSuarezForcing
+        custom_postprocessing(sol, simulation.output_dir, p)
+    else
+        error("Uncaught case")
     end
 end
 
