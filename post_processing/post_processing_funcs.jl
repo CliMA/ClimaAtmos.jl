@@ -141,6 +141,15 @@ function postprocessing(sol, output_dir, fps)
         )
     end
 
+    ᶠw_max = maximum(
+        map(u -> maximum(parent(ClimaCore.Geometry.WVector.(u.f.w))), sol.u),
+    )
+    ᶠw_min = minimum(
+        map(u -> minimum(parent(ClimaCore.Geometry.WVector.(u.f.w))), sol.u),
+    )
+    @info "maximum vertical velocity" ᶠw_max
+    @info "maximum vertical velocity" ᶠw_min
+
     # contour_animations(sol, output_dir, fps) # For generic contours:
 
     anim = Plots.@animate for Y in sol.u
