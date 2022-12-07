@@ -187,12 +187,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(
-    case::Soares,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::Soares, surf_ref_thermo_state, thermo_params)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
@@ -204,7 +199,7 @@ function surface_params(
     ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
     lhf = qt_flux * ρ_f_surf * TD.latent_heat_vapor(thermo_params, ts)
     shf = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
-    return TC.FixedSurfaceFlux(zrough, Ri_bulk_crit, ts, shf, lhf)
+    return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
 #####
@@ -254,12 +249,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(
-    case::Nieuwstadt,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::Nieuwstadt, surf_ref_thermo_state, thermo_params)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
@@ -270,7 +260,7 @@ function surface_params(
     lhf::FT = 0.0 # It would be 0.0 if we follow Nieuwstadt.
     ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
     shf = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
-    return TC.FixedSurfaceFlux(zrough, Ri_bulk_crit, ts, shf, lhf)
+    return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
 #####
@@ -322,12 +312,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(
-    case::Bomex,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::Bomex, surf_ref_thermo_state, thermo_params)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
@@ -341,14 +326,7 @@ function surface_params(
     lhf = qt_flux * ρ_f_surf * TD.latent_heat_vapor(thermo_params, ts)
     shf = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
     ustar::FT = 0.28 # m/s
-    return TC.FixedSurfaceFluxAndFrictionVelocity(
-        zrough,
-        Ri_bulk_crit,
-        ts,
-        shf,
-        lhf,
-        ustar,
-    )
+    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
 #####
@@ -403,7 +381,6 @@ function surface_params(
     case::LifeCycleTan2018,
     surf_ref_thermo_state,
     thermo_params,
-    Ri_bulk_crit,
 )
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
@@ -423,14 +400,7 @@ function surface_params(
     shf = t -> shf0 * (weight * weight_factor(t))
 
     ustar::FT = 0.28 # m/s
-    return TC.FixedSurfaceFluxAndFrictionVelocity(
-        zrough,
-        Ri_bulk_crit,
-        ts,
-        shf,
-        lhf,
-        ustar,
-    )
+    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
 #####
@@ -605,12 +575,7 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(
-    case::TRMM_LBA,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::TRMM_LBA, surf_ref_thermo_state, thermo_params)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     # zrough = 1.0e-4 # not actually used, but initialized to reasonable value
@@ -634,14 +599,7 @@ function surface_params(
                 0,
                 cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)),
             )^FT(1.5)
-    return TC.FixedSurfaceFluxAndFrictionVelocity(
-        zrough,
-        Ri_bulk_crit,
-        ts,
-        shf,
-        lhf,
-        ustar,
-    )
+    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
 
@@ -706,12 +664,7 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(
-    case::ARM_SGP,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::ARM_SGP, surf_ref_thermo_state, thermo_params)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(p_f_surf)
     qsurface::FT = 15.2e-3 # kg/kg
@@ -726,14 +679,7 @@ function surface_params(
     lhf = Dierckx.Spline1D(t_Sur_in, LH; k = 1)
     zrough::FT = 0
 
-    return TC.FixedSurfaceFluxAndFrictionVelocity(
-        zrough,
-        Ri_bulk_crit,
-        ts,
-        shf,
-        lhf,
-        ustar,
-    )
+    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
 #####
@@ -871,12 +817,7 @@ function initialize_profiles(
     end
 end
 
-function surface_params(
-    case::DYCOMS_RF01,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::DYCOMS_RF01, surf_ref_thermo_state, thermo_params)
     FT = eltype(surf_ref_thermo_state)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     zrough::FT = 1.0e-4
@@ -888,7 +829,7 @@ function surface_params(
     #density_surface  = 1.22     # kg/m^3
 
     ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
-    return TC.FixedSurfaceFlux(zrough, Ri_bulk_crit, ts, shf, lhf)
+    return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
 #####
@@ -947,12 +888,7 @@ function initialize_profiles(
     end
 end
 
-function surface_params(
-    case::DYCOMS_RF02,
-    surf_ref_thermo_state,
-    thermo_params,
-    Ri_bulk_crit,
-)
+function surface_params(case::DYCOMS_RF02, surf_ref_thermo_state, thermo_params)
     p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
     FT = eltype(surf_ref_thermo_state)
     zrough::FT = 1.0e-4  #TODO - not needed?
@@ -962,14 +898,7 @@ function surface_params(
     Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
     qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
     ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
-    return TC.FixedSurfaceFluxAndFrictionVelocity(
-        zrough,
-        Ri_bulk_crit,
-        ts,
-        shf,
-        lhf,
-        ustar,
-    )
+    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
 #####
