@@ -400,6 +400,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: Compressible single column EDMF Soares"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --turbconv edmf --turbconv_case Soares --dt_save_to_sol 5mins --z_elem 75 --z_stretch false --z_max 3750 --job_id compressible_edmf_soares --dt 1secs --t_end 8hours --regression_test true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
+        artifact_paths: "compressible_edmf_soares/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":balloon: SCM EDMF: Nieuwstadt"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist dry --turbconv edmf --turbconv_case Nieuwstadt --split_ode false --ode_algo ODE.Euler --dt_save_to_sol 5mins --z_elem 75 --z_stretch false --z_max 3750 --job_id edmf_nieuwstadt --dt 1secs --t_end 8hours --regression_test true --anelastic_dycore true --apply_limiter false --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "edmf_nieuwstadt/*"
