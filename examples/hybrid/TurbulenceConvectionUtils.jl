@@ -67,7 +67,6 @@ function turbconv_cache(
 )
     tc_params = CAP.turbconv_params(param_set)
     FT = CC.Spaces.undertype(axes(Y.c))
-    Ri_bulk_crit::FT = namelist["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"]
     imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
     imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
@@ -75,12 +74,8 @@ function turbconv_cache(
     thermo_params = CAP.thermodynamics_params(param_set)
     surf_ref_thermo_state =
         Cases.surface_reference_thermo_state(case, thermo_params)
-    surf_params = Cases.surface_params(
-        case,
-        surf_ref_thermo_state,
-        thermo_params,
-        Ri_bulk_crit,
-    )
+    surf_params =
+        Cases.surface_params(case, surf_ref_thermo_state, thermo_params)
     edmf = turbconv_model
     anelastic_column_kwargs = if true # CA.is_anelastic_column(atmos) # TODO: make conditional
         ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])

@@ -20,7 +20,6 @@ function get_surface(
     shf = TC.sensible_heat_flux(surf_params, t)
     lhf = TC.latent_heat_flux(surf_params, t)
     zrough = surf_params.zrough
-    (; Ri_bulk_crit) = surf_params
     thermo_params = TCP.thermodynamics_params(param_set)
 
     ts_sfc = TC.surface_thermo_state(surf_params, thermo_params, t)
