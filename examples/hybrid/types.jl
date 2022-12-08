@@ -254,6 +254,8 @@ function get_state_fresh_start(parsed_args, spaces, params, atmos)
     return (Y, t_start)
 end
 
+import ClimaTimeSteppers as CTS
+
 ode_algorithm_type(ode_algorithm) =
     ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
 
@@ -277,6 +279,20 @@ is_ordinary_diffeq_newton(ode_algorithm) =
         ODE.OrdinaryDiffEqNewtonAlgorithm,
         ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
+
+additional_integrator_kwargs(::DiffEqBase.AbstractODEAlgorithm) = (;
+    adaptive = false,
+    progress = isinteractive(),
+    progress_steps = isinteractive() ? 1 : 1000,
+)
+additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
+    kwargshandle = ODE.KeywordArgSilent, # allow custom kwargs
+    adjustfinal = true,
+    # TODO: enable progress bars in ClimaTimeSteppers
+)
+
+is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
 function jac_kwargs(ode_algorithm, Y, energy_form)
     if is_implicit(ode_algorithm)
@@ -302,15 +318,17 @@ import ClimaTimeSteppers as CTS
     ode_config(Y, parsed_args, atmos)
 =#
 function ode_configuration(Y, parsed_args, atmos)
-    ode_algorithm = if startswith(parsed_args["ode_algo"], "ODE.")
+    ode_name = parsed_args["ode_algo"]
+    ode_algorithm = if startswith(ode_name, "ODE.")
         @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
-        getproperty(ODE, Symbol(split(parsed_args["ode_algo"], ".")[2]))
+        getproperty(ODE, Symbol(split(ode_name, ".")[2]))
     else
-        getproperty(CTS, Symbol(parsed_args["ode_algo"]))
+        getproperty(CTS, Symbol(ode_name))
     end
+    @info "Using ODE algo: `$ode_algorithm`"
 
     if !is_implicit(ode_algorithm)
-        return (; ode_algorithm, alg_kwargs = NamedTuple())
+        return (; ode_algorithm, ode_algo = ode_algorithm())
     elseif is_ordinary_diffeq_newton(ode_algorithm)
         if parsed_args["max_newton_iters"] == 1
             error("OridinaryDiffEq requires at least 2 Newton iterations")
@@ -322,7 +340,7 @@ function ode_configuration(Y, parsed_args, atmos)
         )
         return (;
             ode_algorithm,
-            alg_kwargs = (; linsolve = CA.linsolve!, nlsolve),
+            ode_algo = ode_algorithm(; linsolve = CA.linsolve!, nlsolve),
         )
     elseif is_imex_CTS_algo(ode_algorithm)
         newtons_method = NewtonsMethod(;
@@ -352,22 +370,25 @@ function ode_configuration(Y, parsed_args, atmos)
                 nothing
             end,
         )
-        return (; ode_algorithm, alg_kwargs = (; newtons_method))
+        return (; ode_algorithm, ode_algo = ode_algorithm(newtons_method))
     else
-        return (; ode_algorithm, alg_kwargs = (; linsolve = CA.linsolve!))
+        return (;
+            ode_algorithm,
+            ode_algo = ode_algorithm(; linsolve = CA.linsolve!),
+        )
     end
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
-    (; alg_kwargs, ode_algorithm) = ode_config
+    (; ode_algorithm, ode_algo) = ode_config
     (; dt) = p.simulation
+    (; atmos) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
     show_progress_bar = isinteractive()
 
     @time "Define problem" problem = if parsed_args["split_ode"]
         remaining_func =
-            startswith(parsed_args["ode_algo"], "ODE.") ?
-            remaining_tendency! :
+            !is_cts_algo(ode_algo) ? remaining_tendency! :
             ForwardEulerODEFunction(remaining_tendency_increment!)
         ODE.SplitODEProblem(
             ODE.ODEFunction(
@@ -383,21 +404,6 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
     else
         ODE.ODEProblem(remaining_tendency!, Y, tspan, p)
     end
-    if startswith(parsed_args["ode_algo"], "ODE.")
-        ode_algo = ode_algorithm(; alg_kwargs...)
-        integrator_kwargs = (;
-            adaptive = false,
-            progress = show_progress_bar,
-            progress_steps = isinteractive() ? 1 : 1000,
-        )
-    else
-        ode_algo = ode_algorithm(alg_kwargs...)
-        integrator_kwargs = (;
-            kwargshandle = KeywordArgSilent, # allow custom kwargs
-            adjustfinal = true,
-            # TODO: enable progress bars in ClimaTimeSteppers
-        )
-    end
     saveat = if dt_save_to_sol == Inf
         tspan[2]
     elseif tspan[2] % dt_save_to_sol == 0
@@ -406,7 +412,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
         [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
     end # ensure that tspan[2] is always saved
     args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt, integrator_kwargs...)
+    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
     return (args, kwargs)
 end
 
