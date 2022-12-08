@@ -244,10 +244,14 @@ steps:
       - label: ":computer: hydrostatic balance (ρe_tot) float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64"
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: Box hydrostatic balance (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --perturb_initstate false --hyperdiff false --dt 20secs --t_end 1days --job_id box_hydrostatic_balance_rhoe"
         artifact_paths: "box_hydrostatic_balance_rhoe/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
