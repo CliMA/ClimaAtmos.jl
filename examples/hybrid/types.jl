@@ -255,30 +255,38 @@ function get_state_fresh_start(parsed_args, spaces, params, atmos)
 end
 
 import ClimaTimeSteppers as CTS
+import OrdinaryDiffEq as ODE
 
 ode_algorithm_type(ode_algorithm) =
     ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
 
-is_imex_CTS_algo(ode_algorithm) =
+is_imex_CTS_algo_type(ode_algorithm) =
     ode_algorithm_type(ode_algorithm) <: ClimaTimeSteppers.IMEXARKAlgorithm
 
-is_implicit(ode_algorithm) =
+is_implicit_type(ode_algorithm) =
     ode_algorithm_type(ode_algorithm) <: Union{
         ODE.OrdinaryDiffEqImplicitAlgorithm,
         ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
-    } || is_imex_CTS_algo(ode_algorithm)
-
-
-use_transform(ode_algorithm) = !(
-    is_imex_CTS_algo(ode_algorithm) || ode_algorithm_type(ode_algorithm) in
-    (ODE.Rosenbrock23, ODE.Rosenbrock32)
-)
+    } || is_imex_CTS_algo_type(ode_algorithm)
 
 is_ordinary_diffeq_newton(ode_algorithm) =
     ode_algorithm_type(ode_algorithm) <: Union{
         ODE.OrdinaryDiffEqNewtonAlgorithm,
         ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
+
+is_imex_CTS_algo(::CTS.IMEXARKAlgorithm) = true
+is_imex_CTS_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+
+is_implicit(::ODE.OrdinaryDiffEqImplicitAlgorithm) = true
+is_implicit(::ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm) = true
+is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
+
+is_rosenbrock(::ODE.Rosenbrock23) = true
+is_rosenbrock(::ODE.Rosenbrock32) = true
+is_rosenbrock(::DiffEqBase.AbstractODEAlgorithm) = false
+use_transform(ode_algo) =
+    !(is_imex_CTS_algo(ode_algo) || is_rosenbrock(ode_algo))
 
 additional_integrator_kwargs(::DiffEqBase.AbstractODEAlgorithm) = (;
     adaptive = false,
@@ -294,14 +302,14 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
 is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
-function jac_kwargs(ode_algorithm, Y, energy_form)
-    if is_implicit(ode_algorithm)
+function jac_kwargs(ode_algo, Y, energy_form)
+    if is_implicit(ode_algo)
         W = CA.SchurComplementW(
             Y,
-            use_transform(ode_algorithm),
+            use_transform(ode_algo),
             jacobi_flags(energy_form),
         )
-        if use_transform(ode_algorithm)
+        if use_transform(ode_algo)
             return (; jac_prototype = W, Wfact_t = CA.Wfact!)
         else
             return (; jac_prototype = W, Wfact = CA.Wfact!)
@@ -311,11 +319,10 @@ function jac_kwargs(ode_algorithm, Y, energy_form)
     end
 end
 
-import OrdinaryDiffEq as ODE
-import ClimaTimeSteppers as CTS
 #=
-(; ode_algorithm, alg_kwargs) =
-    ode_config(Y, parsed_args, atmos)
+    ode_configuration(Y, parsed_args, atmos)
+
+Returns the ode algorithm
 =#
 function ode_configuration(Y, parsed_args, atmos)
     ode_name = parsed_args["ode_algo"]
@@ -327,8 +334,8 @@ function ode_configuration(Y, parsed_args, atmos)
     end
     @info "Using ODE algo: `$ode_algorithm`"
 
-    if !is_implicit(ode_algorithm)
-        return (; ode_algorithm, ode_algo = ode_algorithm())
+    if !is_implicit_type(ode_algorithm)
+        return ode_algorithm()
     elseif is_ordinary_diffeq_newton(ode_algorithm)
         if parsed_args["max_newton_iters"] == 1
             error("OridinaryDiffEq requires at least 2 Newton iterations")
@@ -338,11 +345,8 @@ function ode_configuration(Y, parsed_args, atmos)
             κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
             max_iter = parsed_args["max_newton_iters"],
         )
-        return (;
-            ode_algorithm,
-            ode_algo = ode_algorithm(; linsolve = CA.linsolve!, nlsolve),
-        )
-    elseif is_imex_CTS_algo(ode_algorithm)
+        return ode_algorithm(; linsolve = CA.linsolve!, nlsolve)
+    elseif is_imex_CTS_algo_type(ode_algorithm)
         newtons_method = NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters"],
             krylov_method = if parsed_args["use_krylov_method"]
@@ -370,19 +374,15 @@ function ode_configuration(Y, parsed_args, atmos)
                 nothing
             end,
         )
-        return (; ode_algorithm, ode_algo = ode_algorithm(newtons_method))
+        return ode_algorithm(newtons_method)
     else
-        return (;
-            ode_algorithm,
-            ode_algo = ode_algorithm(; linsolve = CA.linsolve!),
-        )
+        return ode_algorithm(; linsolve = CA.linsolve!)
     end
 end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
-    (; ode_algorithm, ode_algo) = ode_config
-    (; dt) = p.simulation
-    (; atmos) = p
+function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
+    (; atmos, simulation) = p
+    (; dt) = simulation
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
     show_progress_bar = isinteractive()
 
@@ -393,7 +393,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_config, callback)
         ODE.SplitODEProblem(
             ODE.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs(ode_algorithm, Y, atmos.energy_form)...,
+                jac_kwargs(ode_algo, Y, atmos.energy_form)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             ),
             remaining_func,
