@@ -70,9 +70,9 @@ steps:
   - group: "Column Examples"
     steps:
 
-      - label: ":computer: single column hydrostatic balance"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --job_id sphere_single_column_hydrostatic_balance"
-        artifact_paths: "sphere_single_column_hydrostatic_balance/*"
+      - label: ":computer: single column hydrostatic balance float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --job_id sphere_single_column_hydrostatic_balance --FLOAT_TYPE Float64"
+        artifact_paths: "sphere_single_column_hydrostatic_balance_ft64/*"
 
       - label: ":computer: single column radiative equilibrium gray"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --job_id sphere_single_column_radiative_equilibrium_gray"
@@ -241,13 +241,17 @@ steps:
   - group: "Milestones"
     steps:
 
-      - label: ":computer: hydrostatic balance (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --job_id sphere_hydrostatic_balance_rhoe"
-        artifact_paths: "sphere_hydrostatic_balance_rhoe/*"
+      - label: ":computer: hydrostatic balance (ρe_tot) float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64"
+        artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: Box hydrostatic balance (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --perturb_initstate false --hyperdiff false --dt 20secs --t_end 1days --job_id box_hydrostatic_balance_rhoe"
         artifact_paths: "box_hydrostatic_balance_rhoe/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: baroclinic wave (ρe_tot)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"

@@ -109,6 +109,10 @@ function parse_commandline()
         help = "Add a perturbation to the initial condition [`false`, `true` (default)]"
         arg_type = Bool
         default = true
+        "--discrete_hydrostatic_balance"
+        help = "Set the initial state to discrete hydrostatic balance"
+        arg_type = Bool
+        default = false
         "--energy_upwinding"
         help = "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
         arg_type = Symbol

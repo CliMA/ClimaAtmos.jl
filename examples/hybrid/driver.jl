@@ -250,6 +250,10 @@ if parsed_args["turbconv"] == "edmf"
     @time "init_tc!" TCU.init_tc!(Y, p, params)
 end
 
+if parsed_args["discrete_hydrostatic_balance"]
+    CA.set_discrete_hydrostatic_balanced_state!(Y, p)
+end
+
 # Print tendencies:
 # @info "Model composition" p.atmos...
 @info "Tendencies" p.tendency_knobs...

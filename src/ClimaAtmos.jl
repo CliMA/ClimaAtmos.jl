@@ -18,6 +18,7 @@ include("thermo_state.jl")
 include("precomputed_quantities.jl")
 
 include(joinpath("InitialConditions", "InitialConditions.jl"))
+include("discrete_hydrostatic_balance.jl")
 
 include(joinpath("tendencies", "implicit", "wfact.jl"))
 include(joinpath("tendencies", "implicit", "schur_complement_W.jl"))
