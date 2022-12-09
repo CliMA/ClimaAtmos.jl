@@ -82,13 +82,12 @@ function radiation_model_cache(
             input_center_volume_mixing_ratio_o3 =
                 vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
 
-            # interpolate the ozone concentrations to our initial pressures (set the
-            # kinetic energy to 0 when computing the pressure using total energy)
+            # interpolate the ozone concentrations to our initial pressures
             pressure2ozone = Spline1D(
                 input_center_pressure,
                 input_center_volume_mixing_ratio_o3,
             )
-            ᶜts = thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp, 0)
+            ᶜts = thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
             ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
             center_volume_mixing_ratio_o3 =
                 RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
