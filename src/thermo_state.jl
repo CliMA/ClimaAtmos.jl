@@ -24,23 +24,23 @@ function thermo_state_type(
 end
 
 #= High-level wrapper =#
-function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp, colidx)
+function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp, colidx; debug = false)
     ᶜts = p.ᶜts[colidx]
     ᶠw = Y.f.w[colidx]
     ᶜp = p.ᶜp[colidx]
     thermo_params = CAP.thermodynamics_params(p.params)
     td = p.thermo_dispatcher
-    thermo_state!(ᶜts, Y.c[colidx], thermo_params, td, ᶜinterp, ᶠw, ᶜp)
+    thermo_state!(ᶜts, Y.c[colidx], thermo_params, td, ᶜinterp, ᶠw, ᶜp; debug)
 end
 
 #= High-level wrapper =#
-function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp)
+function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp; debug = false)
     ᶜts = p.ᶜts
     ᶠw = Y.f.w
     ᶜp = p.ᶜp
     thermo_params = CAP.thermodynamics_params(p.params)
     td = p.thermo_dispatcher
-    thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, ᶠw, ᶜp)
+    thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, ᶠw, ᶜp; debug)
 end
 
 thermo_state!(
@@ -48,12 +48,13 @@ thermo_state!(
     Y::Fields.FieldVector,
     thermo_params,
     td::ThermoDispatcher,
-    ᶜinterp,
-) = thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, Y.f.w)
+    ᶜinterp;
+    debug = false,
+) = thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, Y.f.w; debug)
 
 #=
 
-    thermo_state!(ᶜts, Yc, thermo_params, td::ThermoDispatcher, ᶜinterp, ᶠw[, ᶜp])
+    thermo_state!(ᶜts, Yc, thermo_params, td::ThermoDispatcher, ᶜinterp, ᶠw[, ᶜp]; debug = false)
 
 Populate the thermodynamic state, `ᶜts`, given
  - `Yc` the cell centered prognostic fields
@@ -72,7 +73,8 @@ function thermo_state!(
     td::ThermoDispatcher,
     ᶜinterp,
     ᶠw,
-    ᶜp = nothing,
+    ᶜp = nothing;
+    debug = false,
 )
     # Sometimes we want to zero out kinetic energy
     (; energy_form, moisture_model, compressibility_model) = td
@@ -86,7 +88,8 @@ function thermo_state!(
                 moisture_model,
                 z,
                 ᶜinterp,
-                ᶠw,
+                ᶠw;
+                debug,
             )
         elseif compressibility_model isa AnelasticFluid
             @assert !isnothing(ᶜp)
@@ -98,13 +101,14 @@ function thermo_state!(
                 z,
                 ᶜinterp,
                 ᶠw,
-                ᶜp,
+                ᶜp;
+                debug,
             )
         end
     elseif energy_form isa InternalEnergy
-        thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model)
+        thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model; debug)
     elseif energy_form isa PotentialTemperature
-        thermo_state_ρθ!(ᶜts, Yc, thermo_params, moisture_model)
+        thermo_state_ρθ!(ᶜts, Yc, thermo_params, moisture_model; debug)
     else
         error("Could not determine energy model")
     end
@@ -119,7 +123,8 @@ function thermo_state_ρe_tot_anelastic!(
     z,
     ᶜinterp,
     ᶠw,
-    ᶜp,
+    ᶜp;
+    debug,
 )
     C123 = Geometry.Covariant123Vector
     grav = TD.Parameters.grav(thermo_params)
@@ -148,8 +153,9 @@ thermo_state(
     thermo_params,
     td::ThermoDispatcher,
     ᶜinterp,
-    ᶜp = nothing,
-) = thermo_state(Y.c, thermo_params, td, ᶜinterp, Y.f.w, ᶜp)
+    ᶜp = nothing;
+    debug = false,
+) = thermo_state(Y.c, thermo_params, td, ᶜinterp, Y.f.w, ᶜp; debug)
 
 function thermo_state(
     Yc::Fields.Field,
@@ -157,23 +163,24 @@ function thermo_state(
     td::ThermoDispatcher,
     ᶜinterp,
     ᶠw::Fields.Field,
-    ᶜp = nothing,
+    ᶜp = nothing;
+    debug = false,
 )
     FT = Spaces.undertype(axes(Yc))
     ts_type = thermo_state_type(td.moisture_model, FT)
     ts = similar(Yc, ts_type)
-    thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, ᶠw, ᶜp)
+    thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, ᶠw, ᶜp; debug)
     return ts
 end
 
-function thermo_state_ρθ!(ts, Yc, thermo_params, ::DryModel)
+function thermo_state_ρθ!(ts, Yc, thermo_params, ::DryModel; debug)
     @. ts = TD.PhaseDry_ρθ(thermo_params, Yc.ρ, Yc.ρθ / Yc.ρ)
 end
-function thermo_state_ρθ!(ts, Yc, thermo_params, ::EquilMoistModel)
+function thermo_state_ρθ!(ts, Yc, thermo_params, ::EquilMoistModel; debug)
     @. ts =
         TD.PhaseEquil_ρθq(thermo_params, Yc.ρ, Yc.ρθ / Yc.ρ, Yc.ρq_tot / Yc.ρ)
 end
-function thermo_state_ρθ!(ts, Yc, thermo_params, ::NonEquilMoistModel)
+function thermo_state_ρθ!(ts, Yc, thermo_params, ::NonEquilMoistModel; debug)
     @. ts = TD.PhaseNonEquil_ρθq(
         thermo_params,
         Yc.ρ,
@@ -184,7 +191,16 @@ end
 
 internal_energy(Yc, K, g, z) = Yc.ρe_tot - Yc.ρ * (K + g * z)
 
-function thermo_state_ρe_tot!(ts, Yc, thermo_params, ::DryModel, z, ᶜinterp, ᶠw)
+function thermo_state_ρe_tot!(
+    ts,
+    Yc,
+    thermo_params,
+    ::DryModel,
+    z,
+    ᶜinterp,
+    ᶠw;
+    debug,
+)
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
     @. ts = TD.PhaseDry(
@@ -205,7 +221,8 @@ function thermo_state_ρe_tot!(
     ::EquilMoistModel,
     z,
     ᶜinterp,
-    ᶠw,
+    ᶠw;
+    debug,
 )
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
@@ -229,7 +246,8 @@ function thermo_state_ρe_tot!(
     ::NonEquilMoistModel,
     z,
     ᶜinterp,
-    ᶠw,
+    ᶠw;
+    debug,
 )
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
@@ -246,10 +264,10 @@ function thermo_state_ρe_tot!(
     )
 end
 
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::DryModel)
+function thermo_state_ρe_int!(ts, Yc, thermo_params, ::DryModel; debug)
     @. ts = TD.PhaseDry(thermo_params, Yc.ρe_int / Yc.ρ, Yc.ρ)
 end
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel)
+function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel; debug)
     @. ts = TD.PhaseEquil_ρeq(
         thermo_params,
         Yc.ρ,
@@ -257,7 +275,13 @@ function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel)
         Yc.ρq_tot / Yc.ρ,
     )
 end
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::NonEquilMoistModel)
+function thermo_state_ρe_int!(
+    ts,
+    Yc,
+    thermo_params,
+    ::NonEquilMoistModel;
+    debug,
+)
     @. ts = TD.PhaseNonEquil(
         thermo_params,
         Yc.ρe_int / Yc.ρ,
