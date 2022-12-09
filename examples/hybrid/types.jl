@@ -384,26 +384,25 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, simulation) = p
     (; dt) = simulation
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-    show_progress_bar = isinteractive()
 
-    @time "Define problem" problem = if parsed_args["split_ode"]
-        remaining_func =
-            !is_cts_algo(ode_algo) ? remaining_tendency! :
-            ForwardEulerODEFunction(remaining_tendency_increment!)
-        ODE.SplitODEProblem(
-            ODE.ODEFunction(
-                implicit_tendency!;
-                jac_kwargs(ode_algo, Y, atmos.energy_form)...,
-                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
-            ),
-            remaining_func,
-            Y,
-            tspan,
-            p,
+    @time "Define ode function" func = if parsed_args["split_ode"]
+        implicit_func = ODE.ODEFunction(
+            implicit_tendency!;
+            jac_kwargs(ode_algo, Y, atmos.energy_form)...,
+            tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
         )
+        if is_cts_algo(ode_algo)
+            ODE.SplitFunction(
+                implicit_func,
+                ForwardEulerODEFunction(remaining_tendency_increment!),
+            )
+        else
+            ODE.SplitFunction(implicit_func, remaining_tendency!)
+        end
     else
-        ODE.ODEProblem(remaining_tendency!, Y, tspan, p)
+        remaining_tendency! # should be total_tendency!
     end
+    problem = ODE.ODEProblem(func, Y, tspan, p)
     saveat = if dt_save_to_sol == Inf
         tspan[2]
     elseif tspan[2] % dt_save_to_sol == 0
