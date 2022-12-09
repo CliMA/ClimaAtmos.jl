@@ -8,12 +8,19 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 
 function precomputed_quantities!(Y, p, t)
-    Fields.bycolumn(axes(Y.c)) do colidx
-        precomputed_quantities!(Y, p, t, colidx)
+    try
+        Fields.bycolumn(axes(Y.c)) do colidx
+            precomputed_quantities!(Y, p, t, colidx)
+        end
+    catch
+        @info "Simulation failed at time $t"
+        Fields.bycolumn(axes(Y.c)) do colidx
+            precomputed_quantities!(Y, p, t, colidx; debug = true)
+        end
     end
 end
 
-function precomputed_quantities!(Y, p, t, colidx)
+function precomputed_quantities!(Y, p, t, colidx; debug = false)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜuvw, ᶜK, ᶜts, ᶜp, params) = p
@@ -22,7 +29,7 @@ function precomputed_quantities!(Y, p, t, colidx)
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
     thermo_params = CAP.thermodynamics_params(params)
-    thermo_state!(Y, p, ᶜinterp, colidx)
+    thermo_state!(Y, p, ᶜinterp, colidx; debug)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
     return nothing
 end
