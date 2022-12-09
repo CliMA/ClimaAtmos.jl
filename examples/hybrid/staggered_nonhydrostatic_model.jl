@@ -87,7 +87,17 @@ function default_cache(
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
+    R_d = FT(CAP.R_d(params))
+    MSLP = FT(CAP.MSLP(params))
+    grav = FT(CAP.grav(params))
+    T_ref = FT(255)
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
+    ᶜρ_ref = @. MSLP * exp(-grav * ᶜcoord.z / (R_d * T_ref)) / (R_d * T_ref)
+    ᶜp_ref = @. ᶜρ_ref * R_d * T_ref
+    if !parsed_args["use_reference_state"]
+        ᶜρ_ref .*= 0
+        ᶜp_ref .*= 0
+    end
     z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = CAP.Omega(params)
@@ -182,6 +192,8 @@ function default_cache(
         ᶜK = similar(Y.c, FT),
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
+        ᶜρ_ref,
+        ᶜp_ref,
         ᶜts = similar(Y.c, ts_type),
         ᶜp = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),

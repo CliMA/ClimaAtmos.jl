@@ -302,6 +302,10 @@ function parse_commandline()
         help = "Test dycore consistency [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--use_reference_state"
+        help = "Subtract a reference state from the dycore equations [`false`, `true` (default)]"
+        arg_type = Bool
+        default = true
         "--check_conservation"
         help = "Check conservation of mass and energy [`false` (default), `true`]"
         arg_type = Bool

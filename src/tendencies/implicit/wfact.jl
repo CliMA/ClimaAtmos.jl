@@ -94,6 +94,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
+    (; ᶜρ_ref, ᶜp_ref) = p
     (; energy_upwinding, tracer_upwinding, thermo_dispatcher) = p
 
     validate_flags!(Y, flags, energy_upwinding)
@@ -225,7 +226,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     end
 
     if :ρθ in propertynames(Y.c)
-        # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
+        # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
         # ∂(ᶠwₜ)/∂(ᶜρθ) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρθ)
         # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
         # If we ignore the dependence of pressure on moisture,
@@ -240,12 +241,15 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         )
 
         if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
             # ∂(ᶠwₜ)/∂(ᶜρ) = ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
-            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
+            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
             # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
             @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                (
+                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
+                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+                ) / ᶠinterp(ᶜρ[colidx])^2 *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
@@ -259,7 +263,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
             )
         end
     elseif :ρe_tot in propertynames(Y.c)
-        # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
+        # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
         # ∂(ᶠwₜ)/∂(ᶜρe) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe)
         # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
         # If we ignore the dependence of pressure on moisture,
@@ -270,7 +274,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         )
 
         if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
             # ∂(ᶠwₜ)/∂(ᶜρ) =
             #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) +
             #     ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
@@ -278,13 +282,16 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
             # If we ignore the dependence of pressure on moisture,
             # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) =
             #     ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri))
-            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
+            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
             # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
             @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
                 -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
                     R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
                 ) +
-                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                (
+                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
+                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+                ) / ᶠinterp(ᶜρ[colidx])^2 *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
@@ -302,7 +309,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         end
     elseif :ρe_int in propertynames(Y.c)
         ᶜρe_int = Y.c.ρe_int
-        # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
+        # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
         # ∂(ᶠwₜ)/∂(ᶜρe_int) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe_int)
         # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
         # If we ignore the dependence of pressure on moisture,
@@ -313,19 +320,22 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         )
 
         if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
+            # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
             # ∂(ᶠwₜ)/∂(ᶜρ) =
             #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) +
             #     ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
             # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
             # If we ignore the dependence of pressure on moisture,
             # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) = ᶠgradᵥ_stencil(R_d * T_tri)
-            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ)^2
+            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
             # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
             @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
                 -1 / ᶠinterp(ᶜρ[colidx]) *
                 ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int[colidx])) +
-                ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx])^2 *
+                (
+                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
+                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+                ) / ᶠinterp(ᶜρ[colidx])^2 *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
