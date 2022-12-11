@@ -203,22 +203,6 @@ paperplots_baro_wave(::TotalEnergy, ::DryModel, args...) =
 paperplots_baro_wave(::TotalEnergy, ::EquilMoistModel, args...) =
     paperplots_moist_baro_wave_ρe(args...)
 
-# held-suarez
-paperplots_held_suarez(atmos, args...) =
-    paperplots_held_suarez(atmos.energy_form, atmos.moisture_model, args...)
-
-paperplots_held_suarez(::PotentialTemperature, ::DryModel, args...) =
-    paperplots_dry_held_suarez(args...)
-paperplots_held_suarez(::TotalEnergy, ::DryModel, args...) =
-    paperplots_dry_held_suarez(args...)
-paperplots_held_suarez(
-    ::InternalEnergy,
-    ::Union{DryModel, EquilMoistModel},
-    args...,
-) = paperplots_dry_held_suarez(args...)
-paperplots_held_suarez(::TotalEnergy, ::EquilMoistModel, args...) =
-    paperplots_moist_held_suarez_ρe(args...)
-
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10 (if the simulation lasts 10 days)
 function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, thermo_dispatcher) = p
@@ -668,166 +652,13 @@ calc_zonalave_timeave(x) =
     dropdims(dropdims(mean(mean(x, dims = 1), dims = 4), dims = 4), dims = 1)
 calc_zonalave_variance(x) = calc_zonalave_timeave((x .- mean(x, dims = 4)) .^ 2)
 
-function paperplots_dry_held_suarez(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, params, thermo_dispatcher) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    last_day = floor(Int, sol.t[end] / (24 * 3600))
-
-    # create a temporary dir for intermediate data
-    remap_tmpdir = joinpath(output_dir, "remaptmp")
-    mkpath(remap_tmpdir)
-    weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
-    cspace = axes(sol.u[1].c)
-    fspace = axes(sol.u[1].f)
-    create_weightfile(weightfile, cspace, fspace, nlat, nlon)
-
-    ### save raw data into nc -> in preparation for remapping
-    # space info to generate nc raw data
-    Y = sol.u[1]
-
-    # create an nc file to store raw cg data
-    # create data
-    datafile_cc = remap_tmpdir * "/hs-raw.nc"
-    NCDataset(datafile_cc, "c") do nc
-        # defines the appropriate dimensions and variables for a space coordinate
-        def_space_coord(nc, cspace, type = "cgll")
-        # defines the appropriate dimensions and variables for a time coordinate (by default, unlimited size)
-        nc_time = def_time_coord(nc)
-        # defines variables for pressure, temperature, and vorticity
-        nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
-        nc_T = defVar(nc, "T", FT, cspace, ("time",))
-        nc_u = defVar(nc, "u", FT, cspace, ("time",))
-
-        # save raw data
-        for i in 1:length(sol.t)
-            nc_time[i] = sol.t[i]
-            Y = sol.u[i]
-
-            # temperature
-            CA.thermo_state!(Y, p, ᶜinterp)
-            ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-            ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
-
-            # zonal wind
-            ᶜuₕ = Y.c.uₕ
-            ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
-
-            # assigning to nc obj
-            nc_θ[:, i] = ᶜθ
-            nc_T[:, i] = ᶜT
-            nc_u[:, i] = ᶜuₕ_phy.components.data.:1
-        end
-
-    end
-
-    ### remap to lat/lon
-    datafile_latlon = output_dir * "/hs-remapped.nc"
-    apply_remap(
-        datafile_latlon,
-        datafile_cc,
-        weightfile,
-        ["PotentialTemperature", "T", "u"],
-    )
-
-    rm(datafile_cc)
-    rm(weightfile)
-
-    ### load remapped data and create statistics for plots
-    datafile_latlon = output_dir * "/hs-remapped.nc"
-    nt = NCDataset(datafile_latlon, "r") do nc
-        lat = nc["lat"][:]
-        z = nc["z"][:]
-        time = nc["time"][:]
-        if last_day > 200
-            time_mask = time .> 3600 * 24 * 200
-        else
-            time_mask = time .> 3600 * 24 * (last_day - 1)
-        end
-        T = nc["T"][:, :, :, time .> time_mask]
-        θ = nc["PotentialTemperature"][:, :, :, time .> time_mask]
-        u = nc["u"][:, :, :, time .> time_mask]
-        (; lat, z, time, T, θ, u)
-    end
-    (; lat, z, time, T, θ, u) = nt
-
-    u_timeave_zonalave = calc_zonalave_timeave(u)
-    T_timeave_zonalave = calc_zonalave_timeave(T)
-    θ_timeave_zonalave = calc_zonalave_timeave(θ)
-
-    T2_timeave_zonalave = calc_zonalave_variance(T)
-
-    Plots.png(
-        Plots.contourf(
-            lat,
-            z,
-            u_timeave_zonalave',
-            color = :balance,
-            clim = (-30, 30),
-            linewidth = 0,
-            yaxis = :log,
-            title = "u",
-            xlabel = "lat (deg N)",
-            ylabel = "z (m)",
-        ),
-        output_dir * "/hs-u.png",
-    )
-
-    Plots.png(
-        Plots.contourf(
-            lat,
-            z,
-            T_timeave_zonalave',
-            levels = 190:10:310,
-            clim = (190, 310),
-            contour_labels = true,
-            yaxis = :log,
-            title = "T",
-            xlabel = "lat (deg N)",
-            ylabel = "z (m)",
-        ),
-        output_dir * "/hs-T.png",
-    )
-
-    Plots.png(
-        Plots.contourf(
-            lat,
-            z,
-            θ_timeave_zonalave',
-            levels = 260:10:360,
-            clim = (260, 360),
-            contour_labels = true,
-            yaxis = :log,
-            title = "theta",
-            xlabel = "lat (deg N)",
-            ylabel = "z (m)",
-        ),
-        output_dir * "/hs-theta.png",
-    )
-
-    Plots.png(
-        Plots.contourf(
-            lat,
-            z,
-            T2_timeave_zonalave',
-            color = :balance,
-            clim = (0, 40),
-            linewidth = 0,
-            yaxis = :log,
-            title = "[T^2]",
-            xlabel = "lat (deg N)",
-            ylabel = "z (m)",
-        ),
-        output_dir * "/hs-T2.png",
-    )
-
-end
-
 function postprocessing_edmf(sol, output_dir, fps)
     profile_animation(sol, output_dir, fps)
 end
 
-function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, params, ᶜK, thermo_dispatcher) = p
+function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
+    (; ᶜts, params, ᶜK, thermo_dispatcher, atmos) = p
+    (; moisture_model) = atmos
     thermo_params = CAP.thermodynamics_params(params)
     last_day = floor(Int, sol.t[end] / (24 * 3600))
 
@@ -855,7 +686,9 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         nc_θ = defVar(nc, "PotentialTemperature", FT, cspace, ("time",))
         nc_T = defVar(nc, "T", FT, cspace, ("time",))
         nc_u = defVar(nc, "u", FT, cspace, ("time",))
-        nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+        if moisture_model isa CA.EquilMoistModel
+            nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
+        end
 
         # save raw data
         for i in 1:length(sol.t)
@@ -874,16 +707,22 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
             # qt
-            ᶜqt = Y.c.ρq_tot ./ Y.c.ρ
+            if moisture_model isa CA.EquilMoistModel
+                ᶜqt = Y.c.ρq_tot ./ Y.c.ρ
+            end
 
             # assigning to nc obj
             nc_θ[:, i] = ᶜθ
             nc_T[:, i] = ᶜT
             nc_u[:, i] = ᶜuₕ_phy.components.data.:1
-            nc_qt[:, i] = ᶜqt
+            if moisture_model isa CA.EquilMoistModel
+                nc_qt[:, i] = ᶜqt
+            end
         end
 
     end
+
+    moisture_names = moisture_model isa CA.EquilMoistModel ? ("qt",) : ()
 
     ### remap to lat/lon
     datafile_latlon = output_dir * "/hs-remapped.nc"
@@ -891,7 +730,7 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         datafile_latlon,
         datafile_cc,
         weightfile,
-        ["PotentialTemperature", "T", "u", "qt"],
+        ["PotentialTemperature", "T", "u", moisture_names...],
     )
 
     rm(datafile_cc)
@@ -911,7 +750,11 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         T = nc["T"][:, :, :, time .> time_mask]
         θ = nc["PotentialTemperature"][:, :, :, time .> time_mask]
         u = nc["u"][:, :, :, time .> time_mask]
-        qt = nc["qt"][:, :, :, time .> time_mask]
+        qt = if moisture_model isa CA.EquilMoistModel
+            nc["qt"][:, :, :, time .> time_mask]
+        else
+            nothing
+        end
         (; lat, z, time, T, θ, u, qt)
     end
     (; lat, z, time, T, θ, u, qt) = nt
@@ -919,7 +762,9 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
     u_timeave_zonalave = calc_zonalave_timeave(u)
     T_timeave_zonalave = calc_zonalave_timeave(T)
     θ_timeave_zonalave = calc_zonalave_timeave(θ)
-    qt_timeave_zonalave = calc_zonalave_timeave(qt)
+    if moisture_model isa CA.EquilMoistModel
+        qt_timeave_zonalave = calc_zonalave_timeave(qt)
+    end
 
     T2_timeave_zonalave = calc_zonalave_variance(T)
 
@@ -971,21 +816,23 @@ function paperplots_moist_held_suarez_ρe(sol, output_dir, p, nlat, nlon)
         output_dir * "/hs-theta.png",
     )
 
-    Plots.png(
-        Plots.contourf(
-            lat,
-            z,
-            qt_timeave_zonalave' * 1000,
-            color = :balance,
-            levels = -10:2:30,
-            linewidth = 0,
-            yaxis = :log,
-            title = "qt",
-            xlabel = "lat (deg N)",
-            ylabel = "z (m)",
-        ),
-        output_dir * "/hs-qt.png",
-    )
+    if moisture_model isa CA.EquilMoistModel
+        Plots.png(
+            Plots.contourf(
+                lat,
+                z,
+                qt_timeave_zonalave' * 1000,
+                color = :balance,
+                levels = -10:2:30,
+                linewidth = 0,
+                yaxis = :log,
+                title = "qt",
+                xlabel = "lat (deg N)",
+                ylabel = "z (m)",
+            ),
+            output_dir * "/hs-qt.png",
+        )
+    end
 
     Plots.png(
         Plots.contourf(
