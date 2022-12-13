@@ -257,20 +257,19 @@ end
 import ClimaTimeSteppers as CTS
 import OrdinaryDiffEq as ODE
 
-ode_algorithm_type(ode_algorithm) =
-    ode_algorithm isa Function ? typeof(ode_algorithm()) : ode_algorithm
+is_imex_CTS_algo_type(alg_or_tableau) =
+    alg_or_tableau <: CTS.AbstractIMEXARKTableau
 
-is_imex_CTS_algo_type(ode_algorithm) =
-    ode_algorithm_type(ode_algorithm) <: ClimaTimeSteppers.IMEXARKAlgorithm
-
-is_implicit_type(ode_algorithm) =
-    ode_algorithm_type(ode_algorithm) <: Union{
+is_implicit_type(::typeof(ODE.IMEXEuler)) = true
+is_implicit_type(alg_or_tableau) =
+    alg_or_tableau <: Union{
         ODE.OrdinaryDiffEqImplicitAlgorithm,
         ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm,
-    } || is_imex_CTS_algo_type(ode_algorithm)
+    } || is_imex_CTS_algo_type(alg_or_tableau)
 
-is_ordinary_diffeq_newton(ode_algorithm) =
-    ode_algorithm_type(ode_algorithm) <: Union{
+is_ordinary_diffeq_newton(::typeof(ODE.IMEXEuler)) = true
+is_ordinary_diffeq_newton(alg_or_tableau) =
+    alg_or_tableau <: Union{
         ODE.OrdinaryDiffEqNewtonAlgorithm,
         ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
@@ -326,17 +325,17 @@ Returns the ode algorithm
 =#
 function ode_configuration(Y, parsed_args, atmos)
     ode_name = parsed_args["ode_algo"]
-    ode_algorithm = if startswith(ode_name, "ODE.")
+    alg_or_tableau = if startswith(ode_name, "ODE.")
         @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
         getproperty(ODE, Symbol(split(ode_name, ".")[2]))
     else
         getproperty(CTS, Symbol(ode_name))
     end
-    @info "Using ODE algo: `$ode_algorithm`"
+    @info "Using ODE config: `$alg_or_tableau`"
 
-    if !is_implicit_type(ode_algorithm)
-        return ode_algorithm()
-    elseif is_ordinary_diffeq_newton(ode_algorithm)
+    if !is_implicit_type(alg_or_tableau)
+        return alg_or_tableau()
+    elseif is_ordinary_diffeq_newton(alg_or_tableau)
         if parsed_args["max_newton_iters"] == 1
             error("OridinaryDiffEq requires at least 2 Newton iterations")
         end
@@ -345,8 +344,8 @@ function ode_configuration(Y, parsed_args, atmos)
             κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
             max_iter = parsed_args["max_newton_iters"],
         )
-        return ode_algorithm(; linsolve = CA.linsolve!, nlsolve)
-    elseif is_imex_CTS_algo_type(ode_algorithm)
+        return alg_or_tableau(; linsolve = CA.linsolve!, nlsolve)
+    elseif is_imex_CTS_algo_type(alg_or_tableau)
         newtons_method = NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters"],
             krylov_method = if parsed_args["use_krylov_method"]
@@ -374,9 +373,9 @@ function ode_configuration(Y, parsed_args, atmos)
                 nothing
             end,
         )
-        return ode_algorithm(newtons_method)
+        return CTS.IMEXARKAlgorithm(alg_or_tableau(), newtons_method)
     else
-        return ode_algorithm(; linsolve = CA.linsolve!)
+        return alg_or_tableau(; linsolve = CA.linsolve!)
     end
 end
 
