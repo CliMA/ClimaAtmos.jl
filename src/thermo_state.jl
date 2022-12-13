@@ -8,6 +8,8 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
+time_0(f::Fields.Field) = Spaces.undertype(axes(f))(0)
+
 function thermo_state_type(
     moisture_model::AbstractMoistureModel,
     ::Type{FT},
@@ -24,23 +26,38 @@ function thermo_state_type(
 end
 
 #= High-level wrapper =#
-function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp, colidx; debug = false)
+function thermo_state!(
+    Y::Fields.FieldVector,
+    p,
+    ᶜinterp,
+    colidx;
+    time = time_0(Y.c),
+)
     ᶜts = p.ᶜts[colidx]
     ᶠw = Y.f.w[colidx]
     ᶜp = p.ᶜp[colidx]
     thermo_params = CAP.thermodynamics_params(p.params)
     td = p.thermo_dispatcher
-    thermo_state!(ᶜts, Y.c[colidx], thermo_params, td, ᶜinterp, ᶠw, ᶜp; debug)
+    call_thermo_state!(
+        ᶜts,
+        Y.c[colidx],
+        thermo_params,
+        td,
+        ᶜinterp,
+        ᶠw,
+        ᶜp;
+        time,
+    )
 end
 
 #= High-level wrapper =#
-function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp; debug = false)
+function thermo_state!(Y::Fields.FieldVector, p, ᶜinterp; time = time_0(Y.c))
     ᶜts = p.ᶜts
     ᶠw = Y.f.w
     ᶜp = p.ᶜp
     thermo_params = CAP.thermodynamics_params(p.params)
     td = p.thermo_dispatcher
-    thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, ᶠw, ᶜp; debug)
+    call_thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, ᶠw, ᶜp; time)
 end
 
 thermo_state!(
@@ -49,12 +66,20 @@ thermo_state!(
     thermo_params,
     td::ThermoDispatcher,
     ᶜinterp;
-    debug = false,
-) = thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, Y.f.w; debug)
+    time = time_0(Y.c),
+) = call_thermo_state!(ᶜts, Y.c, thermo_params, td, ᶜinterp, Y.f.w; time)
 
 #=
 
-    thermo_state!(ᶜts, Yc, thermo_params, td::ThermoDispatcher, ᶜinterp, ᶠw[, ᶜp]; debug = false)
+    call_thermo_state!(
+        ᶜts,
+        Yc,
+        thermo_params,
+        td::ThermoDispatcher,
+        ᶜinterp,
+        ᶠw[, ᶜp];
+        time = time_0(Y.c)
+    )
 
 Populate the thermodynamic state, `ᶜts`, given
  - `Yc` the cell centered prognostic fields
@@ -66,7 +91,7 @@ Populate the thermodynamic state, `ᶜts`, given
  - `ᶜp` cache for the air pressure, which is used to populate the
     thermodynamic state in the case of an anelastic model.
 =#
-function thermo_state!(
+function call_thermo_state!(
     ᶜts,
     Yc::Fields.Field,
     thermo_params,
@@ -74,7 +99,26 @@ function thermo_state!(
     ᶜinterp,
     ᶠw,
     ᶜp = nothing;
-    debug = false,
+    time = time_0(Y.c),
+)
+    try
+        base_thermo_state!(ᶜts, Yc, thermo_params, td, ᶜinterp, ᶠw, ᶜp; time)
+    catch
+        @error "Failure to establish a thermodynamic state at time $time"
+        base_thermo_state!(ᶜts, Yc, thermo_params, td, ᶜinterp, ᶠw, ᶜp; time)
+    end
+
+end
+
+function base_thermo_state!(
+    ᶜts,
+    Yc::Fields.Field,
+    thermo_params,
+    td::ThermoDispatcher,
+    ᶜinterp,
+    ᶠw,
+    ᶜp = nothing;
+    time = time_0(Y.c),
 )
     # Sometimes we want to zero out kinetic energy
     (; energy_form, moisture_model, compressibility_model) = td
@@ -89,7 +133,7 @@ function thermo_state!(
                 z,
                 ᶜinterp,
                 ᶠw;
-                debug,
+                time,
             )
         elseif compressibility_model isa AnelasticFluid
             @assert !isnothing(ᶜp)
@@ -102,13 +146,13 @@ function thermo_state!(
                 ᶜinterp,
                 ᶠw,
                 ᶜp;
-                debug,
+                time,
             )
         end
     elseif energy_form isa InternalEnergy
-        thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model; debug)
+        thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model; time)
     elseif energy_form isa PotentialTemperature
-        thermo_state_ρθ!(ᶜts, Yc, thermo_params, moisture_model; debug)
+        thermo_state_ρθ!(ᶜts, Yc, thermo_params, moisture_model; time)
     else
         error("Could not determine energy model")
     end
@@ -124,7 +168,7 @@ function thermo_state_ρe_tot_anelastic!(
     ᶜinterp,
     ᶠw,
     ᶜp;
-    debug,
+    time,
 )
     C123 = Geometry.Covariant123Vector
     grav = TD.Parameters.grav(thermo_params)
@@ -154,8 +198,8 @@ thermo_state(
     td::ThermoDispatcher,
     ᶜinterp,
     ᶜp = nothing;
-    debug = false,
-) = thermo_state(Y.c, thermo_params, td, ᶜinterp, Y.f.w, ᶜp; debug)
+    time = time_0(Y.c),
+) = thermo_state(Y.c, thermo_params, td, ᶜinterp, Y.f.w, ᶜp; time)
 
 function thermo_state(
     Yc::Fields.Field,
@@ -164,23 +208,23 @@ function thermo_state(
     ᶜinterp,
     ᶠw::Fields.Field,
     ᶜp = nothing;
-    debug = false,
+    time = time_0(Y.c),
 )
     FT = Spaces.undertype(axes(Yc))
     ts_type = thermo_state_type(td.moisture_model, FT)
     ts = similar(Yc, ts_type)
-    thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, ᶠw, ᶜp; debug)
+    call_thermo_state!(ts, Yc, thermo_params, td, ᶜinterp, ᶠw, ᶜp; time)
     return ts
 end
 
-function thermo_state_ρθ!(ts, Yc, thermo_params, ::DryModel; debug)
+function thermo_state_ρθ!(ts, Yc, thermo_params, ::DryModel; time)
     @. ts = TD.PhaseDry_ρθ(thermo_params, Yc.ρ, Yc.ρθ / Yc.ρ)
 end
-function thermo_state_ρθ!(ts, Yc, thermo_params, ::EquilMoistModel; debug)
+function thermo_state_ρθ!(ts, Yc, thermo_params, ::EquilMoistModel; time)
     @. ts =
         TD.PhaseEquil_ρθq(thermo_params, Yc.ρ, Yc.ρθ / Yc.ρ, Yc.ρq_tot / Yc.ρ)
 end
-function thermo_state_ρθ!(ts, Yc, thermo_params, ::NonEquilMoistModel; debug)
+function thermo_state_ρθ!(ts, Yc, thermo_params, ::NonEquilMoistModel; time)
     @. ts = TD.PhaseNonEquil_ρθq(
         thermo_params,
         Yc.ρ,
@@ -199,7 +243,7 @@ function thermo_state_ρe_tot!(
     z,
     ᶜinterp,
     ᶠw;
-    debug,
+    time,
 )
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
@@ -222,7 +266,7 @@ function thermo_state_ρe_tot!(
     z,
     ᶜinterp,
     ᶠw;
-    debug,
+    time,
 )
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
@@ -247,7 +291,7 @@ function thermo_state_ρe_tot!(
     z,
     ᶜinterp,
     ᶠw;
-    debug,
+    time,
 )
     C123 = Geometry.Covariant123Vector
     g = TD.Parameters.grav(thermo_params)
@@ -264,10 +308,10 @@ function thermo_state_ρe_tot!(
     )
 end
 
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::DryModel; debug)
+function thermo_state_ρe_int!(ts, Yc, thermo_params, ::DryModel; time)
     @. ts = TD.PhaseDry(thermo_params, Yc.ρe_int / Yc.ρ, Yc.ρ)
 end
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel; debug)
+function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel; time)
     @. ts = TD.PhaseEquil_ρeq(
         thermo_params,
         Yc.ρ,
@@ -275,13 +319,7 @@ function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel; debug)
         Yc.ρq_tot / Yc.ρ,
     )
 end
-function thermo_state_ρe_int!(
-    ts,
-    Yc,
-    thermo_params,
-    ::NonEquilMoistModel;
-    debug,
-)
+function thermo_state_ρe_int!(ts, Yc, thermo_params, ::NonEquilMoistModel; time)
     @. ts = TD.PhaseNonEquil(
         thermo_params,
         Yc.ρe_int / Yc.ρ,
