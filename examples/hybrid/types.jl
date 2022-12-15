@@ -391,9 +391,14 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
             tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
         )
         if is_cts_algo(ode_algo)
-            ODE.SplitFunction(
-                implicit_func,
-                ForwardEulerODEFunction(remaining_tendency_increment!),
+            CTS.ClimaODEFunction(;
+                T_exp! = remaining_tendency!,
+                T_imp! = implicit_func,
+                # Can we just pass implicit_tendency! and jac_prototype etc.?
+                dss!,
+                lim! = nothing,
+                T_lim! = nothing,
+                stage_callback! = (Y, p, t) -> nothing,
             )
         else
             ODE.SplitFunction(implicit_func, remaining_tendency!)

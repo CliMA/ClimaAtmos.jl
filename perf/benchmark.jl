@@ -29,12 +29,14 @@ get_W(i::CTS.DistributedODEIntegrator) = i.cache.newtons_method_cache.j
 get_W(i) = i.cache.W
 f_args(i, f::CTS.ForwardEulerODEFunction) = (copy(i.u), i.u, i.p, i.t, i.dt)
 f_args(i, f) = (similar(i.u), i.u, i.p, i.t)
-implicit_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.f1)
+implicit_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.T_imp!)
 implicit_args(i) = f_args(i, i.f.f1)
-remaining_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.f2)
+remaining_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.T_exp!)
 remaining_args(i) = f_args(i, i.f.f2)
-wfact_fun(i) = i.sol.prob.f.f1.Wfact
+wfact_fun(i) = implicit_fun(i).Wfact
+implicit_fun(i::CTS.DistributedODEIntegrator) = i.sol.prob.f.T_imp!
 implicit_fun(i) = i.sol.prob.f.f1
+remaining_fun(i::CTS.DistributedODEIntegrator) = i.sol.prob.f.T_exp!
 remaining_fun(i) = i.sol.prob.f.f2
 
 W = get_W(integrator)
