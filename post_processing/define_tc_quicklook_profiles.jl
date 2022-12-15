@@ -181,6 +181,7 @@ function get_contours(vars, input_filenames; data_source, have_main)
         Ds_parent = parent_data.(fn.(Ds))
         cdata = hcat(Ds_parent...)
         clims[name] = (minimum(cdata), maximum(cdata))
+        @info "clims[$name] ($data_source) = $(clims[name])"
         Plots.contourf!(
             contours[name].plot,
             t ./ 3600,
@@ -304,6 +305,7 @@ function union_clims(a::Dict, b::Dict)
         # Avoid https://github.com/JuliaPlots/Plots.jl/issues/3924
         clims_dict[k] =
             is_trivial_clims(clims_tup) ? NamedTuple() : (; clims = clims_tup)
+        @info "union_clims[$k] = $(clims_dict[k])"
     end
     return clims_dict
 end
