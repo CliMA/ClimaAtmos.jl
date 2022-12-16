@@ -145,7 +145,7 @@ steps:
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --tracer_upwinding zalesak --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak"
         artifact_paths: "longrun_bw_rhoe_equil_highres_zalesak/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 40GB
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
