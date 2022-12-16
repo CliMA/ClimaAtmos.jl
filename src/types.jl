@@ -78,6 +78,17 @@ Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     dϕ_s::FT = -5
 end
 
+Base.@kwdef struct OrographicGravityWave{FT} <: AbstractGravityWave
+    γ::FT = 0.4
+    ϵ::FT = 0.0
+    β::FT = 0.5
+    ρscale::FT = 1.2
+    L0::FT = 80e3
+    a0::FT = 0.9
+    a1::FT = 3.0
+    Fr_crit::FT = 0.7
+end
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -171,6 +182,7 @@ Base.@kwdef struct AtmosModel{
     CM,
     SS,
     NOGW,
+    OGW,
     HD,
     VD,
     VS,
@@ -191,6 +203,7 @@ Base.@kwdef struct AtmosModel{
     compressibility_model::CM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing
+    orographic_gravity_wave::OGW = nothing
     hyperdiff::HD = nothing
     vert_diff::VD = nothing
     viscous_sponge::VS = nothing

@@ -314,6 +314,10 @@ function parse_commandline()
         help = "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--orographic_gravity_wave"
+        help = "Apply parameterization for orographic drag on horizontal mean flow"
+        arg_type = Bool
+        default = false
         "--apply_remap"
         help = "Apply remap script to output directory"
         arg_type = Bool
