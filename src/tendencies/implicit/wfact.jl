@@ -75,12 +75,12 @@ function validate_flags!(Y, flags, energy_upwinding)
 end
 
 function Wfact!(W, Y, p, dtγ, t)
-    p.test_dycore_consistency && fill_with_nans!(p)
-    # @nvtx "Wfact!" color = colorant"green" begin
-    Fields.bycolumn(axes(Y.c)) do colidx
-        Wfact!(W, Y, p, dtγ, t, colidx)
+    NVTX.@range "Wfact!" color = colorant"green" begin
+        p.test_dycore_consistency && fill_with_nans!(p)
+        Fields.bycolumn(axes(Y.c)) do colidx
+            Wfact!(W, Y, p, dtγ, t, colidx)
+        end
     end
-    # end
 end
 
 function Wfact!(W, Y, p, dtγ, t, colidx)

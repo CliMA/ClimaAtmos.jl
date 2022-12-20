@@ -257,31 +257,30 @@ function LinearAlgebra.ldiv!(
             changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
         @warn str maxlog = 1
     end
-    # @nvtx "linsolve" color = colorant"lime" begin
-
-    # Compute Schur complement
-    Fields.bycolumn(axes(x.c)) do colidx
-        _ldiv_serial!(
-            x.c[colidx],
-            x.f[colidx],
-            b.c[colidx],
-            b.f[colidx],
-            dtγ,
-            transform,
-            cond,
-            ∂ᶜρₜ∂ᶠ𝕄[colidx],
-            ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-            ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
-            ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
-            ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
-            ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
-            isnothing(∂ᶜTCₜ∂ᶜTC) ? nothing : ∂ᶜTCₜ∂ᶜTC[colidx],
-            isnothing(∂ᶠTCₜ∂ᶠTC) ? nothing : ∂ᶠTCₜ∂ᶠTC[colidx],
-            S[colidx],
-            S_column_arrays[Threads.threadid()], # can / should this be colidx?
-        )
+    NVTX.@range "linsolve" color = colorant"lime" begin
+        # Compute Schur complement
+        Fields.bycolumn(axes(x.c)) do colidx
+            _ldiv_serial!(
+                x.c[colidx],
+                x.f[colidx],
+                b.c[colidx],
+                b.f[colidx],
+                dtγ,
+                transform,
+                cond,
+                ∂ᶜρₜ∂ᶠ𝕄[colidx],
+                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+                ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
+                ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
+                ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
+                ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
+                isnothing(∂ᶜTCₜ∂ᶜTC) ? nothing : ∂ᶜTCₜ∂ᶜTC[colidx],
+                isnothing(∂ᶠTCₜ∂ᶠTC) ? nothing : ∂ᶠTCₜ∂ᶠTC[colidx],
+                S[colidx],
+                S_column_arrays[Threads.threadid()], # can / should this be colidx?
+            )
+        end
     end
-    # end
 end
 
 function _ldiv_serial!(

@@ -1,5 +1,7 @@
 module ClimaAtmos
 
+using NVTX, Colors
+
 include("Parameters.jl")
 import .Parameters as CAP
 
