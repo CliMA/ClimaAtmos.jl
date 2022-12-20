@@ -13,6 +13,7 @@ import DiffEqCallbacks as DEQ
 import ClimaCore: InputOutput
 import Dates
 using Insolation: instantaneous_zenith_angle
+import ClimaCore.Fields: ColumnField
 
 function get_callbacks(parsed_args, simulation, atmos, params)
     FT = eltype(params)
@@ -129,13 +130,15 @@ end
 function dss_callback(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
-    @nvtx "dss callback" color = colorant"yellow" begin
-        Spaces.weighted_dss_start!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_start!(Y.f, ghost_buffer.f)
-        Spaces.weighted_dss_internal!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_internal!(Y.f, ghost_buffer.f)
-        Spaces.weighted_dss_ghost!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_ghost!(Y.f, ghost_buffer.f)
+    if !ghost_buffer.skip_dss
+        @nvtx "dss callback" color = colorant"yellow" begin
+            Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
+            Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
+            Spaces.weighted_dss_internal2!(Y.c, ghost_buffer.c)
+            Spaces.weighted_dss_internal2!(Y.f, ghost_buffer.f)
+            Spaces.weighted_dss_ghost2!(Y.c, ghost_buffer.c)
+            Spaces.weighted_dss_ghost2!(Y.f, ghost_buffer.f)
+        end
     end
     # ODE.u_modified!(integrator, false) # TODO: try this
 end

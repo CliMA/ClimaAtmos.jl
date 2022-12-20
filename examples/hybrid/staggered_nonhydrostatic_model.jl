@@ -9,6 +9,8 @@ import Thermodynamics as TD
 
 using ClimaCore.Utilities: half
 
+import ClimaCore.Fields: ColumnField
+
 # Note: FT must be defined before `include("staggered_nonhydrostatic_model.jl")`
 
 # Functions on which the model depends:
@@ -103,17 +105,35 @@ function default_cache(
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
 
     ts_type = CA.thermo_state_type(atmos.moisture_model, FT)
-    ghost_buffer = (
-        c = Spaces.create_ghost_buffer(Y.c),
-        f = Spaces.create_ghost_buffer(Y.f),
-        χ = Spaces.create_ghost_buffer(Y.c.ρ), # for hyperdiffusion
-        χw = Spaces.create_ghost_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
-        χuₕ = Spaces.create_ghost_buffer(Y.c.uₕ), # for hyperdiffusion
-    )
-    (:ρq_tot in propertynames(Y.c)) && (
-        ghost_buffer =
-            (ghost_buffer..., ᶜχρq_tot = Spaces.create_ghost_buffer(Y.c.ρ))
-    )
+    quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
+    skip_dss = !(quadrature_style isa Spaces.Quadratures.GLL)
+    if skip_dss
+        ghost_buffer = (
+            c = nothing,
+            f = nothing,
+            χ = nothing, # for hyperdiffusion
+            χw = nothing, # for hyperdiffusion
+            χuₕ = nothing, # for hyperdiffusion
+            skip_dss = skip_dss, # skip DSS on non-GLL quadrature meshes
+        )
+        (:ρq_tot in propertynames(Y.c)) &&
+            (ghost_buffer = (ghost_buffer..., ᶜχρq_tot = nothing))
+    else
+        ghost_buffer = (
+            c = Spaces.create_dss_buffer(Y.c),
+            f = Spaces.create_dss_buffer(Y.f),
+            χ = Spaces.create_dss_buffer(Y.c.ρ), # for hyperdiffusion
+            χw = Spaces.create_dss_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
+            χuₕ = Spaces.create_dss_buffer(Y.c.uₕ), # for hyperdiffusion
+            skip_dss = skip_dss, # skip DSS on non-GLL quadrature meshes
+        )
+        (:ρq_tot in propertynames(Y.c)) && (
+            ghost_buffer = (
+                ghost_buffer...,
+                ᶜχρq_tot = Spaces.create_dss_buffer(Y.c.ρ),
+            )
+        )
+    end
     if apply_limiter
         tracers = filter(CA.is_tracer_var, propertynames(Y.c))
         make_limiter =
@@ -210,12 +230,14 @@ function implicit_tendency!(Yₜ, Y, p, t)
 end
 
 function dss!(Y, p, t)
-    Spaces.weighted_dss_start!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_start!(Y.f, p.ghost_buffer.f)
-    Spaces.weighted_dss_internal!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_internal!(Y.f, p.ghost_buffer.f)
-    Spaces.weighted_dss_ghost!(Y.c, p.ghost_buffer.c)
-    Spaces.weighted_dss_ghost!(Y.f, p.ghost_buffer.f)
+    if !p.ghost_buffer.skip_dss
+        Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_start2!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_internal2!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_internal2!(Y.f, p.ghost_buffer.f)
+        Spaces.weighted_dss_ghost2!(Y.c, p.ghost_buffer.c)
+        Spaces.weighted_dss_ghost2!(Y.f, p.ghost_buffer.f)
+    end
 end
 
 function remaining_tendency!(Yₜ, Y, p, t)
