@@ -119,6 +119,12 @@ steps:
 
     steps:
 
+      - label: ":computer: hydrostatic balance (ρe_tot)"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --t_end 2000days --dt_save_to_sol 10days --dt_save_to_disk 10days --fps 30 --job_id longrun_sphere_hydrostatic_balance_rhoe"
+        artifact_paths: "longrun_sphere_hydrostatic_balance_rhoe/*"
+        agents:
+          slurm_cpus_per_task: 8
+
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_gray/*"

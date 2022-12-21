@@ -16,6 +16,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
+    (; ᶜρ_ref, ᶜp_ref) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     # Mass conservation
@@ -42,12 +43,12 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(ᶜuₕ)
         @. ᶠω¹² = curlₕ(ᶠw)
-        @. Yₜ.c.uₕ -= gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
+        @. Yₜ.c.uₕ -= gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
     elseif point_type <: Geometry.Abstract2DPoint
         ᶜω³ .= Ref(zero(eltype(ᶜω³)))
         @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
         @. Yₜ.c.uₕ -=
-            Geometry.Covariant12Vector(gradₕ(ᶜp) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+            Geometry.Covariant12Vector(gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
     end
 
     # Tracer conservation

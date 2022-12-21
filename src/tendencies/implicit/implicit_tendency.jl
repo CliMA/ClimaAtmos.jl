@@ -85,6 +85,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, params, thermo_dispatcher) = p
+    (; ᶜρ_ref, ᶜp_ref) = p
     (; energy_upwinding, tracer_upwinding, simulation) = p
     (; ᶠgradᵥ, ᶜinterp, ᶠinterp) = p.operators
     C123 = Geometry.Covariant123Vector
@@ -142,8 +143,11 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
     Yₜ.c.uₕ[colidx] .= Ref(zero(eltype(Yₜ.c.uₕ[colidx])))
 
-    @. Yₜ.f.w[colidx] =
-        -(ᶠgradᵥ(ᶜp[colidx]) / ᶠinterp(ᶜρ[colidx]) + ᶠgradᵥ_ᶜΦ[colidx])
+    @. Yₜ.f.w[colidx] = -(
+        ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) / ᶠinterp(ᶜρ[colidx]) +
+        (ᶠinterp(ᶜρ[colidx] - ᶜρ_ref[colidx])) / ᶠinterp(ᶜρ[colidx]) *
+        ᶠgradᵥ_ᶜΦ[colidx]
+    )
     if p.tendency_knobs.rayleigh_sponge
         @. Yₜ.f.w[colidx] -= p.ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
     end

@@ -242,7 +242,7 @@ steps:
     steps:
 
       - label: ":computer: hydrostatic balance (ρe_tot) float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64"
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
         agents:
           slurm_mem: 20GB
