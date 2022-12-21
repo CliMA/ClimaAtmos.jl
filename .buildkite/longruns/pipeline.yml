@@ -52,7 +52,7 @@ steps:
           slurm_ntasks: 32
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres --apply_remap true"
         artifact_paths: "longrun_bw_rhoe_equil_highres/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
