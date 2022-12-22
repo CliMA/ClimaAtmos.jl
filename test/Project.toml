@@ -104,7 +104,7 @@ ReportMetrics = "0.2"
 RootSolvers = "0.2, 0.3"
 StaticArrays = "1"
 StatsBase = "0.33"
-SurfaceFluxes = "0.4"
+SurfaceFluxes = "0.5"
 TerminalLoggers = "0.1"
 Thermodynamics = "0.10"
 

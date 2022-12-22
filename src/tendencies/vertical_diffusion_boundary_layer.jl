@@ -198,6 +198,7 @@ function set_surface_inputs!(
         FT(0),                                             # z0m
         FT(0),                                             # z0b
         FT(1),                                             # gustiness
+        FT(1),                                             # beta
     )
     return nothing
 end
@@ -225,6 +226,7 @@ function set_surface_inputs!(
         sfc_inputs.z0b,                                    # z0b
         FT(-1),                                            # L_MO_init
         FT(1),                                             # gustiness
+        FT(1),                                             # beta
     )
 
 end

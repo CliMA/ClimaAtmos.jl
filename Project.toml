@@ -53,7 +53,7 @@ OrdinaryDiffEq = "5, 6"
 RRTMGP = "0.6"
 StaticArrays = "1"
 StatsBase = "0.33"
-SurfaceFluxes = "0.4"
+SurfaceFluxes = "0.5"
 Thermodynamics = "0.10"
 julia = "1.7"
 
