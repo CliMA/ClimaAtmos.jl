@@ -65,11 +65,13 @@ function vertical_diffusion_boundary_layer_cache(
                 z0b = FT(0),
                 Cd = FT(0),
                 Ch = FT(0),
+                beta = FT(0),
             ),
         )
         sfc_inputs = similar(Fields.level(Y.f, half), sfc_inputs_type)
         fill!(sfc_inputs.Cd, FT(0.0044)) #FT(0.001)
         fill!(sfc_inputs.Ch, FT(0.0044)) #FT(0.0001)
+        fill!(sfc_inputs.beta, FT(1))
         (; sfc_inputs)
     elseif surface_scheme isa MoninObukhovSurface
 
@@ -87,11 +89,13 @@ function vertical_diffusion_boundary_layer_cache(
                 ),
                 z0m = FT(0),
                 z0b = FT(0),
+                beta = FT(0),
             ),
         )
         sfc_inputs = similar(Fields.level(Y.f, half), sfc_inputs_type)
         fill!(sfc_inputs.z0m, FT(1e-5))
         fill!(sfc_inputs.z0b, FT(1e-5))
+        fill!(sfc_inputs.beta, FT(1))
         (; sfc_inputs)
     else
         NamedTuple()
@@ -198,7 +202,7 @@ function set_surface_inputs!(
         FT(0),                                             # z0m
         FT(0),                                             # z0b
         FT(1),                                             # gustiness
-        FT(1),                                             # beta
+        sfc_inputs.beta,                                   # beta
     )
     return nothing
 end
@@ -226,7 +230,7 @@ function set_surface_inputs!(
         sfc_inputs.z0b,                                    # z0b
         FT(-1),                                            # L_MO_init
         FT(1),                                             # gustiness
-        FT(1),                                             # beta
+        sfc_inputs.beta,                                   # beta
     )
 
 end
