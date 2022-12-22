@@ -6,20 +6,16 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
-function hyperdiffusion_cache(
-    Y,
-    ::Type{FT};
-    κ₄::FT = FT(0),
-    divergence_damping_factor::FT = FT(1),
-    use_tempest_mode::Bool = false,
-    disable_qt_hyperdiffusion::Bool = false,
-) where {FT}
+hyperdiffusion_cache(hyperdiff::Nothing, Y) = NamedTuple()
+
+function hyperdiffusion_cache(hyperdiff::AbstractHyperdiffusion, Y)
+    FT = Spaces.undertype(axes(Y.c))
     moist_kwargs = if (:ρq_tot in propertynames(Y.c))
         (; ᶜχρq_tot = similar(Y.c, FT))
     else
         NamedTuple()
     end
-    tempest_kwargs = if use_tempest_mode
+    tempest_kwargs = if hyperdiff isa TempestHyperdiffusion
         (; ᶠχw_data = similar(Y.f, FT))
     else
         NamedTuple()
@@ -29,25 +25,19 @@ function hyperdiffusion_cache(
         ᶜχ = similar(Y.c, FT),
         moist_kwargs...,
         ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
-        κ₄,
-        divergence_damping_factor,
-        use_tempest_mode,
-        disable_qt_hyperdiffusion,
         tempest_kwargs...,
     )
 end
 
 function hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    p.atmos.hyperdiff isa Nothing && return nothing
+
     NVTX.@range "hyperdiffusion tendency" color = colorant"yellow" begin
-        if p.use_tempest_mode
-            hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
-        else
-            hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
-        end
+        hyperdiffusion_tendency!(Yₜ, Y, p, t, p.atmos.hyperdiff)
     end
 end
 
-function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
+function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     divₕ = Operators.Divergence()
@@ -58,15 +48,12 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
     wcurlₕ = Operators.WeakCurl()
 
     (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
-    (;
-        ghost_buffer,
-        κ₄,
-        divergence_damping_factor,
-        use_tempest_mode,
-        disable_qt_hyperdiffusion,
-    ) = p
+    (; ghost_buffer) = p
+    (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    is_ρq_tot = :ρq_tot in propertynames(Y.c) && !disable_qt_hyperdiffusion
+    is_ρq_tot =
+        :ρq_tot in propertynames(Y.c) &&
+        q_tot_hyperdiffusion_enabled(p.atmos.hyperdiff)
     is_2d_pt = point_type <: Geometry.Abstract2DPoint
     is_3d_pt = !is_2d_pt
 
@@ -138,7 +125,7 @@ function hyperdiffusion_tendency_clima!(Yₜ, Y, p, t)
     return nothing
 end
 
-function hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
+function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::TempestHyperdiffusion)
 
     divₕ = Operators.Divergence()
     wdivₕ = Operators.WeakDivergence()
@@ -148,11 +135,12 @@ function hyperdiffusion_tendency_tempest!(Yₜ, Y, p, t)
     wcurlₕ = Operators.WeakCurl()
 
     !(:ρθ in propertynames(Y.c)) &&
-        (error("use_tempest_mode must be false when not using ρθ"))
+        (error("TempestHyperdiffusion is only compatible with ρθ"))
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
-    (; ghost_buffer, κ₄, divergence_damping_factor, use_tempest_mode) = p
+    (; ghost_buffer) = p
+    (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
     is_ρq_tot = :ρq_tot in propertynames(Y.c)
     is_2d_pt = point_type <: Geometry.Abstract2DPoint

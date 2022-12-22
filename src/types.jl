@@ -26,6 +26,19 @@ abstract type AbstractCoupling end
 struct Coupled <: AbstractCoupling end
 struct Decoupled <: AbstractCoupling end
 
+abstract type AbstractHyperdiffusion end
+Base.@kwdef struct ClimaHyperdiffusion{B, FT} <: AbstractHyperdiffusion
+    κ₄::FT
+    divergence_damping_factor::FT
+end
+Base.@kwdef struct TempestHyperdiffusion{B, FT} <: AbstractHyperdiffusion
+    κ₄::FT
+    divergence_damping_factor::FT
+end
+
+q_tot_hyperdiffusion_enabled(::ClimaHyperdiffusion{B}) where {B} = B
+q_tot_hyperdiffusion_enabled(::TempestHyperdiffusion{B}) where {B} = B
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -119,6 +132,7 @@ Base.@kwdef struct AtmosModel{
     CM,
     SS,
     GW,
+    HD,
 }
     model_config::MC = nothing
     coupling::C = nothing
@@ -135,6 +149,7 @@ Base.@kwdef struct AtmosModel{
     compressibility_model::CM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::GW = nothing
+    hyperdiff::HD = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = Ref(x)
