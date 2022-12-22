@@ -19,7 +19,6 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
-vert_diff = parsed_args["vert_diff"]
 turbconv = parsed_args["turbconv"]
 case_name = parsed_args["turbconv_case"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
@@ -32,7 +31,6 @@ zd_viscous = parsed_args["zd_viscous"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
-@assert vert_diff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column", "box")
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
@@ -60,11 +58,6 @@ atmos = get_atmos(FT, parsed_args, namelist)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
-
-diffuse_momentum =
-    vert_diff &&
-    !(atmos.forcing_type isa HeldSuarezForcing) &&
-    !isnothing(atmos.surface_scheme)
 
 # TODO: use import istead of using
 using Colors
@@ -134,19 +127,11 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         CA.edmf_coriolis_cache(Y, atmos.edmf_coriolis),
         CA.forcing_cache(Y, forcing_type),
         radiation_cache,
-        vert_diff ?
-        CA.vertical_diffusion_boundary_layer_cache(
-            Y,
-            atmos,
-            FT;
-            C_E = FT(parsed_args["C_E"]),
-            diffuse_momentum,
-        ) : NamedTuple(),
+        CA.vertical_diffusion_boundary_layer_cache(Y, atmos),
         atmos.non_orographic_gravity_wave ?
         CA.gravity_wave_cache(atmos.model_config, Y, FT) : NamedTuple(),
         (;
             tendency_knobs = (;
-                vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
                 non_orographic_gravity_wave = atmos.non_orographic_gravity_wave,
@@ -173,17 +158,26 @@ function additional_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
-        (; vert_diff) = p.tendency_knobs
         (; rayleigh_sponge) = p.tendency_knobs
         rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
         CA.forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
         CA.subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
         CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
         CA.large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
-        if vert_diff
-            CA.get_surface_fluxes!(Y, p, t, colidx, p.atmos.coupling)
-            CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+
+        (; vert_diff) = p.atmos
+        if p.atmos.coupling isa CA.Decoupled
+            CA.get_surface_fluxes!(Y, p, t, colidx, vert_diff)
         end
+        CA.vertical_diffusion_boundary_layer_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            vert_diff,
+        )
+
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         TCU.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)

@@ -471,7 +471,7 @@ function save_to_disk_func(integrator)
         turbulence_convection_diagnostic = NamedTuple()
     end
 
-    if vert_diff
+    if !isnothing(p.atmos.vert_diff)
         (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
         vert_diff_diagnostic = (;
             sfc_flux_momentum = dif_flux_uₕ,

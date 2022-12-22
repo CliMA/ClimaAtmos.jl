@@ -39,6 +39,13 @@ end
 q_tot_hyperdiffusion_enabled(::ClimaHyperdiffusion{B}) where {B} = B
 q_tot_hyperdiffusion_enabled(::TempestHyperdiffusion{B}) where {B} = B
 
+abstract type AbstractVerticalDiffusion end
+Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
+    C_E::FT
+end
+diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
+diffuse_momentum(::Nothing) = false
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -133,6 +140,7 @@ Base.@kwdef struct AtmosModel{
     SS,
     GW,
     HD,
+    VD,
 }
     model_config::MC = nothing
     coupling::C = nothing
@@ -150,6 +158,7 @@ Base.@kwdef struct AtmosModel{
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::GW = nothing
     hyperdiff::HD = nothing
+    vert_diff::VD = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = Ref(x)

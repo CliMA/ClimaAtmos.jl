@@ -48,6 +48,22 @@ function hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
+function vertical_diffusion_model(
+    diffuse_momentum,
+    parsed_args,
+    ::Type{FT},
+) where {FT}
+    vert_diff_name = parsed_args["vert_diff"]
+    return if vert_diff_name in ("false", false, "none")
+        nothing
+    elseif vert_diff_name in ("true", true, "VerticalDiffusion")
+        C_E = FT(parsed_args["C_E"])
+        VerticalDiffusion{diffuse_momentum, FT}(; C_E)
+    else
+        error("Uncaught diffusion model `$vert_diff_name`.")
+    end
+end
+
 function perf_mode(parsed_args)
     return if parsed_args["perf_mode"] == "PerfExperimental"
         PerfExperimental()
@@ -56,11 +72,10 @@ function perf_mode(parsed_args)
     end
 end
 
-function energy_form(parsed_args)
+function energy_form(parsed_args, vert_diff)
     energy_name = parsed_args["energy_name"]
     @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")
-    vert_diff = parsed_args["vert_diff"]
-    if vert_diff
+    if !isnothing(vert_diff)
         @assert energy_name == "rhoe"
     end
     return if energy_name == "rhoe"

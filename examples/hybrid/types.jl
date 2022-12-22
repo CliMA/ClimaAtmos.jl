@@ -31,19 +31,25 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
     moisture_model = CA.moisture_model(parsed_args)
     precip_model = CA.precipitation_model(parsed_args)
     radiation_mode = CA.radiation_mode(parsed_args, FT)
+    forcing_type = CA.forcing_type(parsed_args)
+    surface_scheme = CA.surface_scheme(FT, parsed_args)
 
+    diffuse_momentum =
+        !(forcing_type isa HeldSuarezForcing) && !isnothing(surface_scheme)
+
+    vert_diff = CA.vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
     atmos = CA.AtmosModel(;
         moisture_model,
         model_config = CA.model_config(parsed_args),
         coupling = CA.coupling_type(parsed_args),
         perf_mode = CA.perf_mode(parsed_args),
-        energy_form = CA.energy_form(parsed_args),
+        energy_form = CA.energy_form(parsed_args, vert_diff),
         radiation_mode,
         subsidence = CA.subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = CA.large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = CA.edmf_coriolis(parsed_args, FT),
         precip_model,
-        forcing_type = CA.forcing_type(parsed_args),
+        forcing_type,
         turbconv_model = CA.turbconv_model(
             FT,
             moisture_model,
@@ -52,9 +58,10 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
             namelist,
         ),
         compressibility_model = CA.compressibility_model(parsed_args),
-        surface_scheme = CA.surface_scheme(FT, parsed_args),
+        surface_scheme,
         non_orographic_gravity_wave,
         hyperdiff = CA.hyperdiffusion_model(parsed_args, FT),
+        vert_diff,
     )
 
     return atmos
