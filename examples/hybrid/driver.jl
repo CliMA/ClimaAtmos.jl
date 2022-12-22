@@ -450,7 +450,7 @@ if parsed_args["check_conservation"]
 end
 
 
-if parsed_args["apply_remap"]
+if parsed_args["apply_remap"] && ClimaComms.iamroot(comms_ctx)
     include(
         joinpath(
             @__DIR__,
