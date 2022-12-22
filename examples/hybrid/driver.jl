@@ -245,7 +245,9 @@ else
     (Y, t_start) = get_state_fresh_start(parsed_args, spaces, params, atmos)
 end
 
-p = get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation)
+@time "Allocating cache (p)" begin
+    p = get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation)
+end
 if parsed_args["turbconv"] == "edmf"
     @time "init_tc!" TCU.init_tc!(Y, p, params)
 end
