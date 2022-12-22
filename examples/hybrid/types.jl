@@ -54,6 +54,7 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
         compressibility_model = CA.compressibility_model(parsed_args),
         surface_scheme = CA.surface_scheme(FT, parsed_args),
         non_orographic_gravity_wave,
+        hyperdiff = CA.hyperdiffusion_model(parsed_args, FT),
     )
 
     return atmos

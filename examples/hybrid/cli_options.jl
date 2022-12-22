@@ -83,7 +83,11 @@ function parse_commandline()
         arg_type = Bool
         default = false
         "--hyperdiff"
-        help = "Hyperdiffusion [`true` (default), `false`]"
+        help = "Hyperdiffusion [`ClimaHyperdiffusion` (default), `TempestHyperdiffusion`, `none` (or `false`)]"
+        arg_type = String
+        default = "ClimaHyperdiffusion"
+        "--enable_qt_hyperdiffusion"
+        help = "Enable the hyperdiffusion of specific humidity [`true` (default), `false`] (TODO: reconcile this with `ρe_tot` or remove if instability fixed with limiters)"
         arg_type = Bool
         default = true
         "--idealized_insolation"
@@ -266,10 +270,6 @@ function parse_commandline()
         help = "Viscous sponge coefficient"
         arg_type = Float64
         default = Float64(1e6)
-        "--disable_qt_hyperdiffusion"
-        help = "Disable the hyperdiffusion of specific humidity [`true`, `false` (default)] (TODO: reconcile this with ρe_tot or remove if instability fixed with limiters)"
-        arg_type = Bool
-        default = false
         "--start_date"
         help = "Start date of the simulation"
         arg_type = String

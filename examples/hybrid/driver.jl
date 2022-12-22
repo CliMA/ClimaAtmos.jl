@@ -20,11 +20,8 @@ fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 vert_diff = parsed_args["vert_diff"]
-hyperdiff = parsed_args["hyperdiff"]
-disable_qt_hyperdiffusion = parsed_args["disable_qt_hyperdiffusion"]
 turbconv = parsed_args["turbconv"]
 case_name = parsed_args["turbconv_case"]
-κ₄ = parsed_args["kappa_4"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
 viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
@@ -36,7 +33,6 @@ zd_viscous = parsed_args["zd_viscous"]
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
 @assert vert_diff in (true, false)
-@assert hyperdiff in (true, false)
 @assert parsed_args["config"] in ("sphere", "column", "box")
 @assert rayleigh_sponge in (true, false)
 @assert viscous_sponge in (true, false)
@@ -94,14 +90,7 @@ jacobi_flags(::PotentialTemperature) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 
 # TODO: flip order so that NamedTuple() is fallback.
-function additional_cache(
-    Y,
-    parsed_args,
-    params,
-    atmos,
-    dt;
-    use_tempest_mode = false,
-)
+function additional_cache(Y, parsed_args, params, atmos, dt;)
     FT = typeof(dt)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
 
@@ -124,13 +113,7 @@ function additional_cache(
     end
 
     return merge(
-        CA.hyperdiffusion_cache(
-            Y,
-            FT;
-            κ₄ = FT(κ₄),
-            use_tempest_mode,
-            disable_qt_hyperdiffusion,
-        ),
+        CA.hyperdiffusion_cache(atmos.hyperdiff, Y),
         rayleigh_sponge ?
         CA.rayleigh_sponge_cache(
             Y,
@@ -166,7 +149,6 @@ function additional_cache(
                 vert_diff,
                 rayleigh_sponge,
                 viscous_sponge,
-                hyperdiff,
                 non_orographic_gravity_wave = atmos.non_orographic_gravity_wave,
             )
         ),
@@ -185,8 +167,8 @@ function additional_cache(
 end
 
 function additional_tendency!(Yₜ, Y, p, t)
-    (; viscous_sponge, hyperdiff) = p.tendency_knobs
-    hyperdiff && CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    (; viscous_sponge) = p.tendency_knobs
+    CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
     viscous_sponge && CA.viscous_sponge_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
