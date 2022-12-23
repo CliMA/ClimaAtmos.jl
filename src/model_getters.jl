@@ -64,6 +64,19 @@ function vertical_diffusion_model(
     end
 end
 
+function viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
+    vs_name = parsed_args["viscous_sponge"]
+    return if vs_name in ("false", false, "none")
+        nothing
+    elseif vs_name in ("true", true, "ViscousSponge")
+        zd = parsed_args["zd_viscous"]
+        κ₂ = parsed_args["kappa_2_sponge"]
+        ViscousSponge{FT}(; zd, κ₂)
+    else
+        error("Uncaught diffusion model `$vert_diff_name`.")
+    end
+end
+
 function perf_mode(parsed_args)
     return if parsed_args["perf_mode"] == "PerfExperimental"
         PerfExperimental()

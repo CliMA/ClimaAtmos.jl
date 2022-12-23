@@ -22,18 +22,14 @@ idealized_clouds = parsed_args["idealized_clouds"]
 turbconv = parsed_args["turbconv"]
 case_name = parsed_args["turbconv_case"]
 rayleigh_sponge = parsed_args["rayleigh_sponge"]
-viscous_sponge = parsed_args["viscous_sponge"]
 zd_rayleigh = parsed_args["zd_rayleigh"]
 α_rayleigh_uₕ = parsed_args["alpha_rayleigh_uh"]
 α_rayleigh_w = parsed_args["alpha_rayleigh_w"]
-zd_viscous = parsed_args["zd_viscous"]
-κ₂_sponge = parsed_args["kappa_2_sponge"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
 @assert parsed_args["config"] in ("sphere", "column", "box")
 @assert rayleigh_sponge in (true, false)
-@assert viscous_sponge in (true, false)
 
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
@@ -115,12 +111,7 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             α_rayleigh_uₕ = FT(α_rayleigh_uₕ),
             α_rayleigh_w = FT(α_rayleigh_w),
         ) : NamedTuple(),
-        viscous_sponge ?
-        CA.viscous_sponge_cache(
-            Y;
-            zd_viscous = FT(zd_viscous),
-            κ₂ = FT(κ₂_sponge),
-        ) : NamedTuple(),
+        CA.viscous_sponge_cache(atmos.viscous_sponge, Y),
         CA.precipitation_cache(Y, precip_model),
         CA.subsidence_cache(Y, atmos.subsidence),
         CA.large_scale_advection_cache(Y, atmos.ls_adv),
@@ -133,7 +124,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         (;
             tendency_knobs = (;
                 rayleigh_sponge,
-                viscous_sponge,
                 non_orographic_gravity_wave = atmos.non_orographic_gravity_wave,
             )
         ),
@@ -152,9 +142,8 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
 end
 
 function additional_tendency!(Yₜ, Y, p, t)
-    (; viscous_sponge) = p.tendency_knobs
     CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    viscous_sponge && CA.viscous_sponge_tendency!(Yₜ, Y, p, t)
+    CA.viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx

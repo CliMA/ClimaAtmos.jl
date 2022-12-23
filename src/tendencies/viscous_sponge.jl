@@ -7,28 +7,23 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 
-viscous_sponge_cache(Y; kwargs...) =
-    viscous_sponge_cache(Y, Spaces.undertype(axes(Y.c)); kwargs...)
+viscous_sponge_cache(::Nothing, Y) = NamedTuple()
+viscous_sponge_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function viscous_sponge_cache(
-    Y,
-    ::Type{FT};
-    zd_viscous = FT(15e3),
-    κ₂ = FT(1e5),
-) where {FT}
+function viscous_sponge_cache(viscous_sponge::ViscousSponge, Y)
+    (; κ₂, zd) = viscous_sponge
+    FT = Spaces.undertype(axes(Y.c))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ = @. ifelse(ᶜz > zd_viscous, κ₂, FT(0))
-    ᶠαₘ = @. ifelse(ᶠz > zd_viscous, κ₂, FT(0))
+    ᶜαₘ = @. ifelse(ᶜz > zd, κ₂, FT(0))
+    ᶠαₘ = @. ifelse(ᶠz > zd, κ₂, FT(0))
     zmax = maximum(ᶠz)
-    ᶜβ_viscous =
-        @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd_viscous) / (zmax - zd_viscous))^2
-    ᶠβ_viscous =
-        @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd_viscous) / (zmax - zd_viscous))^2
+    ᶜβ_viscous = @. ᶜαₘ * sin(FT(π) / 2 * (ᶜz - zd) / (zmax - zd))^2
+    ᶠβ_viscous = @. ᶠαₘ * sin(FT(π) / 2 * (ᶠz - zd) / (zmax - zd))^2
     return (; ᶜβ_viscous, ᶠβ_viscous)
 end
 
-function viscous_sponge_tendency!(Yₜ, Y, p, t)
+function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
     (; ᶜβ_viscous, ᶠβ_viscous, ᶜp) = p
     divₕ = Operators.Divergence()
     wdivₕ = Operators.WeakDivergence()
