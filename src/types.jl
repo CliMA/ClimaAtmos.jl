@@ -46,6 +46,12 @@ end
 diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
+abstract type AbstractSponge end
+Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
+    zd::FT
+    κ₂::FT
+end
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -141,6 +147,7 @@ Base.@kwdef struct AtmosModel{
     GW,
     HD,
     VD,
+    VS,
 }
     model_config::MC = nothing
     coupling::C = nothing
@@ -159,6 +166,7 @@ Base.@kwdef struct AtmosModel{
     non_orographic_gravity_wave::GW = nothing
     hyperdiff::HD = nothing
     vert_diff::VD = nothing
+    viscous_sponge::VS = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = Ref(x)
