@@ -54,9 +54,9 @@ function parse_commandline()
         help = "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
         arg_type = String
         "--vert_diff"
-        help = "Vertical diffusion [`false` (default), `true`]"
-        arg_type = Bool
-        default = false
+        help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
+        arg_type = String
+        default = "false"
         "--surface_scheme"
         help = "Surface flux scheme [`nothing` (default), `bulk`, `monin_obukhov`]"
         arg_type = String

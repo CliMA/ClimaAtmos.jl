@@ -17,13 +17,14 @@ import ClimaCore.Operators as Operators
 # 1) turn the liquid_theta into theta version
 # 2) have a total energy version (primary goal)
 
-function vertical_diffusion_boundary_layer_cache(
-    Y,
-    atmos,
-    ::Type{FT};
-    C_E::FT = FT(0),
-    diffuse_momentum = true,
-) where {FT}
+vertical_diffusion_boundary_layer_cache(Y, atmos) =
+    vertical_diffusion_boundary_layer_cache(Y, atmos, atmos.vert_diff)
+
+vertical_diffusion_boundary_layer_cache(Y, atmos, ::Nothing) = NamedTuple()
+
+function vertical_diffusion_boundary_layer_cache(Y, atmos, ::VerticalDiffusion)
+    FT = Spaces.undertype(axes(Y.c))
+
     (; surface_scheme, coupling) = atmos
     z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z, 1)
 
@@ -104,7 +105,6 @@ function vertical_diffusion_boundary_layer_cache(
     return (;
         surface_scheme,
         sfc_input_kwargs...,
-        C_E,
         ᶠp = similar(Y.f, FT),
         ᶠK_E = similar(Y.f, FT),
         uₕ_int_phys = similar(
@@ -121,7 +121,6 @@ function vertical_diffusion_boundary_layer_cache(
         dif_flux_ρq_tot,
         dif_flux_energy_bc = similar(dif_flux_energy),
         dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
-        diffuse_momentum,
         coupling,
         surface_normal,
         z_bottom,
@@ -237,14 +236,24 @@ end
 
 function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     Fields.bycolumn(axes(Y.c.uₕ)) do colidx
-        get_surface_fluxes!(Y, p, t, colidx, p.atmos.coupling)
-        vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+        (; vert_diff) = p.atmos
+        if p.atmos.coupling isa CA.Decoupled
+            get_surface_fluxes!(Y, p, t, colidx, vert_diff)
+        end
+        vertical_diffusion_boundary_layer_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            vert_diff,
+        )
     end
 end
 
-get_surface_fluxes!(Y, p, t, colidx, ::Coupled) = nothing
+get_surface_fluxes!(Y, p, t, colidx, ::Nothing) = nothing
 
-function get_surface_fluxes!(Y, p, t, colidx, ::Decoupled)
+function get_surface_fluxes!(Y, p, t, colidx, ::VerticalDiffusion)
     (; z_sfc, ᶜts, T_sfc) = p
     (;
         sfc_conditions,
@@ -255,7 +264,6 @@ function get_surface_fluxes!(Y, p, t, colidx, ::Decoupled)
         dif_flux_energy_bc,
         dif_flux_ρq_tot,
         dif_flux_ρq_tot_bc,
-        diffuse_momentum,
         z_bottom,
         ts_sfc,
         uₕ_int_phys_vec,
@@ -306,7 +314,7 @@ function get_surface_fluxes!(Y, p, t, colidx, ::Decoupled)
             SF.surface_conditions(sf_params, p.sfc_inputs[colidx])
     end
 
-    if diffuse_momentum
+    if diffuse_momentum(p.atmos.vert_diff)
         ρτxz = sfc_conditions[colidx].ρτxz
         ρτyz = sfc_conditions[colidx].ρτyz
         ρ_1 = Fields.level(Y.c.ρ[colidx], 1)
@@ -344,19 +352,23 @@ function get_surface_fluxes!(Y, p, t, colidx, ::Decoupled)
     end
 end
 
-function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
+vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) =
+    nothing
+
+function vertical_diffusion_boundary_layer_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    ::VerticalDiffusion,
+)
     ᶜρ = Y.c.ρ
     (; ᶠinterp) = p.operators
     FT = Spaces.undertype(axes(ᶜρ))
-    (; ᶜp, ᶠK_E, C_E) = p # assume ᶜts and ᶜp have been updated
-    (;
-        dif_flux_uₕ_bc,
-        dif_flux_energy_bc,
-        dif_flux_ρq_tot_bc,
-        diffuse_momentum,
-        ᶠp,
-        z_bottom,
-    ) = p
+    (; ᶜp, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
+    (; C_E) = p.atmos.vert_diff
+    (; dif_flux_uₕ_bc, dif_flux_energy_bc, dif_flux_ρq_tot_bc, ᶠp, z_bottom) = p
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
 
@@ -369,7 +381,7 @@ function vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx)
         ᶠp[colidx],
     )
 
-    if diffuse_momentum
+    if diffuse_momentum(p.atmos.vert_diff)
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(
                 Geometry.Contravariant3Vector(FT(0)) ⊗
