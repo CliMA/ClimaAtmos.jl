@@ -73,7 +73,24 @@ function viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
         κ₂ = parsed_args["kappa_2_sponge"]
         ViscousSponge{FT}(; zd, κ₂)
     else
-        error("Uncaught diffusion model `$vert_diff_name`.")
+        error("Uncaught viscous sponge model `$vs_name`.")
+    end
+end
+
+function rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
+    rs_name = parsed_args["rayleigh_sponge"]
+    return if rs_name in ("false", false)
+        nothing
+    elseif rs_name in ("true", true, "RayleighSponge")
+        zd = parsed_args["zd_rayleigh"]
+        α_uₕ = parsed_args["alpha_rayleigh_uh"]
+        α_w = parsed_args["alpha_rayleigh_w"]
+        isnothing(zd) && (zd = FT(15e3))
+        isnothing(α_uₕ) && (α_uₕ = FT(1e-4))
+        isnothing(α_w) && (α_w = FT(1))
+        RayleighSponge{FT}(; zd, α_uₕ, α_w)
+    else
+        error("Uncaught rayleigh sponge model `$rs_name`.")
     end
 end
 

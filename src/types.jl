@@ -52,6 +52,12 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     κ₂::FT
 end
 
+Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
+    zd::FT
+    α_uₕ::FT
+    α_w::FT
+end
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -148,6 +154,7 @@ Base.@kwdef struct AtmosModel{
     HD,
     VD,
     VS,
+    RS,
 }
     model_config::MC = nothing
     coupling::C = nothing
@@ -167,6 +174,7 @@ Base.@kwdef struct AtmosModel{
     hyperdiff::HD = nothing
     vert_diff::VD = nothing
     viscous_sponge::VS = nothing
+    rayleigh_sponge::RS = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = Ref(x)

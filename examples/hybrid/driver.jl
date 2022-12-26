@@ -21,15 +21,10 @@ idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 turbconv = parsed_args["turbconv"]
 case_name = parsed_args["turbconv_case"]
-rayleigh_sponge = parsed_args["rayleigh_sponge"]
-zd_rayleigh = parsed_args["zd_rayleigh"]
-α_rayleigh_uₕ = parsed_args["alpha_rayleigh_uh"]
-α_rayleigh_w = parsed_args["alpha_rayleigh_w"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
 @assert parsed_args["config"] in ("sphere", "column", "box")
-@assert rayleigh_sponge in (true, false)
 
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
@@ -103,14 +98,7 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
 
     return merge(
         CA.hyperdiffusion_cache(atmos.hyperdiff, Y),
-        rayleigh_sponge ?
-        CA.rayleigh_sponge_cache(
-            Y,
-            dt;
-            zd_rayleigh = FT(zd_rayleigh),
-            α_rayleigh_uₕ = FT(α_rayleigh_uₕ),
-            α_rayleigh_w = FT(α_rayleigh_w),
-        ) : NamedTuple(),
+        CA.rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
         CA.viscous_sponge_cache(atmos.viscous_sponge, Y),
         CA.precipitation_cache(Y, precip_model),
         CA.subsidence_cache(Y, atmos.subsidence),
@@ -123,8 +111,7 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         CA.gravity_wave_cache(atmos.model_config, Y, FT) : NamedTuple(),
         (;
             tendency_knobs = (;
-                rayleigh_sponge,
-                non_orographic_gravity_wave = atmos.non_orographic_gravity_wave,
+                non_orographic_gravity_wave = atmos.non_orographic_gravity_wave
             )
         ),
         (; thermo_dispatcher),
@@ -147,8 +134,14 @@ function additional_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
-        (; rayleigh_sponge) = p.tendency_knobs
-        rayleigh_sponge && CA.rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx)
+        CA.rayleigh_sponge_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.rayleigh_sponge,
+        )
         CA.forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
         CA.subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
         CA.edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
