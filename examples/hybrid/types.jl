@@ -63,6 +63,7 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
         hyperdiff = CA.hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         viscous_sponge = CA.viscous_sponge_model(parsed_args, FT),
+        rayleigh_sponge = CA.rayleigh_sponge_model(parsed_args, FT),
     )
 
     return atmos

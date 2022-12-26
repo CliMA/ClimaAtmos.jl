@@ -148,7 +148,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         (ᶠinterp(ᶜρ[colidx] - ᶜρ_ref[colidx])) / ᶠinterp(ᶜρ[colidx]) *
         ᶠgradᵥ_ᶜΦ[colidx]
     )
-    if p.tendency_knobs.rayleigh_sponge
+    if p.atmos.rayleigh_sponge isa RayleighSponge
         @. Yₜ.f.w[colidx] -= p.ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
     end
 

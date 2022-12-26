@@ -373,7 +373,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         )
     end
 
-    if p.tendency_knobs.rayleigh_sponge
+    if p.atmos.rayleigh_sponge isa RayleighSponge
         # ᶠwₜ -= p.ᶠβ_rayleigh_w * ᶠw
         # ∂(ᶠwₜ)/∂(ᶠw_data) -= p.ᶠβ_rayleigh_w
         @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx].coefs.:2 -= p.ᶠβ_rayleigh_w[colidx]
