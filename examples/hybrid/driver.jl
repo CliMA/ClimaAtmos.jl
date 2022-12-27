@@ -107,12 +107,10 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         CA.forcing_cache(Y, forcing_type),
         radiation_cache,
         CA.vertical_diffusion_boundary_layer_cache(Y, atmos),
-        atmos.non_orographic_gravity_wave ?
-        CA.gravity_wave_cache(atmos.model_config, Y, FT) : NamedTuple(),
-        (;
-            tendency_knobs = (;
-                non_orographic_gravity_wave = atmos.non_orographic_gravity_wave
-            )
+        CA.non_orographic_gravity_wave_cache(
+            atmos.non_orographic_gravity_wave,
+            atmos.model_config,
+            Y,
         ),
         (; thermo_dispatcher),
         (; Δt = dt),
@@ -165,8 +163,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able
-    (; non_orographic_gravity_wave) = p.tendency_knobs
-    non_orographic_gravity_wave && CA.gravity_wave_tendency!(Yₜ, Y, p, t)
+    CA.gravity_wave_tendency!(Yₜ, Y, p, t, p.atmos.non_orographic_gravity_wave)
 end
 
 ################################################################################
@@ -213,10 +210,6 @@ end
 if parsed_args["discrete_hydrostatic_balance"]
     CA.set_discrete_hydrostatic_balanced_state!(Y, p)
 end
-
-# Print tendencies:
-# @info "Model composition" p.atmos...
-@info "Tendencies" p.tendency_knobs...
 
 @time "ode_configuration" ode_algo = ode_configuration(Y, parsed_args, atmos)
 

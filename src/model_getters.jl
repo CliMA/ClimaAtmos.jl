@@ -94,6 +94,27 @@ function rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
+function non_orographic_gravity_wave_model(
+    parsed_args,
+    model_config,
+    ::Type{FT},
+) where {FT}
+    nogw_name = parsed_args["non_orographic_gravity_wave"]
+    @assert nogw_name in (true, false)
+    return if nogw_name == true
+        if model_config isa SingleColumnModel
+            NonOrographyGravityWave{FT}(; Bm = 1.2)
+        elseif model_config isa SphericalModel
+            # as in GFDL code (sphere)
+            NonOrographyGravityWave{FT}(; Bm = 0.4)
+        else
+            error("Uncaught case")
+        end
+    else
+        nothing
+    end
+end
+
 function perf_mode(parsed_args)
     return if parsed_args["perf_mode"] == "PerfExperimental"
         PerfExperimental()

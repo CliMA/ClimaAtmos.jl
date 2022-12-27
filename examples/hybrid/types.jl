@@ -25,8 +25,6 @@ import ClimaCore: InputOutput
 
 function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
     # should this live in the radiation model?
-    non_orographic_gravity_wave = parsed_args["non_orographic_gravity_wave"]
-    @assert non_orographic_gravity_wave in (true, false)
 
     moisture_model = CA.moisture_model(parsed_args)
     precip_model = CA.precipitation_model(parsed_args)
@@ -37,10 +35,11 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
     diffuse_momentum =
         !(forcing_type isa HeldSuarezForcing) && !isnothing(surface_scheme)
 
+    model_config = CA.model_config(parsed_args)
     vert_diff = CA.vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
     atmos = CA.AtmosModel(;
         moisture_model,
-        model_config = CA.model_config(parsed_args),
+        model_config,
         coupling = CA.coupling_type(parsed_args),
         perf_mode = CA.perf_mode(parsed_args),
         energy_form = CA.energy_form(parsed_args, vert_diff),
@@ -59,7 +58,11 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
         ),
         compressibility_model = CA.compressibility_model(parsed_args),
         surface_scheme,
-        non_orographic_gravity_wave,
+        non_orographic_gravity_wave = CA.non_orographic_gravity_wave_model(
+            parsed_args,
+            model_config,
+            FT,
+        ),
         hyperdiff = CA.hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         viscous_sponge = CA.viscous_sponge_model(parsed_args, FT),
