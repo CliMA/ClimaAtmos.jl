@@ -105,7 +105,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         Geometry.Contravariant3Axis(),
         C123(ᶠwinterp(ᶜJ[colidx] * ᶜρ[colidx], ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
     )
-    @. ᶜK[colidx] = norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+    compute_kinetic!(ᶜK[colidx], Y.c.uₕ[colidx], Y.f.w[colidx])
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 

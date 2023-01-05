@@ -45,6 +45,7 @@ end
 function set_grid_mean_from_thermo_state!(thermo_params, state, grid)
     Ic = CCO.InterpolateF2C()
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
+    C123 = CCG.Covariant123Vector
     ts_gm = TC.center_aux_grid_mean_ts(state)
     prog_gm = TC.center_prog_grid_mean(state)
     prog_gm_f = TC.face_prog_grid_mean(state)
@@ -56,12 +57,13 @@ function set_grid_mean_from_thermo_state!(thermo_params, state, grid)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
 
-    C123 = CCG.Covariant123Vector
+    # TODO: this should use compute_kinetic!, but it currently requires an intermediate Field
     @. prog_gm.ρe_tot =
         ρ_c * TD.total_energy(
             thermo_params,
             ts_gm,
-            LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(prog_gm_f.w))) / 2,
+            LinearAlgebra.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(prog_gm_f.w))) /
+            2,
             TC.geopotential(thermo_params, grid.zc.z),
         )
 

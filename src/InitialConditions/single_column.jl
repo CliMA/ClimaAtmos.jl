@@ -21,6 +21,7 @@ function center_initial_condition_column(
     ρ = p / (R_d * T)
     ts = TD.PhaseDry_ρp(thermo_params, ρ, p)
     uₕ_local = Geometry.UVVector(FT(0), FT(0))
+    # TODO: this should use compute_kinetic!, but it currently requires an intermediate Field
     ᶜ𝔼_kwarg =
         energy_vars(thermo_params, ts, norm_sqr(uₕ_local) / 2, grav * z, atmos)
 

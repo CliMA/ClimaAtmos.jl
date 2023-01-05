@@ -243,3 +243,34 @@ end
 Fill a data structure's `Field`s / `FieldVector`s with NaNs.
 """
 fill_with_nans!(p) = fill_with_nans_generic!(p)
+
+import LinearAlgebra: norm_sqr
+import ClimaCore: Geometry, Operators, Fields
+
+"""
+    compute_kinetic!(κ::Field, uₕ::Field, uᵥ::Field)
+
+Compute the specific kinetic energy at cell centers, storing in `κ` from
+individual velocity components:
+
+- `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
+  cell centers, and 
+- `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
+"""
+function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Field)
+    @assert eltype(uₕ) <:
+            Union{Geometry.Covariant1Vector, Geometry.Covariant12Vector}
+    @assert eltype(uᵥ) <: Geometry.Covariant3Vector
+    C123 = Geometry.Covariant123Vector
+    Ic = Operators.InterpolateF2C()
+    κ .= norm_sqr.(C123.(uₕ) .+ Ic.(C123.(uᵥ))) ./ 2
+end
+
+"""
+    compute_kinetic!(κ::Field, Y::FieldVector)
+
+Compute the specific kinetic energy at cell centers, storing in `κ`, where `Y`
+is the model state.s
+"""
+compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
+    compute_kinetic!(κ, Y.c.uₕ, Y.f.w)

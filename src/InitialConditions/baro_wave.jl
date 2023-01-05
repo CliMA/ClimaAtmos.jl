@@ -103,6 +103,7 @@ function center_initial_condition_baroclinic_wave(
     # Initial values computed from the thermodynamic state
     ts = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot)
     ρ = TD.air_density(thermo_params, ts)
+    # TODO: this should use compute_kinetic!, but it currently requires an intermediate Field
     ᶜ𝔼_kwarg =
         energy_vars(thermo_params, ts, norm_sqr(uₕ_local) / 2, grav * z, atmos)
     # TODO: Include ability to handle nonzero initial cloud condensate
