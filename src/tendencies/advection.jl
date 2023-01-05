@@ -98,7 +98,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
     )
     @. Yₜ.c.uₕ[colidx] -=
-        ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
+        ᶜinterp(ᶠinterp(ᶜρ[colidx] * J[colidx]) * ᶠω¹²[colidx] × ᶠu³[colidx]) / (ᶜρ[colidx] * J[colidx]) +
         (ᶜf[colidx] + ᶜω³[colidx]) ×
         (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
     @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
