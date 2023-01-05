@@ -26,7 +26,11 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
     end
     thermo_params = CAP.thermodynamics_params(p.params)
     C123 = Geometry.Covariant123Vector
-    @. p.ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+    @. p.ᶜK =
+        (
+            LinearAlgebra.norm_sqr(Y.c.uₕ) +
+            ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w))
+        ) / 2
     if p.atmos.moisture_model isa DryModel
         @. p.ᶜts = TD.PhaseDry_ρp(thermo_params, Y.c.ρ, p.ᶜp)
     elseif p.atmos.moisture_model isa EquilMoistModel

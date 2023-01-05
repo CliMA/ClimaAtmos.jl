@@ -1,3 +1,5 @@
+import LinearAlgebra
+
 function update_aux!(
     edmf::EDMFModel,
     grid::Grid,
@@ -61,9 +63,8 @@ function update_aux!(
 
     @inbounds for i in 1:N_up
         @. aux_up[i].e_kin =
-            LA.norm_sqr(
-                C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f[i].w))),
-            ) / 2
+            LinearAlgebra.norm_sqr(prog_gm_uₕ) +
+            Ic(LinearAlgebra.norm_sqr(prog_up_f[i].w)) / 2
     end
 
     @inbounds for k in real_center_indices(grid)
@@ -141,7 +142,8 @@ function update_aux!(
     end
 
     @. aux_en.e_kin =
-        LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
+        LinearAlgebra.norm_sqr(prog_gm_uₕ) +
+        Ic(LinearAlgebra.norm_sqr(aux_en_f.w)) / 2
 
     @inbounds for k in real_center_indices(grid)
         e_pot = geopotential(thermo_params, grid.zc.z[k])

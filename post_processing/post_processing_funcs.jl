@@ -343,7 +343,11 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜuₕ_phy = @. Geometry.project(Geometry.UVAxis(), ᶜuvw_phy)
         ᶜw_phy = @. Geometry.project(Geometry.WAxis(), ᶜuvw_phy)
         ᶠw_phy = ᶠinterp.(ᶜw_phy)
-        @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+        @. ᶜK =
+            (
+                LinearAlgebra.norm_sqr(Y.c.uₕ) +
+                ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w))
+            ) / 2
         CA.thermo_state!(Y, p, ᶜinterp)
         @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
@@ -701,7 +705,11 @@ function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
 
             # temperature
             ᶠw = Y.f.w
-            @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+            @. ᶜK =
+                (
+                    LinearAlgebra.norm_sqr(Y.c.uₕ) +
+                    ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w))
+                ) / 2
             CA.thermo_state!(Y, p, ᶜinterp)
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)

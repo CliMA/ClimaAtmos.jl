@@ -99,7 +99,10 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
     thermo_params = CAP.thermodynamics_params(params)
     dt = simulation.dt
-    @. ᶜK[colidx] = norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+    @. ᶜK[colidx] = (
+        LinearAlgebra.norm_sqr(Y.c.uₕ[colidx]) +
+        ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w[colidx])) / 2
+    )
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 

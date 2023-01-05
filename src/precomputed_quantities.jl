@@ -20,7 +20,11 @@ function precomputed_quantities!(Y, p, t, colidx)
     (; ᶜinterp) = p.operators
     C123 = Geometry.Covariant123Vector
     @. ᶜuvw[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
-    @. ᶜK[colidx] = norm_sqr(ᶜuvw[colidx]) / 2
+    @. ᶜK[colidx] =
+        (
+            LinearAlgebra.norm_sqr(Y.c.uₕ[colidx]) +
+            ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w[colidx]))
+        ) / 2
     thermo_params = CAP.thermodynamics_params(params)
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])

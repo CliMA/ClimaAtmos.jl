@@ -176,13 +176,19 @@ function thermo_state_ρe_tot_anelastic!(
         @. ᶜts = TD.PhaseDry_pe(
             thermo_params,
             ᶜp,
-            Yc.ρe_tot / Yc.ρ - (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2) - grav * z,
+            Yc.ρe_tot / Yc.ρ - (
+                LinearAlgebra.norm_sqr(Yc.uₕ) +
+                ᶜinterp(LinearAlgebra.norm_sqr(ᶠw)) / 2
+            ) - grav * z,
         )
     elseif moisture_model isa EquilMoistModel
         @. ᶜts = TD.PhaseEquil_peq(
             thermo_params,
             ᶜp,
-            Yc.ρe_tot / Yc.ρ - (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2) - grav * z,
+            Yc.ρe_tot / Yc.ρ - (
+                LinearAlgebra.norm_sqr(Yc.uₕ) +
+                ᶜinterp(LinearAlgebra.norm_sqr(ᶠw)) / 2
+            ) - grav * z,
             Yc.ρq_tot / Yc.ρ,
         )
     else
@@ -251,7 +257,10 @@ function thermo_state_ρe_tot!(
         thermo_params,
         internal_energy(
             Yc,
-            (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2),
+            (
+                LinearAlgebra.norm_sqr(Yc.uₕ) +
+                ᶜinterp(LinearAlgebra.norm_sqr(ᶠw)) / 2
+            ),
             g,
             z,
         ) / Yc.ρ,
@@ -275,7 +284,10 @@ function thermo_state_ρe_tot!(
         Yc.ρ,
         internal_energy(
             Yc,
-            (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2),
+            (
+                LinearAlgebra.norm_sqr(Yc.uₕ) +
+                ᶜinterp(LinearAlgebra.norm_sqr(ᶠw)) / 2
+            ),
             g,
             z,
         ) / Yc.ρ,
@@ -299,7 +311,10 @@ function thermo_state_ρe_tot!(
         thermo_params,
         internal_energy(
             Yc,
-            (norm_sqr(C123(Yc.uₕ) + C123(ᶜinterp(ᶠw))) / 2),
+            (
+                LinearAlgebra.norm_sqr(Yc.uₕ) +
+                ᶜinterp(LinearAlgebra.norm_sqr(ᶠw)) / 2
+            ),
             g,
             z,
         ) / Yc.ρ,

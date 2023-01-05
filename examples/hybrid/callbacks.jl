@@ -203,10 +203,13 @@ function rrtmgp_model_callback!(integrator)
 
     radiation_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
 
-    C123 = Geometry.Covariant123Vector
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
-    @. ᶜK = LinearAlgebra.norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+    @. ᶜK =
+        (
+            LinearAlgebra.norm_sqr(Y.c.uₕ) +
+            ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w))
+        ) / 2
     CA.thermo_state!(Y, p, ᶜinterp; time = t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
@@ -349,7 +352,11 @@ function save_to_disk_func(integrator)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     # kinetic
-    @. ᶜK = norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2
+    @. ᶜK =
+        (
+            LinearAlgebra.norm_sqr(Y.c.uₕ) +
+            ᶜinterp(LinearAlgebra.norm_sqr(Y.f.w))
+        ) / 2
 
     # thermo state
     CA.thermo_state!(Y, p, ᶜinterp; time = t)
