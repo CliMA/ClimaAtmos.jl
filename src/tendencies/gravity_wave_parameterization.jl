@@ -6,19 +6,24 @@ import ClimaAtmos.Spaces as Spaces
 import ClimaAtmos.Fields as Fields
 import ClimaAtmos.Geometry as Geometry
 
-function gravity_wave_cache(
+non_orographic_gravity_wave_cache(atmos, Y) = non_orographic_gravity_wave_cache(
+    atmos.non_orographic_gravity_wave,
+    atmos.model_config,
+    Y,
+)
+
+non_orographic_gravity_wave_cache(::Nothing, ::AbstractModelConfig, Y) =
+    NamedTuple()
+
+gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+
+function non_orographic_gravity_wave_cache(
+    gw::NonOrographyGravityWave,
     ::SingleColumnModel,
     Y,
-    ::Type{FT};
-    source_height = FT(15000),
-    Bm = FT(1.2),
-    F_S0 = FT(4e-3),
-    dc = FT(0.6),
-    cmax = FT(99.6),
-    c0 = FT(0),
-    kwv = FT(2π / 100e5),
-    cw = FT(40.0),
-) where {FT}
+)
+    FT = Spaces.undertype(axes(Y.c))
+    (; source_height, Bm, F_S0, dc, cmax, c0, kwv, cw) = gw
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
@@ -39,25 +44,15 @@ function gravity_wave_cache(
     )
 end
 
-function gravity_wave_cache(
+function non_orographic_gravity_wave_cache(
+    gw::NonOrographyGravityWave,
     ::SphericalModel,
     Y,
-    ::Type{FT};
-    source_pressure = FT(3e4),
-    Bm = FT(0.4), # as in GFDL code
-    Bt_0 = FT(0.0003),
-    Bt_n = FT(0.0003),
-    Bt_s = FT(0.0003),
-    ϕ0_n = FT(30),
-    ϕ0_s = FT(-30),
-    dϕ_n = FT(5),
-    dϕ_s = FT(-5),
-    dc = FT(0.6),
-    cmax = FT(99.6),
-    c0 = FT(0),
-    kwv = FT(2π / 100e5),
-    cw = FT(40.0),
-) where {FT}
+)
+
+    FT = Spaces.undertype(axes(Y.c))
+    (; source_pressure, Bm, Bt_0, Bt_n, Bt_s, ϕ0_n) = gw
+    (; ϕ0_s, dϕ_n, dϕ_s, dc, cmax, c0, kwv, cw) = gw
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
@@ -71,6 +66,7 @@ function gravity_wave_cache(
     # compute spatio variant source F_S0
 
     return (;
+        # TODO: use atmos.non_orographic_gravity_wave for shared cache properties
         gw_source_pressure = source_pressure,
         gw_source_ampl = source_ampl,
         gw_Bm = Bm,
@@ -85,7 +81,7 @@ function gravity_wave_cache(
     )
 end
 
-function gravity_wave_tendency!(Yₜ, Y, p, t)
+function gravity_wave_tendency!(Yₜ, Y, p, t, ::NonOrographyGravityWave)
     #unpack
     (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params, model_config) = p
     (; gw_Bm, gw_source_ampl, gw_c, gw_cw, gw_c0, gw_nk, gw_k, gw_k2) = p

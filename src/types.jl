@@ -58,6 +58,26 @@ Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     α_w::FT
 end
 
+abstract type AbstractGravityWave end
+Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
+    source_pressure::FT = 3e4
+    source_height::FT = 15000
+    Bm::FT
+    F_S0::FT = 4e-3
+    dc::FT = 0.6
+    cmax::FT = 99.6
+    c0::FT = 0
+    kwv::FT = 2π / 100e5
+    cw::FT = 40.0
+    Bt_0::FT = 0.0003
+    Bt_n::FT = 0.0003
+    Bt_s::FT = 0.0003
+    ϕ0_n::FT = 30
+    ϕ0_s::FT = -30
+    dϕ_n::FT = 5
+    dϕ_s::FT = -5
+end
+
 abstract type AbstractForcing end
 struct HeldSuarezForcing <: AbstractForcing end
 struct Subsidence{T} <: AbstractForcing
@@ -150,7 +170,7 @@ Base.@kwdef struct AtmosModel{
     TCM,
     CM,
     SS,
-    GW,
+    NOGW,
     HD,
     VD,
     VS,
@@ -170,7 +190,7 @@ Base.@kwdef struct AtmosModel{
     turbconv_model::TCM = nothing
     compressibility_model::CM = nothing
     surface_scheme::SS = nothing
-    non_orographic_gravity_wave::GW = nothing
+    non_orographic_gravity_wave::NOGW = nothing
     hyperdiff::HD = nothing
     vert_diff::VD = nothing
     viscous_sponge::VS = nothing
