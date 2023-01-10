@@ -2,9 +2,9 @@
 ##### Gravity wave parameterization
 #####
 
-import ClimaAtmos.Spaces as Spaces
-import ClimaAtmos.Fields as Fields
-import ClimaAtmos.Geometry as Geometry
+import ClimaCore.Spaces as Spaces
+import ClimaCore.Fields as Fields
+import ClimaCore.Geometry as Geometry
 
 non_orographic_gravity_wave_cache(atmos, Y) = non_orographic_gravity_wave_cache(
     atmos.non_orographic_gravity_wave,
