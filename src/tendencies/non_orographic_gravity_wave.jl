@@ -1,5 +1,5 @@
 #####
-##### Gravity wave parameterization
+##### Non-orographic gravity wave parameterization
 #####
 
 import ClimaCore.Spaces as Spaces
@@ -15,7 +15,7 @@ non_orographic_gravity_wave_cache(atmos, Y) = non_orographic_gravity_wave_cache(
 non_orographic_gravity_wave_cache(::Nothing, ::AbstractModelConfig, Y) =
     NamedTuple()
 
-gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function non_orographic_gravity_wave_cache(
     gw::NonOrographyGravityWave,
@@ -81,7 +81,13 @@ function non_orographic_gravity_wave_cache(
     )
 end
 
-function gravity_wave_tendency!(Yₜ, Y, p, t, ::NonOrographyGravityWave)
+function non_orographic_gravity_wave_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonOrographyGravityWave,
+)
     #unpack
     (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params, model_config) = p
     (; gw_Bm, gw_source_ampl, gw_c, gw_cw, gw_c0, gw_nk, gw_k, gw_k2) = p
@@ -148,7 +154,7 @@ function gravity_wave_tendency!(Yₜ, Y, p, t, ::NonOrographyGravityWave)
 
     # GW parameterization applied bycolume
     Fields.bycolumn(axes(ᶜρ)) do colidx
-        parent(uforcing[colidx]) .= gravity_wave_forcing(
+        parent(uforcing[colidx]) .= non_orographic_gravity_wave_forcing(
             model_config,
             parent(u_phy[colidx]),
             Int(parent(source_level[colidx])[1]),
@@ -164,7 +170,7 @@ function gravity_wave_tendency!(Yₜ, Y, p, t, ::NonOrographyGravityWave)
             parent(ᶜρ[colidx]),
             parent(ᶠz[colidx]),
         )
-        parent(vforcing[colidx]) .= gravity_wave_forcing(
+        parent(vforcing[colidx]) .= non_orographic_gravity_wave_forcing(
             model_config,
             parent(v_phy[colidx]),
             Int(parent(source_level[colidx])[1]),
@@ -189,7 +195,7 @@ function gravity_wave_tendency!(Yₜ, Y, p, t, ::NonOrographyGravityWave)
 
 end
 
-function gravity_wave_forcing(
+function non_orographic_gravity_wave_forcing(
     model_config,
     ᶜu,
     source_level,

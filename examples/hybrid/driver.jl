@@ -163,7 +163,13 @@ function additional_tendency!(Yₜ, Y, p, t)
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able
-    CA.gravity_wave_tendency!(Yₜ, Y, p, t, p.atmos.non_orographic_gravity_wave)
+    CA.non_orographic_gravity_wave_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.non_orographic_gravity_wave,
+    )
 end
 
 ################################################################################

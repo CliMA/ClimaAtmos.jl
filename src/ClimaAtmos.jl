@@ -31,7 +31,7 @@ include(joinpath("tendencies", "forcing", "subsidence.jl"))
 include(joinpath("tendencies", "forcing", "held_suarez.jl"))
 
 include(joinpath("tendencies", "radiation.jl"))
-include(joinpath("tendencies", "gravity_wave_parameterization.jl"))
+include(joinpath("tendencies", "non_orographic_gravity_wave.jl"))
 include(joinpath("tendencies", "hyperdiffusion.jl"))
 include(joinpath("tendencies", "edmf_coriolis.jl"))
 include(joinpath("tendencies", "precipitation.jl"))

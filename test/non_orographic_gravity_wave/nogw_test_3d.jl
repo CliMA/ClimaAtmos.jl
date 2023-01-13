@@ -15,7 +15,7 @@ center_z = 0.5 .* (face_z[1:(end - 1)] .+ face_z[2:end])
 model_config = CA.SingleColumnModel()
 
 # compute the source parameters
-function gravity_wave_cache(
+function non_orographic_gravity_wave_cache(
     ::Type{FT};
     source_height = FT(15000),
     Bm = FT(1.2),
@@ -43,7 +43,12 @@ function gravity_wave_cache(
     )
 end
 
-params = gravity_wave_cache(FT; Bm = 0.4, cmax = 150, kwv = 2π / 100e3)
+params = non_orographic_gravity_wave_cache(
+    FT;
+    Bm = 0.4,
+    cmax = 150,
+    kwv = 2π / 100e3,
+)
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
@@ -126,7 +131,7 @@ Jan_bf = mean(center_bf_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_ρ = mean(center_ρ_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_uforcing = zeros(length(lat), length(center_z))
 for j in 1:length(lat)
-    Jan_uforcing[j, :] = CA.gravity_wave_forcing(
+    Jan_uforcing[j, :] = CA.non_orographic_gravity_wave_forcing(
         model_config,
         Jan_u[j, :],
         source_level,
