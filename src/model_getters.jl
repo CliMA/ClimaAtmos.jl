@@ -103,10 +103,25 @@ function non_orographic_gravity_wave_model(
     @assert nogw_name in (true, false)
     return if nogw_name == true
         if model_config isa SingleColumnModel
-            NonOrographyGravityWave{FT}(; Bm = 1.2)
+            NonOrographyGravityWave{FT}(; Bw = 1.2, Bn = 0.0, Bt_0 = 4e-3)
         elseif model_config isa SphericalModel
             # as in GFDL code (sphere)
-            NonOrographyGravityWave{FT}(; Bm = 0.4)
+            NonOrographyGravityWave{FT}(;
+                Bw = 0.4,
+                Bn = 8.4,
+                cw = 35.0,
+                cw_tropics = 35.0,
+                cn = 2.0,
+                Bt_0 = 0.0043,
+                Bt_n = 0.0014,
+                Bt_eq = 0.0043,
+                Bt_s = 0.0014,
+                ϕ0_n = 15,
+                ϕ0_s = -15,
+                dϕ_n = 10,
+                dϕ_s = -10,
+                source_pressure = 315.e+02,
+            )
         else
             error("Uncaught case")
         end

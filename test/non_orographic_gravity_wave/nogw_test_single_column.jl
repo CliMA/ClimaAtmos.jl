@@ -13,14 +13,13 @@ const FT = Float64
 
 face_z = FT.(0:1e3:0.5e5)
 center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
-model_config = CA.SingleColumnModel()
 
 # compute the source parameters
 function non_orographic_gravity_wave_cache(
     ::Type{FT};
     source_height = FT(15000),
-    Bm = FT(1.2),
-    F_S0 = FT(4e-3),
+    Bw = FT(1.2),
+    Bt_0 = FT(4e-3),
     dc = FT(0.6),
     cmax = FT(99.6),
     c0 = FT(0),
@@ -33,10 +32,13 @@ function non_orographic_gravity_wave_cache(
 
     return (;
         gw_source_height = source_height,
-        gw_F_S0 = F_S0,
-        gw_Bm = Bm,
+        gw_source_ampl = Bt_0,
+        gw_Bw = Bw,
+        gw_Bn = FT(0),
         gw_c = c,
         gw_cw = cw,
+        gw_cn = FT(1),
+        gw_flag = FT(1),
         gw_c0 = c0,
         gw_nk = length(kwv),
         gw_k = kwv,
@@ -46,7 +48,7 @@ end
 
 params = non_orographic_gravity_wave_cache(
     FT;
-    Bm = 0.4,
+    Bw = 0.4,
     cmax = 150,
     kwv = 2π / 100e3,
 )
@@ -135,13 +137,15 @@ Jan_u = mean(center_u_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_bf = mean(center_bf_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_ρ = mean(center_ρ_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_uforcing = CA.non_orographic_gravity_wave_forcing(
-    model_config,
     Jan_u,
     source_level,
-    params.gw_F_S0,
-    params.gw_Bm,
-    params.gw_c,
+    params.gw_source_ampl,
+    params.gw_Bw,
+    params.gw_Bn,
     params.gw_cw,
+    params.gw_cn,
+    params.gw_flag,
+    params.gw_c,
     params.gw_c0,
     params.gw_nk,
     params.gw_k,
@@ -160,13 +164,15 @@ April_u = mean(center_u_mean[:, month .== 4], dims = 2)[:, 1]
 April_bf = mean(center_bf_mean[:, month .== 4], dims = 2)[:, 1]
 April_ρ = mean(center_ρ_mean[:, month .== 4], dims = 2)[:, 1]
 April_uforcing = CA.non_orographic_gravity_wave_forcing(
-    model_config,
     April_u,
     source_level,
-    params.gw_F_S0,
-    params.gw_Bm,
-    params.gw_c,
+    params.gw_source_ampl,
+    params.gw_Bw,
+    params.gw_Bn,
     params.gw_cw,
+    params.gw_cn,
+    params.gw_flag,
+    params.gw_c,
     params.gw_c0,
     params.gw_nk,
     params.gw_k,
@@ -185,13 +191,15 @@ July_u = mean(center_u_mean[:, month .== 7], dims = 2)[:, 1]
 July_bf = mean(center_bf_mean[:, month .== 7], dims = 2)[:, 1]
 July_ρ = mean(center_ρ_mean[:, month .== 7], dims = 2)[:, 1]
 July_uforcing = CA.non_orographic_gravity_wave_forcing(
-    model_config,
     July_u,
     source_level,
-    params.gw_F_S0,
-    params.gw_Bm,
-    params.gw_c,
+    params.gw_source_ampl,
+    params.gw_Bw,
+    params.gw_Bn,
     params.gw_cw,
+    params.gw_cn,
+    params.gw_flag,
+    params.gw_c,
     params.gw_c0,
     params.gw_nk,
     params.gw_k,
@@ -210,13 +218,15 @@ Oct_u = mean(center_u_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_bf = mean(center_bf_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_ρ = mean(center_ρ_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_uforcing = CA.non_orographic_gravity_wave_forcing(
-    model_config,
     Oct_u,
     source_level,
-    params.gw_F_S0,
-    params.gw_Bm,
-    params.gw_c,
+    params.gw_source_ampl,
+    params.gw_Bw,
+    params.gw_Bn,
     params.gw_cw,
+    params.gw_cn,
+    params.gw_flag,
+    params.gw_c,
     params.gw_c0,
     params.gw_nk,
     params.gw_k,
