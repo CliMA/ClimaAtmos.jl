@@ -96,6 +96,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
+        command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_mima.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
         command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
