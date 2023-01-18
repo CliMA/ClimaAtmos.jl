@@ -115,6 +115,16 @@ function non_orographic_gravity_wave_model(
     end
 end
 
+function orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
+    ogw_name = parsed_args["orographic_gravity_wave"]
+    @assert ogw_name in (true, false)
+    return if ogw_name == true
+        OrographicGravityWave{FT}()
+    else
+        nothing
+    end
+end
+
 function perf_mode(parsed_args)
     return if parsed_args["perf_mode"] == "PerfExperimental"
         PerfExperimental()

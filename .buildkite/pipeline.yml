@@ -190,12 +190,16 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
       - label: ":computer: held suarez (ρe) equilmoist hightop gw parameterization"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 50 --dz_top 3e3 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --non_orographic_gravity_wave true --job_id sphere_held_suarez_rhoe_equilmoist_hightop_gw --dt 450secs --t_end 1days --regression_test true"
-        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_gw/*"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 50 --dz_top 3e3 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --non_orographic_gravity_wave true --job_id sphere_held_suarez_rhoe_equilmoist_hightop_nogw --dt 450secs --t_end 1days --regression_test true"
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_nogw/*"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist monin_obukhov"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --forcing held_suarez --precip_model 0M --job_id sphere_held_suarez_rhoe_equilmoist_mo --dt 600secs"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_mo/*"
+
+      - label: ":computer: baroclinic wave with orographic gravity wave"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --orographic_gravity_wave true --job_id sphere_baroclinic_wave_ogw --t_end 1days --regression_test true"
+        artifact_paths: "sphere_baroclinic_wave_ogw"
 
   - group: "Configs"
     steps:

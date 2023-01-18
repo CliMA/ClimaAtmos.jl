@@ -112,6 +112,12 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             atmos.model_config,
             Y,
         ),
+        CA.orographic_gravity_wave_cache(
+            atmos.orographic_gravity_wave,
+            TOPO_DIR,
+            Y,
+            comms_ctx,
+        ),
         (; thermo_dispatcher),
         (; Δt = dt),
         (; compressibility_model),
@@ -170,6 +176,13 @@ function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.non_orographic_gravity_wave,
     )
+    CA.orographic_gravity_wave_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        p.atmos.orographic_gravity_wave,
+    )
 end
 
 ################################################################################
@@ -204,6 +217,25 @@ enable_threading() = enable_clima_core_threading
 else
     spaces = get_spaces(parsed_args, params, comms_ctx)
     (Y, t_start) = get_state_fresh_start(parsed_args, spaces, params, atmos)
+end
+
+# prepare topographic data if it runs with topography
+if parsed_args["orographic_gravity_wave"] == true
+    const TOPO_DIR = joinpath(@__DIR__, "topo_data/")
+    if !isdir(TOPO_DIR)
+        mkdir(TOPO_DIR)
+    end
+    include("orographic_gravity_wave_helper.jl")
+    if !isfile(joinpath(TOPO_DIR, "topo_info.hdf5")) &
+       ClimaComms.iamroot(comms_ctx)
+        include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+        # download topo data
+        datafile_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+        @show datafile_rll
+        get_topo_info(Y, TOPO_DIR, datafile_rll, comms_ctx)
+    end
+else
+    const TOPO_DIR = nothing
 end
 
 @time "Allocating cache (p)" begin

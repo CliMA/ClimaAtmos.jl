@@ -63,6 +63,10 @@ function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
             model_config,
             FT,
         ),
+        orographic_gravity_wave = CA.orographic_gravity_wave_model(
+            parsed_args,
+            FT,
+        ),
         hyperdiff = CA.hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         viscous_sponge = CA.viscous_sponge_model(parsed_args, FT),
