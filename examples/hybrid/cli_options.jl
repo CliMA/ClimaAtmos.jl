@@ -294,6 +294,10 @@ function parse_commandline()
         help = "Whether to split EDMF's `compute_gm_tendencies!` into implicit and explicit components"
         arg_type = Bool
         default = false
+        "--edmf_entr_closure"
+        help = "EDMF entrainment closure. [`MoistureDeficit` (default), `Constant` ]"
+        arg_type = String
+        default = "MoistureDeficit"
         "--debugging_tc"
         help = "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
         arg_type = Bool
