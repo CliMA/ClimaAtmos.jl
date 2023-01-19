@@ -253,7 +253,6 @@ all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :ρ)] = 0
 all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :ρe_tot)] = 0
 all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :uₕ, :components, :data, 1)] = 0
 all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :uₕ, :components, :data, 2)] = 0
-all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :ρq_tot)] = 0
 all_best_mse["sphere_baroclinic_wave_ogw"][(:f, :w, :components, :data, 1)] = 0
 #
 #! format: on
