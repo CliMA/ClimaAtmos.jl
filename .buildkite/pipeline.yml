@@ -174,7 +174,7 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_IMEXEuler/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) Float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --job_id sphere_baroclinic_wave_rhoe_Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --FLOAT_TYPE Float64 --bubble true --job_id sphere_baroclinic_wave_rhoe_Float64"
         artifact_paths: "sphere_baroclinic_wave_rhoe_Float64/*"
 
       - label: ":computer: held suarez (ρθ)"
@@ -246,7 +246,7 @@ steps:
     steps:
 
       - label: ":computer: hydrostatic balance (ρe_tot) float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64 --bubble true"
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
         agents:
           slurm_mem: 20GB
@@ -266,7 +266,7 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
 
       - label: ":computer: held suarez (ρe_tot)"

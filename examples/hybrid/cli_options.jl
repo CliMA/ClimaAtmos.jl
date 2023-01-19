@@ -214,6 +214,10 @@ function parse_commandline()
         help = "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
         arg_type = Int
         default = 3
+        "--bubble"
+        help = "Enable bubble correction for more accurate surface areas"
+        arg_type = Bool
+        default = false
         "--x_max"
         help = "Model domain size, x direction. Default: 300km"
         arg_type = Float64

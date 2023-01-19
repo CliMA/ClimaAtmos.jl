@@ -31,19 +31,28 @@ function cubed_sphere_mesh(; radius, h_elem)
     return Meshes.EquiangularCubedSphere(domain, h_elem)
 end
 
-function make_horizontal_space(mesh, quad, ::ClimaComms.SingletonCommsContext)
+function make_horizontal_space(
+    mesh,
+    quad,
+    ::ClimaComms.SingletonCommsContext,
+    bubble,
+)
     if mesh isa Meshes.AbstractMesh1D
         topology = Topologies.IntervalTopology(mesh)
         space = Spaces.SpectralElementSpace1D(topology, quad)
     elseif mesh isa Meshes.AbstractMesh2D
         topology =
             Topologies.Topology2D(mesh, Topologies.spacefillingcurve(mesh))
-        space = Spaces.SpectralElementSpace2D(topology, quad)
+        space = Spaces.SpectralElementSpace2D(
+            topology,
+            quad;
+            enable_bubble = bubble,
+        )
     end
     return space
 end
 
-function make_horizontal_space(mesh, quad, comms_ctx)
+function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
     elseif mesh isa Meshes.AbstractMesh2D
@@ -52,7 +61,11 @@ function make_horizontal_space(mesh, quad, comms_ctx)
             mesh,
             Topologies.spacefillingcurve(mesh),
         )
-        space = Spaces.SpectralElementSpace2D(topology, quad)
+        space = Spaces.SpectralElementSpace2D(
+            topology,
+            quad;
+            enable_bubble = bubble,
+        )
     end
     return space
 end

@@ -82,6 +82,7 @@ function get_numerics(parsed_args)
         energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"])),
         tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
         apply_limiter = parsed_args["apply_limiter"],
+        bubble = parsed_args["bubble"],
     )
     @info "numerics" numerics...
 
@@ -129,6 +130,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     dz_bottom = FT(parsed_args["dz_bottom"])
     dz_top = FT(parsed_args["dz_top"])
     topography = parsed_args["topography"]
+    bubble = parsed_args["bubble"]
 
     if topography == "DCMIP200"
         warp_function = CA.topography_dcmip200
@@ -144,7 +146,8 @@ function get_spaces(parsed_args, params, comms_ctx)
         nh_poly = parsed_args["nh_poly"]
         quad = Spaces.Quadratures.GLL{nh_poly + 1}()
         horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
@@ -172,7 +175,12 @@ function get_spaces(parsed_args, params, comms_ctx)
             x_elem = 1,
             y_elem = 1,
         )
-        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+        if bubble
+            @warn "Bubble correction not compatible with single column configuration. It will be switched off."
+            bubble = false
+        end
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
@@ -193,7 +201,8 @@ function get_spaces(parsed_args, params, comms_ctx)
             x_elem = x_elem,
             y_elem = y_elem,
         )
-        h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx)
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
