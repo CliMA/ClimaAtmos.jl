@@ -387,6 +387,22 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: SCM EDMF Bomex (Constant entrainment)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
+          --z_elem 60 --z_stretch false --z_max 3e3
+          --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --job_id edmf_bomex_const_entr
+          --edmf_entr_closure Constant
+          --dt 35secs
+        artifact_paths: "edmf_bomex_const_entr/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":balloon: SCM EDMF Bomex (JFNK)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -515,6 +531,23 @@ steps:
           --job_id edmf_soares
           --dt 1secs
         artifact_paths: "edmf_soares/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Soares (Anelastic, Constant entrainment)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Soares
+          --z_elem 75 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
+          --edmf_entr_closure Constant
+          --job_id edmf_soares_const_entr
+          --dt 1secs
+        artifact_paths: "edmf_soares_const_entr/*"
         agents:
           slurm_mem: 20GB
 
