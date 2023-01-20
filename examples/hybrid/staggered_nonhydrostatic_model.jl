@@ -84,6 +84,7 @@ function default_cache(
     numerics,
     simulation,
 )
+    @info "default_cache"
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -116,6 +117,8 @@ function default_cache(
 
     ts_type = CA.thermo_state_type(atmos.moisture_model, FT)
     quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
+    @info "dss"
+
     skip_dss = !(quadrature_style isa Spaces.Quadratures.GLL)
     if skip_dss
         ghost_buffer = (

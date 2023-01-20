@@ -75,12 +75,14 @@ jacobi_flags(::PotentialTemperature) =
 
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, parsed_args, params, atmos, dt;)
+    @info "additional_cache"
     FT = typeof(dt)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
 
     thermo_dispatcher = CA.ThermoDispatcher(atmos)
     compressibility_model = atmos.compressibility_model
 
+    @info "radiation"
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
             Y,
