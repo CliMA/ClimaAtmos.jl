@@ -735,7 +735,7 @@ function filter_updraft_vars(
     a_max = edmf.max_area
 
     @inbounds for i in 1:N_up
-        @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0)
+        #@. prog_up[i].ρarea = max(prog_up[i].ρarea, 0)
         @. prog_up[i].ρaθ_liq_ice = max(prog_up[i].ρaθ_liq_ice, 0)
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0)
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max)
