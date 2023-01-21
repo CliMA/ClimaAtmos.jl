@@ -121,6 +121,7 @@ function default_cache(
 
     skip_dss = !(quadrature_style isa Spaces.Quadratures.GLL)
     if skip_dss
+        @info "dss skip"
         ghost_buffer = (
             c = nothing,
             f = nothing,
@@ -132,6 +133,7 @@ function default_cache(
         (:ρq_tot in propertynames(Y.c)) &&
             (ghost_buffer = (ghost_buffer..., ᶜχρq_tot = nothing))
     else
+        @info "dss 1"
         ghost_buffer = (
             c = Spaces.create_dss_buffer(Y.c),
             f = Spaces.create_dss_buffer(Y.f),
@@ -140,12 +142,14 @@ function default_cache(
             χuₕ = Spaces.create_dss_buffer(Y.c.uₕ), # for hyperdiffusion
             skip_dss = skip_dss, # skip DSS on non-GLL quadrature meshes
         )
+        @info "dss 2"
         (:ρq_tot in propertynames(Y.c)) && (
             ghost_buffer = (
                 ghost_buffer...,
                 ᶜχρq_tot = Spaces.create_dss_buffer(Y.c.ρ),
             )
         )
+        @info "dss 3"
     end
     @info "setting up limiters"
     if apply_limiter
