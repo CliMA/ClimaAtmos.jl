@@ -147,6 +147,7 @@ function default_cache(
             )
         )
     end
+    @info "setting up limiters"
     if apply_limiter
         tracers = filter(CA.is_tracer_var, propertynames(Y.c))
         make_limiter =
@@ -156,6 +157,7 @@ function default_cache(
     else
         limiters = nothing
     end
+    @info "fluxes"
     pnc = propertynames(Y.c)
     ᶜρh_kwargs =
         :ρe_tot in pnc || :ρe_int in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
@@ -165,6 +167,7 @@ function default_cache(
     net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_sfc[] = Geometry.WVector(FT(0))
 
+    @info "done defaulte_cache"
     return (;
         simulation,
         operators = (;
