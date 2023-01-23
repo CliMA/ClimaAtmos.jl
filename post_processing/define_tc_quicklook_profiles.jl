@@ -25,6 +25,9 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     p14 = Plots.plot(; title = "en Hvar", args...)
     p15 = Plots.plot(; title = "en QTvar", args...)
     p16 = Plots.plot(; title = "en HQTcov", args...)
+    p17 = Plots.plot(; title = "gm theta", args...)
+    p18 = Plots.plot(; title = "gm u", args...)
+    p19 = Plots.plot(; title = "gm v", args...)
 
     function add_to_plots!(input_filename; data_source)
         if !isfile(input_filename)
@@ -85,6 +88,24 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         plot!(p14, parent(D.env_Hvar)[:], zc; label = "$data_source")
         plot!(p15, parent(D.env_QTvar)[:], zc; label = "$data_source")
         plot!(p16, parent(D.env_HQTcov)[:], zc; label = "$data_source")
+        plot!(
+            p17,
+            parent(D.potential_temperature)[:],
+            zc;
+            label = "$data_source",
+        )
+        plot!(
+            p18,
+            parent(Geometry.UVector.(Y.c.uₕ))[:],
+            zc;
+            label = "$data_source",
+        )
+        plot!(
+            p19,
+            parent(Geometry.VVector.(Y.c.uₕ))[:],
+            zc;
+            label = "$data_source",
+        )
     end
 
     PR_filename = joinpath(folder, hdf5_filename)
@@ -117,7 +138,10 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         p13,
         p14,
         p15,
-        p16;
+        p16,
+        p17,
+        p18,
+        p19;
         more_args...,
     )
 
@@ -163,7 +187,7 @@ function get_contours(vars, input_filenames; data_source, have_main)
     K = collect(keys(contours))
     n = length(K)
     fig_width = 4500
-    fig_height = 3000
+    fig_height = 5000
     left_side = data_source == "main"
     if have_main
         l_margin = left_side ? 100 : 0
@@ -176,9 +200,9 @@ function get_contours(vars, input_filenames; data_source, have_main)
 
     for (i, name) in enumerate(K)
         fn = contours[name].fn
-        space = axes(fn(first(Ds)))
+        space = axes(fn(first(Ys), first(Ds)))
         z = parent(Fields.coordinate_field(space).z)[:]
-        Ds_parent = parent_data.(fn.(Ds))
+        Ds_parent = parent_data.(fn.(Ys, Ds))
         cdata = hcat(Ds_parent...)
         clims[name] = (minimum(cdata), maximum(cdata))
         @info "clims[$name] ($data_source) = $(clims[name])"
@@ -290,7 +314,7 @@ end
 union_clims(a::Tuple{T, T}, b::Tuple{T, T}) where {T} =
     (min(first(a), first(b)), max(last(a), last(b)))
 
-is_trivial_clims(tup::Tuple{T, T}) where {T} = tup[1] == tup[2] && tup[1] == 0
+is_trivial_clims(tup::Tuple{T, T}) where {T} = tup[1] == tup[2]
 
 function union_clims(a::Dict, b::Dict)
     clims_dict = Dict()
@@ -313,13 +337,16 @@ end
 function _plot_tc_contours(folder; PR_filenames, main_filenames)
 
     vars = [
-        ("area fraction", D -> D.bulk_up_area),
-        ("up qt", D -> D.bulk_up_q_tot),
-        ("up ql", D -> D.bulk_up_q_liq),
-        ("up qi", D -> D.bulk_up_q_ice),
-        ("up w", D -> Geometry.WVector.(D.face_bulk_w)),
-        ("en qt", D -> D.env_q_tot),
-        ("en TKE", D -> D.env_TKE),
+        ("area fraction", (Y, D) -> D.bulk_up_area),
+        ("up qt", (Y, D) -> D.bulk_up_q_tot),
+        ("up ql", (Y, D) -> D.bulk_up_q_liq),
+        ("up qi", (Y, D) -> D.bulk_up_q_ice),
+        ("up w", (Y, D) -> Geometry.WVector.(D.face_bulk_w)),
+        ("en qt", (Y, D) -> D.env_q_tot),
+        ("en TKE", (Y, D) -> D.env_TKE),
+        ("gm theta", (Y, D) -> D.potential_temperature),
+        ("gm u", (Y, D) -> Geometry.UVector.(Y.c.uₕ)),
+        ("gm v", (Y, D) -> Geometry.VVector.(Y.c.uₕ)),
         # ("up qr", D-> parent(D.)[:])
     ]
 

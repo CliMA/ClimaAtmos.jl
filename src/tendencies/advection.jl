@@ -73,8 +73,9 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶠw = Y.f.w
     C123 = Geometry.Covariant123Vector
     (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
-    (; ᶜdivᵥ, ᶠinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
+    (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     # Mass conservation
+    J = Fields.local_geometry_field(axes(ᶜρ)).J
     @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
 
     # Energy conservation
@@ -100,7 +101,6 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         ᶜinterp(ᶠω¹²[colidx] × ᶠu³[colidx]) +
         (ᶜf[colidx] + ᶜω³[colidx]) ×
         (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
-    @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
 
     # Tracer conservation
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
