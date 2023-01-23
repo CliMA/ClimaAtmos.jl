@@ -15,11 +15,11 @@ if !@isdefined comms_ctx # for compatibility with coupler
     end
     ClimaComms.init(comms_ctx)
 
-    if ClimaComms.iamroot(comms_ctx)
+    #if ClimaComms.iamroot(comms_ctx)
         Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Info))
-    else
-        Logging.global_logger(Logging.NullLogger())
-    end
+    #else
+    #    Logging.global_logger(Logging.NullLogger())
+    #end
 end
 if comms_ctx isa ClimaComms.SingletonCommsContext
     @info "Setting up single-process ClimaAtmos run"
