@@ -75,8 +75,10 @@ steps:
       - label: ":computer: Test restart for MPI baroclinic wave"
         key: "restart_mpi_baro_wave"
         depends_on: "mpi_baro_wave_make_restart"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id restart_mpi_baroclinic_wave_rhoe --t_end 20days"
-        artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
+        command: "srun --output=print-out-%t.log julia --color=yes --project=examples examples/hybrid/driver.jl --job_id restart_mpi_baroclinic_wave_rhoe --t_end 20days"
+        artifact_paths:
+          - "restart_mpi_baroclinic_wave_rhoe/*"
+          - "print-out-*.log"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
           RESTART_FILE: "mpi_make_restart/restart/day5.0.hdf5"
