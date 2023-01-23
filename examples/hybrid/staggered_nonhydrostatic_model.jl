@@ -41,6 +41,10 @@ const ᶠinterp = Operators.InterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
 )
+const ᶠwinterp = Operators.WeightedInterpolateC2F(
+    bottom = Operators.Extrapolate(),
+    top = Operators.Extrapolate(),
+)
 const ᶜdivᵥ = Operators.DivergenceF2C(
     top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
     bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
@@ -172,6 +176,7 @@ function default_cache(
             ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp),
             ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp),
             ᶠinterp,
+            ᶠwinterp,
             ᶠcurlᵥ,
             ᶜinterp,
             ᶠgradᵥ,
