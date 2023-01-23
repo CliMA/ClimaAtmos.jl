@@ -182,7 +182,7 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs --t_end 30days"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
-      # Disabling e_int tests in PR#1240    
+      # Disabling e_int tests in PR#1240
       #- label: ":computer: held suarez (ρe_int)"
       #  command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true --t_end 30days"
       #  artifact_paths: "sphere_held_suarez_rhoe_int/*"
@@ -348,7 +348,7 @@ steps:
           --t_end 9hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist dry
           --job_id compressible_edmf_gabls
-          --dt 4secs
+          --dt 360secs
         artifact_paths: "compressible_edmf_gabls/*"
         agents:
           slurm_mem: 20GB
