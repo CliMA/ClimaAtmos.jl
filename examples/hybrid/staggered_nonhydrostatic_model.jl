@@ -135,11 +135,11 @@ function default_cache(
     else
         @info "dss 1"
         ghost_buffer = (
-            c = Spaces.create_dss_buffer(Y.c),
-            f = Spaces.create_dss_buffer(Y.f),
-            χ = Spaces.create_dss_buffer(Y.c.ρ), # for hyperdiffusion
-            χw = Spaces.create_dss_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
-            χuₕ = Spaces.create_dss_buffer(Y.c.uₕ), # for hyperdiffusion
+            c = (@info "dss Y.c"; Spaces.create_dss_buffer(Y.c)),
+            f = (@info "dss Y.f"; Spaces.create_dss_buffer(Y.f)),
+            χ = (@info "dss Y.c.ρ"; Spaces.create_dss_buffer(Y.c.ρ)), # for hyperdiffusion
+            χw = (@info "dss Y.f.w.components.data.:1"; Spaces.create_dss_buffer(Y.f.w.components.data.:1)), # for hyperdiffusion
+            χuₕ = (@info "dss Y.c.uₕ"; Spaces.create_dss_buffer(Y.c.uₕ)), # for hyperdiffusion
             skip_dss = skip_dss, # skip DSS on non-GLL quadrature meshes
         )
         @info "dss 2"
