@@ -72,11 +72,12 @@ function update_aux!(
         #####
         e_pot = geopotential(thermo_params, grid.zc.z[k])
         @inbounds for i in 1:N_up
-            if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
+            tmp_ρarea = max(prog_up[i].ρarea[k], 0)
+            if tmp_ρarea / ρ_c[k] >= edmf.minimum_area
                 aux_up[i].θ_liq_ice[k] =
-                    prog_up[i].ρaθ_liq_ice[k] / prog_up[i].ρarea[k]
-                aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / prog_up[i].ρarea[k]
-                aux_up[i].area[k] = prog_up[i].ρarea[k] / ρ_c[k]
+                    prog_up[i].ρaθ_liq_ice[k] / tmp_ρarea
+                aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / tmp_ρarea
+                aux_up[i].area[k] = tmp_ρarea / ρ_c[k]
             else
                 aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
                 aux_up[i].q_tot[k] = aux_gm.q_tot[k]
@@ -150,6 +151,9 @@ function update_aux!(
         ##### decompose_environment
         #####
         a_bulk_c = aux_bulk.area[k]
+        if a_bulk_c < 0.0
+            @info(k, a_bulk_c)
+        end
         val1 = 1 / (1 - a_bulk_c)
         val2 = a_bulk_c * val1
         aux_en.q_tot[k] =
@@ -483,7 +487,7 @@ function update_aux!(
         nh_press = aux_up_f[i].nh_pressure
         @. tke_press +=
             (Ic(wcomponent(CCG.WVector(w_en - w_up)))) *
-            prog_up[i].ρarea *
+            max(prog_up[i].ρarea, 0) *
             Ic(nh_press)
     end
 
