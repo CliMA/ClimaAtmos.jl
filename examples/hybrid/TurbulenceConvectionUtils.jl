@@ -130,25 +130,15 @@ function init_tc!(Y, p, params, colidx)
     C123 = CCG.Covariant123Vector
     t = FT(0)
 
-    if CA.is_anelastic_column(p.atmos)
-        @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
+    @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
 
-        CA.compute_ref_density!(
-            Y.c.ρ[colidx],
-            p.ᶜp[colidx],
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-    else
-        @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
+    CA.compute_ref_density!(
+        Y.c.ρ[colidx],
+        p.ᶜp[colidx],
+        thermo_params,
+        surf_ref_thermo_state,
+    )
 
-        CA.compute_ref_density!(
-            Y.c.ρ[colidx],
-            p.ᶜp[colidx],
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-    end
     # TODO: can we simply remove this?
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     @. p.edmf_cache.aux.face.ρ[colidx] = If(Y.c.ρ[colidx])
