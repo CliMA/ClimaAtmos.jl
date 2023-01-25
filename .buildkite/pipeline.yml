@@ -353,6 +353,25 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: SCM EDMF GABLS (Dry, JFNK with IMEX EDMF)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case GABLS --edmf_coriolis GABLS
+          --z_elem 8 --z_stretch false --z_max 400
+          --t_end 9hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist dry
+          --imex_edmf_turbconv true
+          --imex_edmf_gm true
+          --use_krylov_method true
+          --quicklook_reference_job_id compressible_edmf_gabls
+          --job_id compressible_edmf_gabls_jfnk_imex
+          --dt 600secs
+        artifact_paths: "compressible_edmf_gabls/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":balloon: SCM EDMF Bomex (Default: compressible, Newton's method)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
