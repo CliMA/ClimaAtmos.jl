@@ -14,7 +14,7 @@ import ClimaCore.Spaces as Spaces
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
-function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:none})
+function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:none}) # used for mass ᶜρc === ᶜρ
     (; dt) = p.simulation
     (; ᶜdivᵥ, ᶠwinterp) = p.operators
     J = Fields.local_geometry_field(axes(ᶜρ)).J
