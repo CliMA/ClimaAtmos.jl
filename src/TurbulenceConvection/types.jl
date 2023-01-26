@@ -56,10 +56,10 @@ Base.@kwdef struct εδModelParams{FT}
 end
 
 abstract type AbstractEntrDetrModel end
+struct ConstantEntrDetrModel <: AbstractEntrDetrModel end
 Base.@kwdef struct MDEntr{P} <: AbstractEntrDetrModel
     params::P
-end  # existing model
-
+end  # existing model (moisture deficit closure)
 εδ_params(m::AbstractEntrDetrModel) = m.params
 
 abstract type EntrDimScale end
@@ -442,6 +442,98 @@ function EDMFModel(
         )
     end
 
+    entr_closure_name = parsed_args["edmf_entr_closure"]
+    if entr_closure_name == "MoistureDeficit"
+        c_div = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "entrainment_massflux_div_factor";
+            default = 0.0,
+        )
+        w_min = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "min_upd_velocity",
+        )
+        c_ε = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "entrainment_factor",
+        )
+        μ_0 = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "entrainment_scale",
+        )
+        β = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "sorting_power",
+        )
+        χ = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "updraft_mixing_frac",
+        )
+        c_λ = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "entrainment_smin_tke_coeff",
+        )
+        γ_lim = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "area_limiter_scale",
+        )
+        β_lim = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "area_limiter_power",
+        )
+        c_γ = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "turbulent_entrainment_factor",
+        )
+        c_δ = parse_namelist(
+            namelist,
+            "turbulence",
+            "EDMF_PrognosticTKE",
+            "detrainment_factor",
+        )
+
+        εδ_params = εδModelParams{FT}(;
+            c_div,
+            w_min,
+            c_ε,
+            μ_0,
+            β,
+            χ,
+            c_λ,
+            γ_lim,
+            β_lim,
+            c_γ,
+            c_δ,
+        )
+
+        entr_closure = MDEntr(; params = εδ_params)
+    elseif entr_closure_name == "Constant"
+        entr_closure = ConstantEntrDetrModel()
+    else
+        error(
+            "Something went wrong. Invalid entrainment closure type '$entr_closure_name'",
+        )
+    end
     # entr closure
     # entr_type = parse_namelist(
     #     namelist,
@@ -451,90 +543,6 @@ function EDMFModel(
     #     default = "moisture_deficit",
     #     valid_options = ["moisture_deficit"],
     # )
-
-    c_div = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "entrainment_massflux_div_factor";
-        default = 0.0,
-    )
-    w_min = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "min_upd_velocity",
-    )
-    c_ε = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "entrainment_factor",
-    )
-    μ_0 = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "entrainment_scale",
-    )
-    β = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "sorting_power",
-    )
-    χ = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "updraft_mixing_frac",
-    )
-    c_λ = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "entrainment_smin_tke_coeff",
-    )
-    γ_lim = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "area_limiter_scale",
-    )
-    β_lim = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "area_limiter_power",
-    )
-    c_γ = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "turbulent_entrainment_factor",
-    )
-    c_δ = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "detrainment_factor",
-    )
-
-    εδ_params = εδModelParams{FT}(;
-        c_div,
-        w_min,
-        c_ε,
-        μ_0,
-        β,
-        χ,
-        c_λ,
-        γ_lim,
-        β_lim,
-        c_γ,
-        c_δ,
-    )
-
-    entr_closure = MDEntr(; params = εδ_params)
 
     # minimum updraft top to avoid zero division in pressure drag and turb-entr
     H_up_min = FT(
