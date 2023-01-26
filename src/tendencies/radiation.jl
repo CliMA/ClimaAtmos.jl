@@ -266,7 +266,7 @@ function radiation_tendency!(Yₜ, Y, p, t, colidx, self::RadiationDYCOMS_RF01)
     ᶜts_gm = p.ᶜts[colidx]
     ᶠf_rad = p.ᶠf_rad[colidx]
     ᶠq_tot = p.ᶠq_tot[colidx]
-    ᶠρ = p.edmf_cache.aux.face.ρ[colidx]
+    ᶠρ = p.ᶠρ[colidx]
     ᶜq_tot = p.edmf_cache.aux.cent.q_tot[colidx]
     ᶜq_liq = p.edmf_cache.aux.cent.q_liq[colidx]
     # TODO: unify (ᶜq_tot, ᶜq_liq) with grid-mean
@@ -286,6 +286,11 @@ function radiation_tendency!(Yₜ, Y, p, t, colidx, self::RadiationDYCOMS_RF01)
         top = Operators.Extrapolate(),
     )
     @. ᶠq_tot .= Ifq(ᶜq_tot)
+    Ifρ = Operators.InterpolateC2F(;
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    @. ᶠρ .= Ifρ(ᶜρ)
     n = length(parent(ᶠρ))
     for k in Operators.PlusHalf(1):Operators.PlusHalf(n)
         ᶠq_tot_lev = Spaces.level(ᶠq_tot, k)
