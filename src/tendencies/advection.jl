@@ -80,13 +80,22 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
     # Energy conservation
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ[colidx] -= ᶜdivᵥ(ᶠwinterp(J[colidx], Y.c.ρθ[colidx] * ᶜuₕ[colidx]))
+        @. Yₜ.c.ρθ[colidx] -=
+            ᶜdivᵥ(ᶠwinterp(J[colidx], Y.c.ρθ[colidx] * ᶜuₕ[colidx]))
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] -=
-            ᶜdivᵥ(ᶠwinterp(J[colidx], (Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
+        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(
+            ᶠwinterp(
+                J[colidx],
+                (Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx],
+            ),
+        )
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] -=
-            ᶜdivᵥ(ᶠwinterp(J[colidx], (Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
+        @. Yₜ.c.ρe_int[colidx] -= ᶜdivᵥ(
+            ᶠwinterp(
+                J[colidx],
+                (Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx],
+            ),
+        )
     end
 
     # Momentum conservation
