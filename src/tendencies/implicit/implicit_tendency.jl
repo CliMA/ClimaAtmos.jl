@@ -16,46 +16,39 @@ import ClimaCore.Spaces as Spaces
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:none})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp) = p.operators
-    J = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(J, ᶜρc) * ᶠw))
+    (; ᶜdivᵥ, ᶠinterp) = p.operators
+    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw))
 end
 function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:first_order})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1) = p.operators
-    J = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(J, ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ)))
+    (; ᶜdivᵥ, ᶠinterp, ᶠupwind1) = p.operators
+    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ)))
 end
 function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:third_order})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind3) = p.operators
-    J = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(J, ᶜρ) * ᶠupwind3(ᶠw, ᶜρc / ᶜρ)))
+    (; ᶜdivᵥ, ᶠinterp, ᶠupwind3) = p.operators
+    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw, ᶜρc / ᶜρ)))
 end
 function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:boris_book})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1, ᶠupwind3, ᶠfct_boris_book) = p.operators
-    J = Fields.local_geometry_field(axes(ᶜρ)).J
+    (; ᶜdivᵥ, ᶠinterp, ᶠupwind1, ᶠupwind3, ᶠfct_boris_book) = p.operators
     @. ᶜρcₜ =
-        -(ᶜdivᵥ(ᶠwinterp(J, ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-            ᶠwinterp(J, ᶜρ) * ᶠfct_boris_book(
+        -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+            ᶠinterp(ᶜρ) * ᶠfct_boris_book(
                 ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
-                (ᶜρc / dt - ᶜdivᵥ(ᶠwinterp(J, ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) /
-                ᶜρ,
+                (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
             ),
         )
 end
 function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:zalesak})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1, ᶠupwind3, ᶠfct_zalesak) = p.operators
-    J = Fields.local_geometry_field(axes(ᶜρ)).J
+    (; ᶜdivᵥ, ᶠinterp, ᶠupwind1, ᶠupwind3, ᶠfct_zalesak) = p.operators
     @. ᶜρcₜ =
-        -(ᶜdivᵥ(ᶠwinterp(J, ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-            ᶠwinterp(J, ᶜρ) * ᶠfct_zalesak(
+        -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+            ᶠinterp(ᶜρ) * ᶠfct_zalesak(
                 ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
                 ᶜρc / ᶜρ / dt,
-                (ᶜρc / dt - ᶜdivᵥ(ᶠwinterp(J, ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) /
-                ᶜρ,
+                (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
             ),
         )
 end

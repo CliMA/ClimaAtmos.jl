@@ -75,7 +75,6 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
     (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     # Mass conservation
-    J = Fields.local_geometry_field(axes(ᶜρ)).J
     @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
 
     # Energy conservation
