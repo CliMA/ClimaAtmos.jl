@@ -41,6 +41,25 @@ function set_thermo_state_pθq!(Y, p, colidx)
     end
     nothing
 end
+function set_thermo_state_pθq_no_density!(Y, p, colidx)
+    (; edmf_cache, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; moisture_model) = edmf_cache.edmf
+    ᶜts_gm = p.ᶜts[colidx]
+    ᶜp = p.ᶜp[colidx]
+    θ_liq_ice = edmf_cache.aux.cent.θ_liq_ice[colidx]
+
+    if moisture_model isa CA.DryModel
+        @. ᶜts_gm = TD.PhaseDry_pθ(thermo_params, ᶜp, θ_liq_ice)
+    elseif moisture_model isa CA.EquilMoistModel
+        q_tot = edmf_cache.aux.cent.q_tot[colidx]
+        @. ᶜts_gm = TD.PhaseEquil_pθq(thermo_params, ᶜp, θ_liq_ice, q_tot)
+    else
+        error("TODO: add non-equilibrium moisture model support")
+    end
+    nothing
+end
+
 
 function set_grid_mean_from_thermo_state!(thermo_params, state, grid)
     Ic = CCO.InterpolateF2C()
