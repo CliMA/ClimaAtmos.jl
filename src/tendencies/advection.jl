@@ -102,7 +102,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
     @. ᶠu¹²[colidx] = Geometry.project(
         Geometry.Contravariant12Axis(),
-        ᶠwinterp(ᶜρ[colidx] * J, ᶜuvw[colidx]),
+        ᶠwinterp(ᶜρ[colidx] * J[colidx], ᶜuvw[colidx]),
     )
     @. ᶠu³[colidx] = Geometry.project(
         Geometry.Contravariant3Axis(),
