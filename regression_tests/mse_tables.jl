@@ -112,6 +112,15 @@ all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
 all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["edmf_nieuwstadt"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
 #
+all_best_mse["edmf_nieuwstadt_anelastic"] = OrderedCollections.OrderedDict()
+all_best_mse["edmf_nieuwstadt_anelastic"][(:c, :ρ)] = 0.0
+all_best_mse["edmf_nieuwstadt_anelastic"][(:c, :ρe_tot)] = 0.0
+all_best_mse["edmf_nieuwstadt_anelastic"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["edmf_nieuwstadt_anelastic"][(:c, :turbconv, :en, :ρatke)] = 0.0
+all_best_mse["edmf_nieuwstadt_anelastic"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
+all_best_mse["edmf_nieuwstadt_anelastic"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
+all_best_mse["edmf_nieuwstadt_anelastic"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
+#
 all_best_mse["compressible_edmf_bomex"] = OrderedCollections.OrderedDict()
 all_best_mse["compressible_edmf_bomex"][(:c, :ρ)] = 0.0
 all_best_mse["compressible_edmf_bomex"][(:c, :ρe_tot)] = 0.0
@@ -226,17 +235,17 @@ all_best_mse["compressible_edmf_gabls_jfnk_imex"][(:c, :turbconv, :en, :ρatke)]
 all_best_mse["single_column_nonorographic_gravity_wave"] = OrderedCollections.OrderedDict()
 all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :ρ)] = 0.0
 all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :ρe_tot)] = 0.0
-all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 1)] = 102348.01346723628
+all_best_mse["single_column_nonorographic_gravity_wave"][(:c, :uₕ, :components, :data, 2)] = 102348.01346723628
 all_best_mse["single_column_nonorographic_gravity_wave"][(:f, :w, :components, :data, 1)] = 0.0
 #
 all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρe_tot)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρq_tot)] = 0.0
-all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:f, :w, :components, :data, 1)] = 0.0
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρ)] = 3.3970328446320484e-8
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρe_tot)] = 6.190485506578191e-7
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :uₕ, :components, :data, 1)] = 0.9093855291632953
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :uₕ, :components, :data, 2)] = 17.469172491346836
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρq_tot)] = 0.0007853769813783568
+all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:f, :w, :components, :data, 1)] = 6.308874333739998
 #
 all_best_mse["sphere_baroclinic_wave_ogw"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :ρ)] = 0.0

@@ -327,15 +327,6 @@ function EDMFModel(
         default = 1,
     )
 
-    pressure_func_drag_str = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "pressure_closure_drag";
-        default = "normalmode",
-        valid_options = ["normalmode", "normalmode_signdf"],
-    )
-
     surface_area = parse_namelist(
         namelist,
         "turbulence",

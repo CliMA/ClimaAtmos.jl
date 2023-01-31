@@ -12,14 +12,13 @@ const FT = Float64
 
 face_z = 0:1e3:0.47e5
 center_z = 0.5 .* (face_z[1:(end - 1)] .+ face_z[2:end])
-model_config = CA.SingleColumnModel()
 
 # compute the source parameters
 function non_orographic_gravity_wave_cache(
     ::Type{FT};
     source_height = FT(15000),
-    Bm = FT(1.2),
-    F_S0 = FT(4e-3),
+    Bw = FT(1.2),
+    Bt_0 = FT(4e-3),
     dc = FT(0.6),
     cmax = FT(99.6),
     c0 = FT(0),
@@ -32,10 +31,13 @@ function non_orographic_gravity_wave_cache(
 
     return (;
         gw_source_height = source_height,
-        gw_F_S0 = F_S0,
-        gw_Bm = Bm,
+        gw_source_ampl = Bt_0,
+        gw_Bw = Bw,
+        gw_Bn = FT(0),
         gw_c = c,
         gw_cw = cw,
+        gw_cn = FT(1),
+        gw_flag = FT(1),
         gw_c0 = c0,
         gw_nk = length(kwv),
         gw_k = kwv,
@@ -45,7 +47,7 @@ end
 
 params = non_orographic_gravity_wave_cache(
     FT;
-    Bm = 0.4,
+    Bw = 0.4,
     cmax = 150,
     kwv = 2π / 100e3,
 )
@@ -132,13 +134,15 @@ Jan_ρ = mean(center_ρ_zonalave[:, :, month .== 1], dims = 3)[:, :, 1]
 Jan_uforcing = zeros(length(lat), length(center_z))
 for j in 1:length(lat)
     Jan_uforcing[j, :] = CA.non_orographic_gravity_wave_forcing(
-        model_config,
         Jan_u[j, :],
         source_level,
-        params.gw_F_S0,
-        params.gw_Bm,
-        params.gw_c,
+        params.gw_source_ampl,
+        params.gw_Bw,
+        params.gw_Bn,
         params.gw_cw,
+        params.gw_cn,
+        params.gw_flag,
+        params.gw_c,
         params.gw_c0,
         params.gw_nk,
         params.gw_k,
