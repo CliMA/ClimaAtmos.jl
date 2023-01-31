@@ -42,7 +42,6 @@ Base.@kwdef struct EntrDetr{FT}
 end
 
 Base.@kwdef struct εδModelParams{FT}
-    c_div::FT
     w_min::FT # minimum updraft velocity to avoid zero division in b/w²
     c_ε::FT # factor multiplier for dry term in entrainment/detrainment
     μ_0::FT # dimensional scale logistic function in the dry term in entrainment/detrainment
@@ -435,13 +434,6 @@ function EDMFModel(
 
     entr_closure_name = parsed_args["edmf_entr_closure"]
     if entr_closure_name == "MoistureDeficit"
-        c_div = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "entrainment_massflux_div_factor";
-            default = 0.0,
-        )
         w_min = parse_namelist(
             namelist,
             "turbulence",
@@ -504,7 +496,6 @@ function EDMFModel(
         )
 
         εδ_params = εδModelParams{FT}(;
-            c_div,
             w_min,
             c_ε,
             μ_0,
