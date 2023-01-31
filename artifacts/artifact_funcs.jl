@@ -37,3 +37,15 @@ function topo_res_path()
     )
     return AW.get_data_folder(topo_data)
 end
+
+function mima_gwf_path()
+    mima_data = AW.ArtifactWrapper(
+        @__DIR__,
+        "mima-gwf",
+        AW.ArtifactFile[AW.ArtifactFile(
+            url = "https://caltech.box.com/shared/static/6r566rv4631ibfbr5p5vtv4ls7vl5fge.nc",
+            filename = "mima_gwf.nc",
+        ),],
+    )
+    return AW.get_data_folder(mima_data)
+end

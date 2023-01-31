@@ -62,16 +62,19 @@ abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     source_pressure::FT = 3e4
     source_height::FT = 15000
-    Bm::FT
-    F_S0::FT = 4e-3
+    Bw::FT = 1.0
+    Bn::FT = 1.0
     dc::FT = 0.6
     cmax::FT = 99.6
     c0::FT = 0
     kwv::FT = 2π / 100e5
     cw::FT = 40.0
+    cw_tropics::FT = 40.0
+    cn::FT = 40.0
     Bt_0::FT = 0.0003
     Bt_n::FT = 0.0003
     Bt_s::FT = 0.0003
+    Bt_eq::FT = 0.0003
     ϕ0_n::FT = 30
     ϕ0_s::FT = -30
     dϕ_n::FT = 5

@@ -23,19 +23,21 @@ function non_orographic_gravity_wave_cache(
     Y,
 )
     FT = Spaces.undertype(axes(Y.c))
-    (; source_height, Bm, F_S0, dc, cmax, c0, kwv, cw) = gw
+    (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, kwv, cw, cn) = gw
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
-    gw_F_S0 = similar(Fields.level(Y.c.ρ, 1))  # there must be a better way...
-    gw_F_S0 .= F_S0
+
     return (;
         gw_source_height = source_height,
-        gw_source_ampl = gw_F_S0,
-        gw_Bm = Bm,
+        gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+        gw_Bw = Bw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+        gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_c = c,
-        gw_cw = cw,
+        gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
+        gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_c0 = c0,
+        gw_flag = ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_nk = length(kwv),
         gw_k = kwv,
         gw_k2 = kwv .^ 2,
@@ -51,28 +53,48 @@ function non_orographic_gravity_wave_cache(
 )
 
     FT = Spaces.undertype(axes(Y.c))
-    (; source_pressure, Bm, Bt_0, Bt_n, Bt_s, ϕ0_n) = gw
-    (; ϕ0_s, dϕ_n, dϕ_s, dc, cmax, c0, kwv, cw) = gw
+    (; source_pressure, Bw, Bn, Bt_0, Bt_n, Bt_s, Bt_eq) = gw
+    (; ϕ0_s, ϕ0_n, dϕ_n, dϕ_s, dc, cmax, c0, kwv, cw, cw_tropics, cn) = gw
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
 
     ᶜlocal_geometry = Fields.local_geometry_field(Fields.level(Y.c, 1))
     lat = ᶜlocal_geometry.coordinates.lat
-    source_ampl = @. Bt_0 +
-       Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
-       Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s))
 
-    # compute spatio variant source F_S0
+    gw_Bn = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), Bn)
+    gw_cw = @. ifelse(dϕ_s <= lat <= dϕ_n, cw_tropics, cw)
+    gw_flag = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), FT(1))
+    gw_Bw = ones(FT, axes(lat)) .* Bw
+    gw_cn = ones(FT, axes(lat)) .* cn
+
+    source_ampl = @. ifelse(
+        lat > ϕ0_n || lat < ϕ0_s,
+        Bt_0 +
+        Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
+        Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s)),
+        ifelse(
+            dϕ_s <= lat <= dϕ_n,
+            Bt_eq,
+            ifelse(
+                dϕ_n <= lat <= ϕ0_n,
+                Bt_0 + (Bt_eq - Bt_0) / (ϕ0_n - dϕ_n) * (ϕ0_n - lat),
+                Bt_0 + (Bt_eq - Bt_0) / (ϕ0_s - dϕ_s) * (ϕ0_s - lat),
+            ),
+        ),
+    )
 
     return (;
         # TODO: use atmos.non_orographic_gravity_wave for shared cache properties
         gw_source_pressure = source_pressure,
         gw_source_ampl = source_ampl,
-        gw_Bm = Bm,
+        gw_Bw = gw_Bw,
+        gw_Bn = gw_Bn,
         gw_c = c,
-        gw_cw = cw,
+        gw_cw = gw_cw,
+        gw_cn = gw_cn,
         gw_c0 = c0,
+        gw_flag = gw_flag,
         gw_nk = length(kwv),
         gw_k = kwv,
         gw_k2 = kwv .^ 2,
@@ -90,7 +112,19 @@ function non_orographic_gravity_wave_tendency!(
 )
     #unpack
     (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params, model_config) = p
-    (; gw_Bm, gw_source_ampl, gw_c, gw_cw, gw_c0, gw_nk, gw_k, gw_k2) = p
+    (;
+        gw_source_ampl,
+        gw_Bw,
+        gw_Bn,
+        gw_c,
+        gw_cw,
+        gw_cn,
+        gw_flag,
+        gw_c0,
+        gw_nk,
+        gw_k,
+        gw_k2,
+    ) = p
     (; ᶜgradᵥ, ᶠinterp) = p.operators
 
     if model_config isa SingleColumnModel
@@ -150,18 +184,20 @@ function non_orographic_gravity_wave_tendency!(
 
     # a place holder to store physical forcing on uv
     uforcing = ones(axes(u_phy))
-    vforcing = similar(v_phy)
+    vforcing = ones(axes(u_phy))
 
     # GW parameterization applied bycolume
     Fields.bycolumn(axes(ᶜρ)) do colidx
         parent(uforcing[colidx]) .= non_orographic_gravity_wave_forcing(
-            model_config,
             parent(u_phy[colidx]),
             Int(parent(source_level[colidx])[1]),
             parent(gw_source_ampl[colidx])[1],
-            gw_Bm,
+            parent(gw_Bw[colidx])[1],
+            parent(gw_Bn[colidx])[1],
+            parent(gw_cw[colidx])[1],
+            parent(gw_cn[colidx])[1],
+            parent(gw_flag[colidx])[1],
             gw_c,
-            gw_cw,
             gw_c0,
             gw_nk,
             gw_k,
@@ -171,13 +207,15 @@ function non_orographic_gravity_wave_tendency!(
             parent(ᶠz[colidx]),
         )
         parent(vforcing[colidx]) .= non_orographic_gravity_wave_forcing(
-            model_config,
             parent(v_phy[colidx]),
             Int(parent(source_level[colidx])[1]),
             parent(gw_source_ampl[colidx])[1],
-            gw_Bm,
+            parent(gw_Bw)[1],
+            parent(gw_Bn)[1],
+            parent(gw_cw)[1],
+            parent(gw_cn)[1],
+            parent(gw_flag)[1],
             gw_c,
-            gw_cw,
             gw_c0,
             gw_nk,
             gw_k,
@@ -196,13 +234,15 @@ function non_orographic_gravity_wave_tendency!(
 end
 
 function non_orographic_gravity_wave_forcing(
-    model_config,
     ᶜu,
     source_level,
-    source_ampl,  # F_S0 for single columne and source_ampl (F/ρ) as GFDL for sphere
-    Bm,
-    c,
+    source_ampl,
+    Bw,
+    Bn,
     cw,
+    cn,
+    flag,
+    c,
     c0,
     nk,
     kwv,
@@ -221,16 +261,16 @@ function non_orographic_gravity_wave_forcing(
 
     c_hat0 = c .- ᶜu[source_level]
     # In GFDL code, flag is always 1: c = c0 * flag + c_hat0 * (1 - flag)
-    Bexp = @. exp(-log(2.0) * ((c - c0) / cw)^2)
-    B0 = @. sign(c_hat0) * Bm * Bexp
+    Bw_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cw)^2)
+    Bn_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cn)^2)
+    B0 = @. sign(c_hat0) * (Bw * Bw_exp + Bn * Bn_exp)
     # In GFDL code, it is: B0 = @. sign(c_hat0) * (Bw * Bexp + Bn * Bexp)
     # where Bw = Bm is the wide band and Bn is the narrow band
     Bsum = sum(abs.(B0))
     if (Bsum == 0.0)
         error("zero flux input at source level")
     end
-    eps =
-        calc_intermitency(model_config, ᶜρ[source_level], source_ampl, nk, Bsum)
+    eps = calc_intermitency(ᶜρ[source_level], source_ampl, nk, Bsum)
 
     ᶜdz = ᶠz[2:end] - ᶠz[1:(end - 1)]
     wave_forcing = zeros(nc)
@@ -307,6 +347,13 @@ function non_orographic_gravity_wave_forcing(
             gwf[k] = gwf[k] + wave_forcing[k]
         end
 
+        # If there is remaining momentum flux going across model top, it is deposited 
+        # to the top layer
+        k = length(ᶜu)
+        fm = sum(mask .* B0) * sqrt(ᶜρ[k] * ᶜρ[k - 1]) * eps / ᶜdz[k]
+        wave_forcing[k] = 0.5 * (fm + wave_forcing[k])
+        gwf[k] = 0.5 * (fm + gwf[k])
+
     end # ink
 
     return gwf
@@ -314,22 +361,6 @@ end
 
 # calculate the intermittency factor eps -> assuming constant Δc.
 
-function calc_intermitency(
-    ::SingleColumnModel,
-    ρ_source_level,
-    source_ampl,
-    nk,
-    Bsum,
-)
+function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
     return (source_ampl / ρ_source_level / nk) / Bsum
-end
-
-function calc_intermitency(
-    ::SphericalModel,
-    ρ_source_level,
-    source_ampl,
-    nk,
-    Bsum,
-)
-    return source_ampl * 1.5 / nk / Bsum
 end
