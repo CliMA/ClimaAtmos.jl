@@ -41,12 +41,6 @@ function get_Δw(εδ_model, w_up::FT, w_en::FT) where {FT}
     return Δw
 end
 
-function get_MdMdz(M::FT, dMdz::FT) where {FT}
-    MdMdz_ε = max(dMdz / max(M, eps(FT)), 0)
-    MdMdz_δ = max(-dMdz / max(M, eps(FT)), 0)
-    return MdMdz_ε, MdMdz_δ
-end
-
 function entrainment_inv_length_scale(
     εδ_model,
     b_up::FT,
@@ -83,12 +77,9 @@ function εδ_dyn(εδ_model, εδ_vars, ε_nondim, δ_nondim)
 
     area_limiter = max_area_limiter(εδ_model, εδ_vars.max_area, εδ_vars.a_up)
 
-    c_div = εδ_params(εδ_model).c_div
-    MdMdz_ε, MdMdz_δ = get_MdMdz(εδ_vars.M, εδ_vars.dMdz) .* c_div
-
     # fractional dynamical entrainment / detrainment [1 / m]
-    ε_dyn = εδ_dim_scale * ε_nondim + MdMdz_ε
-    δ_dyn = εδ_dim_scale * (δ_nondim + area_limiter) + MdMdz_δ
+    ε_dyn = εδ_dim_scale * ε_nondim
+    δ_dyn = εδ_dim_scale * (δ_nondim + area_limiter)
 
     return ε_dyn, δ_dyn
 end

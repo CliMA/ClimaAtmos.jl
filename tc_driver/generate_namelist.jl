@@ -77,8 +77,6 @@ function default_namelist(
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["detrainment_factor"] =
         0.51
 
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_massflux_div_factor"] =
-        0.0
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["turbulent_entrainment_factor"] =
         0.075
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_smin_tke_coeff"] =
