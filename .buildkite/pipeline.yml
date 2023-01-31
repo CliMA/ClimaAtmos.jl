@@ -96,6 +96,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
+        command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_mima.jl"
+        artifact_paths: "nonorographic_gravity_wave_test_mima/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
         command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
@@ -182,10 +188,9 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs --t_end 30days"
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
-      # Disabling e_int tests in PR#1240
-      #- label: ":computer: held suarez (ρe_int)"
-      #  command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true --t_end 30days"
-      #  artifact_paths: "sphere_held_suarez_rhoe_int/*"
+      - label: ":computer: held suarez (ρe_int)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --energy_name rhoe_int --job_id sphere_held_suarez_rhoe_int --regression_test true --t_end 30days"
+        artifact_paths: "sphere_held_suarez_rhoe_int/*"
 
       - label: ":computer: held suarez (ρe) equilmoist hightop sponge"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 1days"
@@ -368,7 +373,70 @@ steps:
           --quicklook_reference_job_id compressible_edmf_gabls
           --job_id compressible_edmf_gabls_jfnk_imex
           --dt 600secs
-        artifact_paths: "compressible_edmf_gabls/*"
+        artifact_paths: "compressible_edmf_gabls_jfnk_imex/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Nieuwstadt
+          --z_elem 200 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist dry
+          --job_id edmf_nieuwstadt
+          --dt 1secs
+        artifact_paths: "edmf_nieuwstadt/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, anelastic)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Nieuwstadt
+          --z_elem 200 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist dry
+          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
+          --job_id edmf_nieuwstadt_anelastic
+          --dt 1secs
+        artifact_paths: "edmf_nieuwstadt_anelastic/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Soares"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Soares
+          --z_elem 150 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --job_id edmf_soares
+          --dt 1.0secs
+        artifact_paths: "edmf_soares/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Soares (Constant entrainment)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Soares
+          --z_elem 150 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --edmf_entr_closure Constant
+          --job_id edmf_soares_const_entr
+          --dt 1secs
+        artifact_paths: "edmf_soares_const_entr/*"
         agents:
           slurm_mem: 20GB
 
@@ -454,6 +522,51 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: SCM EDMF LifeCycleTan2018"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case LifeCycleTan2018 --subsidence LifeCycleTan2018 --edmf_coriolis LifeCycleTan2018 --ls_adv LifeCycleTan2018
+          --z_elem 75 --z_stretch false --z_max 3e3
+          --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --job_id edmf_life_cycle_tan2018
+          --dt 6secs
+        artifact_paths: "edmf_life_cycle_tan2018/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF ARM_SGP"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case ARM_SGP --ls_adv ARM_SGP --edmf_coriolis ARM_SGP
+          --z_elem 100 --z_stretch false --z_max 4400
+          --t_end 14.5hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --job_id edmf_arm_sgp
+          --dt 2secs
+        artifact_paths: "edmf_arm_sgp/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Rico"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Rico --ls_adv Rico --subsidence Rico
+          --z_elem 100 --z_stretch false --z_max 4000
+          --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
+          --moist equil --precip_model 1M
+          --job_id edmf_rico
+          --dt 1.0secs
+        artifact_paths: "edmf_rico/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":balloon: SCM EDMF TRMM_LBA (Short, 1-moment micro, sponge)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -502,104 +615,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF: Nieuwstadt (Anelastic, dry)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Nieuwstadt
-          --z_elem 75 --z_stretch false --z_max 3750
-          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist dry
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
-          --job_id edmf_nieuwstadt
-          --dt 1secs
-        artifact_paths: "edmf_nieuwstadt/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF Soares (Anelastic)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Soares
-          --z_elem 75 --z_stretch false --z_max 3750
-          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist equil
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
-          --job_id edmf_soares
-          --dt 1secs
-        artifact_paths: "edmf_soares/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF Soares (Anelastic, Constant entrainment)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Soares
-          --z_elem 75 --z_stretch false --z_max 3750
-          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist equil
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
-          --edmf_entr_closure Constant
-          --job_id edmf_soares_const_entr
-          --dt 1secs
-        artifact_paths: "edmf_soares_const_entr/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF LifeCycleTan2018 (Anelastic)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case LifeCycleTan2018 --subsidence LifeCycleTan2018 --edmf_coriolis LifeCycleTan2018 --ls_adv LifeCycleTan2018
-          --z_elem 75 --z_stretch false --z_max 3e3
-          --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist equil
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
-          --job_id edmf_life_cycle_tan2018
-          --dt 6secs
-        artifact_paths: "edmf_life_cycle_tan2018/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF ARM_SGP (Anelastic)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case ARM_SGP --ls_adv ARM_SGP --edmf_coriolis ARM_SGP
-          --z_elem 88 --z_stretch false --z_max 4400
-          --t_end 14.5hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist equil
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
-          --job_id edmf_arm_sgp
-          --dt 2secs
-        artifact_paths: "edmf_arm_sgp/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF Rico (Anelastic)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Rico --ls_adv Rico --subsidence Rico
-          --z_elem 80 --z_stretch false --z_max 4000
-          --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
-          --moist equil --precip_model 1M
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
-          --job_id edmf_rico
-          --dt 1secs
-        artifact_paths: "edmf_rico/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":dart: SCM EDMF Consistency test Bomex (Anelastic)"
+      - label: ":dart: SCM EDMF Consistency test Bomex"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true
@@ -608,7 +624,6 @@ steps:
           --z_elem 60 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --anelastic_dycore true --split_ode false --ode_algo ODE.Euler
           --test_edmf_consistency true
           --job_id edmf_bomex_consistency
           --dt 6secs
