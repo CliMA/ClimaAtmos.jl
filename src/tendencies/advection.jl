@@ -110,7 +110,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜρc = getproperty(Y.c, ᶜρc_name)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ρc[colidx] * ᶜuₕ[colidx]))
+        @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
     end
 
     return nothing
