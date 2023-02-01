@@ -10,8 +10,8 @@ const FT = Float64
 # test Figure 8 of the Alexander and Dunkerton (1999) paper:
 # https://journals.ametsoc.org/view/journals/atsc/56/24/1520-0469_1999_056_4167_aspomf_2.0.co_2.xml?tab_body=pdf
 
-face_z = 0:1e3:0.47e5
-center_z = 0.5 .* (face_z[1:(end - 1)] .+ face_z[2:end])
+face_z = FT.(0:1e3:0.47e5)
+center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
 
 # compute the source parameters
 function non_orographic_gravity_wave_cache(
@@ -40,8 +40,6 @@ function non_orographic_gravity_wave_cache(
         gw_flag = FT(1),
         gw_c0 = c0,
         gw_nk = length(kwv),
-        gw_k = kwv,
-        gw_k2 = kwv .^ 2,
     )
 end
 
@@ -52,6 +50,7 @@ params = non_orographic_gravity_wave_cache(
     kwv = 2π / 100e3,
 )
 source_level = argmin(abs.(center_z .- params.gw_source_height))
+damp_level = length(center_z)
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
@@ -135,7 +134,11 @@ Jan_uforcing = zeros(length(lat), length(center_z))
 for j in 1:length(lat)
     Jan_uforcing[j, :] = CA.non_orographic_gravity_wave_forcing(
         Jan_u[j, :],
+        Jan_bf[j, :],
+        Jan_ρ[j, :],
+        copy(center_z),
         source_level,
+        damp_level,
         params.gw_source_ampl,
         params.gw_Bw,
         params.gw_Bn,
@@ -145,11 +148,6 @@ for j in 1:length(lat)
         params.gw_c,
         params.gw_c0,
         params.gw_nk,
-        params.gw_k,
-        params.gw_k2,
-        Jan_bf[j, :],
-        Jan_ρ[j, :],
-        face_z,
     )
 end
 

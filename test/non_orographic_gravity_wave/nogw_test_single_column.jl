@@ -41,8 +41,6 @@ function non_orographic_gravity_wave_cache(
         gw_flag = FT(1),
         gw_c0 = c0,
         gw_nk = length(kwv),
-        gw_k = kwv,
-        gw_k2 = kwv .^ 2,
     )
 end
 
@@ -53,6 +51,7 @@ params = non_orographic_gravity_wave_cache(
     kwv = 2π / 100e3,
 )
 source_level = argmin(abs.(center_z .- params.gw_source_height))
+damp_level = length(center_z)
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
@@ -138,7 +137,11 @@ Jan_bf = mean(center_bf_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_ρ = mean(center_ρ_mean[:, month .== 1], dims = 2)[:, 1]
 Jan_uforcing = CA.non_orographic_gravity_wave_forcing(
     Jan_u,
+    Jan_bf,
+    Jan_ρ,
+    copy(center_z),
     source_level,
+    damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
@@ -148,14 +151,12 @@ Jan_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c,
     params.gw_c0,
     params.gw_nk,
-    params.gw_k,
-    params.gw_k2,
-    Jan_bf,
-    Jan_ρ,
-    face_z,
 )
 png(
-    plot(Jan_uforcing[source_level:end] * 86400, center_z[source_level:end]),
+    plot(
+        Jan_uforcing[source_level:(end - 1)] * 86400,
+        center_z[source_level:(end - 1)],
+    ),
     joinpath(output_dir, "fig6jan.png"),
 )
 
@@ -165,7 +166,11 @@ April_bf = mean(center_bf_mean[:, month .== 4], dims = 2)[:, 1]
 April_ρ = mean(center_ρ_mean[:, month .== 4], dims = 2)[:, 1]
 April_uforcing = CA.non_orographic_gravity_wave_forcing(
     April_u,
+    April_bf,
+    April_ρ,
+    copy(center_z),
     source_level,
+    damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
@@ -175,14 +180,12 @@ April_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c,
     params.gw_c0,
     params.gw_nk,
-    params.gw_k,
-    params.gw_k2,
-    April_bf,
-    April_ρ,
-    face_z,
 )
 png(
-    plot(April_uforcing[source_level:end] * 86400, center_z[source_level:end]),
+    plot(
+        April_uforcing[source_level:(end - 1)] * 86400,
+        center_z[source_level:(end - 1)],
+    ),
     joinpath(output_dir, "fig6apr.png"),
 )
 
@@ -192,7 +195,11 @@ July_bf = mean(center_bf_mean[:, month .== 7], dims = 2)[:, 1]
 July_ρ = mean(center_ρ_mean[:, month .== 7], dims = 2)[:, 1]
 July_uforcing = CA.non_orographic_gravity_wave_forcing(
     July_u,
+    July_bf,
+    July_ρ,
+    copy(center_z),
     source_level,
+    damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
@@ -202,14 +209,12 @@ July_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c,
     params.gw_c0,
     params.gw_nk,
-    params.gw_k,
-    params.gw_k2,
-    July_bf,
-    July_ρ,
-    face_z,
 )
 png(
-    plot(July_uforcing[source_level:end] * 86400, center_z[source_level:end]),
+    plot(
+        July_uforcing[source_level:(end - 1)] * 86400,
+        center_z[source_level:(end - 1)],
+    ),
     joinpath(output_dir, "fig6jul.png"),
 )
 
@@ -219,7 +224,11 @@ Oct_bf = mean(center_bf_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_ρ = mean(center_ρ_mean[:, month .== 10], dims = 2)[:, 1]
 Oct_uforcing = CA.non_orographic_gravity_wave_forcing(
     Oct_u,
+    Oct_bf,
+    Oct_ρ,
+    copy(center_z),
     source_level,
+    damp_level,
     params.gw_source_ampl,
     params.gw_Bw,
     params.gw_Bn,
@@ -229,13 +238,11 @@ Oct_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c,
     params.gw_c0,
     params.gw_nk,
-    params.gw_k,
-    params.gw_k2,
-    Oct_bf,
-    Oct_ρ,
-    face_z,
 )
 png(
-    plot(Oct_uforcing[source_level:end] * 86400, center_z[source_level:end]),
+    plot(
+        Oct_uforcing[source_level:(end - 1)] * 86400,
+        center_z[source_level:(end - 1)],
+    ),
     joinpath(output_dir, "fig6oct.png"),
 )
