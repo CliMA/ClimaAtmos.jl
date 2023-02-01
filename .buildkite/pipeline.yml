@@ -138,9 +138,9 @@ steps:
         agents:
           slurm_ntasks: 2
         timeout_in_minutes: 20
-        retry:
-          automatic: true
         soft_fail: true
+        #retry:
+        #  automatic: true
 
       - label: ":computer: MPI aquaplanet (ρe_tot) equilmoist clearsky radiation"
         command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad clearsky --precip_model 0M --job_id mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky --dt 400secs --t_end 4days"
