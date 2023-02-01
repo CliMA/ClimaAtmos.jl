@@ -76,26 +76,18 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     # Mass conservation
     J = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠwinterp(J[colidx], ᶜρ[colidx] * ᶜuₕ[colidx]))
+    @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
 
     # Energy conservation
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ[colidx] -=
-            ᶜdivᵥ(ᶠwinterp(J[colidx], Y.c.ρθ[colidx] * ᶜuₕ[colidx]))
+            ᶜdivᵥ(ᶠinterp(Y.c.ρθ[colidx] * ᶜuₕ[colidx]))
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(
-            ᶠwinterp(
-                J[colidx],
-                (Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx],
-            ),
-        )
+        @. Yₜ.c.ρe_tot[colidx] -=
+            ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
     elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] -= ᶜdivᵥ(
-            ᶠwinterp(
-                J[colidx],
-                (Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx],
-            ),
-        )
+        @. Yₜ.c.ρe_int[colidx] -=
+            ᶜdivᵥ(ᶠinterp((Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
     end
 
     # Momentum conservation
@@ -118,7 +110,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜρc = getproperty(Y.c, ᶜρc_name)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠwinterp(J[colidx], ᶜρc[colidx] * ᶜuₕ[colidx]))
+        @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ρc[colidx] * ᶜuₕ[colidx]))
     end
 
     return nothing
