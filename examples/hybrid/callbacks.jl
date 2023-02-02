@@ -360,7 +360,9 @@ function save_to_disk_func(integrator)
     # vorticity
     curl_uh = @. curlₕ(Y.c.uₕ)
     ᶜvort = Geometry.WVector.(curl_uh)
-    Spaces.weighted_dss!(ᶜvort)
+    if !integrator.p.ghost_buffer.skip_dss
+        Spaces.weighted_dss!(ᶜvort)
+    end
 
     q_sfc = @. TD.total_specific_humidity(thermo_params, ts_sfc)
     dry_diagnostic = (;
