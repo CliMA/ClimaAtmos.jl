@@ -59,6 +59,10 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
             cloud_fraction = FT(0),
             e_tot_tendency_precip_formation = FT(0),
             qt_tendency_precip_formation = FT(0),
+            filter_flag_1 = FT(0), # tmp flag for testing filters
+            filter_flag_2 = FT(0), # tmp flag for testing filters
+            filter_flag_3 = FT(0), # tmp flag for testing filters
+            filter_flag_4 = FT(0), # tmp flag for testing filters
         ),
         up = ntuple(
             i -> cent_aux_vars_up(FT, local_geometry, atmos.turbconv_model),
