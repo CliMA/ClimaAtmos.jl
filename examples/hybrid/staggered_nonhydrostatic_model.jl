@@ -205,6 +205,7 @@ function default_cache(
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
+        ᶜu¹² = similar(Y.c, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
         sfc_conditions,
