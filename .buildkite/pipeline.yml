@@ -399,6 +399,26 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, JFNK with IMEX EDMF)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Nieuwstadt
+          --z_elem 200 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist dry
+          --imex_edmf_turbconv true
+          --imex_edmf_gm true
+          --use_krylov_method true
+          --quicklook_reference_job_id edmf_nieuwstadt
+          --job_id edmf_nieuwstadt_jfnk_imex
+          --dt 50secs
+        artifact_paths: "edmf_nieuwstadt_jfnk_imex/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
       - label: ":balloon: SCM EDMF Soares"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -411,7 +431,6 @@ steps:
           --job_id edmf_soares
           --dt 0.5secs
         artifact_paths: "edmf_soares/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 
@@ -428,6 +447,27 @@ steps:
           --job_id edmf_soares_const_entr
           --dt 0.5secs
         artifact_paths: "edmf_soares_const_entr/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Soares (Constant entrainment, JFNK with IMEX EDMF)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Soares
+          --z_elem 150 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --edmf_entr_closure Constant
+          --imex_edmf_turbconv true
+          --imex_edmf_gm true
+          --use_krylov_method true
+          --quicklook_reference_job_id edmf_soares_const_entr
+          --job_id edmf_soares_const_entr_jfnk_imex
+          --dt 50secs
+        artifact_paths: "edmf_soares_const_entr_jfnk_imex/*"
+        soft_fail: true
         agents:
           slurm_mem: 20GB
 
