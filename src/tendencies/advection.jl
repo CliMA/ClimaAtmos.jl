@@ -91,7 +91,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
     # Momentum conservation
     @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
-    @. ᶜu¹²[colid] =
+    @. ᶜu¹²[colidx] =
         Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx])
     @. ᶠu³[colidx] = Geometry.project(
         Geometry.Contravariant3Axis(),
