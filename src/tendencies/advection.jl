@@ -102,7 +102,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         (ᶜf[colidx] + ᶜω³[colidx]) ×
         (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
     @. Yₜ.f.w[colidx] -=
-        ᶠω¹²[colidx] × (ᶠinterp(J[colidx] * ᶜρ[colidx]) * ᶜu¹²[colidx]) / ᶠinterp(ᶜρ[colidx] * J[colidx]) + ᶠgradᵥ(ᶜK[colidx])
+        ᶠω¹²[colidx] × (ᶠinterp(J[colidx] * ᶜρ[colidx] * ᶜu¹²[colidx])) / ᶠinterp(ᶜρ[colidx] * J[colidx]) + ᶠgradᵥ(ᶜK[colidx])
 
     # Tracer conservation
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
