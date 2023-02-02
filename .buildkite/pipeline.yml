@@ -71,7 +71,7 @@ steps:
     steps:
 
       - label: ":computer: single column hydrostatic balance float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --job_id sphere_single_column_hydrostatic_balance --FLOAT_TYPE Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --job_id sphere_single_column_hydrostatic_balance_ft64 --FLOAT_TYPE Float64"
         artifact_paths: "sphere_single_column_hydrostatic_balance_ft64/*"
 
       - label: ":computer: single column radiative equilibrium gray"
@@ -253,7 +253,7 @@ steps:
     steps:
 
       - label: ":computer: hydrostatic balance (ρe_tot) float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe --FLOAT_TYPE Float64 --bubble true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64 --bubble true"
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
         agents:
           slurm_mem: 20GB
