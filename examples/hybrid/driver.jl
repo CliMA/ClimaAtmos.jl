@@ -34,9 +34,13 @@ import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
+import CLIMAParameters as CP
 namelist = if turbconv == "edmf"
-    nl = TCU.NameList.default_namelist(case_name)
-    nl
+    toml_dict = CP.create_toml_dict(FT)
+    aliases = string.(fieldnames(TCU.NameList.EDMFParameters))
+    EDMF_pairs = CP.get_parameter_values!(toml_dict, aliases, "edmf")
+    EDMF_pairs = (; EDMF_pairs...)
+    TCU.NameList.edmf_paramset(EDMF_pairs, case_name)
 else
     nothing
 end
