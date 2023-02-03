@@ -104,51 +104,84 @@ function edmf_paramset(
     namelist_defaults["turbulence"] = Dict()
 
     namelist_defaults["turbulence"]["EDMF_PrognosticTKE"] = Dict()
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["surface_area"] = EDMF_pairs.surface_area
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["max_area"] = EDMF_pairs.max_area
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["min_area"] = EDMF_pairs.min_area
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["surface_area"] =
+        EDMF_pairs.surface_area
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["max_area"] =
+        EDMF_pairs.max_area
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["min_area"] =
+        EDMF_pairs.min_area
 
     # mixing_length
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["tke_ed_coeff"] = EDMF_pairs.tke_ed_coeff
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["tke_diss_coeff"] = EDMF_pairs.tke_diss_coeff
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["static_stab_coeff"] = EDMF_pairs.static_stab_coeff
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["tke_surf_scale"] = EDMF_pairs.tke_surf_scale
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["Prandtl_number_scale"] = EDMF_pairs.Prandtl_number_scale
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["Prandtl_number_0"] = EDMF_pairs.Prandtl_number_0
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"] = EDMF_pairs.Ri_crit
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["smin_ub"] = EDMF_pairs.smin_ub
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["smin_rm"] = EDMF_pairs.smin_rm
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["l_max"] = EDMF_pairs.l_max
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["tke_ed_coeff"] =
+        EDMF_pairs.tke_ed_coeff
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["tke_diss_coeff"] =
+        EDMF_pairs.tke_diss_coeff
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["static_stab_coeff"] =
+        EDMF_pairs.static_stab_coeff
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["tke_surf_scale"] =
+        EDMF_pairs.tke_surf_scale
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["Prandtl_number_scale"] =
+        EDMF_pairs.Prandtl_number_scale
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["Prandtl_number_0"] =
+        EDMF_pairs.Prandtl_number_0
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["Ri_crit"] =
+        EDMF_pairs.Ri_crit
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["smin_ub"] =
+        EDMF_pairs.smin_ub
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["smin_rm"] =
+        EDMF_pairs.smin_rm
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["l_max"] =
+        EDMF_pairs.l_max
     # entrainment
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_factor"] = EDMF_pairs.entrainment_factor
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["detrainment_factor"] = EDMF_pairs.detrainment_factor
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_factor"] =
+        EDMF_pairs.entrainment_factor
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["detrainment_factor"] =
+        EDMF_pairs.detrainment_factor
 
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["turbulent_entrainment_factor"] = EDMF_pairs.turbulent_entrainment_factor
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_smin_tke_coeff"] = EDMF_pairs.entrainment_smin_tke_coeff
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["updraft_mixing_frac"] = EDMF_pairs.updraft_mixing_frac
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["area_limiter_scale"] = EDMF_pairs.area_limiter_scale
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["area_limiter_power"] = EDMF_pairs.area_limiter_power
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_scale"] = EDMF_pairs.entrainment_scale
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["sorting_power"] = EDMF_pairs.sorting_power
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["min_upd_velocity"] = EDMF_pairs.min_upd_velocity
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["turbulent_entrainment_factor"] =
+        EDMF_pairs.turbulent_entrainment_factor
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_smin_tke_coeff"] =
+        EDMF_pairs.entrainment_smin_tke_coeff
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["updraft_mixing_frac"] =
+        EDMF_pairs.updraft_mixing_frac
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["area_limiter_scale"] =
+        EDMF_pairs.area_limiter_scale
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["area_limiter_power"] =
+        EDMF_pairs.area_limiter_power
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment_scale"] =
+        EDMF_pairs.entrainment_scale
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["sorting_power"] =
+        EDMF_pairs.sorting_power
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["min_upd_velocity"] =
+        EDMF_pairs.min_upd_velocity
     # pressure
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["min_updraft_top"] = EDMF_pairs.min_updraft_top
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_buoy_coeff1"] = EDMF_pairs.pressure_normalmode_buoy_coeff1
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_adv_coeff"] = EDMF_pairs.pressure_normalmode_adv_coeff
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_drag_coeff"] = EDMF_pairs.pressure_normalmode_drag_coeff
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["min_updraft_top"] =
+        EDMF_pairs.min_updraft_top
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_buoy_coeff1"] =
+        EDMF_pairs.pressure_normalmode_buoy_coeff1
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_adv_coeff"] =
+        EDMF_pairs.pressure_normalmode_adv_coeff
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["pressure_normalmode_drag_coeff"] =
+        EDMF_pairs.pressure_normalmode_drag_coeff
 
     # thermodynamics
     namelist_defaults["thermodynamics"] = Dict()
-    namelist_defaults["thermodynamics"]["moisture_model"] = EDMF_pairs.moisture_model
-    namelist_defaults["thermodynamics"]["thermo_covariance_model"] = EDMF_pairs.thermo_covariance_model
-    namelist_defaults["thermodynamics"]["diagnostic_covar_limiter"] = EDMF_pairs.diagnostic_covar_limiter
+    namelist_defaults["thermodynamics"]["moisture_model"] =
+        EDMF_pairs.moisture_model
+    namelist_defaults["thermodynamics"]["thermo_covariance_model"] =
+        EDMF_pairs.thermo_covariance_model
+    namelist_defaults["thermodynamics"]["diagnostic_covar_limiter"] =
+        EDMF_pairs.diagnostic_covar_limiter
     namelist_defaults["thermodynamics"]["sgs"] = EDMF_pairs.sgs
-    namelist_defaults["thermodynamics"]["quadrature_order"] = EDMF_pairs.quadrature_order
-    namelist_defaults["thermodynamics"]["quadrature_type"] = EDMF_pairs.quadrature_type
+    namelist_defaults["thermodynamics"]["quadrature_order"] =
+        EDMF_pairs.quadrature_order
+    namelist_defaults["thermodynamics"]["quadrature_type"] =
+        EDMF_pairs.quadrature_type
 
     namelist_defaults["microphysics"] = Dict()
 
-    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["updraft_number"] = EDMF_pairs.updraft_number
+    namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["updraft_number"] =
+        EDMF_pairs.updraft_number
     # namelist_defaults["turbulence"]["EDMF_PrognosticTKE"]["entrainment"] = "moisture_deficit"  # not currently used
 
     #! format: on
@@ -160,28 +193,32 @@ function edmf_paramset(
         "ARM_SGP",
         "GATE_III",
         "DYCOMS_RF01",
-        "GABLS"
+        "GABLS",
     ]
-    microphys_param_cases = [
-        "Rico",
-        "TRMM_LBA",
-        "DYCOMS_RF02"
-    ]
-    
+    microphys_param_cases = ["Rico", "TRMM_LBA", "DYCOMS_RF02"]
+
     if case_name in normal_cases
         namelist_defaults["meta"]["casename"] = case_name
     elseif case_name in microphys_param_cases
         namelist_defaults["meta"]["casename"] = case_name
-        namelist_defaults["microphysics"]["precip_fraction_model"] = EDMF_pairs.precip_fraction_model
-        namelist_defaults["microphysics"]["prescribed_precip_frac_value"] = EDMF_pairs.prescribed_precip_frac
-        namelist_defaults["microphysics"]["precip_fraction_limiter"] = EDMF_pairs.precip_fraction_limiter
+        namelist_defaults["microphysics"]["precip_fraction_model"] =
+            EDMF_pairs.precip_fraction_model
+        namelist_defaults["microphysics"]["prescribed_precip_frac_value"] =
+            EDMF_pairs.prescribed_precip_frac
+        namelist_defaults["microphysics"]["precip_fraction_limiter"] =
+            EDMF_pairs.precip_fraction_limiter
         namelist_defaults["microphysics"]["τ_acnv_rai"] = EDMF_pairs.τ_acnv_rai
         namelist_defaults["microphysics"]["τ_acnv_sno"] = EDMF_pairs.τ_acnv_sno
-        namelist_defaults["microphysics"]["q_liq_threshold"] = EDMF_pairs.q_liq_threshold
-        namelist_defaults["microphysics"]["q_ice_threshold"] = EDMF_pairs.q_ice_threshold
-        namelist_defaults["microphysics"]["microph_scaling"] = EDMF_pairs.microph_scaling
-        namelist_defaults["microphysics"]["microph_scaling_dep_sub"] = EDMF_pairs.microph_scaling_dep_sub
-        namelist_defaults["microphysics"]["microph_scaling_melt"] = EDMF_pairs.microph_scaling_melt
+        namelist_defaults["microphysics"]["q_liq_threshold"] =
+            EDMF_pairs.q_liq_threshold
+        namelist_defaults["microphysics"]["q_ice_threshold"] =
+            EDMF_pairs.q_ice_threshold
+        namelist_defaults["microphysics"]["microph_scaling"] =
+            EDMF_pairs.microph_scaling
+        namelist_defaults["microphysics"]["microph_scaling_dep_sub"] =
+            EDMF_pairs.microph_scaling_dep_sub
+        namelist_defaults["microphysics"]["microph_scaling_melt"] =
+            EDMF_pairs.microph_scaling_melt
         namelist_defaults["microphysics"]["E_liq_rai"] = EDMF_pairs.E_liq_rai
         namelist_defaults["microphysics"]["E_liq_sno"] = EDMF_pairs.E_liq_sno
         namelist_defaults["microphysics"]["E_ice_rai"] = EDMF_pairs.E_ice_rai
