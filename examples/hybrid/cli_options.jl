@@ -217,7 +217,7 @@ function parse_commandline()
         "--bubble"
         help = "Enable bubble correction for more accurate surface areas"
         arg_type = Bool
-        default = true
+        default = false
         "--x_max"
         help = "Model domain size, x direction. Default: 300km"
         arg_type = Float64
