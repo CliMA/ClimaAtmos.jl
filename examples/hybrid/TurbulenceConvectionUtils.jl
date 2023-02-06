@@ -23,8 +23,7 @@ import .Cases
 include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
 include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
 include(joinpath(ca_dir, "tc_driver", "initial_conditions.jl"))
-include(joinpath(ca_dir, "tc_driver", "generate_namelist.jl"))
-import .NameList
+
 
 #####
 ##### No TurbulenceConvection scheme
@@ -34,7 +33,6 @@ turbconv_cache(
     Y,
     turbconv_model::Nothing,
     atmos,
-    namelist,
     param_set,
     parsed_args,
 ) = (; turbconv_model)
@@ -61,7 +59,6 @@ function turbconv_cache(
     Y,
     turbconv_model::TC.EDMFModel,
     atmos,
-    namelist,
     param_set,
     parsed_args,
 )
@@ -70,7 +67,7 @@ function turbconv_cache(
     imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
     imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
-    case = Cases.get_case(namelist["meta"]["casename"])
+    case = Cases.get_case(param_set.turbconv_params.case_name)
     thermo_params = CAP.thermodynamics_params(param_set)
     surf_ref_thermo_state =
         Cases.surface_reference_thermo_state(case, thermo_params)
