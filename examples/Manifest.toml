@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "22bef864af3fea6d98e82ddf3234c0f4a9798aba"
+project_hash = "7f2e9865a49f02843ee63b2d9f5fd9f936f9d135"
 
 [[deps.AMD]]
 deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
@@ -247,9 +247,9 @@ version = "0.7.1"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["CUDA", "ClimaComms", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "75ff5d4e53d2c54364b892806c75ccabceb7c81e"
+git-tree-sha1 = "230a9901ea378a45817846482be57a3ede7c12f1"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.6.0"
+version = "0.7.1"
 
 [[deps.CloseOpenIntervals]]
 deps = ["ArrayInterface", "Static"]

@@ -284,7 +284,7 @@ import ClimaTimeSteppers as CTS
 import OrdinaryDiffEq as ODE
 
 is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.AbstractIMEXARKTableau
+    alg_or_tableau <: CTS.IMEXARKAlgorithmName
 
 is_implicit_type(::typeof(ODE.IMEXEuler)) = true
 is_implicit_type(alg_or_tableau) =
@@ -300,7 +300,7 @@ is_ordinary_diffeq_newton(alg_or_tableau) =
         ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
 
-is_imex_CTS_algo(::CTS.IMEXARKAlgorithm) = true
+is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
 is_imex_CTS_algo(::DiffEqBase.AbstractODEAlgorithm) = false
 
 is_implicit(::ODE.OrdinaryDiffEqImplicitAlgorithm) = true
@@ -399,7 +399,7 @@ function ode_configuration(Y, parsed_args, atmos)
                 nothing
             end,
         )
-        return CTS.IMEXARKAlgorithm(alg_or_tableau(), newtons_method)
+        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
     else
         return alg_or_tableau(; linsolve = CA.linsolve!)
     end
@@ -418,13 +418,12 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         )
         if is_cts_algo(ode_algo)
             CTS.ClimaODEFunction(;
+                T_lim! = nothing,
                 T_exp! = remaining_tendency!,
                 T_imp! = implicit_func,
                 # Can we just pass implicit_tendency! and jac_prototype etc.?
-                dss!,
                 lim! = nothing,
-                T_lim! = nothing,
-                stage_callback! = (Y, p, t) -> nothing,
+                dss!,
             )
         else
             ODE.SplitFunction(implicit_func, remaining_tendency!)
