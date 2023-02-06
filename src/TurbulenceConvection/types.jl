@@ -198,19 +198,9 @@ struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
     quadrature_type::QT
     a::A
     w::W
-    function SGSQuadrature(::Type{FT}, namelist) where {FT}
-        N = parse_namelist(
-            namelist,
-            "thermodynamics",
-            "quadrature_order";
-            default = 3,
-        )
-        quadrature_name = parse_namelist(
-            namelist,
-            "thermodynamics",
-            "quadrature_type";
-            default = "log-normal",
-        )
+    function SGSQuadrature(::Type{FT}, paramset) where {FT}
+        N = paramset.quadrature_order
+        quadrature_name = paramset.quadrature_type
         quadrature_type = if quadrature_name == "log-normal"
             LogNormalQuad()
         elseif quadrature_name == "gaussian"
@@ -309,7 +299,7 @@ struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}
 end
 function EDMFModel(
     ::Type{FT},
-    namelist,
+    paramset,
     moisture_model,
     precip_model,
     parsed_args,
@@ -318,51 +308,18 @@ function EDMFModel(
     tc_case = parsed_args["turbconv_case"]
     zero_uv_fluxes = any(tcc -> tcc == tc_case, ["TRMM_LBA", "ARM_SGP"])
     # Set the number of updrafts (1)
-    n_updrafts = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "updraft_number";
-        default = 1,
-    )
+    n_updrafts = paramset.updraft_number
 
-    surface_area = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "surface_area";
-        default = 0.1,
-    )
-    max_area = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "max_area";
-        default = 0.9,
-    )
-    minimum_area = parse_namelist(
-        namelist,
-        "turbulence",
-        "EDMF_PrognosticTKE",
-        "min_area";
-        default = 1e-5,
-    )
+    surface_area = paramset.surface_area
+    max_area = paramset.max_area
+    minimum_area = paramset.min_area
 
-    thermo_covariance_model_name = parse_namelist(
-        namelist,
-        "thermodynamics",
-        "thermo_covariance_model";
-        default = "prognostic",
-    )
+    thermo_covariance_model_name = paramset.thermo_covariance_model
 
     thermo_covariance_model = if thermo_covariance_model_name == "prognostic"
         PrognosticThermoCovariances()
     elseif thermo_covariance_model_name == "diagnostic"
-        covar_lim = parse_namelist(
-            namelist,
-            "thermodynamics",
-            "diagnostic_covar_limiter",
-        )
+        covar_lim = paramset.diagnostic_covar_limiter
         DiagnosticThermoCovariances(covar_lim)
     else
         error(
@@ -370,29 +327,12 @@ function EDMFModel(
         )
     end
 
-    precip_fraction_model_name = parse_namelist(
-        namelist,
-        "microphysics",
-        "precip_fraction_model";
-        default = "prescribed",
-    )
+    precip_fraction_model_name = paramset.precip_fraction_model
 
     precip_fraction_model = if precip_fraction_model_name == "prescribed"
-        prescribed_precip_frac_value = parse_namelist(
-            namelist,
-            "microphysics",
-            "prescribed_precip_frac_value";
-            default = 1.0,
-        )
-        PrescribedPrecipFraction(prescribed_precip_frac_value)
+        PrescribedPrecipFraction(paramset.prescribed_precip_frac)
     elseif precip_fraction_model_name == "cloud_cover"
-        precip_fraction_limiter = parse_namelist(
-            namelist,
-            "microphysics",
-            "precip_fraction_limiter";
-            default = 0.3,
-        )
-        DiagnosticPrecipFraction(precip_fraction_limiter)
+        DiagnosticPrecipFraction(paramset.precip_fraction_limiter)
     else
         error(
             "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
@@ -402,17 +342,11 @@ function EDMFModel(
     # Create the environment variable class (major diagnostic and prognostic variables)
 
     # Create the class for environment thermodynamics and buoyancy gradient computation
-    en_sgs_name = parse_namelist(
-        namelist,
-        "thermodynamics",
-        "sgs";
-        default = "mean",
-        valid_options = ["mean", "quadrature"],
-    )
+    en_sgs_name = paramset.sgs
     en_thermo = if en_sgs_name == "mean"
         SGSMean()
     elseif en_sgs_name == "quadrature"
-        SGSQuadrature(FT, namelist)
+        SGSQuadrature(FT, paramset)
     else
         error("Something went wrong. Invalid environmental sgs type '$en_sgs_name'")
     end
@@ -434,66 +368,16 @@ function EDMFModel(
 
     entr_closure_name = parsed_args["edmf_entr_closure"]
     if entr_closure_name == "MoistureDeficit"
-        w_min = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "min_upd_velocity",
-        )
-        c_ε = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "entrainment_factor",
-        )
-        μ_0 = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "entrainment_scale",
-        )
-        β = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "sorting_power",
-        )
-        χ = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "updraft_mixing_frac",
-        )
-        c_λ = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "entrainment_smin_tke_coeff",
-        )
-        γ_lim = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "area_limiter_scale",
-        )
-        β_lim = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "area_limiter_power",
-        )
-        c_γ = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "turbulent_entrainment_factor",
-        )
-        c_δ = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "detrainment_factor",
-        )
+        w_min = paramset.min_upd_velocity
+        c_ε = paramset.entrainment_factor
+        μ_0 = paramset.entrainment_scale
+        β = paramset.sorting_power
+        χ = paramset.updraft_mixing_frac
+        c_λ = paramset.entrainment_smin_tke_coeff
+        γ_lim = paramset.area_limiter_scale
+        β_lim = paramset.area_limiter_power
+        c_γ = paramset.turbulent_entrainment_factor
+        c_δ = paramset.detrainment_factor
 
         εδ_params = εδModelParams{FT}(;
             w_min,
@@ -527,99 +411,25 @@ function EDMFModel(
     # )
 
     # minimum updraft top to avoid zero division in pressure drag and turb-entr
-    H_up_min = FT(
-        parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "min_updraft_top",
-        ),
-    )
+    H_up_min = paramset.min_updraft_top
 
     pressure_model_params = PressureModelParams{FT}(;
-        α_b = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "pressure_normalmode_buoy_coeff1",
-        ),
-        α_a = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "pressure_normalmode_adv_coeff",
-        ),
-        α_d = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "pressure_normalmode_drag_coeff",
-        ),
+        α_b = paramset.pressure_normalmode_buoy_coeff1,
+        α_a = paramset.pressure_normalmode_adv_coeff,
+        α_d = paramset.pressure_normalmode_drag_coeff,
     )
 
     mixing_length_params = MixingLengthParams{FT}(;
-        ω_pr = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "Prandtl_number_scale",
-        ),
-        c_m = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "tke_ed_coeff",
-        ),
-        c_d = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "tke_diss_coeff",
-        ),
-        c_b = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "static_stab_coeff";
-            default = 0.4,
-        ), # this is here due to a value error in CliMAParmameters.j,
-        κ_star² = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "tke_surf_scale",
-        ),
-        Pr_n = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "Prandtl_number_0",
-        ),
-        Ri_c = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "Ri_crit",
-        ),
-        smin_ub = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "smin_ub",
-        ),
-        smin_rm = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "smin_rm",
-        ),
-        l_max = parse_namelist(
-            namelist,
-            "turbulence",
-            "EDMF_PrognosticTKE",
-            "l_max";
-            default = 1.0e6,
-        ),
+        ω_pr = paramset.Prandtl_number_scale,
+        c_m = paramset.tke_ed_coeff,
+        c_d = paramset.tke_diss_coeff,
+        c_b = paramset.static_stab_coeff, # this is here due to a value error in CliMAParmameters.j,
+        κ_star² = paramset.tke_surf_scale,
+        Pr_n = paramset.Prandtl_number_0,
+        Ri_c = paramset.Ri_crit,
+        smin_ub = paramset.smin_ub,
+        smin_rm = paramset.smin_rm,
+        l_max = paramset.l_max,
     )
 
     EC = typeof(entr_closure)

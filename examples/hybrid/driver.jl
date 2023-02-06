@@ -34,22 +34,10 @@ import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
-import CLIMAParameters as CP
-namelist = if turbconv == "edmf"
-    toml_dict = CP.create_toml_dict(FT)
-    aliases = string.(fieldnames(TCU.NameList.EDMFParameters))
-    EDMF_pairs = CP.get_parameter_values!(toml_dict, aliases, "edmf")
-    EDMF_pairs = (; EDMF_pairs...)
-    TCU.NameList.edmf_paramset(EDMF_pairs, case_name)
-else
-    nothing
-end
 
 include("parameter_set.jl")
-# TODO: unify parsed_args and namelist
 params = create_parameter_set(FT, parsed_args)
-
-atmos = get_atmos(FT, parsed_args, namelist)
+atmos = get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
@@ -129,7 +117,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             Y,
             turbconv_model,
             atmos,
-            namelist,
             params,
             parsed_args,
         ),

@@ -315,11 +315,11 @@ function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     return EDMFCoriolis(prof_u, prof_v, coriolis_param)
 end
 
-function turbconv_model(FT, moisture_model, precip_model, parsed_args, namelist)
+function turbconv_model(FT, moisture_model, precip_model, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
     @assert turbconv in (nothing, "edmf")
     return if turbconv == "edmf"
-        TC.EDMFModel(FT, namelist, moisture_model, precip_model, parsed_args)
+        TC.EDMFModel(FT, turbconv_params, moisture_model, precip_model, parsed_args)
     else
         nothing
     end

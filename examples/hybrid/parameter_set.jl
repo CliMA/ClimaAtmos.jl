@@ -6,7 +6,7 @@ function create_parameter_set(::Type{FT}, parsed_args) where {FT}
     toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
     dt = FT(time_to_seconds(parsed_args["dt"]))
     return if is_column_edmf(parsed_args)
-        tc_parameter_set(toml_dict, dt)
+        tc_parameter_set(toml_dict, dt, parsed_args["turbconv_case"])
     elseif is_column_without_edmf(parsed_args)
         overrides = (; τ_precip = dt)
         create_climaatmos_parameter_set(toml_dict, overrides)
@@ -29,7 +29,7 @@ function baro_wave_parameter_set(toml_dict, dt)
     create_climaatmos_parameter_set(toml_dict, overrides)
 end
 
-function tc_parameter_set(toml_dict, dt)
-    overrides = (; MSLP = 100000.0, τ_precip = dt)
+function tc_parameter_set(toml_dict, dt, parsed_args)
+    overrides = (; MSLP = 100000.0, τ_precip = dt, case_name)
     create_climaatmos_parameter_set(toml_dict, overrides)
 end

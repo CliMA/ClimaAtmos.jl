@@ -46,33 +46,6 @@ include("Parameters.jl")
 import .Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
 
-function parse_namelist(
-    namelist,
-    keys...;
-    default = nothing,
-    valid_options = nothing,
-)
-    param = namelist
-    for k in keys
-        if haskey(param, k)
-            param = param[k]
-            if valid_options ≠ nothing && !(param isa Dict)
-                @assert param in valid_options
-            end
-        else
-            if default == nothing
-                error(
-                    "No default value given for parameter (`$(join(keys, ", "))`).",
-                )
-            else
-                @info "Using default value, $default, for parameter (`$(join(keys, ", "))`)."
-                return default
-            end
-        end
-    end
-    return param
-end
-
 Base.broadcastable(param_set::APS) = Ref(param_set)
 
 #=
