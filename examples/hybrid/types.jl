@@ -284,7 +284,7 @@ import ClimaTimeSteppers as CTS
 import OrdinaryDiffEq as ODE
 
 is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.AbstractIMEXARKTableau
+    alg_or_tableau <: CTS.AbstractAlgorithmName
 
 is_implicit_type(::typeof(ODE.IMEXEuler)) = true
 is_implicit_type(alg_or_tableau) =
