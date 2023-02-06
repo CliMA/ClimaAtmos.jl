@@ -300,7 +300,7 @@ is_ordinary_diffeq_newton(alg_or_tableau) =
         ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
 
-is_imex_CTS_algo(::CTS.IMEXARKAlgorithm) = true
+is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
 is_imex_CTS_algo(::DiffEqBase.AbstractODEAlgorithm) = false
 
 is_implicit(::ODE.OrdinaryDiffEqImplicitAlgorithm) = true
@@ -399,7 +399,7 @@ function ode_configuration(Y, parsed_args, atmos)
                 nothing
             end,
         )
-        return CTS.IMEXARKAlgorithm(alg_or_tableau(), newtons_method)
+        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
     else
         return alg_or_tableau(; linsolve = CA.linsolve!)
     end
