@@ -418,13 +418,12 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         )
         if is_cts_algo(ode_algo)
             CTS.ClimaODEFunction(;
+                T_lim! = nothing,
                 T_exp! = remaining_tendency!,
                 T_imp! = implicit_func,
                 # Can we just pass implicit_tendency! and jac_prototype etc.?
-                dss!,
                 lim! = nothing,
-                T_lim! = nothing,
-                stage_callback! = (Y, p, t) -> nothing,
+                dss!,
             )
         else
             ODE.SplitFunction(implicit_func, remaining_tendency!)
