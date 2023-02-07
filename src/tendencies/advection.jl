@@ -76,6 +76,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     # Mass conservation
     @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
+    J = Fields.local_geometry_field(axes(ᶜρ)).J
 
     # Energy conservation
     if :ρθ in propertynames(Y.c)
@@ -92,7 +93,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
     @. ᶠu¹²[colidx] = Geometry.project(
         Geometry.Contravariant12Axis(),
-        ᶠwinterp(ᶜρ * J, ᶜuvw[colidx]),
+        ᶠwinterp(ᶜρ[colidx] * J[colidx], ᶜuvw[colidx]),
     )
     @. ᶠu³[colidx] = Geometry.project(
         Geometry.Contravariant3Axis(),
