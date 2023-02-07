@@ -129,7 +129,7 @@ The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \tim
 ```
 ```math
 \omega_f^{h} \times \boldsymbol{u}^{h} = \nabla_v \times \boldsymbol{u}^{h} \times \boldsymbol{u}^{h},
-\omega^{h} × I\^{f}(J \rho u_c^{h}) / I^{f}(\rho J),
+\omega^{h} × I^{f}(J \rho u_c^{h}) / I^{f}(\rho J),
 ```
 with $\boldsymbol{u}_c^{h}$ evaluated at cell centers,  
 and the ``\frac{1}{\rho} \nabla_v p + \nabla_v(\Phi + K)`` term as
