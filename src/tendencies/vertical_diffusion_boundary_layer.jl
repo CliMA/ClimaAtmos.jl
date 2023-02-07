@@ -35,10 +35,12 @@ function vertical_diffusion_boundary_layer_cache(Y, atmos, ::VerticalDiffusion)
             zeros(axes(z_bottom)),
         )
     dif_flux_energy = similar(z_bottom, Geometry.WVector{FT})
-    dif_flux_ρq_tot = if :ρq_tot in propertynames(Y.c)
-        similar(z_bottom, Geometry.WVector{FT})
+    if :ρq_tot in propertynames(Y.c)
+        dif_flux_ρq_tot = similar(z_bottom, Geometry.WVector{FT})
+        dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot)
     else
-        Ref(Geometry.WVector(FT(0)))
+        dif_flux_ρq_tot = nothing
+        dif_flux_ρq_tot_bc = nothing
     end
 
     cond_type = NamedTuple{(:shf, :lhf, :E, :ρτxz, :ρτyz), NTuple{5, FT}}
@@ -120,7 +122,7 @@ function vertical_diffusion_boundary_layer_cache(Y, atmos, ::VerticalDiffusion)
         dif_flux_energy,
         dif_flux_ρq_tot,
         dif_flux_energy_bc = similar(dif_flux_energy),
-        dif_flux_ρq_tot_bc = similar(dif_flux_ρq_tot),
+        dif_flux_ρq_tot_bc,
         coupling,
         surface_normal,
         z_bottom,

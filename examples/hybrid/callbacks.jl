@@ -19,8 +19,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     FT = eltype(params)
     (; dt) = simulation
 
-    tc_callbacks =
-        call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
+    tc_callbacks = call_every_n_steps(turb_conv_affect_filter!)
     flux_accumulation_callback = call_every_n_steps(
         flux_accumulation!;
         skip_first = true,
@@ -146,7 +145,7 @@ end
 function turb_conv_affect_filter!(integrator)
     p = integrator.p
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, aux, case, surf_params) = edmf_cache
+    (; edmf, param_set, aux, surf_params) = edmf_cache
     t = integrator.t
     Y = integrator.u
     tc_params = CAP.turbconv_params(param_set)
@@ -482,8 +481,11 @@ function save_to_disk_func(integrator)
         vert_diff_diagnostic = (;
             sfc_flux_momentum = dif_flux_uₕ,
             sfc_flux_energy = dif_flux_energy,
-            sfc_evaporation = dif_flux_ρq_tot,
         )
+        if :ρq_tot in propertynames(Y.c)
+            vert_diff_diagnostic =
+                (; vert_diff_diagnostic..., sfc_evaporation = dif_flux_ρq_tot)
+        end
     else
         vert_diff_diagnostic = NamedTuple()
     end
