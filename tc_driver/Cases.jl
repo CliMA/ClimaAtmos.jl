@@ -95,50 +95,6 @@ get_case_name(case_type::AbstractCaseType) = string(case_type)
 ##### Pressure helper functions for making initial profiles hydrostatic.
 #####
 
-"""
-    Pressure derivative with height assuming:
-    - hydrostatic
-    - given θ_liq_ice and q_tot initial profiles
-"""
-function dp_dz!(p, params, z)
-    (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag) = params
-
-    FT = eltype(prof_thermo_var(z))
-
-    q_tot = if prof_q_tot ≠ nothing
-        prof_q_tot(z)
-    else
-        FT(0)
-    end
-    q = TD.PhasePartition(q_tot)
-
-    R_m = TD.gas_constant_air(thermo_params, q)
-    grav = TD.Parameters.grav(thermo_params)
-
-    if thermo_flag == "θ_liq_ice"
-        θ_liq_ice = prof_thermo_var(z)
-        cp_m = TD.cp_m(thermo_params, q)
-        MSLP = TD.Parameters.MSLP(thermo_params)
-        T = θ_liq_ice * (p / MSLP)^(R_m / cp_m)
-    elseif thermo_flag == "temperature"
-        T = prof_thermo_var(z)
-    else
-        error("θ_liq_ice or T must be provided to solve for pressure")
-    end
-
-    return -grav * p / R_m / T
-end
-
-""" Solving initial value problem for pressure """
-function p_ivp(::Type{FT}, params, p_0, z_0, z_max) where {FT}
-
-    z_span = (z_0, z_max)
-    prob = ODE.ODEProblem(dp_dz!, p_0, z_span, params)
-
-    sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-15, abstol = 1e-15)
-    return sol
-end
-
 #####
 ##### Soares
 #####
@@ -171,10 +127,6 @@ function initialize_profiles(
     p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
     p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean state
@@ -184,7 +136,6 @@ function initialize_profiles(
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
     @. aux_gm.tke = prof_tke(z)
-    @. p_c = prof_p(z)
 end
 
 function surface_params(case::Soares, surf_ref_thermo_state, thermo_params)
@@ -234,10 +185,6 @@ function initialize_profiles(
     p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
     p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean state
@@ -246,7 +193,6 @@ function initialize_profiles(
     z = CC.Fields.coordinate_field(axes(p_c)).z
     @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
     @. aux_gm.tke = prof_tke(z)
-    @. p_c = prof_p(z)
 end
 
 function surface_params(case::Nieuwstadt, surf_ref_thermo_state, thermo_params)
@@ -296,10 +242,6 @@ function initialize_profiles(
     p_0::FT = FT(1.015e5) # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
     p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean values
@@ -309,7 +251,6 @@ function initialize_profiles(
     @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.tke = prof_tke(z)
-    @. p_c = prof_p(z)
 end
 
 function surface_params(case::Bomex, surf_ref_thermo_state, thermo_params)
@@ -361,10 +302,6 @@ function initialize_profiles(
     p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
     p_c = TC.center_aux_grid_mean_p(state)
 
     # Fill in the grid mean values
@@ -374,7 +311,6 @@ function initialize_profiles(
     @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.tke = prof_tke(z)
-    @. p_c = prof_p(z)
 end
 
 function surface_params(
@@ -438,10 +374,6 @@ function initialize_profiles(
     p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -449,7 +381,6 @@ function initialize_profiles(
     z = CC.Fields.coordinate_field(axes(p_c)).z
     @. aux_gm.θ_liq_ice = prof_θ_liq_ice(z)
     @. aux_gm.q_tot = prof_q_tot(z)
-    @. p_c = prof_p(z)
 
     z = CC.Fields.coordinate_field(axes(p_c)).z
     # Need to get θ_virt
@@ -555,16 +486,11 @@ function initialize_profiles(
     p_0::FT = FT(991.3 * 100)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_T
-    thermo_flag = "temperature"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
     TC.set_z!(prog_gm_uₕ, prof_u, prof_v)
     z = CC.Fields.coordinate_field(axes(p_c)).z
-    @. p_c = prof_p(z)
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.θ_liq_ice = TD.liquid_ice_pottemp_given_pressure(
         thermo_params,
@@ -636,10 +562,6 @@ function initialize_profiles(
     p_0::FT = FT(970 * 100)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -647,7 +569,6 @@ function initialize_profiles(
     TC.set_z!(prog_gm_uₕ, prof_u, x -> FT(0))
     z = CC.Fields.coordinate_field(axes(prog_gm_uₕ)).z
     # TODO figure out how to use ts here
-    @. p_c = prof_p(z)
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.T =
         prof_θ_liq_ice(z) * TD.exner_given_pressure(
@@ -716,10 +637,6 @@ function initialize_profiles(
     p_0::FT = FT(1013 * 100)    # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_T
-    thermo_flag = "temperature"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -728,7 +645,6 @@ function initialize_profiles(
         z = grid.zc[k].z
         aux_gm.q_tot[k] = prof_q_tot(z)
         aux_gm.T[k] = prof_T(z)
-        p_c[k] = prof_p(z)
         aux_gm.tke[k] = prof_tke(z)
         ts = TD.PhaseEquil_pTq(
             thermo_params,
@@ -797,10 +713,6 @@ function initialize_profiles(
     p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -813,7 +725,6 @@ function initialize_profiles(
 
         # velocity profile (geostrophic)
         aux_gm.tke[k] = APL.Dycoms_RF01_tke(FT)(z)
-        p_c[k] = prof_p(z)
     end
 end
 
@@ -868,10 +779,6 @@ function initialize_profiles(
     p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -884,7 +791,6 @@ function initialize_profiles(
 
         # velocity profile
         aux_gm.tke[k] = APL.Dycoms_RF02_tke(FT)(z)
-        p_c[k] = prof_p(z)
     end
 end
 
@@ -934,10 +840,6 @@ function initialize_profiles(
     p_0::FT = FT(1.0e5)         # TODO - duplicated from surface_reference_thermo_state
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
-    prof_thermo_var = prof_θ_liq_ice
-    thermo_flag = "θ_liq_ice"
-    params = (; thermo_params, prof_thermo_var, prof_q_tot, thermo_flag)
-    prof_p = p_ivp(FT, params, p_0, z_0, z_max)
 
     # Fill in the grid mean values
     prog_gm_uₕ = TC.grid_mean_uₕ(state)
@@ -949,7 +851,6 @@ function initialize_profiles(
     @. aux_gm.q_tot = prof_q_tot(z)
     @. aux_gm.tke = prof_tke(z)
     @. aux_gm.Hvar = aux_gm.tke
-    @. p_c = prof_p(z)
 end
 
 function surface_params(
