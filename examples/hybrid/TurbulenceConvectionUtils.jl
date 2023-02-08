@@ -72,37 +72,18 @@ function turbconv_cache(
     test_consistency = parsed_args["test_edmf_consistency"]
     case = Cases.get_case(namelist["meta"]["casename"])
     thermo_params = CAP.thermodynamics_params(param_set)
-    surf_ref_thermo_state =
-        Cases.surface_reference_thermo_state(case, thermo_params)
-    surf_params =
-        Cases.surface_params(case, surf_ref_thermo_state, thermo_params)
+    surf_params = Cases.surface_params(case, thermo_params)
     edmf = turbconv_model
-    anelastic_column_kwargs = if true # CA.is_anelastic_column(atmos) # TODO: make conditional
-        ᶠspace_1 = axes(Y.f[CC.Fields.ColumnIndex((1, 1), 1)])
-        ᶜspace_1 = axes(Y.c[CC.Fields.ColumnIndex((1, 1), 1)])
-        logpressure_fun = CA.log_pressure_profile(
-            ᶠspace_1,
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-        ᶜz = CC.Fields.coordinate_field(ᶜspace_1).z
-        ᶜp₀ = @. exp(logpressure_fun(ᶜz))
-        (; ᶜp₀)
-    else
-        NamedTuple()
-    end
     @info "EDMFModel: \n$(summary(edmf))"
     cache = (;
         edmf,
         turbconv_model,
-        anelastic_column_kwargs...,
         case,
         imex_edmf_turbconv,
         imex_edmf_gm,
         test_consistency,
         surf_params,
         param_set,
-        surf_ref_thermo_state,
         aux = get_aux(atmos, edmf, Y, FT),
         Y_filtered = similar(Y),
     )
@@ -117,7 +98,7 @@ end
 
 function init_tc!(Y, p, params, colidx)
 
-    (; edmf, surf_ref_thermo_state, surf_params, case) = p.edmf_cache
+    (; edmf, surf_params, case) = p.edmf_cache
     tc_params = CAP.turbconv_params(params)
 
     FT = eltype(edmf)
@@ -130,25 +111,6 @@ function init_tc!(Y, p, params, colidx)
     C123 = CCG.Covariant123Vector
     t = FT(0)
 
-    if CA.is_anelastic_column(p.atmos)
-        @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
-
-        CA.compute_ref_density!(
-            Y.c.ρ[colidx],
-            p.ᶜp[colidx],
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-    else
-        @. p.ᶜp[colidx] = p.edmf_cache.ᶜp₀
-
-        CA.compute_ref_density!(
-            Y.c.ρ[colidx],
-            p.ᶜp[colidx],
-            thermo_params,
-            surf_ref_thermo_state,
-        )
-    end
     # TODO: can we simply remove this?
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     @. p.edmf_cache.aux.face.ρ[colidx] = If(Y.c.ρ[colidx])
@@ -169,8 +131,7 @@ end
 
 function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
-        edmf_cache
+    (; edmf, param_set, surf_params, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
@@ -219,8 +180,7 @@ end
 
 function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt) = p
-    (; edmf, param_set, surf_params, surf_ref_thermo_state, Y_filtered) =
-        edmf_cache
+    (; edmf, param_set, surf_params, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
