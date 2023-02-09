@@ -90,7 +90,7 @@ function make_hybrid_spaces(
         center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
         face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
     else
-        z_surface = surface_warp.(Fields.coordinate_field(h_space))
+        z_surface = surface_warp(Fields.coordinate_field(h_space))
         z_face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
         face_space = Spaces.ExtrudedFiniteDifferenceSpace(
             h_space,

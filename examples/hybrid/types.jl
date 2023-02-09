@@ -1,6 +1,8 @@
 using Dates: DateTime, @dateformat_str
 using NCDatasets
 using Dierckx
+using ImageFiltering
+using Interpolations
 import ClimaCore: InputOutput
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -22,6 +24,8 @@ import ClimaAtmos:
     BoxModel
 
 import ClimaCore: InputOutput
+
+include("topography_helper.jl")
 
 function get_atmos(::Type{FT}, parsed_args, namelist) where {FT}
     # should this live in the radiation model?
@@ -132,13 +136,31 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
+    @assert topography in ("NoWarp", "DCMIP200", "Earth")
     if topography == "DCMIP200"
-        warp_function = CA.topography_dcmip200
+        warp_function = topography_dcmip200
     elseif topography == "NoWarp"
         warp_function = nothing
+    elseif topography == "Earth"
+        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        earth_spline = NCDataset(data_path) do data
+            zlevels = data["elevation"][:]
+            lon = data["longitude"][:]
+            lat = data["latitude"][:]
+            # Apply Smoothing
+            smooth_degree = 15
+            esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
+            linear_interpolation(
+                (lon, lat),
+                zlevels,
+                extrapolation_bc = (Periodic(), Flat()),
+            )
+        end
+        @info "Generated interpolation stencil"
+        warp_function = generate_topography_warp(earth_spline)
     end
-    @assert topography in ("NoWarp", "DCMIP200")
     @info "Topography" topography
+
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)

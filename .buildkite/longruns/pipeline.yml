@@ -50,10 +50,26 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
+      
+      - label: ":computer: baroclinic wave (ρe_tot) high resolution topography (dcmip)"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --DCMIP200 --rayleigh_sponge true --viscous_sponge true"
+        artifact_paths: "longrun_bw_rhoe_highres_topography/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres --apply_remap true"
         artifact_paths: "longrun_bw_rhoe_equil_highres/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
+      
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (dcmip)"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --topography DCMIP200 --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_topography --apply_remap true --rayleigh_sponge true --viscous_sponge true"
+        artifact_paths: "longrun_bw_rhoe_equil_highres_topography (dcmip)/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -78,6 +94,14 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres"
         artifact_paths: "longrun_hs_rhoe_equil_highres/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 64
+      
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (dcmip)"
+        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --topography DCMIP200 --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true"
+        artifact_paths: "longrun_hs_rhoe_equil_highres_topography/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -134,6 +158,12 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 300secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_allsky --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_allsky/*"
+        agents:
+          slurm_cpus_per_task: 8
+      
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation topography"
+        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 300secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_allsky_topography --dt_save_to_sol 1days --dt_save_to_disk 10days --topography DCMIP200"
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_allsky_topography/*"
         agents:
           slurm_cpus_per_task: 8
 

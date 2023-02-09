@@ -49,3 +49,15 @@ function mima_gwf_path()
     )
     return AW.get_data_folder(mima_data)
 end
+
+function topo_elev_dataset_path()
+    etopo1_elev_data = AW.ArtifactWrapper(
+        @__DIR__,
+        "topo-elev-info",
+        AW.ArtifactFile[AW.ArtifactFile(
+            url = "https://caltech.box.com/shared/static/gvilybsu5avxso1wubxjthpip9skc6mf.nc",
+            filename = "ETOPO1_coarse.nc",
+        ),],
+    )
+    return AW.get_data_folder(etopo1_elev_data)
+end

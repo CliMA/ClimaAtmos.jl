@@ -68,7 +68,7 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
                 (
                     T_equator - ΔT_y * sin(ᶜφ[colidx])^2 -
                     Δθ_z * log(ᶜp[colidx] / MSLP) * cos(ᶜφ[colidx])^2
-                ) * fast_pow(ᶜσ[colidx], κ_d),
+                ) * fast_pow(ᶜp[colidx] / MSLP, κ_d),
             )
         )
 

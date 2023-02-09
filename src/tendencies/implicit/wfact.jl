@@ -44,7 +44,7 @@ function vertical_transport_jac!(
     return nothing
 end
 function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, operators, ::Val)
-    (; ᶜdivᵥ_stencil, ᶠinterp, ᶠupwind3) = operators
+    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠinterp, ᶠupwind3) = operators
     # To convert ᶠw to ᶠw_data, we extract the third vector component.
     to_scalar(vector) = vector.u₃
     FT = Spaces.undertype(axes(ᶜρ))
