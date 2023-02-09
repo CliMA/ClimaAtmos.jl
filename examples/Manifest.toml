@@ -157,11 +157,9 @@ version = "0.1.2"
 
 [[deps.CLIMAParameters]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "de32e9255a3ef21959dee554860b2d6332855a93"
-repo-rev = "main"
-repo-url = "https://github.com/CliMA/CLIMAParameters.jl.git"
+git-tree-sha1 = "a769996f7ed7a2f1fb070c4837370603387e5eb6"
 uuid = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
-version = "0.7.0"
+version = "0.7.1"
 
 [[deps.CPUSummary]]
 deps = ["CpuId", "IfElse", "Static"]
