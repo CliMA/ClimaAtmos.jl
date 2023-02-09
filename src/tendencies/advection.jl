@@ -75,18 +75,8 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
     (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     # Mass conservation
-    @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρ[colidx] * ᶜuₕ[colidx]))
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
-    # Energy conservation
-    if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ[colidx] -= ᶜdivᵥ(ᶠinterp(Y.c.ρθ[colidx] * ᶜuₕ[colidx]))
-    elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] -=
-            ᶜdivᵥ(ᶠinterp((Y.c.ρe_tot[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] -=
-            ᶜdivᵥ(ᶠinterp((Y.c.ρe_int[colidx] + ᶜp[colidx]) * ᶜuₕ[colidx]))
-    end
 
     # Momentum conservation
     @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
@@ -101,13 +91,6 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         (ᶜf[colidx] + ᶜω³[colidx]) ×
         (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
     @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
-
-    # Tracer conservation
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
-        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ[colidx] -= ᶜdivᵥ(ᶠinterp(ᶜρc[colidx] * ᶜuₕ[colidx]))
-    end
 
     return nothing
 end

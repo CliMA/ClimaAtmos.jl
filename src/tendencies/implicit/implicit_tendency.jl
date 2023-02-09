@@ -14,41 +14,48 @@ import ClimaCore.Spaces as Spaces
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
-function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:none})
+function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:none}) # used for mass ᶜρc === ᶜρ
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠinterp) = p.operators
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw))
+    (; ᶜdivᵥ, ᶠwinterp, ᶠinterp) = p.operators
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
+    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜρc / ᶜρ)))
 end
-function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:first_order})
+function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:first_order})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠinterp, ᶠupwind1) = p.operators
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ)))
+    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1) = p.operators
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
+    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ)))
 end
-function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:third_order})
+function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:third_order})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠinterp, ᶠupwind3) = p.operators
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw, ᶜρc / ᶜρ)))
+    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind3) = p.operators
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
+    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜρc / ᶜρ)))
 end
-function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:boris_book})
+function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:boris_book})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠinterp, ᶠupwind1, ᶠupwind3, ᶠfct_boris_book) = p.operators
+    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1, ᶠupwind3, ᶠfct_boris_book) = p.operators
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
     @. ᶜρcₜ =
-        -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-            ᶠinterp(ᶜρ) * ᶠfct_boris_book(
-                ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
-                (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+        -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+            ᶠwinterp(ᶜJ, ᶜρ) * ᶠfct_boris_book(
+                ᶠupwind3(ᶠu³, ᶜρc / ᶜρ) - ᶠupwind1(ᶠu³, ᶜρc / ᶜρ),
+                (ᶜρc / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) /
+                ᶜρ,
             ),
         )
 end
-function vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, p, ::Val{:zalesak})
+function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:zalesak})
     (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠinterp, ᶠupwind1, ᶠupwind3, ᶠfct_zalesak) = p.operators
+    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1, ᶠupwind3, ᶠfct_zalesak) = p.operators
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
     @. ᶜρcₜ =
-        -(ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-            ᶠinterp(ᶜρ) * ᶠfct_zalesak(
-                ᶠupwind3(ᶠw, ᶜρc / ᶜρ) - ᶠupwind1(ᶠw, ᶜρc / ᶜρ),
+        -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) - ᶜdivᵥ(
+            ᶠwinterp(ᶜJ, ᶜρ) * ᶠfct_zalesak(
+                ᶠupwind3(ᶠu³, ᶜρc / ᶜρ) - ᶠupwind1(ᶠu³, ᶜρc / ᶜρ),
                 ᶜρc / ᶜρ / dt,
-                (ᶜρc / dt - ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw, ᶜρc / ᶜρ))) / ᶜρ,
+                (ᶜρc / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) /
+                ᶜρ,
             ),
         )
 end
@@ -84,21 +91,27 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, params, thermo_dispatcher) = p
+    (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ᶠu³, params, thermo_dispatcher) = p
     (; ᶜρ_ref, ᶜp_ref) = p
     (; energy_upwinding, tracer_upwinding, simulation) = p
-    (; ᶠgradᵥ, ᶜinterp, ᶠinterp) = p.operators
+    (; ᶠgradᵥ, ᶜinterp, ᶠinterp, ᶠwinterp) = p.operators
     C123 = Geometry.Covariant123Vector
 
     thermo_params = CAP.thermodynamics_params(params)
     dt = simulation.dt
+    # TODO: can we move this to implicit tendencies?
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    @. ᶠu³[colidx] = Geometry.project(
+        Geometry.Contravariant3Axis(),
+        C123(ᶠwinterp(ᶜJ[colidx] * ᶜρ[colidx], ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
+    )
     @. ᶜK[colidx] = norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
     vertical_transport!(
         Yₜ.c.ρ[colidx],
-        ᶠw[colidx],
+        ᶠu³[colidx],
         ᶜρ[colidx],
         ᶜρ[colidx],
         p,
@@ -108,7 +121,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     if :ρθ in propertynames(Y.c)
         vertical_transport!(
             Yₜ.c.ρθ[colidx],
-            ᶠw[colidx],
+            ᶠu³[colidx],
             ᶜρ[colidx],
             Y.c.ρθ[colidx],
             p,
@@ -119,7 +132,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         @. ᶜρh[colidx] = Y.c.ρe_tot[colidx] + ᶜp[colidx]
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
-            ᶠw[colidx],
+            ᶠu³[colidx],
             ᶜρ[colidx],
             ᶜρh[colidx],
             p,
@@ -130,14 +143,14 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         @. ᶜρh[colidx] = Y.c.ρe_int[colidx] + ᶜp[colidx]
         vertical_transport!(
             Yₜ.c.ρe_int[colidx],
-            ᶠw[colidx],
+            ᶠu³[colidx],
             ᶜρ[colidx],
             ᶜρh[colidx],
             p,
             energy_upwinding,
         )
         @. Yₜ.c.ρe_int[colidx] += ᶜinterp(
-            dot(ᶠgradᵥ(ᶜp[colidx]), Geometry.Contravariant3Vector(ᶠw[colidx])),
+            dot(ᶠgradᵥ(ᶜp[colidx]), Geometry.Contravariant3Vector(ᶠu³[colidx])),
         )
     end
 
@@ -157,7 +170,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         ᶜρc = getproperty(Y.c, ᶜρc_name)
         vertical_transport!(
             ᶜρcₜ[colidx],
-            ᶠw[colidx],
+            ᶠu³[colidx],
             ᶜρ[colidx],
             ᶜρc[colidx],
             p,

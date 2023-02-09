@@ -25,24 +25,26 @@ We make use of the following operators
 
 ### Reconstruction
 
-* ``I^c`` is the [face-to-center reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateF2C)
-* ``I^f`` is the [center-to-face reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateC2F)
-  - Currently this is just the arithmetic mean, but we will need to use a weighted version with stretched vertical grids.
-* ``U^f`` is the [3rd-order center-to-face upwind product operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F)
-  - We use first-order upwinded reconstruction at the first interior face.
+* ``I^c`` is the [face-to-center reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateF2C) (arithmetic mean)
+* ``I^f`` is the [center-to-face reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateC2F) (arithmetic mean)
+* ``WI^f`` is the [center-to-face weighted reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeightedInterpolateC2F)
+  - ``WI^f(J, x) = I^f(J*x) / I^f(J)``, where ``J`` is the value of the Jacobian for use in the weighted interpolation operator
+* ``U^f`` is the [1st or 3rd-order center-to-face upwind product operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F) # fix link
 
-### Differentiation operators
+### Differential operators
 
 - ``D_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence).
 - ``D^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
-  - Currently fluxes are set to zero at the top and bottom boundaries: this will need to be modified with the addition of diffusive fluxes.
+!!! todo
+    Add vertical diffusive tendencies (including surface fluxes)
+
 - ``G_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
 - ``G^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
   - the gradient is set to 0 at the top and bottom boundaries.
-- ``C_h`` is the [horizontal curl](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
+- ``C_h`` is the [curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
   - ``C_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
   - ``C_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
-- ``C^f_v`` is the [center-to-face vertical curl](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
+- ``C^f_v`` is the [center-to-face curl involving vertical derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
   - ``C^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
   - the curl is set to 0 at the top and bottom boundaries.
     - We need to clarify how best to handle this.
@@ -53,13 +55,23 @@ We make use of the following operators
   ```math
   \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
   ```
-  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+* ``\tilde{\boldsymbol{u}}`` is the mass-weighted reconstruction of velocity at the interfaces:
+  ```math
+  \tilde{\boldsymbol{u}} = WI^f(\rho J, \boldsymbol{u}_h) + \boldsymbol{u}_v
+  ```
+  !!! todo
+      Clarify basis in which vector is interpolated.
+
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
   ```math
   K = \tfrac{1}{2} \|\boldsymbol{u}_h + I^c(\boldsymbol{u}_v)\|^2.
   ```
   where ``\|\boldsymbol{u}\|^2 = g^{ij} \boldsymbol{u}_i \boldsymbol{u}_j`` and ``g^{ij}`` is the contravariant metric tensor.
+  !!! todo
+      This is not correct in the presence of topography.
+
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 * ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
 
@@ -74,13 +86,15 @@ Follows the continuity equation
 
 This is discretized using the following
 ```math
-\frac{\partial}{\partial t} \rho \approx - D_h[ \rho (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] - D^c_v[I^f(\rho \boldsymbol{u}_h)) + I^f(\rho) \boldsymbol{u}_v)]
+\frac{\partial}{\partial t} \rho 
+= - D_h[ \rho (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] - D^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right]
 ```
+
 with the
 ```math
--D^c_v[I^f(\rho) \boldsymbol{u}_v)]
+-D^c_v[WI^f(J, \rho) \boldsymbol{u}_v]
 ```
-term treated implicitly.
+term treated implicitly (check this)
 
 
 ### Momentum
@@ -143,22 +157,20 @@ is discretized using
 ```math
 \frac{\partial}{\partial t} \rho e \approx
 - D_h[ (\rho e + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v \left[
-  I^f(\rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)
-  + (\rho e + p) I^f(\boldsymbol{u}_h)
-  + \boldsymbol{F}_R
+- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right)
+  + \boldsymbol{F}_R 
   \right] .
 ```
 Currently the central reconstruction
 ```math
-- D^c_v[ I^f(\rho e + p) \boldsymbol{u}_v ]
+- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right) \right]
 ```
 is treated implicitly.
 
 !!! todo
     The Jacobian computation should be updated so that the upwinded term
     ```math
-    - D^c_v\left[I^f(\rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)\right]
+    - D^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)\right]
     ```
     is treated implicitly.
 
@@ -172,9 +184,7 @@ The ``\nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}`` term is discretized 
 
 ```math
 D_h[ (\rho e_\text{int} + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] +
-D^c_v\left[
-  I^f(\rho) U^f\left(I^f(\boldsymbol{u}_v, \frac{\rho e_\text{int} + p}{\rho} \right)
-  + (\rho e_\text{int} + p)  I^f(\boldsymbol{u}_h)
+- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e_\text{int} + p}{\rho} \right)
   + \boldsymbol{F}_R
 \right] .
 ```
@@ -187,14 +197,14 @@ I^c( G^f_v(p) \cdot \boldsymbol{u}_v) + G_h(p) \cdot \boldsymbol{u}_h .
 
 Currently the central reconstruction
 ```math
-- D^c_v[ I^f(\rho e_\text{int} + p) \boldsymbol{u}_v ] + I^c( G^f_v(p) \cdot \boldsymbol{u}_v)
+- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e_\text{int} + p}{\rho} \right) + I^c( G^f_v(p) \cdot \boldsymbol{u}_v) \right]
 ```
 is treated implicitly.
 
 !!! todo
     This should be updated so that the upwinded term
     ```math
-    - D^c_v\left[I^f(\rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e_\text{int} + p}{\rho} \right)\right]
+    - D^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e_\text{int} + p}{\rho} \right)\right]
     ```
     is treated implicitly.
 
@@ -211,17 +221,17 @@ This is discretized using the following
 ```math
 \frac{\partial}{\partial t} \rho \chi \approx
 - D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right] .
+- D^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right].
 ```
 Currently the central reconstruction
 ```math
-- D^c_v[ I^f(\rho \chi) \boldsymbol{u}_v ]
+- D^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
 ```
 is treated implicitly.
 
 !!! todo
     The Jacobian computation should be updated so that the upwinded term
     ```math
-    - D^c_v\left[I^f(\rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
+    - D^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
     ```
     is treated implicitly.
