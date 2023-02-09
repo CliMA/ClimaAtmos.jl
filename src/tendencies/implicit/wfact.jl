@@ -17,8 +17,10 @@ import ClimaCore.Geometry as Geometry
 
 # TODO: store operators in `energy_upwinding` so that not all of them are always needed
 function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, operators, ::Val{:none})
-    (; ᶜdivᵥ_stencil, ᶠinterp) = operators
-    @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * one(ᶠw)))
+    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠinterp) = operators
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    @. ∂ᶜρcₜ∂ᶠw =
+        -(ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠw) * ᶠinterp(ᶜρc / ᶜρ)))
     return nothing
 end
 function vertical_transport_jac!(
@@ -29,13 +31,15 @@ function vertical_transport_jac!(
     operators,
     ::Val{:first_order},
 )
-    (; ᶜdivᵥ_stencil, ᶠinterp, ᶠupwind1) = operators
+    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠupwind1) = operators
     # To convert ᶠw to ᶠw_data, we extract the third vector component.
     to_scalar(vector) = vector.u₃
     FT = Spaces.undertype(axes(ᶜρ))
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ref_εw = Ref(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠinterp(ᶜρ) * ᶠupwind1(ᶠw + ref_εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + ref_εw),
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠw + ref_εw, ᶜρc / ᶜρ) /
+        to_scalar(ᶠw + ref_εw),
     ))
     return nothing
 end
@@ -44,9 +48,11 @@ function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, opera
     # To convert ᶠw to ᶠw_data, we extract the third vector component.
     to_scalar(vector) = vector.u₃
     FT = Spaces.undertype(axes(ᶜρ))
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ref_εw = Ref(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠinterp(ᶜρ) * ᶠupwind3(ᶠw + ref_εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + ref_εw),
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠw + ref_εw, ᶜρc / ᶜρ) /
+        to_scalar(ᶠw + ref_εw),
     ))
     return nothing
 end
@@ -101,6 +107,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     FT = Spaces.undertype(axes(Y.c))
     C123 = Geometry.Covariant123Vector
     compose = Operators.ComposeStencils()
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))

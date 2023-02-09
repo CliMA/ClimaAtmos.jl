@@ -175,6 +175,7 @@ function default_cache(
             ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ),
             ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp),
             ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp),
+            ᶠwinterp_stencil = Operators.Operator2Stencil(ᶠwinterp),
             ᶠinterp,
             ᶠwinterp,
             ᶠcurlᵥ,
