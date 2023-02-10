@@ -143,13 +143,6 @@ end
 ##### Soares
 #####
 
-function surface_reference_thermo_state(::Soares, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1000.0 * 100.0
-    qtg::FT = 5.0e-3
-    Tg::FT = 300.0
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 function initialize_profiles(
     ::Soares,
     grid::Grid,
@@ -168,7 +161,7 @@ function initialize_profiles(
     prof_tke = APL.Soares_tke(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -187,18 +180,18 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::Soares, surf_ref_thermo_state, thermo_params)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
+function surface_params(case::Soares, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
+    psurface::FT = 1000 * 100
     Tsurface::FT = 300.0
     qsurface::FT = 5.0e-3
     θ_flux::FT = 6.0e-2
     qt_flux::FT = 2.5e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
-    lhf = qt_flux * ρ_f_surf * TD.latent_heat_vapor(thermo_params, ts)
-    shf = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ρsurface = TD.air_density(thermo_params, ts)
+    lhf = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
+    shf = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
     return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
@@ -206,13 +199,6 @@ end
 ##### Nieuwstadt
 #####
 
-function surface_reference_thermo_state(::Nieuwstadt, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1000.0 * 100.0
-    Tg::FT = 300.0
-    qtg::FT = 0.0
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 function initialize_profiles(
     ::Nieuwstadt,
     grid::Grid,
@@ -231,7 +217,7 @@ function initialize_profiles(
     prof_q_tot = nothing
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1000 * 100) # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -249,31 +235,23 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::Nieuwstadt, surf_ref_thermo_state, thermo_params)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
+function surface_params(case::Nieuwstadt, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
+    psurface::FT = 1000 * 100
     Tsurface::FT = 300.0
     qsurface::FT = 0.0
     θ_flux::FT = 6.0e-2
     lhf::FT = 0.0 # It would be 0.0 if we follow Nieuwstadt.
-    ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
-    shf = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    shf =
+        θ_flux * TD.air_density(thermo_params, ts) * TD.cp_m(thermo_params, ts)
     return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
 #####
 ##### Bomex
 #####
-
-function surface_reference_thermo_state(::Bomex, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1.015e5 #Pressure at ground
-    Tg::FT = 300.4 #Temperature at ground
-    qtg::FT = 0.02245#Total water mixing ratio at surface
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 
 function initialize_profiles(
     ::Bomex,
@@ -293,7 +271,7 @@ function initialize_profiles(
     prof_tke = APL.Bomex_tke(FT)
 
     # Solve the initial value problem
-    p_0::FT = FT(1.015e5) # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1.015e5) # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -312,19 +290,18 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::Bomex, surf_ref_thermo_state, thermo_params)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
+function surface_params(case::Bomex, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 1.0e-4
+    psurface::FT = 1.015e5
     qsurface::FT = 22.45e-3 # kg/kg
-    θ_surface::FT = 299.1
+    Tsurface::FT = 300.4 # Equivalent to θsurface = 299.1
     θ_flux::FT = 8.0e-3
     qt_flux::FT = 5.2e-5
-    ts = TD.PhaseEquil_pθq(thermo_params, p_f_surf, θ_surface, qsurface)
-    Tsurface = TD.air_temperature(thermo_params, ts)
-    lhf = qt_flux * ρ_f_surf * TD.latent_heat_vapor(thermo_params, ts)
-    shf = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ρsurface = TD.air_density(thermo_params, ts)
+    lhf = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
+    shf = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
     ustar::FT = 0.28 # m/s
     return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
@@ -333,13 +310,6 @@ end
 ##### LifeCycleTan2018
 #####
 
-function surface_reference_thermo_state(::LifeCycleTan2018, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1.015e5  #Pressure at ground
-    Tg::FT = 300.4  #Temperature at ground
-    qtg::FT = 0.02245   #Total water mixing ratio at surface
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 function initialize_profiles(
     ::LifeCycleTan2018,
     grid::Grid,
@@ -358,7 +328,7 @@ function initialize_profiles(
     prof_tke = APL.LifeCycleTan2018_tke(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -377,22 +347,18 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(
-    case::LifeCycleTan2018,
-    surf_ref_thermo_state,
-    thermo_params,
-)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    ρ_f_surf = TD.air_density(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
+function surface_params(case::LifeCycleTan2018, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 1.0e-4 # not actually used, but initialized to reasonable value
+    psurface::FT = 1.015e5
     qsurface::FT = 22.45e-3 # kg/kg
-    θ_surface::FT = 299.1
+    Tsurface::FT = 300.4 # equivalent to θsurface = 299.1
     θ_flux::FT = 8.0e-3
     qt_flux::FT = 5.2e-5
-    ts = TD.PhaseEquil_pθq(thermo_params, p_f_surf, θ_surface, qsurface)
-    lhf0 = qt_flux * ρ_f_surf * TD.latent_heat_vapor(thermo_params, ts)
-    shf0 = θ_flux * TD.cp_m(thermo_params, ts) * ρ_f_surf
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ρsurface = TD.air_density(thermo_params, ts)
+    lhf0 = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
+    shf0 = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
 
     weight_factor(t) = FT(0.01) + FT(0.99) * (cos(2 * FT(π) * t / 3600) + 1) / 2
     weight::FT = 1.0
@@ -407,15 +373,6 @@ end
 ##### Rico
 #####
 
-function surface_reference_thermo_state(::Rico, thermo_params)
-    molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1.0154e5  #Pressure at ground
-    Tg::FT = 299.8  #Temperature at ground
-    pvg = TD.saturation_vapor_pressure(thermo_params, Tg, TD.Liquid())
-    qtg = (1 / molmass_ratio) * pvg / (Pg - pvg)   #Total water mixing ratio at surface
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 function initialize_profiles(
     ::Rico,
     grid::Grid,
@@ -435,7 +392,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Rico_θ_liq_ice(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1.015e5)    # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1.0154e5)    # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -469,15 +426,8 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(
-    case::Rico,
-    surf_ref_thermo_state,
-    thermo_params,
-    args...,
-)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
-
+function surface_params(case::Rico, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 0.00015
     cm0::FT = 0.001229
     ch0::FT = 0.001094
@@ -487,13 +437,14 @@ function surface_params(
     cm = zc_surf -> cm0 * grid_adjust(zc_surf)
     ch = zc_surf -> ch0 * grid_adjust(zc_surf)
     cq = zc_surf -> cq0 * grid_adjust(zc_surf) # TODO: not yet used..
-    Tsurface::FT = 301.10523249821375
+    psurface::FT = 1.0154e5
+    Tsurface::FT = 299.8
 
     # For Rico we provide values of transfer coefficients
-    ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, FT(0)) # TODO: is this correct?
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, FT(0)) # TODO: is this correct?
     qsurface = TD.q_vap_saturation(thermo_params, ts)
     # TODO: thermo state should be constructed once
-    ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
     return TC.FixedSurfaceCoeffs(; zrough, ts, ch, cm)
 end
 
@@ -501,15 +452,6 @@ end
 ##### TRMM_LBA
 #####
 
-function surface_reference_thermo_state(::TRMM_LBA, thermo_params)
-    molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 991.3 * 100  #Pressure at ground
-    Tg::FT = 296.85 # surface values for reference state (RS) which outputs p, ρ
-    pvg = TD.saturation_vapor_pressure(thermo_params, Tg, TD.Liquid())
-    qtg = (1 / molmass_ratio) * pvg / (Pg - pvg) #Total water mixing ratio at surface
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 function TRMM_q_tot_profile(::Type{FT}, thermo_params) where {FT}
 
     molmass_ratio = TD.Parameters.molmass_ratio(thermo_params)
@@ -552,7 +494,7 @@ function initialize_profiles(
     prof_q_tot = TRMM_q_tot_profile(FT, thermo_params)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(991.3 * 100)    # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(991.3 * 100)    # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_T
@@ -575,15 +517,14 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(case::TRMM_LBA, surf_ref_thermo_state, thermo_params)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
+function surface_params(case::TRMM_LBA, thermo_params)
+    FT = eltype(thermo_params)
     # zrough = 1.0e-4 # not actually used, but initialized to reasonable value
     zrough::FT = 0 # actually, used, TODO: should we be using the value above?
+    psurface::FT = 991.3 * 100
     qsurface::FT = 22.45e-3 # kg/kg
-    θ_surface::FT = (273.15 + 23)
-    ts = TD.PhaseEquil_pθq(thermo_params, p_f_surf, θ_surface, qsurface)
-    Tsurface = TD.air_temperature(thermo_params, ts)
+    Tsurface::FT = 273.15 + 23.7
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
     ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
     lhf =
         t ->
@@ -607,14 +548,6 @@ end
 ##### ARM_SGP
 #####
 
-function surface_reference_thermo_state(::ARM_SGP, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 970.0 * 100 #Pressure at ground
-    Tg::FT = 299.0   # surface values for reference state (RS) which outputs  p, ρ
-    qtg::FT = 15.2 / 1000 #Total water mixing ratio at surface
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
-
 function initialize_profiles(
     ::ARM_SGP,
     grid::Grid,
@@ -633,7 +566,7 @@ function initialize_profiles(
     prof_tke = APL.ARM_SGP_tke(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(970 * 100)    # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(970 * 100)    # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -664,12 +597,12 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(case::ARM_SGP, surf_ref_thermo_state, thermo_params)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
+function surface_params(case::ARM_SGP, thermo_params)
+    FT = eltype(thermo_params)
+    psurface::FT = 970 * 100
     qsurface::FT = 15.2e-3 # kg/kg
     θ_surface::FT = 299.0
-    ts = TD.PhaseEquil_pθq(thermo_params, p_f_surf, θ_surface, qsurface)
+    ts = TD.PhaseEquil_pθq(thermo_params, psurface, θ_surface, qsurface)
     ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
 
     t_Sur_in = arr_type(FT[0.0, 4.0, 6.5, 7.5, 10.0, 12.5, 14.5]) .* 3600 #LES time is in sec
@@ -685,14 +618,6 @@ end
 #####
 ##### GATE_III
 #####
-
-function surface_reference_thermo_state(::GATE_III, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1013.0 * 100  #Pressure at ground
-    Tg::FT = 299.184   # surface values for reference state (RS) which outputs p, ρ
-    qtg::FT = 16.5 / 1000 #Total water mixing ratio at surface
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 
 function initialize_profiles(
     ::GATE_III,
@@ -713,7 +638,7 @@ function initialize_profiles(
     prof_u = APL.GATE_III_u(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1013 * 100)    # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1013 * 100)    # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_T
@@ -740,40 +665,25 @@ function initialize_profiles(
     end
 end
 
-function surface_params(
-    case::GATE_III,
-    surf_ref_thermo_state,
-    thermo_params,
-    args...,
-)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    FT = eltype(p_f_surf)
-
+# TODO: The paper only specifies that Tsurface = 299.88. Where did all of these
+# values come from?
+function surface_params(case::GATE_III, thermo_params)
+    FT = eltype(thermo_params)
+    psurface::FT = 1013 * 100
     qsurface::FT = 16.5 / 1000.0 # kg/kg
     cm = zc_surf -> FT(0.0012)
     ch = zc_surf -> FT(0.0034337)
     cq = zc_surf -> FT(0.0034337)
-    # TODO: fix bug: Tsurface is passed into `PhaseEquil_pθq`
     Tsurface::FT = 299.184
 
     # For GATE_III we provide values of transfer coefficients
-    ts = TD.PhaseEquil_pθq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
     return TC.FixedSurfaceCoeffs(; zrough = FT(0), ts, ch, cm)
 end
 
 #####
 ##### DYCOMS_RF01
 #####
-
-function surface_reference_thermo_state(::DYCOMS_RF01, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1017.8 * 100.0
-    qtg::FT = 9.0 / 1000.0
-    θ_surf::FT = 289.0
-    ts = TD.PhaseEquil_pθq(thermo_params, Pg, θ_surf, qtg)
-    Tg = TD.air_temperature(thermo_params, ts)
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 
 function initialize_profiles(
     ::DYCOMS_RF01,
@@ -794,7 +704,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Dycoms_RF01_θ_liq_ice(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -817,34 +727,23 @@ function initialize_profiles(
     end
 end
 
-function surface_params(case::DYCOMS_RF01, surf_ref_thermo_state, thermo_params)
-    FT = eltype(surf_ref_thermo_state)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
+function surface_params(case::DYCOMS_RF01, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 1.0e-4
     ustar::FT = 0.28 # just to initialize grid mean covariances
     shf::FT = 15.0 # sensible heat flux
     lhf::FT = 115.0 # latent heat flux
+    psurface::FT = 1017.8 * 100
     Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
     qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
     #density_surface  = 1.22     # kg/m^3
-
-    ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
     return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
 #####
 ##### DYCOMS_RF02
 #####
-
-function surface_reference_thermo_state(::DYCOMS_RF02, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1017.8 * 100.0
-    qtg::FT = 9.0 / 1000.0
-    θ_surf::FT = 288.3
-    ts = TD.PhaseEquil_pθq(thermo_params, Pg, θ_surf, qtg)
-    Tg = TD.air_temperature(thermo_params, ts)
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 
 function initialize_profiles(
     ::DYCOMS_RF02,
@@ -865,7 +764,7 @@ function initialize_profiles(
     prof_θ_liq_ice = APL.Dycoms_RF02_θ_liq_ice(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1017.8 * 100)  # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -888,16 +787,16 @@ function initialize_profiles(
     end
 end
 
-function surface_params(case::DYCOMS_RF02, surf_ref_thermo_state, thermo_params)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    FT = eltype(surf_ref_thermo_state)
+function surface_params(case::DYCOMS_RF02, thermo_params)
+    FT = eltype(thermo_params)
     zrough::FT = 1.0e-4  #TODO - not needed?
     ustar::FT = 0.25
     shf::FT = 16.0 # sensible heat flux
     lhf::FT = 93.0 # latent heat flux
+    psurface::FT = 1017.8 * 100
     Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
     qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
-    ts = TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface, qsurface)
+    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
     return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
@@ -905,13 +804,6 @@ end
 ##### GABLS
 #####
 
-function surface_reference_thermo_state(::GABLS, thermo_params)
-    FT = eltype(thermo_params)
-    Pg::FT = 1.0e5  #Pressure at ground,
-    Tg::FT = 265.0  #Temperature at ground,
-    qtg::FT = 0.0
-    return TD.PhaseEquil_pTq(thermo_params, Pg, Tg, qtg)
-end
 function initialize_profiles(
     ::GABLS,
     grid::Grid,
@@ -931,7 +823,7 @@ function initialize_profiles(
     prof_q_tot = APL.GABLS_q_tot(FT)
 
     # Solve the initial value problem for pressure
-    p_0::FT = FT(1.0e5)         # TODO - duplicated from surface_reference_thermo_state
+    p_0::FT = FT(1.0e5)         # TODO - duplicated from surface_params
     z_0::FT = grid.zf[TC.kf_surface(grid)].z
     z_max::FT = grid.zf[TC.kf_top_of_atmos(grid)].z
     prof_thermo_var = prof_θ_liq_ice
@@ -952,18 +844,13 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(
-    case::GABLS,
-    surf_ref_thermo_state,
-    thermo_params,
-    args...,
-)
-    p_f_surf = TD.air_pressure(thermo_params, surf_ref_thermo_state)
-    FT = eltype(surf_ref_thermo_state)
+function surface_params(case::GABLS, thermo_params)
+    FT = eltype(thermo_params)
+    psurface::FT = 1.0e5
     Tsurface = t -> 265 - (FT(0.25) / 3600) * t
     qsurface::FT = 0.0
     zrough::FT = 0.1
-    ts = t -> TD.PhaseEquil_pTq(thermo_params, p_f_surf, Tsurface(t), qsurface)
+    ts = t -> TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface(t), qsurface)
     return TC.MoninObukhovSurface(; ts, zrough)
 end
 
