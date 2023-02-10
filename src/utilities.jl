@@ -49,9 +49,14 @@ sort_files_by_time(files) =
 
 import ClimaCore.Fields as Fields
 
-function debug_state_generic!(state, var::Union{Fields.FieldVector, NamedTuple})
+function debug_state_generic!(
+    state,
+    var::Union{Fields.FieldVector, NamedTuple};
+    name = "",
+)
     for pn in propertynames(var)
-        debug_state_generic!(state, getproperty(var, pn))
+        pfx = isempty(name) ? "" : "$name."
+        debug_state_generic!(state, getproperty(var, pn); name = "$pfx$pn")
     end
 end
 
@@ -59,63 +64,73 @@ function debug_state_generic!(
     state,
     var::Union{Fields.FieldVector, NamedTuple},
     colidx,
+    name = "",
 )
     for pn in propertynames(var)
-        debug_state_generic!(state, getproperty(var, pn), colidx)
+        pfx = isempty(name) ? "" : "$name."
+        debug_state_generic!(
+            state,
+            getproperty(var, pn),
+            colidx;
+            name = "$pfx$pn",
+        )
     end
 end
 
-debug_state_generic!(state, var::Number) = nothing
-debug_state_generic!(state, var::AbstractString) = nothing
-debug_state_generic!(state, var::Bool) = nothing
-debug_state_generic!(state, var::Nothing) = nothing
-debug_state_generic!(state, var::Any) = nothing # TODO: should we try to catch more types?
+debug_state_generic!(state, var::Number; name = "") = nothing
+debug_state_generic!(state, var::AbstractString; name = "") = nothing
+debug_state_generic!(state, var::Bool; name = "") = nothing
+debug_state_generic!(state, var::Nothing; name = "") = nothing
+debug_state_generic!(state, var::Any; name = "") = nothing # TODO: should we try to catch more types?
 
-debug_state_generic!(state, var::Number, colidx) = nothing
-debug_state_generic!(state, var::AbstractString, colidx) = nothing
-debug_state_generic!(state, var::Bool, colidx) = nothing
-debug_state_generic!(state, var::Nothing, colidx) = nothing
-debug_state_generic!(state, var::Any, colidx) = nothing # TODO: should we try to catch more types?
+debug_state_generic!(state, var::Number, colidx; name = "") = nothing
+debug_state_generic!(state, var::AbstractString, colidx; name = "") = nothing
+debug_state_generic!(state, var::Bool, colidx; name = "") = nothing
+debug_state_generic!(state, var::Nothing, colidx; name = "") = nothing
+debug_state_generic!(state, var::Any, colidx; name = "") = nothing # TODO: should we try to catch more types?
 
-debug_state_generic!(state, var::Fields.Field, colidx) =
-    debug_state_column_field!(state, var[colidx])
-debug_state_generic!(state, var::Fields.Field) = debug_state_field!(state, var)
+debug_state_generic!(state, var::Fields.Field, colidx; name = "") =
+    debug_state_column_field!(state, var[colidx]; name)
+debug_state_generic!(state, var::Fields.Field; name = "") =
+    debug_state_field!(state, var; name)
 
-debug_state_field!(state, ::Nothing) = nothing
-debug_state_field!(state, ::Nothing, colidx) = nothing
+debug_state_field!(state, ::Nothing; name = "") = nothing
+debug_state_field!(state, ::Nothing, colidx; name = "") = nothing
 
-debug_state_field!(state, prog::Fields.Field, colidx) =
-    debug_state_column_field!(state, prog[colidx])
-debug_state_field!(state, prog::Fields.Field) =
-    debug_state_full_field!(state, prog)
+debug_state_field!(state, prog::Fields.Field, colidx; name = "") =
+    debug_state_column_field!(state, prog[colidx]; name)
+debug_state_field!(state, prog::Fields.Field; name = "") =
+    debug_state_full_field!(state, prog; name)
 
-function debug_state_full_field!(state, prog::Fields.Field)
+function debug_state_full_field!(state, prog::Fields.Field; name = "")
     isbad(x) = isnan(x) || isinf(x)
-    (; msg, name) = state
+    (; msg) = state
     for prop_chain in Fields.property_chains(prog)
         var = Fields.single_field(prog, prop_chain)
         nan = any(isnan.(parent(var)))
         inf = any(isinf.(parent(var)))
         any(isbad.(parent(var))) || continue
+        pfx = isempty(name) ? "" : "$name."
         push!(
             msg,
-            "-------------------- Bad data (nan=$nan, inf=$inf) in $name.$prop_chain",
+            "-------------------- Bad data (nan=$nan, inf=$inf) in $(state.name).$pfx$prop_chain",
         )
         push!(msg, sprint(show, var))
     end
 end
 
-function debug_state_column_field!(state, prog::Fields.Field) # can we change this to prof::Fields.ColumnField ?
+function debug_state_column_field!(state, prog::Fields.Field; name = "") # can we change this to prof::Fields.ColumnField ?
     isbad(x) = isnan(x) || isinf(x)
-    (; msg, name) = state
+    (; msg) = state
     for prop_chain in Fields.property_chains(prog)
         var = Fields.single_field(prog, prop_chain)
         nan = any(isnan.(parent(var)))
         inf = any(isinf.(parent(var)))
+        pfx = isempty(name) ? "" : "$name."
         any(isbad.(parent(var))) || continue
         push!(
             msg,
-            "-------------------- Bad data (nan=$nan, inf=$inf) in $name.$prop_chain",
+            "-------------------- Bad data (nan=$nan, inf=$inf) in $(state.name).$pfx$prop_chain",
         )
         push!(msg, sprint(show, var))
     end
@@ -171,7 +186,11 @@ function debug_state(t, colidx; Yₜ = nothing, Y = nothing, p = nothing)
                 println(msg)
             end
         end
-        error("Bad state at time $t")
+        if colidx == ()
+            error("Bad state at time $t")
+        else
+            error("Bad state at time $t in column $colidx")
+        end
     end
     return nothing
 end
