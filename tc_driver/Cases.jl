@@ -180,7 +180,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::Soares, thermo_params)
+function surface_params(case::Soares, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
     psurface::FT = 1000 * 100
@@ -188,7 +188,11 @@ function surface_params(case::Soares, thermo_params)
     qsurface::FT = 5.0e-3
     θ_flux::FT = 6.0e-2
     qt_flux::FT = 2.5e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     ρsurface = TD.air_density(thermo_params, ts)
     lhf = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
     shf = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
@@ -235,7 +239,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::Nieuwstadt, thermo_params)
+function surface_params(case::Nieuwstadt, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
     psurface::FT = 1000 * 100
@@ -243,7 +247,11 @@ function surface_params(case::Nieuwstadt, thermo_params)
     qsurface::FT = 0.0
     θ_flux::FT = 6.0e-2
     lhf::FT = 0.0 # It would be 0.0 if we follow Nieuwstadt.
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     shf =
         θ_flux * TD.air_density(thermo_params, ts) * TD.cp_m(thermo_params, ts)
     return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
@@ -290,7 +298,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::Bomex, thermo_params)
+function surface_params(case::Bomex, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 1.0e-4
     psurface::FT = 1.015e5
@@ -298,7 +306,11 @@ function surface_params(case::Bomex, thermo_params)
     Tsurface::FT = 300.4 # Equivalent to θsurface = 299.1
     θ_flux::FT = 8.0e-3
     qt_flux::FT = 5.2e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     ρsurface = TD.air_density(thermo_params, ts)
     lhf = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
     shf = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
@@ -347,7 +359,7 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::LifeCycleTan2018, thermo_params)
+function surface_params(case::LifeCycleTan2018, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 1.0e-4 # not actually used, but initialized to reasonable value
     psurface::FT = 1.015e5
@@ -355,7 +367,11 @@ function surface_params(case::LifeCycleTan2018, thermo_params)
     Tsurface::FT = 300.4 # equivalent to θsurface = 299.1
     θ_flux::FT = 8.0e-3
     qt_flux::FT = 5.2e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     ρsurface = TD.air_density(thermo_params, ts)
     lhf0 = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
     shf0 = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
@@ -426,7 +442,7 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(case::Rico, thermo_params)
+function surface_params(case::Rico, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 0.00015
     cm0::FT = 0.001229
@@ -441,7 +457,11 @@ function surface_params(case::Rico, thermo_params)
     Tsurface::FT = 299.8
 
     # For Rico we provide values of transfer coefficients
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, FT(0)) # TODO: is this correct?
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, FT(0)) # TODO: is this correct?
+    end
     qsurface = TD.q_vap_saturation(thermo_params, ts)
     # TODO: thermo state should be constructed once
     ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
@@ -517,14 +537,18 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(case::TRMM_LBA, thermo_params)
+function surface_params(case::TRMM_LBA, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     # zrough = 1.0e-4 # not actually used, but initialized to reasonable value
     zrough::FT = 0 # actually, used, TODO: should we be using the value above?
     psurface::FT = 991.3 * 100
     qsurface::FT = 22.45e-3 # kg/kg
     Tsurface::FT = 273.15 + 23.7
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
     lhf =
         t ->
@@ -597,12 +621,16 @@ function initialize_profiles(
     @. aux_gm.tke = prof_tke(z)
 end
 
-function surface_params(case::ARM_SGP, thermo_params)
+function surface_params(case::ARM_SGP, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     psurface::FT = 970 * 100
     qsurface::FT = 15.2e-3 # kg/kg
     θ_surface::FT = 299.0
-    ts = TD.PhaseEquil_pθq(thermo_params, psurface, θ_surface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pθ(thermo_params, psurface, θ_surface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pθq(thermo_params, psurface, θ_surface, qsurface)
+    end
     ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
 
     t_Sur_in = arr_type(FT[0.0, 4.0, 6.5, 7.5, 10.0, 12.5, 14.5]) .* 3600 #LES time is in sec
@@ -667,7 +695,7 @@ end
 
 # TODO: The paper only specifies that Tsurface = 299.88. Where did all of these
 # values come from?
-function surface_params(case::GATE_III, thermo_params)
+function surface_params(case::GATE_III, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     psurface::FT = 1013 * 100
     qsurface::FT = 16.5 / 1000.0 # kg/kg
@@ -677,7 +705,11 @@ function surface_params(case::GATE_III, thermo_params)
     Tsurface::FT = 299.184
 
     # For GATE_III we provide values of transfer coefficients
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseEquil_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     return TC.FixedSurfaceCoeffs(; zrough = FT(0), ts, ch, cm)
 end
 
@@ -727,7 +759,7 @@ function initialize_profiles(
     end
 end
 
-function surface_params(case::DYCOMS_RF01, thermo_params)
+function surface_params(case::DYCOMS_RF01, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 1.0e-4
     ustar::FT = 0.28 # just to initialize grid mean covariances
@@ -737,7 +769,11 @@ function surface_params(case::DYCOMS_RF01, thermo_params)
     Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
     qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
     #density_surface  = 1.22     # kg/m^3
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
 end
 
@@ -787,7 +823,7 @@ function initialize_profiles(
     end
 end
 
-function surface_params(case::DYCOMS_RF02, thermo_params)
+function surface_params(case::DYCOMS_RF02, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     zrough::FT = 1.0e-4  #TODO - not needed?
     ustar::FT = 0.25
@@ -796,7 +832,11 @@ function surface_params(case::DYCOMS_RF02, thermo_params)
     psurface::FT = 1017.8 * 100
     Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
     qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    ts = if moisture_model isa CA.DryModel
+        TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
+    elseif moisture_model isa CA.EquilMoistModel
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    end
     return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
 end
 
@@ -844,13 +884,17 @@ function initialize_profiles(
     @. p_c = prof_p(z)
 end
 
-function surface_params(case::GABLS, thermo_params)
+function surface_params(case::GABLS, thermo_params, moisture_model)
     FT = eltype(thermo_params)
     psurface::FT = 1.0e5
     Tsurface = t -> 265 - (FT(0.25) / 3600) * t
     qsurface::FT = 0.0
     zrough::FT = 0.1
-    ts = t -> TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface(t), qsurface)
+    ts = if moisture_model isa CA.DryModel
+        t -> TD.PhaseDry_pT(thermo_params, psurface, Tsurface(t))
+    elseif moisture_model isa CA.EquilMoistModel
+        t -> TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface(t), qsurface)
+    end
     return TC.MoninObukhovSurface(; ts, zrough)
 end
 

@@ -3,6 +3,7 @@ module TurbulenceConvectionUtils
 using LinearAlgebra
 using LinearAlgebra: norm_sqr
 import ClimaAtmos
+import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
@@ -72,7 +73,9 @@ function turbconv_cache(
     test_consistency = parsed_args["test_edmf_consistency"]
     case = Cases.get_case(namelist["meta"]["casename"])
     thermo_params = CAP.thermodynamics_params(param_set)
-    surf_params = Cases.surface_params(case, thermo_params)
+    @assert atmos.moisture_model in (CA.DryModel(), CA.EquilMoistModel())
+    surf_params =
+        Cases.surface_params(case, thermo_params, atmos.moisture_model)
     edmf = turbconv_model
     @info "EDMFModel: \n$(summary(edmf))"
     cache = (;
