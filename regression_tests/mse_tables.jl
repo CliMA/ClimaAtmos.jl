@@ -238,19 +238,6 @@ all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :uₕ, :com
 all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:c, :ρq_tot)] = 0
 all_best_mse["sphere_held_suarez_rhoe_equilmoist_hightop_nogw"][(:f, :w, :components, :data, 1)] = 0
 #
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :ρe_tot)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :ρq_tot)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :turbconv, :en, :ρatke)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:f, :w, :components, :data, 1)] = 0.0
-all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
-#
 all_best_mse["sphere_baroclinic_wave_ogw"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :ρ)] = 0
 all_best_mse["sphere_baroclinic_wave_ogw"][(:c, :ρe_tot)] = 0
