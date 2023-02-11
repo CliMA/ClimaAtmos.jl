@@ -283,3 +283,39 @@ function remaining_tendency!(Yₜ, Y, p, t)
     end
     return Yₜ
 end
+
+function horizontal_limiter_tendency!(Yₜ, Y, p, t)
+    divₕ = Operators.Divergence()
+
+    (; ᶜu_bar) = p
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    @. ᶜu_bar = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+
+    Yₜ .= zero(eltype(Yₜ))
+
+    # Tracer conservation, horizontal advection
+    for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+        ᶜρc = getproperty(Y.c, ᶜρc_name)
+        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
+    end
+
+    # Call hyperdiffusion
+    CA.hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
+
+    return nothing
+end
+
+function limiters_func!(Y, p, t, ref_Y)
+    (; limiters) = p
+    if !isnothing(limiters)
+        for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+            ρc_limiter = getproperty(limiters, ᶜρc_name)
+            ᶜρc_ref = getproperty(ref_Y.c, ᶜρc_name)
+            ᶜρc = getproperty(Y.c, ᶜρc_name)
+            Limiters.compute_bounds!(ρc_limiter, ᶜρc_ref, ref_Y.c.ρ)
+            Limiters.apply_limiter!(ᶜρc, Y.c.ρ, ρc_limiter)
+        end
+    end
+end
