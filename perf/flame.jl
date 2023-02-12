@@ -12,7 +12,7 @@ parsed_args_target = dict["perf_target_unthreaded"];
 parsed_args = merge(parsed_args_target, parsed_args_prescribed);
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
-const n_samples = occursin("callbacks", parsed_args["job_id"]) ? 2 : 20
+const n_samples = occursin("callbacks", parsed_args["job_id"]) ? 2 : 10
 
 try # capture integrator
     include(filename)
