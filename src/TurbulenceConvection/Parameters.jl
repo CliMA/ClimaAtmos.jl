@@ -8,6 +8,8 @@ import Thermodynamics as TD
 import SurfaceFluxes as SF
 import CloudMicrophysics as CM
 
+include("../model_getters.jl")
+
 abstract type AbstractTurbulenceConvectionParameters end
 const ATCP = AbstractTurbulenceConvectionParameters
 
@@ -15,15 +17,12 @@ const ATCP = AbstractTurbulenceConvectionParameters
 ##### TurbulenceConvection parameters
 #####
 
-Base.@kwdef struct TurbulenceConvectionParameters{FT, MP, SFP} <: ATCP
+Base.@kwdef struct TurbulenceConvectionParameters{FT, MP, SFP, QT, PFM, CM, ET} <: ATCP
     Omega::FT
     planet_radius::FT
     microph_scaling::FT # TODO: move to microphysics parameter set? or Microphysics1Moment?
     microph_scaling_dep_sub::FT # TODO: move to microphysics parameter set? or Microphysics1Moment?
     microph_scaling_melt::FT # TODO: move to microphysics parameter set? or Microphysics1Moment?
-    microphys_params::MP
-    surf_flux_params::SFP
-    case_name::String
     surface_area::FT
     max_area::FT
     min_area::FT
@@ -51,16 +50,40 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, MP, SFP} <: ATCP
     pressure_normalmode_buoy_coeff1::FT
     pressure_normalmode_adv_coeff::FT
     pressure_normalmode_drag_coeff::FT
-    moisture_model::String
-    thermo_covariance_model::String
     diagnostic_covar_limiter::FT
-    sgs::String
-    quadrature_order::Integer
-    quadrature_type::String
-    updraft_number::Integer
-    precip_fraction_model::String
+    quadrature_order::Int
+    updraft_number::Int
     prescribed_precip_frac::FT
     precip_fraction_limiter::FT
+    precip_fraction_model::PFM
+    quadrature_type::QT
+    sgs::ET
+    thermo_covariance_model::CM
+    microphys_params::MP
+    surf_flux_params::SFP
+end
+
+function TurbulenceConvectionParameters(pairs::NamedTuple)
+    quadrature_type = AbstractQuadratureType(pairs.quadrature_type)
+    QT = typeof(quadrature_type)
+    precip_frac_model = AbstractPrecipFractionModel(pairs)
+    PFM = typeof(precip_frac_model)
+    thermo_covariance_model = AbstractCovarianceModel(pairs)
+    CM = typeof(thermo_covariance_model)
+    sgs = AbstractEnvThermo(pairs)
+    ET = typeof(sgs)
+    MP = typeof(pairs.microphys_params)
+    SFP = typeof(pairs.surf_flux_params)
+    FT = typeof(pairs.Omega)
+    pairs = (;
+        pairs...,
+        precip_fraction_model=precip_frac_model,
+        quadrature_type=quadrature_type,
+        sgs=sgs,
+        thermo_covariance_model=thermo_covariance_model,
+    )
+    tcp = TurbulenceConvectionParameters{FT, MP, SFP, QT, PFM, CM, ET}(pairs...)
+    return tcp
 end
 
 thermodynamics_params(ps::ATCP) =
