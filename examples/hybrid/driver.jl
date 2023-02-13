@@ -1,3 +1,5 @@
+import ClimaAtmos as CA
+
 if !(@isdefined parsed_args)
     include("cli_options.jl")
     (s, parsed_args) = parse_commandline()
@@ -28,9 +30,10 @@ case_name = parsed_args["turbconv_case"]
 
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
+include("topography_helper.jl")
+include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
 include("types.jl")
 
-import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU

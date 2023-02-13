@@ -151,7 +151,13 @@ function surface_thermo_state(
         )
     q_sfc =
         TD.q_vap_saturation_generic(thermo_params, T_sfc, ρ_sfc, TD.Liquid())
-    return TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+    if ts_int isa TD.PhaseDry
+        return TD.PhaseDry_ρT(thermo_params, ρ_sfc, T_sfc)
+    elseif ts_int isa TD.PhaseEquil
+        return TD.PhaseEquil_ρTq(thermo_params, ρ_sfc, T_sfc, q_sfc)
+    else
+        error("Unsupported thermo option")
+    end
 end
 
 set_surface_thermo_state!(::Coupled, args...) = nothing

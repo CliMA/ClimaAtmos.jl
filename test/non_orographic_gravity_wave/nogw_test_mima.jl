@@ -12,11 +12,12 @@ function non_orographic_gravity_wave_cache(
     lat,
     ::Type{FT};
     gw_source_pressure = FT(31500),
+    gw_damp_pressure = FT(85),
     Bw = FT(0.4),
-    Bn = FT(8.4),
+    Bn = FT(0),
     Bt_0 = FT(0.0043),
-    Bt_n = FT(0.0014),
-    Bt_s = FT(0.0014),
+    Bt_n = FT(0.001),
+    Bt_s = FT(0.001),
     Bt_eq = FT(0.0043),
     ϕ0_n = FT(15),
     ϕ0_s = FT(-15),
@@ -25,7 +26,7 @@ function non_orographic_gravity_wave_cache(
     dc = FT(0.6),
     cmax = FT(99.6),
     c0 = FT(0),
-    kwv = FT(2π / 100e5),
+    nk = Int(1),
     cw = FT(35.0),
     cw_tropics = FT(35.0),
     cn = FT(2.0),
@@ -41,7 +42,7 @@ function non_orographic_gravity_wave_cache(
 
     gw_Bn = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), Bn)
     gw_cw = @. ifelse(dϕ_s <= lat <= dϕ_n, cw_tropics, cw)
-    gw_flag = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), FT(1))
+    gw_flag = zeros(axes(lat))
 
     # source amplitude following MiMA: radical change between subtropics and the tropic
     source_ampl = @. ifelse(
@@ -62,6 +63,7 @@ function non_orographic_gravity_wave_cache(
 
     return (;
         gw_source_pressure = gw_source_pressure,
+        gw_damp_pressure = gw_damp_pressure,
         gw_source_ampl = source_ampl,
         gw_Bw = Bw,
         gw_Bn = gw_Bn,
@@ -70,9 +72,7 @@ function non_orographic_gravity_wave_cache(
         gw_cn = cn,
         gw_c0 = c0,
         gw_flag = gw_flag,
-        gw_nk = length(kwv),
-        gw_k = kwv,
-        gw_k2 = kwv .^ 2,
+        gw_nk = nk,
     )
 end
 
@@ -119,28 +119,36 @@ dTdz = zeros(size(T))
 bf = @. (grav / T) * (dTdz + grav / cp_d)
 bf = @. ifelse(bf < 2.5e-5, sqrt(2.5e-5), sqrt(abs(bf)))
 
-# z at face levels
-z_face = zeros(size(z) .+ (0, 0, 1, 0))
-for k in length(pfull):-1:1
-    z_face[:, :, k, :] = 2 * z[:, :, k, :] - z_face[:, :, k + 1, :]
-end
-
 # compute u/v forcings from convective gravity waves
-params = non_orographic_gravity_wave_cache(lat, FT; kwv = 2π / 300e3)
+params = non_orographic_gravity_wave_cache(lat, FT)
 
 # nogw forcing
-ρ_source = zeros(length(lon), length(lat), length(time))
+
+kmax = length(pfull) - 1
+k_source = findfirst(pfull * 100 .> params.gw_source_pressure)
+k_damp = findlast(pfull * 100 .< params.gw_damp_pressure)
+
 uforcing = zeros(size(lev))
+vforcing = zeros(size(lev))
 for i in 1:length(lon)
     for j in 1:length(lat)
         for it in 1:length(time)
-            source_level = argmin(
-                abs.(lev[i, j, end:-1:1, it] .- params.gw_source_pressure),
-            )
-            ρ_source[i, j, it] = ρ[i, j, source_level, it]
+            source_level =
+                kmax + 2 - Int(
+                    floor(
+                        (kmax + 1) -
+                        ((kmax + 1 - k_source) * cosd(lat[j]) + 0.5),
+                    ),
+                )
+            damp_level = length(pfull) + 1 - k_damp
+
             uforcing[i, j, :, it] = CA.non_orographic_gravity_wave_forcing(
                 u[i, j, end:-1:1, it],
+                bf[i, j, end:-1:1, it],
+                ρ[i, j, end:-1:1, it],
+                z[i, j, end:-1:1, it],
                 source_level,
+                damp_level,
                 params.gw_source_ampl[j],
                 params.gw_Bw,
                 params.gw_Bn[j],
@@ -150,28 +158,31 @@ for i in 1:length(lon)
                 params.gw_c,
                 params.gw_c0,
                 params.gw_nk,
-                params.gw_k,
-                params.gw_k2,
-                bf[i, j, end:-1:1, it],
-                ρ[i, j, end:-1:1, it],
-                z_face[i, j, end:-1:1, it],
             )
         end
     end
 end
 uforcing_zonalave = dropdims(mean(uforcing, dims = 1), dims = 1)
 
-vforcing = zeros(size(lev))
 for i in 1:length(lon)
     for j in 1:length(lat)
         for it in 1:length(time)
-            source_level = argmin(
-                abs.(lev[i, j, end:-1:1, it] .- params.gw_source_pressure),
-            )
-            ρ_source[i, j, it] = ρ[i, j, source_level, it]
+            source_level =
+                kmax + 2 - Int(
+                    floor(
+                        (kmax + 1) -
+                        ((kmax + 1 - k_source) * cosd(lat[j]) + 0.5),
+                    ),
+                )
+            damp_level = length(pfull) + 1 - k_damp
+
             vforcing[i, j, :, it] = CA.non_orographic_gravity_wave_forcing(
                 v[i, j, end:-1:1, it],
+                bf[i, j, end:-1:1, it],
+                ρ[i, j, end:-1:1, it],
+                z[i, j, end:-1:1, it],
                 source_level,
+                damp_level,
                 params.gw_source_ampl[j],
                 params.gw_Bw,
                 params.gw_Bn[j],
@@ -181,11 +192,6 @@ for i in 1:length(lon)
                 params.gw_c,
                 params.gw_c0,
                 params.gw_nk,
-                params.gw_k,
-                params.gw_k2,
-                bf[i, j, end:-1:1, it],
-                ρ[i, j, end:-1:1, it],
-                z_face[i, j, end:-1:1, it],
             )
         end
     end
@@ -254,8 +260,8 @@ for it in 1:length(time)
     c6 = contourf(
         lat,
         pfull,
-        (vforcing_zonalave[:, end:-1:1, it] .- gwfv_zonalave[:, 1, it])' ./
-        gwfv_zonalave[:, 1, it]' .* 100,
+        (vforcing_zonalave[:, end:-1:1, it] .- gwfv_zonalave[:, :, it])' ./
+        gwfv_zonalave[:, :, it]' .* 100,
         color = :balance,
         clim = (-100, 100),
         title = "gwfv clima-mima (%)",

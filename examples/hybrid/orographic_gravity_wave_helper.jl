@@ -70,8 +70,9 @@ function reshape_cgll_sparse_to_field!(field::Fields.Field, in_array::Array, R)
     end
     # broadcast to the redundant nodes using unweighted dss
     topology = Spaces.topology(axes(field))
-    Spaces.dss_interior_faces!(topology, Fields.field_values(field))
-    Spaces.dss_local_vertices!(topology, Fields.field_values(field))
+    hspace = Spaces.horizontal_space(axes(field))
+    quadrature_style = hspace.quadrature_style
+    Spaces.dss2!(Fields.field_values(field), topology, quadrature_style)
     return field
 end
 

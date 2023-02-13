@@ -1,6 +1,8 @@
 using Dates: DateTime, @dateformat_str
 using NCDatasets
 using Dierckx
+using ImageFiltering
+using Interpolations
 import ClimaCore: InputOutput
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -23,7 +25,10 @@ import ClimaAtmos:
 
 import ClimaCore: InputOutput
 
+include("topography_helper.jl")
+
 function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
+
     # should this live in the radiation model?
 
     moisture_model = CA.moisture_model(parsed_args)
@@ -132,13 +137,31 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
+    @assert topography in ("NoWarp", "DCMIP200", "Earth")
     if topography == "DCMIP200"
-        warp_function = CA.topography_dcmip200
+        warp_function = topography_dcmip200
     elseif topography == "NoWarp"
         warp_function = nothing
+    elseif topography == "Earth"
+        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        earth_spline = NCDataset(data_path) do data
+            zlevels = data["elevation"][:]
+            lon = data["longitude"][:]
+            lat = data["latitude"][:]
+            # Apply Smoothing
+            smooth_degree = 15
+            esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
+            linear_interpolation(
+                (lon, lat),
+                zlevels,
+                extrapolation_bc = (Periodic(), Flat()),
+            )
+        end
+        @info "Generated interpolation stencil"
+        warp_function = generate_topography_warp(earth_spline)
     end
-    @assert topography in ("NoWarp", "DCMIP200")
     @info "Topography" topography
+
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
@@ -284,7 +307,7 @@ import ClimaTimeSteppers as CTS
 import OrdinaryDiffEq as ODE
 
 is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.AbstractIMEXARKTableau
+    alg_or_tableau <: CTS.IMEXARKAlgorithmName
 
 is_implicit_type(::typeof(ODE.IMEXEuler)) = true
 is_implicit_type(alg_or_tableau) =
@@ -300,7 +323,7 @@ is_ordinary_diffeq_newton(alg_or_tableau) =
         ODE.OrdinaryDiffEqNewtonAdaptiveAlgorithm,
     }
 
-is_imex_CTS_algo(::CTS.IMEXARKAlgorithm) = true
+is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
 is_imex_CTS_algo(::DiffEqBase.AbstractODEAlgorithm) = false
 
 is_implicit(::ODE.OrdinaryDiffEqImplicitAlgorithm) = true
@@ -399,7 +422,7 @@ function ode_configuration(Y, parsed_args, atmos)
                 nothing
             end,
         )
-        return CTS.IMEXARKAlgorithm(alg_or_tableau(), newtons_method)
+        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
     else
         return alg_or_tableau(; linsolve = CA.linsolve!)
     end
@@ -418,13 +441,12 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         )
         if is_cts_algo(ode_algo)
             CTS.ClimaODEFunction(;
+                T_lim! = nothing,
                 T_exp! = remaining_tendency!,
                 T_imp! = implicit_func,
                 # Can we just pass implicit_tendency! and jac_prototype etc.?
-                dss!,
                 lim! = nothing,
-                T_lim! = nothing,
-                stage_callback! = (Y, p, t) -> nothing,
+                dss!,
             )
         else
             ODE.SplitFunction(implicit_func, remaining_tendency!)
