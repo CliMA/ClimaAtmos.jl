@@ -1,18 +1,10 @@
+# Customizing specific jobs / specs in config_parsed_args.jl:
 ca_dir = joinpath(dirname(@__DIR__));
-include(joinpath(ca_dir, "examples", "hybrid", "cli_options.jl"));
+include(joinpath(ca_dir, "perf", "config_parsed_args.jl")) # defines parsed_args
 
 ENV["CI_PERF_SKIP_RUN"] = true # we only need haskey(ENV, "CI_PERF_SKIP_RUN") == true
 
 filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
-dict = parsed_args_per_job_id(; trigger = "benchmark.jl")
-parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
-
-# Start with performance target, but override anything provided in ARGS
-parsed_args_target = dict["perf_target_unthreaded"];
-parsed_args = merge(parsed_args_target, parsed_args_prescribed);
-
-# The callbacks flame graph is very expensive, so only do 2 steps.
-const n_samples = occursin("callbacks", parsed_args["job_id"]) ? 2 : 20
 
 try # capture integrator
     include(filename)
@@ -21,6 +13,9 @@ catch err
         rethrow(err.error)
     end
 end
+
+# The callbacks flame graph is very expensive, so only do 2 steps.
+const n_samples = occursin("callbacks", parsed_args["job_id"]) ? 2 : 20
 
 function do_work!(integrator)
     for _ in 1:n_samples
@@ -66,10 +61,11 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target_rhoe"] = 9360
-allocs_limit["flame_perf_target_rhoe_tracers"] = 6245350392
-allocs_limit["flame_perf_target_rhoe_threaded"] = 4299280
-allocs_limit["flame_perf_target_rhoe_callbacks"] = 11439104
+allocs_limit["flame_perf_target"] = 9360
+allocs_limit["flame_perf_target_tracers"] = 6245350392
+allocs_limit["flame_perf_target_edmf"] = 18530198696
+allocs_limit["flame_perf_target_threaded"] = 4299280
+allocs_limit["flame_perf_target_callbacks"] = 11439104
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"

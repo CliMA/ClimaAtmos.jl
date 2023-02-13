@@ -307,9 +307,10 @@ steps:
         agents:
           slurm_ntasks: 2
 
-      - label: ":computer: performance target checkbounds"
-        command: "julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --job_id perf_target_checkbounds --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-        artifact_paths: "perf_target_checkbounds/*"
+      # TODO: we should somehow decouple this unit test from the perf env / scripts
+      - label: ":computer: checkbounds"
+        command: "julia --color=yes --check-bounds=yes --project=perf perf/benchmark.jl --job_id checkbounds"
+        artifact_paths: "checkbounds/*"
         agents:
           slurm_mem: 20GB
 
@@ -325,28 +326,6 @@ steps:
         artifact_paths: "no_surface/*"
         agents:
           slurm_mem: 20GB
-
-  - group: "Performance targets"
-    steps:
-
-      - label: ":computer: Unthreaded performance target (Rosenbrock)"
-        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id perf_target_unthreaded_rosenbrock --ode_algo ODE.Rosenbrock23 --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-        artifact_paths: "perf_target_unthreaded_rosenbrock/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: Unthreaded performance target"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_unthreaded --enable_threading false --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-        artifact_paths: "perf_target_unthreaded/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: Threaded performance target"
-        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id perf_target_threaded --enable_threading true --forcing held_suarez --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12"
-        artifact_paths: "perf_target_threaded/*"
-        agents:
-          slurm_ntasks: 8
-          slurm_ntasks_per_node: 8
 
   - group: "TurbulenceConvection"
     steps:
@@ -666,50 +645,69 @@ steps:
   - group: "Performance"
     steps:
 
-      - label: ":rocket: flame graph: perf target (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe"
-        artifact_paths: "flame_perf_target_rhoe/*"
+      # Benchmarks
+      - label: ":computer: Benchmark: perf target (default)"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target"
         agents:
           slurm_mem: 20GB
 
-      - label: ":rocket: JET n-failures (inference)"
-        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures"
-
-      - label: ":rocket: flame graph: perf target (ρe_tot) with tracers"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_tracers --perf_mode PerfExperimental"
-        artifact_paths: "flame_perf_target_rhoe_tracers/*"
+      - label: ":computer: Benchmark: perf target (Rosenbrock)"
+        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id bm_perf_target_rosenbrock --ode_algo ODE.Rosenbrock23"
         agents:
           slurm_mem: 20GB
 
-      - label: ":mag::rocket: Invalidations"
-        command: "julia --color=yes --project=perf perf/invalidations.jl --job_id invalidations"
-        artifact_paths: "invalidations/*"
+      - label: ":computer: Benchmark: perf target (Threaded)"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target_threaded --enable_threading true"
+        agents:
+          slurm_mem: 20GB
+          slurm_ntasks: 8
+          slurm_ntasks_per_node: 8
+
+      # Flame graphs
+      - label: ":fire: Flame graph: perf target (default)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target"
+        artifact_paths: "flame_perf_target/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: threaded perf target (ρe_tot)"
-        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_threaded --enable_threading true"
-        artifact_paths: "flame_perf_target_rhoe_threaded/*"
+      - label: ":fire: Flame graph: perf target (with tracers)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_tracers --perf_mode PerfExperimental"
+        artifact_paths: "flame_perf_target_tracers/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (edmf)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmf --target_job sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --moist dry --rad nothing"
+        artifact_paths: "flame_perf_target_edmf/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (Threaded)"
+        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_threaded --enable_threading true"
+        artifact_paths: "flame_perf_target_threaded/*"
         agents:
           slurm_ntasks: 8
           slurm_ntasks_per_node: 8
           slurm_mem: 20GB
 
-      - label: ":rocket: flame graph: perf target callbacks"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
-        artifact_paths: "flame_perf_target_rhoe_callbacks/*"
+      - label: ":fire: Flame graph: perf target (Callbacks)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
+        artifact_paths: "flame_perf_target_callbacks/*"
         agents:
           slurm_mem: 20GB
 
-      # Comment out the following job for now, until flame graph w/ changing ID is cleared
-      # - label: ":rocket: flame graph: perf target (ρe_tot) (Rosenbrock)"
-      #   command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_rosenbrock --ode_algo ODE.Rosenbrock23"
-      #   artifact_paths: "flame_perf_target_rhoe_rosenbrock/*"
-      #   agents:
-      #     slurm_mem: 20GB
+      # Inference
+      - label: ":rocket: JET n-failures (inference)"
+        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --moist dry --rad nothing"
+        agents:
+          slurm_mem: 20GB
 
-      - label: ":rocket: benchmark: baroclinic wave (ρe_tot)"
-        command: "julia --color=yes --project=perf perf/benchmark.jl --job_id bm_sphere_baroclinic_wave_rhoe"
+      # Latency
+      - label: ":mag::rocket: Invalidations"
+        command: "julia --color=yes --project=perf perf/invalidations.jl --job_id invalidations"
+        artifact_paths: "invalidations/*"
+        agents:
+          slurm_mem: 20GB
 
   - wait: ~
     continue_on_failure: true

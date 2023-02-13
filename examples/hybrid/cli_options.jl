@@ -338,6 +338,9 @@ function parse_commandline()
         help = "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
         arg_type = String
         default = "PerfStandard"
+        "--target_job"
+        help = "An (optional) job to target for analyzing performance"
+        arg_type = String
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)

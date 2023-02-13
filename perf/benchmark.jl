@@ -1,12 +1,8 @@
+# Customizing specific jobs / specs in config_parsed_args.jl:
 ca_dir = joinpath(dirname(@__DIR__));
-include(joinpath(ca_dir, "examples", "hybrid", "cli_options.jl"));
+include(joinpath(ca_dir, "perf", "config_parsed_args.jl")) # defines parsed_args
 
 ENV["CI_PERF_SKIP_RUN"] = true # we only need haskey(ENV, "CI_PERF_SKIP_RUN") == true
-
-# Uncomment for customizing specific jobs / specs:
-# dict = parsed_args_per_job_id(; trigger = "benchmark.jl"); # if job_id uses benchmark.jl
-# dict = parsed_args_per_job_id();                           # if job_id uses driver.jl
-# parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
 
 filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
 
