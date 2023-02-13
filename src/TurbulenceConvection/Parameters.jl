@@ -8,8 +8,6 @@ import Thermodynamics as TD
 import SurfaceFluxes as SF
 import CloudMicrophysics as CM
 
-include("../model_getters.jl")
-
 abstract type AbstractTurbulenceConvectionParameters end
 const ATCP = AbstractTurbulenceConvectionParameters
 

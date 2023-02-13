@@ -1,5 +1,92 @@
-include("../model_getters.jl")
-import ClimaAtmos.TurbulenceConvection.Parameters as TCP
+import .Parameters as TCP
+
+abstract type AbstractPrecipFractionModel end
+struct PrescribedPrecipFraction{FT} <: AbstractPrecipFractionModel
+    prescribed_precip_frac_value::FT
+end
+struct DiagnosticPrecipFraction{FT} <: AbstractPrecipFractionModel
+    precip_fraction_limiter::FT
+end
+
+abstract type AbstractQuadratureType end
+struct LogNormalQuad <: AbstractQuadratureType end
+struct GaussianQuad <: AbstractQuadratureType end
+
+abstract type AbstractEnvThermo end
+struct SGSMean <: AbstractEnvThermo end
+struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
+    quadrature_type::QT
+    a::A
+    w::W
+end
+
+quadrature_order(::SGSQuadrature{N}) where {N} = N
+quad_type(::SGSQuadrature{N}) where {N} = N
+
+abstract type AbstractCovarianceModel end
+struct PrognosticThermoCovariances <: AbstractCovarianceModel end
+struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
+    covar_lim::FT
+end
+
+####
+function AbstractCovarianceModel(paramset::NamedTuple)
+    thermo_covariance_model_name = paramset.thermo_covariance_model
+    if thermo_covariance_model_name == "prognostic"
+        return PrognosticThermoCovariances()
+    elseif thermo_covariance_model_name == "diagnostic"
+        covar_lim = paramset.diagnostic_covar_limiter
+        return DiagnosticThermoCovariances(covar_lim)
+    else
+        error(
+            "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
+        )
+    end
+end
+
+function AbstractPrecipFractionModel(paramset::NamedTuple)
+    precip_fraction_model_name = paramset.precip_fraction_model
+    if precip_fraction_model_name == "prescribed"
+        return PrescribedPrecipFraction(paramset.prescribed_precip_frac)
+    elseif precip_fraction_model_name == "cloud_cover"
+        return DiagnosticPrecipFraction(paramset.precip_fraction_limiter)
+    else
+        error(
+            "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
+        )
+    end
+end
+
+function AbstractQuadratureType(s::String)
+    if s == "log-normal"
+        LogNormalQuad()
+    elseif s == "gaussian"
+        GaussianQuad()
+    end
+end
+
+function SGSQuadrature(::Type{FT}, paramset) where {FT}
+    N = paramset.quadrature_order
+    quadrature_type = paramset.quadrature_type
+    # TODO: double check this python-> julia translation
+    # a, w = np.polynomial.hermite.hermgauss(N)
+    a, w = FastGaussQuadrature.gausshermite(N)
+    a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+    QT = typeof(quadrature_type)
+    return SGSQuadrature{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
+end
+
+function AbstractEnvThermo(paramset::NamedTuple)
+    if paramset.sgs == "mean"
+        SGSMean()
+    elseif paramset.sgs == "quadrature"
+        SGSQuadrature(FT, paramset)
+    else
+        error("Something went wrong. Invalid environmental sgs type '$paramset.sgs'")
+    end
+end
+####
+
 """
     PrecipFormation
 

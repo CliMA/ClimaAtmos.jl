@@ -360,12 +360,6 @@ function ThermoDispatcher(atmos)
     )
 end
 
-abstract type AbstractCovarianceModel end
-struct PrognosticThermoCovariances <: AbstractCovarianceModel end
-struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
-    covar_lim::FT
-end
-
 function AbstractCovarianceModel(paramset::NamedTuple)
     thermo_covariance_model_name = paramset.thermo_covariance_model
     if thermo_covariance_model_name == "prognostic"
@@ -378,14 +372,6 @@ function AbstractCovarianceModel(paramset::NamedTuple)
             "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
         )
     end
-end
-
-abstract type AbstractPrecipFractionModel end
-struct PrescribedPrecipFraction{FT} <: AbstractPrecipFractionModel
-    prescribed_precip_frac_value::FT
-end
-struct DiagnosticPrecipFraction{FT} <: AbstractPrecipFractionModel
-    precip_fraction_limiter::FT
 end
 
 function AbstractPrecipFractionModel(paramset::NamedTuple)
@@ -401,10 +387,6 @@ function AbstractPrecipFractionModel(paramset::NamedTuple)
     end
 end
 
-abstract type AbstractQuadratureType end
-struct LogNormalQuad <: AbstractQuadratureType end
-struct GaussianQuad <: AbstractQuadratureType end
-
 function AbstractQuadratureType(s::String)
     if s == "log-normal"
         LogNormalQuad()
@@ -413,26 +395,16 @@ function AbstractQuadratureType(s::String)
     end
 end
 
-abstract type AbstractEnvThermo end
-struct SGSMean <: AbstractEnvThermo end
-
-struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
-    quadrature_type::QT
-    a::A
-    w::W
-    function SGSQuadrature(::Type{FT}, paramset) where {FT}
-        N = paramset.quadrature_order
-        quadrature_type = paramset.quadrature_type
-        # TODO: double check this python-> julia translation
-        # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        QT = typeof(quadrature_type)
-        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
-    end
+function SGSQuadrature(::Type{FT}, paramset) where {FT}
+    N = paramset.quadrature_order
+    quadrature_type = paramset.quadrature_type
+    # TODO: double check this python-> julia translation
+    # a, w = np.polynomial.hermite.hermgauss(N)
+    a, w = FastGaussQuadrature.gausshermite(N)
+    a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+    QT = typeof(quadrature_type)
+    return SGSQuadrature{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
 end
-quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N
 
 function AbstractEnvThermo(paramset::NamedTuple)
     if paramset.sgs == "mean"
