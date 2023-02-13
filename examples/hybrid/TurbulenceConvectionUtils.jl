@@ -67,7 +67,7 @@ function turbconv_cache(
     imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
     imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
-    case = Cases.get_case(param_set.turbconv_params.case_name)
+    case = Cases.get_case(parsed_args["turbconv_case"])
     thermo_params = CAP.thermodynamics_params(param_set)
     surf_ref_thermo_state =
         Cases.surface_reference_thermo_state(case, thermo_params)

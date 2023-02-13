@@ -1,3 +1,5 @@
+include("../model_getters.jl")
+import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 """
     PrecipFormation
 
@@ -174,51 +176,6 @@ Base.@kwdef struct PressureModelParams{FT}
     α_d::FT # factor multiplier for pressure drag
 end
 
-abstract type AbstractCovarianceModel end
-struct PrognosticThermoCovariances <: AbstractCovarianceModel end
-struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
-    covar_lim::FT
-end
-
-abstract type AbstractPrecipFractionModel end
-struct PrescribedPrecipFraction{FT} <: AbstractPrecipFractionModel
-    prescribed_precip_frac_value::FT
-end
-struct DiagnosticPrecipFraction{FT} <: AbstractPrecipFractionModel
-    precip_fraction_limiter::FT
-end
-
-abstract type AbstractQuadratureType end
-struct LogNormalQuad <: AbstractQuadratureType end
-struct GaussianQuad <: AbstractQuadratureType end
-
-abstract type AbstractEnvThermo end
-struct SGSMean <: AbstractEnvThermo end
-struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
-    quadrature_type::QT
-    a::A
-    w::W
-    function SGSQuadrature(::Type{FT}, paramset) where {FT}
-        N = paramset.quadrature_order
-        quadrature_name = paramset.quadrature_type
-        quadrature_type = if quadrature_name == "log-normal"
-            LogNormalQuad()
-        elseif quadrature_name == "gaussian"
-            GaussianQuad()
-        else
-            error("Invalid thermodynamics quadrature $(quadrature_name)")
-        end
-        # TODO: double check this python-> julia translation
-        # a, w = np.polynomial.hermite.hermgauss(N)
-        a, w = FastGaussQuadrature.gausshermite(N)
-        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-        QT = typeof(quadrature_type)
-        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
-    end
-end
-quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N
-
 abstract type AbstractSurfaceParameters{FT <: Real} end
 
 const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
@@ -314,49 +271,25 @@ function EDMFModel(
     max_area = paramset.max_area
     minimum_area = paramset.min_area
 
-    thermo_covariance_model_name = paramset.thermo_covariance_model
+    thermo_covariance_model = paramset.thermo_covariance_model
 
-    thermo_covariance_model = if thermo_covariance_model_name == "prognostic"
-        PrognosticThermoCovariances()
-    elseif thermo_covariance_model_name == "diagnostic"
-        covar_lim = paramset.diagnostic_covar_limiter
-        DiagnosticThermoCovariances(covar_lim)
-    else
-        error(
-            "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
-        )
-    end
-
-    precip_fraction_model_name = paramset.precip_fraction_model
-
-    precip_fraction_model = if precip_fraction_model_name == "prescribed"
-        PrescribedPrecipFraction(paramset.prescribed_precip_frac)
-    elseif precip_fraction_model_name == "cloud_cover"
-        DiagnosticPrecipFraction(paramset.precip_fraction_limiter)
-    else
-        error(
-            "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
-        )
-    end
+    precip_fraction_model = paramset.precip_fraction_model
 
     # Create the environment variable class (major diagnostic and prognostic variables)
 
     # Create the class for environment thermodynamics and buoyancy gradient computation
-    en_sgs_name = paramset.sgs
-    en_thermo = if en_sgs_name == "mean"
-        SGSMean()
-    elseif en_sgs_name == "quadrature"
-        SGSQuadrature(FT, paramset)
-    else
-        error("Something went wrong. Invalid environmental sgs type '$en_sgs_name'")
-    end
-    bg_closure = if en_sgs_name == "mean"
+    en_thermo = paramset.sgs
+    # This is very ugly, but since en_thermo is a qualified type I'm not sure what to do
+    bg_closure = 
+    # if Symbol(split(string(typeof(en_thermo)), ".")[end]) == :SGSMean
+    if en_thermo isa TCP.SGSMean
         BuoyGradMean()
-    elseif en_sgs_name == "quadrature"
+    # elseif Symbol(split(string(typeof(en_thermo)), ".")[end]) ==  :SGSQuadrature
+    elseif en_thermo isa TCP.SGSQuadrature
         BuoyGradQuadratures()
     else
         error(
-            "Something went wrong. Invalid environmental buoyancy gradient closure type '$en_sgs_name'",
+            "Something went wrong. Invalid environmental buoyancy gradient closure type '$(typeof(paramset.sgs))'",
         )
     end
     if !(moisture_model isa EquilMoistModel)

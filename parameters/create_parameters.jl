@@ -114,12 +114,11 @@ function create_climaatmos_parameter_set(
         aliases = string.(fieldnames(TCP.TurbulenceConvectionParameters))
         pairs = CP.get_parameter_values!(toml_dict, aliases, "EDMF")
         pairs = override_climaatmos_defaults((; pairs...), overrides)
-        pairs = (; pairs... , case_name=overrides.case_name)
-        tc_params = TCP.TurbulenceConvectionParameters{FTD, MP, SFP}(;
-            pairs...,
+        pairs = (;pairs..., 
             microphys_params,
             surf_flux_params,
         )
+        tc_params = TCP.TurbulenceConvectionParameters(pairs)
     else
         nothing
     end
