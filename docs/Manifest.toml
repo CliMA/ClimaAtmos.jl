@@ -79,6 +79,12 @@ git-tree-sha1 = "4aff5fa660eb95c2e0deb6bcdabe4d9a96bc4667"
 uuid = "4c555306-a7a7-4459-81d9-ec55ddd5c99a"
 version = "0.8.18"
 
+[[deps.ArtifactWrappers]]
+deps = ["Downloads", "Pkg"]
+git-tree-sha1 = "760f4c06375735829b8c1b67560b608b9dba4c6a"
+uuid = "a14bc488-3040-4b00-9dc1-f6467924858a"
+version = "0.2.0"
+
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
@@ -157,7 +163,7 @@ uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.5"
 
 [[deps.ClimaAtmos]]
-deps = ["AtmosphericProfilesLibrary", "ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "CloudMicrophysics", "Colors", "Dierckx", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "NVTX", "OrdinaryDiffEq", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "StaticArrays", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics"]
+deps = ["ArtifactWrappers", "AtmosphericProfilesLibrary", "ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "CloudMicrophysics", "Colors", "Dierckx", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "Insolation", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "NVTX", "OrdinaryDiffEq", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "StaticArrays", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.9.0"
