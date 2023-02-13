@@ -631,6 +631,9 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":rocket: JET n-failures (inference)"
+        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures"
+
       - label: ":rocket: flame graph: perf target (ρe_tot) with tracers"
         command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_rhoe_tracers --perf_mode PerfExperimental"
         artifact_paths: "flame_perf_target_rhoe_tracers/*"
