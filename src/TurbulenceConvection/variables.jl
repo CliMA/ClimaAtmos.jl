@@ -2,7 +2,7 @@
 ##### Fields
 #####
 import ClimaCore.Geometry: ⊗
-import ClimaAtmos.TurbulenceConvection.Parameters as TCP
+import .Parameters as TCP
 
 # Helpers for adding empty thermodynamic state fields:
 thermo_state_zeros(::DryModel, FT) = zero(TD.PhaseDry{FT})
@@ -171,11 +171,11 @@ cent_prognostic_vars_en(::Type{FT}, edmf) where {FT} = (;
 )
 cent_prognostic_vars_en_thermo(
     ::Type{FT},
-    ::TCP.DiagnosticThermoCovariances,
+    ::DiagnosticThermoCovariances,
 ) where {FT} = NamedTuple()
 cent_prognostic_vars_en_thermo(
     ::Type{FT},
-    ::TCP.PrognosticThermoCovariances,
+    ::PrognosticThermoCovariances,
 ) where {FT} = (; ρaHvar = FT(0), ρaQTvar = FT(0), ρaHQTcov = FT(0))
 cent_prognostic_vars_edmf(::Type{FT}, edmf) where {FT} = (;
     turbconv = (;
