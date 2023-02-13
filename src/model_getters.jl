@@ -412,6 +412,6 @@ function AbstractEnvThermo(paramset::NamedTuple)
     elseif paramset.sgs == "quadrature"
         SGSQuadrature(FT, paramset)
     else
-        error("Something went wrong. Invalid environmental sgs type '$paramset.sgs'")
+        error("Something went wrong. Invalid environmental sgs type '$(typeof(paramset.sgs))'")
     end
 end
