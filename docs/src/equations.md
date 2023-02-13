@@ -116,10 +116,15 @@ By breaking the curl and cross product terms into horizontal and vertical contri
 ```
 where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
 
-The ``(\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as
+The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as: 
 ```math
-I^c((C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times \boldsymbol{u}^v)
+\frac{I^{c}(I^{f}(\rho J) \omega^{h} \times u^{v})}{\rho J}, 
 ```
+where 
+```math
+\omega^{h} = (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v)
+```
+
 The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h`` term is discretized as
 ```math
 (2 \boldsymbol{\Omega}^v + C_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
