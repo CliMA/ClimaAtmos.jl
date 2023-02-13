@@ -75,14 +75,6 @@ steps:
         agents:
           slurm_ntasks: 32
 
-      - label: ":computer: held suarez (ρe_tot) high resolution"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 800days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_highres"
-        artifact_paths: "longrun_hs_rhoe_highres/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 32
-
       - label: ":computer: held suarez (ρe_tot) high resolution hightop"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 800days --job_id longrun_hs_rhoe_highres_hightop --dt_save_to_disk 10days"
         artifact_paths: "longrun_hs_rhoe_highres_hightop/*"
@@ -102,14 +94,6 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (dcmip)"
         command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --topography DCMIP200 --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true"
         artifact_paths: "longrun_hs_rhoe_equil_highres_topography/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 64
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution monin obukhov Float64"
-        command: "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme monin_obukhov --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_monin_obukhov_FLoat64 --FLOAT_TYPE Float64"
-        artifact_paths: "longrun_hs_rhoe_equil_highres_monin_obukhov_Float64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -152,18 +136,6 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 10days"
         artifact_paths: "longrun_aquaplanet_rhoe_equil_gray/*"
-        agents:
-          slurm_cpus_per_task: 8
-
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 300secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_allsky --dt_save_to_sol 1days --dt_save_to_disk 10days"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_allsky/*"
-        agents:
-          slurm_cpus_per_task: 8
-      
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation topography"
-        command: "julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad allskywithclear --precip_model 0M --viscous_sponge true --kappa_2_sponge 1e7 --dt 300secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_allsky_topography --dt_save_to_sol 1days --dt_save_to_disk 10days --topography DCMIP200"
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_allsky_topography/*"
         agents:
           slurm_cpus_per_task: 8
 
