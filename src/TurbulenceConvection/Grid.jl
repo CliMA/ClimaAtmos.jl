@@ -1,28 +1,19 @@
-struct Grid{FT, NZ, CS, FS, SC, SF}
-    zmin::FT
-    zmax::FT
-    Δz::FT
+struct Grid{NZ, CS, FS, SC, SF}
     cs::CS
     fs::FS
     zc::SC
     zf::SF
     function Grid(space::CC.Spaces.CenterFiniteDifferenceSpace)
-
         nz = length(space)
         cs = space
         fs = CC.Spaces.FaceFiniteDifferenceSpace(cs)
         zc = CC.Fields.coordinate_field(cs)
         zf = CC.Fields.coordinate_field(fs)
-        Δz = zf[CCO.PlusHalf(2)].z - zf[CCO.PlusHalf(1)].z
-        FT = eltype(parent(zf))
-
-        zmin = zf.z[CCO.PlusHalf(1)]
-        zmax = zf.z[CCO.PlusHalf(nz + 1)]
         CS = typeof(cs)
         FS = typeof(fs)
         SC = typeof(zc)
         SF = typeof(zf)
-        return new{FT, nz, CS, FS, SC, SF}(zmin, zmax, Δz, cs, fs, zc, zf)
+        return new{nz, CS, FS, SC, SF}(cs, fs, zc, zf)
     end
 end
 
@@ -42,7 +33,7 @@ function Grid(Δz::FT, nz::Int) where {FT <: AbstractFloat}
     return Grid(mesh)
 end
 
-n_cells(::Grid{FT, NZ}) where {FT, NZ} = NZ
+n_cells(::Grid{NZ}) where {NZ} = NZ
 
 # Index of the first interior cell above the surface
 kc_surface(grid::Grid) = Cent(1)
@@ -124,5 +115,3 @@ function findlast_center(f::Function, grid::Grid)
 end
 z_findlast_center(f::F, grid::Grid) where {F} =
     grid.zc[findlast_center(f, grid)].z
-
-Base.eltype(::Grid{FT}) where {FT} = FT

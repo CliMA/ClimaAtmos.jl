@@ -18,7 +18,6 @@ function update_aux!(
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
-    kc_toa = kc_top_of_atmos(grid)
     c_m = mixing_length_params(edmf).c_m
     KM = center_aux_turbconv(state).KM
     KH = center_aux_turbconv(state).KH

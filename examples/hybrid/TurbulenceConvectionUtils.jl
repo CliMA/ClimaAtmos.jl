@@ -110,7 +110,7 @@ function init_tc!(Y, p, params, colidx)
     thermo_params = CAP.thermodynamics_params(params)
 
     grid = TC.Grid(state)
-    FT = eltype(grid)
+    FT = CC.Spaces.undertype(axes(Y.c))
     C123 = CCG.Covariant123Vector
     t = FT(0)
 
