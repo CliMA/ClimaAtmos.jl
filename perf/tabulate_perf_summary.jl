@@ -211,8 +211,12 @@ function compute_has_func(summaries, funcs)
     for job_id in collect(keys(summaries["This PR"]))
         for commit in collect(keys(summaries))
             for func in funcs
-                has_func[func * commit] =
+                has_func[func * commit] = if haskey(summaries[commit], job_id)
                     haskey(summaries[commit][job_id], func)
+                else
+                    @warn "Key $job_id not found for commit $commit and func $func."
+                    false
+                end
             end
         end
     end
