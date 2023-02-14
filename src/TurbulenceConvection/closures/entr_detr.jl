@@ -22,7 +22,7 @@ function compute_entr_detr!(
     m_entr_detr = aux_tc.ϕ_temporary
     ∇m_entr_detr = aux_tc.ψ_temporary
 
-    plume_scale_height = map(1:N_up) do i
+    plume_scale_height = ntuple(N_up) do i
         compute_plume_scale_height(grid, state, edmf.H_up_min, i)
     end
 
