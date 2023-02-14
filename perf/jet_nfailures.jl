@@ -1,15 +1,12 @@
-import Profile
+# Customizing specific jobs / specs in config_parsed_args.jl:
+ca_dir = joinpath(dirname(@__DIR__));
+include(joinpath(ca_dir, "perf", "config_parsed_args.jl")) # defines parsed_args
 
 ENV["CI_PERF_SKIP_RUN"] = true # we only need haskey(ENV, "CI_PERF_SKIP_RUN") == true
 
-filename = joinpath(dirname(@__DIR__), "examples", "hybrid", "driver.jl")
+filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
 
-# Uncomment for customizing specific jobs / specs:
-# dict = parsed_args_per_job_id(; trigger = "benchmark.jl"); # if job_id uses benchmark.jl
-# dict = parsed_args_per_job_id();                           # if job_id uses driver.jl
-# parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
-
-try
+try # capture integrator
     include(filename)
 catch err
     if err.error !== :exit_profile
@@ -38,7 +35,7 @@ using Test
     # inference. By increasing this counter, we acknowledge that
     # we have introduced an inference failure. We hope to drive
     # this number down to 0.
-    n_allowed_failures = 7
+    n_allowed_failures = 31
     @test n ≤ n_allowed_failures
     if n < n_allowed_failures
         @info "Please update the n-failures to $n"

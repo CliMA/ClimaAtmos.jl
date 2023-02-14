@@ -177,6 +177,7 @@ function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
+        "nothing",
         "clearsky",
         "gray",
         "allsky",
