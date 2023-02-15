@@ -378,7 +378,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Soares (Constant entrainment, JFNK with IMEX EDMF)"
+      - label: ":balloon: SCM EDMF Soares (Constant entrainment, PiDetrainment)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true
@@ -387,7 +387,23 @@ steps:
           --z_elem 150 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --edmf_entr_closure Constant
+          --edmf_entr_closure PiDetrainment
+          --job_id edmf_soares_const_entr_pi_detr
+          --dt 0.5secs
+        artifact_paths: "edmf_soares_const_entr_pi_detr/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Soares (Const entr, pi detr, JFNK with IMEX EDMF)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Soares
+          --z_elem 150 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true

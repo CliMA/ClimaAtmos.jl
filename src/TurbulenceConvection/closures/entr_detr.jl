@@ -4,6 +4,7 @@ function compute_entr_detr!(
     grid::Grid,
     edmf::EDMFModel,
     εδ_closure::MDEntr,
+    param_set::APS,
 )
     FT = float_type(state)
     N_up = n_updrafts(edmf)
@@ -144,12 +145,89 @@ function compute_entr_detr!(
     end
 end
 
+function compute_entr_detr!(
+    state::State,
+    grid::Grid,
+    edmf::EDMFModel,
+    εδ_closure::PiGroupsDetrModel,
+    param_set::APS,
+)
+    FT = float_type(state)
+    grav = TCP.grav(param_set)
+    R_d = TCP.R_d(param_set)
+
+    N_up = n_updrafts(edmf)
+    #aux_tc = center_aux_turbconv(state)
+    aux_up = center_aux_updrafts(state)
+    aux_en = center_aux_environment(state)
+    aux_gm = center_aux_grid_mean(state)
+    #aux_en_f = face_aux_environment(state)
+    #prog_up_f = face_prog_updrafts(state)
+    #w_up_c = aux_tc.w_up_c
+    #w_en_c = aux_tc.w_en_c
+
+    Ic = CCO.InterpolateF2C()
+
+    @inbounds for i in 1:N_up
+        # TODO: should we interpolate in local or covariant basis?
+        #@. w_up_c = Ic(wcomponent(CCG.WVector(prog_up_f[i].w)))
+        #@. w_en_c = Ic(wcomponent(CCG.WVector(aux_en_f.w)))
+
+        # updraft top height
+        H_up = compute_plume_scale_height(grid, state, edmf.H_up_min, i)
+
+        @inbounds for k in real_center_indices(grid)
+            if aux_up[i].area[k] > 0.0
+
+                #b_up = aux_up[i].buoy[k] # updraft buoyancy
+                #b_en = aux_en.buoy[k] # environment buoyancy
+                #w_up = w_up_c[k] # updraft vertical velocit at cell centers
+                #w_en = w_en_c[k] # environment vertical velocity at cell centers
+                #w_d = get_wstar(bflux)
+                #Π_1 = z * (b_up - b_en) / ((w_up - w_en)^2 + w_d^2)
+
+                a_en = aux_en.area[k] # environment area fraction
+                tke_gm = aux_gm.tke[k] # grid-mean tke
+                tke_en = aux_en.tke[k] # environment tke
+                Π_2 = (tke_gm - a_en * tke_en) / (tke_gm + eps(FT))
+
+                a_up = aux_up[i].area[k] # updraft area fraction
+                Π_3 = sqrt(a_up)
+
+                RH_up = aux_up[i].RH[k] # updraft relative humidity
+                RH_en = aux_en.RH[k] # environment relative humidity
+                Π_4 = RH_up - RH_en
+
+                z = grid.zc.z[k]
+                Π_5 = z / H_up
+
+                T_gm = aux_gm.T[k] # grid mean temperature
+                Π_6 = grav * z / R_d / T_gm
+
+                aux_up[i].detr_sc[k] =
+                    max(-0.0102 + 0.0612 * Π_2 + 0.0827 * Π_4, FT(1e-4))
+            else
+                aux_up[i].detr_sc[k] = FT(0)
+            end
+
+            aux_up[i].entr_sc[k] = FT(1e-4)
+            aux_up[i].frac_turb_entr[k] = FT(0)
+
+            aux_up[i].entr_turb_dyn[k] =
+                aux_up[i].entr_sc[k] + aux_up[i].frac_turb_entr[k]
+            aux_up[i].detr_turb_dyn[k] =
+                aux_up[i].detr_sc[k] + aux_up[i].frac_turb_entr[k]
+        end
+    end
+end
+
 ##### Compute constant entr/detr
 function compute_entr_detr!(
     state::State,
     grid::Grid,
     edmf::EDMFModel,
     εδ_closure::ConstantEntrDetrModel,
+    param_set::APS,
 )
     FT = float_type(state)
     N_up = n_updrafts(edmf)

@@ -56,6 +56,7 @@ end
 
 abstract type AbstractEntrDetrModel end
 struct ConstantEntrDetrModel <: AbstractEntrDetrModel end
+struct PiGroupsDetrModel <: AbstractEntrDetrModel end
 Base.@kwdef struct MDEntr{P} <: AbstractEntrDetrModel
     params::P
 end  # existing model (moisture deficit closure)
@@ -511,6 +512,8 @@ function EDMFModel(
         entr_closure = MDEntr(; params = εδ_params)
     elseif entr_closure_name == "Constant"
         entr_closure = ConstantEntrDetrModel()
+    elseif entr_closure_name == "PiDetrainment"
+        entr_closure = PiGroupsDetrModel()
     else
         error(
             "Something went wrong. Invalid entrainment closure type '$entr_closure_name'",
