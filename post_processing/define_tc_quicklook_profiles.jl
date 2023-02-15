@@ -3,31 +3,54 @@ ENV["GKSwstype"] = "nul";
 import Plots
 import ClimaAtmos as CA
 
+function getfun(D, sym::Symbol)
+    if !hasproperty(D, sym)
+        @warn "Property $(sym) not in Diagnostics FieldVector."
+        return nothing
+    else
+        return (Y, D) -> getproperty(D, sym)
+    end
+end
+getfun(D, p::Function) = p
+
 function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     args =
         (; tickfontsize = 13, guidefontsize = 16, legendfontsize = 10, lw = 3)
 
     # initialize all plot panes
-    p1 = Plots.plot(; title = "area fraction", args...)
-    p2 = Plots.plot(; title = "up qt", args...)
-    p3 = Plots.plot(; title = "up ql", args...)
-    p4 = Plots.plot(; title = "up qi", args...)
-    p5a = Plots.plot(; title = "up w", args...)
-    p5b = Plots.plot(; title = "en w", args...)
-    p6 = Plots.plot(; title = "en qt", args...)
-    p7 = Plots.plot(; title = "en ql", args...)
-    p8 = Plots.plot(; title = "en qi", args...)
-    p9 = Plots.plot(; title = "buoy", args...)
-    p10 = Plots.plot(; title = "T", args...)
-    p11 = Plots.plot(; title = "CF", args...)
-    p12 = Plots.plot(; title = "en RH", args...)
-    p13 = Plots.plot(; title = "en TKE", args...)
-    p14 = Plots.plot(; title = "en Hvar", args...)
-    p15 = Plots.plot(; title = "en QTvar", args...)
-    p16 = Plots.plot(; title = "en HQTcov", args...)
-    p17 = Plots.plot(; title = "gm theta", args...)
-    p18 = Plots.plot(; title = "gm u", args...)
-    p19 = Plots.plot(; title = "gm v", args...)
+
+#! format: off
+    vars = Dict()
+    # vars[title] = (; fn = func to get variable(s), pfx = label prefix(es))
+    vars["area fraction"] =     (;fn=(:bulk_up_area, :env_area), pfx = ("up", "en"))
+    vars["buoy"] =              (;fn=(:bulk_up_buoyancy, :env_buoyancy), pfx = ("up", "en"))
+    vars["T"] =                 (;fn=(:bulk_up_temperature, :env_temperature), pfx = ("up", "en"))
+    vars["CF"] =                (;fn=(:bulk_up_cloud_fraction, :env_cloud_fraction), pfx = ("up", "env"))
+
+    vars["up w"]  =             (;fn=(Y, D) -> Geometry.WVector.(D.face_bulk_w), pfx="")
+    vars["en w"] =              (;fn=(Y, D) -> Geometry.WVector.(D.face_env_w), pfx="")
+    vars["gm u"] =              (;fn=(Y, D) -> Geometry.UVector.(Y.c.uₕ), pfx = "")
+    vars["gm v"] =              (;fn=(Y, D) -> Geometry.VVector.(Y.c.uₕ), pfx = "")
+
+    vars["up qt"] =             (;fn=:bulk_up_q_tot, pfx = "")
+    vars["up ql"] =             (;fn=:bulk_up_q_liq, pfx = "")
+    vars["up qi"] =             (;fn=:bulk_up_q_ice, pfx = "")
+    vars["en qt"] =             (;fn=:env_q_tot, pfx = "")
+    vars["en ql"] =             (;fn=:env_q_liq, pfx = "")
+    vars["en qi"] =             (;fn=:env_q_ice, pfx = "")
+    vars["gm theta"] =          (;fn=:potential_temperature, pfx = "")
+    vars["en RH"] =             (;fn=:env_RH, pfx = "")
+    vars["en TKE"] =            (;fn=:env_TKE, pfx = "")
+    vars["en Hvar"] =           (;fn=:env_Hvar, pfx = "")
+    vars["en QTvar"] =          (;fn=:env_QTvar, pfx = "")
+    vars["en HQTcov"] =         (;fn=:env_HQTcov, pfx = "")
+    vars["up filter flag 1"] =  (;fn=:bulk_up_filter_flag_1, pfx = "")
+    vars["up filter flag 2"] =  (;fn=:bulk_up_filter_flag_2, pfx = "")
+    vars["up filter flag 3"] =  (;fn=:bulk_up_filter_flag_3, pfx = "")
+    vars["up filter flag 4"] =  (;fn=:bulk_up_filter_flag_4, pfx = "")
+#! format: on
+
+    p_all = map(k -> Plots.plot(; title = k, args...), collect(keys(vars)))
 
     function add_to_plots!(input_filename; data_source)
         if !isfile(input_filename)
@@ -42,70 +65,27 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         zc = parent(Fields.coordinate_field(Y.c).z)[:]
         zf = parent(Fields.coordinate_field(Y.f).z)[:]
 
-        plot!(p1, parent(D.bulk_up_area)[:], zc; label = "up $data_source")
-        plot!(p1, parent(D.env_area)[:], zc; label = "en $data_source")
-        plot!(p2, parent(D.bulk_up_q_tot)[:], zc; label = "$data_source")
-        plot!(p3, parent(D.bulk_up_q_liq)[:], zc; label = "$data_source")
-        plot!(p4, parent(D.bulk_up_q_ice)[:], zc; label = "$data_source")
-        plot!(
-            p5a,
-            parent(Geometry.WVector.(D.face_bulk_w))[:],
-            zf;
-            label = "$data_source",
-        )
-        plot!(
-            p5b,
-            parent(Geometry.WVector.(D.face_env_w))[:],
-            zf;
-            label = "$data_source",
-        )
-        plot!(p6, parent(D.env_q_tot)[:], zc; label = "$data_source")
-        plot!(p7, parent(D.env_q_liq)[:], zc; label = "$data_source")
-        plot!(p8, parent(D.env_q_ice)[:], zc; label = "$data_source")
-        plot!(p9, parent(D.bulk_up_buoyancy)[:], zc; label = "up $data_source")
-        plot!(p9, parent(D.env_buoyancy)[:], zc; label = "en $data_source")
-        plot!(
-            p10,
-            parent(D.bulk_up_temperature)[:],
-            zc;
-            label = "up $data_source",
-        )
-        plot!(p10, parent(D.env_temperature)[:], zc; label = "en $data_source")
-        plot!(
-            p11,
-            parent(D.bulk_up_cloud_fraction)[:],
-            zc;
-            label = "up $data_source",
-        )
-        plot!(
-            p11,
-            parent(D.env_cloud_fraction)[:],
-            zc;
-            label = "env $data_source",
-        )
-        plot!(p12, parent(D.env_RH)[:], zc; label = "$data_source")
-        plot!(p13, parent(D.env_TKE)[:], zc; label = "$data_source")
-        plot!(p14, parent(D.env_Hvar)[:], zc; label = "$data_source")
-        plot!(p15, parent(D.env_QTvar)[:], zc; label = "$data_source")
-        plot!(p16, parent(D.env_HQTcov)[:], zc; label = "$data_source")
-        plot!(
-            p17,
-            parent(D.potential_temperature)[:],
-            zc;
-            label = "$data_source",
-        )
-        plot!(
-            p18,
-            parent(Geometry.UVector.(Y.c.uₕ))[:],
-            zc;
-            label = "$data_source",
-        )
-        plot!(
-            p19,
-            parent(Geometry.VVector.(Y.c.uₕ))[:],
-            zc;
-            label = "$data_source",
-        )
+        for (i, (k, v)) in enumerate(vars)
+            if v.pfx isa Tuple
+                for j in 1:length(v.pfx)
+                    fn = getfun(D, v.fn[j])
+                    isnothing(fn) && continue
+                    var = fn(Y, D)
+                    z = parent(Fields.coordinate_field(axes(var)).z)[:]
+                    vardata = parent(var)[:]
+                    prefix = isempty(v.pfx[j]) ? "" : "$(v.pfx[j]) "
+                    plot!(p_all[i], vardata, z; label = "$prefix$data_source")
+                end
+            elseif v.pfx isa String
+                fn = getfun(D, v.fn)
+                isnothing(fn) && continue
+                var = fn(Y, D)
+                z = parent(Fields.coordinate_field(axes(var)).z)[:]
+                vardata = parent(var)[:]
+                prefix = isempty(v.pfx) ? "" : "$(v.pfx) "
+                plot!(p_all[i], vardata, z; label = "$prefix$data_source")
+            end
+        end
     end
 
     PR_filename = joinpath(folder, hdf5_filename)
@@ -115,35 +95,14 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
         add_to_plots!(main_filename; data_source = "main")
     end
 
+    n_cols = 5
     more_args = (;
         size = (2400.0, 1500.0),
         bottom_margin = 20.0 * Plots.PlotMeasures.px,
         left_margin = 20.0 * Plots.PlotMeasures.px,
-        layout = (4, 5),
+        layout = (ceil(Int, length(p_all) / n_cols), n_cols),
     )
-    p = Plots.plot(
-        p1,
-        p2,
-        p3,
-        p4,
-        p5a,
-        p5b,
-        p6,
-        p7,
-        p8,
-        p9,
-        p10,
-        p11,
-        p12,
-        p13,
-        p14,
-        p15,
-        p16,
-        p17,
-        p18,
-        p19;
-        more_args...,
-    )
+    p = Plots.plot(p_all...; more_args...)
 
     # Save output
     output_filename = joinpath(
@@ -199,7 +158,8 @@ function get_contours(vars, input_filenames; data_source, have_main)
     parent_data(data) = parent(data)[:]
 
     for (i, name) in enumerate(K)
-        fn = contours[name].fn
+        fn = getfun(first(Ds), contours[name].fn)
+        isnothing(fn) && continue
         space = axes(fn(first(Ys), first(Ds)))
         z = parent(Fields.coordinate_field(space).z)[:]
         Ds_parent = parent_data.(fn.(Ys, Ds))
@@ -337,16 +297,17 @@ end
 function _plot_tc_contours(folder; PR_filenames, main_filenames)
 
     vars = [
-        ("area fraction", (Y, D) -> D.bulk_up_area),
-        ("up qt", (Y, D) -> D.bulk_up_q_tot),
-        ("up ql", (Y, D) -> D.bulk_up_q_liq),
-        ("up qi", (Y, D) -> D.bulk_up_q_ice),
-        ("up w", (Y, D) -> Geometry.WVector.(D.face_bulk_w)),
-        ("en qt", (Y, D) -> D.env_q_tot),
-        ("en TKE", (Y, D) -> D.env_TKE),
-        ("gm theta", (Y, D) -> D.potential_temperature),
-        ("gm u", (Y, D) -> Geometry.UVector.(Y.c.uₕ)),
-        ("gm v", (Y, D) -> Geometry.VVector.(Y.c.uₕ)),
+        ("area fraction", :bulk_up_area),
+        ("up qt", :bulk_up_q_tot),
+        ("up ql", :bulk_up_q_liq),
+        ("up qi", :bulk_up_q_ice),
+        ("en qt", :env_q_tot),
+        ("en TKE", :env_TKE),
+        ("gm theta", :potential_temperature),
+        ("up filter flag 1", :bulk_up_filter_flag_1),
+        ("up filter flag 2", :bulk_up_filter_flag_2),
+        ("up filter flag 3", :bulk_up_filter_flag_3),
+        ("up filter flag 4", :bulk_up_filter_flag_4),
         # ("up qr", D-> parent(D.)[:])
     ]
 
@@ -358,9 +319,11 @@ function _plot_tc_contours(folder; PR_filenames, main_filenames)
             get_contours(vars, main_filenames; data_source = "main", have_main)
         clims = union_clims(clims_main, clims_PR)
         for k in keys(contours_main)
+            haskey(clims, k) || continue # need to skip when adding new variables
             Plots.contourf!(contours_main[k].plot; clims[k]...)
         end
         for k in keys(contours_PR)
+            haskey(clims, k) || continue # need to skip when adding new variables
             Plots.contourf!(contours_PR[k].plot; clims[k]...)
         end
         # Get array of plots from dict of NamedTuples
