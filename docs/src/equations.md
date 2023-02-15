@@ -57,11 +57,12 @@ We make use of the following operators
   ```
   where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
 * ``\tilde{\boldsymbol{u}}`` is the mass-weighted reconstruction of velocity at the interfaces:
-  ```math
+  by interpolation of contravariant components
+    ```math
   \tilde{\boldsymbol{u}} = WI^f(\rho J, \boldsymbol{u}_h) + \boldsymbol{u}_v
   ```
-  !!! todo
-      Clarify basis in which vector is interpolated.
+  and ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
+* ``\bar{\boldsymbol{u}} = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v)``
 
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
@@ -118,7 +119,7 @@ where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and verti
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as: 
 ```math
-\frac{I^{c}(I^{f}(\rho J) \omega^{h} \times u^{v})}{\rho J}, 
+\frac{I^c((C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times (I^f(\rho J)\tilde{\boldsymbol{u}}^v))}{\rho J}
 ```
 where 
 ```math

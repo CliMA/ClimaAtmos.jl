@@ -194,8 +194,9 @@ function default_cache(
         Yₜ = similar(Y), # only needed when using increment formulation
         limiters,
         ᶜρh_kwargs...,
-        ᶜuvw = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜK = similar(Y.c, FT),
+        ᶠu_tilde = similar(Y.f, Geometry.Contravariant123Vector{FT}),
+        ᶜu_bar = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜρ_ref,
@@ -205,7 +206,6 @@ function default_cache(
         ᶜT = similar(Y.c, FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
-        ᶠu¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
         ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
         sfc_conditions,
