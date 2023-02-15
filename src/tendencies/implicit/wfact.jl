@@ -139,7 +139,8 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     # The εw is only necessary in case w = 0.
     # Since Operator2Stencil has not yet been extended to upwinding
     # operators, ᶠupwind_stencil is not available.
-    @. ᶜK[colidx] = norm_sqr(C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))) / 2
+    compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠw[colidx])
+
     thermo_params = CAP.thermodynamics_params(params)
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])

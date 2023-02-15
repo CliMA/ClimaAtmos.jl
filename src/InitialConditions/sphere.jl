@@ -41,6 +41,7 @@ function center_initial_condition_3d(
     # Initial values computed from the thermodynamic state
     ρ = TD.air_density(thermo_params, T, p)
     ts = TD.PhaseEquil_ρTq(thermo_params, ρ, T, q_tot)
+    # TODO: this should use compute_kinetic!, but it currently requires an intermediate Field
     ᶜ𝔼_kwarg =
         energy_vars(thermo_params, ts, norm_sqr(uₕ_local) / 2, grav * z, atmos)
     # TODO: Include ability to handle nonzero initial cloud condensate

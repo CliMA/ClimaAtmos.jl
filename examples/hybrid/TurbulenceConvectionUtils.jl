@@ -1,7 +1,6 @@
 module TurbulenceConvectionUtils
 
 using LinearAlgebra
-using LinearAlgebra: norm_sqr
 import ClimaAtmos
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP

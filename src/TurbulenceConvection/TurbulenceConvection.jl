@@ -12,6 +12,8 @@ import ..AbstractPrecipitationModel
 import ..Microphysics0Moment
 import ..Microphysics1Moment
 
+import ..compute_kinetic!
+
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
 import ClimaCore.Geometry: ⊗

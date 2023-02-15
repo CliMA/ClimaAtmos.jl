@@ -1,4 +1,3 @@
-import LinearAlgebra: norm_sqr
 import Thermodynamics as TD
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
@@ -25,8 +24,7 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
         )
     end
     thermo_params = CAP.thermodynamics_params(p.params)
-    C123 = Geometry.Covariant123Vector
-    @. p.ᶜK = norm_sqr(C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))) / 2
+    compute_kinetic!(p.ᶜK, Y)
     if p.atmos.moisture_model isa DryModel
         @. p.ᶜts = TD.PhaseDry_ρp(thermo_params, Y.c.ρ, p.ᶜp)
     elseif p.atmos.moisture_model isa EquilMoistModel

@@ -1,4 +1,4 @@
-using LinearAlgebra: ×, norm, norm_sqr, dot
+using LinearAlgebra: ×, norm, dot
 
 import ClimaAtmos.Parameters as CAP
 using ClimaCore: Operators, Fields, Limiters

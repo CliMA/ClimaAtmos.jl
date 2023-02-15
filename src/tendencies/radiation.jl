@@ -13,7 +13,6 @@ import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
-using LinearAlgebra: norm_sqr
 using Dierckx: Spline1D
 using StatsBase: mean
 
