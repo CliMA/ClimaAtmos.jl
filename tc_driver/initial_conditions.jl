@@ -35,15 +35,12 @@ function initialize_covariance(
     grid::TC.Grid,
     state::TC.State,
 )
-
-    kc_surf = TC.kc_surface(grid)
     aux_gm = TC.center_aux_grid_mean(state)
     prog_en = TC.center_prog_environment(state)
     aux_en = TC.center_aux_environment(state)
     prog_gm = TC.center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
-    aux_bulk = TC.center_aux_bulk(state)
-    ae = 1 .- aux_bulk.area # area of environment
+    ae = 1 - edmf.minimum_area * TC.n_updrafts(edmf)
 
     aux_en.tke .= aux_gm.tke
     aux_en.Hvar .= aux_gm.Hvar
