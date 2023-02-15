@@ -1,52 +1,13 @@
 # convective velocity scale
-get_wstar(bflux, zi) = cbrt(max(bflux * zi, 0))
+function get_wstar(bflux::FT) where {FT}
+    # average depth of the mixed layer (prescribed for now)
+    zi = FT(1000)
+    return cbrt(max(bflux * zi, 0))
+end
 
 function buoyancy_c(thermo_params, ρ::FT, ρ_i::FT) where {FT}
     g::FT = TD.Parameters.grav(thermo_params)
     return g * (ρ - ρ_i) / ρ
-end
-
-# BL height
-function get_inversion(grid::Grid, state::State, thermo_params, Ri_bulk_crit)
-    FT = float_type(state)
-    g::FT = TD.Parameters.grav(thermo_params)
-    kc_surf = kc_surface(grid)
-    θ_virt = center_aux_grid_mean(state).θ_virt
-    u = physical_grid_mean_u(state)
-    v = physical_grid_mean_v(state)
-    Ri_bulk = center_aux_grid_mean(state).Ri
-    θ_virt_b = θ_virt[kc_surf]
-    z_c = grid.zc
-    ∇c = CCO.DivergenceF2C()
-    wvec = CC.Geometry.WVector
-
-    # test if we need to look at the free convective limit
-    if (u[kc_surf]^2 + v[kc_surf]^2) <= 0.01
-        ∇θ_virt = center_aux_turbconv(state).ϕ_temporary
-        k_star = findlast_center(k -> θ_virt[k] > θ_virt_b, grid)
-        LB = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(θ_virt[kc_surf]))
-        @. ∇θ_virt = ∇c(wvec(LB(θ_virt)))
-        h =
-            (θ_virt_b - θ_virt[k_star - 1]) / ∇θ_virt[k_star] +
-            z_c[k_star - 1].z
-    else
-        ∇Ri_bulk = center_aux_turbconv(state).ϕ_temporary
-        Ri_bulk_fn(k) =
-            g * (θ_virt[k] - θ_virt_b) * z_c[k].z / θ_virt_b /
-            (u[k] * u[k] + v[k] * v[k])
-
-        @inbounds for k in real_center_indices(grid)
-            Ri_bulk[k] = Ri_bulk_fn(k)
-        end
-        k_star = findlast_center(k -> Ri_bulk_fn(k) > Ri_bulk_crit, grid)
-        LB = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(Ri_bulk[kc_surf]))
-        @. ∇Ri_bulk = ∇c(wvec(LB(Ri_bulk)))
-        h =
-            (Ri_bulk_crit - Ri_bulk[k_star - 1]) / ∇Ri_bulk[k_star] +
-            z_c[k_star - 1].z
-    end
-
-    return h
 end
 
 # MO scaling of near surface tke and scalar variance

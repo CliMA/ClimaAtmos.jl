@@ -22,7 +22,6 @@ const APS = TCP.AbstractTurbulenceConvectionParameters
 
 using ..TurbulenceConvection: Grid
 using ..TurbulenceConvection: real_center_indices
-using ..TurbulenceConvection: get_inversion
 
 #=
     arr_type(x)
@@ -432,8 +431,8 @@ function initialize_profiles(
         thermo_params,
         TD.PhaseEquil_pθq(thermo_params, p_c, aux_gm.θ_liq_ice, aux_gm.q_tot),
     )
-    zi = FT(0.6) * get_inversion(grid, state, thermo_params, FT(0.2))
 
+    zi = FT(2980.0)
     prof_tke = z -> if z <= zi
         1 - z / zi
     else
