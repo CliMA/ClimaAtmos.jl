@@ -535,11 +535,7 @@ function get_GMV_CoVar(
     return nothing
 end
 
-function compute_updraft_top(
-    grid::Grid{FT},
-    state::State,
-    i::Int,
-)::FT where {FT}
+function compute_updraft_top(grid::Grid, state::State, i::Int)
     aux_up = center_aux_updrafts(state)
     return z_findlast_center(k -> aux_up[i].area[k] > 1e-3, grid)
 end
