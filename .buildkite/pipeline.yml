@@ -122,11 +122,13 @@ steps:
       - label: ":computer: hydrostatic balance (ρe) float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64 --bubble true"
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: baroclinic wave (ρe)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --regression_test true"
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
-      
+
       - label: ":computer: baroclinic wave (ρe) h_elem8"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --h_elem 8 --kappa_4 5e16 --job_id sphere_baroclinic_wave_rhoe_he8 --dt 500secs"
         artifact_paths: "sphere_baroclinic_wave_rhoe_he8/*"
@@ -163,7 +165,7 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf/*"
         agents:
           slurm_mem: 20GB
-      
+
   - group: "Sphere Examples (Topography)"
     steps:
 
@@ -178,7 +180,7 @@ steps:
       - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip --dt 200secs --t_end 3days --topography DCMIP200 --rayleigh_sponge true --viscous_sponge true"
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/*"
-      
+
   - group: "MPI Examples"
     steps:
 
