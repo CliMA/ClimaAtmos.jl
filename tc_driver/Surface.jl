@@ -41,8 +41,9 @@ function get_surface(
         ts_sfc,
         scheme,
     )
-    zi = FT(1000) # TODO: extract from CLIMAParameters
-    convective_vel = TC.get_wstar(bflux, zi) # yair here zi in TRMM should be adjusted
+    # TODO: In wstar computation the mixed layer depth zi is assumed to be 1km.
+    # This should be adjusted in deep convective cases like TRMM.
+    convective_vel = TC.get_wstar(bflux)
 
     kwargs = (;
         state_in = vals_int,
