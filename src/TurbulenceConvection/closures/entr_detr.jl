@@ -156,22 +156,13 @@ function compute_entr_detr!(
     aux_up = center_aux_updrafts(state)
 
     @inbounds for i in 1:N_up
-        @inbounds for k in real_center_indices(grid)
-            if aux_up[i].area[k] > 0.0
-                # Compute fractional and turbulent entrainment/detrainment
-                aux_up[i].entr_sc[k] = FT(0.001)
-                aux_up[i].detr_sc[k] = FT(0.001)
-                aux_up[i].frac_turb_entr[k] = FT(0)
-            else
-                aux_up[i].entr_sc[k] = FT(0)
-                aux_up[i].detr_sc[k] = FT(0)
-                aux_up[i].frac_turb_entr[k] = FT(0)
-            end
-
-            aux_up[i].entr_turb_dyn[k] =
-                aux_up[i].entr_sc[k] + aux_up[i].frac_turb_entr[k]
-            aux_up[i].detr_turb_dyn[k] =
-                aux_up[i].detr_sc[k] + aux_up[i].frac_turb_entr[k]
-        end
+        # Compute fractional and turbulent entrainment/detrainment
+        @. aux_up[i].entr_sc = ifelse(aux_up[i].area > 0.0, FT(0.001), FT(0))
+        @. aux_up[i].detr_sc = ifelse(aux_up[i].area > 0.0, FT(0.001), FT(0))
+        @. aux_up[i].frac_turb_entr = ifelse(aux_up[i].area > 0.0, FT(0), FT(0))
+        @. aux_up[i].entr_turb_dyn =
+            aux_up[i].entr_sc + aux_up[i].frac_turb_entr
+        @. aux_up[i].detr_turb_dyn =
+            aux_up[i].detr_sc + aux_up[i].frac_turb_entr
     end
 end
