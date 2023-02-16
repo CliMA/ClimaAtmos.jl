@@ -109,19 +109,14 @@ function create_climaatmos_parameter_set(
     )
     SFP = typeof(surf_flux_params)
 
-    tc_params = 
-    if haskey(overrides, :case_name)
-        aliases = string.(fieldnames(TCP.TurbulenceConvectionParameters))
-        pairs = CP.get_parameter_values!(toml_dict, aliases, "EDMF")
-        pairs = override_climaatmos_defaults((; pairs...), overrides)
-        pairs = (;pairs..., 
-            microphys_params,
-            surf_flux_params,
-        )
-        tc_params = TCP.TurbulenceConvectionParameters{FT, MP, SFP}(pairs... )
-    else
-        nothing
-    end
+    aliases = string.(fieldnames(TCP.TurbulenceConvectionParameters))
+    pairs = CP.get_parameter_values!(toml_dict, aliases, "EDMF")
+    pairs = override_climaatmos_defaults((; pairs...), overrides)
+    pairs = (;pairs..., 
+        microphys_params,
+        surf_flux_params,
+    )
+    tc_params = TCP.TurbulenceConvectionParameters{FT, MP, SFP}(pairs... )
 
     config_param_names = [
         "sgs",
