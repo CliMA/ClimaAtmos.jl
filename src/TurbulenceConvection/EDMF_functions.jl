@@ -723,6 +723,7 @@ function filter_updraft_vars(
     prog_gm = center_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
+    aux_bulk = center_aux_bulk(state)
     aux_up = center_aux_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
@@ -731,12 +732,16 @@ function filter_updraft_vars(
     a_max = edmf.max_area
 
     @inbounds for i in 1:N_up
-        @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0)
-        @. prog_up[i].ρaθ_liq_ice = max(prog_up[i].ρaθ_liq_ice, 0)
-        @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0)
-        @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max)
-    end
+        @. aux_bulk.filter_flag_1 = ifelse(prog_up[i].ρarea < FT(0), 1, 0)
+        @. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρaθ_liq_ice < FT(0), 1, 0)
+        @. aux_bulk.filter_flag_3 = ifelse(prog_up[i].ρaq_tot < FT(0), 1, 0)
+        @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
+        @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
+        @. prog_up[i].ρaθ_liq_ice = max(prog_up[i].ρaθ_liq_ice, 0) #flag_2
+        @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
+        @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
+    end
     @inbounds for i in 1:N_up
         @. prog_up_f[i].w = CCG.Covariant3Vector(
             CCG.WVector(max(wcomponent(CCG.WVector(prog_up_f[i].w)), 0)),

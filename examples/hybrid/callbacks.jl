@@ -467,6 +467,10 @@ function save_to_disk_func(integrator)
             env_HQTcov_rain_dt = tc_cent(p).en.HQTcov_rain_dt,
             face_bulk_w = tc_face(p).bulk.w,
             face_env_w = tc_face(p).en.w,
+            bulk_up_filter_flag_1 = tc_cent(p).bulk.filter_flag_1,
+            bulk_up_filter_flag_2 = tc_cent(p).bulk.filter_flag_2,
+            bulk_up_filter_flag_3 = tc_cent(p).bulk.filter_flag_3,
+            bulk_up_filter_flag_4 = tc_cent(p).bulk.filter_flag_4,
         )
     else
         turbulence_convection_diagnostic = NamedTuple()
