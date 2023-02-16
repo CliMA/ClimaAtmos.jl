@@ -290,7 +290,6 @@ function affect_filter!(
     t::Real,
 )
     prog_en = center_prog_environment(state)
-    aux_en = center_aux_environment(state)
     ###
     ### Filters
     ###
@@ -321,17 +320,13 @@ function set_edmf_surface_bc(
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
-    aux_gm = center_aux_grid_mean(state)
-    aux_gm_f = face_aux_grid_mean(state)
     prog_gm = center_prog_grid_mean(state)
     prog_up = center_prog_updrafts(state)
     prog_en = center_prog_environment(state)
     prog_up_f = face_prog_updrafts(state)
-    aux_bulk = center_aux_bulk(state)
     ts_gm = center_aux_grid_mean_ts(state)
     cp = TD.cp_m(thermo_params, ts_gm[kc_surf])
     ρ_c = prog_gm.ρ
-    ρ_f = aux_gm_f.ρ
     ae_surf::FT = 1
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
@@ -715,19 +710,21 @@ function filter_updraft_vars(
 )
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
-    kf_surf = kf_surface(grid)
     FT = float_type(state)
     N_up = n_updrafts(edmf)
 
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
-    aux_gm = center_aux_grid_mean(state)
     aux_bulk = center_aux_bulk(state)
-    aux_up = center_aux_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
+    If = CCO.InterpolateC2F(;
+        bottom = CCO.Extrapolate(),
+        top = CCO.Extrapolate(),
+    )
+    @. ρ_f = If(ρ_c)
     a_min = edmf.minimum_area
     a_max = edmf.max_area
 
