@@ -313,11 +313,11 @@ function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     return EDMFCoriolis(prof_u, prof_v, coriolis_param)
 end
 
-function turbconv_model(FT, moisture_model, precip_model, parsed_args, turbconv_params)
+function turbconv_model(FT, moisture_model, precip_model, parsed_args, config_params, turbconv_params)
     turbconv = parsed_args["turbconv"]
     @assert turbconv in (nothing, "edmf")
     return if turbconv == "edmf"
-        TC.EDMFModel(FT, turbconv_params, moisture_model, precip_model, parsed_args)
+        TC.EDMFModel(FT, turbconv_params, moisture_model, precip_model, parsed_args, config_params)
     else
         nothing
     end
@@ -356,60 +356,4 @@ function ThermoDispatcher(atmos)
         moisture_model,
         compressibility_model,
     )
-end
-
-function AbstractCovarianceModel(paramset::NamedTuple)
-    thermo_covariance_model_name = paramset.thermo_covariance_model
-    if thermo_covariance_model_name == "prognostic"
-        return PrognosticThermoCovariances()
-    elseif thermo_covariance_model_name == "diagnostic"
-        covar_lim = paramset.diagnostic_covar_limiter
-        return DiagnosticThermoCovariances(covar_lim)
-    else
-        error(
-            "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
-        )
-    end
-end
-
-function AbstractPrecipFractionModel(paramset::NamedTuple)
-    precip_fraction_model_name = paramset.precip_fraction_model
-    if precip_fraction_model_name == "prescribed"
-        return PrescribedPrecipFraction(paramset.prescribed_precip_frac)
-    elseif precip_fraction_model_name == "cloud_cover"
-        return DiagnosticPrecipFraction(paramset.precip_fraction_limiter)
-    else
-        error(
-            "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
-        )
-    end
-end
-
-function AbstractQuadratureType(s::String)
-    if s == "log-normal"
-        LogNormalQuad()
-    elseif s == "gaussian"
-        GaussianQuad()
-    end
-end
-
-function SGSQuadrature(::Type{FT}, paramset) where {FT}
-    N = paramset.quadrature_order
-    quadrature_type = paramset.quadrature_type
-    # TODO: double check this python-> julia translation
-    # a, w = np.polynomial.hermite.hermgauss(N)
-    a, w = FastGaussQuadrature.gausshermite(N)
-    a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-    QT = typeof(quadrature_type)
-    return SGSQuadrature{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
-end
-
-function AbstractEnvThermo(paramset::NamedTuple)
-    if paramset.sgs == "mean"
-        SGSMean()
-    elseif paramset.sgs == "quadrature"
-        SGSQuadrature(FT, paramset)
-    else
-        error("Something went wrong. Invalid environmental sgs type '$(typeof(paramset.sgs))'")
-    end
 end

@@ -39,8 +39,8 @@ include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 
 include("parameter_set.jl")
-params = create_parameter_set(FT, parsed_args)
-atmos = get_atmos(FT, parsed_args, params.turbconv_params)
+params, config_params = create_parameter_set(FT, parsed_args)
+atmos = get_atmos(FT, parsed_args, config_params, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)

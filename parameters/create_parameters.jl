@@ -118,11 +118,23 @@ function create_climaatmos_parameter_set(
             microphys_params,
             surf_flux_params,
         )
-        tc_params = TCP.TurbulenceConvectionParameters(pairs)
+        tc_params = TCP.TurbulenceConvectionParameters{FT, MP, SFP}(pairs... )
     else
         nothing
     end
 
+    config_param_names = [
+        "sgs",
+        "quadrature_type",
+        "quadrature_order",
+        "precip_fraction_model",
+        "prescribed_precip_frac",
+        "precip_fraction_limiter",
+        "thermo_covariance_model",
+        "diagnostic_covar_limiter"
+    ]
+    config_params = CP.get_parameter_values!(toml_dict, config_param_names, "EDMF")
+    config_params = (; config_params... )
     aliases = string.(fieldnames(RP.RRTMGPParameters))
     pairs = CP.get_parameter_values!(toml_dict, aliases, "RRTMGP")
     params = override_climaatmos_defaults((; pairs...), overrides) # overrides
@@ -159,5 +171,5 @@ function create_climaatmos_parameter_set(
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
-    return param_set
+    return param_set, config_params
 end

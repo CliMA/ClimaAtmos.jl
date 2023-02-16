@@ -1,5 +1,3 @@
-import .Parameters as TCP
-
 abstract type AbstractPrecipFractionModel end
 struct PrescribedPrecipFraction{FT} <: AbstractPrecipFractionModel
     prescribed_precip_frac_value::FT
@@ -8,9 +6,30 @@ struct DiagnosticPrecipFraction{FT} <: AbstractPrecipFractionModel
     precip_fraction_limiter::FT
 end
 
+function PrecipFractionModel(paramset::NamedTuple)
+    precip_fraction_model_name = paramset.precip_fraction_model
+    if precip_fraction_model_name == "prescribed"
+        return PrescribedPrecipFraction(paramset.prescribed_precip_frac)
+    elseif precip_fraction_model_name == "cloud_cover"
+        return DiagnosticPrecipFraction(paramset.precip_fraction_limiter)
+    else
+        error(
+            "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
+        )
+    end
+end
+
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
 struct GaussianQuad <: AbstractQuadratureType end
+
+function QuadratureType(s::String)
+    if s == "log-normal"
+        LogNormalQuad()
+    elseif s == "gaussian"
+        GaussianQuad()
+    end
+end
 
 abstract type AbstractEnvThermo end
 struct SGSMean <: AbstractEnvThermo end
@@ -18,6 +37,27 @@ struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
     quadrature_type::QT
     a::A
     w::W
+end
+
+function EnvThermo(paramset::NamedTuple)
+    if paramset.sgs == "mean"
+        SGSMean()
+    elseif paramset.sgs == "quadrature"
+        SGSQuadrature(FT, paramset)
+    else
+        error("Something went wrong. Invalid environmental sgs type '$(typeof(paramset.sgs))'")
+    end
+end
+
+function SGSQuadrature(::Type{FT}, paramset) where {FT}
+    N = paramset.quadrature_order
+    quadrature_type = paramset.quadrature_type
+    # TODO: double check this python-> julia translation
+    # a, w = np.polynomial.hermite.hermgauss(N)
+    a, w = FastGaussQuadrature.gausshermite(N)
+    a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+    QT = typeof(quadrature_type)
+    return SGSQuadrature{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
 end
 
 quadrature_order(::SGSQuadrature{N}) where {N} = N
@@ -29,6 +69,19 @@ struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
     covar_lim::FT
 end
 
+function CovarianceModel(paramset::NamedTuple)
+    thermo_covariance_model_name = paramset.thermo_covariance_model
+    if thermo_covariance_model_name == "prognostic"
+        return PrognosticThermoCovariances()
+    elseif thermo_covariance_model_name == "diagnostic"
+        covar_lim = paramset.diagnostic_covar_limiter
+        return DiagnosticThermoCovariances(covar_lim)
+    else
+        error(
+            "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
+        )
+    end
+end
 
 """
     PrecipFormation
@@ -286,40 +339,36 @@ struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}
 end
 function EDMFModel(
     ::Type{FT},
-    paramset,
+    turbconv_params,
     moisture_model,
     precip_model,
     parsed_args,
+    config_params
 ) where {FT}
 
     tc_case = parsed_args["turbconv_case"]
     zero_uv_fluxes = any(tcc -> tcc == tc_case, ["TRMM_LBA", "ARM_SGP"])
     # Set the number of updrafts (1)
-    n_updrafts = paramset.updraft_number
+    n_updrafts = turbconv_params.updraft_number
 
-    surface_area = paramset.surface_area
-    max_area = paramset.max_area
-    minimum_area = paramset.min_area
+    surface_area = turbconv_params.surface_area
+    max_area = turbconv_params.max_area
+    minimum_area = turbconv_params.min_area
 
-    thermo_covariance_model = paramset.thermo_covariance_model
-
-    precip_fraction_model = paramset.precip_fraction_model
+    precip_fraction_model = PrecipFractionModel(config_params)
+    thermo_covariance_model = CovarianceModel(config_params)
 
     # Create the environment variable class (major diagnostic and prognostic variables)
-
+    en_thermo = EnvThermo(config_params)
     # Create the class for environment thermodynamics and buoyancy gradient computation
-    en_thermo = paramset.sgs
-    # This is very ugly, but since en_thermo is a qualified type I'm not sure what to do
     bg_closure = 
-    # if Symbol(split(string(typeof(en_thermo)), ".")[end]) == :SGSMean
-    if en_thermo isa TCP.SGSMean
+    if en_thermo isa SGSMean
         BuoyGradMean()
-    # elseif Symbol(split(string(typeof(en_thermo)), ".")[end]) ==  :SGSQuadrature
-    elseif en_thermo isa TCP.SGSQuadrature
+    elseif en_thermo isa SGSQuadrature
         BuoyGradQuadratures()
     else
         error(
-            "Something went wrong. Invalid environmental buoyancy gradient closure type '$(typeof(paramset.sgs))'",
+            "Something went wrong. Invalid environmental buoyancy gradient closure type '$(typeof(turbconv_params.sgs))'",
         )
     end
     if !(moisture_model isa EquilMoistModel)
@@ -331,16 +380,16 @@ function EDMFModel(
 
     entr_closure_name = parsed_args["edmf_entr_closure"]
     if entr_closure_name == "MoistureDeficit"
-        w_min = paramset.min_upd_velocity
-        c_ε = paramset.entrainment_factor
-        μ_0 = paramset.entrainment_scale
-        β = paramset.sorting_power
-        χ = paramset.updraft_mixing_frac
-        c_λ = paramset.entrainment_smin_tke_coeff
-        γ_lim = paramset.area_limiter_scale
-        β_lim = paramset.area_limiter_power
-        c_γ = paramset.turbulent_entrainment_factor
-        c_δ = paramset.detrainment_factor
+        w_min = turbconv_params.min_upd_velocity
+        c_ε = turbconv_params.entrainment_factor
+        μ_0 = turbconv_params.entrainment_scale
+        β = turbconv_params.sorting_power
+        χ = turbconv_params.updraft_mixing_frac
+        c_λ = turbconv_params.entrainment_smin_tke_coeff
+        γ_lim = turbconv_params.area_limiter_scale
+        β_lim = turbconv_params.area_limiter_power
+        c_γ = turbconv_params.turbulent_entrainment_factor
+        c_δ = turbconv_params.detrainment_factor
 
         εδ_params = εδModelParams{FT}(;
             w_min,
@@ -374,25 +423,25 @@ function EDMFModel(
     # )
 
     # minimum updraft top to avoid zero division in pressure drag and turb-entr
-    H_up_min = paramset.min_updraft_top
+    H_up_min = turbconv_params.min_updraft_top
 
     pressure_model_params = PressureModelParams{FT}(;
-        α_b = paramset.pressure_normalmode_buoy_coeff1,
-        α_a = paramset.pressure_normalmode_adv_coeff,
-        α_d = paramset.pressure_normalmode_drag_coeff,
+        α_b = turbconv_params.pressure_normalmode_buoy_coeff1,
+        α_a = turbconv_params.pressure_normalmode_adv_coeff,
+        α_d = turbconv_params.pressure_normalmode_drag_coeff,
     )
 
     mixing_length_params = MixingLengthParams{FT}(;
-        ω_pr = paramset.Prandtl_number_scale,
-        c_m = paramset.tke_ed_coeff,
-        c_d = paramset.tke_diss_coeff,
-        c_b = paramset.static_stab_coeff, # this is here due to a value error in CliMAParmameters.j,
-        κ_star² = paramset.tke_surf_scale,
-        Pr_n = paramset.Prandtl_number_0,
-        Ri_c = paramset.Ri_crit,
-        smin_ub = paramset.smin_ub,
-        smin_rm = paramset.smin_rm,
-        l_max = paramset.l_max,
+        ω_pr = turbconv_params.Prandtl_number_scale,
+        c_m = turbconv_params.tke_ed_coeff,
+        c_d = turbconv_params.tke_diss_coeff,
+        c_b = turbconv_params.static_stab_coeff, # this is here due to a value error in CliMAParmameters.j,
+        κ_star² = turbconv_params.tke_surf_scale,
+        Pr_n = turbconv_params.Prandtl_number_0,
+        Ri_c = turbconv_params.Ri_crit,
+        smin_ub = turbconv_params.smin_ub,
+        smin_rm = turbconv_params.smin_rm,
+        l_max = turbconv_params.l_max,
     )
 
     EC = typeof(entr_closure)
