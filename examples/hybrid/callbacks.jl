@@ -151,6 +151,7 @@ function turb_conv_affect_filter!(integrator)
     Y = integrator.u
     tc_params = CAP.turbconv_params(param_set)
 
+    CA.thermo_state!(Y, p, ᶜinterp; time = t) # set ᶜts for set_edmf_surface_bc
     Fields.bycolumn(axes(Y.c)) do colidx
         state = TC.tc_column_state(Y, p, nothing, colidx)
         grid = TC.Grid(state)
