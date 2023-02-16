@@ -326,10 +326,6 @@ function parse_commandline()
         help = "Apply parameterization for orographic drag on horizontal mean flow"
         arg_type = Bool
         default = false
-        "--apply_remap"
-        help = "Apply remap script to output directory"
-        arg_type = Bool
-        default = false
         "--perf_summary"
         help = "Flag for collecting performance summary information"
         arg_type = Bool

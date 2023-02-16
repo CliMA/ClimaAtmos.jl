@@ -440,31 +440,3 @@ if parsed_args["check_conservation"]
           (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈
           sum(sol.u[end].c.ρe_tot) rtol = 25 * eps(FT)
 end
-
-if parsed_args["apply_remap"] && ClimaComms.iamroot(comms_ctx)
-    include(
-        joinpath(
-            @__DIR__,
-            "..",
-            "..",
-            "post_processing",
-            "remap",
-            "remap_helpers.jl",
-        ),
-    )
-    # TODO: Can we somehow unify this and code in `get_params()`?
-    data_dir = simulation.output_dir
-    out_dir = joinpath(data_dir, "remap")
-    nlat = 90
-    nlon = 180
-    mkpath(out_dir)
-    data_files =
-        filter(x -> endswith(x, ".hdf5"), readdir(data_dir, join = true))
-    remap_tmpdir = joinpath(out_dir, "remaptmp")
-    mkpath(remap_tmpdir)
-    weightfile = create_weightfile(data_files[1], remap_tmpdir, nlat, nlon)
-    map(data_files) do data_file
-        remap2latlon(data_file, out_dir, remap_tmpdir, weightfile, nlat, nlon)
-    end
-    rm(remap_tmpdir; recursive = true)
-end
