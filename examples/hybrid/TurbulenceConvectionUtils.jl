@@ -23,21 +23,14 @@ import .Cases
 include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
 include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
 include(joinpath(ca_dir, "tc_driver", "initial_conditions.jl"))
-include(joinpath(ca_dir, "tc_driver", "generate_namelist.jl"))
-import .NameList
+
 
 #####
 ##### No TurbulenceConvection scheme
 #####
 
-turbconv_cache(
-    Y,
-    turbconv_model::Nothing,
-    atmos,
-    namelist,
-    param_set,
-    parsed_args,
-) = (; turbconv_model)
+turbconv_cache(Y, turbconv_model::Nothing, atmos, param_set, parsed_args) =
+    (; turbconv_model)
 
 implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
@@ -61,7 +54,6 @@ function turbconv_cache(
     Y,
     turbconv_model::TC.EDMFModel,
     atmos,
-    namelist,
     param_set,
     parsed_args,
 )
@@ -70,7 +62,7 @@ function turbconv_cache(
     imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
     imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
-    case = Cases.get_case(namelist["meta"]["casename"])
+    case = Cases.get_case(parsed_args["turbconv_case"])
     thermo_params = CAP.thermodynamics_params(param_set)
     @assert atmos.moisture_model in (CA.DryModel(), CA.EquilMoistModel())
     surf_params =
