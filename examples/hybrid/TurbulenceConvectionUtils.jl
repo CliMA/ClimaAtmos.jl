@@ -22,7 +22,6 @@ import .Cases
 
 include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
 include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
-include(joinpath(ca_dir, "tc_driver", "initial_conditions.jl"))
 
 
 #####
@@ -94,32 +93,82 @@ function init_tc!(Y, p, params, colidx)
 
     (; edmf, surf_params, case) = p.edmf_cache
     tc_params = CAP.turbconv_params(params)
+    thermo_params = CAP.thermodynamics_params(params)
 
     FT = eltype(edmf)
     # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
     state = TC.tc_column_state(Y, p, nothing, colidx)
-    thermo_params = CAP.thermodynamics_params(params)
-
     grid = TC.Grid(state)
-    FT = CC.Spaces.undertype(axes(Y.c))
-    C123 = CCG.Covariant123Vector
-    t = FT(0)
 
-    # TODO: can we simply remove this?
-    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
-    @. p.edmf_cache.aux.face.ρ[colidx] = If(Y.c.ρ[colidx])
+    parent(state.aux.face) .= NaN
+    parent(state.aux.cent) .= NaN
 
-    # TODO: convert initialize_profiles to set prognostic state, not aux state
+    # Initialization of required auxiliary variables:
+    (; ᶜp, ᶜts) = p
+    ᶜθ_liq_ice = p.edmf_cache.aux.cent.θ_liq_ice
+    ᶜq_tot = p.edmf_cache.aux.cent.q_tot
+    ᶜtke = p.edmf_cache.aux.cent.tke
+    ᶜHvar = p.edmf_cache.aux.cent.Hvar
+    ᶜQTvar = p.edmf_cache.aux.cent.QTvar
+    ᶜHQTcov = p.edmf_cache.aux.cent.HQTcov
+    ᶜq_tot .= 0 # set to 0 because it is only initialized for moist cases
+    ᶜHvar .= 0 # set to 0 because it is only initialized for GABLS
+    ᶜQTvar .= 0 # set to 0 because it is not initialized for any cases
+    ᶜHQTcov .= 0 # set to 0 because it is not initialized for any cases
     Cases.initialize_profiles(case, grid, thermo_params, state)
+    if p.atmos.moisture_model isa CA.DryModel
+        @. ᶜts[colidx] =
+            TD.PhaseDry_pθ(thermo_params, ᶜp[colidx], ᶜθ_liq_ice[colidx])
+    else
+        @. ᶜts[colidx] = TD.PhaseEquil_pθq(
+            thermo_params,
+            ᶜp[colidx],
+            ᶜθ_liq_ice[colidx],
+            ᶜq_tot[colidx],
+        )
+    end
 
-    # Temporarily, we'll re-populate ρq_tot based on initial aux q_tot
-    q_tot = p.edmf_cache.aux.cent.q_tot[colidx]
-    @. Y.c.ρq_tot[colidx] = Y.c.ρ[colidx] * q_tot
-    set_thermo_state_pθq!(Y, p, colidx)
-    set_grid_mean_from_thermo_state!(thermo_params, state, grid)
-    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
-    initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
+    # Initialization of grid-mean prognostic variables:
+    (; ᶜinterp) = p.operators
+    C123 = CCG.Covariant123Vector
+    @. Y.c.ρ[colidx] = TD.air_density(thermo_params, ᶜts[colidx])
+    @. Y.c.ρe_tot[colidx] =
+        Y.c.ρ[colidx] * TD.total_energy(
+            thermo_params,
+            ᶜts[colidx],
+            LA.norm_sqr(C123(Y.c.uₕ[colidx]) + C123(ᶜinterp(Y.f.w[colidx]))) /
+            2,
+            p.ᶜΦ[colidx],
+        )
+    if !(p.atmos.moisture_model isa CA.DryModel)
+        @. Y.c.ρq_tot[colidx] = Y.c.ρ[colidx] * ᶜq_tot[colidx]
+    end
 
+    # Initialization of EDMF prognostic variables:
+    N_up = TC.n_updrafts(edmf)
+    a_min = edmf.minimum_area
+    lg = CC.Fields.local_geometry_field(axes(Y.f))
+    @inbounds for i in 1:N_up
+        @. Y.c.turbconv.up[i].ρarea[colidx] = Y.c.ρ[colidx] * a_min
+        @. Y.c.turbconv.up[i].ρaq_tot[colidx] =
+            Y.c.turbconv.up[i].ρarea[colidx] * ᶜq_tot[colidx]
+        @. Y.c.turbconv.up[i].ρaθ_liq_ice[colidx] =
+            Y.c.turbconv.up[i].ρarea[colidx] * ᶜθ_liq_ice[colidx]
+        @. Y.f.turbconv.up[i].w[colidx] =
+            CC.Geometry.Covariant3Vector(CC.Geometry.WVector(FT(0)), lg[colidx])
+    end
+    a_en = (1 - N_up * a_min)
+    @. Y.c.turbconv.en.ρatke[colidx] = Y.c.ρ[colidx] * a_en * ᶜtke[colidx]
+    if p.atmos.turbconv_model.thermo_covariance_model isa
+       TC.PrognosticThermoCovariances
+        @. Y.c.turbconv.en.ρaHvar[colidx] = Y.c.ρ[colidx] * a_en * ᶜHvar[colidx]
+        @. Y.c.turbconv.en.ρaQTvar[colidx] =
+            Y.c.ρ[colidx] * a_en * ᶜQTvar[colidx]
+        @. Y.c.turbconv.en.ρaHQTcov[colidx] =
+            Y.c.ρ[colidx] * a_en * ᶜHQTcov[colidx]
+    end
+
+    # Modification of EDMF prognostic variables with BCs:
     t = FT(0)
     surf = get_surface(
         state.p.atmos.model_config,
@@ -129,8 +178,13 @@ function init_tc!(Y, p, params, colidx)
         t,
         tc_params,
     )
+    TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+
+    # Initialization of all other auxiliary variables, some of which are saved
+    # for diagnostics in the saving callback:
+    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
     TC.update_aux!(edmf, grid, state, surf, tc_params, t, p.Δt)
-    # TODO: Compute all diagnostic values in the saving callback.
+    # TODO: Compute diagnostic values in the saving callback, not in update_aux.
 end
 
 # TODO: Split update_aux! and other functions into implicit and explicit parts.

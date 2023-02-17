@@ -611,13 +611,13 @@ function initialize_profiles(
         prof_θ_liq_ice(z) * TD.exner_given_pressure(
             thermo_params,
             p_c,
-            TD.PhasePartition(aux_gm.q_tot, aux_gm.q_liq, FT(0)),
+            TD.PhasePartition(aux_gm.q_tot, FT(0), FT(0)),
         )
     @. aux_gm.θ_liq_ice = TD.liquid_ice_pottemp_given_pressure(
         thermo_params,
         aux_gm.T,
         p_c,
-        TD.PhasePartition(aux_gm.q_tot, aux_gm.q_liq, FT(0)),
+        TD.PhasePartition(aux_gm.q_tot, FT(0), FT(0)),
     )
     @. aux_gm.tke = prof_tke(z)
 end

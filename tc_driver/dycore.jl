@@ -22,57 +22,6 @@ include(joinpath(@__DIR__, "dycore_variables.jl"))
 #### Reference state
 ####
 
-function set_thermo_state_pθq!(Y, p, colidx)
-    (; edmf_cache, params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    (; moisture_model) = edmf_cache.edmf
-    ᶜts_gm = p.ᶜts[colidx]
-    ᶜρ = Y.c.ρ[colidx]
-    ᶜp = p.ᶜp[colidx]
-    θ_liq_ice = edmf_cache.aux.cent.θ_liq_ice[colidx]
-
-    if moisture_model isa CA.DryModel
-        @. ᶜts_gm = TD.PhaseDry_pθ(thermo_params, ᶜp, θ_liq_ice)
-    elseif moisture_model isa CA.EquilMoistModel
-        ρq_tot = Y.c.ρq_tot[colidx]
-        @. ᶜts_gm = TD.PhaseEquil_pθq(thermo_params, ᶜp, θ_liq_ice, ρq_tot / ᶜρ)
-    else
-        error("TODO: add non-equilibrium moisture model support")
-    end
-    nothing
-end
-
-function set_grid_mean_from_thermo_state!(thermo_params, state, grid)
-    Ic = CCO.InterpolateF2C()
-    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
-    C123 = CCG.Covariant123Vector
-    ts_gm = TC.center_aux_grid_mean_ts(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    prog_gm_f = TC.face_prog_grid_mean(state)
-    aux_gm = TC.center_aux_grid_mean(state)
-    aux_gm_f = TC.face_aux_grid_mean(state)
-    prog_gm_uₕ = TC.grid_mean_uₕ(state)
-
-    @. prog_gm.ρ = TD.air_density(thermo_params, ts_gm)
-    ρ_c = prog_gm.ρ
-    ρ_f = aux_gm_f.ρ
-
-    # TODO: this should use compute_kinetic!, but it currently requires an intermediate Field
-    @. prog_gm.ρe_tot =
-        ρ_c * TD.total_energy(
-            thermo_params,
-            ts_gm,
-            LinearAlgebra.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(prog_gm_f.w))) /
-            2,
-            TC.geopotential(thermo_params, grid.zc.z),
-        )
-
-    @. prog_gm.ρq_tot = ρ_c * aux_gm.q_tot
-    @. ρ_f = If(ρ_c)
-
-    return nothing
-end
-
 function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     aux_gm = TC.center_aux_grid_mean(state)
