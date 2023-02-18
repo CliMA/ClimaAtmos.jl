@@ -295,7 +295,7 @@ function parse_commandline()
         arg_type = Bool
         default = false
         "--edmf_entr_closure"
-        help = "EDMF entrainment closure. [`MoistureDeficit` (default), `Constant` ]"
+        help = "EDMF entrainment closure. [`MoistureDeficit` (default), `Constant`, `PiDetrainment`]"
         arg_type = String
         default = "MoistureDeficit"
         "--debugging_tc"

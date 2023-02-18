@@ -316,7 +316,7 @@ function update_aux!(
     #####
     ##### compute_updraft_closures
     #####
-    compute_entr_detr!(state, grid, edmf, edmf.entr_closure)
+    compute_entr_detr!(state, grid, edmf, edmf.entr_closure, param_set)
     compute_nh_pressure!(state, grid, edmf, surf)
 
     #####
