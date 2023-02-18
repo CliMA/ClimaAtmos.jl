@@ -205,12 +205,12 @@ function compute_entr_detr!(
                 Π_6 = grav * z / R_d / T_gm
 
                 aux_up[i].detr_sc[k] =
-                    max(-0.0102 + 0.0612 * Π_2 + 0.0827 * Π_4, FT(1e-4))
+                    max(-0.0102 + 0.0612 * Π_2 + 0.0827 * Π_4, FT(5e-5))
             else
                 aux_up[i].detr_sc[k] = FT(0)
             end
 
-            aux_up[i].entr_sc[k] = FT(1e-4)
+            aux_up[i].entr_sc[k] = FT(5e-5)
             aux_up[i].frac_turb_entr[k] = FT(0)
 
             aux_up[i].entr_turb_dyn[k] =
