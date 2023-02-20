@@ -25,6 +25,7 @@ makedocs(
         "Installation instructions" => "installation_instructions.md",
         "Contributor Guide" => "contributor_guide.md",
         "Equations" => "equations.md",
+        "Gravity wave" => "gravity_wave.md",
         "REPL scripts" => "repl_scripts.md",
         "Command line arguments" => "cl_args.md",
         "API" => "api.md",
