@@ -453,17 +453,19 @@ function surface_params(case::Rico, thermo_params, moisture_model)
     ch = zc_surf -> ch0 * grid_adjust(zc_surf)
     cq = zc_surf -> cq0 * grid_adjust(zc_surf) # TODO: not yet used..
     psurface::FT = 1.0154e5
-    Tsurface::FT = 299.8
-
-    # For Rico we provide values of transfer coefficients
+    Tsurface::FT = 299.8 # 301.1
+    # Saturated surface condtions for a given surface temperature and pressure
+    p_sat_surface::FT =
+        TD.saturation_vapor_pressure(thermo_params, Tsurface, TD.Liquid())
+    ϵ_v::FT =
+        TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
+    qsurface::FT = ϵ_v * p_sat_surface / (psurface - p_sat_surface * (1 - ϵ_v))
     ts = if moisture_model isa CA.DryModel
         TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
     elseif moisture_model isa CA.EquilMoistModel
-        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, FT(0)) # TODO: is this correct?
+        TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
     end
-    qsurface = TD.q_vap_saturation(thermo_params, ts)
-    # TODO: thermo state should be constructed once
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
+    # For Rico we provide values of transfer coefficients
     return TC.FixedSurfaceCoeffs(; zrough, ts, ch, cm)
 end
 
