@@ -37,18 +37,11 @@ include("types.jl")
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
-namelist = if turbconv == "edmf"
-    nl = TCU.NameList.default_namelist(case_name)
-    nl
-else
-    nothing
-end
 
 include("parameter_set.jl")
-# TODO: unify parsed_args and namelist
-params = create_parameter_set(FT, parsed_args)
-
-atmos = get_atmos(FT, parsed_args, namelist)
+# config stores flags used to configure constructors
+params, config = create_parameter_set(FT, parsed_args)
+atmos = get_atmos(FT, parsed_args, config, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
@@ -124,14 +117,7 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         (; thermo_dispatcher),
         (; Δt = dt),
         (; compressibility_model),
-        TCU.turbconv_cache(
-            Y,
-            turbconv_model,
-            atmos,
-            namelist,
-            params,
-            parsed_args,
-        ),
+        TCU.turbconv_cache(Y, turbconv_model, atmos, params, parsed_args),
     )
 end
 
