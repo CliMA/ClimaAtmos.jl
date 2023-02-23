@@ -204,7 +204,7 @@ end
 
 function precipitation_model(parsed_args)
     precip_model = parsed_args["precip_model"]
-    return if precip_model == nothing
+    return if precip_model == nothing || precip_model == "nothing"
         NoPrecipitation()
     elseif precip_model == "0M"
         Microphysics0Moment()
