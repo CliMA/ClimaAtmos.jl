@@ -32,8 +32,8 @@ function compute_precipitation_formation_tendencies(
             mph = precipitation_formation(
                 param_set,
                 precip_model,
-                prog_gm.q_rai[k],
-                prog_gm.q_sno[k],
+                prog_gm.ρq_rai[k] / ρ_c[k],
+                prog_gm.ρq_sno[k] / ρ_c[k],
                 aux_up[i].area[k],
                 ρ_c[k],
                 FT(grid.zc[k].z),
@@ -47,8 +47,10 @@ function compute_precipitation_formation_tendencies(
                 mph.θ_liq_ice_tendency * aux_up[i].area[k]
             aux_up[i].e_tot_tendency_precip_formation[k] =
                 mph.e_tot_tendency * aux_up[i].area[k]
-            tendencies_gm.q_rai[k] += mph.qr_tendency * aux_up[i].area[k]
-            tendencies_gm.q_sno[k] += mph.qs_tendency * aux_up[i].area[k]
+            tendencies_gm.ρq_rai[k] +=
+                ρ_c[k] * mph.qr_tendency * aux_up[i].area[k]
+            tendencies_gm.ρq_sno[k] +=
+                ρ_c[k] * mph.qs_tendency * aux_up[i].area[k]
         end
     end
     # TODO - to be deleted once we sum all tendencies elsewhere

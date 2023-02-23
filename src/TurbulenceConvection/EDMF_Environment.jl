@@ -27,8 +27,8 @@ function microphysics(
         mph = precipitation_formation(
             param_set,
             precip_model,
-            prog_gm.q_rai[k],
-            prog_gm.q_sno[k],
+            prog_gm.ρq_rai[k] / ρ_c[k],
+            prog_gm.ρq_sno[k] / ρ_c[k],
             aux_en.area[k],
             ρ_c[k],
             FT(grid.zc[k].z),
@@ -59,8 +59,8 @@ function microphysics(
             mph.qt_tendency * aux_en.area[k]
         aux_en.e_tot_tendency_precip_formation[k] =
             mph.e_tot_tendency * aux_en.area[k]
-        tendencies_gm.q_rai[k] += mph.qr_tendency * aux_en.area[k]
-        tendencies_gm.q_sno[k] += mph.qs_tendency * aux_en.area[k]
+        tendencies_gm.ρq_rai[k] += ρ_c[k] * mph.qr_tendency * aux_en.area[k]
+        tendencies_gm.ρq_sno[k] += ρ_c[k] * mph.qs_tendency * aux_en.area[k]
     end
     return nothing
 end
@@ -309,8 +309,8 @@ function microphysics(
                 θl_mean = aux_en.θ_liq_ice[k],
                 θl′qt′ = aux_en.HQTcov[k],
                 subdomain_area = aux_en.area[k],
-                q_rai = prog_gm.q_rai[k],
-                q_sno = prog_gm.q_sno[k],
+                q_rai = prog_gm.ρq_rai[k] / ρ_c[k],
+                q_sno = prog_gm.ρq_sno[k] / ρ_c[k],
                 ρ_c = ρ_c[k],
                 p_c = p_c[k],
                 precip_frac = precip_fraction,
@@ -333,8 +333,8 @@ function microphysics(
             aux_en.e_tot_tendency_precip_formation[k] =
                 e_tot_tendency * aux_en.area[k]
 
-            tendencies_gm.q_rai[k] += qr_tendency * aux_en.area[k]
-            tendencies_gm.q_sno[k] += qs_tendency * aux_en.area[k]
+            tendencies_gm.ρq_rai[k] += ρ_c[k] * qr_tendency * aux_en.area[k]
+            tendencies_gm.ρq_sno[k] += ρ_c[k] * qs_tendency * aux_en.area[k]
 
             # update cloudy/dry variables for buoyancy in TKE
             aux_en.cloud_fraction[k] = outer_env.cf
@@ -393,8 +393,8 @@ function microphysics(
             mph = precipitation_formation(
                 param_set,
                 precip_model,
-                prog_gm.q_rai[k],
-                prog_gm.q_sno[k],
+                prog_gm.ρq_rai[k] / ρ_c[k],
+                prog_gm.ρq_sno[k] / ρ_c[k],
                 aux_en.area[k],
                 ρ_c[k],
                 FT(grid.zc[k].z),
@@ -409,8 +409,8 @@ function microphysics(
                 mph.qt_tendency * aux_en.area[k]
             aux_en.e_tot_tendency_precip_formation[k] =
                 mph.e_tot_tendency * aux_en.area[k]
-            tendencies_gm.q_rai[k] += mph.qr_tendency * aux_en.area[k]
-            tendencies_gm.q_sno[k] += mph.qs_tendency * aux_en.area[k]
+            tendencies_gm.ρq_rai[k] += ρ_c[k] * mph.qr_tendency * aux_en.area[k]
+            tendencies_gm.ρq_sno[k] += ρ_c[k] * mph.qs_tendency * aux_en.area[k]
 
             # update_sat_unsat
             if TD.has_condensate(thermo_params, ts)

@@ -59,8 +59,8 @@ function compute_precipitation_sink_tendencies(
     FT = float_type(state)
 
     @inbounds for k in real_center_indices(grid)
-        qr = max(FT(0), prog_gm.q_rai[k]) / precip_fraction
-        qs = max(FT(0), prog_gm.q_sno[k]) / precip_fraction
+        qr = max(FT(0), prog_gm.ρq_rai[k] / ρ_c[k]) / precip_fraction
+        qs = max(FT(0), prog_gm.ρq_sno[k] / ρ_c[k]) / precip_fraction
         ρ = ρ_c[k]
         q_tot_gm = aux_gm.q_tot[k]
         T_gm = aux_gm.T[k]
@@ -119,8 +119,8 @@ function compute_precipitation_sink_tendencies(
         aux_tc.qs_tendency_melt[k] = S_qs_melt
         aux_tc.qs_tendency_dep_sub[k] = S_qs_sub_dep
 
-        tendencies_gm.q_rai[k] += S_qr_evap - S_qs_melt
-        tendencies_gm.q_sno[k] += S_qs_sub_dep + S_qs_melt
+        tendencies_gm.ρq_rai[k] += ρ_c[k] * (S_qr_evap - S_qs_melt)
+        tendencies_gm.ρq_sno[k] += ρ_c[k] * (S_qs_sub_dep + S_qs_melt)
 
         aux_tc.qt_tendency_precip_sinks[k] = -S_qr_evap - S_qs_sub_dep
         aux_tc.e_tot_tendency_precip_sinks[k] =

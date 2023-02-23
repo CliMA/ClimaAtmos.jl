@@ -205,8 +205,8 @@ function precipitation_advection_tendency!(
     # TODO: assuming w_gm = 0
     # TODO: verify translation
 
-    q_rai = Y.c.q_rai[colidx] #./ precip_fraction
-    q_sno = Y.c.q_sno[colidx] #./ precip_fraction
+    ρq_rai = Y.c.ρq_rai[colidx]
+    ρq_sno = Y.c.ρq_sno[colidx]
 
     RB = Operators.RightBiasedC2F(; top = Operators.SetValue(FT(0)))
     ᶜdivᵥ = Operators.DivergenceF2C(; bottom = Operators.Extrapolate())
@@ -220,38 +220,31 @@ function precipitation_advection_tendency!(
     # TODO: need to add horizontal advection + vertical velocity of air
 
     # TODO: use correct advection operators
-    # TODO: use ρq_rai, ρq_sno
-    @. Yₜ.c.q_rai[colidx] +=
-        ᶜdivᵥ(
-            wvec(
-                RB(
-                    ρ_c *
-                    q_rai *
-                    CM1.terminal_velocity(
-                        microphys_params,
-                        rain_type,
-                        ρ_c,
-                        q_rai,
-                    ),
+    @. Yₜ.c.ρq_rai[colidx] += ᶜdivᵥ(
+        wvec(
+            RB(
+                ρq_rai * CM1.terminal_velocity(
+                    microphys_params,
+                    rain_type,
+                    ρ_c,
+                    ρq_rai / ρ_c,
                 ),
             ),
-        ) / ρ_c
+        ),
+    )
 
-    @. Yₜ.c.q_sno[colidx] +=
-        ᶜdivᵥ(
-            wvec(
-                RB(
-                    ρ_c *
-                    q_sno *
-                    CM1.terminal_velocity(
-                        microphys_params,
-                        snow_type,
-                        ρ_c,
-                        q_sno,
-                    ),
+    @. Yₜ.c.ρq_sno[colidx] += ᶜdivᵥ(
+        wvec(
+            RB(
+                ρq_sno * CM1.terminal_velocity(
+                    microphys_params,
+                    snow_type,
+                    ρ_c,
+                    ρq_sno / ρ_c,
                 ),
             ),
-        ) / ρ_c
+        ),
+    )
     return nothing
 end
 
