@@ -15,26 +15,26 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜuvw, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
+    (; ᶜu_bar, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
     (; ᶜρ_ref, ᶜp_ref) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     # Mass conservation
-    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜuvw)
+    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜu_bar)
 
     # Energy conservation
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜuvw)
+        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜu_bar)
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜuvw)
+        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜu_bar)
     elseif :ρe_int in propertynames(Y.c)
         if point_type <: Geometry.Abstract3DPoint
             @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
+                divₕ((Y.c.ρe_int + ᶜp) * ᶜu_bar) -
                 dot(gradₕ(ᶜp), Geometry.Contravariant12Vector(ᶜuₕ))
         else
             @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜuvw) -
+                divₕ((Y.c.ρe_int + ᶜp) * ᶜu_bar) -
                 dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
         end
     end
@@ -55,7 +55,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜρc = getproperty(Y.c, ᶜρc_name)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜuvw)
+        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
     end
     return nothing
 end
@@ -72,25 +72,23 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     C123 = Geometry.Covariant123Vector
-    (; ᶜuvw, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu¹², ᶠu³, ᶜf) = p
+    (; ᶠu_tilde, ᶜu_bar, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu³, ᶜf) = p
     (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     # Mass conservation
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
     # Momentum conservation
     @. ᶠω¹²[colidx] += ᶠcurlᵥ(ᶜuₕ[colidx])
-    @. ᶠu¹²[colidx] =
-        Geometry.project(Geometry.Contravariant12Axis(), ᶠinterp(ᶜuvw[colidx]))
-    @. ᶠu³[colidx] = Geometry.project(
-        Geometry.Contravariant3Axis(),
-        C123(ᶠinterp(ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
-    )
     @. Yₜ.c.uₕ[colidx] -=
-        ᶜinterp(ᶠinterp(ᶜρ[colidx] * ᶜJ[colidx]) * ᶠω¹²[colidx] × ᶠu³[colidx]) /
-        (ᶜρ[colidx] * ᶜJ[colidx]) +
+        ᶜinterp(
+            ᶠω¹²[colidx] × (ᶠinterp(ᶜρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+        ) / (ᶜρ[colidx] * ᶜJ[colidx]) +
         (ᶜf[colidx] + ᶜω³[colidx]) ×
-        (Geometry.project(Geometry.Contravariant12Axis(), ᶜuvw[colidx]))
-    @. Yₜ.f.w[colidx] -= ᶠω¹²[colidx] × ᶠu¹²[colidx] + ᶠgradᵥ(ᶜK[colidx])
+        (Geometry.project(Geometry.Contravariant12Axis(), ᶜu_bar[colidx]))
+    @. Yₜ.f.w[colidx] -=
+        ᶠω¹²[colidx] × ᶠinterp(
+            Geometry.project(Geometry.Contravariant12Axis(), ᶜu_bar[colidx]),
+        ) + ᶠgradᵥ(ᶜK[colidx])
 
     return nothing
 end
