@@ -86,6 +86,10 @@ steps:
         command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
+      - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
+        command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_baseflux.jl"
+        artifact_paths: "orographic_gravity_wave_test_baseflux/*"
+
   - group: "Column Examples"
     steps:
 
