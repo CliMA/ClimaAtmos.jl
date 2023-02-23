@@ -181,14 +181,6 @@ struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
     covar_lim::FT
 end
 
-abstract type AbstractPrecipFractionModel end
-struct PrescribedPrecipFraction{FT} <: AbstractPrecipFractionModel
-    prescribed_precip_frac_value::FT
-end
-struct DiagnosticPrecipFraction{FT} <: AbstractPrecipFractionModel
-    precip_fraction_limiter::FT
-end
-
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
 struct GaussianQuad <: AbstractQuadratureType end
@@ -276,14 +268,13 @@ get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
 
 
-struct EDMFModel{N_up, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}
+struct EDMFModel{N_up, FT, MM, TCM, PM, ENT, EBGC, MLP, PMP, EC}
     surface_area::FT
     max_area::FT
     minimum_area::FT
     moisture_model::MM
     thermo_covariance_model::TCM
     precip_model::PM
-    precip_fraction_model::PFM
     en_thermo::ENT
     bg_closure::EBGC
     mixing_length_params::MLP
@@ -297,7 +288,6 @@ function EDMFModel(
     moisture_model,
     precip_model,
     thermo_covariance_model,
-    precip_fraction_model,
     en_thermo,
     parsed_args,
     turbconv_params,
@@ -401,19 +391,17 @@ function EDMFModel(
     MM = typeof(moisture_model)
     TCM = typeof(thermo_covariance_model)
     PM = typeof(precip_model)
-    PFM = typeof(precip_fraction_model)
     EBGC = typeof(bg_closure)
     ENT = typeof(en_thermo)
     MLP = typeof(mixing_length_params)
     PMP = typeof(pressure_model_params)
-    return EDMFModel{n_updrafts, FT, MM, TCM, PM, PFM, ENT, EBGC, MLP, PMP, EC}(
+    return EDMFModel{n_updrafts, FT, MM, TCM, PM, ENT, EBGC, MLP, PMP, EC}(
         surface_area,
         max_area,
         minimum_area,
         moisture_model,
         thermo_covariance_model,
         precip_model,
-        precip_fraction_model,
         en_thermo,
         bg_closure,
         mixing_length_params,

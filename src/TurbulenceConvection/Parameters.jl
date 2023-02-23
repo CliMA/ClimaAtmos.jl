@@ -50,8 +50,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, MP, SFP} <: ATCP
     pressure_normalmode_drag_coeff::FT
     updraft_number::Int
     quadrature_order::Int
-    prescribed_precip_frac::FT
-    precip_fraction_limiter::FT
     diagnostic_covar_limiter::FT
     microphys_params::MP
     surf_flux_params::SFP

@@ -18,7 +18,6 @@ function microphysics(
     ρ_c = prog_gm.ρ
     aux_en_sat = aux_en.sat
     aux_en_unsat = aux_en.unsat
-    precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
 
     @inbounds for k in real_center_indices(grid)
         # condensation
@@ -34,7 +33,6 @@ function microphysics(
             FT(grid.zc[k].z),
             Δt,
             ts,
-            precip_fraction,
         )
 
         # update_sat_unsat
@@ -101,7 +99,6 @@ function quad_loop(
         ρ_c,
         p_c,
         zc,
-        precip_frac,
     ) = vars
 
     FT = eltype(ρ_c)
@@ -199,7 +196,6 @@ function quad_loop(
                 zc,
                 Δt,
                 ts,
-                precip_frac,
             )
 
             # environmental variables
@@ -280,7 +276,6 @@ function microphysics(
     aux_en_sat = aux_en.sat
     tendencies_gm = center_tendencies_grid_mean(state)
     ts_env = center_aux_environment(state).ts
-    precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
     p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
 
@@ -313,7 +308,6 @@ function microphysics(
                 q_sno = prog_gm.ρq_sno[k] / ρ_c[k],
                 ρ_c = ρ_c[k],
                 p_c = p_c[k],
-                precip_frac = precip_fraction,
                 zc = FT(grid.zc[k].z),
             )
             outer_env, outer_src =
@@ -400,7 +394,6 @@ function microphysics(
                 FT(grid.zc[k].z),
                 Δt,
                 ts,
-                precip_fraction,
             )
 
             # update_env_precip_tendencies
