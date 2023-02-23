@@ -68,7 +68,7 @@ precipitation_vars(FT, atmos::AtmosModel) =
 
 # TODO: Remove. Currently, adding tracers hurts performance
 precipitation_vars(FT, atmos::AtmosModel, ::PerfExperimental) =
-    (; q_rai = FT(0), q_sno = FT(0))
+    (; ρq_rai = FT(0), ρq_sno = FT(0))
 
 precipitation_vars(FT, atmos::AtmosModel, ::PerfStandard) =
     precipitation_vars(FT, atmos.precip_model, atmos.turbconv_model)
@@ -81,7 +81,7 @@ precipitation_vars(
     FT,
     ::AbstractPrecipitationModel,
     turbconv_model::TC.EDMFModel,
-) = (; q_rai = FT(0), q_sno = FT(0))
+) = (; ρq_rai = FT(0), ρq_sno = FT(0))
 
 function init_state(
     center_initial_condition,
