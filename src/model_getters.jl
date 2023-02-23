@@ -328,19 +328,6 @@ function CovarianceModel(paramset, config_params)
     end
 end
 
-function PrecipFractionModel(paramset, config_params)
-    precip_fraction_model_name = config_params.precip_fraction_model
-    if precip_fraction_model_name == "prescribed"
-        return TC.PrescribedPrecipFraction(paramset.prescribed_precip_frac)
-    elseif precip_fraction_model_name == "cloud_cover"
-        return TC.DiagnosticPrecipFraction(paramset.precip_fraction_limiter)
-    else
-        error(
-            "Something went wrong. Invalid `precip_fraction` model: `$precip_fraction_model_name`",
-        )
-    end
-end
-
 function EnvThermo(paramset, config_params)
     sgs_string = config_params.sgs
     if sgs_string == "mean"
@@ -375,7 +362,6 @@ function turbconv_model(
     @assert turbconv in (nothing, "edmf")
 
     covariance_model = CovarianceModel(turbconv_params, config_params)
-    precip_fraction_model = PrecipFractionModel(turbconv_params, config_params)
     en_thermo = EnvThermo(turbconv_params, config_params)
 
     return if turbconv == "edmf"
@@ -384,7 +370,6 @@ function turbconv_model(
             moisture_model,
             precip_model,
             covariance_model,
-            precip_fraction_model,
             en_thermo,
             parsed_args,
             turbconv_params,

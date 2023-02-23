@@ -119,13 +119,8 @@ function create_climaatmos_parameter_set(
     )
 
     # config_params: Store strings and flags that are used for constructors
-    # but don't end up in the final Model struct 
-    config_param_names = [
-        "sgs",
-        "quadrature_type",
-        "precip_fraction_model",
-        "thermo_covariance_model",
-    ]
+    # but don't end up in the final Model struct
+    config_param_names = ["sgs", "quadrature_type", "thermo_covariance_model"]
     config_params =
         CP.get_parameter_values!(toml_dict, config_param_names, "EDMF")
     config_params = (; config_params...)

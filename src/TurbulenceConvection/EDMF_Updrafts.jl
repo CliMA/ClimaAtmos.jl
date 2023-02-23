@@ -20,8 +20,6 @@ function compute_precipitation_formation_tendencies(
     p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
 
-    precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
-
     @inbounds for i in 1:N_up
         @inbounds for k in real_center_indices(grid)
             T_up = aux_up[i].T[k]
@@ -39,7 +37,6 @@ function compute_precipitation_formation_tendencies(
                 FT(grid.zc[k].z),
                 Δt,
                 ts_up,
-                precip_fraction,
             )
             aux_up[i].qt_tendency_precip_formation[k] =
                 mph.qt_tendency * aux_up[i].area[k]

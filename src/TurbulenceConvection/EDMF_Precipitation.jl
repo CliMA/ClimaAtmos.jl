@@ -1,29 +1,9 @@
 """
-    compute_precip_fraction
-
-Computes diagnostic precipitation fraction
-"""
-compute_precip_fraction(
-    precip_fraction_model::PrescribedPrecipFraction,
-    ::State,
-) = precip_fraction_model.prescribed_precip_frac_value
-
-function compute_precip_fraction(
-    precip_fraction_model::DiagnosticPrecipFraction,
-    state::State,
-)
-    aux_gm = center_aux_grid_mean(state)
-    maxcf = maximum(aux_gm.cloud_fraction)
-    return max(maxcf, precip_fraction_model.precip_fraction_limiter)
-end
-
-"""
 Computes the tendencies to θ_liq_ice, q_tot, q_rain and q_snow
 due to rain evaporation, snow deposition and sublimation and snow melt
 """
 function compute_precipitation_sink_tendencies(
     ::AbstractPrecipitationModel,
-    ::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
@@ -39,7 +19,6 @@ end
 
 function compute_precipitation_sink_tendencies(
     ::Microphysics1Moment,
-    precip_fraction_model::AbstractPrecipFractionModel,
     grid::Grid,
     state::State,
     param_set::APS,
@@ -54,13 +33,11 @@ function compute_precipitation_sink_tendencies(
     tendencies_gm = center_tendencies_grid_mean(state)
     ts_gm = center_aux_grid_mean_ts(state)
 
-    precip_fraction = compute_precip_fraction(precip_fraction_model, state)
-
     FT = float_type(state)
 
     @inbounds for k in real_center_indices(grid)
-        qr = max(FT(0), prog_gm.ρq_rai[k] / ρ_c[k]) / precip_fraction
-        qs = max(FT(0), prog_gm.ρq_sno[k] / ρ_c[k]) / precip_fraction
+        qr = max(FT(0), prog_gm.ρq_rai[k] / ρ_c[k])
+        qs = max(FT(0), prog_gm.ρq_sno[k] / ρ_c[k])
         ρ = ρ_c[k]
         q_tot_gm = aux_gm.q_tot[k]
         T_gm = aux_gm.T[k]
@@ -92,23 +69,18 @@ function compute_precipitation_sink_tendencies(
                     ρ,
                     T_gm,
                 ),
-            ) * precip_fraction
+            )
         S_qs_melt =
-            -min(
-                qs / Δt,
-                α_melt * CM1.snow_melt(microphys_params, qs, ρ, T_gm),
-            ) * precip_fraction
+            -min(qs / Δt, α_melt * CM1.snow_melt(microphys_params, qs, ρ, T_gm))
         tmp =
-            α_dep_sub *
-            CM1.evaporation_sublimation(
+            α_dep_sub * CM1.evaporation_sublimation(
                 microphys_params,
                 snow_type,
                 q,
                 qs,
                 ρ,
                 T_gm,
-            ) *
-            precip_fraction
+            )
         if tmp > 0
             S_qs_sub_dep = min(qv / Δt, tmp)
         else
