@@ -16,8 +16,8 @@ import ..InternalEnergy
 import ..EquilMoistModel
 import ..NonEquilMoistModel
 import ..NoPrecipitation
-import ..AbstractPrecipitationModel
-import ..AbstractPerformanceMode
+import ..Microphysics0Moment
+import ..Microphysics1Moment
 import ..PerfStandard
 import ..PerfExperimental
 
@@ -62,26 +62,18 @@ turbconv_vars(FT, turbconv_model::TC.EDMFModel) = (;
     TC.cent_prognostic_vars_edmf(FT, turbconv_model)...,
 )
 
-# TODO: Remove dependence on perf mode
+# TODO: Remove perf_mode. Currently, adding tracers hurts performance.
 precipitation_vars(FT, atmos::AtmosModel) =
-    precipitation_vars(FT, atmos, atmos.perf_mode)
+    precipitation_vars(FT, atmos.precip_model, atmos.perf_mode)
+precipitation_vars(FT, precip_model, ::PerfExperimental) =
+    (; ρq_rai = FT(0), ρq_sno = FT(0))
+precipitation_vars(FT, precip_model, ::PerfStandard) =
+    precipitation_vars(FT, precip_model)
 
-# TODO: Remove. Currently, adding tracers hurts performance
-precipitation_vars(FT, atmos::AtmosModel, ::PerfExperimental) =
-    (; q_rai = FT(0), q_sno = FT(0))
-
-precipitation_vars(FT, atmos::AtmosModel, ::PerfStandard) =
-    precipitation_vars(FT, atmos.precip_model, atmos.turbconv_model)
-
-precipitation_vars(FT, ::AbstractPrecipitationModel, turbconv_model::Nothing) =
-    NamedTuple()
-
-# TODO: have precip vars only with Microphysics1Moment
-precipitation_vars(
-    FT,
-    ::AbstractPrecipitationModel,
-    turbconv_model::TC.EDMFModel,
-) = (; q_rai = FT(0), q_sno = FT(0))
+precipitation_vars(FT, ::NoPrecipitation) = NamedTuple()
+precipitation_vars(FT, ::Microphysics0Moment) = NamedTuple()
+precipitation_vars(FT, ::Microphysics1Moment) =
+    (; ρq_rai = FT(0), ρq_sno = FT(0))
 
 function init_state(
     center_initial_condition,

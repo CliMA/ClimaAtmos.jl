@@ -1,5 +1,6 @@
 using ClimaCoreTempestRemap
 using NCDatasets
+using ClimaCore: InputOutput
 
 function get_topo_info(Y, topo_dir, datafile_rll, comms_ctx)
     # model grid/space information

@@ -9,16 +9,11 @@ function microphysics(
 )
     FT = float_type(state)
     thermo_params = TCP.thermodynamics_params(param_set)
-    tendencies_gm = center_tendencies_grid_mean(state)
     aux_en = center_aux_environment(state)
     prog_gm = center_prog_grid_mean(state)
-    aux_gm = center_aux_grid_mean(state)
     ts_env = center_aux_environment(state).ts
-    p_c = center_aux_grid_mean_p(state)
-    ρ_c = prog_gm.ρ
     aux_en_sat = aux_en.sat
     aux_en_unsat = aux_en.unsat
-    precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
 
     @inbounds for k in real_center_indices(grid)
         # condensation
@@ -27,14 +22,11 @@ function microphysics(
         mph = precipitation_formation(
             param_set,
             precip_model,
-            prog_gm.q_rai[k],
-            prog_gm.q_sno[k],
+            prog_gm[k],
             aux_en.area[k],
-            ρ_c[k],
             FT(grid.zc[k].z),
             Δt,
             ts,
-            precip_fraction,
         )
 
         # update_sat_unsat
@@ -55,12 +47,14 @@ function microphysics(
 
         # update_env_precip_tendencies
         # TODO: move ..._tendency_precip_formation to diagnostics
-        aux_en.qt_tendency_precip_formation[k] =
-            mph.qt_tendency * aux_en.area[k]
         aux_en.e_tot_tendency_precip_formation[k] =
             mph.e_tot_tendency * aux_en.area[k]
-        tendencies_gm.q_rai[k] += mph.qr_tendency * aux_en.area[k]
-        tendencies_gm.q_sno[k] += mph.qs_tendency * aux_en.area[k]
+        aux_en.qt_tendency_precip_formation[k] =
+            mph.qt_tendency * aux_en.area[k]
+        aux_en.qr_tendency_precip_formation[k] =
+            mph.qr_tendency * aux_en.area[k]
+        aux_en.qs_tendency_precip_formation[k] =
+            mph.qs_tendency * aux_en.area[k]
     end
     return nothing
 end
@@ -88,7 +82,6 @@ function quad_loop(
     # qt - total water specific humidity
     # θl - liquid ice potential temperature
     # _mean and ′ - subdomain mean and (co)variances
-    # q_rai, q_sno - grid mean precipitation
     (;
         qt′qt′,
         qt_mean,
@@ -96,15 +89,12 @@ function quad_loop(
         θl_mean,
         θl′qt′,
         subdomain_area,
-        q_rai,
-        q_sno,
-        ρ_c,
+        prog_gm,
         p_c,
         zc,
-        precip_frac,
     ) = vars
 
-    FT = eltype(ρ_c)
+    FT = eltype(zc)
 
     inner_env = SA.MVector{env_len, FT}(undef)
     outer_env = SA.MVector{env_len, FT}(undef)
@@ -192,14 +182,11 @@ function quad_loop(
             mph = precipitation_formation(
                 param_set,
                 precip_model,
-                q_rai,
-                q_sno,
+                prog_gm,
                 subdomain_area,
-                ρ_c,
                 zc,
                 Δt,
                 ts,
-                precip_frac,
             )
 
             # environmental variables
@@ -275,14 +262,10 @@ function microphysics(
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_en = center_aux_environment(state)
     prog_gm = center_prog_grid_mean(state)
-    aux_gm = center_aux_grid_mean(state)
     aux_en_unsat = aux_en.unsat
     aux_en_sat = aux_en.sat
-    tendencies_gm = center_tendencies_grid_mean(state)
     ts_env = center_aux_environment(state).ts
-    precip_fraction = compute_precip_fraction(edmf.precip_fraction_model, state)
     p_c = center_aux_grid_mean_p(state)
-    ρ_c = prog_gm.ρ
 
     #TODO - if we start using eos_smpl for the updrafts calculations
     #       we can get rid of the two categories for outer and inner quad. points
@@ -309,11 +292,8 @@ function microphysics(
                 θl_mean = aux_en.θ_liq_ice[k],
                 θl′qt′ = aux_en.HQTcov[k],
                 subdomain_area = aux_en.area[k],
-                q_rai = prog_gm.q_rai[k],
-                q_sno = prog_gm.q_sno[k],
-                ρ_c = ρ_c[k],
+                prog_gm = prog_gm[k],
                 p_c = p_c[k],
-                precip_frac = precip_fraction,
                 zc = FT(grid.zc[k].z),
             )
             outer_env, outer_src =
@@ -328,13 +308,14 @@ function microphysics(
             qr_tendency = outer_src.Sqr
             qs_tendency = outer_src.Sqs
             # TODO: move ..._tendency_precip_formation to diagnostics
-            aux_en.qt_tendency_precip_formation[k] =
-                qt_tendency * aux_en.area[k]
             aux_en.e_tot_tendency_precip_formation[k] =
                 e_tot_tendency * aux_en.area[k]
-
-            tendencies_gm.q_rai[k] += qr_tendency * aux_en.area[k]
-            tendencies_gm.q_sno[k] += qs_tendency * aux_en.area[k]
+            aux_en.qt_tendency_precip_formation[k] =
+                qt_tendency * aux_en.area[k]
+            aux_en.qr_tendency_precip_formation[k] =
+                qr_tendency * aux_en.area[k]
+            aux_en.qs_tendency_precip_formation[k] =
+                qs_tendency * aux_en.area[k]
 
             # update cloudy/dry variables for buoyancy in TKE
             aux_en.cloud_fraction[k] = outer_env.cf
@@ -393,24 +374,23 @@ function microphysics(
             mph = precipitation_formation(
                 param_set,
                 precip_model,
-                prog_gm.q_rai[k],
-                prog_gm.q_sno[k],
+                prog_gm[k],
                 aux_en.area[k],
-                ρ_c[k],
                 FT(grid.zc[k].z),
                 Δt,
                 ts,
-                precip_fraction,
             )
 
             # update_env_precip_tendencies
             # TODO: move ..._tendency_precip_formation to diagnostics
-            aux_en.qt_tendency_precip_formation[k] =
-                mph.qt_tendency * aux_en.area[k]
             aux_en.e_tot_tendency_precip_formation[k] =
                 mph.e_tot_tendency * aux_en.area[k]
-            tendencies_gm.q_rai[k] += mph.qr_tendency * aux_en.area[k]
-            tendencies_gm.q_sno[k] += mph.qs_tendency * aux_en.area[k]
+            aux_en.qt_tendency_precip_formation[k] =
+                mph.qt_tendency * aux_en.area[k]
+            aux_en.qr_tendency_precip_formation[k] =
+                mph.qr_tendency * aux_en.area[k]
+            aux_en.qs_tendency_precip_formation[k] =
+                mph.qs_tendency * aux_en.area[k]
 
             # update_sat_unsat
             if TD.has_condensate(thermo_params, ts)

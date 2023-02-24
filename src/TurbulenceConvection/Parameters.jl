@@ -21,6 +21,36 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, MP, SFP} <: ATCP
     microph_scaling::FT # TODO: move to microphysics parameter set? or Microphysics1Moment?
     microph_scaling_dep_sub::FT # TODO: move to microphysics parameter set? or Microphysics1Moment?
     microph_scaling_melt::FT # TODO: move to microphysics parameter set? or Microphysics1Moment?
+    surface_area::FT
+    max_area::FT
+    min_area::FT
+    tke_ed_coeff::FT
+    tke_diss_coeff::FT
+    static_stab_coeff::FT
+    tke_surf_scale::FT
+    Prandtl_number_scale::FT
+    Prandtl_number_0::FT
+    Ri_crit::FT
+    smin_ub::FT
+    smin_rm::FT
+    l_max::FT
+    entrainment_factor::FT
+    detrainment_factor::FT
+    turbulent_entrainment_factor::FT
+    entrainment_smin_tke_coeff::FT
+    updraft_mixing_frac::FT
+    area_limiter_scale::FT
+    area_limiter_power::FT
+    entrainment_scale::FT
+    sorting_power::FT
+    min_upd_velocity::FT
+    min_updraft_top::FT
+    pressure_normalmode_buoy_coeff1::FT
+    pressure_normalmode_adv_coeff::FT
+    pressure_normalmode_drag_coeff::FT
+    updraft_number::Int
+    quadrature_order::Int
+    diagnostic_covar_limiter::FT
     microphys_params::MP
     surf_flux_params::SFP
 end

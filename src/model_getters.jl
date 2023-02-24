@@ -204,7 +204,7 @@ end
 
 function precipitation_model(parsed_args)
     precip_model = parsed_args["precip_model"]
-    return if precip_model == nothing
+    return if precip_model == nothing || precip_model == "nothing"
         NoPrecipitation()
     elseif precip_model == "0M"
         Microphysics0Moment()
@@ -314,11 +314,66 @@ function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     return EDMFCoriolis(prof_u, prof_v, coriolis_param)
 end
 
-function turbconv_model(FT, moisture_model, precip_model, parsed_args, namelist)
+function CovarianceModel(paramset, config_params)
+    thermo_covariance_model_name = config_params.thermo_covariance_model
+    if thermo_covariance_model_name == "prognostic"
+        return TC.PrognosticThermoCovariances()
+    elseif thermo_covariance_model_name == "diagnostic"
+        covar_lim = paramset.diagnostic_covar_limiter
+        return TC.DiagnosticThermoCovariances(covar_lim)
+    else
+        error(
+            "Something went wrong. Invalid thermo_covariance model: '$thermo_covariance_model_name'",
+        )
+    end
+end
+
+function EnvThermo(paramset, config_params)
+    sgs_string = config_params.sgs
+    if sgs_string == "mean"
+        TC.SGSMean()
+    elseif csgs_string == "quadrature"
+        quadrature_type = QuadratureType(config_params.quadrature_type)
+        TC.SGSQuadrature(FT, quadrature_type, paramset)
+    else
+        error(
+            "Something went wrong. Invalid environmental sgs type '$sgs_string'",
+        )
+    end
+end
+
+function QuadratureType(s::String)
+    if s == "log-normal"
+        TC.LogNormalQuad()
+    elseif s == "gaussian"
+        TC.GaussianQuad()
+    end
+end
+
+function turbconv_model(
+    FT,
+    moisture_model,
+    precip_model,
+    parsed_args,
+    config_params,
+    turbconv_params,
+)
     turbconv = parsed_args["turbconv"]
     @assert turbconv in (nothing, "edmf")
+
+    covariance_model = CovarianceModel(turbconv_params, config_params)
+    en_thermo = EnvThermo(turbconv_params, config_params)
+
     return if turbconv == "edmf"
-        TC.EDMFModel(FT, namelist, moisture_model, precip_model, parsed_args)
+        TC.EDMFModel(
+            FT,
+            moisture_model,
+            precip_model,
+            covariance_model,
+            en_thermo,
+            parsed_args,
+            turbconv_params,
+        )
     else
         nothing
     end

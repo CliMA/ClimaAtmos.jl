@@ -151,8 +151,10 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
 
     return (;
         precip_model,
-        ᶜS_ρq_tot = similar(Y.c, FT),
         ᶜS_ρe_tot = similar(Y.c, FT),
+        ᶜS_ρq_tot = similar(Y.c, FT),
+        ᶜS_ρq_rai = similar(Y.c, FT),
+        ᶜS_ρq_sno = similar(Y.c, FT),
     )
 end
 
@@ -163,27 +165,39 @@ function compute_precipitation_cache!(
     ::Microphysics1Moment,
     ::TC.EDMFModel,
 )
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p
-
-    qt_tendency_precip_formation_en =
-        p.edmf_cache.aux.cent.turbconv.en.qt_tendency_precip_formation[colidx]
-    qt_tendency_precip_formation_bulk =
-        p.edmf_cache.aux.cent.turbconv.bulk.qt_tendency_precip_formation[colidx]
+    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno) = p
 
     e_tot_tendency_precip_formation_en =
         p.edmf_cache.aux.cent.turbconv.en.e_tot_tendency_precip_formation[colidx]
     e_tot_tendency_precip_formation_bulk =
         p.edmf_cache.aux.cent.turbconv.bulk.e_tot_tendency_precip_formation[colidx]
+    qt_tendency_precip_formation_en =
+        p.edmf_cache.aux.cent.turbconv.en.qt_tendency_precip_formation[colidx]
+    qt_tendency_precip_formation_bulk =
+        p.edmf_cache.aux.cent.turbconv.bulk.qt_tendency_precip_formation[colidx]
+    qr_tendency_precip_formation_en =
+        p.edmf_cache.aux.cent.turbconv.en.qr_tendency_precip_formation[colidx]
+    qr_tendency_precip_formation_bulk =
+        p.edmf_cache.aux.cent.turbconv.bulk.qr_tendency_precip_formation[colidx]
+    qs_tendency_precip_formation_en =
+        p.edmf_cache.aux.cent.turbconv.en.qs_tendency_precip_formation[colidx]
+    qs_tendency_precip_formation_bulk =
+        p.edmf_cache.aux.cent.turbconv.bulk.qs_tendency_precip_formation[colidx]
 
-    @. ᶜS_ρq_tot[colidx] =
-        Y.c.ρ[colidx] *
-        (qt_tendency_precip_formation_bulk + qt_tendency_precip_formation_en)
     @. ᶜS_ρe_tot[colidx] =
         Y.c.ρ[colidx] * (
             e_tot_tendency_precip_formation_bulk +
             e_tot_tendency_precip_formation_en
         )
-
+    @. ᶜS_ρq_tot[colidx] =
+        Y.c.ρ[colidx] *
+        (qt_tendency_precip_formation_bulk + qt_tendency_precip_formation_en)
+    @. ᶜS_ρq_rai[colidx] =
+        Y.c.ρ[colidx] *
+        (qr_tendency_precip_formation_bulk + qr_tendency_precip_formation_en)
+    @. ᶜS_ρq_sno[colidx] =
+        Y.c.ρ[colidx] *
+        (qs_tendency_precip_formation_bulk + qs_tendency_precip_formation_en)
 end
 
 """
@@ -205,8 +219,8 @@ function precipitation_advection_tendency!(
     # TODO: assuming w_gm = 0
     # TODO: verify translation
 
-    q_rai = Y.c.q_rai[colidx] #./ precip_fraction
-    q_sno = Y.c.q_sno[colidx] #./ precip_fraction
+    ρq_rai = Y.c.ρq_rai[colidx]
+    ρq_sno = Y.c.ρq_sno[colidx]
 
     RB = Operators.RightBiasedC2F(; top = Operators.SetValue(FT(0)))
     ᶜdivᵥ = Operators.DivergenceF2C(; bottom = Operators.Extrapolate())
@@ -220,38 +234,31 @@ function precipitation_advection_tendency!(
     # TODO: need to add horizontal advection + vertical velocity of air
 
     # TODO: use correct advection operators
-    # TODO: use ρq_rai, ρq_sno
-    @. Yₜ.c.q_rai[colidx] +=
-        ᶜdivᵥ(
-            wvec(
-                RB(
-                    ρ_c *
-                    q_rai *
-                    CM1.terminal_velocity(
-                        microphys_params,
-                        rain_type,
-                        ρ_c,
-                        q_rai,
-                    ),
+    @. Yₜ.c.ρq_rai[colidx] += ᶜdivᵥ(
+        wvec(
+            RB(
+                ρq_rai * CM1.terminal_velocity(
+                    microphys_params,
+                    rain_type,
+                    ρ_c,
+                    ρq_rai / ρ_c,
                 ),
             ),
-        ) / ρ_c
+        ),
+    )
 
-    @. Yₜ.c.q_sno[colidx] +=
-        ᶜdivᵥ(
-            wvec(
-                RB(
-                    ρ_c *
-                    q_sno *
-                    CM1.terminal_velocity(
-                        microphys_params,
-                        snow_type,
-                        ρ_c,
-                        q_sno,
-                    ),
+    @. Yₜ.c.ρq_sno[colidx] += ᶜdivᵥ(
+        wvec(
+            RB(
+                ρq_sno * CM1.terminal_velocity(
+                    microphys_params,
+                    snow_type,
+                    ρ_c,
+                    ρq_sno / ρ_c,
                 ),
             ),
-        ) / ρ_c
+        ),
+    )
     return nothing
 end
 
@@ -263,7 +270,7 @@ function precipitation_tendency!(
     colidx,
     precip_model::Microphysics1Moment,
 )
-    (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p
+    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno) = p
     compute_precipitation_cache!(
         Y,
         p,
@@ -274,6 +281,8 @@ function precipitation_tendency!(
 
     @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
     @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+    @. Yₜ.c.ρq_rai[colidx] += ᶜS_ρq_rai[colidx]
+    @. Yₜ.c.ρq_sno[colidx] += ᶜS_ρq_sno[colidx]
 
     if :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]

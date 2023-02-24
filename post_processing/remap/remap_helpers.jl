@@ -126,6 +126,9 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_cloudliq = defVar(nc, "cloud_liquid", FT, cspace, ("time",))
         nc_cloudice = defVar(nc, "cloud_ice", FT, cspace, ("time",))
         nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
+    end
+    # define precip variables
+    if :precipitation_removal in propertynames(diag)
         nc_precipitation_removal =
             defVar(nc, "precipitation_removal", FT, cspace, ("time",))
         nc_column_integrated_rain =
@@ -195,6 +198,9 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_cloudliq[:, 1] = diag.cloud_liquid
         nc_cloudice[:, 1] = diag.cloud_ice
         nc_watervapor[:, 1] = diag.water_vapor
+    end
+
+    if :precipitation_removal in propertynames(diag)
         nc_precipitation_removal[:, 1] = diag.precipitation_removal
         nc_column_integrated_rain[:, 1] = diag.column_integrated_rain
         nc_column_integrated_snow[:, 1] = diag.column_integrated_snow
@@ -247,18 +253,19 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         "sfc_qt",
     ]
     if :ρq_tot in propertynames(Y.c)
-        moist_variables = [
-            "qt",
-            "RH",
-            "cloud_ice",
-            "cloud_liquid",
-            "water_vapor",
+        moist_variables =
+            ["qt", "RH", "cloud_ice", "cloud_liquid", "water_vapor"]
+    else
+        moist_variables = String[]
+    end
+    if :precipitation_removal in propertynames(diag)
+        precip_variables = [
             "precipitation_removal",
             "column_integrated_rain",
             "column_integrated_snow",
         ]
     else
-        moist_variables = String[]
+        precip_variables = String[]
     end
     if :sfc_flux_energy in propertynames(diag)
         sfc_flux_variables =
@@ -286,6 +293,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     netcdf_variables = vcat(
         dry_variables,
         moist_variables,
+        precip_variables,
         sfc_flux_variables,
         rad_flux_variables,
         rad_flux_clear_variables,

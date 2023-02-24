@@ -90,7 +90,6 @@ function compute_sgs_flux!(
 )
     thermo_params = TCP.thermodynamics_params(param_set)
     N_up = n_updrafts(edmf)
-    tendencies_gm = center_tendencies_grid_mean(state)
     FT = float_type(state)
     prog_gm = center_prog_grid_mean(state)
     aux_gm = center_aux_grid_mean(state)
