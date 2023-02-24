@@ -129,14 +129,15 @@ function compute_explicit_gm_tendencies!(
 )
     tendencies_gm = TC.center_tendencies_grid_mean(state)
     prog_gm = TC.center_prog_grid_mean(state)
-    aux_en = TC.center_aux_environment(state)
-    aux_bulk = TC.center_aux_bulk(state)
     ρ_c = prog_gm.ρ
     aux_tc = TC.center_aux_turbconv(state)
 
     # Apply precipitation tendencies
-    @. tendencies_gm.ρq_tot += ρ_c * aux_tc.qt_tendency_precip_sinks
     @. tendencies_gm.ρe_tot += ρ_c * aux_tc.e_tot_tendency_precip_sinks
-
+    @. tendencies_gm.ρq_tot += ρ_c * aux_tc.qt_tendency_precip_sinks
+    if edmf.precip_model isa CA.Microphysics1Moment
+        @. tendencies_gm.ρq_rai += ρ_c * aux_tc.qr_tendency_precip_sinks
+        @. tendencies_gm.ρq_sno += ρ_c * aux_tc.qs_tendency_precip_sinks
+    end
     return nothing
 end

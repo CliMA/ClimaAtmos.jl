@@ -30,7 +30,6 @@ function compute_precipitation_sink_tendencies(
     aux_tc = center_aux_turbconv(state)
     prog_gm = center_prog_grid_mean(state)
     ρ_c = prog_gm.ρ
-    tendencies_gm = center_tendencies_grid_mean(state)
     ts_gm = center_aux_grid_mean_ts(state)
 
     FT = float_type(state)
@@ -39,7 +38,6 @@ function compute_precipitation_sink_tendencies(
         qr = max(FT(0), prog_gm.ρq_rai[k] / ρ_c[k])
         qs = max(FT(0), prog_gm.ρq_sno[k] / ρ_c[k])
         ρ = ρ_c[k]
-        q_tot_gm = aux_gm.q_tot[k]
         T_gm = aux_gm.T[k]
         # When we fuse loops, this should hopefully disappear
         ts = ts_gm[k]
@@ -91,12 +89,11 @@ function compute_precipitation_sink_tendencies(
         aux_tc.qs_tendency_melt[k] = S_qs_melt
         aux_tc.qs_tendency_dep_sub[k] = S_qs_sub_dep
 
-        tendencies_gm.ρq_rai[k] += ρ_c[k] * (S_qr_evap - S_qs_melt)
-        tendencies_gm.ρq_sno[k] += ρ_c[k] * (S_qs_sub_dep + S_qs_melt)
-
-        aux_tc.qt_tendency_precip_sinks[k] = -S_qr_evap - S_qs_sub_dep
         aux_tc.e_tot_tendency_precip_sinks[k] =
             -S_qr_evap * (I_l + Φ) - S_qs_sub_dep * (I_i + Φ) + S_qs_melt * L_f
+        aux_tc.qt_tendency_precip_sinks[k] = -S_qr_evap - S_qs_sub_dep
+        aux_tc.qr_tendency_precip_sinks[k] = S_qr_evap - S_qs_melt
+        aux_tc.qs_tendency_precip_sinks[k] = S_qs_sub_dep + S_qs_melt
     end
     return nothing
 end

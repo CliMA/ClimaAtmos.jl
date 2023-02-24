@@ -119,6 +119,18 @@ function init_tc!(Y, p, params, colidx)
     set_grid_mean_from_thermo_state!(thermo_params, state, grid)
     assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
     initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
+
+    t = FT(0)
+    surf = get_surface(
+        state.p.atmos.model_config,
+        surf_params,
+        grid,
+        state,
+        t,
+        tc_params,
+    )
+    TC.update_aux!(edmf, grid, state, surf, tc_params, t, p.Δt)
+    # TODO: Compute all diagnostic values in the saving callback.
 end
 
 # TODO: Split update_aux! and other functions into implicit and explicit parts.

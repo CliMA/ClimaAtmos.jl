@@ -53,10 +53,8 @@ Computes the tendencies to qt and θ_liq_ice due to precipitation formation
 function precipitation_formation(
     param_set::APS,
     precip_model::AbstractPrecipitationModel,
-    qr::FT,
-    qs::FT,
+    prog_gm,
     area::FT,
-    ρ::FT,
     z::FT,
     Δt::Real,
     ts,
@@ -115,8 +113,9 @@ function precipitation_formation(
             Rm = TD.gas_constant_air(thermo_params, ts)
             Lf = TD.latent_heat_fusion(thermo_params, ts)
 
-            qr = max(FT(0), qr)
-            qs = max(FT(0), qs)
+            ρ = prog_gm.ρ
+            qr = max(FT(0), prog_gm.ρq_rai) / ρ
+            qs = max(FT(0), prog_gm.ρq_sno) / ρ
 
             # Autoconversion of cloud ice to snow is done with a simplified rate.
             # The saturation adjustment scheme prevents using the
