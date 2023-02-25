@@ -126,7 +126,7 @@ function parse_commandline()
         arg_type = Symbol
         default = :none # TODO: change to :zalesak
         "--ode_algo"
-        help = "ODE algorithm [`ARS343` (default), `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
+        help = "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
         arg_type = String
         default = "ARS343"
         "--max_newton_iters"
