@@ -135,6 +135,40 @@ function pt_calculation!(Y, p, zLZB, Tref, deltaT, Pt, colidx)
     )
 end
 
-function do_deep_convection!()
+function do_deep_convection()
+    if Pq[colidx] > Pt[colidx]
+        do_change_time_scale_deepconv()
+    else
+        do_change_tref_deepconv()
+    end
+end
+
+function do_change_time_scale_deepconv!(Y, p, zLZB, Pt, Pq, deltaq, colidx)
+    (; τ_bm) = p
+
+    @. deltaq[colidx] = ifelse(ᶜz < zLZB, deltaq[colidx] * Pt[colidx] / Pq[colidx], deltaq[colidx])
+    @. Pq[colidx] = Pt[colidx]
+end
+
+function do_change_tref_deepconv(Y, p, zLZB, deltaT, deltaq, Tref, colidx)
+    (; τ_bm) = p
+    (; dt) = p.simulation
+
+    deltaT1 = @. -(deltaT[colidx] + L_v / cp_m * deltaq[colidx])
+    @. deltaT1 = ifelse(ᶜz < zLZB, deltaT1, FT(0))
+    Operators.column_integral_definite!(
+        deltak,
+        deltaT1 * Y.c.ρ[colidx]
+    )
+    ρ1 = @. ifelse(ᶜz < zLZB, Y.c.ρ, FT(0))
+    Operators.column_integral_definite!(
+        deltap,
+        ρ1,
+    )
+    @. deltak = deltak / deltap
+    deltak1 = @. ifelse(ᶜz < zLZB, deltak, FT(0))
+
+    @. Tref[colidx] = Tref[colidx] + deltak1 * τ_bm / dt
+    @. deltaT[colidx] = deltaT[colidx] + deltak1
 end
 
