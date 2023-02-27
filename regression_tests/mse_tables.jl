@@ -28,14 +28,6 @@ all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :componen
 all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0.0
 all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :ρe_tot)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :ρq_tot)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:f, :w, :components, :data, 1)] = 0.0
-#
 all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 0.0
 all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 0.0
