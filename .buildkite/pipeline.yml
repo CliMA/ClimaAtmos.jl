@@ -160,7 +160,7 @@ steps:
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 400secs --ode_algo SSP333 --dt_save_to_disk 5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 350secs --ode_algo SSP333 --dt_save_to_disk 5days"
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
         soft_fail: true
 
