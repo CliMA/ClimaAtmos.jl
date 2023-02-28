@@ -76,6 +76,11 @@ We make use of the following operators
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 * ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
 
+* No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
+  ```math
+  \tilde{u}_{v} = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
+  ```
+
 ## Equations and discretizations
 
 ### Mass
