@@ -260,19 +260,16 @@ end
 
 function remaining_tendency!(Yₜ, Y, p, t)
     p.test_dycore_consistency && CA.fill_with_nans!(p)
-    (; compressibility_model) = p
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin
             CA.precomputed_quantities!(Y, p, t)
         end
-        if compressibility_model isa CA.CompressibleFluid
-            @nvtx "horizontal" color = colorant"orange" begin
-                CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
-            end
-            @nvtx "vertical" color = colorant"orange" begin
-                CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-            end
+        @nvtx "horizontal" color = colorant"orange" begin
+            CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
+        end
+        @nvtx "vertical" color = colorant"orange" begin
+            CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "additional_tendency!" color = colorant"orange" begin
             additional_tendency!(Yₜ, Y, p, t)
