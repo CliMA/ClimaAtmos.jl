@@ -5,20 +5,22 @@ if !(@isdefined parsed_args)
     (s, parsed_args) = parse_commandline()
 end
 
-include("comms.jl")
-if startswith(parsed_args["ode_algo"], "ODE.") # TODO: use Preferences.jl instead:
-    include("../ordinary_diff_eq_bug_fixes.jl")
-end
 include("nvtx.jl")
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
+include("parameter_set.jl")
+params, parsed_args = create_parameter_set(FT, parsed_args, cli_defaults(s))
+
+include("comms.jl")
+if startswith(parsed_args["ode_algo"], "ODE.") # TODO: use Preferences.jl instead:
+    include("../ordinary_diff_eq_bug_fixes.jl")
+end
 fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
-turbconv = parsed_args["turbconv"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
@@ -34,8 +36,7 @@ import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 
-include("parameter_set.jl")
-params = create_parameter_set(FT, parsed_args)
+
 atmos = get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
@@ -219,7 +220,7 @@ if parsed_args["orographic_gravity_wave"] == true
     include("orographic_gravity_wave_helper.jl")
     if !isfile(joinpath(TOPO_DIR, "topo_info.hdf5")) &
        ClimaComms.iamroot(comms_ctx)
-        include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+        include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
         # download topo data
         datafile_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
         @show datafile_rll
@@ -309,9 +310,7 @@ using Test
 import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
-include(
-    joinpath(pkgdir(ClimaAtmos), "post_processing", "post_processing_funcs.jl"),
-)
+include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
 
 if parsed_args["debugging_tc"]
     include(
@@ -325,7 +324,7 @@ if parsed_args["debugging_tc"]
     )
     include(
         joinpath(
-            pkgdir(ClimaAtmos),
+            pkgdir(CA),
             "post_processing",
             "define_tc_quicklook_profiles.jl",
         ),
