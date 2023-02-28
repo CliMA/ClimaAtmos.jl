@@ -12,13 +12,29 @@ function precomputed_quantities!(Y, p, t)
     end
 end
 
+function set_boundary_velocity!(uₕ, uᵥ)
+    uₕ_surface_data = Fields.level(Fields.field_values(uₕ), 1)
+    uₕ_surface_geom = Fields.level(Spaces.local_geometry_data(axes(uₕ)), 1)
+    uᵥ_surface_data = Fields.level(Fields.field_values(uᵥ), 1)
+    uᵥ_surface_geom = Fields.level(Spaces.local_geometry_data(axes(uᵥ)), 1)
+
+    @. uᵥ_surface_data = Geometry.Covariant3Vector(
+        -Geometry.contravariant3(uₕ_surface_data, uₕ_surface_geom) /
+        Geometry.contravariant3(one(uᵥ_surface_data), uᵥ_surface_geom),
+    )
+end
+
 function precomputed_quantities!(Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
+
     (; ᶜK, ᶠu_tilde, ᶜu_bar, ᶠu³, ᶜts, ᶜp, params) = p
     (; ᶠwinterp, ᶜinterp) = p.operators
     ᶜJ = Fields.local_geometry_field(axes(Y.c.ρ)).J
     C123 = Geometry.Covariant123Vector
+
+    set_boundary_velocity!(ᶜuₕ[colidx], ᶠw[colidx])
+
     @. ᶜu_bar[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠw[colidx]))
     @. ᶠu_tilde[colidx] =
         ᶠwinterp(
