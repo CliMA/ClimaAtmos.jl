@@ -4,8 +4,6 @@ module TurbulenceConvection
 import ..DryModel
 import ..EquilMoistModel
 import ..NonEquilMoistModel
-import ..AnelasticFluid
-import ..CompressibleFluid
 import ..RadiationDYCOMS_RF01
 import ..RadiationTRMM_LBA
 import ..AbstractPrecipitationModel

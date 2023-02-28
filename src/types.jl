@@ -3,10 +3,6 @@ struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
 struct NonEquilMoistModel <: AbstractMoistureModel end
 
-abstract type AbstractCompressibilityModel end
-struct CompressibleFluid <: AbstractCompressibilityModel end
-struct AnelasticFluid <: AbstractCompressibilityModel end
-
 abstract type AbstractEnergyFormulation end
 struct PotentialTemperature <: AbstractEnergyFormulation end
 struct TotalEnergy <: AbstractEnergyFormulation end
@@ -154,10 +150,9 @@ A dispatching type for selecting the
 precise thermodynamics method call to
 be used.
 """
-Base.@kwdef struct ThermoDispatcher{EF, MM, CM}
+Base.@kwdef struct ThermoDispatcher{EF, MM}
     energy_form::EF
     moisture_model::MM
-    compressibility_model::CM
 end
 Base.broadcastable(x::ThermoDispatcher) = Ref(x)
 
@@ -183,7 +178,6 @@ Base.@kwdef struct AtmosModel{
     LA,
     EC,
     TCM,
-    CM,
     SS,
     NOGW,
     OGW,
@@ -204,7 +198,6 @@ Base.@kwdef struct AtmosModel{
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
     turbconv_model::TCM = nothing
-    compressibility_model::CM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
@@ -215,12 +208,6 @@ Base.@kwdef struct AtmosModel{
 end
 
 Base.broadcastable(x::AtmosModel) = Ref(x)
-
-is_compressible(atmos::AtmosModel) =
-    atmos.compressibility_model isa CompressibleFluid
-is_anelastic(atmos::AtmosModel) = atmos.compressibility_model isa AnelasticFluid
-is_column(atmos::AtmosModel) = atmos.model_config isa SingleColumnModel
-is_anelastic_column(atmos::AtmosModel) = is_anelastic(atmos) && is_column(atmos)
 
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))

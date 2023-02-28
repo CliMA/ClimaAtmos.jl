@@ -75,7 +75,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
 
     thermo_dispatcher = CA.ThermoDispatcher(atmos)
-    compressibility_model = atmos.compressibility_model
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
@@ -116,7 +115,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         ),
         (; thermo_dispatcher),
         (; Δt = dt),
-        (; compressibility_model),
         TCU.turbconv_cache(Y, turbconv_model, atmos, params, parsed_args),
     )
 end

@@ -10,8 +10,6 @@ import ClimaAtmos:
     DryModel,
     EquilMoistModel,
     NonEquilMoistModel,
-    CompressibleFluid,
-    AnelasticFluid,
     PotentialTemperature,
     TotalEnergy,
     InternalEnergy,
@@ -67,7 +65,6 @@ function get_atmos(
             config_params,
             turbconv_params,
         ),
-        compressibility_model = CA.compressibility_model(parsed_args),
         surface_scheme,
         non_orographic_gravity_wave = CA.non_orographic_gravity_wave_model(
             parsed_args,
