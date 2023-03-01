@@ -13,7 +13,6 @@ env:
 agents:
   config: cpu
   queue: central
-  slurm_ntasks: 1
 
 steps:
   - label: "init :computer:"
@@ -608,8 +607,7 @@ steps:
         command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target_threaded --enable_threading true"
         agents:
           slurm_mem: 20GB
-          slurm_ntasks: 8
-          slurm_ntasks_per_node: 8
+          slurm_cpus_per_task: 8
 
       # Flame graphs
       - label: ":fire: Flame graph: perf target (default)"
@@ -634,8 +632,7 @@ steps:
         command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_threaded --enable_threading true"
         artifact_paths: "flame_perf_target_threaded/*"
         agents:
-          slurm_ntasks: 8
-          slurm_ntasks_per_node: 8
+          slurm_cpus_per_task: 8
           slurm_mem: 20GB
 
       - label: ":fire: Flame graph: perf target (Callbacks)"
