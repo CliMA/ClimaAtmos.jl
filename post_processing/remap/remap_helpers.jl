@@ -140,10 +140,12 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     if :sfc_flux_energy in propertynames(diag)
         nc_sfc_flux_energy =
             defVar(nc, "sfc_flux_energy", FT, hspace, ("time",))
-        nc_sfc_evaporation =
-            defVar(nc, "sfc_evaporation", FT, hspace, ("time",))
         nc_sfc_flux_u = defVar(nc, "sfc_flux_u", FT, hspace, ("time",))
         nc_sfc_flux_v = defVar(nc, "sfc_flux_v", FT, hspace, ("time",))
+        if :sfc_evaporation in propertynames(diag)
+            nc_sfc_evaporation =
+                defVar(nc, "sfc_evaporation", FT, hspace, ("time",))
+        end
     end
     # define radiative flux variables
     if :lw_flux_down in propertynames(diag)
@@ -208,7 +210,6 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
 
     if :sfc_flux_energy in propertynames(diag)
         nc_sfc_flux_energy[:, 1] = diag.sfc_flux_energy.components.data.:1
-        nc_sfc_evaporation[:, 1] = diag.sfc_evaporation.components.data.:1
         sfc_flux_momentum = diag.sfc_flux_momentum
         w_unit =
             Geometry.Covariant3Vector.(
@@ -218,6 +219,9 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
             Geometry.UVVector.(adjoint.(sfc_flux_momentum) .* w_unit)
         nc_sfc_flux_u[:, 1] = sfc_flux_momentum_phy.components.data.:1
         nc_sfc_flux_v[:, 1] = sfc_flux_momentum_phy.components.data.:2
+        if :sfc_evaporation in propertynames(diag)
+            nc_sfc_evaporation[:, 1] = diag.sfc_evaporation.components.data.:1
+        end
     end
 
     if :lw_flux_down in propertynames(diag)
@@ -268,8 +272,10 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         precip_variables = String[]
     end
     if :sfc_flux_energy in propertynames(diag)
-        sfc_flux_variables =
-            ["sfc_flux_energy", "sfc_evaporation", "sfc_flux_u", "sfc_flux_v"]
+        sfc_flux_variables = ["sfc_flux_energy", "sfc_flux_u", "sfc_flux_v"]
+        if :sfc_evaporation in propertynames(diag)
+            sfc_flux_variables = [sfc_flux_variables..., "sfc_evaporation"]
+        end
     else
         sfc_flux_variables = String[]
     end

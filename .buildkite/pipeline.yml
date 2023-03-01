@@ -198,9 +198,9 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist with EDMF"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --vert_diff true --surface_scheme bulk --moist dry --dt 1secs --t_end 20secs --FLOAT_TYPE Float64 --turbconv edmf --turbconv_case Soares --config sphere --z_stretch false --post_process  false --apply_limiter false --dt_save_to_sol 10secs --dt_save_to_disk 10secs
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --out_dir sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf/*"
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmf --vert_diff true --surface_scheme bulk --moist dry --dt 1secs --t_end 20secs --FLOAT_TYPE Float64 --turbconv edmf --config sphere --z_stretch false --post_process false --apply_limiter false --dt_save_to_sol 10secs --dt_save_to_disk 10secs
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --out_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmf/*"
         agents:
           slurm_mem: 20GB
 
@@ -623,7 +623,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":fire: Flame graph: perf target (edmf)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmf --target_job sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --moist dry --precip_model nothing --rad nothing"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmf --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
         artifact_paths: "flame_perf_target_edmf/*"
         agents:
           slurm_mem: 20GB
@@ -643,7 +643,7 @@ steps:
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"
-        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_mo_edmf --moist dry --precip_model nothing --rad nothing"
+        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
         agents:
           slurm_mem: 20GB
 

@@ -13,10 +13,11 @@ Modify the energy variable in state `Y` given Y and the cache `p` so that
 function set_discrete_hydrostatic_balanced_state!(Y, p)
     ᶜinterp = Operators.InterpolateF2C()
     FT = Spaces.undertype(axes(Y.c))
+    ᶠgradᵥ_ᶜp = similar(Y.f.w)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         set_discrete_hydrostatic_balanced_pressure!(
             p.ᶜp,
-            similar(Y.f.w),
+            ᶠgradᵥ_ᶜp,
             Y.c.ρ,
             p.ᶠgradᵥ_ᶜΦ,
             FT(CAP.MSLP(p.params)),
@@ -24,7 +25,6 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
         )
     end
     thermo_params = CAP.thermodynamics_params(p.params)
-    compute_kinetic!(p.ᶜK, Y)
     if p.atmos.moisture_model isa DryModel
         @. p.ᶜts = TD.PhaseDry_ρp(thermo_params, Y.c.ρ, p.ᶜp)
     elseif p.atmos.moisture_model isa EquilMoistModel
@@ -33,9 +33,21 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
     else
         error("Unsupported moisture model")
     end
-    # assume ᶜΦ has been updated
-    ᶜ𝔼_kwarg = @. ICs.energy_vars(thermo_params, p.ᶜts, p.ᶜK, p.ᶜΦ, p.atmos)
-    @. Y.c = merge(Y.c, ᶜ𝔼_kwarg)
+    ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
+    ls(params, thermo_state, geometry, velocity) =
+        ICs.LocalState(; params, thermo_state, geometry, velocity)
+    @. Y.c = merge(
+        Y.c,
+        ICs.energy_variables(
+            ls(
+                p.params,
+                p.ᶜts,
+                ᶜlocal_geometry,
+                Geometry.UVWVector(Y.c.uₕ) + Geometry.UVWVector(ᶜinterp(Y.f.w)),
+            ),
+            p.atmos.energy_form,
+        ),
+    ) # broadcasting doesn't seem to work with kwargs, so define interim ls()
 end
 
 """
