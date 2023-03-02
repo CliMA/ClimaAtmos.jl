@@ -19,30 +19,6 @@ function compute_implicit_turbconv_tendencies!(
     compute_implicit_up_tendencies!(edmf, grid, state)
     compute_implicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
 
-    if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        compute_implicit_en_tendencies!(
-            edmf,
-            grid,
-            state,
-            Val(:Hvar),
-            Val(:ρaHvar),
-        )
-        compute_implicit_en_tendencies!(
-            edmf,
-            grid,
-            state,
-            Val(:QTvar),
-            Val(:ρaQTvar),
-        )
-        compute_implicit_en_tendencies!(
-            edmf,
-            grid,
-            state,
-            Val(:HQTcov),
-            Val(:ρaHQTcov),
-        )
-    end
-
     return nothing
 end
 
@@ -53,30 +29,6 @@ function compute_explicit_turbconv_tendencies!(
 )
     compute_explicit_up_tendencies!(edmf, grid, state)
     compute_explicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
-
-    if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        compute_explicit_en_tendencies!(
-            edmf,
-            grid,
-            state,
-            Val(:Hvar),
-            Val(:ρaHvar),
-        )
-        compute_explicit_en_tendencies!(
-            edmf,
-            grid,
-            state,
-            Val(:QTvar),
-            Val(:ρaQTvar),
-        )
-        compute_explicit_en_tendencies!(
-            edmf,
-            grid,
-            state,
-            Val(:HQTcov),
-            Val(:ρaHQTcov),
-        )
-    end
 
     return nothing
 end
@@ -296,14 +248,6 @@ function affect_filter!(
     filter_updraft_vars(edmf, grid, state, surf, param_set)
 
     @. prog_en.ρatke = max(prog_en.ρatke, 0)
-    if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        @. prog_en.ρaHvar = max(prog_en.ρaHvar, 0)
-        @. prog_en.ρaQTvar = max(prog_en.ρaQTvar, 0)
-        @. prog_en.ρaHQTcov =
-            max(prog_en.ρaHQTcov, -sqrt(prog_en.ρaHvar * prog_en.ρaQTvar))
-        @. prog_en.ρaHQTcov =
-            min(prog_en.ρaHQTcov, sqrt(prog_en.ρaHvar * prog_en.ρaQTvar))
-    end
     return nothing
 end
 
@@ -356,17 +300,6 @@ function set_edmf_surface_bc(
             zLL,
             obukhov_length(surf),
         )
-    if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-        prog_en.ρaHvar[kc_surf] =
-            ρ_ae *
-            get_surface_variance(flux1 / ρLL, flux1 / ρLL, ustar, zLL, oblength)
-        prog_en.ρaQTvar[kc_surf] =
-            ρ_ae *
-            get_surface_variance(flux2 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
-        prog_en.ρaHQTcov[kc_surf] =
-            ρ_ae *
-            get_surface_variance(flux1 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
-    end
     return nothing
 end
 
@@ -478,55 +411,6 @@ function q_surface_bc(
         1 - a_total + i * a_,
     )
     return aux_gm.q_tot[kc_surf] + surface_scalar_coeff * sqrt(qt_var)
-end
-
-function get_GMV_CoVar(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_sym},
-    ::Val{ϕ_sym},
-    ::Val{ψ_sym},
-) where {covar_sym, ϕ_sym, ψ_sym}
-    N_up = n_updrafts(edmf)
-    is_tke = covar_sym == :tke
-    FT = float_type(state)
-    tke_factor = is_tke ? FT(0.5) : 1
-    aux_gm_c = center_aux_grid_mean(state)
-    aux_gm_f = face_aux_grid_mean(state)
-    prog_gm_c = center_prog_grid_mean(state)
-    prog_gm_f = face_prog_grid_mean(state)
-    prog_up_f = face_prog_updrafts(state)
-    aux_en_c = center_aux_environment(state)
-    aux_en_f = face_aux_environment(state)
-    aux_en = is_tke ? aux_en_f : aux_en_c
-    aux_up_c = center_aux_updrafts(state)
-    aux_up = is_tke ? prog_up_f : aux_up_c
-    gmv_covar = getproperty(center_aux_grid_mean(state), covar_sym)
-    covar_e = getproperty(center_aux_environment(state), covar_sym)
-    gm = is_tke ? prog_gm_f : aux_gm_c
-    ϕ_gm = getproperty(gm, ϕ_sym)
-    ψ_gm = getproperty(gm, ψ_sym)
-    ϕ_en = getproperty(aux_en, ϕ_sym)
-    ψ_en = getproperty(aux_en, ψ_sym)
-    area_en = aux_en_c.area
-
-    Icd = is_tke ? CCO.InterpolateF2C() : x -> x
-    @. gmv_covar =
-        tke_factor *
-        area_en *
-        Icd(wcomponent(CCG.WVector(ϕ_en - ϕ_gm))) *
-        Icd(wcomponent(CCG.WVector(ψ_en - ψ_gm))) + area_en * covar_e
-    @inbounds for i in 1:N_up
-        ϕ_up = getproperty(aux_up[i], ϕ_sym)
-        ψ_up = getproperty(aux_up[i], ψ_sym)
-        @. gmv_covar +=
-            tke_factor *
-            aux_up_c[i].area *
-            Icd(wcomponent(CCG.WVector(ϕ_up - ϕ_gm))) *
-            Icd(wcomponent(CCG.WVector(ψ_up - ψ_gm)))
-    end
-    return nothing
 end
 
 function compute_updraft_top(grid::Grid, state::State, i::Int)
@@ -1150,73 +1034,5 @@ function update_diagnostic_covariances!(
             ρ_c * area_en * c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1),
             covar_lim,
         )
-    return nothing
-end
-
-
-function GMV_third_m(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_en_sym},
-    ::Val{var},
-    ::Val{gm_third_m_sym},
-) where {covar_en_sym, var, gm_third_m_sym}
-
-    N_up = n_updrafts(edmf)
-    gm_third_m = getproperty(center_aux_grid_mean(state), gm_third_m_sym)
-    kc_surf = kc_surface(grid)
-    FT = float_type(state)
-
-    aux_bulk = center_aux_bulk(state)
-    aux_up_f = face_aux_updrafts(state)
-    prog_up_f = face_prog_updrafts(state)
-    is_tke = covar_en_sym == :tke
-    aux_en_c = center_aux_environment(state)
-    covar_en = getproperty(aux_en_c, covar_en_sym)
-    aux_en_f = face_aux_environment(state)
-    aux_en = is_tke ? aux_en_f : aux_en_c
-    aux_up_c = center_aux_updrafts(state)
-    aux_tc = center_aux_turbconv(state)
-    ϕ_gm = aux_tc.ϕ_gm
-    ϕ_gm_cov = aux_tc.ϕ_gm_cov
-    ϕ_en_cov = aux_tc.ϕ_en_cov
-    ϕ_up_cubed = aux_tc.ϕ_up_cubed
-    aux_up = is_tke ? prog_up_f : aux_up_c
-    var_en = getproperty(aux_en, var)
-    area_en = aux_en_c.area
-    Ic = is_tke ? CCO.InterpolateF2C() : x -> x
-    wvec = CC.Geometry.WVector
-    ∇c = CCO.DivergenceF2C()
-    w_en = aux_en_f.w
-
-    @. ϕ_gm = area_en * Ic(var_en)
-    @inbounds for i in 1:N_up
-        a_up = aux_up_c[i].area
-        var_up = getproperty(aux_up[i], var)
-        @. ϕ_gm += a_up * Ic(wcomponent(CCG.WVector(var_up)))
-    end
-
-    # w'w' ≈ 2/3 TKE (isotropic turbulence assumption)
-    if is_tke
-        @. ϕ_en_cov = FT(2 / 3) * covar_en
-    else
-        @. ϕ_en_cov = covar_en
-    end
-
-    parent(ϕ_up_cubed) .= 0
-    @. ϕ_gm_cov = area_en * (ϕ_en_cov + (Ic(var_en) - ϕ_gm)^2)
-    @inbounds for i in 1:N_up
-        a_up = aux_up_c[i].area
-        var_up = getproperty(aux_up[i], var)
-        @. ϕ_gm_cov += a_up * (Ic(var_up) - ϕ_gm)^2
-        @. ϕ_up_cubed += a_up * Ic(var_up)^3
-    end
-
-    @. gm_third_m =
-        ϕ_up_cubed + area_en * (Ic(var_en)^3 + 3 * Ic(var_en) * ϕ_en_cov) -
-        ϕ_gm^3 - 3 * ϕ_gm_cov * ϕ_gm
-
-    gm_third_m[kc_surf] = 0
     return nothing
 end

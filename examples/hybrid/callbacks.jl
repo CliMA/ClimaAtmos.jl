@@ -453,18 +453,12 @@ function save_to_disk_func(integrator)
             env_buoyancy = tc_cent(p).en.buoy,
             env_cloud_fraction = tc_cent(p).en.cloud_fraction,
             env_TKE = tc_cent(p).en.tke,
-            env_Hvar = tc_cent(p).en.Hvar,
-            env_QTvar = tc_cent(p).en.QTvar,
-            env_HQTcov = tc_cent(p).en.HQTcov,
             env_e_tot_tendency_precip_formation = tc_cent(
                 p,
             ).en.e_tot_tendency_precip_formation,
             env_qt_tendency_precip_formation = tc_cent(
                 p,
             ).en.qt_tendency_precip_formation,
-            env_Hvar_rain_dt = tc_cent(p).en.Hvar_rain_dt,
-            env_QTvar_rain_dt = tc_cent(p).en.QTvar_rain_dt,
-            env_HQTcov_rain_dt = tc_cent(p).en.HQTcov_rain_dt,
             face_bulk_w = tc_face(p).bulk.w,
             face_env_w = tc_face(p).en.w,
             bulk_up_filter_flag_1 = tc_cent(p).bulk.filter_flag_1,

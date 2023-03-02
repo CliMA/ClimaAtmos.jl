@@ -105,13 +105,6 @@ function create_climaatmos_parameter_set(
         surf_flux_params,
     )
 
-    # config_params: Store strings and flags that are used for constructors
-    # but don't end up in the final Model struct
-    config_param_names = ["sgs", "quadrature_type", "thermo_covariance_model"]
-    config_params =
-        CP.get_parameter_values!(toml_dict, config_param_names, "EDMF")
-    config_params = (; config_params...)
-
     aliases = string.(fieldnames(RP.RRTMGPParameters))
     pairs = CP.get_parameter_values!(toml_dict, aliases, "RRTMGP")
     params = override_climaatmos_defaults((; pairs...), overrides) # overrides
@@ -148,5 +141,5 @@ function create_climaatmos_parameter_set(
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
-    return param_set, config_params
+    return param_set
 end
