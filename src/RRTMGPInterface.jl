@@ -736,6 +736,14 @@ function RRTMGPModel(
         end
     end
 
+    if !(:latitude in keys(dict))
+        lon = lat = nothing
+    else
+        lon = DA{FT}(undef, ncol) # TODO: lon required but unused
+        lat = DA{FT}(undef, ncol)
+        set_and_save!(lat, "latitude", t..., dict)
+    end
+
     p_lay = DA{FT}(undef, nlay, ncol)
     p_lev = DA{FT}(undef, nlay + 1, ncol)
     t_lay = DA{FT}(undef, nlay, ncol)
@@ -765,27 +773,20 @@ function RRTMGPModel(
 
         d0 = DA{FT}(undef, ncol)
         set_and_save!(d0, "optical_thickness_parameter", t..., dict)
+        otp = RRTMGP.AtmosphericStates.GrayOpticalThicknessOGorman2008(FT)
         as = RRTMGP.AtmosphericStates.GrayAtmosphericState(
+            lat,
             p_lay,
             p_lev,
             t_lay,
             t_lev,
             z_lev,
             t_sfc,
-            α,
-            d0,
+            otp,
             nlay,
             ncol,
         )
     else
-        if !(:latitude in keys(dict))
-            lon = lat = nothing
-        else
-            lon = DA{FT}(undef, ncol) # TODO: lon required but unused
-            lat = DA{FT}(undef, ncol)
-            set_and_save!(lat, "latitude", t..., dict)
-        end
-
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
             gas_name ->
@@ -1214,66 +1215,6 @@ function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
         parent(model.face_clear_lw_flux) .+ parent(model.face_clear_sw_flux)
     parent(model.face_flux) .=
         parent(model.face_lw_flux) .+ parent(model.face_sw_flux)
-end
-
-# Overriding the definition of optical depth for GrayRadiation.
-function τ_lw_gray(p, pꜜ, pꜛ, p₀, τ₀)
-    FT = eltype(p)
-    f = FT(0.2)
-    return τ₀ * (f / p₀ + 4 * (1 - f) / p₀ * (p / p₀)^3) * (pꜜ - pꜛ)
-end
-τ_sw_gray(p, pꜜ, pꜛ, p₀, τ₀) = 2 * τ₀ * (p / p₀) / p₀ * (pꜜ - pꜛ)
-# Note: the original value for both of these functions was
-#     abs(α * τ₀ * (p / p₀)^α / p * (pꜛ - pꜜ)),
-# where α is the lapse rate and τ₀ is the optical thickness parameter.
-
-import RRTMGP.Optics: compute_optical_props_kernel!
-function compute_optical_props_kernel!(
-    op::RRTMGP.Optics.AbstractOpticalProps{FT},
-    as::RRTMGP.AtmosphericStates.GrayAtmosphericState{FT},
-    glaycol,
-    source::RRTMGP.Sources.AbstractSourceLW{FT},
-) where {FT <: AbstractFloat}
-    compute_optical_props_kernel_lw!(op, as, glaycol)
-    RRTMGP.Optics.compute_sources_gray_kernel!(source, as, glaycol)
-end
-function compute_optical_props_kernel_lw!(
-    op::RRTMGP.Optics.AbstractOpticalProps{FT},
-    as::RRTMGP.AtmosphericStates.GrayAtmosphericState{FT},
-    glaycol,
-) where {FT <: AbstractFloat}
-    glay, gcol = glaycol
-    (; p_lay, p_lev, d0) = as
-    @inbounds op.τ[glay, gcol] = τ_lw_gray(
-        p_lay[glay, gcol],
-        p_lev[glay, gcol],
-        p_lev[glay + 1, gcol],
-        p_lev[1, gcol],
-        d0[gcol],
-    )
-    if op isa RRTMGP.Optics.TwoStream
-        op.ssa[glaycol...] = FT(0)
-        op.g[glaycol...] = FT(0)
-    end
-end
-function compute_optical_props_kernel!(
-    op::RRTMGP.Optics.AbstractOpticalProps{FT},
-    as::RRTMGP.AtmosphericStates.GrayAtmosphericState{FT},
-    glaycol,
-) where {FT <: AbstractFloat}
-    glay, gcol = glaycol
-    (; p_lay, p_lev) = as
-    @inbounds op.τ[glay, gcol] = τ_sw_gray(
-        p_lay[glay, gcol],
-        p_lev[glay, gcol],
-        p_lev[glay + 1, gcol],
-        p_lev[1, gcol],
-        FT(0.22), # hardcode the value of τ₀ for shortwave gray radiation
-    )
-    if op isa RRTMGP.Optics.TwoStream
-        op.ssa[glaycol...] = FT(0)
-        op.g[glaycol...] = FT(0)
-    end
 end
 
 end # end module
