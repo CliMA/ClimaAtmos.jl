@@ -60,14 +60,17 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
 
     @. ᶜheight_factor[colidx] = max(0, (ᶜσ[colidx] - σ_b) / (1 - σ_b))
     @. ᶜΔρT[colidx] =
-        (k_a + (k_s - k_a) * ᶜheight_factor[colidx] * (cos(ᶜφ[colidx])^2)^2) *
+        (
+            k_a +
+            (k_s - k_a) * ᶜheight_factor[colidx] * abs2(abs2(cos(ᶜφ[colidx])))
+        ) *
         Y.c.ρ[colidx] *
         ( # ᶜT - ᶜT_equil
             ᶜp[colidx] / (Y.c.ρ[colidx] * R_d) - max(
                 T_min,
                 (
-                    T_equator - ΔT_y * sin(ᶜφ[colidx])^2 -
-                    Δθ_z * log(ᶜp[colidx] / MSLP) * cos(ᶜφ[colidx])^2
+                    T_equator - ΔT_y * abs2(sin(ᶜφ[colidx])) -
+                    Δθ_z * log(ᶜp[colidx] / MSLP) * abs2(cos(ᶜφ[colidx]))
                 ) * fast_pow(ᶜp[colidx] / MSLP, κ_d),
             )
         )

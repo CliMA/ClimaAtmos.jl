@@ -45,7 +45,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. ᶠω¹² = curlₕ(ᶠw)
         @. Yₜ.c.uₕ -= gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
     elseif point_type <: Geometry.Abstract2DPoint
-        ᶜω³ .= Ref(zero(eltype(ᶜω³)))
+        ᶜω³ .= tuple(zero(eltype(ᶜω³)))
         @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
         @. Yₜ.c.uₕ -=
             Geometry.Covariant12Vector(gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ))

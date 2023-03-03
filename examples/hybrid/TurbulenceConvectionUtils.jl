@@ -190,11 +190,19 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     # Note: This "filter relaxation tendency" can be scaled down if needed, but
     # it must be present in order to prevent Y and Y_filtered from diverging
     # during each timestep.
-    Yₜ.c.turbconv[colidx] .+=
-        (Y_filtered.c.turbconv[colidx] .- Y.c.turbconv[colidx]) ./ Δt
-    Yₜ.f.turbconv[colidx] .+=
-        (Y_filtered.f.turbconv[colidx] .- Y.f.turbconv[colidx]) ./ Δt
-
+    Yₜ_turbconv = CC.Fields.FieldVector(
+        c = Yₜ.c.turbconv[colidx],
+        f = Yₜ.f.turbconv[colidx],
+    )
+    Y_filtered_turbconv = CC.Fields.FieldVector(
+        c = Y_filtered.c.turbconv[colidx],
+        f = Y_filtered.f.turbconv[colidx],
+    )
+    Y_turbconv = CC.Fields.FieldVector(
+        c = Y.c.turbconv[colidx],
+        f = Y.f.turbconv[colidx],
+    )
+    Yₜ_turbconv .+= (Y_filtered_turbconv .- Y_turbconv) ./ Δt
     return nothing
 end
 
