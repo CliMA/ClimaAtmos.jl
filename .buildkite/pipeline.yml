@@ -403,7 +403,7 @@ steps:
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id edmf_soares
-          --dt 0.5secs
+          --dt 0.25secs
         artifact_paths: "edmf_soares/*"
         agents:
           slurm_mem: 20GB
@@ -456,7 +456,7 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id compressible_edmf_bomex
-          --dt 35secs
+          --dt 30secs
         artifact_paths: "compressible_edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -473,7 +473,7 @@ steps:
           --use_krylov_method true
           --quicklook_reference_job_id compressible_edmf_bomex
           --job_id compressible_edmf_bomex_jfnk
-          --dt 40secs
+          --dt 20secs
         artifact_paths: "compressible_edmf_bomex_jfnk/*"
         agents:
           slurm_mem: 20GB
