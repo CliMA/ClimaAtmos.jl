@@ -260,19 +260,16 @@ end
 
 function remaining_tendency!(Yₜ, Y, p, t)
     p.test_dycore_consistency && CA.fill_with_nans!(p)
-    (; compressibility_model) = p
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin
             CA.precomputed_quantities!(Y, p, t)
         end
-        if compressibility_model isa CA.CompressibleFluid
-            @nvtx "horizontal" color = colorant"orange" begin
-                CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
-            end
-            @nvtx "vertical" color = colorant"orange" begin
-                CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-            end
+        @nvtx "horizontal" color = colorant"orange" begin
+            CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
+        end
+        @nvtx "vertical" color = colorant"orange" begin
+            CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "additional_tendency!" color = colorant"orange" begin
             additional_tendency!(Yₜ, Y, p, t)
@@ -282,4 +279,40 @@ function remaining_tendency!(Yₜ, Y, p, t)
         end
     end
     return Yₜ
+end
+
+function horizontal_limiter_tendency!(Yₜ, Y, p, t)
+    divₕ = Operators.Divergence()
+
+    (; ᶜu_bar) = p
+    ᶜuₕ = Y.c.uₕ
+    ᶠw = Y.f.w
+    @. ᶜu_bar = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
+
+    Yₜ .= zero(eltype(Yₜ))
+
+    # Tracer conservation, horizontal advection
+    for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+        ᶜρc = getproperty(Y.c, ᶜρc_name)
+        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
+        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
+    end
+
+    # Call hyperdiffusion
+    CA.hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
+
+    return nothing
+end
+
+function limiters_func!(Y, p, t, ref_Y)
+    (; limiters) = p
+    if !isnothing(limiters)
+        for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+            ρc_limiter = getproperty(limiters, ᶜρc_name)
+            ᶜρc_ref = getproperty(ref_Y.c, ᶜρc_name)
+            ᶜρc = getproperty(Y.c, ᶜρc_name)
+            Limiters.compute_bounds!(ρc_limiter, ᶜρc_ref, ref_Y.c.ρ)
+            Limiters.apply_limiter!(ᶜρc, Y.c.ρ, ρc_limiter)
+        end
+    end
 end

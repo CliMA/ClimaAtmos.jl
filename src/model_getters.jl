@@ -161,16 +161,6 @@ function energy_form(parsed_args, vert_diff)
     end
 end
 
-function compressibility_model(parsed_args)
-    anelastic_dycore = parsed_args["anelastic_dycore"]
-    @assert anelastic_dycore in (true, false)
-    return if anelastic_dycore
-        AnelasticFluid()
-    else
-        CompressibleFluid()
-    end
-end
-
 function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
@@ -406,10 +396,6 @@ A helper method for creating a thermodynamics dispatcher
 from the model specification struct.
 """
 function ThermoDispatcher(atmos)
-    (; energy_form, moisture_model, compressibility_model) = atmos
-    return ThermoDispatcher(;
-        energy_form,
-        moisture_model,
-        compressibility_model,
-    )
+    (; energy_form, moisture_model) = atmos
+    return ThermoDispatcher(; energy_form, moisture_model)
 end

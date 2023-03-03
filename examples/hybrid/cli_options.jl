@@ -78,10 +78,6 @@ function parse_commandline()
         "--turbconv_case"
         help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
         arg_type = String
-        "--anelastic_dycore"
-        help = "false enables defualt remaining tendency which produces a compressible model, the true option allow the EDMF to use an anelastic dycore (temporary)"
-        arg_type = Bool
-        default = false
         "--hyperdiff"
         help = "Hyperdiffusion [`ClimaHyperdiffusion` (default), `TempestHyperdiffusion`, `none` (or `false`)]"
         arg_type = String
@@ -126,7 +122,7 @@ function parse_commandline()
         arg_type = Symbol
         default = :none # TODO: change to :zalesak
         "--ode_algo"
-        help = "ODE algorithm [`ARS343` (default), `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
+        help = "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
         arg_type = String
         default = "ARS343"
         "--max_newton_iters"

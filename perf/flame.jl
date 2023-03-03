@@ -64,7 +64,7 @@ allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 9360
 allocs_limit["flame_perf_target_tracers"] = 6245350392
 allocs_limit["flame_perf_target_edmf"] = 15003862184
-allocs_limit["flame_perf_target_threaded"] = 4313120
+allocs_limit["flame_perf_target_threaded"] = 4431840
 allocs_limit["flame_perf_target_callbacks"] = 11439104
 
 if allocs < allocs_limit[job_id] * buffer

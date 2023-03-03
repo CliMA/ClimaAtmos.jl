@@ -68,6 +68,7 @@ function radiation_model_cache(
                 optical_thickness_parameter = (@. 7.2 +
                                                   (1.8 - 7.2) *
                                                   sind(latitude)^2),
+                latitude,
             )
         else
             # the pressure and ozone concentrations are provided for each of 100

@@ -94,7 +94,6 @@ cat << EOM
         config: cpu
         queue: central
         slurm_nodes: $nnodes
-        slurm_ntasks: $nprocs
         slurm_tasks_per_node: $procs_per_node
         slurm_mem: 0
         slurm_exclusive:

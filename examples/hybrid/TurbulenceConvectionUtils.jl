@@ -11,26 +11,28 @@ import ClimaCore.Geometry: ⊗
 import OrdinaryDiffEq as ODE
 import ClimaAtmos.TurbulenceConvection
 import ClimaAtmos.TurbulenceConvection as TC
+import ClimaAtmos.InitialConditions as ICs
 
 import Logging
 import TerminalLoggers
 
 const ca_dir = pkgdir(ClimaAtmos)
 
-include(joinpath(ca_dir, "tc_driver", "Cases.jl"))
-import .Cases
-
 include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
 include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
-include(joinpath(ca_dir, "tc_driver", "initial_conditions.jl"))
-
 
 #####
 ##### No TurbulenceConvection scheme
 #####
 
-turbconv_cache(Y, turbconv_model::Nothing, atmos, param_set, parsed_args) =
-    (; turbconv_model)
+turbconv_cache(
+    Y,
+    turbconv_model::Nothing,
+    atmos,
+    param_set,
+    parsed_args,
+    initial_condition,
+) = (; turbconv_model)
 
 implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
@@ -56,23 +58,19 @@ function turbconv_cache(
     atmos,
     param_set,
     parsed_args,
+    initial_condition,
 )
-    tc_params = CAP.turbconv_params(param_set)
     FT = CC.Spaces.undertype(axes(Y.c))
     imex_edmf_turbconv = parsed_args["imex_edmf_turbconv"]
     imex_edmf_gm = parsed_args["imex_edmf_gm"]
     test_consistency = parsed_args["test_edmf_consistency"]
-    case = Cases.get_case(parsed_args["turbconv_case"])
     thermo_params = CAP.thermodynamics_params(param_set)
-    @assert atmos.moisture_model in (CA.DryModel(), CA.EquilMoistModel())
-    surf_params =
-        Cases.surface_params(case, thermo_params, atmos.moisture_model)
+    surf_params = ICs.surface_params(initial_condition, thermo_params)
     edmf = turbconv_model
     @info "EDMFModel: \n$(summary(edmf))"
     cache = (;
         edmf,
         turbconv_model,
-        case,
         imex_edmf_turbconv,
         imex_edmf_gm,
         test_consistency,
@@ -82,55 +80,6 @@ function turbconv_cache(
         Y_filtered = similar(Y),
     )
     return (; edmf_cache = cache, turbconv_model)
-end
-
-function init_tc!(Y, p, params)
-    CC.Fields.bycolumn(axes(Y.c)) do colidx
-        init_tc!(Y, p, params, colidx)
-    end
-end
-
-function init_tc!(Y, p, params, colidx)
-
-    (; edmf, surf_params, case) = p.edmf_cache
-    tc_params = CAP.turbconv_params(params)
-
-    FT = eltype(edmf)
-    # `nothing` goes into State because OrdinaryDiffEq.jl owns tendencies.
-    state = TC.tc_column_state(Y, p, nothing, colidx)
-    thermo_params = CAP.thermodynamics_params(params)
-
-    grid = TC.Grid(state)
-    FT = CC.Spaces.undertype(axes(Y.c))
-    C123 = CCG.Covariant123Vector
-    t = FT(0)
-
-    # TODO: can we simply remove this?
-    If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
-    @. p.edmf_cache.aux.face.ρ[colidx] = If(Y.c.ρ[colidx])
-
-    # TODO: convert initialize_profiles to set prognostic state, not aux state
-    Cases.initialize_profiles(case, grid, thermo_params, state)
-
-    # Temporarily, we'll re-populate ρq_tot based on initial aux q_tot
-    q_tot = p.edmf_cache.aux.cent.q_tot[colidx]
-    @. Y.c.ρq_tot[colidx] = Y.c.ρ[colidx] * q_tot
-    set_thermo_state_pθq!(Y, p, colidx)
-    set_grid_mean_from_thermo_state!(thermo_params, state, grid)
-    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
-    initialize_edmf(edmf, grid, state, surf_params, tc_params, t)
-
-    t = FT(0)
-    surf = get_surface(
-        state.p.atmos.model_config,
-        surf_params,
-        grid,
-        state,
-        t,
-        tc_params,
-    )
-    TC.update_aux!(edmf, grid, state, surf, tc_params, t, p.Δt)
-    # TODO: Compute all diagnostic values in the saving callback.
 end
 
 # TODO: Split update_aux! and other functions into implicit and explicit parts.

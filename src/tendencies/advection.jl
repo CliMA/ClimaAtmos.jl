@@ -51,12 +51,6 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
             Geometry.Covariant12Vector(gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
     end
 
-    # Tracer conservation
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
-        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
-    end
     return nothing
 end
 

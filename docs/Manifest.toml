@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "ed9cc18b7821630fbf90c8500ed8ae244c29a397"
+project_hash = "4a04fb45fef0b24cea0311c1c2e90a8e704148c0"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -1031,9 +1031,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "CUDA", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "6d706df1fb8cb8f761f0d2db610a853ea2020c0e"
+git-tree-sha1 = "b4fa3e1f4a87007d78e39f437a566f16f6612156"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.6.2"
+version = "0.7.0"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]

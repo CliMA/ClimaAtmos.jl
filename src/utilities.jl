@@ -252,7 +252,7 @@ import ClimaCore: Geometry, Operators, Fields
 
 Compute the specific kinetic energy at cell centers, storing in `κ` from
 individual velocity components:
-
+κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))
 - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
   cell centers, and 
 - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
@@ -262,8 +262,13 @@ function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Fie
             Union{Geometry.Covariant1Vector, Geometry.Covariant12Vector}
     @assert eltype(uᵥ) <: Geometry.Covariant3Vector
     C123 = Geometry.Covariant123Vector
+    CON123 = Geometry.Contravariant123Vector
     Ic = Operators.InterpolateF2C()
-    κ .= norm_sqr.(C123.(uₕ) .+ Ic.(C123.(uᵥ))) ./ 2
+    κ .=
+        1 / 2 .* (
+            dot.(C123.(uₕ), CON123.(uₕ)) .+ Ic.(dot.(C123.(uᵥ), CON123.(uᵥ))) .+
+            2 .* dot.(CON123.(uₕ), Ic.(C123.(uᵥ)))
+        )
 end
 
 """
