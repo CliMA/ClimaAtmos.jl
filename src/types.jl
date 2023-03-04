@@ -118,12 +118,12 @@ struct MoninObukhovSurface{T} <: AbstractSurfaceScheme
 end # TODO: unify with MoninObukhovSurface in TC
 
 # Define broadcasting for types
-Base.broadcastable(x::AbstractSurfaceThermoState) = Ref(x)
-Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)
-Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
-Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
-Base.broadcastable(x::AbstractPrecipitationModel) = Ref(x)
-Base.broadcastable(x::AbstractForcing) = Ref(x)
+Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
+Base.broadcastable(x::AbstractSurfaceScheme) = tuple(x)
+Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
+Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
+Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
+Base.broadcastable(x::AbstractForcing) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -154,7 +154,7 @@ Base.@kwdef struct ThermoDispatcher{EF, MM}
     energy_form::EF
     moisture_model::MM
 end
-Base.broadcastable(x::ThermoDispatcher) = Ref(x)
+Base.broadcastable(x::ThermoDispatcher) = tuple(x)
 
 
 # TODO: remove AbstractPerformanceMode and all subtypes
@@ -163,7 +163,7 @@ Base.broadcastable(x::ThermoDispatcher) = Ref(x)
 abstract type AbstractPerformanceMode end
 struct PerfExperimental <: AbstractPerformanceMode end
 struct PerfStandard <: AbstractPerformanceMode end
-Base.broadcastable(x::AbstractPerformanceMode) = Ref(x)
+Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
 Base.@kwdef struct AtmosModel{
     MC,
@@ -207,7 +207,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
 end
 
-Base.broadcastable(x::AtmosModel) = Ref(x)
+Base.broadcastable(x::AtmosModel) = tuple(x)
 
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))

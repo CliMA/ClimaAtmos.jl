@@ -262,7 +262,7 @@ function rrtmgp_model_callback!(integrator)
                 radiation_model.weighted_irradiance,
                 axes(bottom_coords),
             )
-            ref_insolation_params = Ref(insolation_params)
+            ref_insolation_params = tuple(insolation_params)
             @. insolation_tuple = instantaneous_zenith_angle(
                 current_datetime,
                 Float64(bottom_coords.long),
