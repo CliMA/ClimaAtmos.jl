@@ -65,13 +65,19 @@ We make use of the following operators
 * ``\bar{\boldsymbol{u}} = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v)``
 
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
+* ``\boldsymbol{b}`` is the reduced gravitational acceleration
+  ```math
+  \boldsymbol{b} = - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla \Phi
+  ```
+* ``\rho_{\text{ref}}`` is the reference state density
 * ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
   ```math
-  K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot \boldsymbol{u}_{v} + I_{c}(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
+  K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot I_{c} (\boldsymbol{u}_{v}) + I_{c}(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
   ```
-  where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c}`` is an interpolation operation using covariant components.  
+  where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.  
 
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
+* ``p_{\text{ref}}`` is the reference state pressure. It is related to the reference state density by analytical hydrostatic balance: ``\nabla p_{\text{ref}} = - \rho_{\text{ref}} \nabla \Phi``.
 * ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
 
 * No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
@@ -105,7 +111,7 @@ term treated implicitly (check this)
 
 Uses the advective form equation
 ```math
-\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla p  - \nabla(\Phi + K) .
+\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla (p - p_{\text{ref}})  + \boldsymbol{b} - \nabla K .
 ```
 
 #### Horizontal momentum
@@ -116,7 +122,7 @@ By breaking the curl and cross product terms into horizontal and vertical contri
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
   - (\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_h p  - \nabla_h (\Phi + K) ,
+  - \frac{1}{\rho} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K) ,
 ```
 where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
 
@@ -133,9 +139,9 @@ The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \bolds
 ```math
 (2 \boldsymbol{\Omega}^v + C_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
 ```
-and the ``\frac{1}{\rho} \nabla_h p  + \nabla_h (\Phi + K)`` as
+and the ``\frac{1}{\rho} \nabla_h (p - p_h)  + \nabla_h (\Phi + K)`` as
 ```math
-\frac{1}{\rho} G_h[p] + G_h[\Phi + K] ,
+\frac{1}{\rho} G_h[p - p_{\text{ref}}] + G_h[\Phi + K] ,
 ```
 where all these terms are treated explicitly.
 
@@ -144,15 +150,15 @@ Similarly for vertical velocity
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v  =
   - (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_v p - \nabla_v(\Phi + K) .
+  - \frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla_v \Phi - \nabla_v K .
 ```
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
 ```math
 (C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
 ```
-and the ``\frac{1}{\rho} \nabla_v p + \nabla_v(\Phi + K)`` term as
+and the ``\frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla_v \Phi - \nabla_v K`` term as
 ```math
-\frac{1}{I^f(\rho)} G^f_v[p] + G^f[K + \Phi] ,
+\frac{1}{I^f(\rho)} G^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho - \rho_{\text{ref}})}{I^f(\rho)} G^f_v[\Phi] - G^f_v[K] ,
 ```
 with the latter treated implicitly.
 
