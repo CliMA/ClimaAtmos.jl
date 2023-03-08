@@ -12,9 +12,6 @@ import ClimaCore.Geometry: ⊗
 # Center only
 cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     tke = FT(0),
-    Hvar = FT(0),
-    QTvar = FT(0),
-    HQTcov = FT(0),
     q_liq = FT(0),
     q_ice = FT(0),
     RH = FT(0),
