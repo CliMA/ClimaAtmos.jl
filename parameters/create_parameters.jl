@@ -10,24 +10,11 @@ import Thermodynamics as TD
 import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 import ClimaCore
 
-#=
-ClimaCore.Operators.getidx(
-    scalar::ConstRef,
-    loc::ClimaCore.Operators.Location,
-    idx,
-    hidx,
-) = scalar[]
-struct ConstRef{T} <: AbstractArray{T, 0}
-    val::T
-end
-Base.getindex(c::ConstRef) = c.val
-Base.size(c::ConstRef) = ()
-=#
 # TODO: move to corresponding packages
 # disable for now as causing problems
-Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = Ref(ps)
-Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = Ref(ps)
-Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = Ref(ps)
+Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = tuple(ps)
+Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = tuple(ps)
+Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = tuple(ps)
 
 
 function override_climaatmos_defaults(

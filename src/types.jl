@@ -3,10 +3,6 @@ struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
 struct NonEquilMoistModel <: AbstractMoistureModel end
 
-abstract type AbstractCompressibilityModel end
-struct CompressibleFluid <: AbstractCompressibilityModel end
-struct AnelasticFluid <: AbstractCompressibilityModel end
-
 abstract type AbstractEnergyFormulation end
 struct PotentialTemperature <: AbstractEnergyFormulation end
 struct TotalEnergy <: AbstractEnergyFormulation end
@@ -122,12 +118,12 @@ struct MoninObukhovSurface{T} <: AbstractSurfaceScheme
 end # TODO: unify with MoninObukhovSurface in TC
 
 # Define broadcasting for types
-Base.broadcastable(x::AbstractSurfaceThermoState) = Ref(x)
-Base.broadcastable(x::AbstractSurfaceScheme) = Ref(x)
-Base.broadcastable(x::AbstractMoistureModel) = Ref(x)
-Base.broadcastable(x::AbstractEnergyFormulation) = Ref(x)
-Base.broadcastable(x::AbstractPrecipitationModel) = Ref(x)
-Base.broadcastable(x::AbstractForcing) = Ref(x)
+Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
+Base.broadcastable(x::AbstractSurfaceScheme) = tuple(x)
+Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
+Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
+Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
+Base.broadcastable(x::AbstractForcing) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -154,12 +150,11 @@ A dispatching type for selecting the
 precise thermodynamics method call to
 be used.
 """
-Base.@kwdef struct ThermoDispatcher{EF, MM, CM}
+Base.@kwdef struct ThermoDispatcher{EF, MM}
     energy_form::EF
     moisture_model::MM
-    compressibility_model::CM
 end
-Base.broadcastable(x::ThermoDispatcher) = Ref(x)
+Base.broadcastable(x::ThermoDispatcher) = tuple(x)
 
 
 # TODO: remove AbstractPerformanceMode and all subtypes
@@ -168,7 +163,7 @@ Base.broadcastable(x::ThermoDispatcher) = Ref(x)
 abstract type AbstractPerformanceMode end
 struct PerfExperimental <: AbstractPerformanceMode end
 struct PerfStandard <: AbstractPerformanceMode end
-Base.broadcastable(x::AbstractPerformanceMode) = Ref(x)
+Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
 Base.@kwdef struct AtmosModel{
     MC,
@@ -183,7 +178,6 @@ Base.@kwdef struct AtmosModel{
     LA,
     EC,
     TCM,
-    CM,
     SS,
     NOGW,
     OGW,
@@ -204,7 +198,6 @@ Base.@kwdef struct AtmosModel{
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
     turbconv_model::TCM = nothing
-    compressibility_model::CM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
@@ -214,13 +207,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
 end
 
-Base.broadcastable(x::AtmosModel) = Ref(x)
-
-is_compressible(atmos::AtmosModel) =
-    atmos.compressibility_model isa CompressibleFluid
-is_anelastic(atmos::AtmosModel) = atmos.compressibility_model isa AnelasticFluid
-is_column(atmos::AtmosModel) = atmos.model_config isa SingleColumnModel
-is_anelastic_column(atmos::AtmosModel) = is_anelastic(atmos) && is_column(atmos)
+Base.broadcastable(x::AtmosModel) = tuple(x)
 
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))

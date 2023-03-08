@@ -18,10 +18,6 @@ include(joinpath(@__DIR__, "dycore_variables.jl"))
 ##### Methods
 #####
 
-####
-#### Reference state
-####
-
 function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     aux_gm = TC.center_aux_grid_mean(state)
@@ -33,7 +29,7 @@ function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     ρ_f = aux_gm_f.ρ
     @. ρ_f = If(ρ_c)
 
-    @. aux_gm.q_tot = prog_gm.ρq_tot / ρ_c
+    @. aux_gm.q_tot = TD.total_specific_humidity(thermo_params, ᶜts)
     @. aux_gm.q_liq = TD.liquid_specific_humidity(thermo_params, ᶜts)
     @. aux_gm.q_ice = TD.ice_specific_humidity(thermo_params, ᶜts)
     @. aux_gm.T = TD.air_temperature(thermo_params, ᶜts)
@@ -63,8 +59,10 @@ function compute_implicit_gm_tendencies!(
 
     ∇sgs = CCO.DivergenceF2C()
     @. tendencies_gm.ρe_tot += -∇sgs(aux_gm_f.sgs_flux_h_tot)
-    @. tendencies_gm.ρq_tot += -∇sgs(aux_gm_f.sgs_flux_q_tot)
     @. tendencies_gm_uₕ += -∇sgs(aux_gm_f.sgs_flux_uₕ) / ρ_c
+    if hasproperty(tendencies_gm, :ρq_tot)
+        @. tendencies_gm.ρq_tot += -∇sgs(aux_gm_f.sgs_flux_q_tot)
+    end
 
     return nothing
 end
@@ -83,7 +81,9 @@ function compute_explicit_gm_tendencies!(
 
     # Apply precipitation tendencies
     @. tendencies_gm.ρe_tot += ρ_c * aux_tc.e_tot_tendency_precip_sinks
-    @. tendencies_gm.ρq_tot += ρ_c * aux_tc.qt_tendency_precip_sinks
+    if hasproperty(tendencies_gm, :ρq_tot)
+        @. tendencies_gm.ρq_tot += ρ_c * aux_tc.qt_tendency_precip_sinks
+    end
     if edmf.precip_model isa CA.Microphysics1Moment
         @. tendencies_gm.ρq_rai += ρ_c * aux_tc.qr_tendency_precip_sinks
         @. tendencies_gm.ρq_sno += ρ_c * aux_tc.qs_tendency_precip_sinks

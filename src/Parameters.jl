@@ -8,7 +8,7 @@ import CloudMicrophysics as CM
 abstract type AbstractClimaAtmosParameters end
 const ACAP = AbstractClimaAtmosParameters
 
-Base.broadcastable(param_set::ACAP) = Ref(param_set)
+Base.broadcastable(param_set::ACAP) = tuple(param_set)
 
 Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     Omega::FT

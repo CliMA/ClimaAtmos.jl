@@ -418,7 +418,7 @@ Base.eltype(::EDMFModel{N_up, FT}) where {N_up, FT} = FT
 pressure_model_params(m::EDMFModel) = m.pressure_model_params
 mixing_length_params(m::EDMFModel) = m.mixing_length_params
 
-Base.broadcastable(edmf::EDMFModel) = Ref(edmf)
+Base.broadcastable(edmf::EDMFModel) = tuple(edmf)
 
 function Base.summary(io::IO, edmf::EDMFModel)
     pns = string.(propertynames(edmf))

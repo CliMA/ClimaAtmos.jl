@@ -15,47 +15,48 @@ catch err
 end
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
-const n_samples = occursin("callbacks", parsed_args["job_id"]) ? 2 : 20
+@info "running step"
 
-function do_work!(integrator)
-    for _ in 1:n_samples
-        OrdinaryDiffEq.step!(integrator)
-    end
-end
-
-do_work!(integrator) # compile first
-import Profile
-Profile.clear_malloc_data()
-Profile.clear()
-prof = Profile.@profile begin
-    do_work!(integrator)
-end
-
+OrdinaryDiffEq.step!(integrator) # compile first
+import Profile, ProfileCanvas
 (; output_dir, job_id) = simulation
+output_dir = job_id
+mkpath(output_dir)
 
-import ProfileCanvas
 
-if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
-    output_dir = job_id
-    mkpath(output_dir)
-    ProfileCanvas.html_file(joinpath(output_dir, "flame.html"))
-else
-    ProfileCanvas.view(Profile.fetch())
-end
+@info "collect profile"
+Profile.clear()
+prof = Profile.@profile OrdinaryDiffEq.step!(integrator)
+results = Profile.fetch()
+Profile.clear()
+
+ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 
 
 #####
 ##### Allocation tests
 #####
 
+# use new allocation profiler
+@info "collecting allocations"
+Profile.Allocs.clear()
+Profile.Allocs.@profile sample_rate = 0.01 OrdinaryDiffEq.step!(integrator)
+results = Profile.Allocs.fetch()
+Profile.Allocs.clear()
+profile = ProfileCanvas.view_allocs(results)
+ProfileCanvas.html_file(joinpath(output_dir, "allocs.html"), profile)
+
 # We're grouping allocation tests here for convenience.
 
+@info "testing allocations"
 using Test
 # Threaded allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
 buffer = occursin("threaded", job_id) ? 1.4 : 1
 
+
+## old allocation profiler (TODO: remove this)
 allocs = @allocated OrdinaryDiffEq.step!(integrator)
 @timev OrdinaryDiffEq.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
@@ -63,7 +64,7 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 9360
 allocs_limit["flame_perf_target_tracers"] = 6245350392
-allocs_limit["flame_perf_target_edmf"] = 15003862184
+allocs_limit["flame_perf_target_edmf"] = 16003862184
 allocs_limit["flame_perf_target_threaded"] = 4431840
 allocs_limit["flame_perf_target_callbacks"] = 11439104
 

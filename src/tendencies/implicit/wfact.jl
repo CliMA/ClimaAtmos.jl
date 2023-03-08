@@ -36,7 +36,7 @@ function vertical_transport_jac!(
     to_scalar(vector) = vector.u₃
     FT = Spaces.undertype(axes(ᶜρ))
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ref_εw = Ref(Geometry.Covariant3Vector(eps(FT)))
+    ref_εw = tuple(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
         ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠw + ref_εw, ᶜρc / ᶜρ) /
         to_scalar(ᶠw + ref_εw),
@@ -49,7 +49,7 @@ function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, opera
     to_scalar(vector) = vector.u₃
     FT = Spaces.undertype(axes(ᶜρ))
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ref_εw = Ref(Geometry.Covariant3Vector(eps(FT)))
+    ref_εw = tuple(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
         ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠw + ref_εw, ᶜρc / ᶜρ) /
         to_scalar(ᶠw + ref_εw),
@@ -124,7 +124,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     # To convert ∂(ᶠwₜ)/∂(ᶜ𝔼) to ∂(ᶠw_data)ₜ/∂(ᶜ𝔼) and ∂(ᶠwₜ)/∂(ᶠw_data) to
     # ∂(ᶠw_data)ₜ/∂(ᶠw_data), we extract the third component of each vector-
     # valued stencil coefficient.
-    to_scalar_coefs(vector_coefs) =
+    @inline to_scalar_coefs(vector_coefs) =
         map(vector_coef -> vector_coef.u₃, vector_coefs)
     # If ᶜρcₜ = -ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw), then
     # ∂(ᶜρcₜ)/∂(ᶠw_data) =
@@ -257,7 +257,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
                 (
                     ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
                     ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                ) / ᶠinterp(ᶜρ[colidx])^2 *
+                ) / abs2(ᶠinterp(ᶜρ[colidx])) *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
@@ -299,7 +299,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
                 (
                     ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
                     ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                ) / ᶠinterp(ᶜρ[colidx])^2 *
+                ) / abs2(ᶠinterp(ᶜρ[colidx])) *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
@@ -343,7 +343,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
                 (
                     ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
                     ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                ) / ᶠinterp(ᶜρ[colidx])^2 *
+                ) / abs2(ᶠinterp(ᶜρ[colidx])) *
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
@@ -370,7 +370,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     #     ᶜ𝔼_name == :ρe_tot ? ᶠgradᵥ_stencil(-ᶜρ * R_d / cv_d) : 0
     if :ρθ in propertynames(Y.c) || :ρe_int in propertynames(Y.c)
         ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] .=
-            Ref(Operators.StencilCoefs{-1, 1}((FT(0), FT(0), FT(0))))
+            tuple(Operators.StencilCoefs{-1, 1}((FT(0), FT(0), FT(0))))
     elseif :ρe_tot in propertynames(Y.c)
         @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
             compose(

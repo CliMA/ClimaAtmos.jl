@@ -67,14 +67,17 @@ We make use of the following operators
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
   ```math
-  K = \tfrac{1}{2} \|\boldsymbol{u}_h + I^c(\boldsymbol{u}_v)\|^2.
+  K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot \boldsymbol{u}_{v} + I_{c}(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
   ```
-  where ``\|\boldsymbol{u}\|^2 = g^{ij} \boldsymbol{u}_i \boldsymbol{u}_j`` and ``g^{ij}`` is the contravariant metric tensor.
-  !!! todo
-      This is not correct in the presence of topography.
+  where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c}`` is an interpolation operation using covariant components.  
 
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 * ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
+
+* No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
+  ```math
+  \tilde{u}_{v} = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
+  ```
 
 ## Equations and discretizations
 

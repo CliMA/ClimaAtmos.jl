@@ -22,13 +22,13 @@ fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
 turbconv = parsed_args["turbconv"]
-case_name = parsed_args["turbconv_case"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
 @assert parsed_args["config"] in ("sphere", "column", "box")
 
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import ClimaAtmos.InitialConditions as ICs
 
 include("topography_helper.jl")
 include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
@@ -45,6 +45,7 @@ atmos = get_atmos(FT, parsed_args, config, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
+initial_condition = get_initial_condition(parsed_args)
 
 # TODO: use import istead of using
 using Colors
@@ -75,7 +76,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
 
     thermo_dispatcher = CA.ThermoDispatcher(atmos)
-    compressibility_model = atmos.compressibility_model
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
@@ -116,8 +116,14 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
         ),
         (; thermo_dispatcher),
         (; Δt = dt),
-        (; compressibility_model),
-        TCU.turbconv_cache(Y, turbconv_model, atmos, params, parsed_args),
+        TCU.turbconv_cache(
+            Y,
+            turbconv_model,
+            atmos,
+            params,
+            parsed_args,
+            initial_condition,
+        ),
     )
 end
 
@@ -205,7 +211,13 @@ enable_threading() = enable_clima_core_threading
     spaces = get_spaces_restart(Y)
 else
     spaces = get_spaces(parsed_args, params, comms_ctx)
-    (Y, t_start) = get_state_fresh_start(parsed_args, spaces, params, atmos)
+    Y = ICs.atmos_state(
+        initial_condition(params),
+        atmos,
+        spaces.center_space,
+        spaces.face_space,
+    )
+    t_start = FT(0)
 end
 
 # prepare topographic data if it runs with topography
@@ -229,9 +241,6 @@ end
 
 @time "Allocating cache (p)" begin
     p = get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation)
-end
-if parsed_args["turbconv"] == "edmf"
-    @time "init_tc!" TCU.init_tc!(Y, p, params)
 end
 
 if parsed_args["discrete_hydrostatic_balance"]

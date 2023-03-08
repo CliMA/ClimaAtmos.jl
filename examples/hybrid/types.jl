@@ -10,8 +10,6 @@ import ClimaAtmos:
     DryModel,
     EquilMoistModel,
     NonEquilMoistModel,
-    CompressibleFluid,
-    AnelasticFluid,
     PotentialTemperature,
     TotalEnergy,
     InternalEnergy,
@@ -67,7 +65,6 @@ function get_atmos(
             config_params,
             turbconv_params,
         ),
-        compressibility_model = CA.compressibility_model(parsed_args),
         surface_scheme,
         non_orographic_gravity_wave = CA.non_orographic_gravity_wave_model(
             parsed_args,
@@ -279,34 +276,24 @@ function get_state_restart(comms_ctx)
     return (Y, t_start)
 end
 
-import ClimaAtmos.InitialConditions as ICs
-
-function get_state_fresh_start(parsed_args, spaces, params, atmos)
-    (; center_space, face_space) = spaces
-    FT = eltype(params)
-    t_start = FT(0)
-
-    center_initial_condition = if is_baro_wave(parsed_args)
-        ICs.center_initial_condition_baroclinic_wave
-    elseif parsed_args["config"] == "sphere"
-        ICs.center_initial_condition_3d
+function get_initial_condition(parsed_args)
+    if is_baro_wave(parsed_args)
+        if parsed_args["moist"] == "dry"
+            return ICs.DryBaroclinicWave(parsed_args["perturb_initstate"])
+        else
+            return ICs.MoistBaroclinicWave(parsed_args["perturb_initstate"])
+        end
+    elseif parsed_args["config"] in ("sphere", "box")
+        return ICs.DecayingProfile(parsed_args["perturb_initstate"])
     elseif parsed_args["config"] == "column"
-        ICs.center_initial_condition_column
-    elseif parsed_args["config"] == "box"
-        ICs.center_initial_condition_box
+        if isnothing(parsed_args["turbconv_case"])
+            return ICs.IsothermalProfile()
+        else
+            return getproperty(ICs, Symbol(parsed_args["turbconv_case"]))()
+        end
+    else
+        error("Unknown `config`: $(parsed_args["config"])")
     end
-    perturb_initstate = parsed_args["perturb_initstate"]
-
-    Y = ICs.init_state(
-        center_initial_condition,
-        ICs.face_initial_condition,
-        center_space,
-        face_space,
-        params,
-        atmos,
-        perturb_initstate,
-    )
-    return (Y, t_start)
 end
 
 import ClimaTimeSteppers as CTS

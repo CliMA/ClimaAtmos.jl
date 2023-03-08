@@ -4,8 +4,6 @@ module TurbulenceConvection
 import ..DryModel
 import ..EquilMoistModel
 import ..NonEquilMoistModel
-import ..AnelasticFluid
-import ..CompressibleFluid
 import ..RadiationDYCOMS_RF01
 import ..RadiationTRMM_LBA
 import ..AbstractPrecipitationModel
@@ -39,16 +37,16 @@ const rain_type = CM.CommonTypes.RainType()
 const snow_type = CM.CommonTypes.SnowType()
 
 # TODO: This is type piracy, move this into CloudMicrophysics
-Base.broadcastable(x::CM.CommonTypes.LiquidType) = Ref(x)
-Base.broadcastable(x::CM.CommonTypes.IceType) = Ref(x)
-Base.broadcastable(x::CM.CommonTypes.RainType) = Ref(x)
-Base.broadcastable(x::CM.CommonTypes.SnowType) = Ref(x)
+Base.broadcastable(x::CM.CommonTypes.LiquidType) = tuple(x)
+Base.broadcastable(x::CM.CommonTypes.IceType) = tuple(x)
+Base.broadcastable(x::CM.CommonTypes.RainType) = tuple(x)
+Base.broadcastable(x::CM.CommonTypes.SnowType) = tuple(x)
 
 include("Parameters.jl")
 import .Parameters as TCP
 const APS = TCP.AbstractTurbulenceConvectionParameters
 
-Base.broadcastable(param_set::APS) = Ref(param_set)
+Base.broadcastable(param_set::APS) = tuple(param_set)
 
 #=
     debug_state(state, code_location::String)

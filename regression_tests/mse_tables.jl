@@ -28,14 +28,6 @@ all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :componen
 all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0.0
 all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 0.0
 #
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :ρe_tot)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:c, :ρq_tot)] = 0.0
-all_best_mse["sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64"][(:f, :w, :components, :data, 1)] = 0.0
-#
 all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρ)] = 0.0
 all_best_mse["sphere_held_suarez_rhotheta"][(:c, :ρθ)] = 0.0
@@ -174,30 +166,6 @@ all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρarea)] 
 all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
 all_best_mse["compressible_edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
 all_best_mse["compressible_edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
-#
-all_best_mse["edmf_trmm"] = OrderedCollections.OrderedDict()
-all_best_mse["edmf_trmm"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :ρe_tot)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :ρq_tot)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :turbconv, :en, :ρatke)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
-all_best_mse["edmf_trmm"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_trmm"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
-#
-all_best_mse["edmf_trmm_0_moment"] = OrderedCollections.OrderedDict()
-all_best_mse["edmf_trmm_0_moment"][(:c, :ρ)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :ρe_tot)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :ρq_tot)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :en, :ρatke)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :up, 1, :ρarea)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :up, 1, :ρaθ_liq_ice)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0.0
-all_best_mse["edmf_trmm_0_moment"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0.0
 #
 all_best_mse["compressible_edmf_trmm"] = OrderedCollections.OrderedDict()
 all_best_mse["compressible_edmf_trmm"][(:c, :ρ)] = 0.0

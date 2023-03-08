@@ -30,7 +30,6 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
     if ClimaComms.iamroot(comms_ctx)
         Y = sol.u[1]
         center_space = axes(Y.c)
-        face_space = axes(Y.f)
         horz_space = ClimaCore.Spaces.horizontal_space(center_space)
         horz_topology = horz_space.topology
         Nq = ClimaCore.Spaces.Quadratures.degrees_of_freedom(
@@ -38,31 +37,6 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
         )
         nlocalelems = Topologies.nlocalelems(horz_topology)
         ncols_per_process = nlocalelems * Nq * Nq
-        Yc_type =
-            Fields.Field{typeof(Fields.field_values(Y.c)), typeof(center_space)}
-        Yf_type =
-            Fields.Field{typeof(Fields.field_values(Y.f)), typeof(face_space)}
-        Y_type = Fields.FieldVector{
-            FT,
-            NamedTuple{(:c, :f), Tuple{Yc_type, Yf_type}},
-        }
-        global_sol_u = similar(sol.u, Y_type)
-    end
-    for i in 1:length(sol.u)
-        global_Y_c =
-            DataLayouts.gather(comms_ctx, Fields.field_values(sol.u[i].c))
-        global_Y_f =
-            DataLayouts.gather(comms_ctx, Fields.field_values(sol.u[i].f))
-        if ClimaComms.iamroot(comms_ctx)
-            global_sol_u[i] = Fields.FieldVector(
-                c = Fields.Field(global_Y_c, center_space),
-                f = Fields.Field(global_Y_f, face_space),
-            )
-        end
-    end
-
-    if ClimaComms.iamroot(comms_ctx)
-        sol = DiffEqBase.sensitivity_solution(sol, global_sol_u, sol.t)
         scaling_file =
             joinpath(output_dir, "scaling_data_$(nprocs)_processes.jld2")
         @info(
