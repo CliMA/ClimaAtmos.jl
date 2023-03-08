@@ -270,6 +270,18 @@ function update_aux!(
         else
             0
         end
+
+        @. aux_gm.tke = aux_en.area * aux_en.tke
+        @. aux_gm.tke +=
+            0.5 *
+            aux_en.area *
+            LA.norm_sqr(C123(Ic(wvec(aux_en_f.w - prog_gm_f.w))))
+        @inbounds for i in 1:N_up
+            @. aux_gm.tke +=
+                0.5 *
+                aux_up[i].area *
+                LA.norm_sqr(C123(Ic(wvec(prog_up_f[i].w - prog_gm_f.w))))
+        end
     end
     #####
     ##### face variables: diagnose primitive, diagnose env and compute bulk
@@ -289,7 +301,7 @@ function update_aux!(
     #####
     ##### compute_updraft_closures
     #####
-    compute_entr_detr!(state, grid, edmf, edmf.entr_closure, param_set)
+    compute_entr_detr!(state, grid, edmf, param_set)
     compute_nh_pressure!(state, grid, edmf, surf)
 
     #####

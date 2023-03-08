@@ -368,7 +368,6 @@ steps:
           --z_elem 200 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist dry
-          --edmf_entr_closure PiDetrainment
           --job_id edmf_nieuwstadt_const_entr_pi_detr
           --quicklook_reference_job_id edmf_nieuwstadt
           --dt 0.5secs
@@ -385,7 +384,6 @@ steps:
           --z_elem 200 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist dry
-          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
@@ -421,7 +419,6 @@ steps:
           --z_elem 150 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --edmf_entr_closure PiDetrainment
           --job_id edmf_soares_const_entr_pi_detr
           --quicklook_reference_job_id edmf_soares
           --dt 0.5secs
@@ -438,7 +435,6 @@ steps:
           --z_elem 150 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
@@ -460,7 +456,7 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id compressible_edmf_bomex
-          --dt 30secs
+          --dt 20secs
         artifact_paths: "compressible_edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -477,7 +473,7 @@ steps:
           --use_krylov_method true
           --quicklook_reference_job_id compressible_edmf_bomex
           --job_id compressible_edmf_bomex_jfnk
-          --dt 20secs
+          --dt 15secs
         artifact_paths: "compressible_edmf_bomex_jfnk/*"
         agents:
           slurm_mem: 20GB
@@ -496,7 +492,7 @@ steps:
           --use_krylov_method true
           --quicklook_reference_job_id compressible_edmf_bomex
           --job_id compressible_edmf_bomex_jfnk_imex
-          --dt 40secs
+          --dt 30secs
         artifact_paths: "compressible_edmf_bomex_jfnk_imex/*"
         agents:
           slurm_mem: 20GB
@@ -509,7 +505,7 @@ steps:
           --toml ./.buildkite/toml/bomex.toml
           --job_id toml_compressible_edmf_bomex
           --quicklook_reference_job_id compressible_edmf_bomex
-          --dt 30secs
+          --dt 20secs
         artifact_paths: "toml_compressible_edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -569,7 +565,7 @@ steps:
           --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
           --moist equil --precip_model 1M
           --job_id edmf_rico
-          --dt 1.0secs
+          --dt 0.75secs
         artifact_paths: "edmf_rico/*"
         agents:
           slurm_mem: 20GB

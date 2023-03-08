@@ -28,46 +28,6 @@ Base.@kwdef struct NoneqMoistureSources{FT}
 end
 
 """
-    EntrDetr
-
-$(DocStringExtensions.FIELDS)
-"""
-Base.@kwdef struct EntrDetr{FT}
-    "Fractional dynamical entrainment [1/m]"
-    ε_dyn::FT
-    "Fractional dynamical detrainment [1/m]"
-    δ_dyn::FT
-    "Turbulent entrainment"
-    ε_turb::FT
-end
-
-Base.@kwdef struct εδModelParams{FT}
-    w_min::FT # minimum updraft velocity to avoid zero division in b/w²
-    c_ε::FT # factor multiplier for dry term in entrainment/detrainment
-    μ_0::FT # dimensional scale logistic function in the dry term in entrainment/detrainment
-    β::FT # sorting power for ad-hoc moisture detrainment function
-    χ::FT # fraction of updraft air for buoyancy mixing in entrainment/detrainment (0≤χ≤1)
-    c_λ::FT # scaling factor for TKE in entrainment scale calculations
-    γ_lim::FT
-    β_lim::FT
-    c_γ::FT # scaling factor for turbulent entrainment rate
-    c_δ::FT # factor multiplier for moist term in entrainment/detrainment
-end
-
-abstract type AbstractEntrDetrModel end
-struct ConstantEntrDetrModel <: AbstractEntrDetrModel end
-struct PiGroupsDetrModel <: AbstractEntrDetrModel end
-Base.@kwdef struct MDEntr{P} <: AbstractEntrDetrModel
-    params::P
-end  # existing model (moisture deficit closure)
-εδ_params(m::AbstractEntrDetrModel) = m.params
-
-abstract type EntrDimScale end
-struct BuoyVelEntrDimScale <: EntrDimScale end
-struct InvZEntrDimScale <: EntrDimScale end
-struct InvMeterEntrDimScale <: EntrDimScale end
-
-"""
     GradBuoy
 
 Environmental buoyancy gradients.
@@ -237,7 +197,7 @@ get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
 
 
-struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP, EC}
+struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP}
     surface_area::FT
     max_area::FT
     minimum_area::FT
@@ -246,7 +206,6 @@ struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP, EC}
     bg_closure::EBGC
     mixing_length_params::MLP
     pressure_model_params::PMP
-    entr_closure::EC
     H_up_min::FT # minimum updraft top to avoid zero division in pressure drag and turb-entr
     zero_uv_fluxes::Bool
 end
@@ -275,43 +234,6 @@ function EDMFModel(
         )
     end
 
-    entr_closure_name = parsed_args["edmf_entr_closure"]
-    if entr_closure_name == "MoistureDeficit"
-        w_min = turbconv_params.min_upd_velocity
-        c_ε = turbconv_params.entrainment_factor
-        μ_0 = turbconv_params.entrainment_scale
-        β = turbconv_params.sorting_power
-        χ = turbconv_params.updraft_mixing_frac
-        c_λ = turbconv_params.entrainment_smin_tke_coeff
-        γ_lim = turbconv_params.area_limiter_scale
-        β_lim = turbconv_params.area_limiter_power
-        c_γ = turbconv_params.turbulent_entrainment_factor
-        c_δ = turbconv_params.detrainment_factor
-
-        εδ_params = εδModelParams{FT}(;
-            w_min,
-            c_ε,
-            μ_0,
-            β,
-            χ,
-            c_λ,
-            γ_lim,
-            β_lim,
-            c_γ,
-            c_δ,
-        )
-
-        entr_closure = MDEntr(; params = εδ_params)
-    elseif entr_closure_name == "Constant"
-        entr_closure = ConstantEntrDetrModel()
-    elseif entr_closure_name == "PiDetrainment"
-        entr_closure = PiGroupsDetrModel()
-    else
-        error(
-            "Something went wrong. Invalid entrainment closure type '$entr_closure_name'",
-        )
-    end
-
     # minimum updraft top to avoid zero division in pressure drag and turb-entr
     H_up_min = turbconv_params.min_updraft_top
 
@@ -334,13 +256,12 @@ function EDMFModel(
         l_max = turbconv_params.l_max,
     )
 
-    EC = typeof(entr_closure)
     MM = typeof(moisture_model)
     PM = typeof(precip_model)
     EBGC = typeof(bg_closure)
     MLP = typeof(mixing_length_params)
     PMP = typeof(pressure_model_params)
-    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP, PMP, EC}(
+    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP, PMP}(
         surface_area,
         max_area,
         minimum_area,
@@ -349,7 +270,6 @@ function EDMFModel(
         bg_closure,
         mixing_length_params,
         pressure_model_params,
-        entr_closure,
         H_up_min,
         zero_uv_fluxes,
     )
