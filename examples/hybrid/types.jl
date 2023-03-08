@@ -25,12 +25,7 @@ import ClimaCore: InputOutput
 
 include("topography_helper.jl")
 
-function get_atmos(
-    ::Type{FT},
-    parsed_args,
-    config_params,
-    turbconv_params,
-) where {FT}
+function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
 
     # should this live in the radiation model?
 
@@ -62,7 +57,6 @@ function get_atmos(
             moisture_model,
             precip_model,
             parsed_args,
-            config_params,
             turbconv_params,
         ),
         surface_scheme,

@@ -126,11 +126,6 @@ function update_aux!(
         end
         aux_en.area[k] = 1 - aux_bulk.area[k]
         aux_en.tke[k] = prog_en.ρatke[k] / (ρ_c[k] * aux_en.area[k])
-        if edmf.thermo_covariance_model isa PrognosticThermoCovariances
-            aux_en.Hvar[k] = prog_en.ρaHvar[k] / (ρ_c[k] * aux_en.area[k])
-            aux_en.QTvar[k] = prog_en.ρaQTvar[k] / (ρ_c[k] * aux_en.area[k])
-            aux_en.HQTcov[k] = prog_en.ρaHQTcov[k] / (ρ_c[k] * aux_en.area[k])
-        end
     end
 
     @. aux_en_f.w = prog_gm_f.w / (1 - Ifb(aux_bulk.area))
@@ -177,15 +172,7 @@ function update_aux!(
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
     end
 
-    microphysics(
-        edmf.en_thermo,
-        grid,
-        state,
-        edmf,
-        edmf.precip_model,
-        Δt,
-        param_set,
-    )
+    microphysics(grid, state, edmf, edmf.precip_model, Δt, param_set)
 
     @inbounds for k in real_center_indices(grid)
         a_bulk_c = aux_bulk.area[k]
@@ -298,20 +285,6 @@ function update_aux!(
             CCG.Covariant3Vector(FT(0)),
         )
     end
-
-    #####
-    #####  diagnose_GMV_moments
-    #####
-    get_GMV_CoVar(
-        edmf,
-        grid,
-        state,
-        Val(:Hvar),
-        Val(:θ_liq_ice),
-        Val(:θ_liq_ice),
-    )
-    get_GMV_CoVar(edmf, grid, state, Val(:QTvar), Val(:q_tot), Val(:q_tot))
-    get_GMV_CoVar(edmf, grid, state, Val(:HQTcov), Val(:θ_liq_ice), Val(:q_tot))
 
     #####
     ##### compute_updraft_closures
@@ -487,104 +460,14 @@ function update_aux!(
     end
 
     compute_covariance_entr(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
-    compute_covariance_entr(
-        edmf,
-        grid,
-        state,
-        Val(:Hvar),
-        Val(:θ_liq_ice),
-        Val(:θ_liq_ice),
-    )
-    compute_covariance_entr(
-        edmf,
-        grid,
-        state,
-        Val(:QTvar),
-        Val(:q_tot),
-        Val(:q_tot),
-    )
-    compute_covariance_entr(
-        edmf,
-        grid,
-        state,
-        Val(:HQTcov),
-        Val(:θ_liq_ice),
-        Val(:q_tot),
-    )
+
     compute_covariance_shear(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
-    compute_covariance_shear(
-        edmf,
-        grid,
-        state,
-        Val(:Hvar),
-        Val(:θ_liq_ice),
-        Val(:θ_liq_ice),
-    )
-    compute_covariance_shear(
-        edmf,
-        grid,
-        state,
-        Val(:QTvar),
-        Val(:q_tot),
-        Val(:q_tot),
-    )
-    compute_covariance_shear(
-        edmf,
-        grid,
-        state,
-        Val(:HQTcov),
-        Val(:θ_liq_ice),
-        Val(:q_tot),
-    )
+
     # TODO defined again in compute_covariance_shear and compute_covaraince
     @. aux_en_2m.tke.rain_src = 0
-    @. aux_en_2m.Hvar.rain_src = ρ_c * aux_en.area * 2 * aux_en.Hvar_rain_dt
-    @. aux_en_2m.QTvar.rain_src = ρ_c * aux_en.area * 2 * aux_en.QTvar_rain_dt
-    @. aux_en_2m.HQTcov.rain_src = ρ_c * aux_en.area * aux_en.HQTcov_rain_dt
-
-    get_GMV_CoVar(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
-    ### Diagnostic thermodynamiccovariances
-    if edmf.thermo_covariance_model isa DiagnosticThermoCovariances
-        flux1 = shf(surf) / TD.cp_m(thermo_params, ts_gm[kc_surf])
-        flux2 = get_ρq_tot_flux(surf, thermo_params, ts_gm[kc_surf])
-        zLL::FT = grid.zc[kc_surf].z
-        ustar = get_ustar(surf)
-        oblength = obukhov_length(surf)
-        prog_gm = center_prog_grid_mean(state)
-        ρLL = prog_gm.ρ[kc_surf]
-        update_diagnostic_covariances!(edmf, grid, state, param_set, Val(:Hvar))
-        update_diagnostic_covariances!(
-            edmf,
-            grid,
-            state,
-            param_set,
-            Val(:QTvar),
-        )
-        update_diagnostic_covariances!(
-            edmf,
-            grid,
-            state,
-            param_set,
-            Val(:HQTcov),
-        )
-        @. aux_en.Hvar = max(aux_en.Hvar, 0)
-        @. aux_en.QTvar = max(aux_en.QTvar, 0)
-        @. aux_en.HQTcov = max(aux_en.HQTcov, -sqrt(aux_en.Hvar * aux_en.QTvar))
-        @. aux_en.HQTcov = min(aux_en.HQTcov, sqrt(aux_en.Hvar * aux_en.QTvar))
-        ae_surf = 1 - aux_bulk.area[kc_surf]
-        aux_en.Hvar[kc_surf] =
-            ae_surf *
-            get_surface_variance(flux1 / ρLL, flux1 / ρLL, ustar, zLL, oblength)
-        aux_en.QTvar[kc_surf] =
-            ae_surf *
-            get_surface_variance(flux2 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
-        aux_en.HQTcov[kc_surf] =
-            ae_surf *
-            get_surface_variance(flux1 / ρLL, flux2 / ρLL, ustar, zLL, oblength)
-    end
     compute_precipitation_formation_tendencies(
         grid,
         state,

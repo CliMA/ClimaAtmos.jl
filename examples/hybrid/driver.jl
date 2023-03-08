@@ -39,9 +39,8 @@ include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 
 include("parameter_set.jl")
-# config stores flags used to configure constructors
-params, config = create_parameter_set(FT, parsed_args)
-atmos = get_atmos(FT, parsed_args, config, params.turbconv_params)
+params = create_parameter_set(FT, parsed_args)
+atmos = get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
