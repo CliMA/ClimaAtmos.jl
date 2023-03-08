@@ -331,6 +331,7 @@ steps:
           --z_elem 8 --z_stretch false --z_max 400
           --t_end 9hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist dry
+          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
@@ -455,6 +456,7 @@ steps:
           --z_elem 60 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --job_id compressible_edmf_bomex
           --dt 30secs
         artifact_paths: "compressible_edmf_bomex/*"
@@ -470,6 +472,7 @@ steps:
           --z_elem 60 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --use_krylov_method true
           --quicklook_reference_job_id compressible_edmf_bomex
           --job_id compressible_edmf_bomex_jfnk
@@ -487,6 +490,7 @@ steps:
           --z_elem 60 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
@@ -506,6 +510,7 @@ steps:
           --z_elem 30 --z_stretch false --z_max 1500
           --t_end 4hours --dt_save_to_sol 5mins --dt_save_to_disk 2mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --job_id compressible_edmf_dycoms_rf01
           --dt 6secs
         artifact_paths: "compressible_edmf_dycoms_rf01/*"
@@ -521,6 +526,7 @@ steps:
           --z_elem 75 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --job_id edmf_life_cycle_tan2018
           --dt 6secs
         artifact_paths: "edmf_life_cycle_tan2018/*"
@@ -536,6 +542,7 @@ steps:
           --z_elem 100 --z_stretch false --z_max 4400
           --t_end 14.5hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --job_id edmf_arm_sgp
           --dt 2secs
         artifact_paths: "edmf_arm_sgp/*"
@@ -551,6 +558,7 @@ steps:
           --z_elem 100 --z_stretch false --z_max 4000
           --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
           --moist equil --precip_model 1M
+          --edmf_entr_closure PiDetrainment
           --job_id edmf_rico
           --dt 1.0secs
         artifact_paths: "edmf_rico/*"
@@ -567,6 +575,7 @@ steps:
           --rayleigh_sponge true --zd_rayleigh 15000
           --t_end 1hours --dt_save_to_sol 5mins --dt_save_to_disk 1mins
           --moist equil --precip_model 1M
+          --edmf_entr_closure PiDetrainment
           --job_id compressible_edmf_trmm
           --dt 0.1secs
         artifact_paths: "compressible_edmf_trmm/*"
@@ -582,6 +591,7 @@ steps:
           --z_elem 60 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
+          --edmf_entr_closure PiDetrainment
           --test_edmf_consistency true
           --job_id edmf_bomex_consistency
           --dt 6secs
