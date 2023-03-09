@@ -142,23 +142,23 @@ The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \t
 ```math
 (C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v^j]) \times I^f(\boldsymbol{u}^h) ,
 ```
-and the ``\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j`` term as
+and the ``-\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j`` term as
 ```math
-\frac{1}{I^f(\rho^j)} G^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho^j - \rho_{\text{ref}})}{I^f(\rho^j)} G^f_v[\Phi] - G^f_v[K^j] ,
+-\frac{1}{I^f(\rho^j)} G^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho^j - \rho_{\text{ref}})}{I^f(\rho^j)} G^f_v[\Phi] - G^f_v[K^j] ,
 ```
 
 
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho^j}{\rho^j}}p) \boldsymbol{u}^j) + RHS
+\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho^j}}{\rho^j}p) \boldsymbol{u}^j) + RHS
 ```
 
 is discretized using
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
-- D_h[ (\hat{\rho^j} e^j + \frac{\hat{\rho^j}{\rho^j}}p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
-- D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}{\rho^j}}p}{\hat{\rho}^j} \right)
+- D_h[ (\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
+- D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p}{\hat{\rho}^j} \right)
   \right] + RHS .
 ```
 (Is the weighting factor ``\hat{\rho}^j`` ???)
