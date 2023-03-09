@@ -1,10 +1,15 @@
-# Equations
+# Sub-grid scale equations
 
 This describes the EDMF scheme equations and its discretizations. Where possible, we use a coordinate invariant form: the ClimaCore operators generally handle the conversions between bases internally.
 
 
 ## Dycore variables
 
+* ``\boldsymbol{\Omega}`` is the planetary angular velocity. We currently use a shallow-atmosphere approximation, with
+  ```math
+  \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
+  ```
+  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
 * ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` is the projection onto horizontal covariant components (covariance here means with respect to the reference element), stored at cell centers.
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``\rho_{\text{ref}}`` is the reference state density
@@ -16,7 +21,7 @@ This describes the EDMF scheme equations and its discretizations. Where possible
 * $\hat{\rho}^j$: _effective density_ in kg/m³. ``\hat{\rho}^j = \rho^j a^j`` where ``\rho`` is density and ``a`` is the sub-domain area fraction. Superscript ``j`` represents the sub-domain. This is discretized at cell centers.
 * ``\boldsymbol{u}^j`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u}^j = \boldsymbol{u}_h + \boldsymbol{u}_v^j`` where
   - ``\boldsymbol{u}_v^j = u_3^j \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
-* - ``\hat{\rho}^j e^j``: _total energy_ in J/m³. This is discretized at cell centers.
+* ``\hat{\rho}^j e^j``: _total energy_ in J/m³. This is discretized at cell centers.
 * ``\hat{\rho}^j \q^j``: moisture tracers (total, liquid, ice, rain, snow), stored at cell centers.
 * ``\hat{\rho}^j \chi^j``: other tracers (aerosol, ...), again stored at cell centers.
 
@@ -36,9 +41,6 @@ We make use of the following operators
 
 - ``D_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence).
 - ``D^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
-!!! todo
-    Add vertical diffusive tendencies (including surface fluxes)
-
 - ``G_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
 - ``G^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
   - the gradient is set to 0 at the top and bottom boundaries.
@@ -52,11 +54,6 @@ We make use of the following operators
 
 ## Auxiliary and derived quantities
 
-* ``\boldsymbol{\Omega}`` is the planetary angular velocity. We currently use a shallow-atmosphere approximation, with
-  ```math
-  \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
-  ```
-  where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
 * ``\tilde{\boldsymbol{u}^j}`` is the mass-weighted reconstruction of velocity at the interfaces:
   by interpolation of contravariant components
     ```math
@@ -66,21 +63,21 @@ We make use of the following operators
   and ``\bar{\boldsymbol{u}}^j`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
 * ``\bar{\boldsymbol{u}}^j = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v^j)``
 
-* ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``\boldsymbol{b}^j`` is the reduced gravitational acceleration
   ```math
   \boldsymbol{b}^j = - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla \Phi
   ```
 * ``K^j = \tfrac{1}{2} \|\boldsymbol{u}^j\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
   ```math
-  K = \tfrac{1}{2} (\boldsymbol{u}_{h}^j \cdot \boldsymbol{u}_{h}^j + 2 \boldsymbol{u}_{h}^j \cdot I_{c} (\boldsymbol{u}_{v}^j) + I_{c}(\boldsymbol{u}_{v}^j \cdot \boldsymbol{u}_{v}^j)),
+  K^j = \tfrac{1}{2} (\boldsymbol{u}_{h}^j \cdot \boldsymbol{u}_{h}^j + 2 \boldsymbol{u}_{h}^j \cdot I_{c} (\boldsymbol{u}_{v}^j) + I_{c}(\boldsymbol{u}_{v}^j \cdot \boldsymbol{u}_{v}^j)),
   ```
   where ``\boldsymbol{u}_{h}^j`` is defined on cell-centers, ``\boldsymbol{u}_{v}^j`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.  
 
 * No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
   ```math
-  \tilde{u}_{v} = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
+  \tilde{u}_{v}^j = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
   ```
+(Is this correct???)
 
 ## Equations and discretizations
 
@@ -94,9 +91,9 @@ Follows the continuity equation
 This is discretized using the following
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j 
-= - D_h[ \rho (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS
+= - D_h[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS
 ```
-
+(Is the weighting factor ``\hat{\rho}^j J``???)
 
 ### Momentum
 
@@ -115,9 +112,8 @@ By breaking the curl and cross product terms into horizontal and vertical contri
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - \frac{1}{\rho^j} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K^j) ,
 ```
+(Should we remove this equation ???)
 where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^{v,j}`` are the horizontal and vertical _contravariant_ vectors from sub-domain. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
-
-TODO:
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^{v,j}`` term is discretized as: 
 ```math
@@ -138,8 +134,8 @@ and the ``\frac{1}{\rho^j} \nabla_h (p - p_h)  + \nabla_h (\Phi + K^j)`` as
 Similarly for vertical velocity
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v^j  =
-  - (\nabla_v \times \boldsymbol{u}_h^j + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^{h,j}
-  - \frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j .
+  - (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^h
+  - \frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j + RHS .
 ```
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^h`` term is discretized as
@@ -155,32 +151,17 @@ and the ``\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + p) \boldsymbol{u}^j) + RHS
+\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho^j}{\rho^j}}p) \boldsymbol{u}^j) + RHS
 ```
-
-TODO:
 
 is discretized using
 ```math
-\frac{\partial}{\partial t} \rho e \approx
-- D_h[ (\rho e + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right)
-  + \boldsymbol{F}_R 
-  \right] .
+\frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
+- D_h[ (\hat{\rho^j} e^j + \frac{\hat{\rho^j}{\rho^j}}p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
+- D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}{\rho^j}}p}{\hat{\rho}^j} \right)
+  \right] + RHS .
 ```
-Currently the central reconstruction
-```math
-- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right) \right]
-```
-is treated implicitly.
-
-!!! todo
-    The Jacobian computation should be updated so that the upwinded term
-    ```math
-    - D^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)\right]
-    ```
-    is treated implicitly.
-
+(Is the weighting factor ``\hat{\rho}^j`` ???)
 
 ### Moisture tracers
 
@@ -191,27 +172,14 @@ For a sub-domain moisture scalar ``q^j``, the density-weighted scalar ``\hat{\rh
 ```
 where ``\hat{\boldsymbol{k}}`` is the vertical unit vector and ``w_q^j`` is the terminal velocity.
 
-TODO:
-
 This is discretized using the following
 ```math
-\frac{\partial}{\partial t} \rho \chi \approx
-- D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right].
+\frac{\partial}{\partial t} \hat{\rho}^j q^j \approx
+- D_h[ \hat{\rho}^j q^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
+- D^c_v \left[ WI^f(J,\hat{\rho}^j) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right] + sedimentation + RHS.
 ```
-Currently the central reconstruction
-```math
-- D^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
-```
-is treated implicitly.
-
-!!! todo
-    The Jacobian computation should be updated so that the upwinded term
-    ```math
-    - D^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
-    ```
-    is treated implicitly.
-
+!!! todo 
+   Add the discretization for sedimentation
 
 ### Other tracers
 
@@ -221,23 +189,9 @@ For a sub-domain scalar ``\chi^j``, the density-weighted scalar ``\hat{\rho}^j \
 \frac{\partial}{\partial t} \hat{\rho}^j \chi^j = - \nabla \cdot(\hat{\rho}^j \chi^j \boldsymbol{u}^j) + RHS .
 ```
 
-TODO:
-
 This is discretized using the following
 ```math
-\frac{\partial}{\partial t} \rho \chi \approx
-- D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right].
+\frac{\partial}{\partial t} \hat{\rho}^j \chi^j \approx
+- D_h[ \hat{\rho^j} \chi^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
+- D^c_v \left[ WI^f(J,\hat{\rho^j}) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j \chi^j}{\hat{\rho^j}} \right) \right] + RHS.
 ```
-Currently the central reconstruction
-```math
-- D^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
-```
-is treated implicitly.
-
-!!! todo
-    The Jacobian computation should be updated so that the upwinded term
-    ```math
-    - D^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
-    ```
-    is treated implicitly.
