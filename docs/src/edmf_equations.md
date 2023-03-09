@@ -178,8 +178,15 @@ This is discretized using the following
 - D_h[ \hat{\rho}^j q^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
 - D^c_v \left[ WI^f(J,\hat{\rho}^j) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right] + sedimentation + RHS.
 ```
+
+Currently we use the central reconstruction
+```math
+- D^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right]
+```
+(Do we need to change this to upwinding???)
+
 !!! todo 
-   Add the discretization for sedimentation
+    Add the discretization for sedimentation
 
 ### Other tracers
 
@@ -195,3 +202,9 @@ This is discretized using the following
 - D_h[ \hat{\rho^j} \chi^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
 - D^c_v \left[ WI^f(J,\hat{\rho^j}) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j \chi^j}{\hat{\rho^j}} \right) \right] + RHS.
 ```
+
+Currently we use the central reconstruction
+```math
+- D^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j \chi^j}{\hat{\rho}^j} \right) \right]
+```
+(Do we need to change this to upwinding???)
