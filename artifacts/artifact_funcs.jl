@@ -61,3 +61,16 @@ function topo_elev_dataset_path()
     )
     return AW.get_data_folder(etopo1_elev_data)
 end
+
+
+function gfdl_ogw_data_path()
+    gfdl_data = AW.ArtifactWrapper(
+        @__DIR__,
+        "gfdl-ogw-data",
+        AW.ArtifactFile[AW.ArtifactFile(
+            url = "https://caltech.box.com/shared/static/zubipz298q5ar5rpfais8c0ymtfyz2oc.nc",
+            filename = "gfdl_ogw.nc",
+        ),],
+    )
+    return AW.get_data_folder(gfdl_data)
+end
