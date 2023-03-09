@@ -8,6 +8,7 @@ import .Parameters as CAP
 include("types.jl")
 include("utilities.jl")
 
+include("radiation_utilities.jl")
 include("RRTMGPInterface.jl")
 import .RRTMGPInterface as RRTMGPI
 

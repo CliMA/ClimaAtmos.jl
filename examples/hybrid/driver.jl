@@ -60,8 +60,6 @@ using ClimaTimeSteppers
 import Random
 Random.seed!(1234)
 
-isnothing(atmos.radiation_mode) || include("radiation_utilities.jl")
-
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 jacobi_flags(::InternalEnergy) =
@@ -84,7 +82,7 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             idealized_insolation,
             idealized_clouds,
             thermo_dispatcher,
-            data_loader,
+            data_loader = CA.rrtmgp_data_loader,
             ᶜinterp,
         )
     else
