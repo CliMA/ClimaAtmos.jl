@@ -18,11 +18,11 @@ This describes the EDMF scheme equations and its discretizations. Where possible
 
 ## Prognostic variables
 
-* $\hat{\rho}^j$: _effective density_ in kg/m³. ``\hat{\rho}^j = \rho^j a^j`` where ``\rho`` is density and ``a`` is the sub-domain area fraction. Superscript ``j`` represents the sub-domain. This is discretized at cell centers.
+* ``\hat{\rho}^j``: _effective density_ in kg/m³. ``\hat{\rho}^j = \rho^j a^j`` where ``\rho`` is density and ``a`` is the sub-domain area fraction. Superscript ``j`` represents the sub-domain. This is discretized at cell centers.
 * ``\boldsymbol{u}^j`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u}^j = \boldsymbol{u}_h + \boldsymbol{u}_v^j`` where
   - ``\boldsymbol{u}_v^j = u_3^j \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
 * ``\hat{\rho}^j e^j``: _total energy_ in J/m³. This is discretized at cell centers.
-* ``\hat{\rho}^j \q^j``: moisture tracers (total, liquid, ice, rain, snow), stored at cell centers.
+* ``\hat{\rho}^j q^j``: moisture tracers (total, liquid, ice, rain, snow), stored at cell centers.
 * ``\hat{\rho}^j \chi^j``: other tracers (aerosol, ...), again stored at cell centers.
 
 ## Operators
@@ -73,11 +73,11 @@ We make use of the following operators
   ```
   where ``\boldsymbol{u}_{h}^j`` is defined on cell-centers, ``\boldsymbol{u}_{v}^j`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.  
 
-* No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
+* No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v,j}``, to be zero. The vertical covariant velocity component is computed as
   ```math
   \tilde{u}_{v}^j = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
   ```
-(Is this correct???)
+(Is the boundary condition for ``\boldsymbol{\tilde{u}}^{v,j}`` correct???)
 
 ## Equations and discretizations
 
@@ -93,7 +93,7 @@ This is discretized using the following
 \frac{\partial}{\partial t} \hat{\rho}^j 
 = - D_h[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS
 ```
-(Is the weighting factor ``\hat{\rho}^j J``???)
+(Is the weighting factor ``\hat{\rho}^j``???)
 
 ### Momentum
 
@@ -112,7 +112,7 @@ By breaking the curl and cross product terms into horizontal and vertical contri
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - \frac{1}{\rho^j} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K^j) ,
 ```
-(Should we remove this equation ???)
+(Should we remove the horizontal momentum equation ???)
 where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^{v,j}`` are the horizontal and vertical _contravariant_ vectors from sub-domain. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^{v,j}`` term is discretized as: 
