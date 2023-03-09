@@ -18,11 +18,11 @@ This describes the EDMF scheme equations and its discretizations. Where possible
 
 ## Prognostic variables
 
-* ``\hat{\rho}^j``: _effective density_ in kg/m³. ``\hat{\rho}^j = \rho^j a^j`` where ``\rho`` is density and ``a`` is the sub-domain area fraction. Superscript ``j`` represents the sub-domain. This is discretized at cell centers.
+* ``\hat{\rho}^j``: _effective density_ in kg/m³. Superscript ``j`` represents the sub-domain. ``\hat{\rho}^j = \rho^j a^j`` where ``\rho^j`` is the sub-domain density and ``a^j`` is the sub-domain area fraction. This is discretized at cell centers.
 * ``\boldsymbol{u}^j`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u}^j = \boldsymbol{u}_h + \boldsymbol{u}_v^j`` where
   - ``\boldsymbol{u}_v^j = u_3^j \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
 * ``\hat{\rho}^j e^j``: _total energy_ in J/m³. This is discretized at cell centers.
-* ``\hat{\rho}^j q^j``: moisture tracers (total, liquid, ice, rain, snow), stored at cell centers.
+* ``\hat{\rho}^j q^j``: moisture tracers. ``q^j`` stands for the sub-domain total (liquid, ice, rain, snow) specific humidity in kg/kg. This is stored at cell centers.
 * ``\hat{\rho}^j \chi^j``: other tracers (aerosol, ...), again stored at cell centers.
 
 ## Operators
@@ -59,9 +59,14 @@ We make use of the following operators
     ```math
   \tilde{\boldsymbol{u}^j} = WI^f(\hat{\rho}^j J, \boldsymbol{u}_h) + \boldsymbol{u}_v^j
   ```
-  (Is the weighting factor ``\rho^j J`` or ``\hat{\rho}^j J`` ???)
-  and ``\bar{\boldsymbol{u}}^j`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
-* ``\bar{\boldsymbol{u}}^j = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v^j)``
+!!! Todo
+    Is the weighting factor ``\rho^j J`` or ``\hat{\rho}^j J`` ???
+
+* ``\bar{\boldsymbol{u}}^j`` is the reconstruction of velocity at cell-centers,
+  carried out by linear interpolation of the covariant vertical component:
+ ```math
+   \bar{\boldsymbol{u}}^j = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v^j)
+ ```
 
 * ``\boldsymbol{b}^j`` is the reduced gravitational acceleration
   ```math
@@ -71,13 +76,14 @@ We make use of the following operators
   ```math
   K^j = \tfrac{1}{2} (\boldsymbol{u}_{h}^j \cdot \boldsymbol{u}_{h}^j + 2 \boldsymbol{u}_{h}^j \cdot I_{c} (\boldsymbol{u}_{v}^j) + I_{c}(\boldsymbol{u}_{v}^j \cdot \boldsymbol{u}_{v}^j)),
   ```
-  where ``\boldsymbol{u}_{h}^j`` is defined on cell-centers, ``\boldsymbol{u}_{v}^j`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.  
+  where ``\boldsymbol{u}_{h}^j`` is defined on cell-centers, ``\boldsymbol{u}_{v}^j`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.
 
 * No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v,j}``, to be zero. The vertical covariant velocity component is computed as
   ```math
   \tilde{u}_{v}^j = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
   ```
-(Is the boundary condition for ``\boldsymbol{\tilde{u}}^{v,j}`` correct???)
+!!! Todo
+    Is the boundary condition for ``\boldsymbol{\tilde{u}}^{v,j}`` correct???
 
 ## Equations and discretizations
 
@@ -90,10 +96,12 @@ Follows the continuity equation
 
 This is discretized using the following
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j 
+\frac{\partial}{\partial t} \hat{\rho}^j
 = - D_h[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS
 ```
-(Is the weighting factor ``\hat{\rho}^j``???)
+
+!!! Todo
+    Is the weighting factor ``\hat{\rho}^j``???
 
 ### Momentum
 
@@ -102,7 +110,13 @@ Uses the advective form equation
 \frac{\partial}{\partial t} \boldsymbol{u}^j  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}^j) \times \boldsymbol{u}^j - \frac{1}{\rho^j} \nabla (p - p_{\text{ref}})  + \boldsymbol{b}^j - \nabla K^j + RHS
 ```
 
+!!! Todo
+    Why are we not dividing by ``\hat{\rho}^j`` to go from flux form to advective form???
+
 #### Horizontal momentum
+
+!!! Todo
+    Should we remove the horizontal momentum equation ???
 
 By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain
 
@@ -112,14 +126,14 @@ By breaking the curl and cross product terms into horizontal and vertical contri
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - \frac{1}{\rho^j} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K^j) ,
 ```
-(Should we remove the horizontal momentum equation ???)
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^{v,j}`` are the horizontal and vertical _contravariant_ vectors from sub-domain. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^{v,j}`` are the horizontal and vertical _contravariant_ vectors from sub-domain. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
 
-The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^{v,j}`` term is discretized as: 
+The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^{v,j}`` term is discretized as:
 ```math
 \frac{I^c((C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v^j]) \times (I^f(\hat{\rho}^j J)\tilde{\boldsymbol{u}}^v,j))}{\hat{\rho}^j J}
 ```
-(Is the weighting factor ``\hat{\rho}^j J``???)
+!!! Todo
+    Is the weighting factor ``\hat{\rho}^j J``???
 
 The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h`` term is discretized as
 ```math
@@ -161,7 +175,8 @@ is discretized using
 - D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p}{\hat{\rho}^j} \right)
   \right] + RHS .
 ```
-(Is the weighting factor ``\hat{\rho}^j`` ???)
+!!! Todo
+    Is the weighting factor ``\hat{\rho}^j`` ???
 
 ### Moisture tracers
 
@@ -183,9 +198,10 @@ Currently we use the central reconstruction
 ```math
 - D^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right]
 ```
-(Do we need to change this to upwinding???)
+!!! Todo
+    Do we need to change this to upwinding???
 
-!!! todo 
+!!! Todo
     Add the discretization for sedimentation
 
 ### Other tracers
@@ -207,4 +223,5 @@ Currently we use the central reconstruction
 ```math
 - D^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j \chi^j}{\hat{\rho}^j} \right) \right]
 ```
-(Do we need to change this to upwinding???)
+!!! Todo
+    Do we need to change this to upwinding???
