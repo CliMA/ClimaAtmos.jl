@@ -1,13 +1,12 @@
 using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
-using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces
+using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces, Geometry
 import ClimaComms, Logging
 using Plots
 using Interpolations
 const FT = Float64
 
-include("../../examples/common_spaces.jl")
 include("../../examples/hybrid/orographic_gravity_wave_helper.jl")
 include("../../post_processing/remap/remap_helpers.jl")
 
@@ -21,10 +20,11 @@ z_elem = 1
 radius = 6.371229e6
 
 quad = Spaces.Quadratures.GLL{nh_poly + 1}()
-horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-h_space = make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
+horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
+h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 z_stretch = Meshes.Uniform()
-center_space, face_space = make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+center_space, face_space =
+    CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
 
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)

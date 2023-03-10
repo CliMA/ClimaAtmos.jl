@@ -22,6 +22,7 @@ function time_to_seconds(s::String)
 end
 
 import ClimaComms
+import ClimaCore: Spaces, Topologies
 import DiffEqBase
 import JLD2
 
