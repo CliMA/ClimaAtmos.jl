@@ -1,6 +1,7 @@
 using Dates: DateTime, @dateformat_str
 using NCDatasets
 using Dierckx
+using DiffEqBase
 using ImageFiltering
 using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
@@ -22,8 +23,6 @@ import ClimaAtmos:
     BoxModel
 
 import ClimaCore: InputOutput
-
-include("topography_helper.jl")
 
 function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
 
@@ -109,9 +108,9 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
-        dt = FT(time_to_seconds(parsed_args["dt"])),
+        dt = FT(CA.time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
-        t_end = FT(time_to_seconds(parsed_args["t_end"])),
+        t_end = FT(CA.time_to_seconds(parsed_args["t_end"])),
     )
     n_steps = floor(Int, sim.t_end / sim.dt)
     @info(
@@ -136,7 +135,7 @@ function get_spaces(parsed_args, params, comms_ctx)
 
     @assert topography in ("NoWarp", "DCMIP200", "Earth")
     if topography == "DCMIP200"
-        warp_function = topography_dcmip200
+        warp_function = CA.topography_dcmip200
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
@@ -155,7 +154,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             )
         end
         @info "Generated interpolation stencil"
-        warp_function = generate_topography_warp(earth_spline)
+        warp_function = CA.generate_topography_warp(earth_spline)
     end
     @info "Topography" topography
 
@@ -283,7 +282,7 @@ function get_state_restart(comms_ctx)
 end
 
 function get_initial_condition(parsed_args)
-    if is_baro_wave(parsed_args)
+    if CA.is_baro_wave(parsed_args)
         if parsed_args["moist"] == "dry"
             return ICs.DryBaroclinicWave(parsed_args["perturb_initstate"])
         else
@@ -430,7 +429,7 @@ end
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, simulation) = p
     (; dt) = simulation
-    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+    dt_save_to_sol = CA.time_to_seconds(parsed_args["dt_save_to_sol"])
 
     @time "Define ode function" func = if parsed_args["split_ode"]
         implicit_func = ODE.ODEFunction(

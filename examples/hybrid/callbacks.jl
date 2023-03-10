@@ -1,3 +1,4 @@
+import ClimaAtmos as CA
 import ClimaCore.DataLayouts as DL
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
@@ -32,7 +33,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             dt_rad = if parsed_args["config"] == "column"
                 dt
             else
-                FT(time_to_seconds(parsed_args["dt_rad"]))
+                FT(CA.time_to_seconds(parsed_args["dt_rad"]))
             end
             (call_every_dt(rrtmgp_model_callback!, dt_rad),)
         else
@@ -48,8 +49,8 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             (flux_accumulation_callback, additional_callbacks...)
     end
 
-    dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
-    dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
+    dt_save_to_disk = CA.time_to_seconds(parsed_args["dt_save_to_disk"])
+    dt_save_restart = CA.time_to_seconds(parsed_args["dt_save_restart"])
 
     dss_cb = if startswith(parsed_args["ode_algo"], "ODE.")
         call_every_n_steps(dss_callback)

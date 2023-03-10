@@ -9,8 +9,6 @@ include("comms.jl")
 if startswith(parsed_args["ode_algo"], "ODE.") # TODO: use Preferences.jl instead:
     include("../ordinary_diff_eq_bug_fixes.jl")
 end
-include("classify_case.jl")
-include("utilities.jl")
 include("nvtx.jl")
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
@@ -29,7 +27,6 @@ turbconv = parsed_args["turbconv"]
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos.InitialConditions as ICs
 
-include("topography_helper.jl")
 include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
 include("types.jl")
 
@@ -373,10 +370,10 @@ end
 # Simulation did not crash
 (; sol, walltime) = sol_res
 @assert last(sol.t) == simulation.t_end
-verify_callbacks(sol.t)
+CA.verify_callbacks(sol.t)
 
 if simulation.is_distributed
-    export_scaling_file(
+    CA.export_scaling_file(
         sol,
         simulation.output_dir,
         walltime,
@@ -387,13 +384,13 @@ end
 
 if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if is_baro_wave(parsed_args)
+    if CA.is_baro_wave(parsed_args)
         paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
-    elseif is_column_without_edmf(parsed_args)
+    elseif CA.is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
-    elseif is_column_edmf(parsed_args)
+    elseif CA.is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
-    elseif is_solid_body(parsed_args)
+    elseif CA.is_solid_body(parsed_args)
         postprocessing(sol, simulation.output_dir, fps)
     elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)
