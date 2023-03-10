@@ -32,11 +32,14 @@ function temporary_quantities(atmos, center_space, face_space)
     FT = Spaces.undertype(center_space)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;
+        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
         ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
+        # TODO: Remove this hack
+        sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
     )
 end
 
@@ -48,6 +51,7 @@ function default_cache(
     spaces,
     numerics,
     simulation,
+    surface_setup,
 )
     FT = eltype(params)
     (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
@@ -66,21 +70,14 @@ function default_cache(
         ᶜρ_ref .*= 0
         ᶜp_ref .*= 0
     end
-    z_sfc = Fields.level(ᶠcoord.z, half)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = CAP.Omega(params)
         ᶜf = @. 2 * Ω * sind(ᶜcoord.lat)
-        lat_sfc = Fields.level(ᶜcoord.lat, 1)
     else
         f = CAP.f_plane_coriolis_frequency(params)
         ᶜf = map(_ -> f, ᶜcoord)
-        lat_sfc = map(_ -> eltype(params)(0), Fields.level(ᶜcoord, 1))
     end
     ᶜf = @. CT3(Geometry.WVector(ᶜf))
-    T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
-
-    sfc_conditions =
-        similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
 
     quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
     do_dss = quadrature_style isa Spaces.Quadratures.GLL
@@ -102,6 +99,7 @@ function default_cache(
         spaces,
         atmos,
         comms_ctx = Fields.comm_context(axes(Y.c)),
+        sfc_setup = surface_setup(params),
         test_dycore_consistency = parsed_args["test_dycore_consistency"],
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
@@ -113,13 +111,6 @@ function default_cache(
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
         ᶜf,
-        sfc_conditions,
-        z_sfc,
-        T_sfc,
-        ts_sfc = similar(
-            Spaces.level(Y.f, half),
-            thermo_state_type(atmos.moisture_model, FT),
-        ),
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
@@ -182,7 +173,6 @@ function additional_cache(
         edmf_coriolis_cache(Y, atmos.edmf_coriolis),
         forcing_cache(Y, forcing_type),
         radiation_cache,
-        vertical_diffusion_boundary_layer_cache(Y, atmos),
         non_orographic_gravity_wave_cache(
             atmos.non_orographic_gravity_wave,
             atmos.model_config,

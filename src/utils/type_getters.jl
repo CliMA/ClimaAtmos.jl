@@ -14,17 +14,12 @@ import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DEQ
 
 function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
-
-    # should this live in the radiation model?
-
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
-    surface_scheme = get_surface_scheme(FT, parsed_args)
 
-    diffuse_momentum =
-        !(forcing_type isa HeldSuarezForcing) && !isnothing(surface_scheme)
+    diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
     edmfx_adv_test = parsed_args["edmfx_adv_test"]
     @assert edmfx_adv_test in (false, true)
@@ -37,7 +32,6 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
     atmos = AtmosModel(;
         moisture_model,
         model_config,
-        coupling = get_coupling_type(parsed_args),
         perf_mode = get_perf_mode(parsed_args),
         energy_form = get_energy_form(parsed_args, vert_diff),
         radiation_mode,
@@ -55,7 +49,6 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
             parsed_args,
             turbconv_params,
         ),
-        surface_scheme,
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             model_config,
@@ -301,6 +294,10 @@ function get_initial_condition(parsed_args)
     end
 end
 
+function get_surface_setup(parsed_args)
+    return getproperty(SurfaceStates, Symbol(parsed_args["surface_setup"]))()
+end
+
 is_explicit_CTS_algo_type(alg_or_tableau) =
     alg_or_tableau <: CTS.ERKAlgorithmName
 
@@ -531,6 +528,7 @@ function get_cache(
     numerics,
     simulation,
     initial_condition,
+    surface_setup,
 )
     _default_cache = default_cache(
         Y,
@@ -540,6 +538,7 @@ function get_cache(
         spaces,
         numerics,
         simulation,
+        surface_setup,
     )
     merge(
         _default_cache,

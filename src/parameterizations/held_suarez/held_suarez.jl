@@ -28,7 +28,7 @@ function forcing_cache(Y, forcing_type::HeldSuarezForcing)
 end
 
 function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
-    (; T_sfc, z_sfc, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p # assume ᶜp has been updated
+    (; sfc_conditions, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p
 
     FT = Spaces.undertype(axes(Y.c))
     R_d = FT(CAP.R_d(params))
@@ -37,9 +37,10 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
     grav = FT(CAP.grav(params))
+    thermo_params = CAP.thermodynamics_params(params)
 
-    z_bottom = Spaces.level(Fields.coordinate_field(Y.c).z[colidx], 1)
-    z_surface = Fields.Field(Fields.field_values(z_sfc[colidx]), axes(z_bottom))
+    z_surface =
+        Fields.level(Fields.coordinate_field(Y.f).z[colidx], Fields.half)
 
     σ_b = FT(7 / 10)
     k_a = 1 / (40 * day)
@@ -56,7 +57,12 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     T_min = FT(200)
 
     @. ᶜσ[colidx] =
-        ᶜp[colidx] / (MSLP * exp(-grav * z_surface / R_d / T_sfc[colidx]))
+        ᶜp[colidx] / (
+            MSLP * exp(
+                -grav * z_surface / R_d /
+                TD.air_temperature(thermo_params, sfc_conditions.ts[colidx]),
+            )
+        )
 
     @. ᶜheight_factor[colidx] = max(0, (ᶜσ[colidx] - σ_b) / (1 - σ_b))
     @. ᶜΔρT[colidx] =

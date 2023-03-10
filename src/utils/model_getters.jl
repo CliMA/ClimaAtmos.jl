@@ -24,17 +24,6 @@ function get_model_config(parsed_args)
     end
 end
 
-function get_coupling_type(parsed_args)
-    coupled = parsed_args["coupled"]
-    return if coupled == true
-        Coupled()
-    elseif coupled == false
-        Decoupled()
-    else
-        error("Uncaught coupled type.")
-    end
-end
-
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
     κ₄ = FT(parsed_args["kappa_4"])
@@ -333,18 +322,4 @@ function get_surface_thermo_state_type(parsed_args)
     dict = Dict()
     dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
     return dict[parsed_args["surface_thermo_state_type"]]
-end
-
-
-function get_surface_scheme(FT, parsed_args)
-    surface_scheme = parsed_args["surface_scheme"]
-    sfc_thermo_state_type = get_surface_thermo_state_type(parsed_args)
-    @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
-    return if surface_scheme == "bulk"
-        BulkSurfaceScheme(sfc_thermo_state_type)
-    elseif surface_scheme == "monin_obukhov"
-        MoninObukhovSurface(sfc_thermo_state_type)
-    elseif surface_scheme == nothing
-        surface_scheme
-    end
 end

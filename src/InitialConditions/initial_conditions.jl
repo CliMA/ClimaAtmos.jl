@@ -428,7 +428,8 @@ end
 ##
 ## EDMF Test Cases
 ##
-
+# TODO: Get rid of this
+const FunctionOrSpline = Union{Dierckx.Spline1D, Function}
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
 
@@ -450,12 +451,15 @@ function hydrostatic_pressure_profile(;
     grav = TD.Parameters.grav(thermo_params)
 
     ts(p, z, ::Nothing, ::Nothing, _) = error("Either T or θ must be specified")
-    ts(p, z, T, θ, _) = error("Only one of T and θ can be specified")
-    ts(p, z, T, ::Nothing, ::Nothing) = TD.PhaseDry_pT(thermo_params, p, T(z))
-    ts(p, z, ::Nothing, θ, ::Nothing) = TD.PhaseDry_pθ(thermo_params, p, θ(z))
-    ts(p, z, T, ::Nothing, q_tot) =
+    ts(p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _) =
+        error("Only one of T and θ can be specified")
+    ts(p, z, T::FunctionOrSpline, ::Nothing, ::Nothing) =
+        TD.PhaseDry_pT(thermo_params, p, T(z))
+    ts(p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing) =
+        TD.PhaseDry_pθ(thermo_params, p, θ(z))
+    ts(p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline) =
         TD.PhaseEquil_pTq(thermo_params, p, T(z), q_tot(z))
-    ts(p, z, ::Nothing, θ, q_tot) =
+    ts(p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline) =
         TD.PhaseEquil_pθq(thermo_params, p, θ(z), q_tot(z))
     dp_dz(p, _, z) =
         -grav * TD.air_density(thermo_params, ts(p, z, T, θ, q_tot))
@@ -487,7 +491,7 @@ for IC in (:Nieuwstadt, :GABLS)
     @eval function (initial_condition::$IC)(params)
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
-        p_0 = initial_surface_pressure(initial_condition, thermo_params)
+        p_0 = FT(100000.0)
         θ = APL.$θ_func_name(FT)
         p = hydrostatic_pressure_profile(; thermo_params, p_0, θ)
         u = APL.$u_func_name(FT)
@@ -517,7 +521,7 @@ struct GATE_III <: InitialCondition end
 function (initial_condition::GATE_III)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    p_0 = initial_surface_pressure(initial_condition, thermo_params)
+    p_0 = FT(101500.0)
     T = APL.GATE_III_T(FT)
     q_tot = APL.GATE_III_q_tot(FT)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, T, q_tot)
@@ -581,7 +585,12 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
     @eval function (initial_condition::$IC)(params)
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
-        p_0 = initial_surface_pressure(initial_condition, thermo_params)
+        p_0 = FT(
+            $IC <: Bomex || $IC <: LifeCycleTan2018 ? 101500.0 :
+            $IC <: Soares ? 100000.0 :
+            $IC <: ARM_SGP ? 97000.0 :
+            error("Invalid Initial Condition : $($IC)"),
+        )
         θ = APL.$θ_func_name(FT)
         q_tot = APL.$q_tot_func_name(FT)
         p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
@@ -632,7 +641,7 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     @eval function (initial_condition::$IC_Type)(params)
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
-        p_0 = initial_surface_pressure(initial_condition, thermo_params)
+        p_0 = FT(101780.0)
         θ = APL.$θ_func_name(FT)
         q_tot = APL.$q_tot_func_name(FT)
         p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
@@ -670,7 +679,7 @@ struct Rico <: InitialCondition end
 function (initial_condition::Rico)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    p_0 = initial_surface_pressure(initial_condition, thermo_params)
+    p_0 = FT(101540.0)
     θ = APL.Rico_θ_liq_ice(FT)
     q_tot = APL.Rico_q_tot(FT)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
@@ -707,7 +716,7 @@ struct TRMM_LBA <: InitialCondition end
 function (initial_condition::TRMM_LBA)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    p_0 = initial_surface_pressure(initial_condition, thermo_params)
+    p_0 = FT(99130.0)
     T = APL.TRMM_LBA_T(FT)
 
     # Set q_tot to the value implied by the measured pressure and relative
@@ -749,207 +758,4 @@ function (initial_condition::TRMM_LBA)(params)
         )
     end
     return local_state
-end
-
-##
-## TODO: Temporary workaround for TC using its own surface parametrization.
-##
-
-# By default, use the dycore's surface parametrization.
-surface_params(::InitialCondition, thermo_params) =
-    surface_params(Bomex(), thermo_params)
-
-function surface_params(::Nieuwstadt, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
-    psurface::FT = 1000 * 100
-    Tsurface::FT = 300.0
-    θ_flux::FT = 6.0e-2
-    lhf::FT = 0.0 # It would be 0.0 if we follow Nieuwstadt.
-    ts = TD.PhaseDry_pT(thermo_params, psurface, Tsurface)
-    shf =
-        θ_flux * TD.air_density(thermo_params, ts) * TD.cp_m(thermo_params, ts)
-    return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
-end
-
-function surface_params(::GABLS, thermo_params)
-    FT = eltype(thermo_params)
-    psurface::FT = 1.0e5
-    Tsurface = t -> 265 - (FT(0.25) / 3600) * t
-    zrough::FT = 0.1
-    ts = t -> TD.PhaseDry_pT(thermo_params, psurface, Tsurface(t))
-    return TC.MoninObukhovSurface(; ts, zrough)
-end
-
-# TODO: The paper only specifies that Tsurface = 299.88. Where did all of these
-# values come from?
-function surface_params(::GATE_III, thermo_params)
-    FT = eltype(thermo_params)
-    psurface::FT = 1013 * 100
-    qsurface::FT = 16.5 / 1000.0 # kg/kg
-    cm = zc_surf -> FT(0.0012)
-    ch = zc_surf -> FT(0.0034337)
-    cq = zc_surf -> FT(0.0034337)
-    Tsurface::FT = 299.184
-
-    # For GATE_III we provide values of transfer coefficients
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    return TC.FixedSurfaceCoeffs(; zrough = FT(0), ts, ch, cm)
-end
-
-function surface_params(::Soares, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 0.16 #1.0e-4 0.16 is the value specified in the Nieuwstadt paper.
-    psurface::FT = 1000 * 100
-    Tsurface::FT = 300.0
-    qsurface::FT = 5.0e-3
-    θ_flux::FT = 6.0e-2
-    qt_flux::FT = 2.5e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    ρsurface = TD.air_density(thermo_params, ts)
-    lhf = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
-    shf = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
-    return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
-end
-
-function surface_params(::Bomex, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 1.0e-4
-    psurface::FT = 1.015e5
-    qsurface::FT = 22.45e-3 # kg/kg
-    Tsurface::FT = 300.4 # Equivalent to θsurface = 299.1
-    θ_flux::FT = 8.0e-3
-    qt_flux::FT = 5.2e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    ρsurface = TD.air_density(thermo_params, ts)
-    lhf = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
-    shf = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
-    ustar::FT = 0.28 # m/s
-    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
-end
-
-function surface_params(::LifeCycleTan2018, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 1.0e-4 # not actually used, but initialized to reasonable value
-    psurface::FT = 1.015e5
-    qsurface::FT = 22.45e-3 # kg/kg
-    Tsurface::FT = 300.4 # equivalent to θsurface = 299.1
-    θ_flux::FT = 8.0e-3
-    qt_flux::FT = 5.2e-5
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    ρsurface = TD.air_density(thermo_params, ts)
-    lhf0 = qt_flux * ρsurface * TD.latent_heat_vapor(thermo_params, ts)
-    shf0 = θ_flux * ρsurface * TD.cp_m(thermo_params, ts)
-
-    weight_factor(t) = FT(0.01) + FT(0.99) * (cos(2 * FT(π) * t / 3600) + 1) / 2
-    weight::FT = 1.0
-    lhf = t -> lhf0 * (weight * weight_factor(t))
-    shf = t -> shf0 * (weight * weight_factor(t))
-
-    ustar::FT = 0.28 # m/s
-    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
-end
-
-function surface_params(::ARM_SGP, thermo_params)
-    FT = eltype(thermo_params)
-    psurface::FT = 970 * 100
-    qsurface::FT = 15.2e-3 # kg/kg
-    θ_surface::FT = 299.0
-    ts = TD.PhaseEquil_pθq(thermo_params, psurface, θ_surface, qsurface)
-    ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
-
-    t_Sur_in = FT[0.0, 4.0, 6.5, 7.5, 10.0, 12.5, 14.5] .* 3600 #LES time is in sec
-    SH = FT[-30.0, 90.0, 140.0, 140.0, 100.0, -10, -10] # W/m^2
-    LH = FT[5.0, 250.0, 450.0, 500.0, 420.0, 180.0, 0.0] # W/m^2
-    shf = Dierckx.Spline1D(t_Sur_in, SH; k = 1)
-    lhf = Dierckx.Spline1D(t_Sur_in, LH; k = 1)
-    zrough::FT = 0
-
-    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
-end
-
-function surface_params(::DYCOMS_RF01, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 1.0e-4
-    ustar::FT = 0.28 # just to initialize grid mean covariances
-    shf::FT = 15.0 # sensible heat flux
-    lhf::FT = 115.0 # latent heat flux
-    psurface::FT = 1017.8 * 100
-    Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
-    qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
-    #density_surface  = 1.22     # kg/m^3
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    return TC.FixedSurfaceFlux(zrough, ts, shf, lhf)
-end
-
-function surface_params(::DYCOMS_RF02, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 1.0e-4  #TODO - not needed?
-    ustar::FT = 0.25
-    shf::FT = 16.0 # sensible heat flux
-    lhf::FT = 93.0 # latent heat flux
-    psurface::FT = 1017.8 * 100
-    Tsurface::FT = 292.5    # K      # i.e. the SST from DYCOMS setup
-    qsurface::FT = 13.84e-3 # kg/kg  # TODO - taken from Pycles, maybe it would be better to calculate the q_star(sst) for TurbulenceConvection?
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
-end
-
-function surface_params(::Rico, thermo_params)
-    FT = eltype(thermo_params)
-    zrough::FT = 0.00015
-    cm0::FT = 0.001229
-    ch0::FT = 0.001094
-    cq0::FT = 0.001133
-    # Adjust for non-IC grid spacing
-    grid_adjust(zc_surf) = (log(20 / zrough) / log(zc_surf / zrough))^2
-    cm = zc_surf -> cm0 * grid_adjust(zc_surf)
-    ch = zc_surf -> ch0 * grid_adjust(zc_surf)
-    cq = zc_surf -> cq0 * grid_adjust(zc_surf) # TODO: not yet used..
-    psurface::FT = 1.0154e5
-    Tsurface::FT = 299.8
-
-    # Saturated surface conditions for a given surface temperature and pressure
-    p_sat_surface =
-        TD.saturation_vapor_pressure(thermo_params, Tsurface, TD.Liquid())
-    ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)
-    qsurface = ϵ_v * p_sat_surface / (psurface - p_sat_surface * (1 - ϵ_v))
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-
-    # For Rico we provide values of transfer coefficients
-    return TC.FixedSurfaceCoeffs(; zrough, ts, ch, cm)
-end
-
-function surface_params(::TRMM_LBA, thermo_params)
-    FT = eltype(thermo_params)
-    # zrough = 1.0e-4 # not actually used, but initialized to reasonable value
-    zrough::FT = 0 # actually, used, TODO: should we be using the value above?
-    psurface::FT = 991.3 * 100
-    qsurface::FT = 22.45e-3 # kg/kg
-    Tsurface::FT = 273.15 + 23.7
-    ts = TD.PhaseEquil_pTq(thermo_params, psurface, Tsurface, qsurface)
-    ustar::FT = 0.28 # this is taken from Bomex -- better option is to approximate from LES tke above the surface
-    lhf =
-        t ->
-            554 *
-            max(
-                0,
-                cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)),
-            )^FT(1.3)
-    shf =
-        t ->
-            270 *
-            max(
-                0,
-                cos(FT(π) / 2 * ((FT(5.25) * 3600 - t) / FT(5.25) / 3600)),
-            )^FT(1.5)
-    return TC.FixedSurfaceFluxAndFrictionVelocity(zrough, ts, shf, lhf, ustar)
-end
-
-# This function is only called by the TC initial conditions.
-function initial_surface_pressure(initial_condition, thermo_params)
-    FT = eltype(thermo_params)
-    surf_params = surface_params(initial_condition, thermo_params)
-    surf_ts = TC.surface_thermo_state(surf_params, thermo_params, FT(0))
-    return TD.air_pressure(thermo_params, surf_ts)
 end

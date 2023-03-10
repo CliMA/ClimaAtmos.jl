@@ -37,9 +37,6 @@ function additional_tendency!(Yₜ, Y, p, t)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
 
         (; vert_diff) = p.atmos
-        if p.atmos.coupling isa Decoupled
-            get_surface_fluxes!(Y, p, t, colidx, vert_diff)
-        end
         vertical_diffusion_boundary_layer_tendency!(
             Yₜ,
             Y,

@@ -2,7 +2,7 @@
 is_baro_wave(parsed_args) = all((
     parsed_args["config"] == "sphere",
     parsed_args["forcing"] == nothing,
-    parsed_args["surface_scheme"] == nothing,
+    parsed_args["surface_setup"] == nothing,
     parsed_args["perturb_initstate"] == true,
 ))
 

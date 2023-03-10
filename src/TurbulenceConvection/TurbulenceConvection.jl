@@ -17,10 +17,9 @@ import ClimaCore.Geometry as CCG
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
-import ClimaCore.Geometry: ⊗
+import ClimaCore.Geometry: ⊗, _norm_sqr
 import ClimaCore.Operators as CCO
 import LinearAlgebra as LA
-import LinearAlgebra: ×
 import DocStringExtensions
 import StaticArrays as SA
 import StatsBase

@@ -27,6 +27,10 @@ import .TurbulenceConvection as TC
 include("precomputed_quantities.jl")
 
 include(joinpath("InitialConditions", "InitialConditions.jl"))
+include(
+    joinpath("parameterizations", "TurbulenceConvection", "tc_functions.jl"),
+)
+include(joinpath("SurfaceStates", "SurfaceStates.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("tendencies", "pressure_work.jl"))
@@ -73,8 +77,6 @@ include(joinpath("tendencies", "advection.jl"))
 include(joinpath("dycore_equations", "sgs_flux_tendencies.jl"))
 
 include("staggered_nonhydrostatic_model.jl")
-
-include(joinpath("utils", "surface.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
 

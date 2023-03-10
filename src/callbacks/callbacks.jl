@@ -88,33 +88,16 @@ end
 function turb_conv_affect_filter!(integrator)
     p = integrator.p
     (; edmf_cache) = p
-    (; edmf, param_set, surf_params) = edmf_cache
+    (; edmf, param_set) = edmf_cache
     t = integrator.t
     Y = integrator.u
     tc_params = CAP.turbconv_params(param_set)
-    thermo_params = CAP.thermodynamics_params(param_set)
 
     set_precomputed_quantities!(Y, p, t) # sets ᶜts for set_edmf_surface_bc
     Fields.bycolumn(axes(Y.c)) do colidx
-        state = TC.tc_column_state(
-            Y,
-            p,
-            nothing,
-            colidx,
-            surf_params,
-            thermo_params,
-            t,
-        )
+        state = TC.tc_column_state(Y, p, nothing, colidx, t)
         grid = TC.Grid(state)
-        surf = get_surface(
-            p.atmos.model_config,
-            surf_params,
-            grid,
-            state,
-            t,
-            tc_params,
-        )
-        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+        TC.affect_filter!(edmf, grid, state, tc_params, t)
     end
 
     # We're lying to OrdinaryDiffEq.jl, in order to avoid
@@ -129,7 +112,9 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜts, T_sfc, params) = p
+    set_precomputed_quantities!(Y, p, t) # sets ᶜts and sfc_conditions
+
+    (; ᶜts, sfc_conditions, params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
 
@@ -137,11 +122,13 @@ function rrtmgp_model_callback!(integrator)
     thermo_params = CAP.thermodynamics_params(params)
     insolation_params = CAP.insolation_params(params)
 
-    radiation_model.surface_temperature .= RRTMGPI.field2array(T_sfc)
+    sfc_ts = sfc_conditions.ts
+    sfc_T =
+        RRTMGPI.array2field(radiation_model.surface_temperature, axes(sfc_ts))
+    @. sfc_T = TD.air_temperature(thermo_params, sfc_ts)
 
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
-    set_precomputed_quantities!(Y, p, t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
@@ -288,13 +275,13 @@ function save_to_disk_func(integrator)
 
     set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
 
-    (; ᶜu, ᶜK, ᶜts, ᶜp, T_sfc, ts_sfc) = p
+    (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p
     dycore_diagnostic = (;
         common_diagnostics(ᶜu, ᶜts)...,
         pressure = ᶜp,
         kinetic_energy = ᶜK,
-        sfc_temperature = T_sfc,
-        sfc_qt = TD.total_specific_humidity.(thermo_params, ts_sfc),
+        sfc_temperature = TD.air_temperature.(thermo_params, sfc_conditions.ts),
+        sfc_qt = TD.total_specific_humidity.(thermo_params, sfc_conditions.ts),
     )
 
     if eltype(Fields.coordinate_field(axes(Y.c))) <: Geometry.Abstract3DPoint
@@ -410,16 +397,17 @@ function save_to_disk_func(integrator)
     end
 
     if !isnothing(p.atmos.vert_diff)
-        (; ρ_dif_flux_uₕ, ρ_dif_flux_h_tot, ρ_dif_flux_q_tot) = p
+        (; ρ_flux_uₕ, ρ_flux_h_tot) = p.sfc_conditions
         vert_diff_diagnostic = (;
-            sfc_flux_momentum = ρ_dif_flux_uₕ ./ Spaces.level(Y.c.ρ, 1),
-            sfc_flux_energy = ρ_dif_flux_h_tot,
+            sfc_flux_momentum = ρ_flux_uₕ ./
+                                Spaces.level(ᶠinterp.(Y.c.ρ), half),
+            sfc_flux_energy = ρ_flux_h_tot,
         )
-        # TODO: The division should be by Spaces.level(ᶠρ, half), but we need to
-        # be consistent in how we get ρ at the surface.
         if :ρq_tot in propertynames(Y.c)
-            vert_diff_diagnostic =
-                (; vert_diff_diagnostic..., sfc_evaporation = ρ_dif_flux_q_tot)
+            vert_diff_diagnostic = (;
+                vert_diff_diagnostic...,
+                sfc_evaporation = p.sfc_conditions.ρ_flux_q_tot,
+            )
         end
     else
         vert_diff_diagnostic = NamedTuple()

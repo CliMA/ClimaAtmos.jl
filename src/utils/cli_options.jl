@@ -70,9 +70,10 @@ function argparse_settings()
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String
         default = "false"
-        "--surface_scheme"
-        help = "Surface flux scheme [`nothing` (default), `bulk`, `monin_obukhov`]"
+        "--surface_setup"
+        help = "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
         arg_type = String
+        default = "DefaultExchangeCoefficients"
         "--surface_thermo_state_type"
         help = "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
         arg_type = String

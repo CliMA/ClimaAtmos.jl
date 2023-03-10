@@ -33,7 +33,7 @@ parsed_args_perf_target = isnothing(target_job) ? Dict() : dict[target_job]
 
 parsed_args_perf_target["forcing"] = "held_suarez";
 parsed_args_perf_target["vert_diff"] = true;
-parsed_args_perf_target["surface_scheme"] = "bulk";
+parsed_args_perf_target["surface_setup"] = "DefaultExchangeCoefficients";
 parsed_args_perf_target["moist"] = "equil";
 parsed_args_perf_target["enable_threading"] = false;
 parsed_args_perf_target["rad"] = "allskywithclear";
