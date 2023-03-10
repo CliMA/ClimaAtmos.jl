@@ -1,3 +1,5 @@
+using ClimaCore
+
 time_to_seconds(t::Number) =
     t == Inf ? t : error("Uncaught case in computing time from given string.")
 

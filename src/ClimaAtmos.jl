@@ -8,6 +8,9 @@ import .Parameters as CAP
 include("common_spaces.jl")
 include("types.jl")
 include("utilities.jl")
+include("examples_utilities.jl")
+include("classify_case.jl")
+include("topography_helper.jl")
 
 include("radiation_utilities.jl")
 include("RRTMGPInterface.jl")

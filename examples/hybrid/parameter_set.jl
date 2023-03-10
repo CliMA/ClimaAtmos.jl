@@ -1,14 +1,15 @@
 import ClimaAtmos
+import ClimaAtmos as CA
 
 include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
 
 function create_parameter_set(::Type{FT}, parsed_args) where {FT}
     toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
-    dt = FT(time_to_seconds(parsed_args["dt"]))
-    return if is_column_edmf(parsed_args)
+    dt = FT(CA.time_to_seconds(parsed_args["dt"]))
+    return if CA.is_column_edmf(parsed_args)
         overrides = (; MSLP = 100000.0, τ_precip = dt)
         create_climaatmos_parameter_set(toml_dict, overrides)
-    elseif is_column_without_edmf(parsed_args)
+    elseif CA.is_column_without_edmf(parsed_args)
         overrides = (; τ_precip = dt)
         create_climaatmos_parameter_set(toml_dict, overrides)
     else
