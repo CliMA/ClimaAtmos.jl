@@ -100,13 +100,10 @@ function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel)
     ρaθ_liq_ice = ρa * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state)
     ρaq_tot = ρa * TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
     n_up = TC.n_updrafts(turbconv_model)
+    ρa_en_tke = (ls.ρ - n_up * ρa) * ls.turbconv_state.tke
     return (;
         turbconv = (;
-            edmf_environment_variables(
-                ls,
-                turbconv_model.thermo_covariance_model,
-                ls.ρ - n_up * ρa,
-            )...,
+            en = (; ρatke = ρa_en_tke),
             up = ntuple(_ -> (; ρarea = ρa, ρaθ_liq_ice, ρaq_tot), Val(n_up)),
         )
     )
@@ -119,18 +116,5 @@ turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
             _ -> (; w = Geometry.Covariant3Vector(zero(eltype(ls)))),
             Val(TC.n_updrafts(turbconv_model)),
         )
-    )
-)
-
-function edmf_environment_variables(ls, ::TC.DiagnosticThermoCovariances, ρa_en)
-    @assert !(ls.turbconv_state isa EDMFStateWithThermo2ndMoments)
-    return (; en = (; ρatke = ρa_en * ls.turbconv_state.tke))
-end
-edmf_environment_variables(ls, ::TC.PrognosticThermoCovariances, ρa_en) = (;
-    en = (;
-        ρatke = ρa_en * ls.turbconv_state.tke,
-        ρaHvar = ρa_en * ls.turbconv_state.Hvar,
-        ρaQTvar = ρa_en * ls.turbconv_state.QTvar,
-        ρaHQTcov = ρa_en * ls.turbconv_state.HQTcov,
     )
 )

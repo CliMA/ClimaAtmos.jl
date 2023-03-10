@@ -77,16 +77,3 @@ end
 
 @inline Base.getproperty(ts::EDMFState{FT}, s::Symbol) where {FT} =
     s in (:Hvar, :QTVar, :HQTcov) ? FT(0) : getfield(ts, s)
-
-"""
-    EDMFStateWithThermo2ndMoments(; tke, Hvar, QTvar, HQTcov)
-
-Stores the values of `tke`, `Hvar`, `QTvar`, and `HQTcov` for a
-`turbconv_model::EDMFModel` that uses a `PrognosticThermoCovariances` model.
-"""
-Base.@kwdef struct EDMFStateWithThermo2ndMoments{FT} <: TurbconvState{FT}
-    tke::FT
-    Hvar::FT
-    QTvar::FT
-    HQTcov::FT
-end

@@ -3,7 +3,7 @@ using NCDatasets
 using Dierckx
 using ImageFiltering
 using Interpolations
-import ClimaCore: InputOutput
+import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
 import ClimaAtmos:
@@ -25,12 +25,7 @@ import ClimaCore: InputOutput
 
 include("topography_helper.jl")
 
-function get_atmos(
-    ::Type{FT},
-    parsed_args,
-    config_params,
-    turbconv_params,
-) where {FT}
+function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
 
     # should this live in the radiation model?
 
@@ -62,7 +57,6 @@ function get_atmos(
             moisture_model,
             precip_model,
             parsed_args,
-            config_params,
             turbconv_params,
         ),
         surface_scheme,
@@ -171,18 +165,22 @@ function get_spaces(parsed_args, params, comms_ctx)
     center_space, face_space = if parsed_args["config"] == "sphere"
         nh_poly = parsed_args["nh_poly"]
         quad = Spaces.Quadratures.GLL{nh_poly + 1}()
-        horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
+        h_space = CA.make_horizontal_space(
+            horizontal_mesh,
+            quad,
+            comms_ctx,
+            bubble,
+        )
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
             Meshes.Uniform()
         end
         if warp_function == nothing
-            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+            CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
         else
-            make_hybrid_spaces(
+            CA.make_hybrid_spaces(
                 h_space,
                 z_max,
                 z_elem,
@@ -195,7 +193,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         FT = eltype(params)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
         quad = Spaces.Quadratures.GL{1}()
-        horizontal_mesh = periodic_rectangle_mesh(;
+        horizontal_mesh = CA.periodic_rectangle_mesh(;
             x_max = Δx,
             y_max = Δx,
             x_elem = 1,
@@ -205,14 +203,18 @@ function get_spaces(parsed_args, params, comms_ctx)
             @warn "Bubble correction not compatible with single column configuration. It will be switched off."
             bubble = false
         end
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        h_space = CA.make_horizontal_space(
+            horizontal_mesh,
+            quad,
+            comms_ctx,
+            bubble,
+        )
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -221,20 +223,24 @@ function get_spaces(parsed_args, params, comms_ctx)
         x_max = FT(parsed_args["x_max"])
         y_elem = Int(parsed_args["y_elem"])
         y_max = FT(parsed_args["y_max"])
-        horizontal_mesh = periodic_rectangle_mesh(;
+        horizontal_mesh = CA.periodic_rectangle_mesh(;
             x_max = x_max,
             y_max = y_max,
             x_elem = x_elem,
             y_elem = y_elem,
         )
-        h_space =
-            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        h_space = CA.make_horizontal_space(
+            horizontal_mesh,
+            quad,
+            comms_ctx,
+            bubble,
+        )
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     end
     return (;
         center_space,

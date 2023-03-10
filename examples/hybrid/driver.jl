@@ -9,7 +9,6 @@ include("comms.jl")
 if startswith(parsed_args["ode_algo"], "ODE.") # TODO: use Preferences.jl instead:
     include("../ordinary_diff_eq_bug_fixes.jl")
 end
-include("../common_spaces.jl")
 include("classify_case.jl")
 include("utilities.jl")
 include("nvtx.jl")
@@ -39,9 +38,8 @@ include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 
 include("parameter_set.jl")
-# config stores flags used to configure constructors
-params, config = create_parameter_set(FT, parsed_args)
-atmos = get_atmos(FT, parsed_args, config, params.turbconv_params)
+params = create_parameter_set(FT, parsed_args)
+atmos = get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
 numerics = get_numerics(parsed_args)
 simulation = get_simulation(FT, parsed_args)
@@ -60,8 +58,6 @@ using ClimaTimeSteppers
 
 import Random
 Random.seed!(1234)
-
-isnothing(atmos.radiation_mode) || include("radiation_utilities.jl")
 
 jacobi_flags(::TotalEnergy) =
     (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
@@ -85,7 +81,7 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             idealized_insolation,
             idealized_clouds,
             thermo_dispatcher,
-            data_loader,
+            data_loader = CA.rrtmgp_data_loader,
             ᶜinterp,
         )
     else

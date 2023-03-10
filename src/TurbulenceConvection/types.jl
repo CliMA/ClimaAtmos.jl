@@ -175,37 +175,6 @@ Base.@kwdef struct PressureModelParams{FT}
     α_d::FT # factor multiplier for pressure drag
 end
 
-abstract type AbstractCovarianceModel end
-struct PrognosticThermoCovariances <: AbstractCovarianceModel end
-struct DiagnosticThermoCovariances{FT} <: AbstractCovarianceModel
-    covar_lim::FT
-end
-
-abstract type AbstractQuadratureType end
-struct LogNormalQuad <: AbstractQuadratureType end
-struct GaussianQuad <: AbstractQuadratureType end
-
-abstract type AbstractEnvThermo end
-struct SGSMean <: AbstractEnvThermo end
-struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
-    quadrature_type::QT
-    a::A
-    w::W
-end
-
-function SGSQuadrature(::Type{FT}, paramset, quadrature_type) where {FT}
-    N = paramset.quadrature_order
-    # TODO: double check this python-> julia translation
-    # a, w = np.polynomial.hermite.hermgauss(N)
-    a, w = FastGaussQuadrature.gausshermite(N)
-    a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
-    QT = typeof(quadrature_type)
-    return SGSQuadrature{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
-end
-
-quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N
-
 abstract type AbstractSurfaceParameters{FT <: Real} end
 
 const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
@@ -268,14 +237,12 @@ get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
 
 
-struct EDMFModel{N_up, FT, MM, TCM, PM, ENT, EBGC, MLP, PMP, EC}
+struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP, EC}
     surface_area::FT
     max_area::FT
     minimum_area::FT
     moisture_model::MM
-    thermo_covariance_model::TCM
     precip_model::PM
-    en_thermo::ENT
     bg_closure::EBGC
     mixing_length_params::MLP
     pressure_model_params::PMP
@@ -287,8 +254,6 @@ function EDMFModel(
     ::Type{FT},
     moisture_model,
     precip_model,
-    thermo_covariance_model,
-    en_thermo,
     parsed_args,
     turbconv_params,
 ) where {FT}
@@ -302,16 +267,7 @@ function EDMFModel(
     max_area = turbconv_params.max_area
     minimum_area = turbconv_params.min_area
 
-    # Create the class for environment thermodynamics and buoyancy gradient computation
-    bg_closure = if en_thermo isa SGSMean
-        BuoyGradMean()
-    elseif en_thermo isa SGSQuadrature
-        BuoyGradQuadratures()
-    else
-        error(
-            "Something went wrong. Invalid environmental buoyancy gradient closure type '$(typeof(turbconv_params.sgs))'",
-        )
-    end
+    bg_closure = BuoyGradMean()
     if !(moisture_model isa EquilMoistModel)
         @warn string(
             "SGS model only supports equilibrium moisture choice.",
@@ -355,15 +311,6 @@ function EDMFModel(
             "Something went wrong. Invalid entrainment closure type '$entr_closure_name'",
         )
     end
-    # entr closure
-    # entr_type = parse_namelist(
-    #     namelist,
-    #     "turbulence",
-    #     "EDMF_PrognosticTKE",
-    #     "entrainment";
-    #     default = "moisture_deficit",
-    #     valid_options = ["moisture_deficit"],
-    # )
 
     # minimum updraft top to avoid zero division in pressure drag and turb-entr
     H_up_min = turbconv_params.min_updraft_top
@@ -389,20 +336,16 @@ function EDMFModel(
 
     EC = typeof(entr_closure)
     MM = typeof(moisture_model)
-    TCM = typeof(thermo_covariance_model)
     PM = typeof(precip_model)
     EBGC = typeof(bg_closure)
-    ENT = typeof(en_thermo)
     MLP = typeof(mixing_length_params)
     PMP = typeof(pressure_model_params)
-    return EDMFModel{n_updrafts, FT, MM, TCM, PM, ENT, EBGC, MLP, PMP, EC}(
+    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP, PMP, EC}(
         surface_area,
         max_area,
         minimum_area,
         moisture_model,
-        thermo_covariance_model,
         precip_model,
-        en_thermo,
         bg_closure,
         mixing_length_params,
         pressure_model_params,
@@ -418,7 +361,7 @@ Base.eltype(::EDMFModel{N_up, FT}) where {N_up, FT} = FT
 pressure_model_params(m::EDMFModel) = m.pressure_model_params
 mixing_length_params(m::EDMFModel) = m.mixing_length_params
 
-Base.broadcastable(edmf::EDMFModel) = Ref(edmf)
+Base.broadcastable(edmf::EDMFModel) = tuple(edmf)
 
 function Base.summary(io::IO, edmf::EDMFModel)
     pns = string.(propertynames(edmf))

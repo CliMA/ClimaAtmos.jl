@@ -105,12 +105,12 @@ function SchurComplementW(Y, transform, flags, test = false)
         for var_prop_chain in Fields.property_chains(ᶜTC)
             ∂ᶜvarₜ∂ᶜvar =
                 Fields.single_field(∂ᶜTCₜ∂ᶜTC, var_prop_chain, identity)
-            ∂ᶜvarₜ∂ᶜvar .= Ref(tridiag_type((0, 0, 0)))
+            ∂ᶜvarₜ∂ᶜvar .= tuple(tridiag_type((0, 0, 0)))
         end
         for var_prop_chain in Fields.property_chains(ᶠTC)
             ∂ᶠvarₜ∂ᶠvar =
                 Fields.single_field(∂ᶠTCₜ∂ᶠTC, var_prop_chain, identity)
-            ∂ᶠvarₜ∂ᶠvar .= Ref(tridiag_type((0, 0, 0)))
+            ∂ᶠvarₜ∂ᶠvar .= tuple(tridiag_type((0, 0, 0)))
         end
     else
         ∂ᶜTCₜ∂ᶜTC = nothing
@@ -306,7 +306,7 @@ function _ldiv_serial!(
     # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
     # than 2 diagonals per Jacobian block.
     FT = eltype(eltype(S_column))
-    I = Ref(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
+    I = tuple(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
     compose = Operators.ComposeStencils()
     apply = Operators.ApplyStencil()
     if cond

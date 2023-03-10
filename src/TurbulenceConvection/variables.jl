@@ -89,9 +89,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
             buoy = FT(0),
             cloud_fraction = FT(0),
             tke = FT(0),
-            Hvar = FT(0),
-            QTvar = FT(0),
-            HQTcov = FT(0),
             #θ_liq_ice_tendency_precip_formation = FT(0),
             e_tot_tendency_precip_formation = FT(0),
             qt_tendency_precip_formation = FT(0),
@@ -105,9 +102,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
                 θ_dry = FT(0),
                 θ_liq_ice = FT(0),
             ),
-            Hvar_rain_dt = FT(0),
-            QTvar_rain_dt = FT(0),
-            HQTcov_rain_dt = FT(0),
         ),
         θ_liq_ice_tendency_precip_sinks = FT(0),
         e_tot_tendency_precip_sinks = FT(0),
@@ -117,12 +111,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
         qr_tendency_evap = FT(0),
         qs_tendency_melt = FT(0),
         qs_tendency_dep_sub = FT(0),
-        en_2m = (;
-            tke = cent_aux_vars_en_2m(FT),
-            Hvar = cent_aux_vars_en_2m(FT),
-            QTvar = cent_aux_vars_en_2m(FT),
-            HQTcov = cent_aux_vars_en_2m(FT),
-        ),
+        en_2m = (; tke = cent_aux_vars_en_2m(FT)),
         KM = FT(0),
         KH = FT(0),
         mixing_length = FT(0),
@@ -138,10 +127,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
         ∂θv∂z_unsat = FT(0),
         ∂qt∂z_sat = FT(0),
         ∂θl∂z_sat = FT(0),
-        ϕ_gm = FT(0), # temporary for grid-mean variables
-        ϕ_gm_cov = FT(0), # temporary for grid-mean covariance variables
-        ϕ_en_cov = FT(0), # temporary for environmental covariance variables
-        ϕ_up_cubed = FT(0), # temporary for cubed updraft variables in grid mean 3rd moment functions
     )
 )
 

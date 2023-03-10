@@ -178,7 +178,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_thermo[:, 1] = Y.c.ρθ ./ Y.c.ρ
     end
     # physical horizontal velocity
-    uh_phy = Geometry.transform.(Ref(Geometry.UVAxis()), Y.c.uₕ)
+    uh_phy = Geometry.transform.(tuple(Geometry.UVAxis()), Y.c.uₕ)
     nc_u[:, 1] = uh_phy.components.data.:1
     nc_v[:, 1] = uh_phy.components.data.:2
     # physical vertical velocity

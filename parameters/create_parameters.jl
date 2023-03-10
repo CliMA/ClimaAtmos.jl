@@ -10,24 +10,11 @@ import Thermodynamics as TD
 import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 import ClimaCore
 
-#=
-ClimaCore.Operators.getidx(
-    scalar::ConstRef,
-    loc::ClimaCore.Operators.Location,
-    idx,
-    hidx,
-) = scalar[]
-struct ConstRef{T} <: AbstractArray{T, 0}
-    val::T
-end
-Base.getindex(c::ConstRef) = c.val
-Base.size(c::ConstRef) = ()
-=#
 # TODO: move to corresponding packages
 # disable for now as causing problems
-Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = Ref(ps)
-Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = Ref(ps)
-Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = Ref(ps)
+Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = tuple(ps)
+Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = tuple(ps)
+Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = tuple(ps)
 
 
 function override_climaatmos_defaults(
@@ -118,13 +105,6 @@ function create_climaatmos_parameter_set(
         surf_flux_params,
     )
 
-    # config_params: Store strings and flags that are used for constructors
-    # but don't end up in the final Model struct
-    config_param_names = ["sgs", "quadrature_type", "thermo_covariance_model"]
-    config_params =
-        CP.get_parameter_values!(toml_dict, config_param_names, "EDMF")
-    config_params = (; config_params...)
-
     aliases = string.(fieldnames(RP.RRTMGPParameters))
     pairs = CP.get_parameter_values!(toml_dict, aliases, "RRTMGP")
     params = override_climaatmos_defaults((; pairs...), overrides) # overrides
@@ -161,5 +141,5 @@ function create_climaatmos_parameter_set(
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
-    return param_set, config_params
+    return param_set
 end
