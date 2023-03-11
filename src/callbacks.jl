@@ -372,14 +372,16 @@ function save_to_disk_func(integrator)
     end
 
     if !isnothing(p.atmos.vert_diff)
-        (; dif_flux_uₕ, dif_flux_energy, dif_flux_ρq_tot) = p
+        (; ρ_dif_flux_uₕ, ρ_dif_flux_h_tot, ρ_dif_flux_q_tot) = p
         vert_diff_diagnostic = (;
-            sfc_flux_momentum = dif_flux_uₕ,
-            sfc_flux_energy = dif_flux_energy,
+            sfc_flux_momentum = ρ_dif_flux_uₕ ./ Spaces.level(Y.c.ρ, 1),
+            sfc_flux_energy = ρ_dif_flux_h_tot,
         )
+        # TODO: The division should be by Spaces.level(ᶠρ, half), but we need to
+        # be consistent in how we get ρ at the surface.
         if :ρq_tot in propertynames(Y.c)
             vert_diff_diagnostic =
-                (; vert_diff_diagnostic..., sfc_evaporation = dif_flux_ρq_tot)
+                (; vert_diff_diagnostic..., sfc_evaporation = ρ_dif_flux_q_tot)
         end
     else
         vert_diff_diagnostic = NamedTuple()
