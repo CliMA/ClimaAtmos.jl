@@ -41,37 +41,46 @@ function convection_tendency!(
     convection_model::BettsMiller,
 )
     FT = Spaces.undertype(axes(Y.c))
-    (;
-        τ_bm,
-        rh_bm,
-    ) = p # assume ᶜts has been updated
+    (; ᶜts, ᶜT, params, τ_bm, rh_bm) = p # assume ᶜts has been updated
+    (; dt) = p.simulation
+    thermo_params = CAP.thermodynamics_params(params)
+    @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
 
-
-    
     cape_calculation()
     if cape >= 0
         set_reference_profiles!(Y, p, Tp, zLZB, rp, deltaq, deltaT, qref, Tref, colidx)
         pq_calculation!(Y, p, zLZB, qref, deltaq, Pq, colidx)
         pt_calculation!(Y, p, )
-        if (pq > 0) & (pt > 0)
-            do_deep_convection()
-        elseif (pt > 0)
-            do_shallow_convection()
+        if (parent(Pq[colidx])[] > FT(0)) & (parent(Pt[colidx])[] > FT(0))
+            do_deep_convection!()
+        elseif parent(Pt[colidx])[] > FT(0)
+            do_shallow_convection!()
         else
-            pq = 0
-            set_profiles_to_full_model_values()
+            @. Pq[colidx] = FT(0)
+            @. Tref[colidx] = ᶜT[colidx]
+            @. qref[colidx] = Y.c.ρq_tot[colidx] / Y.c.ρ[colidx]
+            @. deltaT[colidx] = FT(0)
+            @. deltaq[colidx] = FT(0)
         end
     else
-        pq = 0
-        set_profiles_to_full_model_values()
+        @. Pq[colidx] = FT(0)
+        @. Tref[colidx] = ᶜT[colidx]
+        @. qref[colidx] = Y.c.ρq_tot[colidx] / Y.c.ρ[colidx]
+        @. deltaT[colidx] = FT(0)
+        @. deltaq[colidx] = FT(0)
     end
 
-    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
-    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+    T_tend = @. Pt[colidx] / dt
+    qt_tend = @. Pq[colidx] / dt
+
+    @. Yₜ.c.ρ[colidx] += Y.c.ρ[colidx] * Pq[colidx] / dt
+    @. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * Pq[colidx] / dt
 
     if :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] += ...
+        # TODO: add qt tendency
+        @. Yₜ.c.ρe_tot[colidx] += TD.cv_m(thermo_params, ᶜts) * Pt[colidx] / dt
     end
+
     return nothing
 end
 
@@ -105,7 +114,7 @@ function pq_calculation!(Y, p, zLZB, qref, deltaq, Pq, colidx)
     (; τ_bm, params) = p
     (; dt) = p.simulation
     @. deltaq[colidx] = -(Y.c.ρq_tot[colidx] / Y.c.ρ[colidx] - qref[colidx]) * dt / τ_bm 
-    @. deltaq[colidx] = ifelse(ᶜz < zLZB, deltaq[colidx], FT(0))
+    @. deltaq[colidx] = ifelse(ᶜz <= zLZB, deltaq[colidx], FT(0))
     Operators.column_integral_definite!(
         Pq[colidx],
         -deltaq[colidx] * Y.c.ρ[colidx],
@@ -128,7 +137,7 @@ function pt_calculation!(Y, p, zLZB, Tref, deltaT, Pt, colidx)
     @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
 
     @. deltaT[colidx] = -(ᶜT[colidx] - Tref[colidx]) * dt / τ_bm 
-    @. deltaT[colidx] = ifelse(ᶜz < zLZB, deltaT[colidx], FT(0))
+    @. deltaT[colidx] = ifelse(ᶜz <= zLZB, deltaT[colidx], FT(0))
     Operators.column_integral_definite!(
         Pt[colidx],
         deltaT[colidx] * cp_m / L_v * Y.c.ρ[colidx],
@@ -146,7 +155,7 @@ end
 function do_change_time_scale_deepconv!(Y, p, zLZB, Pt, Pq, deltaq, colidx)
     (; τ_bm) = p
 
-    @. deltaq[colidx] = ifelse(ᶜz < zLZB, deltaq[colidx] * Pt[colidx] / Pq[colidx], deltaq[colidx])
+    @. deltaq[colidx] = ifelse(ᶜz <= zLZB, deltaq[colidx] * Pt[colidx] / Pq[colidx], deltaq[colidx])
     @. Pq[colidx] = Pt[colidx]
 end
 
@@ -155,20 +164,96 @@ function do_change_tref_deepconv(Y, p, zLZB, deltaT, deltaq, Tref, colidx)
     (; dt) = p.simulation
 
     deltaT1 = @. -(deltaT[colidx] + L_v / cp_m * deltaq[colidx])
-    @. deltaT1 = ifelse(ᶜz < zLZB, deltaT1, FT(0))
+    @. deltaT1 = ifelse(ᶜz[colidx] <= zLZB, deltaT1, FT(0))
     Operators.column_integral_definite!(
         deltak,
         deltaT1 * Y.c.ρ[colidx]
     )
-    ρ1 = @. ifelse(ᶜz < zLZB, Y.c.ρ, FT(0))
+    ρ1 = @. ifelse(ᶜz[colidx] <= zLZB, Y.c.ρ, FT(0))
     Operators.column_integral_definite!(
         deltap,
         ρ1,
     )
     @. deltak = deltak / deltap
-    deltak1 = @. ifelse(ᶜz < zLZB, deltak, FT(0))
+    deltak1 = @. ifelse(ᶜz[colidx] <= zLZB, deltak, FT(0))
 
     @. Tref[colidx] = Tref[colidx] + deltak1 * τ_bm / dt
     @. deltaT[colidx] = deltaT[colidx] + deltak1
 end
 
+function do_shallow_convection!(Y, p, colidx)
+    z_top, k_top = level_of_zero_precip()
+
+    (; ᶜT, ᶜts, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
+
+    if Pq[colidx] .> 0
+        change_Tref_LZB_shallowconv()
+    else
+        if z_top == zLZB
+            @. Tref[colidx] = ifelse(ᶜz[colidx] == Fields.level(ᶜz[colidx], 1), ᶜT[colidx], Tref[colidx])
+            @. qref[colidx] = ifelse(ᶜz[colidx] == Fields.level(ᶜz[colidx], 1), Y.c.ρq_tot[colidx] / Y.c.ρ[colidx], qref[colidx])
+            @. deltaT[colidx] = ifelse(ᶜz[colidx] == Fields.level(ᶜz[colidx], 1), 0, deltaT[colidx])
+            @. deltaq[colidx] = ifelse(ᶜz[colidx] == Fields.level(ᶜz[colidx], 1), 0, deltaq[colidx])
+        else
+            @. Tref[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] >= z_top, ᶜT[colidx], Tref[colidx])
+            @. qref[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] >= z_top, Y.c.ρq_tot[colidx] / Y.c.ρ[colidx], qref[colidx])
+            @. deltaT[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] >= z_top, 0, deltaT[colidx])
+            @. deltaq[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] >= z_top, 0, deltaq[colidx])
+        end
+    end
+
+    @. Pq[colidx] = FT(0)
+end
+
+function level_of_zero_precip!(Y, p)
+
+    (; ᶜT, ᶜts, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
+
+    z_top = zLZB
+    k_top = kLZB
+
+    for k in kLZB:-1:1
+        z_top = Fields.level(Fields.coordinate_field(Y.c[colidx]).z, k)
+        k_top = k
+        Pq[colidx] .-= Fields.level(deltaq[colidx] .* Y.c.ρ[colidx] .* Fields.dz_field(Y.c[colidx]), k)
+        if Pq[colidx] .> 0
+            break
+        end
+    end
+
+    if z_top < zLZB
+        @. Tref[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] > z_top, ᶜT[colidx], Tref[colidx])
+        @. qref[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] > z_top, Y.c.ρq_tot[colidx] / Y.c.ρ[colidx], qref[colidx])
+        @. deltaT[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] > z_top, 0, deltaT[colidx])
+        @. deltaq[colidx] = ifelse(ᶜz[colidx] <= zLZB & ᶜz[colidx] > z_top, 0, deltaq[colidx])
+    end
+
+    return z_top, k_top
+end
+
+function change_Tref_LZB_shallowconv!(Pq, colidx)
+    (; τ_bm) = p
+    c = Pq ./ Fields.level((Y.c.ρ[colidx] .* Fields.dz_field(Y.c[colidx])), k_top)
+    @. deltaT[colidx] = ifelse(ᶜz[colidx] == z_top, deltaT[colidx] .* c, deltaT[colidx])
+    @. deltaq[colidx] = ifelse(ᶜz[colidx] == z_top, deltaq[colidx] .* c, deltaq[colidx]) 
+
+    deltaT1 = @. -(deltaT[colidx] + L_v / cp_m * deltaq[colidx])
+    @. deltaT1 = ifelse(ᶜz[colidx] <= z_top, deltaT1, FT(0))
+    Operators.column_integral_definite!(
+        deltak,
+        deltaT1 * Y.c.ρ[colidx]
+    )
+    ρ1 = @. ifelse(ᶜz[colidx] <= z_top, Y.c.ρ, FT(0))
+    Operators.column_integral_definite!(
+        deltap,
+        ρ1,
+    )
+    @. deltak = deltak / deltap
+    deltak1 = @. ifelse(ᶜz[colidx] <= z_top, deltak, FT(0))
+    @. Tref[colidx] = Tref[colidx] + deltak1 * τ_bm / dt
+    @. deltaT[colidx] = deltaT[colidx] + deltak1
+end
