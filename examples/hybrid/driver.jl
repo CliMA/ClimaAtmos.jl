@@ -233,7 +233,16 @@ else
 end
 
 @time "Allocating cache (p)" begin
-    p = get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation)
+    p = get_cache(
+        Y,
+        parsed_args,
+        params,
+        spaces,
+        atmos,
+        numerics,
+        simulation,
+        comms_ctx,
+    )
 end
 
 if parsed_args["discrete_hydrostatic_balance"]
@@ -242,7 +251,7 @@ end
 
 @time "ode_configuration" ode_algo = ode_configuration(Y, parsed_args, atmos)
 
-include("callbacks.jl")
+include("get_callbacks.jl")
 
 @time "get_callbacks" callback =
     get_callbacks(parsed_args, simulation, atmos, params)

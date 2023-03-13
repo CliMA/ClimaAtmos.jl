@@ -1,4 +1,3 @@
-import ClimaAtmos as CA
 import ClimaCore.DataLayouts as DL
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
@@ -15,80 +14,6 @@ import ClimaCore: InputOutput
 import Dates
 using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
-
-function get_callbacks(parsed_args, simulation, atmos, params)
-    FT = eltype(params)
-    (; dt) = simulation
-
-    tc_callbacks = call_every_n_steps(turb_conv_affect_filter!)
-    flux_accumulation_callback = call_every_n_steps(
-        flux_accumulation!;
-        skip_first = true,
-        call_at_end = true,
-    )
-
-    additional_callbacks =
-        if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-            # TODO: better if-else criteria?
-            dt_rad = if parsed_args["config"] == "column"
-                dt
-            else
-                FT(CA.time_to_seconds(parsed_args["dt_rad"]))
-            end
-            (call_every_dt(rrtmgp_model_callback!, dt_rad),)
-        else
-            ()
-        end
-
-    if !isnothing(atmos.turbconv_model)
-        additional_callbacks = (additional_callbacks..., tc_callbacks)
-    end
-
-    if parsed_args["check_conservation"]
-        additional_callbacks =
-            (flux_accumulation_callback, additional_callbacks...)
-    end
-
-    dt_save_to_disk = CA.time_to_seconds(parsed_args["dt_save_to_disk"])
-    dt_save_restart = CA.time_to_seconds(parsed_args["dt_save_restart"])
-
-    dss_cb = if startswith(parsed_args["ode_algo"], "ODE.")
-        call_every_n_steps(dss_callback)
-    else
-        nothing
-    end
-    save_to_disk_callback = if dt_save_to_disk == Inf
-        nothing
-    elseif simulation.restart
-        call_every_dt(save_to_disk_func, dt_save_to_disk; skip_first = true)
-    else
-        call_every_dt(save_to_disk_func, dt_save_to_disk)
-    end
-
-    save_restart_callback = if dt_save_restart == Inf
-        nothing
-    else
-        call_every_dt(save_restart_func, dt_save_restart)
-    end
-
-    gc_callback = if simulation.is_distributed
-        call_every_n_steps(
-            gc_func,
-            parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
-            skip_first = true,
-        )
-    else
-        nothing
-    end
-
-    return ODE.CallbackSet(
-        dss_cb,
-        save_to_disk_callback,
-        save_restart_callback,
-        gc_callback,
-        additional_callbacks...,
-    )
-end
 
 function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
     previous_step = Ref(0)
@@ -131,7 +56,7 @@ function dss_callback(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
     if !ghost_buffer.skip_dss
-        @nvtx "dss callback" color = colorant"yellow" begin
+        NVTX.@range "dss callback" color = colorant"yellow" begin
             Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
             Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
             Spaces.weighted_dss_internal2!(Y.c, ghost_buffer.c)
@@ -143,41 +68,12 @@ function dss_callback(integrator)
     # ODE.u_modified!(integrator, false) # TODO: try this
 end
 
-function turb_conv_affect_filter!(integrator)
-    p = integrator.p
-    (; edmf_cache, Δt) = p
-    (; edmf, param_set, aux, surf_params) = edmf_cache
-    t = integrator.t
-    Y = integrator.u
-    tc_params = CAP.turbconv_params(param_set)
-
-    CA.thermo_state!(Y, p, ᶜinterp; time = t) # set ᶜts for set_edmf_surface_bc
-    Fields.bycolumn(axes(Y.c)) do colidx
-        state = TC.tc_column_state(Y, p, nothing, colidx)
-        grid = TC.Grid(state)
-        surf = TCU.get_surface(
-            p.atmos.model_config,
-            surf_params,
-            grid,
-            state,
-            t,
-            tc_params,
-        )
-        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
-    end
-
-    # We're lying to OrdinaryDiffEq.jl, in order to avoid
-    # paying for an additional `∑tendencies!` call, which is required
-    # to support supplying a continuous representation of the
-    # solution.
-    ODE.u_modified!(integrator, false)
-end
-
 horizontal_integral_at_boundary(f, lev) = sum(
     Spaces.level(f, lev) ./ Fields.dz_field(axes(Spaces.level(f, lev))) .* 2,
 )
 
 function flux_accumulation!(integrator)
+    Y = integrator.u
     p = integrator.p
     if !isnothing(p.radiation_model)
         (; ᶠradiation_flux, net_energy_flux_toa, net_energy_flux_sfc, Δt) = p
@@ -199,6 +95,8 @@ function rrtmgp_model_callback!(integrator)
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
     (; ᶜinterp) = p.operators
+
+    FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     insolation_params = CAP.insolation_params(params)
 
@@ -206,8 +104,8 @@ function rrtmgp_model_callback!(integrator)
 
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
-    CA.compute_kinetic!(ᶜK, Y)
-    CA.thermo_state!(Y, p, ᶜinterp; time = t)
+    compute_kinetic!(ᶜK, Y)
+    thermo_state!(Y, p, ᶜinterp; time = t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
@@ -322,6 +220,7 @@ end
 function save_to_disk_func(integrator)
 
     (; t, u, p) = integrator
+    (; ᶜinterp, curlₕ) = p.operators
     (; output_dir) = p.simulation
     Y = u
 
@@ -343,16 +242,17 @@ function save_to_disk_func(integrator)
         (; ᶜts, ᶜp, params, ᶜK, T_sfc, ts_sfc) = p
     end
 
+    FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
 
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     # kinetic
-    CA.compute_kinetic!(ᶜK, Y)
+    compute_kinetic!(ᶜK, Y)
 
     # thermo state
-    CA.thermo_state!(Y, p, ᶜinterp; time = t)
+    thermo_state!(Y, p, ᶜinterp; time = t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
     ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
@@ -485,7 +385,7 @@ function save_to_disk_func(integrator)
         vert_diff_diagnostic = NamedTuple()
     end
 
-    if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+    if p.atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         (; face_lw_flux_dn, face_lw_flux_up, face_sw_flux_dn, face_sw_flux_up) =
             p.radiation_model
         rad_diagnostic = (;
@@ -494,7 +394,7 @@ function save_to_disk_func(integrator)
             sw_flux_down = RRTMGPI.array2field(FT.(face_sw_flux_dn), axes(Y.f)),
             sw_flux_up = RRTMGPI.array2field(FT.(face_sw_flux_up), axes(Y.f)),
         )
-        if atmos.radiation_mode isa
+        if p.atmos.radiation_mode isa
            RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
             (;
                 face_clear_lw_flux_dn,
@@ -523,11 +423,11 @@ function save_to_disk_func(integrator)
         else
             rad_clear_diagnostic = NamedTuple()
         end
-    elseif atmos.radiation_mode isa CA.RadiationDYCOMS_RF01
+    elseif p.atmos.radiation_mode isa RadiationDYCOMS_RF01
         # TODO: add radiation diagnostics
         rad_diagnostic = NamedTuple()
         rad_clear_diagnostic = NamedTuple()
-    elseif atmos.radiation_mode isa CA.RadiationTRMM_LBA
+    elseif p.atmos.radiation_mode isa RadiationTRMM_LBA
         # TODO: add radiation diagnostics
         rad_diagnostic = NamedTuple()
         rad_clear_diagnostic = NamedTuple()
@@ -549,7 +449,7 @@ function save_to_disk_func(integrator)
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving diagnostics to HDF5 file on day $day second $sec"
     output_file = joinpath(output_dir, "day$day.$sec.hdf5")
-    hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
+    hdfwriter = InputOutput.HDF5Writer(output_file, integrator.p.comms_ctx)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     InputOutput.write!(
@@ -570,7 +470,7 @@ function save_restart_func(integrator)
     @info "Saving restart file to HDF5 file on day $day second $sec"
     mkpath(joinpath(output_dir, "restart"))
     output_file = joinpath(output_dir, "restart", "day$day.$sec.hdf5")
-    hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
+    hdfwriter = InputOutput.HDF5Writer(output_file, integrator.p.comms_ctx)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
