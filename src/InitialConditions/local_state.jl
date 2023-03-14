@@ -62,18 +62,16 @@ values required by the `turbconv_model` are set to 0.
 """
 struct NoTurbconvState{FT} <: TurbconvState{FT} end
 
-@inline Base.getproperty(ts::NoTurbconvState{FT}, s::Symbol) where {FT} =
-    s in (:tke, :Hvar, :QTVar, :HQTcov) ? FT(0) : getfield(ts, s)
+@inline Base.getproperty(::NoTurbconvState{FT}, ::Symbol) where {FT} = FT(0)
 
 """
-    EDMFState(; tke)
+    EDMFState(; tke, draft_area)
 
-Stores the value of `tke` for a `turbconv_model::EDMFModel`. Any other values
-required by the `turbconv_model` are set to 0.
+Stores the values of `tke` and `draft_area` for the `turbconv_model`. If
+`draft_area` is omitted, it is set to 0.
 """
-Base.@kwdef struct EDMFState{FT} <: TurbconvState{FT}
+struct EDMFState{FT} <: TurbconvState{FT}
     tke::FT
+    draft_area::FT
 end
-
-@inline Base.getproperty(ts::EDMFState{FT}, s::Symbol) where {FT} =
-    s in (:Hvar, :QTVar, :HQTcov) ? FT(0) : getfield(ts, s)
+EDMFState(; tke, draft_area = 0) = EDMFState{typeof(tke)}(tke, draft_area)

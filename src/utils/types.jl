@@ -106,6 +106,12 @@ struct EDMFCoriolis{U, V, FT}
     coriolis_param::FT
 end
 
+struct EDMFX{N, FT}
+    a_min::FT # WARNING: this should never be used outside of divide_by_ρa
+end
+EDMFX{N}(a_min::FT) where {N, FT} = EDMFX{N, FT}(a_min)
+n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 

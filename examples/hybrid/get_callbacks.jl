@@ -28,7 +28,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             ()
         end
 
-    if !isnothing(atmos.turbconv_model)
+    if p.atmos.turbconv_model isa TC.EDMFModel
         additional_callbacks = (additional_callbacks..., tc_callbacks)
     end
 
