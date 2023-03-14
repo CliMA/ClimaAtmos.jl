@@ -74,8 +74,26 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
 
 const C123 = Geometry.Covariant123Vector
 
-get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation) = merge(
-    default_cache(Y, parsed_args, params, atmos, spaces, numerics, simulation),
+get_cache(
+    Y,
+    parsed_args,
+    params,
+    spaces,
+    atmos,
+    numerics,
+    simulation,
+    comms_ctx,
+) = merge(
+    default_cache(
+        Y,
+        parsed_args,
+        params,
+        atmos,
+        spaces,
+        numerics,
+        simulation,
+        comms_ctx,
+    ),
     additional_cache(Y, parsed_args, params, atmos, simulation.dt),
 )
 
@@ -87,6 +105,7 @@ function default_cache(
     spaces,
     numerics,
     simulation,
+    comms_ctx,
 )
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -181,6 +200,7 @@ function default_cache(
             ᶠcurlᵥ,
             ᶜinterp,
             ᶠgradᵥ,
+            curlₕ,
             ᶠupwind1,
             ᶠupwind3,
             ᶠfct_boris_book,
@@ -188,6 +208,7 @@ function default_cache(
         ),
         spaces,
         atmos,
+        comms_ctx,
         test_dycore_consistency = parsed_args["test_dycore_consistency"],
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,

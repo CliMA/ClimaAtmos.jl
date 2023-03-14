@@ -22,6 +22,8 @@ import .TurbulenceConvection as TC
 include("thermo_state.jl")
 include("precomputed_quantities.jl")
 
+include("callbacks.jl")
+
 include(joinpath("InitialConditions", "InitialConditions.jl"))
 include("discrete_hydrostatic_balance.jl")
 
