@@ -645,31 +645,31 @@ function filter_updraft_vars(
         end
     end
 
-    Ic = CCO.InterpolateF2C()
-    @inbounds for i in 1:N_up
-        @. prog_up[i].ρarea = ifelse(
-            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
-            FT(0),
-            prog_up[i].ρarea,
-        )
-        @. prog_up[i].ρaθ_liq_ice = ifelse(
-            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
-            FT(0),
-            prog_up[i].ρaθ_liq_ice,
-        )
-        @. prog_up[i].ρaq_tot = ifelse(
-            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
-            FT(0),
-            prog_up[i].ρaq_tot,
-        )
+    #Ic = CCO.InterpolateF2C()
+    #@inbounds for i in 1:N_up
+    #    @. prog_up[i].ρarea = ifelse(
+    #        Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+    #        FT(0),
+    #        prog_up[i].ρarea,
+    #    )
+    #    @. prog_up[i].ρaθ_liq_ice = ifelse(
+    #        Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+    #        FT(0),
+    #        prog_up[i].ρaθ_liq_ice,
+    #    )
+    #    @. prog_up[i].ρaq_tot = ifelse(
+    #        Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+    #        FT(0),
+    #        prog_up[i].ρaq_tot,
+    #    )
 
-        θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
-        q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
-        a_surf = area_surface_bc(surf, edmf, i)
-        prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
-        prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
-    end
+    #    θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
+    #    q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
+    #    a_surf = area_surface_bc(surf, edmf, i)
+    #    prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
+    #    prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
+    #    prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
+    #end
     return nothing
 end
 
