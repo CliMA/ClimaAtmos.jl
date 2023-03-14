@@ -177,8 +177,7 @@ function default_cache(
         limiters = nothing
     end
     pnc = propertynames(Y.c)
-    ᶜρh_kwargs =
-        :ρe_tot in pnc || :ρe_int in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
+    ᶜρh_kwargs = :ρe_tot in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
 
     net_energy_flux_toa = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_toa[] = Geometry.WVector(FT(0))

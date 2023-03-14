@@ -70,8 +70,6 @@ function validate_flags!(Y, flags, energy_upwinding)
             error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe_tot with \
                   upwinding")
         end
-    elseif :ρe_int in propertynames(Y.c) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :exact
-        error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact when using ρe_int")
     end
     # TODO: If we end up using :gradΦ_shenanigans, optimize it to
     # `cached_stencil / ᶠinterp(ᶜρ)`.
@@ -212,25 +210,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
                 )
             end
         end
-    elseif :ρe_int in propertynames(Y.c)
-        (; ᶜρh) = p
-        @. ᶜρh[colidx] = Y.c.ρe_int[colidx] + ᶜp[colidx]
-        # vertical_transport!(Yₜ.c.ρe_int, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
-        # ᶜρe_intₜ += ᶜinterp(dot(ᶠgradᵥ(ᶜp), Geometry.Contravariant3Vector(ᶠw))
-        vertical_transport_jac!(
-            ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-            ᶠw[colidx],
-            ᶜρ[colidx],
-            ᶜρh[colidx],
-            p.operators,
-            energy_upwinding,
-        )
-        @. ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx] += ᶜinterp_stencil(
-            dot(
-                ᶠgradᵥ(ᶜp[colidx]),
-                Geometry.Contravariant3Vector(one(ᶠw[colidx])),
-            ),
-        )
     end
 
     if :ρθ in propertynames(Y.c)
@@ -315,49 +294,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
                 ᶠinterp_stencil(one(ᶜρ[colidx])),
             )
         end
-    elseif :ρe_int in propertynames(Y.c)
-        ᶜρe_int = Y.c.ρe_int
-        # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
-        # ∂(ᶠwₜ)/∂(ᶜρe_int) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe_int)
-        # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
-        # If we ignore the dependence of pressure on moisture,
-        # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe_int) = ᶠgradᵥ_stencil(R_d / cv_d)
-        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
-            -1 / ᶠinterp(ᶜρ[colidx]) *
-            ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe_int[colidx])),
-        )
-
-        if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
-            # ∂(ᶠwₜ)/∂(ᶜρ) =
-            #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) +
-            #     ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
-            # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
-            # If we ignore the dependence of pressure on moisture,
-            # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) = ᶠgradᵥ_stencil(R_d * T_tri)
-            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
-            # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ[colidx]) *
-                ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int[colidx])) +
-                (
-                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
-                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                ) / abs2(ᶠinterp(ᶜρ[colidx])) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-        elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
-            # ᶠwₜ = (
-            #     -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ′) -
-            #     ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ′) * ᶠinterp(ᶜρ)
-            # ), where ᶜp′ = ᶜp but we approximate ∂ᶜρ′/∂ᶜρ = 0
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ[colidx]) *
-                ᶠgradᵥ_stencil(R_d * T_tri * one(ᶜρe_int[colidx])) -
-                ᶠgradᵥ_ᶜΦ[colidx] / ᶠinterp(ᶜρ[colidx]) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-        end
     end
 
     # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
@@ -368,7 +304,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     # If we ignore the dependence of pressure on moisture,
     # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜK) =
     #     ᶜ𝔼_name == :ρe_tot ? ᶠgradᵥ_stencil(-ᶜρ * R_d / cv_d) : 0
-    if :ρθ in propertynames(Y.c) || :ρe_int in propertynames(Y.c)
+    if :ρθ in propertynames(Y.c)
         ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] .=
             tuple(Operators.StencilCoefs{-1, 1}((FT(0), FT(0), FT(0))))
     elseif :ρe_tot in propertynames(Y.c)

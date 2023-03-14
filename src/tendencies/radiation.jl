@@ -226,8 +226,6 @@ function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
         error("radiation_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     end
     return nothing
 end
