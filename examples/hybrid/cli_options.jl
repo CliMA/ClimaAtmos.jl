@@ -102,7 +102,7 @@ function parse_commandline()
         help = "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
         arg_type = String
         "--energy_name"
-        help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
+        help = "Energy variable name [`rhoe` (default), `rhotheta`]"
         arg_type = String
         default = "rhoe"
         "--perturb_initstate"

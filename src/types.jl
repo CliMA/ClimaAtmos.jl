@@ -6,7 +6,6 @@ struct NonEquilMoistModel <: AbstractMoistureModel end
 abstract type AbstractEnergyFormulation end
 struct PotentialTemperature <: AbstractEnergyFormulation end
 struct TotalEnergy <: AbstractEnergyFormulation end
-struct InternalEnergy <: AbstractEnergyFormulation end
 
 abstract type AbstractPrecipitationModel end
 struct NoPrecipitation <: AbstractPrecipitationModel end

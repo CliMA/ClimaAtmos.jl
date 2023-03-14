@@ -2,7 +2,6 @@ module InitialConditions
 
 import ..AtmosModel
 import ..PotentialTemperature
-import ..InternalEnergy
 import ..TotalEnergy
 import ..DryModel
 import ..EquilMoistModel

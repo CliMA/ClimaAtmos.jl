@@ -38,8 +38,6 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
         @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_int + ᶜp) / ᶜρ))
     end
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (

@@ -148,14 +148,12 @@ end
 
 function energy_form(parsed_args, vert_diff)
     energy_name = parsed_args["energy_name"]
-    @assert energy_name in ("rhoe", "rhoe_int", "rhotheta")
+    @assert energy_name in ("rhoe", "rhotheta")
     if !isnothing(vert_diff)
         @assert energy_name == "rhoe"
     end
     return if energy_name == "rhoe"
         TotalEnergy()
-    elseif energy_name == "rhoe_int"
-        InternalEnergy()
     elseif energy_name == "rhotheta"
         PotentialTemperature()
     end

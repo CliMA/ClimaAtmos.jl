@@ -119,8 +119,6 @@ function base_thermo_state!(
             ᶠw;
             time,
         )
-    elseif energy_form isa InternalEnergy
-        thermo_state_ρe_int!(ᶜts, Yc, thermo_params, moisture_model; time)
     elseif energy_form isa PotentialTemperature
         thermo_state_ρθ!(ᶜts, Yc, thermo_params, moisture_model; time)
     else
@@ -238,26 +236,6 @@ function thermo_state_ρe_tot!(
             g,
             z,
         ) / Yc.ρ,
-        Yc.ρ,
-        TD.PhasePartition(Yc.ρq_tot / Yc.ρ, Yc.ρq_liq / Yc.ρ, Yc.ρq_ice / Yc.ρ),
-    )
-end
-
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::DryModel; time)
-    @. ts = TD.PhaseDry(thermo_params, Yc.ρe_int / Yc.ρ, Yc.ρ)
-end
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::EquilMoistModel; time)
-    @. ts = TD.PhaseEquil_ρeq(
-        thermo_params,
-        Yc.ρ,
-        Yc.ρe_int / Yc.ρ,
-        Yc.ρq_tot / Yc.ρ,
-    )
-end
-function thermo_state_ρe_int!(ts, Yc, thermo_params, ::NonEquilMoistModel; time)
-    @. ts = TD.PhaseNonEquil(
-        thermo_params,
-        Yc.ρe_int / Yc.ρ,
         Yc.ρ,
         TD.PhasePartition(Yc.ρq_tot / Yc.ρ, Yc.ρq_liq / Yc.ρ, Yc.ρq_ice / Yc.ρ),
     )

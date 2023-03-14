@@ -138,20 +138,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             p,
             energy_upwinding,
         )
-    elseif :ρe_int in propertynames(Y.c)
-        (; ᶜρh) = p
-        @. ᶜρh[colidx] = Y.c.ρe_int[colidx] + ᶜp[colidx]
-        vertical_transport!(
-            Yₜ.c.ρe_int[colidx],
-            ᶠu³[colidx],
-            ᶜρ[colidx],
-            ᶜρh[colidx],
-            p,
-            energy_upwinding,
-        )
-        @. Yₜ.c.ρe_int[colidx] += ᶜinterp(
-            dot(ᶠgradᵥ(ᶜp[colidx]), Geometry.Contravariant3Vector(ᶠu³[colidx])),
-        )
     end
 
     Yₜ.c.uₕ[colidx] .= tuple(zero(eltype(Yₜ.c.uₕ[colidx])))

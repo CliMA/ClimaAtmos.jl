@@ -13,7 +13,6 @@ import ClimaAtmos:
     NonEquilMoistModel,
     PotentialTemperature,
     TotalEnergy,
-    InternalEnergy,
     Microphysics0Moment,
     HeldSuarezForcing,
     BulkSurfaceScheme,
