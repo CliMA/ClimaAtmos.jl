@@ -114,13 +114,8 @@ function create_regrid_weight_files(
     write_exodus(meshfile_cgll, topology)
     overlap_mesh(meshfile_overlap, meshfile_rll, meshfile_cgll)
 
-    # 'in_np = 1' and 'mono = true' arguments ensure mapping is conservative and monotone
-    # Note: for a kwarg not followed by a value, set it to true here (i.e. pass 'mono = true' to produce '--mono')
-    # Note: out_np = degrees of freedom = polynomial degree + 1
-
     kwargs = (; out_type = out_type, out_np = Nq)
-    kwargs =
-        mono ? (; (kwargs)..., in_np = mono ? 1 : false, mono = mono) : kwargs
+    kwargs = mono ? (; (kwargs)..., mono = mono) : kwargs
     remap_weights(
         weightfile,
         meshfile_rll,
