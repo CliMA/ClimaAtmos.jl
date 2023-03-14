@@ -33,21 +33,27 @@ We make use of the following operators
 
 ### Differential operators
 
-- ``D_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence).
-- ``D^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
+- ``\mathcal{D}_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence).
+- ``\hat{\mathcal{D}}_h`` is the [discrete horizontal spectral weak divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakDivergence).
+- ``\mathcal{D}^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
 !!! todo
     Add vertical diffusive tendencies (including surface fluxes)
 
-- ``G_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
-- ``G^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
+- ``\mathcal{G}_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
+- ``\mathcal{G}^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
   - the gradient is set to 0 at the top and bottom boundaries.
-- ``C_h`` is the [curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
-  - ``C_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
-  - ``C_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
-- ``C^f_v`` is the [center-to-face curl involving vertical derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
-  - ``C^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
+- ``\mathcal{C}_h`` is the [curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
+  - ``\mathcal{C}_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
+  - ``\mathcal{C}_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
+- ``\hat{\mathcal{C}}_h`` is the [weak curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakCurl)
+- ``\mathcal{C}^f_v`` is the [center-to-face curl involving vertical derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
+  - ``\mathcal{C}^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
   - the curl is set to 0 at the top and bottom boundaries.
     - We need to clarify how best to handle this.
+
+### Projection
+
+- ``\mathcal{P}`` is the [direct stiffness summation (DSS) operation](https://clima.github.io/ClimaCore.jl/stable/operators/#DSS), which computes the projection onto the continuous spectral element basis.
 
 ## Auxiliary and derived quantities
 
@@ -61,8 +67,10 @@ We make use of the following operators
     ```math
   \tilde{\boldsymbol{u}} = WI^f(\rho J, \boldsymbol{u}_h) + \boldsymbol{u}_v
   ```
-  and ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
-* ``\bar{\boldsymbol{u}} = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v)``
+* ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
+  ```math
+  \bar{\boldsymbol{u}} = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v)
+  ```
 
 * ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
 * ``\boldsymbol{b}`` is the reduced gravitational acceleration
@@ -74,11 +82,13 @@ We make use of the following operators
   ```math
   K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot I_{c} (\boldsymbol{u}_{v}) + I_{c}(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
   ```
-  where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.  
+  where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.
 
 * ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 * ``p_{\text{ref}}`` is the reference state pressure. It is related to the reference state density by analytical hydrostatic balance: ``\nabla p_{\text{ref}} = - \rho_{\text{ref}} \nabla \Phi``.
 * ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
+
+* ``\nu_u``, ``\nu_h``, and ``\nu_\chi`` are hyperdiffusion coefficients, and ``c`` is the divergence damping factor.
 
 * No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
   ```math
@@ -96,13 +106,13 @@ Follows the continuity equation
 
 This is discretized using the following
 ```math
-\frac{\partial}{\partial t} \rho 
-= - D_h[ \rho (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] - D^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right]
+\frac{\partial}{\partial t} \rho
+= - \mathcal{D}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right]
 ```
 
 with the
 ```math
--D^c_v[WI^f(J, \rho) \boldsymbol{u}_v]
+-\mathcal{D}^c_v[WI^f(J, \rho) \boldsymbol{u}_v]
 ```
 term treated implicitly (check this)
 
@@ -111,7 +121,7 @@ term treated implicitly (check this)
 
 Uses the advective form equation
 ```math
-\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla (p - p_{\text{ref}})  + \boldsymbol{b} - \nabla K .
+\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - \frac{1}{\rho} \nabla (p - p_{\text{ref}})  + \boldsymbol{b} - \nabla K
 ```
 
 #### Horizontal momentum
@@ -122,28 +132,46 @@ By breaking the curl and cross product terms into horizontal and vertical contri
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
   - (\nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
-  - \frac{1}{\rho} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K) ,
+  - \frac{1}{\rho} \nabla_h (p - p_{\text{ref}})  - \nabla_h (\Phi + K),
 ```
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions. 
+where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
 
-The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as: 
+This is stabilized with the addition of 4th-order hyperviscosity
 ```math
-\frac{I^c((C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times (I^f(\rho J)\tilde{\boldsymbol{u}}^v))}{\rho J}
+-\nu_u \, \nabla^2 (\nabla^2(\boldsymbol{u}_h)),
 ```
-where 
+where ``\nabla^2(\boldsymbol{v})`` is the vector Laplacian
+```math
+\nabla^2(\boldsymbol{v}) = \nabla(\nabla \cdot \boldsymbol{v}) - \nabla \times (\nabla \times \boldsymbol{v}).
+```
+
+The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as:
+```math
+\frac{I^c((\mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v]) \times (I^f(\rho J)\tilde{\boldsymbol{u}}^v))}{\rho J}
+```
+where
 ```math
 \omega^{h} = (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v)
 ```
 
 The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h`` term is discretized as
 ```math
-(2 \boldsymbol{\Omega}^v + C_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
+(2 \boldsymbol{\Omega}^v + \mathcal{C}_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
 ```
 and the ``\frac{1}{\rho} \nabla_h (p - p_h)  + \nabla_h (\Phi + K)`` as
 ```math
-\frac{1}{\rho} G_h[p - p_{\text{ref}}] + G_h[\Phi + K] ,
+\frac{1}{\rho} \mathcal{G}_h[p - p_{\text{ref}}] + \mathcal{G}_h[\Phi + K] ,
 ```
 where all these terms are treated explicitly.
+
+The hyperviscosity term is
+```math
+- \nu_u \left\{ c \, \hat{\mathcal{G}}_h ( \mathcal{D}(\boldsymbol{\psi}_h) ) - \hat{\mathcal{C}}_h( \mathcal{C}_h( \boldsymbol{\psi}_h )) \right\}
+```
+where
+```math
+\boldsymbol{\psi}_h = \mathcal{P} \left[ \hat{\mathcal{G}}_h ( \mathcal{D}(\boldsymbol{u}_h) ) - \hat{\mathcal{C}}_h( \mathcal{C}_h( \boldsymbol{u}_h )) \right]
+```
 
 #### Vertical momentum
 Similarly for vertical velocity
@@ -154,11 +182,11 @@ Similarly for vertical velocity
 ```
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
 ```math
-(C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
+(\mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
 ```
 and the ``\frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla_v \Phi - \nabla_v K`` term as
 ```math
-\frac{1}{I^f(\rho)} G^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho - \rho_{\text{ref}})}{I^f(\rho)} G^f_v[\Phi] - G^f_v[K] ,
+\frac{1}{I^f(\rho)} \mathcal{G}^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho - \rho_{\text{ref}})}{I^f(\rho)} \mathcal{G}^f_v[\Phi] - \mathcal{G}^f_v[K] ,
 ```
 with the latter treated implicitly.
 
@@ -166,87 +194,71 @@ with the latter treated implicitly.
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R)
+\frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R),
 ```
-is discretized using
+which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
+```math
+- \nu_h \nabla \cdot \left( \rho \nabla^3 \left(\frac{ρe + p}{ρ} \right)\right)
+```
+
+This is discretized using
 ```math
 \frac{\partial}{\partial t} \rho e \approx
-- D_h[ (\rho e + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right)
-  + \boldsymbol{F}_R 
-  \right] .
+- \mathcal{D}_h[ (\rho e + p) \bar{\boldsymbol{u}} ]
+- \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right)
+  + \boldsymbol{F}_R \right] - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi) ).
 ```
+where
+```math
+\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h \left(\frac{ρe + p}{ρ} \right)\right) \right]
+```
+
 Currently the central reconstruction
 ```math
-- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right) \right]
+- \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right) \right]
 ```
 is treated implicitly.
 
 !!! todo
     The Jacobian computation should be updated so that the upwinded term
     ```math
-    - D^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)\right]
+    - \mathcal{D}^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)\right]
     ```
     is treated implicitly.
-
-
-### Internal energy
-
-```math
-\frac{\partial}{\partial t} \rho e_\text{int} = - \nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u} + \boldsymbol{F}_R) + (\nabla p) \cdot \boldsymbol{u} .
-```
-The ``\nabla \cdot((\rho e_\text{int} + p) \boldsymbol{u}`` term is discretized the same as in total energy:
-
-```math
-D_h[ (\rho e_\text{int} + p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))] +
-- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e_\text{int} + p}{\rho} \right)
-  + \boldsymbol{F}_R
-\right] .
-```
-The ``(\nabla p) \cdot \boldsymbol{u}`` term is discretized as
-```math
-I^c( G^f_v(p) \cdot \boldsymbol{u}_v) + G_h(p) \cdot \boldsymbol{u}_h .
-```
-!!! todo
-    We will need to add ``\nabla_h \cdot u_v`` and ``\nabla_v \cdot u_h`` terms, as they will be non-zero in the presence of topography.
-
-Currently the central reconstruction
-```math
-- D^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e_\text{int} + p}{\rho} \right) + I^c( G^f_v(p) \cdot \boldsymbol{u}_v) \right]
-```
-is treated implicitly.
-
-!!! todo
-    This should be updated so that the upwinded term
-    ```math
-    - D^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e_\text{int} + p}{\rho} \right)\right]
-    ```
-    is treated implicitly.
-
 
 ### Scalars
 
 For an arbitrary scalar ``\chi``, the density-weighted scalar ``\rho\chi`` follows the continuity equation
 
 ```math
-\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}) .
+\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}).
+```
+This is stabilized with the addition of a 4th-order hyperdiffusion term
+```math
+- \nu_\chi \nabla \cdot(\rho \nabla^3(\chi))
 ```
 
-This is discretized using the following
+This is discretized using
 ```math
 \frac{\partial}{\partial t} \rho \chi \approx
-- D_h[ \rho \chi (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v))]
-- D^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right].
+- \mathcal{D}_h[ \rho \chi \bar{\boldsymbol{u}}]
+- \mathcal{D}^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right]
+- \nu_\chi \hat{\mathcal{D}}_h ( \rho \, \mathcal{G}_h (\psi) )
 ```
+where
+```math
+\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h \left( \frac{\rho \chi}{\rho} \right)\right) \right]
+```
+
 Currently the central reconstruction
 ```math
-- D^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
+- \mathcal{D}^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
 ```
 is treated implicitly.
 
 !!! todo
     The Jacobian computation should be updated so that the upwinded term
     ```math
-    - D^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
+    - \mathcal{D}^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
     ```
     is treated implicitly.
