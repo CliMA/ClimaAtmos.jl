@@ -77,7 +77,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             idealized_clouds,
             thermo_dispatcher,
             data_loader = CA.rrtmgp_data_loader,
-            ᶜinterp,
         )
     else
         CA.radiation_model_cache(Y, params, radiation_mode)
@@ -191,7 +190,7 @@ import ClimaCore.Operators as CCO
 const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
-include("staggered_nonhydrostatic_model.jl")
+include("get_cache_and_tendency.jl")
 
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
