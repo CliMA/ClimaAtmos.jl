@@ -11,8 +11,6 @@ using ClimaCore.Utilities: half
 
 import ClimaCore.Fields: ColumnField
 
-# Note: FT must be defined before `include("staggered_nonhydrostatic_model.jl")`
-
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
@@ -29,74 +27,6 @@ import ClimaCore.Fields: ColumnField
 # To add additional terms to the explicit part of the tendency, define new
 # methods for `additional_cache` and `additional_tendency!`.
 
-const divₕ = Operators.Divergence()
-const wdivₕ = Operators.WeakDivergence()
-const gradₕ = Operators.Gradient()
-const wgradₕ = Operators.WeakGradient()
-const curlₕ = Operators.Curl()
-const wcurlₕ = Operators.WeakCurl()
-
-const ᶜinterp = Operators.InterpolateF2C()
-const ᶠinterp = Operators.InterpolateC2F(
-    bottom = Operators.Extrapolate(),
-    top = Operators.Extrapolate(),
-)
-const ᶠwinterp = Operators.WeightedInterpolateC2F(
-    bottom = Operators.Extrapolate(),
-    top = Operators.Extrapolate(),
-)
-const ᶜdivᵥ = Operators.DivergenceF2C(
-    top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-    bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-)
-const ᶠgradᵥ = Operators.GradientC2F(
-    bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-)
-const ᶜgradᵥ = Operators.GradientF2C()
-const ᶠcurlᵥ = Operators.CurlC2F(
-    bottom = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
-    top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
-)
-const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
-const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
-    bottom = Operators.ThirdOrderOneSided(),
-    top = Operators.ThirdOrderOneSided(),
-)
-const ᶠfct_boris_book = Operators.FCTBorisBook(
-    bottom = Operators.FirstOrderOneSided(),
-    top = Operators.FirstOrderOneSided(),
-)
-const ᶠfct_zalesak = Operators.FCTZalesak(
-    bottom = Operators.FirstOrderOneSided(),
-    top = Operators.FirstOrderOneSided(),
-)
-
-const C123 = Geometry.Covariant123Vector
-
-get_cache(
-    Y,
-    parsed_args,
-    params,
-    spaces,
-    atmos,
-    numerics,
-    simulation,
-    comms_ctx,
-) = merge(
-    default_cache(
-        Y,
-        parsed_args,
-        params,
-        atmos,
-        spaces,
-        numerics,
-        simulation,
-        comms_ctx,
-    ),
-    additional_cache(Y, parsed_args, params, atmos, simulation.dt),
-)
-
 function default_cache(
     Y,
     parsed_args,
@@ -107,6 +37,47 @@ function default_cache(
     simulation,
     comms_ctx,
 )
+    FT = eltype(params)
+
+    curlₕ = Operators.Curl()
+    ᶜinterp = Operators.InterpolateF2C()
+    ᶠinterp = Operators.InterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    ᶠwinterp = Operators.WeightedInterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
+    ᶜdivᵥ = Operators.DivergenceF2C(
+        top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
+        bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
+    )
+    ᶠgradᵥ = Operators.GradientC2F(
+        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
+    )
+    ᶜgradᵥ = Operators.GradientF2C()
+    ᶠcurlᵥ = Operators.CurlC2F(
+        bottom = Operators.SetCurl(
+            Geometry.Contravariant12Vector(FT(0), FT(0)),
+        ),
+        top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
+    )
+    ᶠupwind1 = Operators.UpwindBiasedProductC2F()
+    ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
+        bottom = Operators.ThirdOrderOneSided(),
+        top = Operators.ThirdOrderOneSided(),
+    )
+    ᶠfct_boris_book = Operators.FCTBorisBook(
+        bottom = Operators.FirstOrderOneSided(),
+        top = Operators.FirstOrderOneSided(),
+    )
+    ᶠfct_zalesak = Operators.FCTZalesak(
+        bottom = Operators.FirstOrderOneSided(),
+        top = Operators.FirstOrderOneSided(),
+    )
+
     (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -129,7 +100,7 @@ function default_cache(
     else
         f = CAP.f_plane_coriolis_frequency(params)
         ᶜf = map(_ -> f, ᶜcoord)
-        lat_sfc = map(_ -> FT(0), Fields.level(ᶜcoord, 1))
+        lat_sfc = map(_ -> eltype(params)(0), Fields.level(ᶜcoord, 1))
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
@@ -137,7 +108,7 @@ function default_cache(
     sfc_conditions =
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
 
-    ts_type = CA.thermo_state_type(atmos.moisture_model, FT)
+    ts_type = thermo_state_type(atmos.moisture_model, FT)
     quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
     skip_dss = !(quadrature_style isa Spaces.Quadratures.GLL)
     if skip_dss
@@ -168,7 +139,7 @@ function default_cache(
         )
     end
     if apply_limiter
-        tracers = filter(CA.is_tracer_var, propertynames(Y.c))
+        tracers = filter(is_tracer_var, propertynames(Y.c))
         make_limiter =
             ᶜρc_name ->
                 Limiters.QuasiMonotoneLimiter(getproperty(Y.c, ᶜρc_name))
@@ -245,28 +216,6 @@ function default_cache(
     )
 end
 
-function implicit_tendency!(Yₜ, Y, p, t)
-    p.test_dycore_consistency && CA.fill_with_nans!(p)
-    @nvtx "implicit tendency" color = colorant"yellow" begin
-        Fields.bycolumn(axes(Y.c)) do colidx
-            CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-
-            if p.turbconv_model isa CA.TurbulenceConvection.EDMFModel
-                parent(Yₜ.c.turbconv[colidx]) .= zero(eltype(Yₜ))
-                parent(Yₜ.f.turbconv[colidx]) .= zero(eltype(Yₜ))
-                TCU.implicit_sgs_flux_tendency!(
-                    Yₜ,
-                    Y,
-                    p,
-                    t,
-                    colidx,
-                    p.turbconv_model,
-                )
-            end
-        end
-    end
-end
-
 function dss!(Y, p, t)
     if !p.ghost_buffer.skip_dss
         Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)
@@ -278,33 +227,12 @@ function dss!(Y, p, t)
     end
 end
 
-function remaining_tendency!(Yₜ, Y, p, t)
-    p.test_dycore_consistency && CA.fill_with_nans!(p)
-    @nvtx "remaining tendency" color = colorant"yellow" begin
-        Yₜ .= zero(eltype(Yₜ))
-        @nvtx "precomputed quantities" color = colorant"orange" begin
-            CA.precomputed_quantities!(Y, p, t)
-        end
-        @nvtx "horizontal" color = colorant"orange" begin
-            CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
-        end
-        @nvtx "vertical" color = colorant"orange" begin
-            CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-        end
-        @nvtx "additional_tendency!" color = colorant"orange" begin
-            additional_tendency!(Yₜ, Y, p, t)
-        end
-        @nvtx "dss_remaining_tendency" color = colorant"blue" begin
-            dss!(Yₜ, p, t)
-        end
-    end
-    return Yₜ
-end
-
 function horizontal_limiter_tendency!(Yₜ, Y, p, t)
     divₕ = Operators.Divergence()
+    C123 = Geometry.Covariant123Vector
 
     (; ᶜu_bar) = p
+    (; ᶜinterp) = p.operators
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
     @. ᶜu_bar = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
@@ -312,14 +240,14 @@ function horizontal_limiter_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
 
     # Tracer conservation, horizontal advection
-    for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜρc = getproperty(Y.c, ᶜρc_name)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
         @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
     end
 
     # Call hyperdiffusion
-    CA.hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
+    hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
 
     return nothing
 end
@@ -327,7 +255,7 @@ end
 function limiters_func!(Y, p, t, ref_Y)
     (; limiters) = p
     if !isnothing(limiters)
-        for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
+        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
             ρc_limiter = getproperty(limiters, ᶜρc_name)
             ᶜρc_ref = getproperty(ref_Y.c, ᶜρc_name)
             ᶜρc = getproperty(Y.c, ᶜρc_name)

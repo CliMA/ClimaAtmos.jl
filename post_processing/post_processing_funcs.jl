@@ -5,6 +5,8 @@ space_string(::Spaces.CenterExtrudedFiniteDifferenceSpace) = "(Center field)"
 
 import ClimaCoreTempestRemap: def_space_coord
 import ClimaCoreSpectra: power_spectrum_1d, power_spectrum_2d
+import ClimaCore: Geometry, Fields, Spaces
+using LinearAlgebra: norm
 
 function process_name(s::AbstractString)
     # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
@@ -206,6 +208,7 @@ paperplots_baro_wave(::TotalEnergy, ::EquilMoistModel, args...) =
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10 (if the simulation lasts 10 days)
 function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
     (; ᶜts, ᶜp, params, thermo_dispatcher) = p
+    (; ᶜinterp, curlₕ) = p.operators
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -315,7 +318,9 @@ end
 
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
+    C123 = Geometry.Covariant123Vector
     (; ᶜts, ᶜp, params, ᶜK, thermo_dispatcher) = p
+    (; ᶜinterp, ᶠinterp, curlₕ) = p.operators
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -658,6 +663,7 @@ end
 
 function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
     (; ᶜts, params, ᶜK, thermo_dispatcher, atmos) = p
+    (; ᶜinterp) = p.operators
     (; moisture_model) = atmos
     thermo_params = CAP.thermodynamics_params(params)
     last_day = floor(Int, sol.t[end] / (24 * 3600))
@@ -854,6 +860,7 @@ end
 function custom_postprocessing(sol, output_dir, p)
     # TODO: remove closure over params
     thermo_dispatcher = p.thermo_dispatcher
+    (; ᶜinterp) = p.operators
     thermo_params = CAP.thermodynamics_params(params)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
     n = length(sol.u)
