@@ -1,0 +1,79 @@
+[config] 
+value = "column" 
+type = "string"
+alias = "config"
+
+[turbconv]
+value = "edmf"
+type = "string"
+alias = "turbconv"
+
+[debugging_tc]
+value = true
+type = "bool"
+alias = "debugging_tc"
+
+[hyperdiff]
+value = "false"
+type = "string"
+alias = "hyperdiff"
+
+[apply_limiter]
+value = false
+type = "bool"
+alias = "apply_limiter"
+
+[turbconv_case]
+value = "Bomex"
+type = "string"
+alias = "turbconv_case"
+
+[subsidence]
+value = "Bomex"
+type = "string"
+alias = "subsidence"
+
+[edmf_coriolis]
+value = "Bomex"
+type = "string"
+alias = "edmf_coriolis"
+
+[ls_adv]
+value = "Bomex"
+type = "string"
+alias = "ls_adv"
+
+[z_elem]
+value = 60
+type = "integer"
+alias = "z_elem"
+
+[z_stretch]
+value = false
+type = "bool"
+alias = "z_stretch"
+
+[z_max]
+value = 3e3
+type = "integer"
+alias = "z_max"
+
+[t_end]
+value = "6hours"
+type = "string"
+alias = "t_end"
+
+[dt_save_to_sol]
+value = "5mins"
+type = "string"
+alias = "dt_save_to_sol"
+
+[dt_save_to_disk]
+value = "5mins"
+type = "string"
+alias = "dt_save_to_disk"
+
+[moist]
+value = "equil"
+type = "string"
+alias = "moist"

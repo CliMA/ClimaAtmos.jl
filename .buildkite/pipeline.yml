@@ -497,6 +497,19 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":balloon: SCM EDMF Bomex (Default: compressible, Newton's method, toml-driven)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --regression_test true
+          --FLOAT_TYPE Float64
+          --toml ./.buildkite/toml/bomex.toml
+          --job_id toml_compressible_edmf_bomex
+          --quicklook_reference_job_id compressible_edmf_bomex
+          --dt 30secs
+        artifact_paths: "toml_compressible_edmf_bomex/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":balloon: SCM EDMF DYCOMS_RF01"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl

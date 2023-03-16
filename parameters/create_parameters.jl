@@ -1,3 +1,4 @@
+import ClimaAtmos as CA
 import ClimaAtmos.TurbulenceConvection as TC
 import CLIMAParameters as CP
 import RRTMGP.Parameters as RP
@@ -16,7 +17,6 @@ Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = tuple(ps)
 Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = tuple(ps)
 Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = tuple(ps)
 
-
 function override_climaatmos_defaults(
     defaults::NamedTuple,
     overrides::NamedTuple,
@@ -27,21 +27,9 @@ function override_climaatmos_defaults(
     return merge(defaults, intersect_overrides)
 end
 
-#=
-import ClimaAtmos
-include(joinpath(pkgdir(ClimaAtmos), "parameters", "create_parameters.jl"))
-params = create_climaatmos_parameter_set(FT)
-=#
-function create_climaatmos_parameter_set(
-    ::Type{FT},
-    overrides::NamedTuple = NamedTuple(),
-) where {FT}
-    toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
-    create_climaatmos_parameter_set(toml_dict, overrides)
-end
-
 function create_climaatmos_parameter_set(
     toml_dict::CP.AbstractTOMLDict,
+    parsed_args,
     overrides::NamedTuple = NamedTuple(),
 )
     FT = CP.float_type(toml_dict)
@@ -141,5 +129,5 @@ function create_climaatmos_parameter_set(
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
-    return param_set
+    return param_set, parsed_args
 end
