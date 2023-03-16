@@ -1,4 +1,4 @@
-function moisture_model(parsed_args)
+function get_moisture_model(parsed_args)
     moisture_name = parsed_args["moist"]
     @assert moisture_name in ("dry", "equil", "nonequil")
     return if moisture_name == "dry"
@@ -10,7 +10,7 @@ function moisture_model(parsed_args)
     end
 end
 
-function model_config(parsed_args)
+function get_model_config(parsed_args)
     config = parsed_args["config"]
     return if config == "sphere"
         SphericalModel()
@@ -21,7 +21,7 @@ function model_config(parsed_args)
     end
 end
 
-function coupling_type(parsed_args)
+function get_coupling_type(parsed_args)
     coupled = parsed_args["coupled"]
     return if coupled == true
         Coupled()
@@ -32,7 +32,7 @@ function coupling_type(parsed_args)
     end
 end
 
-function hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
+function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     enable_qt = parsed_args["enable_qt_hyperdiffusion"]
     hyperdiff_name = parsed_args["hyperdiff"]
     κ₄ = FT(parsed_args["kappa_4"])
@@ -48,7 +48,7 @@ function hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function vertical_diffusion_model(
+function get_vertical_diffusion_model(
     diffuse_momentum,
     parsed_args,
     ::Type{FT},
@@ -64,7 +64,7 @@ function vertical_diffusion_model(
     end
 end
 
-function viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
+function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")
         nothing
@@ -77,7 +77,7 @@ function viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
+function get_rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
         nothing
@@ -94,7 +94,7 @@ function rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function non_orographic_gravity_wave_model(
+function get_non_orographic_gravity_wave_model(
     parsed_args,
     model_config,
     ::Type{FT},
@@ -128,7 +128,7 @@ function non_orographic_gravity_wave_model(
     end
 end
 
-function orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
+function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     @assert ogw_name in (true, false)
     return if ogw_name == true
@@ -138,7 +138,7 @@ function orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function perf_mode(parsed_args)
+function get_perf_mode(parsed_args)
     return if parsed_args["perf_mode"] == "PerfExperimental"
         PerfExperimental()
     else
@@ -146,7 +146,7 @@ function perf_mode(parsed_args)
     end
 end
 
-function energy_form(parsed_args, vert_diff)
+function get_energy_form(parsed_args, vert_diff)
     energy_name = parsed_args["energy_name"]
     @assert energy_name in ("rhoe", "rhotheta")
     if !isnothing(vert_diff)
@@ -159,7 +159,7 @@ function energy_form(parsed_args, vert_diff)
     end
 end
 
-function radiation_mode(parsed_args, ::Type{FT}) where {FT}
+function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
     radiation_name = parsed_args["rad"]
@@ -190,7 +190,7 @@ function radiation_mode(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function precipitation_model(parsed_args)
+function get_precipitation_model(parsed_args)
     precip_model = parsed_args["precip_model"]
     return if precip_model == nothing || precip_model == "nothing"
         NoPrecipitation()
@@ -203,7 +203,7 @@ function precipitation_model(parsed_args)
     end
 end
 
-function forcing_type(parsed_args)
+function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
     return if forcing == nothing
@@ -213,7 +213,7 @@ function forcing_type(parsed_args)
     end
 end
 
-function subsidence_model(parsed_args, radiation_mode, FT)
+function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
     subsidence == nothing && return nothing
 
@@ -232,7 +232,7 @@ function subsidence_model(parsed_args, radiation_mode, FT)
     return Subsidence(prof)
 end
 
-function large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
+function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     ls_adv = parsed_args["ls_adv"]
     ls_adv == nothing && return nothing
 
@@ -269,7 +269,7 @@ function large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
+function get_edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     edmf_coriolis = parsed_args["edmf_coriolis"]
     edmf_coriolis == nothing && return nothing
     (prof_u, prof_v) = if edmf_coriolis == "Bomex"
@@ -302,7 +302,7 @@ function edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     return EDMFCoriolis(prof_u, prof_v, coriolis_param)
 end
 
-function turbconv_model(
+function get_turbconv_model(
     FT,
     moisture_model,
     precip_model,
@@ -325,16 +325,16 @@ function turbconv_model(
     end
 end
 
-function surface_thermo_state_type(parsed_args)
+function get_surface_thermo_state_type(parsed_args)
     dict = Dict()
     dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
     return dict[parsed_args["surface_thermo_state_type"]]
 end
 
 
-function surface_scheme(FT, parsed_args)
+function get_surface_scheme(FT, parsed_args)
     surface_scheme = parsed_args["surface_scheme"]
-    sfc_thermo_state_type = surface_thermo_state_type(parsed_args)
+    sfc_thermo_state_type = get_surface_thermo_state_type(parsed_args)
     @assert surface_scheme in (nothing, "bulk", "monin_obukhov")
     return if surface_scheme == "bulk"
         BulkSurfaceScheme(sfc_thermo_state_type)
