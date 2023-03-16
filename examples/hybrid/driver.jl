@@ -30,18 +30,17 @@ import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos.InitialConditions as ICs
 
 include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
-include("types.jl")
 
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 
-
-atmos = get_atmos(FT, parsed_args, params.turbconv_params)
+atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
-numerics = get_numerics(parsed_args)
+numerics = CA.get_numerics(parsed_args)
+include("get_simulation_and_args_integrator.jl")
 simulation = get_simulation(FT, parsed_args)
-initial_condition = get_initial_condition(parsed_args)
+initial_condition = CA.get_initial_condition(parsed_args)
 
 # TODO: use import istead of using
 using Colors
@@ -56,11 +55,6 @@ using ClimaTimeSteppers
 
 import Random
 Random.seed!(1234)
-
-jacobi_flags(::TotalEnergy) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobi_flags(::PotentialTemperature) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, parsed_args, params, atmos, dt;)
@@ -198,10 +192,10 @@ const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
 
 @time "Allocating Y" if simulation.restart
-    (Y, t_start) = get_state_restart(comms_ctx)
-    spaces = get_spaces_restart(Y)
+    (Y, t_start) = CA.get_state_restart(comms_ctx)
+    spaces = CA.get_spaces_restart(Y)
 else
-    spaces = get_spaces(parsed_args, params, comms_ctx)
+    spaces = CA.get_spaces(parsed_args, params, comms_ctx)
     Y = ICs.atmos_state(
         initial_condition(params),
         atmos,
@@ -247,7 +241,7 @@ if parsed_args["discrete_hydrostatic_balance"]
     CA.set_discrete_hydrostatic_balanced_state!(Y, p)
 end
 
-@time "ode_configuration" ode_algo = ode_configuration(Y, parsed_args, atmos)
+@time "ode_configuration" ode_algo = CA.ode_configuration(Y, parsed_args, atmos)
 
 include("get_callbacks.jl")
 
@@ -262,7 +256,7 @@ if haskey(ENV, "CI_PERF_SKIP_INIT") # for performance analysis
 end
 
 @time "get_integrator" integrator =
-    get_integrator(integrator_args, integrator_kwargs)
+    CA.get_integrator(integrator_args, integrator_kwargs)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
