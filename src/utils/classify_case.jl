@@ -1,3 +1,4 @@
+#TODO - do we want to change anything here now?
 is_baro_wave(parsed_args) = all((
     parsed_args["config"] == "sphere",
     parsed_args["forcing"] == nothing,

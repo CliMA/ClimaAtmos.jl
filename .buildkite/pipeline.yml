@@ -97,31 +97,49 @@ steps:
     steps:
 
       - label: ":computer: single column hydrostatic balance float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --dt_save_to_disk 5days --job_id single_column_hydrostatic_balance_ft64 --FLOAT_TYPE Float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --initial_condition IsothermalProfile --z_max 30e3 --z_elem 45 --dz_bottom 30 --dz_top 5000 --t_end 10days --dt 3hours --dt_save_to_sol 3hours --dt_save_to_disk 5days --job_id single_column_hydrostatic_balance_ft64 --FLOAT_TYPE Float64"
         artifact_paths: "single_column_hydrostatic_balance_ft64/*"
 
       - label: ":computer: single column radiative equilibrium gray"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_gray"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad gray --hyperdiff false --config column --initial_condition IsothermalProfile --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_gray"
         artifact_paths: "single_column_radiative_equilibrium_gray/*"
 
       - label: ":computer: single column radiative equilibrium clearsky"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_clearsky"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --initial_condition IsothermalProfile --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_clearsky"
         artifact_paths: "single_column_radiative_equilibrium_clearsky/*"
 
       - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_insolation false --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_allsky_idealized_clouds"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_insolation false --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --initial_condition IsothermalProfile --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_allsky_idealized_clouds"
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/*"
 
       - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --non_orographic_gravity_wave true --t_end 1500secs --dt 500secs --dt_save_to_disk 500secs --job_id single_column_nonorographic_gravity_wave --regression_test true"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --initial_condition IsothermalProfile --non_orographic_gravity_wave true --t_end 1500secs --dt 500secs --dt_save_to_disk 500secs --job_id single_column_nonorographic_gravity_wave --regression_test true"
         artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Box Examples"
     steps:
 
       - label: ":computer: Box hydrostatic balance (ρe_tot)"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --perturb_initstate false --hyperdiff false --dt 20secs --t_end 1days --job_id box_hydrostatic_balance_rhoe"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config box --perturb_initstate false --hyperdiff false
+          --initial_condition DecayingProfile
+          --dt 20secs --t_end 1days
+          --job_id box_hydrostatic_balance_rhoe
         artifact_paths: "box_hydrostatic_balance_rhoe/*"
+
+      - label: ":computer: Bomex box hydrostatic balance (ρe_tot)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config box --perturb_initstate false --hyperdiff false
+          --initial_condition Bomex
+          --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
+          --x_max 1e4 --y_max 1e4 --x_elem 6 --y_elem 6
+          --z_elem 60 --z_stretch false --z_max 3e3
+          --moist equil
+          --dt 0.5secs --t_end 600secs
+          --job_id bomex_box_hydrostatic_balance_rhoe
+        artifact_paths: "bomex_box_hydrostatic_balance_rhoe/*"
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -136,34 +154,34 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe)"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --dt_save_to_disk 5days --regression_test true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --dt_save_to_disk 5days --initial_condition DryBaroclinicWave --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe) h_elem8"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --h_elem 8 --kappa_4 5e16 --job_id sphere_baroclinic_wave_rhoe_he8 --dt 500secs --dt_save_to_disk 5days
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --h_elem 8 --kappa_4 5e16 --job_id sphere_baroclinic_wave_rhoe_he8 --dt 500secs --initial_condition DryBaroclinicWave --dt_save_to_disk 5days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_he8 --out_dir sphere_baroclinic_wave_rhoe_he8
         artifact_paths: "sphere_baroclinic_wave_rhoe_he8/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 5days --apply_limiter false
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 5days --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_equilmoist --out_dir sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist"
         command:
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --regression_test true"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --regression_test true"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --ode_algo SSP333 --dt_save_to_disk 5days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --ode_algo SSP333 --dt_save_to_disk 5days"
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
         soft_fail: true
 
@@ -234,7 +252,7 @@ steps:
 
       - label: ":computer: Prep restart for MPI"
         key: "mpi_baro_wave_make_restart"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_make_restart --dt_save_restart 5days --dt_save_to_disk 5days"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id mpi_make_restart --dt_save_restart 5days --dt_save_to_disk 5days --initial_condition DryBaroclinicWave"
         artifact_paths: "mpi_make_restart/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -244,7 +262,7 @@ steps:
       - label: ":computer: Test restart for MPI baroclinic wave"
         key: "restart_mpi_baro_wave"
         depends_on: "mpi_baro_wave_make_restart"
-        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id restart_mpi_baroclinic_wave_rhoe --t_end 20days"
+        command: "mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl --job_id restart_mpi_baroclinic_wave_rhoe --t_end 20days --initial_condition DryBaroclinicWave"
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
