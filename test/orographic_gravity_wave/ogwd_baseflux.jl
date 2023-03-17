@@ -46,7 +46,7 @@ end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 
 # Prepare topo data
-TOPO_DIR = joinpath(@__DIR__, "topo_data/")
+TOPO_DIR = joinpath(@__DIR__, "topo_data_ogwd_baseflux_test/")
 if !isdir(TOPO_DIR)
     mkdir(TOPO_DIR)
 end

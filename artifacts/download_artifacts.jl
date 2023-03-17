@@ -7,6 +7,7 @@ function trigger_download(lazy_download = true)
     @info "topo dataset path:`$(topo_res_path())`"
     @info "MiMA convective gravity wave path:`$(mima_gwf_path())`"
     @info "ETOPO1 arc-minute relief model:`$(topo_elev_dataset_path())`"
+    @info "GFDL OGWD test data:`$(gfdl_ogw_data_path())`"
     return nothing
 end
 trigger_download()
