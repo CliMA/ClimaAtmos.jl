@@ -81,6 +81,7 @@ end
 function Wfact!(W, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
         p.test_dycore_consistency && fill_with_nans!(p)
+        precomputed_quantities!(Y, p, t)
         Fields.bycolumn(axes(Y.c)) do colidx
             Wfact!(W, Y, p, dtγ, t, colidx)
         end
@@ -105,7 +106,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     FT = Spaces.undertype(axes(Y.c))
     C123 = Geometry.Covariant123Vector
     compose = Operators.ComposeStencils()
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
@@ -137,11 +137,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     # The εw is only necessary in case w = 0.
     # Since Operator2Stencil has not yet been extended to upwinding
     # operators, ᶠupwind_stencil is not available.
-    compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠw[colidx])
-
-    thermo_params = CAP.thermodynamics_params(params)
-    thermo_state!(Y, p, ᶜinterp, colidx; time = t)
-    @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
     # ᶜinterp(ᶠw) =
     #     ᶜinterp(ᶠw)_data * ᶜinterp(ᶠw)_unit =
