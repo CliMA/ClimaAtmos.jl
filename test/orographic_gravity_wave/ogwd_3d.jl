@@ -457,7 +457,7 @@ for k in [21, 31]
         ogwd_v[:, :, k, 1]' .* 86400,
         color = :balance,
         clim = (-10, 10),
-        title = "gfdl at z = " * string(z_coord[k]),
+        title = "climaatmos at z = " * string(z_coord[k]),
     )
     p2 = contourf(
         lon,
