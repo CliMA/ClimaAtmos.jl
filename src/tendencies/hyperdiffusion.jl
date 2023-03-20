@@ -54,12 +54,8 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     is_2d_pt = point_type <: Geometry.Abstract2DPoint
     is_3d_pt = !is_2d_pt
 
-    ᶜρs =
-        :ρe_tot in propertynames(Y.c) ? Y.c.ρe_tot :
-        (:ρe_int in propertynames(Y.c) ? Y.c.ρe_int : Y.c.ρθ)
-    ᵗρs =
-        :ρe_tot in propertynames(Y.c) ? Yₜ.c.ρe_tot :
-        (:ρe_int in propertynames(Y.c) ? Yₜ.c.ρe_int : Yₜ.c.ρθ)
+    ᶜρs = :ρe_tot in propertynames(Y.c) ? Y.c.ρe_tot : Y.c.ρθ
+    ᵗρs = :ρe_tot in propertynames(Y.c) ? Yₜ.c.ρe_tot : Yₜ.c.ρθ
 
     (:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ(ᶜρs / ᶜρ)))
     !(:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ((ᶜρs + ᶜp) / ᶜρ)))

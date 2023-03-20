@@ -27,16 +27,6 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜu_bar)
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜu_bar)
-    elseif :ρe_int in propertynames(Y.c)
-        if point_type <: Geometry.Abstract3DPoint
-            @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜu_bar) -
-                dot(gradₕ(ᶜp), Geometry.Contravariant12Vector(ᶜuₕ))
-        else
-            @. Yₜ.c.ρe_int -=
-                divₕ((Y.c.ρe_int + ᶜp) * ᶜu_bar) -
-                dot(gradₕ(ᶜp), Geometry.Contravariant1Vector(ᶜuₕ))
-        end
     end
 
     # Momentum conservation

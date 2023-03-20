@@ -5,22 +5,22 @@ if !(@isdefined parsed_args)
     (s, parsed_args) = parse_commandline()
 end
 
-include("comms.jl")
-if startswith(parsed_args["ode_algo"], "ODE.") # TODO: use Preferences.jl instead:
-    include("../ordinary_diff_eq_bug_fixes.jl")
-end
-include("classify_case.jl")
-include("utilities.jl")
 include("nvtx.jl")
 
 parse_arg(pa, key, default) = isnothing(pa[key]) ? default : pa[key]
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 
+include("parameter_set.jl")
+params, parsed_args = create_parameter_set(FT, parsed_args, cli_defaults(s))
+
+include("comms.jl")
+if startswith(parsed_args["ode_algo"], "ODE.") # TODO: use Preferences.jl instead:
+    include("../ordinary_diff_eq_bug_fixes.jl")
+end
 fps = parsed_args["fps"]
 idealized_insolation = parsed_args["idealized_insolation"]
 idealized_clouds = parsed_args["idealized_clouds"]
-turbconv = parsed_args["turbconv"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
@@ -29,21 +29,18 @@ turbconv = parsed_args["turbconv"]
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos.InitialConditions as ICs
 
-include("topography_helper.jl")
 include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
-include("types.jl")
 
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
 import .TurbulenceConvectionUtils as TCU
 
-include("parameter_set.jl")
-params = create_parameter_set(FT, parsed_args)
-atmos = get_atmos(FT, parsed_args, params.turbconv_params)
+atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
-numerics = get_numerics(parsed_args)
+numerics = CA.get_numerics(parsed_args)
+include("get_simulation_and_args_integrator.jl")
 simulation = get_simulation(FT, parsed_args)
-initial_condition = get_initial_condition(parsed_args)
+initial_condition = CA.get_initial_condition(parsed_args)
 
 # TODO: use import istead of using
 using Colors
@@ -58,13 +55,6 @@ using ClimaTimeSteppers
 
 import Random
 Random.seed!(1234)
-
-jacobi_flags(::TotalEnergy) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobi_flags(::InternalEnergy) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobi_flags(::PotentialTemperature) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
 
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, parsed_args, params, atmos, dt;)
@@ -82,7 +72,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             idealized_clouds,
             thermo_dispatcher,
             data_loader = CA.rrtmgp_data_loader,
-            ᶜinterp,
         )
     else
         CA.radiation_model_cache(Y, params, radiation_mode)
@@ -196,17 +185,17 @@ import ClimaCore.Operators as CCO
 const CM = CloudMicrophysics
 import ClimaAtmos.Parameters as CAP
 
-include("staggered_nonhydrostatic_model.jl")
+include("get_cache_and_tendency.jl")
 
 import ClimaCore: enable_threading
 const enable_clima_core_threading = parsed_args["enable_threading"]
 enable_threading() = enable_clima_core_threading
 
 @time "Allocating Y" if simulation.restart
-    (Y, t_start) = get_state_restart(comms_ctx)
-    spaces = get_spaces_restart(Y)
+    (Y, t_start) = CA.get_state_restart(comms_ctx)
+    spaces = CA.get_spaces_restart(Y)
 else
-    spaces = get_spaces(parsed_args, params, comms_ctx)
+    spaces = CA.get_spaces(parsed_args, params, comms_ctx)
     Y = ICs.atmos_state(
         initial_condition(params),
         atmos,
@@ -225,7 +214,7 @@ if parsed_args["orographic_gravity_wave"] == true
     include("orographic_gravity_wave_helper.jl")
     if !isfile(joinpath(TOPO_DIR, "topo_info.hdf5")) &
        ClimaComms.iamroot(comms_ctx)
-        include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+        include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
         # download topo data
         datafile_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
         @show datafile_rll
@@ -236,16 +225,25 @@ else
 end
 
 @time "Allocating cache (p)" begin
-    p = get_cache(Y, parsed_args, params, spaces, atmos, numerics, simulation)
+    p = get_cache(
+        Y,
+        parsed_args,
+        params,
+        spaces,
+        atmos,
+        numerics,
+        simulation,
+        comms_ctx,
+    )
 end
 
 if parsed_args["discrete_hydrostatic_balance"]
     CA.set_discrete_hydrostatic_balanced_state!(Y, p)
 end
 
-@time "ode_configuration" ode_algo = ode_configuration(Y, parsed_args, atmos)
+@time "ode_configuration" ode_algo = CA.ode_configuration(Y, parsed_args, atmos)
 
-include("callbacks.jl")
+include("get_callbacks.jl")
 
 @time "get_callbacks" callback =
     get_callbacks(parsed_args, simulation, atmos, params)
@@ -258,7 +256,7 @@ if haskey(ENV, "CI_PERF_SKIP_INIT") # for performance analysis
 end
 
 @time "get_integrator" integrator =
-    get_integrator(integrator_args, integrator_kwargs)
+    CA.get_integrator(integrator_args, integrator_kwargs)
 
 if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
     throw(:exit_profile)
@@ -306,9 +304,7 @@ using Test
 import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
-include(
-    joinpath(pkgdir(ClimaAtmos), "post_processing", "post_processing_funcs.jl"),
-)
+include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
 
 if parsed_args["debugging_tc"]
     include(
@@ -322,7 +318,7 @@ if parsed_args["debugging_tc"]
     )
     include(
         joinpath(
-            pkgdir(ClimaAtmos),
+            pkgdir(CA),
             "post_processing",
             "define_tc_quicklook_profiles.jl",
         ),
@@ -373,10 +369,10 @@ end
 # Simulation did not crash
 (; sol, walltime) = sol_res
 @assert last(sol.t) == simulation.t_end
-verify_callbacks(sol.t)
+CA.verify_callbacks(sol.t)
 
 if simulation.is_distributed
-    export_scaling_file(
+    CA.export_scaling_file(
         sol,
         simulation.output_dir,
         walltime,
@@ -387,13 +383,13 @@ end
 
 if !simulation.is_distributed && parsed_args["post_process"]
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if is_baro_wave(parsed_args)
+    if CA.is_baro_wave(parsed_args)
         paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
-    elseif is_column_without_edmf(parsed_args)
+    elseif CA.is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
-    elseif is_column_edmf(parsed_args)
+    elseif CA.is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
-    elseif is_solid_body(parsed_args)
+    elseif CA.is_solid_body(parsed_args)
         postprocessing(sol, simulation.output_dir, fps)
     elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)

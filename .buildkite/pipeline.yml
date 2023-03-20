@@ -89,6 +89,10 @@ steps:
         command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_baseflux.jl"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
+      - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
+        command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_3d.jl"
+        artifact_paths: "orographic_gravity_wave_test_3d/*"
+
   - group: "Column Examples"
     steps:
 
@@ -313,7 +317,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":dart: Dycore Consistency test"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id dycore_consistency --quicklook_reference_job_id compressible_edmf_bomex --dt 40secs --t_end 6hours --apply_limiter false --test_dycore_consistency true --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id dycore_consistency --quicklook_reference_job_id edmf_bomex --dt 40secs --t_end 6hours --apply_limiter false --test_dycore_consistency true --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "dycore_consistency/*"
         soft_fail: true
         agents:
@@ -322,7 +326,7 @@ steps:
   - group: "TurbulenceConvection"
     steps:
 
-      - label: ":balloon: SCM EDMF GABLS (Dry, JFNK with IMEX EDMF)"
+      - label: ":balloon: SCM EDMF GABLS (Dry, JFNK IMEX EDMF)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true --regression_test true
@@ -334,9 +338,9 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --job_id compressible_edmf_gabls_jfnk_imex
+          --job_id edmf_gabls_jfnk_imex
           --dt 600secs
-        artifact_paths: "compressible_edmf_gabls_jfnk_imex/*"
+        artifact_paths: "edmf_gabls_jfnk_imex/*"
         agents:
           slurm_mem: 20GB
 
@@ -355,7 +359,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, Const entr, Pi detr)"
+      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, JFNK IMEX EDMF)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true
@@ -364,24 +368,6 @@ steps:
           --z_elem 200 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist dry
-          --edmf_entr_closure PiDetrainment
-          --job_id edmf_nieuwstadt_const_entr_pi_detr
-          --quicklook_reference_job_id edmf_nieuwstadt
-          --dt 0.5secs
-        artifact_paths: "edmf_nieuwstadt_const_entr_pi_detr/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, Const entr, Pi detr, JFNK IMEX EDMF)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Nieuwstadt
-          --z_elem 200 --z_stretch false --z_max 3750
-          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist dry
-          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
@@ -408,7 +394,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Soares (Const entr, Pi detr)"
+      - label: ":balloon: SCM EDMF Soares (JFNK IMEX EDMF)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true
@@ -417,36 +403,18 @@ steps:
           --z_elem 150 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --edmf_entr_closure PiDetrainment
-          --job_id edmf_soares_const_entr_pi_detr
-          --quicklook_reference_job_id edmf_soares
-          --dt 0.5secs
-        artifact_paths: "edmf_soares_const_entr_pi_detr/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF Soares (Const entr, pi detr, JFNK IMEX EDMF)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Soares
-          --z_elem 150 --z_stretch false --z_max 3750
-          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist equil
-          --edmf_entr_closure PiDetrainment
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
           --quicklook_reference_job_id edmf_soares
-          --job_id edmf_soares_const_entr_jfnk_imex
+          --job_id edmf_soares_jfnk_imex
           --dt 50secs
-        artifact_paths: "edmf_soares_const_entr_jfnk_imex/*"
+        artifact_paths: "edmf_soares_jfnk_imex/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (Default: compressible, Newton's method)"
+      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true --regression_test true
@@ -455,9 +423,9 @@ steps:
           --z_elem 60 --z_stretch false --z_max 3e3
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --job_id compressible_edmf_bomex
-          --dt 30secs
-        artifact_paths: "compressible_edmf_bomex/*"
+          --job_id edmf_bomex
+          --dt 20secs
+        artifact_paths: "edmf_bomex/*"
         agents:
           slurm_mem: 20GB
 
@@ -471,14 +439,14 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --use_krylov_method true
-          --quicklook_reference_job_id compressible_edmf_bomex
-          --job_id compressible_edmf_bomex_jfnk
-          --dt 20secs
-        artifact_paths: "compressible_edmf_bomex_jfnk/*"
+          --quicklook_reference_job_id edmf_bomex
+          --job_id edmf_bomex_jfnk
+          --dt 15secs
+        artifact_paths: "edmf_bomex_jfnk/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (JFNK with IMEX EDMF)"
+      - label: ":balloon: SCM EDMF Bomex (JFNK IMEX EDMF)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true --regression_test true
@@ -490,10 +458,23 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id compressible_edmf_bomex
-          --job_id compressible_edmf_bomex_jfnk_imex
-          --dt 40secs
-        artifact_paths: "compressible_edmf_bomex_jfnk_imex/*"
+          --quicklook_reference_job_id edmf_bomex
+          --job_id edmf_bomex_jfnk_imex
+          --dt 30secs
+        artifact_paths: "edmf_bomex_jfnk_imex/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method, toml-driven)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --regression_test true
+          --FLOAT_TYPE Float64
+          --toml ./.buildkite/toml/bomex.toml
+          --job_id toml_edmf_bomex
+          --quicklook_reference_job_id edmf_bomex
+          --dt 20secs
+        artifact_paths: "toml_edmf_bomex/*"
         agents:
           slurm_mem: 20GB
 
@@ -506,9 +487,9 @@ steps:
           --z_elem 30 --z_stretch false --z_max 1500
           --t_end 4hours --dt_save_to_sol 5mins --dt_save_to_disk 2mins
           --moist equil
-          --job_id compressible_edmf_dycoms_rf01
+          --job_id edmf_dycoms_rf01
           --dt 6secs
-        artifact_paths: "compressible_edmf_dycoms_rf01/*"
+        artifact_paths: "edmf_dycoms_rf01/*"
         agents:
           slurm_mem: 20GB
 
@@ -552,7 +533,7 @@ steps:
           --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
           --moist equil --precip_model 1M
           --job_id edmf_rico
-          --dt 1.0secs
+          --dt 0.75secs
         artifact_paths: "edmf_rico/*"
         agents:
           slurm_mem: 20GB
@@ -567,9 +548,9 @@ steps:
           --rayleigh_sponge true --zd_rayleigh 15000
           --t_end 1hours --dt_save_to_sol 5mins --dt_save_to_disk 1mins
           --moist equil --precip_model 1M
-          --job_id compressible_edmf_trmm
+          --job_id edmf_trmm
           --dt 0.1secs
-        artifact_paths: "compressible_edmf_trmm/*"
+        artifact_paths: "edmf_trmm/*"
         agents:
           slurm_mem: 20GB
 

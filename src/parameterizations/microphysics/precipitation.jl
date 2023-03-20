@@ -129,14 +129,6 @@ function precipitation_tendency!(
                 TD.internal_energy_ice(thermo_params, ᶜts[colidx]) +
                 ᶜΦ[colidx]
             )
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] +=
-            ᶜS_ρq_tot[colidx] * (
-                ᶜλ[colidx] *
-                TD.internal_energy_liquid(thermo_params, ᶜts[colidx]) +
-                (1 - ᶜλ[colidx]) *
-                TD.internal_energy_ice(thermo_params, ᶜts[colidx])
-            )
     end
     return nothing
 end

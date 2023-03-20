@@ -1,58 +1,40 @@
 using Dates: DateTime, @dateformat_str
 using NCDatasets
 using Dierckx
+using DiffEqBase
 using ImageFiltering
 using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
-import ClimaAtmos as CA
-import ClimaAtmos:
-    DryModel,
-    EquilMoistModel,
-    NonEquilMoistModel,
-    PotentialTemperature,
-    TotalEnergy,
-    InternalEnergy,
-    Microphysics0Moment,
-    HeldSuarezForcing,
-    BulkSurfaceScheme,
-    MoninObukhovSurface,
-    SingleColumnModel,
-    SphericalModel,
-    BoxModel
-
-import ClimaCore: InputOutput
-
-include("topography_helper.jl")
 
 function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
 
     # should this live in the radiation model?
 
-    moisture_model = CA.moisture_model(parsed_args)
-    precip_model = CA.precipitation_model(parsed_args)
-    radiation_mode = CA.radiation_mode(parsed_args, FT)
-    forcing_type = CA.forcing_type(parsed_args)
-    surface_scheme = CA.surface_scheme(FT, parsed_args)
+    moisture_model = get_moisture_model(parsed_args)
+    precip_model = get_precipitation_model(parsed_args)
+    radiation_mode = get_radiation_mode(parsed_args, FT)
+    forcing_type = get_forcing_type(parsed_args)
+    surface_scheme = get_surface_scheme(FT, parsed_args)
 
     diffuse_momentum =
         !(forcing_type isa HeldSuarezForcing) && !isnothing(surface_scheme)
 
-    model_config = CA.model_config(parsed_args)
-    vert_diff = CA.vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
-    atmos = CA.AtmosModel(;
+    model_config = get_model_config(parsed_args)
+    vert_diff = get_vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
+    atmos = AtmosModel(;
         moisture_model,
         model_config,
-        coupling = CA.coupling_type(parsed_args),
-        perf_mode = CA.perf_mode(parsed_args),
-        energy_form = CA.energy_form(parsed_args, vert_diff),
+        coupling = get_coupling_type(parsed_args),
+        perf_mode = get_perf_mode(parsed_args),
+        energy_form = get_energy_form(parsed_args, vert_diff),
         radiation_mode,
-        subsidence = CA.subsidence_model(parsed_args, radiation_mode, FT),
-        ls_adv = CA.large_scale_advection_model(parsed_args, FT),
-        edmf_coriolis = CA.edmf_coriolis(parsed_args, FT),
+        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
+        ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         precip_model,
         forcing_type,
-        turbconv_model = CA.turbconv_model(
+        turbconv_model = get_turbconv_model(
             FT,
             moisture_model,
             precip_model,
@@ -60,19 +42,19 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
             turbconv_params,
         ),
         surface_scheme,
-        non_orographic_gravity_wave = CA.non_orographic_gravity_wave_model(
+        non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             model_config,
             FT,
         ),
-        orographic_gravity_wave = CA.orographic_gravity_wave_model(
+        orographic_gravity_wave = get_orographic_gravity_wave_model(
             parsed_args,
             FT,
         ),
-        hyperdiff = CA.hyperdiffusion_model(parsed_args, FT),
+        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
-        viscous_sponge = CA.viscous_sponge_model(parsed_args, FT),
-        rayleigh_sponge = CA.rayleigh_sponge_model(parsed_args, FT),
+        viscous_sponge = get_viscous_sponge_model(parsed_args, FT),
+        rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
     )
 
     return atmos
@@ -89,39 +71,6 @@ function get_numerics(parsed_args)
     @info "numerics" numerics...
 
     return numerics
-end
-
-function get_simulation(::Type{FT}, parsed_args) where {FT}
-
-    job_id = if isnothing(parsed_args["job_id"])
-        (s, default_parsed_args) = parse_commandline()
-        job_id_from_parsed_args(s, parsed_args)
-    else
-        parsed_args["job_id"]
-    end
-    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    output_dir = parse_arg(parsed_args, "output_dir", default_output)
-    mkpath(output_dir)
-
-    sim = (;
-        is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
-        is_debugging_tc = parsed_args["debugging_tc"],
-        output_dir,
-        restart = haskey(ENV, "RESTART_FILE"),
-        job_id,
-        dt = FT(time_to_seconds(parsed_args["dt"])),
-        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
-        t_end = FT(time_to_seconds(parsed_args["t_end"])),
-    )
-    n_steps = floor(Int, sim.t_end / sim.dt)
-    @info(
-        "Time info:",
-        dt = parsed_args["dt"],
-        t_end = parsed_args["t_end"],
-        floor_n_steps = n_steps,
-    )
-
-    return sim
 end
 
 function get_spaces(parsed_args, params, comms_ctx)
@@ -165,22 +114,18 @@ function get_spaces(parsed_args, params, comms_ctx)
     center_space, face_space = if parsed_args["config"] == "sphere"
         nh_poly = parsed_args["nh_poly"]
         quad = Spaces.Quadratures.GLL{nh_poly + 1}()
-        horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
-        h_space = CA.make_horizontal_space(
-            horizontal_mesh,
-            quad,
-            comms_ctx,
-            bubble,
-        )
+        horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
             Meshes.Uniform()
         end
         if warp_function == nothing
-            CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
         else
-            CA.make_hybrid_spaces(
+            make_hybrid_spaces(
                 h_space,
                 z_max,
                 z_elem,
@@ -193,7 +138,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         FT = eltype(params)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
         quad = Spaces.Quadratures.GL{1}()
-        horizontal_mesh = CA.periodic_rectangle_mesh(;
+        horizontal_mesh = periodic_rectangle_mesh(;
             x_max = Δx,
             y_max = Δx,
             x_elem = 1,
@@ -203,18 +148,14 @@ function get_spaces(parsed_args, params, comms_ctx)
             @warn "Bubble correction not compatible with single column configuration. It will be switched off."
             bubble = false
         end
-        h_space = CA.make_horizontal_space(
-            horizontal_mesh,
-            quad,
-            comms_ctx,
-            bubble,
-        )
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
             Meshes.Uniform()
         end
-        CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -223,24 +164,20 @@ function get_spaces(parsed_args, params, comms_ctx)
         x_max = FT(parsed_args["x_max"])
         y_elem = Int(parsed_args["y_elem"])
         y_max = FT(parsed_args["y_max"])
-        horizontal_mesh = CA.periodic_rectangle_mesh(;
+        horizontal_mesh = periodic_rectangle_mesh(;
             x_max = x_max,
             y_max = y_max,
             x_elem = x_elem,
             y_elem = y_elem,
         )
-        h_space = CA.make_horizontal_space(
-            horizontal_mesh,
-            quad,
-            comms_ctx,
-            bubble,
-        )
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
             Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
         else
             Meshes.Uniform()
         end
-        CA.make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
     end
     return (;
         center_space,
@@ -349,17 +286,22 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
 is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
+jacobi_flags(::TotalEnergy) =
+    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::PotentialTemperature) =
+    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+
 function jac_kwargs(ode_algo, Y, energy_form)
     if is_implicit(ode_algo)
-        W = CA.SchurComplementW(
+        W = SchurComplementW(
             Y,
             use_transform(ode_algo),
             jacobi_flags(energy_form),
         )
         if use_transform(ode_algo)
-            return (; jac_prototype = W, Wfact_t = CA.Wfact!)
+            return (; jac_prototype = W, Wfact_t = Wfact!)
         else
-            return (; jac_prototype = W, Wfact = CA.Wfact!)
+            return (; jac_prototype = W, Wfact = Wfact!)
         end
     else
         return NamedTuple()
@@ -372,6 +314,7 @@ end
 Returns the ode algorithm
 =#
 function ode_configuration(Y, parsed_args, atmos)
+    FT = Spaces.undertype(axes(Y.c))
     ode_name = parsed_args["ode_algo"]
     alg_or_tableau = if startswith(ode_name, "ODE.")
         @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
@@ -392,78 +335,40 @@ function ode_configuration(Y, parsed_args, atmos)
             κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
             max_iter = parsed_args["max_newton_iters"],
         )
-        return alg_or_tableau(; linsolve = CA.linsolve!, nlsolve)
+        return alg_or_tableau(; linsolve = linsolve!, nlsolve)
     elseif is_imex_CTS_algo_type(alg_or_tableau)
-        newtons_method = NewtonsMethod(;
+        newtons_method = CTS.NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters"],
             krylov_method = if parsed_args["use_krylov_method"]
-                KrylovMethod(;
-                    jacobian_free_jvp = ForwardDiffJVP(;
+                CTS.KrylovMethod(;
+                    jacobian_free_jvp = CTS.ForwardDiffJVP(;
                         step_adjustment = FT(
                             parsed_args["jvp_step_adjustment"],
                         ),
                     ),
                     forcing_term = if parsed_args["use_dynamic_krylov_rtol"]
                         α = FT(parsed_args["eisenstat_walker_forcing_alpha"])
-                        EisenstatWalkerForcing(; α)
+                        CTS.EisenstatWalkerForcing(; α)
                     else
-                        ConstantForcing(FT(parsed_args["krylov_rtol"]))
+                        CTS.ConstantForcing(FT(parsed_args["krylov_rtol"]))
                     end,
                 )
             else
                 nothing
             end,
             convergence_checker = if parsed_args["use_newton_rtol"]
-                norm_condition =
-                    MaximumRelativeError(FT(parsed_args["newton_rtol"]))
-                ConvergenceChecker(; norm_condition)
+                norm_condition = CTS.MaximumRelativeError(
+                    FT(parsed_args["newton_rtol"]),
+                )
+                CTS.ConvergenceChecker(; norm_condition)
             else
                 nothing
             end,
         )
         return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
     else
-        return alg_or_tableau(; linsolve = CA.linsolve!)
+        return alg_or_tableau(; linsolve = linsolve!)
     end
-end
-
-function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, simulation) = p
-    (; dt) = simulation
-    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
-
-    @time "Define ode function" func = if parsed_args["split_ode"]
-        implicit_func = ODE.ODEFunction(
-            implicit_tendency!;
-            jac_kwargs(ode_algo, Y, atmos.energy_form)...,
-            tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
-        )
-        if is_cts_algo(ode_algo)
-            CTS.ClimaODEFunction(;
-                T_lim! = horizontal_limiter_tendency!,
-                T_exp! = remaining_tendency!,
-                T_imp! = implicit_func,
-                # Can we just pass implicit_tendency! and jac_prototype etc.?
-                lim! = limiters_func!,
-                dss!,
-            )
-        else
-            ODE.SplitFunction(implicit_func, remaining_tendency!)
-        end
-    else
-        remaining_tendency! # should be total_tendency!
-    end
-    problem = ODE.ODEProblem(func, Y, tspan, p)
-    saveat = if dt_save_to_sol == Inf
-        tspan[2]
-    elseif tspan[2] % dt_save_to_sol == 0
-        dt_save_to_sol
-    else
-        [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
-    end # ensure that tspan[2] is always saved
-    args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
-    return (args, kwargs)
 end
 
 function get_integrator(args, kwargs)

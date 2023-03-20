@@ -30,7 +30,7 @@ function parse_commandline()
         help = "Time between calling radiation callback for sphere configurations"
         arg_type = String
         default = "6hours"
-        "--config" # TODO: add box
+        "--config"
         help = "Spatial configuration [`sphere` (default), `column`, `box`]"
         arg_type = String
         default = "sphere"
@@ -102,7 +102,7 @@ function parse_commandline()
         help = "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
         arg_type = String
         "--energy_name"
-        help = "Energy variable name [`rhoe` (default), `rhoe_int` , `rhotheta`]"
+        help = "Energy variable name [`rhoe` (default), `rhotheta`]"
         arg_type = String
         default = "rhoe"
         "--perturb_initstate"
@@ -120,7 +120,7 @@ function parse_commandline()
         "--tracer_upwinding"
         help = "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
         arg_type = Symbol
-        default = :none # TODO: change to :zalesak
+        default = :none  # TODO: change to :zalesak
         "--ode_algo"
         help = "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
         arg_type = String
@@ -290,10 +290,6 @@ function parse_commandline()
         help = "Whether to split EDMF's `compute_gm_tendencies!` into implicit and explicit components"
         arg_type = Bool
         default = false
-        "--edmf_entr_closure"
-        help = "EDMF entrainment closure. [`MoistureDeficit` (default), `Constant`, `PiDetrainment`]"
-        arg_type = String
-        default = "MoistureDeficit"
         "--debugging_tc"
         help = "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
         arg_type = Bool
@@ -333,6 +329,9 @@ function parse_commandline()
         "--target_job"
         help = "An (optional) job to target for analyzing performance"
         arg_type = String
+        "--toml"
+        help = "A toml file used to override model parameters and configurations. In the case of conflicts, CLI arguments take priority over the toml"
+        arg_type = String
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
@@ -364,6 +363,7 @@ job_id_from_parsed_args(s, parsed_args = ArgParse.parse_args(ARGS, s)) =
     job_id_from_parsed_args(cli_defaults(s), parsed_args)
 
 function job_id_from_parsed_args(defaults::Dict, parsed_args)
+    # Use only keys from the default ArgParseSettings
     _parsed_args = deepcopy(parsed_args)
     s = ""
     warn = false

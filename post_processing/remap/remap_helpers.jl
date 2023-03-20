@@ -22,7 +22,8 @@ function create_weightfile(
     cspace::Spaces.AbstractSpace,
     fspace::Spaces.AbstractSpace,
     nlat::Int,
-    nlon::Int,
+    nlon::Int;
+    mono = false,
 )
     # space info to generate nc raw data
     hspace = cspace.horizontal_space
@@ -44,13 +45,14 @@ function create_weightfile(
             meshfile_rll,
         )
         tmp_weightfile = joinpath(tmp, "remap_weights.nc")
+        kwargs = (; in_type = "cgll", in_np = Nq)
+        kwargs = mono ? (; (kwargs)..., mono = mono) : kwargs
         ClimaCoreTempestRemap.remap_weights(
             tmp_weightfile,
             meshfile_cc,
             meshfile_rll,
             meshfile_overlap;
-            in_type = "cgll",
-            in_np = Nq,
+            kwargs...,
         )
         mv(tmp_weightfile, weightfile; force = true)
     end

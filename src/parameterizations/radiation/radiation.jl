@@ -38,10 +38,10 @@ function radiation_model_cache(
     idealized_clouds = false,
     thermo_dispatcher,
     data_loader,
-    ᶜinterp,
 )
     (; idealized_h2o) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
+    ᶜinterp = Operators.InterpolateF2C()
     rrtmgp_params = CAP.rrtmgp_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
@@ -226,8 +226,6 @@ function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
         error("radiation_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     end
     return nothing
 end

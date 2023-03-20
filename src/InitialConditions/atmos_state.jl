@@ -54,8 +54,6 @@ atmos_face_variables(ls, atmos_model::AtmosModel) = (;
 
 energy_variables(ls, ::PotentialTemperature) =
     (; ρθ = ls.ρ * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state))
-energy_variables(ls, ::InternalEnergy) =
-    (; ρe_int = ls.ρ * TD.internal_energy(ls.thermo_params, ls.thermo_state))
 energy_variables(ls, ::TotalEnergy) = (;
     ρe_tot = ls.ρ * (
         TD.internal_energy(ls.thermo_params, ls.thermo_state) +

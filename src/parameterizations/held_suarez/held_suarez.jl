@@ -80,8 +80,6 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
         @. Yₜ.c.ρθ[colidx] -= ᶜΔρT[colidx] * fast_pow((MSLP / ᶜp[colidx]), κ_d)
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
-    elseif :ρe_int in propertynames(Y.c)
-        @. Yₜ.c.ρe_int[colidx] -= ᶜΔρT[colidx] * cv_d
     end
     return nothing
 end
