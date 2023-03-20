@@ -458,14 +458,14 @@ function update_aux!(
             p = p_c[k],
             ∇b = bg,
             Shear² = Shear²[k],
-            tke = aux_en.tke[k],
+            tke = FT(0.44),
             b_exch = b_exch[k],
         )
 
         aux_tc.mixing_length[k] =
             mixing_length(mix_len_params, param_set, ml_model)
 
-        KM[k] = c_m * aux_tc.mixing_length[k] * FT(0.44)
+        KM[k] = c_m * aux_tc.mixing_length[k] * sqrt(0.44)
         KH[k] = KM[k] / aux_tc.prandtl_nvec[k]
 
         aux_en_2m.tke.buoy[k] = -aux_en.area[k] * ρ_c[k] * KH[k] * bg.∂b∂z
