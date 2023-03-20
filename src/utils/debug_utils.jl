@@ -1,49 +1,4 @@
 #####
-##### Utility functions
-#####
-
-is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot)
-is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
-is_turbconv_var(symbol) = symbol == :turbconv
-is_tracer_var(symbol) = !(
-    symbol == :ρ ||
-    is_energy_var(symbol) ||
-    is_momentum_var(symbol) ||
-    is_turbconv_var(symbol)
-)
-
-# we may be hitting a slow path:
-# https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
-fast_pow(x::FT, y::FT) where {FT <: AbstractFloat} = exp(y * log(x))
-
-"""
-    time_from_filename(file)
-
-Returns the time (Float64) from a given filename
-
-## Example
-```
-time_from_filename("day4.46906.hdf5")
-392506.0
-```
-"""
-function time_from_filename(file)
-    arr = split(basename(file), ".")
-    day = parse(Float64, replace(arr[1], "day" => ""))
-    sec = parse(Float64, arr[2])
-    return day * (60 * 60 * 24) + sec
-end
-
-"""
-    sort_files_by_time(files)
-
-Sorts an array of files by the time,
-determined by the filename.
-"""
-sort_files_by_time(files) =
-    permute!(files, sortperm(time_from_filename.(files)))
-
-#####
 ##### State debugging tools
 #####
 
@@ -199,8 +154,6 @@ end
 ##### Recursive function for filling auxiliary state with NaNs
 #####
 
-import ClimaCore.Fields as Fields
-
 function fill_with_nans_generic!(var::Union{Fields.FieldVector, NamedTuple})
     for pn in propertynames(var)
         fill_with_nans_generic!(getproperty(var, pn))
@@ -243,39 +196,3 @@ end
 Fill a data structure's `Field`s / `FieldVector`s with NaNs.
 """
 fill_with_nans!(p) = fill_with_nans_generic!(p)
-
-import LinearAlgebra: norm_sqr
-import ClimaCore: Geometry, Operators, Fields
-
-"""
-    compute_kinetic!(κ::Field, uₕ::Field, uᵥ::Field)
-
-Compute the specific kinetic energy at cell centers, storing in `κ` from
-individual velocity components:
-κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))
-- `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
-  cell centers, and 
-- `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
-"""
-function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Field)
-    @assert eltype(uₕ) <:
-            Union{Geometry.Covariant1Vector, Geometry.Covariant12Vector}
-    @assert eltype(uᵥ) <: Geometry.Covariant3Vector
-    C123 = Geometry.Covariant123Vector
-    CON123 = Geometry.Contravariant123Vector
-    Ic = Operators.InterpolateF2C()
-    κ .=
-        1 / 2 .* (
-            dot.(C123.(uₕ), CON123.(uₕ)) .+ Ic.(dot.(C123.(uᵥ), CON123.(uᵥ))) .+
-            2 .* dot.(CON123.(uₕ), Ic.(C123.(uᵥ)))
-        )
-end
-
-"""
-    compute_kinetic!(κ::Field, Y::FieldVector)
-
-Compute the specific kinetic energy at cell centers, storing in `κ`, where `Y`
-is the model state.s
-"""
-compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
-    compute_kinetic!(κ, Y.c.uₕ, Y.f.w)
