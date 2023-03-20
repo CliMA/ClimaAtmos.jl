@@ -220,22 +220,25 @@ function get_state_restart(comms_ctx)
 end
 
 function get_initial_condition(parsed_args)
-    if is_baro_wave(parsed_args)
-        if parsed_args["moist"] == "dry"
-            return ICs.DryBaroclinicWave(parsed_args["perturb_initstate"])
+    if isnothing(parsed_args["turbconv_case"])
+        if parsed_args["initial_condition"] in
+           ["DryBaroclinicWave", "MoistBaroclinicWave", "DecayingProfile"]
+            return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+                parsed_args["perturb_initstate"],
+            )
+        elseif parsed_args["initial_condition"] in
+               ["IsothermalProfile", "Bomex"]
+            return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
         else
-            return ICs.MoistBaroclinicWave(parsed_args["perturb_initstate"])
-        end
-    elseif parsed_args["config"] in ("sphere", "box")
-        return ICs.DecayingProfile(parsed_args["perturb_initstate"])
-    elseif parsed_args["config"] == "column"
-        if isnothing(parsed_args["turbconv_case"])
-            return ICs.IsothermalProfile()
-        else
-            return getproperty(ICs, Symbol(parsed_args["turbconv_case"]))()
+            error(
+                "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
+            )
         end
     else
-        error("Unknown `config`: $(parsed_args["config"])")
+        # turbconv_case is also used for surface fluxes for TRMM and ARM cases.
+        # I don't want to change that right now, so I'm leaving the
+        # EDMF logic as is. This should be obsolete soon.
+        return getproperty(ICs, Symbol(parsed_args["turbconv_case"]))()
     end
 end
 

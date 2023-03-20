@@ -89,10 +89,9 @@ precip_variables(ls, ::Microphysics1Moment, ::PerfStandard) =
 precip_variables(ls, _, ::PerfExperimental) =
     (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
 
-function turbconv_center_variables(ls, ::Nothing)
-    @assert ls.turbconv_state isa NoTurbconvState
-    return (;)
-end
+# We can use paper-based cases for LES type configurations (no TKE)
+# or SGS type configurations (initial TKE needed)
+turbconv_center_variables(ls, ::Nothing) = (;)
 function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel)
     ρa = ls.ρ * turbconv_model.minimum_area
     ρaθ_liq_ice = ρa * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state)

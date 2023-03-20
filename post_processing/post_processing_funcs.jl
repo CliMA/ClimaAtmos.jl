@@ -130,6 +130,16 @@ function postprocessing_box(sol, output_dir)
         clim = (-0.1, 0.1),
     )
     Plots.png(p, joinpath(output_dir, "w.png"))
+
+    if :ρq_tot in propertynames(Y.c)
+        qt = Y.c.ρq_tot ./ Y.c.ρ
+        pq = Plots.plot(
+            qt,
+            slice = (:, FT(parsed_args["y_max"] / 2), :),
+            clim = (-0.02, 0.020),
+        )
+        Plots.png(pq, joinpath(output_dir, "qt.png"))
+    end
 end
 
 function postprocessing(sol, output_dir, fps)

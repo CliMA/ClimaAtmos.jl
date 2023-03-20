@@ -34,6 +34,10 @@ function parse_commandline()
         help = "Spatial configuration [`sphere` (default), `column`, `box`]"
         arg_type = String
         default = "sphere"
+        "--initial_condition"
+        help = "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`]"
+        arg_type = String
+        default = "DecayingProfile"
         "--moist"
         help = "Moisture model [`dry` (default), `equil`, `non_equil`]"
         arg_type = String
