@@ -302,16 +302,17 @@ function update_aux!(
     ##### compute_updraft_closures
     #####
     #compute_entr_detr!
+    If = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
         @. aux_up[i].frac_turb_entr = FT(0)
         @. aux_up[i].entr_sc = FT(5.0e-4)
         @. aux_up[i].detr_sc = pi_groups_detrainment!(
-               aux_gm.tke,
-               aux_up[i].area,
-               aux_up[i].RH,
-               aux_en.area,
-               aux_en.tke,
-               aux_en.RH
+            wcomponent(CCG.WVector(If(prog_gm_f.w))),
+            aux_up[i].area,
+            aux_up[i].RH,
+            aux_en.area,
+            wcomponent(CCG.WVector(If(aux_en_f.w))),
+            aux_en.RH
         )
         @. aux_up[i].entr_turb_dyn = aux_up[i].entr_sc + aux_up[i].frac_turb_entr
         @. aux_up[i].detr_turb_dyn = aux_up[i].detr_sc + aux_up[i].frac_turb_entr
