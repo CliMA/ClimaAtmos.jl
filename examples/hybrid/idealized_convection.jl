@@ -84,7 +84,25 @@ function convection_tendency!(
     return nothing
 end
 
-function cape_calculation()
+function cape_calculation!(Y, p, colidx)
+    (; rh_bm, ᶜp, ᶜts, ᶜT, params) = p
+    R_d = FT(CAP.R_d(params))
+    R_v = FT(CAP.R_v(params))
+    thermo_params = CAP.thermodynamics_params(params)
+    @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
+    nocape = true
+    cape = FT(0)
+    cin = FT(0)
+    pLZB = FT(0)
+    kLFC = Int(0)
+    kLZB = Int(0)
+    @. Tp[colidx] = ᶜT[colidx]
+    @. rp[colidx] = TD.shum_to_mixing_ratio(Y.c.ρq_tot / Y.c.ρ, Y.c.ρq_tot / Y.c.ρ)
+    @. T_virtual[colidx] = TD.virtual_temperature(thermo_params, ᶜts)
+    saturated = saturated(thermo_params, Fields.level(ᶜts[colidx], 1))
+    
+    cape_below_lcl!()
+    cape_above_lcl!()
 end
 
 function set_reference_profiles!(Y, p, Tp, zLZB, rp, deltaq, deltaT, qref, Tref, colidx)
@@ -99,12 +117,11 @@ function set_reference_profiles!(Y, p, Tp, zLZB, rp, deltaq, deltaT, qref, Tref,
     eref = @. rh_bm * ᶜp[colidx] * rp[colidx] / (rp[colidx] + R_d / R_v)
     @. rp[colidx] = R_d * eref / R_v / (ᶜp[colidx] - eref)
     @. qref[colidx] = rp[colidx] / (FT(1) + rp[colidx])
-    ᶜα = @. ifelse(ᶜz[colidx] < zLZB[colidx], FT(1), FT(0))
-    @. Tref[colidx] = ᶜα * Tref[colidx] + (FT(1) - ᶜα) * ᶜT[colidx]
-    #@. Tref = ifelse(ᶜz < zLZB, Tref, ᶜT)
-    @. qref[colidx] = ᶜα * qref[colidx] + (FT(1) - ᶜα) * (Y.c.ρq_tot[colidx] / Y.c.ρ[colidx])
-    @. deltaT[colidx] = ᶜα * deltaT[colidx]
-    @. deltaq[colidx] = ᶜα * deltaq[colidx]
+    #ᶜα = @. ifelse(ᶜz[colidx] < zLZB[colidx], FT(1), FT(0))
+    @. Tref[colidx] = ifelse(ᶜz[colidx] < zLZB[colidx], Tref[colidx], ᶜT[colidx])
+    @. qref[colidx] = ifelse(ᶜz[colidx] < zLZB[colidx], qref[colidx], Y.c.ρq_tot[colidx] / Y.c.ρ[colidx])
+    @. deltaT[colidx] = ifelse(ᶜz[colidx] < zLZB[colidx], deltaT[colidx], FT(0))
+    @. deltaq[colidx] = ifelse(ᶜz[colidx] < zLZB[colidx], deltaq[colidx], FT(0))
 end
 
 ```
