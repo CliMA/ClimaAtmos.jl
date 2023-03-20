@@ -1,42 +1,20 @@
-function compute_entr_detr!(
-    state::State,
-    grid::Grid,
-    edmf::EDMFModel,
-    param_set::APS,
-)
-    FT = float_type(state)
+"""
+    function pi_groups_detrainment!(gm_tke, up_area, up_RH, en_area, en_tke, en_RH)
 
-    N_up = n_updrafts(edmf)
-    aux_up = center_aux_updrafts(state)
-    aux_en = center_aux_environment(state)
-    aux_gm = center_aux_grid_mean(state)
+    - gm_tke - grid mean turbulent kinetic energy
+    - up_area - updraft area
+    - up_RH - updraft relative humidity
+    - en_area - environment area
+    - en_tke - environment turbulent kinetic energy
+    - en_RH - environment relative humidity
 
-    @inbounds for i in 1:N_up
-        @inbounds for k in real_center_indices(grid)
-            if aux_up[i].area[k] > 0.0
+  Computes detrainment based on Π-groups
+"""
+function pi_groups_detrainment!(gm_tke::FT, up_area::FT, up_RH::FT, en_area::FT, en_tke::FT, en_RH::FT) where {FT}
 
-                a_en = aux_en.area[k] # environment area fraction
-                tke_gm = aux_gm.tke[k] # grid-mean tke
-                tke_en = aux_en.tke[k] # environment tke
-                Π_2 = (tke_gm - a_en * tke_en) / (tke_gm + eps(FT))
+    Π2 = (gm_tke - en_area * en_tke) / (gm_tke + eps(FT))
+    Π4 = up_RH - en_RH
 
-                RH_up = aux_up[i].RH[k] # updraft relative humidity
-                RH_en = aux_en.RH[k] # environment relative humidity
-                Π_4 = RH_up - RH_en
-
-                aux_up[i].detr_sc[k] =
-                    max(-0.0102 + 0.0612 * Π_2 + 0.0827 * Π_4, FT(0))
-            else
-                aux_up[i].detr_sc[k] = FT(0)
-            end
-
-            aux_up[i].entr_sc[k] = FT(5.0e-4)
-            aux_up[i].frac_turb_entr[k] = FT(0)
-
-            aux_up[i].entr_turb_dyn[k] =
-                aux_up[i].entr_sc[k] + aux_up[i].frac_turb_entr[k]
-            aux_up[i].detr_turb_dyn[k] =
-                aux_up[i].detr_sc[k] + aux_up[i].frac_turb_entr[k]
-        end
-    end
+    return up_area > FT(0) ?
+        max(-0.0102 + 0.0612 * Π2 + 0.0827 * Π4, FT(0)) : FT(0)
 end
