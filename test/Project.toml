@@ -106,7 +106,7 @@ RootSolvers = "0.2, 0.3"
 RRTMGP = "0.7"
 StaticArrays = "1"
 StatsBase = "0.33"
-SurfaceFluxes = "0.5"
+SurfaceFluxes = "0.6"
 TerminalLoggers = "0.1"
 Thermodynamics = "0.10"
 

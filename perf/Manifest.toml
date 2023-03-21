@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "191bce3cdb4f7e3bb5d2e74405ac386550b72bb2"
+project_hash = "de83e4b0b9936ebed3d3819cf7b8bf7f58795d96"
 
 [[deps.AMD]]
 deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
@@ -1864,9 +1864,9 @@ version = "5.10.1+0"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "KernelAbstractions", "RootSolvers", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "8675215ce1268f649d7aa3f0ceea7f9eec3ddddf"
+git-tree-sha1 = "700b837ce4d997da60c592129aaadb7593121e63"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.5.1"
+version = "0.6.1"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["DocStringExtensions"]

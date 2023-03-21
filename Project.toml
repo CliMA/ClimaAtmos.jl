@@ -64,7 +64,7 @@ RRTMGP = "0.7"
 RootSolvers = "0.2, 0.3"
 StaticArrays = "1"
 StatsBase = "0.33"
-SurfaceFluxes = "0.5"
+SurfaceFluxes = "0.6"
 Thermodynamics = "0.10"
 julia = "1.7"
 
