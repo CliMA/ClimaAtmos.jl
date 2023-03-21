@@ -14,10 +14,8 @@ thermo_state_zeros(::NonEquilMoistModel, FT) = zero(TD.PhaseNonEquil{FT})
 cent_aux_vars_en_2m(FT) = (;
     shear = FT(0),
     entr_gain = FT(0),
-    detr_loss = FT(0),
     press = FT(0),
     buoy = FT(0),
-    interdomain = FT(0),
     rain_src = FT(0),
 )
 cent_aux_vars_up(FT, local_geometry, edmf) = (;
@@ -37,13 +35,8 @@ cent_aux_vars_up(FT, local_geometry, edmf) = (;
     qt_tendency_precip_formation = FT(0),
     qr_tendency_precip_formation = FT(0),
     qs_tendency_precip_formation = FT(0),
-    entr_sc = FT(0),
-    detr_sc = FT(0),
-    ε_nondim = FT(0),  # nondimensional entrainment
-    δ_nondim = FT(0),  # nondimensional detrainment
-    frac_turb_entr = FT(0),
-    entr_turb_dyn = FT(0),
-    detr_turb_dyn = FT(0),
+    detr = FT(0),
+    entr = FT(0),
 )
 cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
     turbconv = (;

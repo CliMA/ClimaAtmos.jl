@@ -28,7 +28,7 @@ function compute_explicit_turbconv_tendencies!(
     state::State,
 )
     compute_explicit_up_tendencies!(edmf, grid, state)
-    compute_explicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
+    compute_explicit_en_tendencies!(edmf, grid, state)
 
     return nothing
 end
@@ -507,80 +507,60 @@ function compute_explicit_up_tendencies!(
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-
-    # Solve for updraft area fraction
 
     Ic = CCO.InterpolateF2C()
-
-    @inbounds for i in 1:N_up
-        aux_up_i = aux_up[i]
-        w_up = prog_up_f[i].w
-        q_tot_en = aux_en.q_tot
-        θ_liq_ice_en = aux_en.θ_liq_ice
-        entr_turb_dyn = aux_up_i.entr_turb_dyn
-        detr_turb_dyn = aux_up_i.detr_turb_dyn
-        θ_liq_ice_tendency_precip_formation =
-            aux_up_i.θ_liq_ice_tendency_precip_formation
-        qt_tendency_precip_formation = aux_up_i.qt_tendency_precip_formation
-
-        ρarea = prog_up[i].ρarea
-        ρaθ_liq_ice = prog_up[i].ρaθ_liq_ice
-        ρaq_tot = prog_up[i].ρaq_tot
-
-        tends_ρarea = tendencies_up[i].ρarea
-        tends_ρaθ_liq_ice = tendencies_up[i].ρaθ_liq_ice
-        tends_ρaq_tot = tendencies_up[i].ρaq_tot
-
-        @. tends_ρarea +=
-            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * entr_turb_dyn) -
-            (ρarea * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn)
-
-        @. tends_ρaθ_liq_ice +=
-            (
-                ρarea *
-                Ic(wcomponent(CCG.WVector(w_up))) *
-                entr_turb_dyn *
-                θ_liq_ice_en
-            ) -
-            (ρaθ_liq_ice * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
-            (ρ_c * θ_liq_ice_tendency_precip_formation)
-
-        @. tends_ρaq_tot +=
-            (
-                ρarea *
-                Ic(wcomponent(CCG.WVector(w_up))) *
-                entr_turb_dyn *
-                q_tot_en
-            ) - (ρaq_tot * Ic(wcomponent(CCG.WVector(w_up))) * detr_turb_dyn) +
-            (ρ_c * qt_tendency_precip_formation)
-
-        tends_ρarea[kc_surf] = 0
-        tends_ρaθ_liq_ice[kc_surf] = 0
-        tends_ρaq_tot[kc_surf] = 0
-    end
-
-    # Solve for updraft velocity
-
     # We know that, since W = 0 at z = 0, BCs for entr, detr,
     # and buoyancy should not matter in the end
     zero_bcs = (; bottom = CCO.SetValue(FT(0)), top = CCO.SetValue(FT(0)))
     I0f = CCO.InterpolateC2F(; zero_bcs...)
 
     @inbounds for i in 1:N_up
+
         w_up = prog_up_f[i].w
-        tends_w = tendencies_up_f[i].w
-        nh_pressure = aux_up_f[i].nh_pressure
         w_en = aux_en_f.w
-        entr_w = aux_up[i].entr_turb_dyn
-        buoy = aux_up[i].buoy
+        # Augment the tendencies of updraft area, tracers and vertical velocity
 
-        @. tends_w +=
-            w_up * I0f(entr_w) * (wcomponent(CCG.WVector(w_en - w_up))) +
-            CCG.Covariant3Vector(CCG.WVector(I0f(buoy) + nh_pressure))
-        tends_w[kf_surf] = zero(tends_w[kf_surf])
+        # entrainment and detrainment - could be moved to implicit
+        @. tendencies_up[i].ρarea +=
+            prog_up[i].ρarea *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            (aux_up[i].entr - aux_up[i].detr)
+        @. tendencies_up[i].ρaθ_liq_ice +=
+            prog_up[i].ρarea *
+            aux_en.θ_liq_ice *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].entr -
+            prog_up[i].ρaθ_liq_ice *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].detr
+        @. tendencies_up[i].ρaq_tot +=
+            prog_up[i].ρarea *
+            aux_en.q_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].entr -
+            prog_up[i].ρaq_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].detr
+        @. tendencies_up_f[i].w +=
+            w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
+
+        # precipitation formation
+        @. tendencies_up[i].ρaθ_liq_ice +=
+            prog_gm.ρ * aux_up[i].θ_liq_ice_tendency_precip_formation
+        @. tendencies_up[i].ρaq_tot +=
+            prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
+
+        # buoyancy and pressure
+        @. tendencies_up_f[i].w += CCG.Covariant3Vector(
+            CCG.WVector(I0f(aux_up[i].buoy) + aux_up_f[i].nh_pressure),
+        )
+
+        # TODO - to be removed?
+        tendencies_up[i].ρarea[kc_surf] = 0
+        tendencies_up[i].ρaθ_liq_ice[kc_surf] = 0
+        tendencies_up[i].ρaq_tot[kc_surf] = 0
+        tendencies_up_f[i].w[kf_surf] = zero(tendencies_up_f[i].w[kf_surf])
     end
-
     return nothing
 end
 
@@ -732,135 +712,6 @@ function compute_covariance_shear(
     return nothing
 end
 
-function compute_covariance_interdomain_src(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_sym},
-    ::Val{ϕ_sym},
-    ::Val{ψ_sym},
-) where {covar_sym, ϕ_sym, ψ_sym}
-    N_up = n_updrafts(edmf)
-    is_tke = covar_sym == :tke
-    FT = float_type(state)
-    tke_factor = is_tke ? FT(0.5) : 1
-    aux_up = center_aux_updrafts(state)
-    prog_up_f = face_prog_updrafts(state)
-    aux_en_2m = center_aux_environment_2m(state)
-    interdomain = getproperty(aux_en_2m, covar_sym).interdomain
-    prog_up = is_tke ? prog_up_f : aux_up
-    aux_en_c = center_aux_environment(state)
-    aux_en_f = face_aux_environment(state)
-    aux_en = is_tke ? aux_en_f : aux_en_c
-    ϕ_en = getproperty(aux_en, ϕ_sym)
-    ψ_en = getproperty(aux_en, ψ_sym)
-    Ic = is_tke ? CCO.InterpolateF2C() : x -> x
-
-    parent(interdomain) .= 0
-    @inbounds for i in 1:N_up
-        ϕ_up = getproperty(prog_up[i], ϕ_sym)
-        ψ_up = getproperty(prog_up[i], ψ_sym)
-        a_up = aux_up[i].area
-        @. interdomain +=
-            tke_factor *
-            a_up *
-            (1 - a_up) *
-            (Ic(wcomponent(CCG.WVector(ϕ_up - ϕ_en)))) *
-            (Ic(wcomponent(CCG.WVector(ψ_up - ψ_en))))
-    end
-    return nothing
-end
-
-function compute_covariance_entr(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_sym},
-    ::Val{ϕ_sym},
-    ::Val{ψ_sym},
-) where {covar_sym, ϕ_sym, ψ_sym}
-
-    N_up = n_updrafts(edmf)
-    FT = float_type(state)
-    is_tke = covar_sym == :tke
-    tke_factor = is_tke ? FT(0.5) : 1
-    aux_up = center_aux_updrafts(state)
-    prog_up_f = face_prog_updrafts(state)
-    aux_gm_c = center_aux_grid_mean(state)
-    prog_gm_f = face_prog_grid_mean(state)
-    prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    gm = is_tke ? prog_gm_f : aux_gm_c
-    prog_up = is_tke ? prog_up_f : aux_up
-    ϕ_gm = getproperty(gm, ϕ_sym)
-    ψ_gm = getproperty(gm, ψ_sym)
-    aux_en_2m = center_aux_environment_2m(state)
-    aux_covar = getproperty(aux_en_2m, covar_sym)
-    aux_en_c = center_aux_environment(state)
-    covar = getproperty(aux_en_c, covar_sym)
-    aux_en_f = face_aux_environment(state)
-    aux_en = is_tke ? aux_en_f : aux_en_c
-    ϕ_en = getproperty(aux_en, ϕ_sym)
-    ψ_en = getproperty(aux_en, ψ_sym)
-    entr_gain = aux_covar.entr_gain
-    detr_loss = aux_covar.detr_loss
-    Ic = CCO.InterpolateF2C()
-    Idc = is_tke ? Ic : x -> x
-    # TODO: we shouldn't need `parent` call here:
-    parent(entr_gain) .= 0
-    parent(detr_loss) .= 0
-    min_area = edmf.minimum_area
-
-    @inbounds for i in 1:N_up
-        aux_up_i = aux_up[i]
-        frac_turb_entr = aux_up_i.frac_turb_entr
-        eps_turb = frac_turb_entr
-        detr_sc = aux_up_i.detr_sc
-        entr_sc = aux_up_i.entr_sc
-        w_up = prog_up_f[i].w
-        prog_up_i = prog_up[i]
-        ϕ_up = getproperty(prog_up_i, ϕ_sym)
-        ψ_up = getproperty(prog_up_i, ψ_sym)
-
-        a_up = aux_up_i.area
-
-        @. entr_gain +=
-            Int(a_up > min_area) * (
-                tke_factor *
-                ρ_c *
-                a_up *
-                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
-                detr_sc *
-                (Idc(wcomponent(CCG.WVector(ϕ_up - ϕ_en)))) *
-                (Idc(wcomponent(CCG.WVector(ψ_up - ψ_en))))
-            ) + (
-                tke_factor *
-                ρ_c *
-                a_up *
-                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
-                eps_turb *
-                (
-                    (Idc(wcomponent(CCG.WVector(ϕ_en - ϕ_gm)))) *
-                    (Idc(wcomponent(CCG.WVector(ψ_up - ψ_en)))) +
-                    (Idc(wcomponent(CCG.WVector(ψ_en - ψ_gm)))) *
-                    (Idc(wcomponent(CCG.WVector(ϕ_up - ϕ_en))))
-                )
-            )
-
-        @. detr_loss +=
-            Int(a_up > min_area) *
-            tke_factor *
-            ρ_c *
-            a_up *
-            abs(Ic(wcomponent(CCG.WVector(w_up)))) *
-            (entr_sc + eps_turb) *
-            covar
-
-    end
-
-    return nothing
-end
-
 function compute_implicit_en_tendencies!(
     edmf::EDMFModel,
     grid::Grid,
@@ -918,121 +769,66 @@ function compute_explicit_en_tendencies!(
     edmf::EDMFModel,
     grid::Grid,
     state::State,
-    ::Val{covar_sym},
-    ::Val{prog_sym},
-) where {covar_sym, prog_sym}
+)
     N_up = n_updrafts(edmf)
+
+    prog_up_f = face_prog_updrafts(state)
     prog_en = center_prog_environment(state)
     prog_gm = center_prog_grid_mean(state)
-    aux_en_2m = center_aux_environment_2m(state)
-    tendencies_en = center_tendencies_environment(state)
-    tend_covar = getproperty(tendencies_en, prog_sym)
-    prog_covar = getproperty(prog_en, prog_sym)
-    prog_up_f = face_prog_updrafts(state)
-    aux_en = center_aux_environment(state)
-    covar = getproperty(aux_en, covar_sym)
-    aux_covar = getproperty(aux_en_2m, covar_sym)
+
     aux_up = center_aux_updrafts(state)
-    ρ_c = prog_gm.ρ
-    c_d = mixing_length_params(edmf).c_d
+    aux_en = center_aux_environment(state)
+    aux_en_f = face_aux_environment(state)
     aux_tc = center_aux_turbconv(state)
-    D_env = aux_tc.ϕ_temporary
+    aux_covar = center_aux_environment_2m(state).tke
+
+    tendencies_en = center_tendencies_environment(state)
+
+    c_d = mixing_length_params(edmf).c_d
 
     press = aux_covar.press
     buoy = aux_covar.buoy
     shear = aux_covar.shear
-    entr_gain = aux_covar.entr_gain
     rain_src = aux_covar.rain_src
-    min_area = edmf.minimum_area
 
     Ic = CCO.InterpolateF2C()
-    tke_en = aux_en.tke
 
-    parent(D_env) .= 0
-
-    @inbounds for i in 1:N_up
-        turb_entr = aux_up[i].frac_turb_entr
-        entr_sc = aux_up[i].entr_sc
-        w_up = prog_up_f[i].w
-        a_up = aux_up[i].area
-        # TODO: using `Int(bool) *` means that NaNs can propagate
-        # into the solution. Could we somehow call `ifelse` instead?
-        @. D_env +=
-            Int(a_up > min_area) *
-            ρ_c *
-            a_up *
-            Ic(wcomponent(CCG.WVector(w_up))) *
-            (entr_sc + turb_entr)
-    end
-
-    @. tend_covar +=
-        press + buoy + shear + entr_gain + rain_src - D_env * covar -
-        (c_d * sqrt(max(tke_en, 0)) / max(aux_tc.mixing_length, 1)) * prog_covar
-
-    return nothing
-end
-
-function update_diagnostic_covariances!(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    param_set::APS,
-    ::Val{covar_sym},
-) where {covar_sym}
-    FT = float_type(state)
-    N_up = n_updrafts(edmf)
-    kc_surf = kc_surface(grid)
-    kc_toa = kc_top_of_atmos(grid)
-    prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    aux_en_2m = center_aux_environment_2m(state)
-    prog_up_f = face_prog_updrafts(state)
-    aux_en = center_aux_environment(state)
-    covar = getproperty(aux_en, covar_sym)
-    aux_covar = getproperty(aux_en_2m, covar_sym)
-    aux_up = center_aux_updrafts(state)
-    w_en_f = face_aux_environment(state).w
-    c_d = mixing_length_params(edmf).c_d
-    covar_lim = edmf.thermo_covariance_model.covar_lim
-
-    ρ_ae_K = face_aux_turbconv(state).ρ_ae_K
-    KH = center_aux_turbconv(state).KH
-    aux_tc = center_aux_turbconv(state)
-    aux_bulk = center_aux_bulk(state)
+    # TODO: we shouldn't need `parent` call here:
     D_env = aux_tc.ϕ_temporary
-    a_bulk = aux_bulk.area
-    tke_en = aux_en.tke
-
-    shear = aux_covar.shear
-    entr_gain = aux_covar.entr_gain
-    rain_src = aux_covar.rain_src
-    mixing_length = aux_tc.mixing_length
-    min_area = edmf.minimum_area
-
-    Ic = CCO.InterpolateF2C()
-    area_en = aux_en.area
-
     parent(D_env) .= 0
+    entr_gain = aux_covar.entr_gain
+    parent(entr_gain) .= 0
+
+    w_en = aux_en_f.w
     @inbounds for i in 1:N_up
-        turb_entr = aux_up[i].frac_turb_entr
-        entr_sc = aux_up[i].entr_sc
+
         w_up = prog_up_f[i].w
-        a_up = aux_up[i].area
+
         # TODO: using `Int(bool) *` means that NaNs can propagate
         # into the solution. Could we somehow call `ifelse` instead?
+        @. entr_gain +=
+            Int(aux_up[i].area > edmf.minimum_area) * (
+                0.5 *
+                prog_gm.ρ *
+                aux_up[i].area *
+                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
+                aux_up[i].detr *
+                (Ic(wcomponent(CCG.WVector(w_up - w_en)))) *
+                (Ic(wcomponent(CCG.WVector(w_up - w_en))))
+            )
         @. D_env +=
-            Int(a_up > min_area) *
-            ρ_c *
-            a_up *
-            Ic(wcomponent(CCG.WVector(w_up))) *
-            (entr_sc + turb_entr)
+            Int(aux_up[i].area > edmf.minimum_area) * (
+                prog_gm.ρ *
+                aux_up[i].area *
+                Ic(wcomponent(CCG.WVector(w_up))) *
+                aux_up[i].entr
+            )
     end
 
-    @. covar =
-        (shear + entr_gain + rain_src) / max(
-            D_env +
-            ρ_c * area_en * c_d * sqrt(max(tke_en, 0)) / max(mixing_length, 1),
-            covar_lim,
-        )
+    @. tendencies_en.ρatke +=
+        press + buoy + shear + entr_gain + rain_src - D_env * aux_en.tke -
+        (c_d * sqrt(max(aux_en.tke, 0)) / max(aux_tc.mixing_length, 1)) *
+        prog_en.ρatke
+
     return nothing
 end

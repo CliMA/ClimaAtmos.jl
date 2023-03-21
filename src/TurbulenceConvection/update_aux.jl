@@ -301,7 +301,20 @@ function update_aux!(
     #####
     ##### compute_updraft_closures
     #####
-    compute_entr_detr!(state, grid, edmf, param_set)
+    # entrainment and detrainment
+    @inbounds for i in 1:N_up
+        @. aux_up[i].entr = FT(5e-4)
+        @. aux_up[i].detr = pi_groups_detrainment!(
+            aux_gm.tke,
+            aux_up[i].area,
+            aux_up[i].RH,
+            aux_en.area,
+            aux_en.tke,
+            aux_en.RH,
+        )
+    end
+    # updraft pressure
+    # TODO @. aux_up_f[i].nh_pressure = compute_nh_pressure(...)
     compute_nh_pressure!(state, grid, edmf, surf)
 
     #####
@@ -309,26 +322,17 @@ function update_aux!(
     #####
 
     # Subdomain exchange term
-    ∇c = CCO.DivergenceF2C()
     Ic = CCO.InterpolateF2C()
     b_exch = center_aux_turbconv(state).b_exch
     parent(b_exch) .= 0
-    a_en = aux_en.area
     w_en = aux_en_f.w
-    tke_en = aux_en.tke
     @inbounds for i in 1:N_up
-        a_up = aux_up[i].area
         w_up = prog_up_f[i].w
-        δ_dyn = aux_up[i].detr_sc
-        ε_turb = aux_up[i].frac_turb_entr
         @. b_exch +=
-            a_up * Ic(wcomponent(CCG.WVector(w_up))) * δ_dyn / a_en *
-            (1 / 2 * (Ic(wcomponent(CCG.WVector(w_up - w_en))))^2 - tke_en) -
-            a_up *
+            aux_up[i].area *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            (Ic(wcomponent(CCG.WVector(w_up - w_en)))) *
-            ε_turb *
-            Ic(wcomponent(CCG.WVector(w_en))) / a_en
+            aux_up[i].detr / aux_en.area *
+            (1 / 2 * (Ic(wcomponent(CCG.WVector(w_up - w_en))))^2 - aux_en.tke)
     end
 
     Shear² = center_aux_turbconv(state).Shear²
@@ -356,6 +360,7 @@ function update_aux!(
     @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(CCG.WVector(w_en))
     @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
 
+    ∇c = CCO.DivergenceF2C()
     q_tot_en = aux_en.q_tot
     θ_liq_ice_en = aux_en.θ_liq_ice
     θ_virt_en = aux_en.θ_virt
@@ -470,8 +475,6 @@ function update_aux!(
             prog_up[i].ρarea *
             Ic(nh_press)
     end
-
-    compute_covariance_entr(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
 
     compute_covariance_shear(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
 
