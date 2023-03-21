@@ -34,17 +34,18 @@ function mixing_length(
     # Subdomain exchange term
     b_exch = ml_model.b_exch
 
-    if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -b_exch * b_exch
-        l_TKE = max(
-            -b_exch / 2 / a_pd +
-            sqrt(b_exch * b_exch + 4 * a_pd * c_neg) / 2 / a_pd,
-            0,
-        )
-    elseif abs(a_pd) < eps(FT) && abs(b_exch) > eps(FT)
-        l_TKE = c_neg / b_exch
-    else
-        l_TKE = FT(0)
-    end
+    #if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -b_exch * b_exch
+    #    l_TKE = max(
+    #        -b_exch / 2 / a_pd +
+    #        sqrt(b_exch * b_exch + 4 * a_pd * c_neg) / 2 / a_pd,
+    #        0,
+    #    )
+    #elseif abs(a_pd) < eps(FT) && abs(b_exch) > eps(FT)
+    #    l_TKE = c_neg / b_exch
+    #else
+    #    l_TKE = FT(0)
+    #end
+    l_TKE = FT(50)
 
     # compute l_N - the effective static stability length scale.
     N_eff = sqrt(max(∂b∂z, 0))
