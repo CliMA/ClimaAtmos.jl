@@ -330,7 +330,8 @@ function update_aux!(
     parent(b_exch) .= 0
     a_en = aux_en.area
     w_en = aux_en_f.w
-    tke_en = aux_en.tke
+    #tke_en = aux_en.tke
+    tke_en = FT(0.44)
     @inbounds for i in 1:N_up
         a_up = aux_up[i].area
         w_up = prog_up_f[i].w
