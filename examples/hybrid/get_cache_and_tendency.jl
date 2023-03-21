@@ -29,6 +29,9 @@ get_cache(
 
 function implicit_tendency!(Yₜ, Y, p, t)
     p.test_dycore_consistency && CA.fill_with_nans!(p)
+    @nvtx "precomputed quantities" color = colorant"orange" begin
+        CA.precomputed_quantities!(Y, p, t)
+    end
     @nvtx "implicit tendency" color = colorant"yellow" begin
         Fields.bycolumn(axes(Y.c)) do colidx
             CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)

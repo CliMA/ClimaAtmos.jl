@@ -95,19 +95,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶜρ_ref, ᶜp_ref) = p
     (; energy_upwinding, tracer_upwinding, simulation) = p
     (; ᶠgradᵥ, ᶜinterp, ᶠinterp, ᶠwinterp) = p.operators
-    C123 = Geometry.Covariant123Vector
-
     thermo_params = CAP.thermodynamics_params(params)
     dt = simulation.dt
     # TODO: can we move this to implicit tendencies?
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ᶠu³[colidx] = Geometry.project(
-        Geometry.Contravariant3Axis(),
-        C123(ᶠwinterp(ᶜJ[colidx] * ᶜρ[colidx], ᶜuₕ[colidx])) + C123(ᶠw[colidx]),
-    )
-    compute_kinetic!(ᶜK[colidx], Y.c.uₕ[colidx], Y.f.w[colidx])
-    thermo_state!(Y, p, ᶜinterp, colidx; time = t)
-    @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])
 
     vertical_transport!(
         Yₜ.c.ρ[colidx],

@@ -40,7 +40,7 @@ function precomputed_quantities!(Y, p, t, colidx)
         ᶠwinterp(
             Y.c.ρ[colidx] * ᶜJ[colidx],
             Geometry.Contravariant123Vector(ᶜuₕ[colidx]),
-        ) + Geometry.Contravariant123Vector(Y.f.w[colidx])
+        ) + Geometry.Contravariant123Vector(ᶠw[colidx])
     @. ᶠu³[colidx] =
         Geometry.project(Geometry.Contravariant3Axis(), ᶠu_tilde[colidx])
     compute_kinetic!(ᶜK[colidx], Y.c.uₕ[colidx], Y.f.w[colidx])
