@@ -224,7 +224,6 @@ function set_surface_inputs!(
         ),
         sfc_inputs.z0m,                                    # z0m
         sfc_inputs.z0b,                                    # z0b
-        FT(-1),                                            # L_MO_init
         FT(1),                                             # gustiness
         sfc_inputs.beta,                                   # beta
     )
