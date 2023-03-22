@@ -5,6 +5,23 @@
 import Thermodynamics as TD
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
+import ClimaCore.Spaces:
+    column, ExtrudedFiniteDifferenceSpace, FiniteDifferenceSpace
+
+Base.@propagate_inbounds function column(
+    space::ExtrudedFiniteDifferenceSpace,
+    i,
+    h,
+)
+    FiniteDifferenceSpace(
+        space.staggering,
+        space.vertical_topology,
+        Geometry.CartesianGlobalGeometry(),
+        column(space.center_local_geometry, i, h),
+        column(space.face_local_geometry, i, h),
+    )
+end
+
 
 function precomputed_quantities!(Y, p, t)
     Fields.bycolumn(axes(Y.c)) do colidx
@@ -43,7 +60,7 @@ function precomputed_quantities!(Y, p, t, colidx)
         ) + Geometry.Contravariant123Vector(ᶠw[colidx])
     @. ᶠu³[colidx] =
         Geometry.project(Geometry.Contravariant3Axis(), ᶠu_tilde[colidx])
-    compute_kinetic!(ᶜK[colidx], Y.c.uₕ[colidx], Y.f.w[colidx])
+    compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠw[colidx])
     thermo_params = CAP.thermodynamics_params(params)
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])

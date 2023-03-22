@@ -16,6 +16,7 @@ abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
 struct SphericalModel <: AbstractModelConfig end
 struct BoxModel <: AbstractModelConfig end
+struct PlaneModel <: AbstractModelConfig end
 
 abstract type AbstractCoupling end
 struct Coupled <: AbstractCoupling end

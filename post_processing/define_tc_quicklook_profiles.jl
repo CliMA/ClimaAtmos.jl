@@ -71,7 +71,12 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
                     z = parent(Fields.coordinate_field(axes(var)).z)[:]
                     vardata = parent(var)[:]
                     prefix = isempty(v.pfx[j]) ? "" : "$(v.pfx[j]) "
-                    plot!(p_all[i], vardata, z; label = "$prefix$data_source")
+                    Plots.plot!(
+                        p_all[i],
+                        vardata,
+                        z;
+                        label = "$prefix$data_source",
+                    )
                 end
             elseif v.pfx isa String
                 fn = getfun(D, v.fn)
@@ -80,7 +85,7 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
                 z = parent(Fields.coordinate_field(axes(var)).z)[:]
                 vardata = parent(var)[:]
                 prefix = isempty(v.pfx) ? "" : "$(v.pfx) "
-                plot!(p_all[i], vardata, z; label = "$prefix$data_source")
+                Plots.plot!(p_all[i], vardata, z; label = "$prefix$data_source")
             end
         end
     end

@@ -18,6 +18,8 @@ function get_model_config(parsed_args)
         SingleColumnModel()
     elseif config == "box"
         BoxModel()
+    elseif config == "plane"
+        PlaneModel()
     end
 end
 

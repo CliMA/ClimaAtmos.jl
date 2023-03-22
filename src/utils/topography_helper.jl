@@ -35,3 +35,46 @@ function generate_topography_warp(earth_spline)
     end
     return topography_earth
 end
+
+"""
+    topography_agnesi(x,z)
+x = horizontal coordinate [m]
+z = vertical coordinate [m]
+h_c = 1 [m]
+a_c = 1000 [m]
+x_c = 72000 [m]
+Generate a single mountain profile (Agnesi mountain)
+for use with tests of gravity waves with topography.
+"""
+function topography_agnesi(coords)
+    x = coords.x
+    FT = eltype(x)
+    h_c = FT(1)
+    a_c = FT(10000)
+    x_c = FT(90000)
+    zₛ = @. h_c / (1 + ((x - x_c) / a_c)^2)
+    return zₛ
+end
+
+"""
+    topography_schar(x,z)
+x = horizontal coordinate [m]
+z = vertical coordinate [m]
+h_c = 250 [m]
+λ_c = 4000 [m]
+a_c = 5000 [m]
+x_c = 30000 [m]
+Assumes [0, 60] km domain.
+Generate a single mountain profile (Schar mountain)
+for use with tests of gravity waves with topography.
+"""
+function topography_schar(coords)
+    x = coords.x
+    FT = eltype(x)
+    h_c = FT(250)
+    λ_c = FT(4000)
+    a_c = FT(5000)
+    x_c = FT(30000)
+    zₛ = @. h_c * exp(-((x - x_c) / a_c)^2) * (cospi((x - x_c) / λ_c))^2
+    return zₛ
+end

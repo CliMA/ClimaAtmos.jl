@@ -32,6 +32,10 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
     curlₕ = Operators.Curl()
     wcurlₕ = Operators.WeakCurl()
 
+    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
+    is_2d_pt = point_type <: Geometry.Abstract2DPoint
+    is_3d_pt = !is_2d_pt
+
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     if :ρθ in propertynames(Y.c)
@@ -39,13 +43,16 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     end
-    @. Yₜ.c.uₕ +=
+    is_3d_pt && (@. Yₜ.c.uₕ +=
         ᶜβ_viscous * (
             wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
                 Geometry.Covariant12Axis(),
                 wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
             )
-        )
+        ))
+    is_2d_pt && (@. Yₜ.c.uₕ =
+        ᶜβ_viscous *
+        Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ))))
     @. Yₜ.f.w.components.data.:1 +=
         ᶠβ_viscous * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end

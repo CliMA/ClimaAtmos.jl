@@ -140,6 +140,22 @@ steps:
           --dt 0.5secs --t_end 600secs
           --job_id bomex_box_hydrostatic_balance_rhoe
         artifact_paths: "bomex_box_hydrostatic_balance_rhoe/*"
+  
+  - group: "Plane Examples"
+    steps:
+      - label: ":computer: Agnesi linear hydrostatic mountain experiment"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 180000.0 --z_max 25000.0 --x_elem 80 --z_elem 90 --dt 1.5secs --t_end 36000.0secs --z_stretch false --vert_diff false --kappa_4 1e6 --dt_save_to_disk 3600secs --initial_condition AgnesiHProfile --discrete_hydrostatic_balance true --topography Agnesi --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --use_reference_state true --job_id plane_agnesi_mountain_test"
+        artifact_paths: "plane_agnesi_mountain_test/*"
+      
+      - label: ":computer: Density current experiment"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 51200.0 --z_max 6400.0 --x_elem 80 --z_elem 90 --dt 0.3secs --t_end 900.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 3600secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --rayleigh_sponge false --use_reference_state true --job_id plane_density_current_test"
+        artifact_paths: "plane_density_current_test/*"
+
+      - label: ":computer: Plane e-kin conservation experiment"
+        command: "julia --project=examples examples/hybrid/driver.jl --initial_condition IsothermalZPGProfile --geopotential false --config plane --x_max 25000.0 --z_max 30000.0 --x_elem 15 --z_elem 30 --nh_poly 4 --dt 1secs --t_end 14400secs --z_stretch false --check_conservation true --kappa_4 0.0 --post_process false"
+
+      - label: ":computer: Plane e-kin conservation experiment (stretched mesh)"
+        command: "julia --project=examples examples/hybrid/driver.jl --initial_condition IsothermalZPGProfile --geopotential false --config plane --x_max 25000.0 --z_max 30000.0 --x_elem 15 --z_elem 30 --nh_poly 4 --dt 1secs --t_end 14400secs --z_stretch true --check_conservation true --kappa_4 0.0 --post_process false"
 
   - group: "Sphere Examples (Dycore)"
     steps:
