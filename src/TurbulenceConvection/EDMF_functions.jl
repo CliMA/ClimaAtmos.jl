@@ -283,14 +283,6 @@ function set_edmf_surface_bc(
     #w_up_c = aux_tc.w_up_c
     p_c = center_aux_grid_mean_p(state)
 
-    thermo_state = TD.PhaseEquil_pθq(
-        thermo_params,
-        p(z),
-        θ(z),
-        q_tot(z),
-    ),
-
-
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         #@. w_up_c = Ic(prog_up_f[i].w)
