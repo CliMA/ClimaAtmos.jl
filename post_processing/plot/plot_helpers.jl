@@ -24,7 +24,7 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
             fig = []
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     p[lonidx, latidx, 1, 1]',
@@ -34,7 +34,7 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
             )
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     T[lonidx, latidx, 1, 1]',
@@ -45,7 +45,7 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
             )
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     vort[lonidx, latidx, 1, 1]' .* FT(1e5),
@@ -54,7 +54,7 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
                 ),
             )
             png(
-                plot(fig..., layout = (3, 1), size = (600, 800)),
+                Plots.plot(fig..., layout = (3, 1), size = (600, 800)),
                 fig_dir * "/dbw_day$day.png",
             )
         else
@@ -126,7 +126,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
             fig = []
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     p[lonidx, latidx, 1, 1]',
@@ -137,7 +137,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     T[lonidx, latidx, 1, 1]',
@@ -149,7 +149,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     vort[lonidx, latidx, 1, 1]' * FT(1e5),
@@ -160,7 +160,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     vort[lonidx, latidx, 3, 1]' * FT(1e5),
@@ -170,7 +170,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
             )
 
             png(
-                plot(fig..., layout = (4, 1), size = (600, 1000)),
+                Plots.plot(fig..., layout = (4, 1), size = (600, 1000)),
                 fig_dir * "/mbw_basic_day$day.png",
             )
 
@@ -178,7 +178,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     w[lonidx, latidx, 1, 1]',
@@ -189,7 +189,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     w[lonidx, latidx, 3, 1]',
@@ -200,7 +200,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     u[lonidx, latidx, 3, 1]',
@@ -211,7 +211,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     u[lonidx, latidx, 1, 1]',
@@ -222,7 +222,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     v[lonidx, latidx, 3, 1]',
@@ -233,7 +233,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     v[lonidx, latidx, 1, 1]',
@@ -243,7 +243,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
             )
 
             png(
-                plot(fig..., layout = (3, 2), size = (800, 800)),
+                Plots.plot(fig..., layout = (3, 2), size = (800, 800)),
                 fig_dir * "/mbw_velocity_day$day.png",
             )
 
@@ -251,7 +251,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     qt[lonidx, latidx, 1, 1]' * FT(1e3),
@@ -262,7 +262,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     vert_intg_cloud_water[lonidx, latidx, 1, 1]' * FT(1e3),
@@ -273,7 +273,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
 
             push!(
                 fig,
-                contourf(
+                Plots.contourf(
                     lon[lonidx],
                     lat[latidx],
                     vert_intg_water_vapor[lonidx, latidx, 1, 1]' * FT(1e3),
@@ -283,7 +283,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
             )
 
             png(
-                plot(fig..., layout = (3, 1), size = (600, 800)),
+                Plots.plot(fig..., layout = (3, 1), size = (600, 800)),
                 fig_dir * "/mbw_moisture_day$day.png",
             )
 
@@ -343,7 +343,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
             )
 
             png(
-                plot(fig..., layout = (3, 1), size = (600, 800)),
+                Plots.plot(fig..., layout = (3, 1), size = (600, 800)),
                 fig_dir * "/mbw_spectrum_day$day.png",
             )
 

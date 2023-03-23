@@ -66,7 +66,7 @@ loc = findfirst(nprocs_tempest .== minprocs)
 nprocs_tempest = nprocs_tempest[loc:end]
 walltime_tempest = walltime_tempest[loc:end]
 
-@assert nprocs_clima_atmos == nprocs_tempest # needed for comparison plot
+@assert nprocs_clima_atmos == nprocs_tempest # needed for comparison Plots.plot
 
 # simulated years per day
 sypd_tempest = (secs_per_day ./ walltime_tempest) * t_int_days ./ days_per_year
@@ -92,7 +92,7 @@ scaling_efficiency_clima_atmos =
     )
 ENV["GKSwstype"] = "100"
 Plots.GRBackend()
-plt1 = plot(
+plt1 = Plots.plot(
     [log2.(nprocs_clima_atmos) log2.(nprocs_tempest)],
     [sypd_clima_atmos sypd_tempest],
     markershape = [:circle :square],
@@ -116,7 +116,7 @@ Plots.png(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 Plots.pdf(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 
 Plots.GRBackend()
-plt2 = plot(
+plt2 = Plots.plot(
     [log2.(nprocs_clima_atmos) log2.(nprocs_tempest)],
     [cpu_hours_clima_atmos cpu_hours_tempest],
     markershape = [:circle :square],
@@ -140,7 +140,7 @@ Plots.png(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
 Plots.pdf(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
 
 Plots.GRBackend()
-plt3 = plot(
+plt3 = Plots.plot(
     log2.(nprocs_clima_atmos),
     cpu_hours_clima_atmos ./ cpu_hours_tempest,
     markershape = [:circle :square],
@@ -165,7 +165,7 @@ Plots.pdf(plt3, joinpath(output_dir, resolution * "_" * "comparison"))
 
 
 Plots.GRBackend()
-plt4 = plot(
+plt4 = Plots.plot(
     [log2.(nprocs_clima_atmos) log2.(nprocs_tempest)],
     [scaling_efficiency_clima_atmos scaling_efficiency_tempest],
     markershape = [:circle :square],

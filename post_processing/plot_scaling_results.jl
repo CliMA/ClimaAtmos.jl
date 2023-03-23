@@ -68,7 +68,7 @@ scaling_efficiency_clima_atmos =
     )
 ENV["GKSwstype"] = "100"
 Plots.GRBackend()
-plt1 = plot(
+plt1 = Plots.plot(
     nprocs_clima_atmos,
     sypd_clima_atmos,
     markershape = :circle,
@@ -92,7 +92,7 @@ Plots.png(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 Plots.pdf(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
 
 Plots.GRBackend()
-plt2 = plot(
+plt2 = Plots.plot(
     nprocs_clima_atmos,
     cpu_hours_clima_atmos,
     markershape = :circle,
@@ -114,7 +114,7 @@ Plots.pdf(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
 
 
 Plots.GRBackend()
-plt3 = plot(
+plt3 = Plots.plot(
     nprocs_clima_atmos,
     scaling_efficiency_clima_atmos,
     markershape = :circle,
@@ -135,7 +135,7 @@ Plots.png(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
 Plots.pdf(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
 
 Plots.GRBackend()
-plt4 = plot(
+plt4 = Plots.plot(
     ncols_per_process,
     scaling_efficiency_clima_atmos,
     markershape = :circle,

@@ -299,7 +299,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         latidx = findall(x -> x >= 0, lat)
         lonidx = findall(x -> 0 <= x <= 240, lon)
 
-        plot_p = contourf(
+        plot_p = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
@@ -308,7 +308,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
 
-        plot_T = contourf(
+        plot_T = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
@@ -318,7 +318,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         )
         png(plot_T, output_dir * "/bw-temperature-day" * string(day) * ".png")
 
-        plot_ω = contourf(
+        plot_ω = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             vort[lonidx, latidx, 1, 1]',
@@ -463,7 +463,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         latidx = findall(x -> x >= 0, lat)
         lonidx = findall(x -> 0 <= x <= 240, lon)
 
-        plot_p = contourf(
+        plot_p = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             p[lonidx, latidx, 1, 1]',
@@ -472,7 +472,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_p, output_dir * "/bw-pressure-day" * string(day) * ".png")
 
-        plot_T = contourf(
+        plot_T = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             T[lonidx, latidx, 1, 1]',
@@ -482,7 +482,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_T, output_dir * "/bw-temperature-day" * string(day) * ".png")
 
-        plot_ω = contourf(
+        plot_ω = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             vort[lonidx, latidx, 1, 1]',
@@ -494,7 +494,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             output_dir * "/bw-vorticity_lower-day" * string(day) * ".png",
         )
 
-        plot_ω = contourf(
+        plot_ω = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             vort[lonidx, latidx, 3, 1]',
@@ -506,7 +506,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             output_dir * "/bw-vorticity_uppper-day" * string(day) * ".png",
         )
 
-        plot_qt = contourf(
+        plot_qt = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             qt[lonidx, latidx, 1, 1]',
@@ -515,7 +515,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_qt, output_dir * "/bw-qt-day" * string(day) * ".png")
 
-        plot_w = contourf(
+        plot_w = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             w[lonidx, latidx, 1, 1]',
@@ -524,7 +524,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_w, output_dir * "/bw-w-day" * string(day) * ".png")
 
-        plot_u = contourf(
+        plot_u = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             u[lonidx, latidx, 3, 1]',
@@ -533,7 +533,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_u, output_dir * "/bw-u7500-day" * string(day) * ".png")
 
-        plot_u = contourf(
+        plot_u = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             u[lonidx, latidx, 1, 1]',
@@ -542,7 +542,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_u, output_dir * "/bw-u1500-day" * string(day) * ".png")
 
-        plot_v = contourf(
+        plot_v = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             v[lonidx, latidx, 3, 1]',
@@ -551,7 +551,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_v, output_dir * "/bw-v7500-day" * string(day) * ".png")
 
-        plot_v = contourf(
+        plot_v = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             v[lonidx, latidx, 1, 1]',
@@ -560,7 +560,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         )
         png(plot_v, output_dir * "/bw-v1500-day" * string(day) * ".png")
 
-        plot_cw = contourf(
+        plot_cw = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             vert_intg_cloud_water[lonidx, latidx, 1, 1]',
@@ -573,7 +573,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
             output_dir * "/bw-vert_intg_cloud_water-day" * string(day) * ".png",
         )
 
-        plot_wv = contourf(
+        plot_wv = Plots.contourf(
             lon[lonidx],
             lat[latidx],
             vert_intg_water_vapor[lonidx, latidx, 1, 1]',
@@ -898,7 +898,7 @@ function custom_postprocessing(sol, output_dir, p)
 
     anim = @animate for Y in sol.u
         ᶜts = CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
-        plot(
+        Plots.plot(
             vec(TD.air_temperature.(thermo_params, ᶜts)),
             vec(Fields.coordinate_field(Y.c).z ./ 1000);
             xlabel = "T [K]",
@@ -911,7 +911,7 @@ function custom_postprocessing(sol, output_dir, p)
 
     anim = @animate for Y in sol.u
         w_phy = Geometry.WVector.(Y.f.w).components.data.:1
-        plot(
+        Plots.plot(
             vec(w_phy),
             vec(Fields.coordinate_field(Y.f).z ./ 1000);
             xlabel = "w [m/s]",
@@ -921,4 +921,83 @@ function custom_postprocessing(sol, output_dir, p)
         )
     end
     Plots.mp4(anim, joinpath(output_dir, "w.mp4"), fps = 10)
+end
+
+function postprocessing_plane(sol, output_dir, p)
+    # TODO: remove closure over params
+    C123 = Geometry.Covariant123Vector
+    (; ᶜinterp) = p.operators
+    thermo_dispatcher = p.thermo_dispatcher
+    thermo_params = CAP.thermodynamics_params(params)
+    get_var(i, var) = Fields.single_field(sol.u[i], var)
+    n = length(sol.u)
+    #! format: off
+    get_row(var) = [
+        "Y.$(join(var, '.'))";;
+        "$(norm(get_var(1, var), 2)) → $(norm(get_var(n, var), 2))";;
+        "$(mean(get_var(1, var))) → $(mean(get_var(n, var)))";;
+        "$(maximum(abs, get_var(1, var))) → $(maximum(abs, get_var(n, var)))";;
+        "$(minimum(abs, get_var(1, var))) → $(minimum(abs, get_var(n, var)))";;
+    ]
+    #! format: on
+    pretty_table(
+        vcat(map(get_row, Fields.property_chains(sol.u[1]))...);
+        title = "Change in Y from t = $(sol.t[1]) to t = $(sol.t[n]):",
+        header = ["var", "‖var‖₂", "mean(var)", "max(∣var∣)", "min(∣var∣)"],
+        alignment = :c,
+    )
+
+    Y = sol.u[end]
+
+    ## Plots for last timestep
+    function gen_plot_plane(
+        variable::Fields.Field,
+        filename::String,
+        title::String,
+        xlabel::String,
+        ylabel::String;
+        output_dir = output_dir,
+    )
+        # Set up Figure and Axes
+        f = CairoMakie.Figure(; font = "CMU Serif")
+        gaa = f[1, 1] = GridLayout()
+        FT = eltype(variable)
+        Axis(gaa[1, 1], aspect = 2, title = title)
+        paa = fieldcontourf!(variable)
+        Colorbar(gaa[1, 2], paa, label = xlabel)
+        fig_png = joinpath(output_dir, filename)
+        CairoMakie.save(fig_png, f)
+    end
+
+    u_bar = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.w))
+    u_velo = @. Geometry.project(Geometry.UAxis(), u_bar)
+    gen_plot_plane(
+        u_velo,
+        "horz_velocity.png",
+        "Horizontal Velocity",
+        "u[m/s]",
+        "z[m]",
+    )
+
+    w_velo = @. Geometry.project(Geometry.WAxis(), u_bar)
+    gen_plot_plane(
+        w_velo,
+        "vert_velocity.png",
+        "Vertical Velocity",
+        "w[m/s]",
+        "z[m]",
+    )
+
+    thermo_dispatcher = p.thermo_dispatcher
+    thermo_params = CAP.thermodynamics_params(params)
+    ᶜts = CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
+    θ = TD.virtual_pottemp.(thermo_params, ᶜts)
+    gen_plot_plane(
+        θ,
+        "virtual_pottemp.png",
+        "Virtual Pottemp",
+        "Theta[K]",
+        "z[m]",
+    )
+
 end
