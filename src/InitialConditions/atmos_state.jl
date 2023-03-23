@@ -94,14 +94,17 @@ precip_variables(ls, _, ::PerfExperimental) =
 turbconv_center_variables(ls, ::Nothing) = (;)
 function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel)
     ρa = ls.ρ * turbconv_model.minimum_area
-    ρaθ_liq_ice = ρa * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state)
     ρaq_tot = ρa * TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    ρae_tot = ρa * (
+        TD.internal_energy(ls.thermo_params, ls.thermo_state) +
+        norm_sqr(ls.velocity) / 2 +
+        CAP.grav(ls.params) * ls.geometry.coordinates.z)
     n_up = TC.n_updrafts(turbconv_model)
     ρa_en_tke = (ls.ρ - n_up * ρa) * ls.turbconv_state.tke
     return (;
         turbconv = (;
             en = (; ρatke = ρa_en_tke),
-            up = ntuple(_ -> (; ρarea = ρa, ρaθ_liq_ice, ρaq_tot), Val(n_up)),
+            up = ntuple(_ -> (; ρarea = ρa, ρae_tot, ρaq_tot), Val(n_up)),
         )
     )
 end
