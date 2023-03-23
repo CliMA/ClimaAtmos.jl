@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "dbf8fd144c2ccbc3472ab66156d86eb1590f36e1"
+project_hash = "5471e239544c1be2cb9d1350243e0f019b267359"
 
 [[deps.AMD]]
 deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
@@ -72,9 +72,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.AtmosphericProfilesLibrary]]
 deps = ["Dierckx"]
-git-tree-sha1 = "2523b3d1a2feceeeff4ba126e64ae746b8ca73d3"
+git-tree-sha1 = "0d2fe99b3bc12cb4339e20b01755b24036789845"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
-version = "0.1.0"
+version = "0.1.2"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]

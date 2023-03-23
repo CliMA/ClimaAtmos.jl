@@ -17,7 +17,7 @@ function compute_implicit_turbconv_tendencies!(
     state::State,
 )
     compute_implicit_up_tendencies!(edmf, grid, state)
-    compute_implicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
+    #compute_implicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
 
     return nothing
 end
@@ -28,7 +28,7 @@ function compute_explicit_turbconv_tendencies!(
     state::State,
 )
     compute_explicit_up_tendencies!(edmf, grid, state)
-    compute_explicit_en_tendencies!(edmf, grid, state)
+    #compute_explicit_en_tendencies!(edmf, grid, state)
 
     return nothing
 end
@@ -247,7 +247,7 @@ function affect_filter!(
     set_edmf_surface_bc(edmf, grid, state, surf, param_set)
     filter_updraft_vars(edmf, grid, state, surf, param_set)
 
-    @. prog_en.ρatke = max(prog_en.ρatke, 0)
+    #@. prog_en.ρatke = max(prog_en.ρatke, 0)
     return nothing
 end
 
@@ -293,13 +293,13 @@ function set_edmf_surface_bc(
     ρLL = prog_gm.ρ[kc_surf]
     ρ_ae = ρ_c[kc_surf] * ae_surf
     mix_len_params = mixing_length_params(edmf)
-    prog_en.ρatke[kc_surf] =
-        ρ_ae * get_surface_tke(
-            mix_len_params,
-            get_ustar(surf),
-            zLL,
-            obukhov_length(surf),
-        )
+    #prog_en.ρatke[kc_surf] =
+    #    ρ_ae * get_surface_tke(
+    #        mix_len_params,
+    #        get_ustar(surf),
+    #        zLL,
+    #        obukhov_length(surf),
+    #    )
     return nothing
 end
 
