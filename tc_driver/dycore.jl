@@ -25,6 +25,7 @@ function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     prog_gm = TC.center_prog_grid_mean(state)
     ᶜts = TC.center_aux_grid_mean_ts(state)
     p_c = TC.center_aux_grid_mean_p(state)
+    e_kin = TC.center_aux_grid_mean_e_kin(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
     @. ρ_f = If(ρ_c)
@@ -39,6 +40,10 @@ function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
         TD.total_specific_enthalpy(thermo_params, ᶜts, prog_gm.ρe_tot / ρ_c)
     @. p_c = TD.air_pressure(thermo_params, ᶜts)
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ᶜts)
+    @. aux_gm.e_tot =
+        e_kin +
+        TC.geopotential(thermo_params, grid.zc.z) +
+        TD.internal_energy(thermo_params, ᶜts)
     return
 end
 

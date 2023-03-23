@@ -23,6 +23,7 @@ cent_aux_vars_gm(FT, local_geometry, edmf) = (;
     θ_liq_ice = FT(0),
     q_tot = FT(0),
     h_tot = FT(0),
+    e_tot = FT(0),
 )
 cent_aux_vars(FT, local_geometry, atmos, edmf) = (;
     cent_aux_vars_gm(FT, local_geometry, edmf)...,
