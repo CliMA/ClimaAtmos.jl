@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "7371ffd5aab8bfccaaed2cf393fe6b175948738c"
+project_hash = "d3b8e2a33b946262fbb8b366a3ff31e33f95e0d9"
 
 [[deps.AMD]]
 deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
@@ -259,9 +259,9 @@ version = "0.1.11"
 
 [[deps.CloudMicrophysics]]
 deps = ["DocStringExtensions", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "de5a477949a7d803d45a87f44633f336ce640332"
+git-tree-sha1 = "7fb9a5a860f5bcfb68879354b53381f848551162"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.9.2"
+version = "0.10.0"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
