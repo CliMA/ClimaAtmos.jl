@@ -231,7 +231,7 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe) topography (dcmip): no viscous sponge"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs --topography DCMIP200 --dt 200secs --t_end 6days --dt_save_to_disk 6days --rayleigh_sponge true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_topography_dcmip_rs --topography DCMIP200 --initial_condition DryBaroclinicWave --dt 200secs --t_end 6days --dt_save_to_disk 6days --rayleigh_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_topography_dcmip_rs --out_dir sphere_baroclinic_wave_rhoe_topography_dcmip_rs
         artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/*"
 
