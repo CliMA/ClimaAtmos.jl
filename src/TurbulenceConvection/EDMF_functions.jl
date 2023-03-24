@@ -596,13 +596,16 @@ function filter_updraft_vars(
     FT = float_type(state)
     N_up = n_updrafts(edmf)
 
+    thermo_params = TCP.thermodynamics_params(param_set)
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
     aux_gm_f = face_aux_grid_mean(state)
+    aux_up = center_aux_updrafts(state)
     aux_bulk = center_aux_bulk(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
+    p_c = center_aux_grid_mean_p(state)
     If = CCO.InterpolateC2F(;
         bottom = CCO.Extrapolate(),
         top = CCO.Extrapolate(),
@@ -663,11 +666,17 @@ function filter_updraft_vars(
             prog_up[i].ρaq_tot,
         )
 
-        #θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
+        θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
         a_surf = area_surface_bc(surf, edmf, i)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
         #prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
+        e_kin = aux_up[i].e_kin
+        e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
+        ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
+        e_tot_surf =
+            TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
+        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
     return nothing
