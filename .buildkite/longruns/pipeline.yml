@@ -45,7 +45,7 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
         artifact_paths: "longrun_bw_rhoe_highres/*"
         env:
@@ -55,7 +55,7 @@ steps:
 
       - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres --apply_limiter false
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres --out_dir longrun_bw_rhoe_equil_highres
         artifact_paths: "longrun_bw_rhoe_equil_highres/*"
         env:
@@ -65,7 +65,7 @@ steps:
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 300secs --max_newton_iters 10 --t_end 100days --dt_save_to_disk 10days --job_id longrun_ssp_bw_rhoe_equil_highres --ode_algo SSP333"
+          - "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 100secs --max_newton_iters 2 --initial_condition MoistBaroclinicWave --t_end 100days --dt_save_to_disk 10days --job_id longrun_ssp_bw_rhoe_equil_highres --ode_algo SSP333"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_bw_rhoe_equil_highres --out_dir longrun_ssp_bw_rhoe_equil_highres
         artifact_paths: "longrun_ssp_bw_rhoe_equil_highres/*"
         env:
@@ -95,7 +95,7 @@ steps:
 
       - label: ":computer: SSP held suarez (ρe_tot) equilmoist high resolution"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --dt 100secs --max_newton_iters 10 --t_end 400days --dt_save_to_disk 10days --job_id longrun_ssp_hs_rhoe_equil_highres --ode_algo SSP333"
+          - "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --dt 75secs --max_newton_iters 2 --t_end 400days --dt_save_to_disk 10days --job_id longrun_ssp_hs_rhoe_equil_highres --ode_algo SSP333"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_hs_rhoe_equil_highres --out_dir longrun_ssp_hs_rhoe_equil_highres
         artifact_paths: "longrun_ssp_hs_rhoe_equil_highres/*"
         env:
@@ -115,7 +115,7 @@ steps:
 
       - label: ":computer: SSP aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 100secs --max_newton_iters 10 --t_end 400days --fps 30 --job_id longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64 --ode_algo SSP333"
+          - "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --bubble true --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 75secs --max_newton_iters 2 --t_end 400days --fps 30 --job_id longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64 --ode_algo SSP333"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64
         artifact_paths: "longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
         env:
@@ -169,7 +169,7 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution zalesak"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --tracer_upwinding zalesak --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --tracer_upwinding zalesak --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres_zalesak --out_dir longrun_bw_rhoe_equil_highres_zalesak
         artifact_paths: "longrun_bw_rhoe_equil_highres_zalesak/*"
         agents:
@@ -201,7 +201,7 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) high resolution topography (dcmip)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --topography DCMIP200 --rayleigh_sponge true --viscous_sponge true
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --topography DCMIP200 --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres_topography --out_dir longrun_bw_rhoe_highres_topography
         artifact_paths: "longrun_bw_rhoe_highres_topography/*"
         env:
@@ -211,7 +211,7 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (dcmip)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --topography DCMIP200 --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --topography DCMIP200 --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres_topography --out_dir longrun_bw_rhoe_equil_highres_topography
         artifact_paths: "longrun_bw_rhoe_equil_highres_topography (dcmip)/*"
         env:
