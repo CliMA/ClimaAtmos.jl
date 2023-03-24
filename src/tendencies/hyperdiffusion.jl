@@ -47,7 +47,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     curlₕ = Operators.Curl()
     wcurlₕ = Operators.WeakCurl()
 
-    (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
+    (; ᶜp, ᶜχ, ᶜχuₕ, ᶜh_ref) = p # assume ᶜp has been updated
     (; ghost_buffer) = p
     (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
@@ -58,7 +58,15 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     ᵗρs = :ρe_tot in propertynames(Y.c) ? Yₜ.c.ρe_tot : Yₜ.c.ρθ
 
     (:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ(ᶜρs / ᶜρ)))
-    !(:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ((ᶜρs + ᶜp) / ᶜρ)))
+    ## Remove a reference enthalpy hᵣ from the hyperdiffusion term
+    ## ᶜχ = ∇ ⋅ (∇ₕ(hₜ - hᵣ)) = ∇³(h′) 
+    ## Assume reference e_kinᵣ is zero.
+    ## Where hᵣ = e_totᵣ + pᵣ/ρᵣ = cᵥ_d(Tᵣ - T₀) + gz + pᵣ/ρᵣ
+    ## T₀ is the triple point temperature
+    ## Tᵣ is the reference temperature
+    ## [p,ρ]ᵣ are reference values for [pressure, density] defined in the default cache
+    !(:ρθ in propertynames(Y.c)) &&
+        (@. ᶜχ = wdivₕ(gradₕ((ᶜρs + ᶜp) / ᶜρ - ᶜh_ref)))
 
     is_3d_pt && (@. ᶜχuₕ =
         wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(

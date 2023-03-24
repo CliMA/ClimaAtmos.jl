@@ -84,10 +84,16 @@ function default_cache(
     R_d = FT(CAP.R_d(params))
     MSLP = FT(CAP.MSLP(params))
     grav = FT(CAP.grav(params))
+    cv_d = FT(CAP.cv_d(params))
+    T_0 = FT(CAP.T_0(params))
     T_ref = FT(255)
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
     ᶜρ_ref = @. MSLP * exp(-grav * ᶜcoord.z / (R_d * T_ref)) / (R_d * T_ref)
     ᶜp_ref = @. ᶜρ_ref * R_d * T_ref
+    ᶜh_ref = @. ᶜp_ref / ᶜρ_ref + (cv_d * (T_ref - T_0) + grav * ᶜcoord.z)
+    if !parsed_args["use_hyperdiff_reference_state"]
+        ᶜh_ref .*= 0
+    end
     if !parsed_args["use_reference_state"]
         ᶜρ_ref .*= 0
         ᶜp_ref .*= 0
@@ -192,6 +198,7 @@ function default_cache(
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜρ_ref,
         ᶜp_ref,
+        ᶜh_ref,
         ᶜts = similar(Y.c, ts_type),
         ᶜp = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),
