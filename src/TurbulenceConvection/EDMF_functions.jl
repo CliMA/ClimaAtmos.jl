@@ -273,20 +273,11 @@ function set_edmf_surface_bc(
     ae_surf::FT = 1
 
     aux_up = center_aux_updrafts(state)
-    #aux_gm = center_aux_grid_mean(state)
-    #Ic = CCO.InterpolateF2C()
-    #aux_up_f = face_aux_updrafts(state)
-    #aux_tc = center_aux_turbconv(state)
-    #prog_gm_uₕ = grid_mean_uₕ(state)
-    #C123 = CCG.Covariant123Vector
-    #wvec = CC.Geometry.WVector
-    #w_up_c = aux_tc.w_up_c
     p_c = center_aux_grid_mean_p(state)
 
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
-        #@. w_up_c = Ic(prog_up_f[i].w)
         e_kin = aux_up[i].e_kin
         e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
         ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
@@ -294,7 +285,6 @@ function set_edmf_surface_bc(
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
         a_surf = area_surface_bc(surf, edmf, i)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        #prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
         prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
@@ -473,7 +463,6 @@ function compute_implicit_up_tendencies!(
         w_up = prog_up_f[i].w
 
         ρarea = prog_up[i].ρarea
-        #ρae_tot = prog_up[i].ρae_tot
         ρaq_tot = prog_up[i].ρaq_tot
 
         tends_ρarea = tendencies_up[i].ρarea
@@ -613,12 +602,10 @@ function filter_updraft_vars(
 
     @inbounds for i in 1:N_up
         @. aux_bulk.filter_flag_1 = ifelse(prog_up[i].ρarea < FT(0), 1, 0)
-        #@. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρae_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_3 = ifelse(prog_up[i].ρaq_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
         @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
-        #@. prog_up[i].ρaθ_liq_ice = max(prog_up[i].ρaθ_liq_ice, 0) #flag_2
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
     end
