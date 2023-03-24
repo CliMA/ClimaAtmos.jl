@@ -83,7 +83,7 @@ function update_aux!(
                 aux_up[i].e_kin[k] = e_kin[k]
             end
             e_int = aux_up[i].e_tot[k] - aux_up[i].e_kin[k] - e_pot
-            ts_up_i = thermo_state_peq(
+            ts_up_i = TD.PhaseEquil_peq(
             #ts_up_i = if edmf.moisture_model isa DryModel
             #    TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
             #elseif edmf.moisture_model isa EquilMoistModel

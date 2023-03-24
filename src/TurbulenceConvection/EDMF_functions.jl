@@ -285,16 +285,16 @@ function set_edmf_surface_bc(
 
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
+        q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
         #@. w_up_c = Ic(prog_up_f[i].w)
-        e_kin = aux_up[i].e_kin 
+        e_kin = aux_up[i].e_kin
         e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
         ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
-        q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
         a_surf = area_surface_bc(surf, edmf, i)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
+        #prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
         prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
@@ -461,6 +461,7 @@ function compute_implicit_up_tendencies!(
     prog_up_f = face_prog_updrafts(state)
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
+    aux_up = center_aux_updrafts(state)
 
     # Solve for updraft area fraction
 
@@ -549,7 +550,7 @@ function compute_explicit_up_tendencies!(
             aux_en.h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
             aux_up[i].entr -
-            prog_up[i].ρa * aux_up[i].h_tot *
+            prog_up[i].ρarea * aux_up[i].h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
             aux_up[i].detr
         @. tendencies_up[i].ρaq_tot +=
