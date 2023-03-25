@@ -47,6 +47,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_highres --fig_dir longrun_bw_rhoe_highres --case_name dry_baroclinic_wave
         artifact_paths: "longrun_bw_rhoe_highres/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -57,6 +58,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres --out_dir longrun_bw_rhoe_equil_highres
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_equil_highres --fig_dir longrun_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_bw_rhoe_equil_highres/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -67,6 +69,7 @@ steps:
         command:
           - "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 100secs --max_newton_iters 2 --initial_condition MoistBaroclinicWave --t_end 100days --dt_save_to_disk 10days --job_id longrun_ssp_bw_rhoe_equil_highres --ode_algo SSP333"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_bw_rhoe_equil_highres --out_dir longrun_ssp_bw_rhoe_equil_highres
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_bw_rhoe_equil_highres --fig_dir longrun_ssp_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_ssp_bw_rhoe_equil_highres/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -171,6 +174,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --tracer_upwinding zalesak --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 200secs --t_end 100days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_equil_highres_zalesak
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres_zalesak --out_dir longrun_bw_rhoe_equil_highres_zalesak
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_equil_highres_zalesak --fig_dir longrun_bw_rhoe_equil_highres_zalesak --case_name moist_baroclinic_wave
         artifact_paths: "longrun_bw_rhoe_equil_highres_zalesak/*"
         agents:
           slurm_mem: 20GB
