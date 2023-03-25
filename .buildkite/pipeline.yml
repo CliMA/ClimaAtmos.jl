@@ -163,7 +163,7 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --h_elem 8 --kappa_4 5e16 --job_id sphere_baroclinic_wave_rhoe_he8 --dt 500secs --initial_condition DryBaroclinicWave --dt_save_to_disk 2days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_he8 --out_dir sphere_baroclinic_wave_rhoe_he8
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe_he8 --fig_dir sphere_baroclinic_wave_rhoe_he8 --case_name dry_baroclinic_wave 
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe_he8 --fig_dir sphere_baroclinic_wave_rhoe_he8 --case_name dry_baroclinic_wave
         artifact_paths: "sphere_baroclinic_wave_rhoe_he8/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
@@ -526,21 +526,6 @@ steps:
           --job_id edmf_life_cycle_tan2018
           --dt 6secs
         artifact_paths: "edmf_life_cycle_tan2018/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":balloon: SCM EDMF ARM_SGP"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
-          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case ARM_SGP --ls_adv ARM_SGP --edmf_coriolis ARM_SGP
-          --z_elem 100 --z_stretch false --z_max 4400
-          --t_end 14.5hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist equil
-          --job_id edmf_arm_sgp
-          --dt 2secs
-        artifact_paths: "edmf_arm_sgp/*"
         agents:
           slurm_mem: 20GB
 
