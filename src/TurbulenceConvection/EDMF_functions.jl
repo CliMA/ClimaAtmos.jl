@@ -284,6 +284,8 @@ function set_edmf_surface_bc(
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
         a_surf = area_surface_bc(surf, edmf, i)
+        T_surf = TD.air_temperature(thermo_params, ts_up_i_surf)
+
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
         prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
@@ -386,6 +388,7 @@ function θ_surface_bc(
         1 - a_total + (i - 1) * a_,
         1 - a_total + i * a_,
     )
+
     return aux_gm.θ_liq_ice[kc_surf] + surface_scalar_coeff * sqrt(h_var)
 end
 function q_surface_bc(
@@ -452,6 +455,7 @@ function compute_implicit_up_tendencies!(
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
     aux_up = center_aux_updrafts(state)
+    p_c = center_aux_grid_mean_p(state)
 
     # Solve for updraft area fraction
 
@@ -470,8 +474,20 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
+        @info "tendency before" tends_ρae_tot
         @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot))
+
+        @info "h_tot" aux_up[i].h_tot
+        @info "e_tot" aux_up[i].e_tot
+        tmp_h_tot = aux_up[i].e_tot .+ p_c ./ (ρarea ./ aux_up[i].area)
+        @info "tmp_h_tot" tmp_h_tot
+        @info "ρarea" ρarea
+        @info "Ic.(CCG.WVector.(w_up))" Ic.(CCG.WVector.(w_up))
+        @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
+        @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
+        @info "tendency after" tends_ρae_tot
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
+        
 
         tends_ρarea[kc_surf] = 0
         tends_ρae_tot[kc_surf] = 0
@@ -534,14 +550,14 @@ function compute_explicit_up_tendencies!(
             prog_up[i].ρarea *
             Ic(wcomponent(CCG.WVector(w_up))) *
             (aux_up[i].entr - aux_up[i].detr)
-        @. tendencies_up[i].ρae_tot +=
-            prog_up[i].ρarea *
-            aux_en.h_tot *
-            Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].entr -
-            prog_up[i].ρarea * aux_up[i].h_tot *
-            Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr
+        # @. tendencies_up[i].ρae_tot +=
+        #     prog_up[i].ρarea *
+        #     aux_en.h_tot *
+        #     Ic(wcomponent(CCG.WVector(w_up))) *
+        #     aux_up[i].entr -
+        #     prog_up[i].ρarea * aux_up[i].h_tot *
+        #     Ic(wcomponent(CCG.WVector(w_up))) *
+        #     aux_up[i].detr
         @. tendencies_up[i].ρaq_tot +=
             prog_up[i].ρarea *
             aux_en.q_tot *
@@ -554,10 +570,10 @@ function compute_explicit_up_tendencies!(
             w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
-        @. tendencies_up[i].ρae_tot +=
-            prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
-        @. tendencies_up[i].ρaq_tot +=
-            prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
+        #@. tendencies_up[i].ρae_tot +=
+        #    prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
+        #@. tendencies_up[i].ρaq_tot +=
+        #    prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
 
         # buoyancy and pressure
         @. tendencies_up_f[i].w += CCG.Covariant3Vector(
