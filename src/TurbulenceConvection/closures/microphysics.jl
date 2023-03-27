@@ -1,54 +1,6 @@
 """
-Computes the tendencies to qt and θ_liq_ice due to precipitation formation
-(autoconversion + accretion)
-"""
-function noneq_moisture_sources(
-    param_set::APS,
-    area::FT,
-    ρ::FT,
-    Δt::Real,
-    ts,
-) where {FT}
-    thermo_params = TCP.thermodynamics_params(param_set)
-    microphys_params = TCP.microphysics_params(param_set)
-    # TODO - when using adaptive timestepping we are limiting the source terms
-    #        with the previous timestep Δt
-    ql_tendency = FT(0)
-    qi_tendency = FT(0)
-    if area > 0
-
-        q = TD.PhasePartition(thermo_params, ts)
-        T = TD.air_temperature(thermo_params, ts)
-        q_vap = TD.vapor_specific_humidity(thermo_params, ts)
-
-        # TODO - is that the state we want to be relaxing to?
-        ts_eq = TD.PhaseEquil_ρTq(thermo_params, ρ, T, q.tot)
-        q_eq = TD.PhasePartition(thermo_params, ts_eq)
-
-        S_ql = CMNe.conv_q_vap_to_q_liq_ice(microphys_params, liq_type, q_eq, q)
-        S_qi = CMNe.conv_q_vap_to_q_liq_ice(microphys_params, ice_type, q_eq, q)
-
-        # TODO - handle limiters elswhere
-        if S_ql >= FT(0)
-            S_ql = min(S_ql, q_vap / Δt)
-        else
-            S_ql = -min(-S_ql, q.liq / Δt)
-        end
-        if S_qi >= FT(0)
-            S_qi = min(S_qi, q_vap / Δt)
-        else
-            S_qi = -min(-S_qi, q.ice / Δt)
-        end
-
-        ql_tendency += S_ql
-        qi_tendency += S_qi
-    end
-    return NoneqMoistureSources{FT}(ql_tendency, qi_tendency)
-end
-
-"""
-Computes the tendencies to qt and θ_liq_ice due to precipitation formation
-(autoconversion + accretion)
+Computes the tendencies to qt and e_tot or θ_liq_ice
+due to precipitation formation (autoconversion + accretion)
 """
 function precipitation_formation(
     param_set::APS,

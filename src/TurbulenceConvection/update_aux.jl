@@ -169,9 +169,23 @@ function update_aux!(
         rho = TD.air_density(thermo_params, ts_en)
         aux_en.buoy[k] = buoyancy_c(thermo_params, ρ_c[k], rho)
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
-    end
 
-    microphysics(grid, state, edmf, edmf.precip_model, Δt, param_set)
+        # update_sat_unsat
+        if TD.has_condensate(thermo_params, ts_en)
+            aux_en.cloud_fraction[k] = 1
+            aux_en_sat.θ_dry[k] = TD.dry_pottemp(thermo_params, ts_en)
+            aux_en_sat.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts_en)
+            aux_en_sat.T[k] = TD.air_temperature(thermo_params, ts_en)
+            aux_en_sat.q_tot[k] = TD.total_specific_humidity(thermo_params, ts_en)
+            aux_en_sat.q_vap[k] = TD.vapor_specific_humidity(thermo_params, ts_en)
+        else
+            aux_en.cloud_fraction[k] = 0
+            aux_en_unsat.θ_dry[k] = TD.dry_pottemp(thermo_params, ts_en)
+            aux_en_unsat.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts_en)
+            aux_en_unsat.q_tot[k] =
+                TD.total_specific_humidity(thermo_params, ts_en)
+        end
+    end
 
     @inbounds for k in real_center_indices(grid)
         a_bulk_c = aux_bulk.area[k]
@@ -460,7 +474,7 @@ function update_aux!(
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
-    compute_precipitation_formation_tendencies(
+    updraft_precipitation_formation_tendencies(
         grid,
         state,
         edmf,
@@ -468,5 +482,15 @@ function update_aux!(
         Δt,
         param_set,
     )
+
+    environment_precipitation_formation_tendencies(
+        grid,
+        state,
+        edmf,
+        edmf.precip_model,
+        Δt,
+        param_set
+    )
+
     return nothing
 end
