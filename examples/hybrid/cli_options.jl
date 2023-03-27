@@ -246,6 +246,10 @@ function parse_commandline()
         help = "Hyperdiffusion parameter"
         arg_type = Float64
         default = Float64(2e17)
+        "--divergence_damping_factor"
+        help = "Divergence damping factor"
+        arg_type = Float64
+        default = Float64(1)
         "--rayleigh_sponge"
         help = "Rayleigh sponge [`true`, `false` (default)]"
         arg_type = Bool
