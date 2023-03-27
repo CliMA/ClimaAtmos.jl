@@ -35,7 +35,6 @@ function update_aux!(
     aux_tc = center_aux_turbconv(state)
     aux_bulk = center_aux_bulk(state)
     prog_en = center_prog_environment(state)
-    aux_en_2m = center_aux_environment_2m(state)
     prog_up = center_prog_updrafts(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_f = aux_gm_f.ρ
@@ -457,29 +456,7 @@ function update_aux!(
 
         KM[k] = c_m * aux_tc.mixing_length[k] * sqrt(max(aux_en.tke[k], 0))
         KH[k] = KM[k] / aux_tc.prandtl_nvec[k]
-
-        aux_en_2m.tke.buoy[k] = -aux_en.area[k] * ρ_c[k] * KH[k] * bg.∂b∂z
     end
-
-    #####
-    ##### compute covarinaces tendendies
-    #####
-    tke_press = aux_en_2m.tke.press
-    w_en = aux_en_f.w
-    parent(tke_press) .= 0
-    @inbounds for i in 1:N_up
-        w_up = prog_up_f[i].w
-        nh_press = aux_up_f[i].nh_pressure
-        @. tke_press +=
-            (Ic(wcomponent(CCG.WVector(w_en - w_up)))) *
-            prog_up[i].ρarea *
-            Ic(nh_press)
-    end
-
-    compute_covariance_shear(edmf, grid, state, Val(:tke), Val(:w), Val(:w))
-
-    # TODO defined again in compute_covariance_shear and compute_covaraince
-    @. aux_en_2m.tke.rain_src = 0
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
