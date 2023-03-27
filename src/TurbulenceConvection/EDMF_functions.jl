@@ -17,8 +17,6 @@ function compute_implicit_turbconv_tendencies!(
     state::State,
 )
     compute_implicit_up_tendencies!(edmf, grid, state)
-    #compute_implicit_en_tendencies!(edmf, grid, state, Val(:tke), Val(:ρatke))
-
     return nothing
 end
 
@@ -28,8 +26,6 @@ function compute_explicit_turbconv_tendencies!(
     state::State,
 )
     compute_explicit_up_tendencies!(edmf, grid, state)
-    #compute_explicit_en_tendencies!(edmf, grid, state)
-
     return nothing
 end
 
@@ -246,8 +242,6 @@ function affect_filter!(
     ###
     set_edmf_surface_bc(edmf, grid, state, surf, param_set)
     filter_updraft_vars(edmf, grid, state, surf, param_set)
-
-    #@. prog_en.ρatke = max(prog_en.ρatke, 0)
     return nothing
 end
 
@@ -284,22 +278,6 @@ function set_edmf_surface_bc(
         )
         ae_surf -= a_surf
     end
-
-    flux1 = shf(surf) / cp
-    flux2 = get_ρq_tot_flux(surf, thermo_params, ts_gm[kc_surf])
-    zLL::FT = grid.zc[kc_surf].z
-    ustar = get_ustar(surf)
-    oblength = obukhov_length(surf)
-    ρLL = prog_gm.ρ[kc_surf]
-    ρ_ae = ρ_c[kc_surf] * ae_surf
-    mix_len_params = mixing_length_params(edmf)
-    #prog_en.ρatke[kc_surf] =
-    #    ρ_ae * get_surface_tke(
-    #        mix_len_params,
-    #        get_ustar(surf),
-    #        zLL,
-    #        obukhov_length(surf),
-    #    )
     return nothing
 end
 
@@ -650,185 +628,5 @@ function filter_updraft_vars(
         prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
-    return nothing
-end
-
-function compute_covariance_shear(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_sym},
-    ::Val{ϕ_en_sym},
-    ::Val{ψ_en_sym},
-) where {covar_sym, ϕ_en_sym, ψ_en_sym}
-
-    aux_tc = center_aux_turbconv(state)
-    prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    is_tke = covar_sym == :tke
-    FT = float_type(state)
-    k_eddy = is_tke ? aux_tc.KM : aux_tc.KH
-    aux_en_2m = center_aux_environment_2m(state)
-    aux_covar = getproperty(aux_en_2m, covar_sym)
-    uₕ_gm = grid_mean_uₕ(state)
-
-    aux_en_c = center_aux_environment(state)
-    aux_en_f = face_aux_environment(state)
-    aux_en = is_tke ? aux_en_f : aux_en_c
-    wvec = CC.Geometry.WVector
-    ϕ_en = getproperty(aux_en, ϕ_en_sym)
-    ψ_en = getproperty(aux_en, ψ_en_sym)
-
-    bcs = (; bottom = CCO.Extrapolate(), top = CCO.SetGradient(wvec(zero(FT))))
-    If = CCO.InterpolateC2F(; bcs...)
-    area_en = aux_en_c.area
-    shear = aux_covar.shear
-
-    C123 = CCG.Covariant123Vector
-    local_geometry = CC.Fields.local_geometry_field(axes(ρ_c))
-    k̂ = center_aux_turbconv(state).k̂
-
-    @. k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
-    Ifuₕ = uₕ_bcs()
-    ∇uvw = CCO.GradientF2C()
-    # TODO: k_eddy and Shear² should probably be tensors (Contravariant3 tensor),
-    #       so that the result (a contraction) is a scalar.
-    if is_tke
-        uvw = face_aux_turbconv(state).uvw
-        Shear² = center_aux_turbconv(state).Shear²
-        @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(ϕ_en) # ϕ_en === ψ_en
-        @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
-        @. shear = ρ_c * area_en * k_eddy * Shear²
-    else
-        ∇c = CCO.GradientF2C()
-        @. shear =
-            2 *
-            ρ_c *
-            area_en *
-            k_eddy *
-            LA.dot(∇c(If(wcomponent(CCG.WVector(ϕ_en)))), k̂) *
-            LA.dot(∇c(If(wcomponent(CCG.WVector(ψ_en)))), k̂)
-    end
-    return nothing
-end
-
-function compute_implicit_en_tendencies!(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-    ::Val{covar_sym},
-    ::Val{prog_sym},
-) where {covar_sym, prog_sym}
-    kc_surf = kc_surface(grid)
-    kc_toa = kc_top_of_atmos(grid)
-    aux_gm_f = face_aux_grid_mean(state)
-    prog_en = center_prog_environment(state)
-    tendencies_en = center_tendencies_environment(state)
-    tend_covar = getproperty(tendencies_en, prog_sym)
-    prog_covar = getproperty(prog_en, prog_sym)
-    aux_en = center_aux_environment(state)
-    covar = getproperty(aux_en, covar_sym)
-    w_en_f = face_aux_environment(state).w
-    ρ_f = aux_gm_f.ρ
-    is_tke = covar_sym == :tke
-    FT = float_type(state)
-
-    KM = center_aux_turbconv(state).KM
-    KH = center_aux_turbconv(state).KH
-    aux_tc = center_aux_turbconv(state)
-    aux_bulk = center_aux_bulk(state)
-    aeK = aux_tc.ψ_temporary
-    a_bulk = aux_bulk.area
-    if is_tke
-        @. aeK = (1 - a_bulk) * KM
-    else
-        @. aeK = (1 - a_bulk) * KH
-    end
-
-    aeK_bcs =
-        (; bottom = CCO.SetValue(aeK[kc_surf]), top = CCO.SetValue(aeK[kc_toa]))
-    prog_bcs = (;
-        bottom = CCO.SetGradient(CCG.WVector(FT(0))),
-        top = CCO.SetGradient(CCG.WVector(FT(0))),
-    )
-
-    Ic = CCO.InterpolateF2C()
-    If = CCO.InterpolateC2F(; aeK_bcs...)
-    RB = CCO.RightBiasedC2F(; top = CCO.SetValue(CCG.WVector(FT(0))))
-    ∇c = CCO.DivergenceF2C()
-    ∇f = CCO.GradientC2F(; prog_bcs...)
-
-    @. tend_covar +=
-        -∇c(RB(prog_covar * Ic(CCG.WVector(w_en_f)))) +
-        ∇c(ρ_f * If(aeK) * ∇f(covar))
-
-    return nothing
-end
-
-function compute_explicit_en_tendencies!(
-    edmf::EDMFModel,
-    grid::Grid,
-    state::State,
-)
-    N_up = n_updrafts(edmf)
-
-    prog_up_f = face_prog_updrafts(state)
-    prog_en = center_prog_environment(state)
-    prog_gm = center_prog_grid_mean(state)
-
-    aux_up = center_aux_updrafts(state)
-    aux_en = center_aux_environment(state)
-    aux_en_f = face_aux_environment(state)
-    aux_tc = center_aux_turbconv(state)
-    aux_covar = center_aux_environment_2m(state).tke
-
-    tendencies_en = center_tendencies_environment(state)
-
-    c_d = mixing_length_params(edmf).c_d
-
-    press = aux_covar.press
-    buoy = aux_covar.buoy
-    shear = aux_covar.shear
-    rain_src = aux_covar.rain_src
-
-    Ic = CCO.InterpolateF2C()
-
-    # TODO: we shouldn't need `parent` call here:
-    D_env = aux_tc.ϕ_temporary
-    parent(D_env) .= 0
-    entr_gain = aux_covar.entr_gain
-    parent(entr_gain) .= 0
-
-    w_en = aux_en_f.w
-    @inbounds for i in 1:N_up
-
-        w_up = prog_up_f[i].w
-
-        # TODO: using `Int(bool) *` means that NaNs can propagate
-        # into the solution. Could we somehow call `ifelse` instead?
-        @. entr_gain +=
-            Int(aux_up[i].area > edmf.minimum_area) * (
-                0.5 *
-                prog_gm.ρ *
-                aux_up[i].area *
-                abs(Ic(wcomponent(CCG.WVector(w_up)))) *
-                aux_up[i].detr *
-                (Ic(wcomponent(CCG.WVector(w_up - w_en)))) *
-                (Ic(wcomponent(CCG.WVector(w_up - w_en))))
-            )
-        @. D_env +=
-            Int(aux_up[i].area > edmf.minimum_area) * (
-                prog_gm.ρ *
-                aux_up[i].area *
-                Ic(wcomponent(CCG.WVector(w_up))) *
-                aux_up[i].entr
-            )
-    end
-
-    @. tendencies_en.ρatke +=
-        press + buoy + shear + entr_gain + rain_src - D_env * aux_en.tke -
-        (c_d * sqrt(max(aux_en.tke, 0)) / max(aux_tc.mixing_length, 1)) *
-        prog_en.ρatke
-
     return nothing
 end

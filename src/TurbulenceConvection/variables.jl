@@ -11,13 +11,6 @@ thermo_state_zeros(::NonEquilMoistModel, FT) = zero(TD.PhaseNonEquil{FT})
 ##### Auxiliary fields
 
 # Center only
-cent_aux_vars_en_2m(FT) = (;
-    shear = FT(0),
-    entr_gain = FT(0),
-    press = FT(0),
-    buoy = FT(0),
-    rain_src = FT(0),
-)
 cent_aux_vars_up(FT, local_geometry, edmf) = (;
     q_liq = FT(0),
     q_ice = FT(0),
@@ -104,7 +97,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
         qr_tendency_evap = FT(0),
         qs_tendency_melt = FT(0),
         qs_tendency_dep_sub = FT(0),
-        en_2m = (; tke = cent_aux_vars_en_2m(FT)),
         KM = FT(0),
         KH = FT(0),
         mixing_length = FT(0),
