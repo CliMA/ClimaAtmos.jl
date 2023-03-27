@@ -273,16 +273,26 @@ function set_edmf_surface_bc(
     ae_surf::FT = 1
 
     aux_up = center_aux_updrafts(state)
-    p_c = center_aux_grid_mean_p(state)
+    # This cause a problem at initialization
+    #p_c = center_aux_grid_mean_p(state)
+    p_c = TD.air_pressure.(thermo_params, ts_gm)
+    @info "p_c" p_c
+    @info "p_c[kc_surf]" p_c[kc_surf]
 
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
+        @info "θ_surf" θ_surf
         q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
+        @info "q_surf" q_surf
         e_kin = aux_up[i].e_kin
+        @info "e_kin" e_kin
         e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
+        @info "e_pot_surf" e_pot_surf
         ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
+        @info "ts_up_i_surf" ts_up_i_surf
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
+        @info "e_tot_surf" e_tot_surf
         a_surf = area_surface_bc(surf, edmf, i)
         T_surf = TD.air_temperature(thermo_params, ts_up_i_surf)
 
@@ -610,7 +620,10 @@ function filter_updraft_vars(
     prog_up_f = face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
-    p_c = center_aux_grid_mean_p(state)
+    # This cause a problem at initialization
+    #p_c = center_aux_grid_mean_p(state)
+    ts_gm = center_aux_grid_mean_ts(state)
+    p_c = TD.air_pressure.(thermo_params, ts_gm)
     If = CCO.InterpolateC2F(;
         bottom = CCO.Extrapolate(),
         top = CCO.Extrapolate(),
