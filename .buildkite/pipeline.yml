@@ -140,13 +140,13 @@ steps:
           --dt 0.5secs --t_end 600secs
           --job_id bomex_box_hydrostatic_balance_rhoe
         artifact_paths: "bomex_box_hydrostatic_balance_rhoe/*"
-  
+
   - group: "Plane Examples"
     steps:
       - label: ":computer: Agnesi linear hydrostatic mountain experiment"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 240000.0 --z_max 25000.0 --x_elem 80 --z_elem 90 --dt 1.5secs --t_end 36000.0secs --z_stretch false --vert_diff false --kappa_4 1e6 --dt_save_to_disk 3600secs --initial_condition AgnesiHProfile --discrete_hydrostatic_balance true --topography Agnesi --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_agnesi_mountain_test"
         artifact_paths: "plane_agnesi_mountain_test/*"
-      
+
       - label: ":computer: Density current experiment"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 51200.0 --z_max 6400.0 --x_elem 80 --z_elem 90 --dt 0.3secs --t_end 900.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 3600secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id plane_density_current_test"
         artifact_paths: "plane_density_current_test/*"
@@ -156,7 +156,7 @@ steps:
 
       - label: ":computer: hydrostatic balance (ρe) float64"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --t_end 8days --dt_save_to_disk 8days --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64 --bubble true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --t_end 8days --dt_save_to_disk 8days --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_hydrostatic_balance_rhoe_ft64 --out_dir sphere_hydrostatic_balance_rhoe_ft64
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
         agents:
@@ -190,11 +190,11 @@ steps:
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --ode_algo SSP333 --dt_save_to_disk 2days"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs --ode_algo SSP333 --dt_save_to_disk 2days"
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
         soft_fail: true
 
