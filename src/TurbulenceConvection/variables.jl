@@ -11,12 +11,12 @@ thermo_state_zeros(::NonEquilMoistModel, FT) = zero(TD.PhaseNonEquil{FT})
 ##### Auxiliary fields
 
 # Center only
-cent_aux_vars_up(FT, local_geometry, edmf) = (;
+cent_aux_vars_up(FT, local_geometry, atmos) = (;
+    ts = thermo_state_zeros(atmos.moisture_model, FT),
     q_liq = FT(0),
     q_ice = FT(0),
     T = FT(0),
     RH = FT(0),
-    buoy = FT(0),
     area = FT(0),
     q_tot = FT(0),
     θ_liq_ice = FT(0),
@@ -39,7 +39,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
         bulk = (;
             area = FT(0),
             h_tot = FT(0),
-            buoy = FT(0),
             q_tot = FT(0),
             q_liq = FT(0),
             q_ice = FT(0),
@@ -55,7 +54,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
             filter_flag_4 = FT(0), # tmp flag for testing filters
         ),
         up = ntuple(
-            i -> cent_aux_vars_up(FT, local_geometry, atmos.turbconv_model),
+            i -> cent_aux_vars_up(FT, local_geometry, atmos),
             Val(n_updrafts(atmos.turbconv_model)),
         ),
         en = (;
@@ -72,7 +71,6 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
             θ_dry = FT(0),
             RH = FT(0),
             T = FT(0),
-            buoy = FT(0),
             cloud_fraction = FT(0),
             tke = FT(0),
             #θ_liq_ice_tendency_precip_formation = FT(0),
@@ -116,15 +114,18 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
 )
 
 # Face only
-face_aux_vars_up(FT, local_geometry) =
-    (; nh_pressure = FT(0), massflux = CCG.Covariant3Vector(FT(0)))
+face_aux_vars_up(FT, local_geometry) = (;
+    nh_pressure = FT(0),
+    massflux = CCG.Covariant3Vector(FT(0)),
+    buoy = FT(0),
+)
 face_aux_vars_edmf(::Type{FT}, local_geometry, edmf) where {FT} = (;
     turbconv = (;
-        bulk = (; w = CCG.Covariant3Vector(FT(0))),
+        bulk = (; w = CCG.Covariant3Vector(FT(0)), buoy_up1 = FT(0)),
         ρ_ae_KM = FT(0),
         ρ_ae_KH = FT(0),
         ρ_ae_K = FT(0),
-        en = (; w = CCG.Covariant3Vector(FT(0))),
+        en = (; w = CCG.Covariant3Vector(FT(0)), buoy = FT(0)),
         up = ntuple(
             i -> face_aux_vars_up(FT, local_geometry),
             Val(n_updrafts(edmf)),

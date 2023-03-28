@@ -530,7 +530,7 @@ function compute_explicit_up_tendencies!(
 
         # buoyancy and pressure
         @. tendencies_up_f[i].w += CCG.Covariant3Vector(
-            CCG.WVector(I0f(aux_up[i].buoy) + aux_up_f[i].nh_pressure),
+            CCG.WVector(aux_up_f[i].buoy + aux_up_f[i].nh_pressure),
         )
 
         # TODO - to be removed?

@@ -49,21 +49,15 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
 
     @inbounds for i in 1:N_up
         # pressure
-        b_up = aux_up[i].buoy
+        b_up = aux_up_f[i].buoy
         w_up = prog_up_f[i].w
         H_up = plume_scale_height[i]
         w_en = aux_en_f.w
 
-        b_bcs = (;
-            bottom = CCO.SetValue(b_up[kc_surf]),
-            top = CCO.SetValue(b_up[kc_toa]),
-        )
-        Ifb = CCO.InterpolateC2F(; b_bcs...)
-
         nh_pressure = aux_up_f[i].nh_pressure
 
         @. nh_pressure =
-            -α_b * Ifb(b_up) +
+            -α_b * b_up +
             α_a * wcomponent(CCG.WVector(w_up)) * ∇(Ifc(CCG.WVector(w_up))) -
             α_d *
             (wcomponent(CCG.WVector(w_up - w_en))) *
