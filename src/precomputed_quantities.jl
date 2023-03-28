@@ -43,7 +43,7 @@ function precomputed_quantities!(Y, p, t, colidx)
         ) + Geometry.Contravariant123Vector(ᶠw[colidx])
     @. ᶠu³[colidx] =
         Geometry.project(Geometry.Contravariant3Axis(), ᶠu_tilde[colidx])
-    compute_kinetic!(ᶜK[colidx], Y.c.uₕ[colidx], Y.f.w[colidx])
+    compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠw[colidx])
     thermo_params = CAP.thermodynamics_params(params)
     thermo_state!(Y, p, ᶜinterp, colidx; time = t)
     @. ᶜp[colidx] = TD.air_pressure(thermo_params, ᶜts[colidx])

@@ -31,11 +31,11 @@ function parse_commandline()
         arg_type = String
         default = "6hours"
         "--config"
-        help = "Spatial configuration [`sphere` (default), `column`, `box`]"
+        help = "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
         arg_type = String
         default = "sphere"
         "--initial_condition"
-        help = "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`]"
+        help = "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`]"
         arg_type = String
         default = "DecayingProfile"
         "--moist"
@@ -283,7 +283,7 @@ function parse_commandline()
         arg_type = String
         default = "19790101"
         "--topography"
-        help = "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`]"
+        help = "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
         arg_type = String
         default = "NoWarp"
         "--apply_limiter"

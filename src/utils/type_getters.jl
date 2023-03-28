@@ -83,9 +83,11 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth")
+    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
+    elseif topography == "Agnesi"
+        warp_function = topography_agnesi
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
@@ -177,7 +179,35 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(
+            h_space,
+            z_max,
+            z_elem,
+            z_stretch;
+            surface_warp = warp_function,
+        )
+    elseif parsed_args["config"] == "plane"
+        FT = eltype(params)
+        nh_poly = parsed_args["nh_poly"]
+        quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+        x_elem = Int(parsed_args["x_elem"])
+        x_max = FT(parsed_args["x_max"])
+        horizontal_mesh =
+            periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        z_stretch = if parsed_args["z_stretch"]
+            Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+        else
+            Meshes.Uniform()
+        end
+        make_hybrid_spaces(
+            h_space,
+            z_max,
+            z_elem,
+            z_stretch;
+            surface_warp = warp_function,
+        )
     end
     return (;
         center_space,
@@ -226,8 +256,12 @@ function get_initial_condition(parsed_args)
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
                 parsed_args["perturb_initstate"],
             )
-        elseif parsed_args["initial_condition"] in
-               ["IsothermalProfile", "Bomex"]
+        elseif parsed_args["initial_condition"] in [
+            "IsothermalProfile",
+            "Bomex",
+            "AgnesiHProfile",
+            "DryDensityCurrentProfile",
+        ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
         else
             error(

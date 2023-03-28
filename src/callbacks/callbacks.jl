@@ -258,23 +258,22 @@ function save_to_disk_func(integrator)
     ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
     # vorticity
-    curl_uh = @. curlₕ(Y.c.uₕ)
-    ᶜvort = Geometry.WVector.(curl_uh)
-    if !integrator.p.ghost_buffer.skip_dss
-        Spaces.weighted_dss!(ᶜvort)
-    end
-
-    q_sfc = @. TD.total_specific_humidity(thermo_params, ts_sfc)
     dry_diagnostic = (;
         pressure = ᶜp,
         temperature = ᶜT,
         potential_temperature = ᶜθ,
         kinetic_energy = ᶜK,
-        vorticity = ᶜvort,
         sfc_temperature = T_sfc,
-        sfc_qt = q_sfc,
+        sfc_qt = TD.total_specific_humidity.(thermo_params, ts_sfc),
     )
-
+    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
+    if point_type <: Geometry.Abstract3DPoint
+        ᶜvort = @. Geometry.WVector(curlₕ(Y.c.uₕ))
+        if !integrator.p.ghost_buffer.skip_dss
+            Spaces.weighted_dss!(ᶜvort)
+        end
+        dry_diagnostic = (; dry_diagnostic..., vorticity = ᶜvort)
+    end
     # cloudwater (liquid and ice), watervapor and RH for moist simulation
     if :ρq_tot in propertynames(Y.c)
 

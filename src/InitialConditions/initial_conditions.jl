@@ -80,6 +80,91 @@ function (initial_condition::DecayingProfile)(params)
     return local_state
 end
 
+"""
+    AgnesiHProfile(; perturb = false)
+
+An `InitialCondition` with a decaying temperature profile
+"""
+struct AgnesiHProfile <: InitialCondition end
+
+function (initial_condition::AgnesiHProfile)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        (; x, z) = local_geometry.coordinates
+        cp_d = CAP.cp_d(params)
+        cv_d = CAP.cv_d(params)
+        p_0 = CAP.MSLP(params)
+        R_d = CAP.R_d(params)
+        T_0 = CAP.T_0(params)
+        # auxiliary quantities
+        T_bar = FT(250)
+        𝒩 = grav / sqrt(cp_d * T_bar)
+        π_exn = exp(-grav * z / cp_d / T_bar)
+        p = p_0 * π_exn^(cp_d / R_d) # pressure
+        ρ = p / R_d / T_bar # density
+        velocity = @. Geometry.UVVector(FT(20), FT(0))
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T_bar),
+            velocity = velocity,
+        )
+    end
+    return local_state
+end
+
+"""
+    DryDensityCurrentProfile(; perturb = false)
+
+An `InitialCondition` with an isothermal background profile, with a negatively
+buoyant bubble, and with an optional
+perturbation to the temperature.
+"""
+Base.@kwdef struct DryDensityCurrentProfile <: InitialCondition
+    perturb::Bool = false
+end
+
+function (initial_condition::DryDensityCurrentProfile)(params)
+    (; perturb) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        (; x, z) = local_geometry.coordinates
+        x_c = FT(25600)
+        z_c = FT(2000)
+        x_r = FT(4000)
+        z_r = FT(2000)
+        r_c = FT(1)
+        θ_b = FT(300)
+        θ_c = FT(-15)
+        cp_d = CAP.cp_d(params)
+        cv_d = CAP.cv_d(params)
+        p_0 = CAP.MSLP(params)
+        R_d = CAP.R_d(params)
+        T_0 = CAP.T_0(params)
+
+        # auxiliary quantities
+        r = sqrt(((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2)
+        θ_p = r < r_c ? FT(1 / 2) * θ_c * (FT(1) + cospi(r / r_c)) : FT(0) # potential temperature perturbation
+
+        θ = θ_b + θ_p # potential temperature
+        π_exn = FT(1) - grav * z / cp_d / θ # exner function
+        T = π_exn * θ # temperature
+        p = p_0 * π_exn^(cp_d / R_d) # pressure
+        ρ = p / R_d / T # density
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+        )
+    end
+    return local_state
+end
+
 ##
 ## Baroclinic Wave
 ##
