@@ -35,3 +35,23 @@ function generate_topography_warp(earth_spline)
     end
     return topography_earth
 end
+
+"""
+    topography_agnesi(x,z)
+x = horizontal coordinate [m]
+z = vertical coordinate [m]
+h_c = 1 [m]
+a_c = 10000 [m]
+x_c = 120000 [m]
+Generate a single mountain profile (Agnesi mountain)
+for use with tests of gravity waves with topography.
+"""
+function topography_agnesi(coords)
+    x = coords.x
+    FT = eltype(x)
+    h_c = FT(1)
+    a_c = FT(10000)
+    x_c = FT(120000)
+    zₛ = @. h_c / (1 + ((x - x_c) / a_c)^2)
+    return zₛ
+end

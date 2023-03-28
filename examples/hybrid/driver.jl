@@ -24,7 +24,7 @@ idealized_clouds = parsed_args["idealized_clouds"]
 
 @assert idealized_insolation in (true, false)
 @assert idealized_clouds in (true, false)
-@assert parsed_args["config"] in ("sphere", "column", "box")
+@assert parsed_args["config"] in ("sphere", "column", "box", "plane")
 
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos.InitialConditions as ICs
@@ -304,6 +304,7 @@ using Test
 import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
+using ClimaCoreMakie, CairoMakie
 include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
 
 if parsed_args["debugging_tc"]
@@ -393,6 +394,8 @@ if !simulation.is_distributed && parsed_args["post_process"]
         postprocessing(sol, simulation.output_dir, fps)
     elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)
+    elseif atmos.model_config isa CA.PlaneModel
+        postprocessing_plane(sol, simulation.output_dir, p)
     elseif atmos.model_config isa CA.SphericalModel
         paperplots_held_suarez(sol, simulation.output_dir, p, 90, 180)
     elseif atmos.forcing_type isa CA.HeldSuarezForcing
