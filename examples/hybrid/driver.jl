@@ -146,7 +146,7 @@ function additional_tendency!(Yₜ, Y, p, t)
 
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         TCU.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
-        @info "tendency after explicit" Yₜ.c.turbconv.up[1].ρae_tot
+        @info "tendency after explicit" Yₜ.c.turbconv.up[1].ρarea, Yₜ.c.turbconv.up[1].ρae_tot
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able

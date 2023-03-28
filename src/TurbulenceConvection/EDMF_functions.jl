@@ -496,9 +496,11 @@ function compute_implicit_up_tendencies!(
         #@info "tmp_h_tot" tmp_h_tot
         @info "ρarea" ρarea
         @info "Ic.(CCG.WVector.(w_up))" Ic.(CCG.WVector.(w_up))
+        @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)
+        @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))
         @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
         @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
-        @info "tendency after advection" tends_ρae_tot
+        @info "tendency after advection" tends_ρarea, tends_ρae_tot
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
         
 
