@@ -476,8 +476,8 @@ function compute_implicit_up_tendencies!(
 
     @inbounds for i in 1:N_up
         @info "ρarea" prog_up[i].ρarea
-        @info "ρae_tot" prog_up[i].ρae_tot
-        @info "h_tot" aux_up[i].h_tot
+        #@info "ρae_tot" prog_up[i].ρae_tot
+        #@info "h_tot" aux_up[i].h_tot
         @info "e_tot" aux_up[i].e_tot
         @info "w_up" prog_up_f[i].w
 
