@@ -276,23 +276,21 @@ function set_edmf_surface_bc(
     # This cause a problem at initialization
     #p_c = center_aux_grid_mean_p(state)
     p_c = TD.air_pressure.(thermo_params, ts_gm)
-    @info "p_c" p_c
-    @info "p_c[kc_surf]" p_c[kc_surf]
 
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
-        @info "θ_surf" θ_surf
+        #@info "θ_surf" θ_surf
         q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
-        @info "q_surf" q_surf
+        #@info "q_surf" q_surf
         e_kin = aux_up[i].e_kin
-        @info "e_kin" e_kin
+        #@info "e_kin" e_kin
         e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
-        @info "e_pot_surf" e_pot_surf
+        #@info "e_pot_surf" e_pot_surf
         ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
-        @info "ts_up_i_surf" ts_up_i_surf
+        #@info "ts_up_i_surf" ts_up_i_surf
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
-        @info "e_tot_surf" e_tot_surf
+        e_tot_surf = FT(61013)
         a_surf = area_surface_bc(surf, edmf, i)
         T_surf = TD.air_temperature(thermo_params, ts_up_i_surf)
 
@@ -455,6 +453,7 @@ function compute_implicit_up_tendencies!(
     grid::Grid,
     state::State,
 )
+
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
@@ -465,6 +464,7 @@ function compute_implicit_up_tendencies!(
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
     aux_up = center_aux_updrafts(state)
+    ts = center_aux_grid_mean_ts(state)
     p_c = center_aux_grid_mean_p(state)
 
     # Solve for updraft area fraction
@@ -474,6 +474,12 @@ function compute_implicit_up_tendencies!(
     LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
 
     @inbounds for i in 1:N_up
+        @info "ρarea" prog_up[i].ρarea
+        @info "ρae_tot" prog_up[i].ρae_tot
+        @info "h_tot" aux_up[i].h_tot
+        @info "e_tot" aux_up[i].e_tot
+        @info "w_up" prog_up_f[i].w
+
         w_up = prog_up_f[i].w
 
         ρarea = prog_up[i].ρarea
@@ -484,18 +490,15 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @info "tendency before" tends_ρae_tot
         @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot))
-
-        @info "h_tot" aux_up[i].h_tot
-        @info "e_tot" aux_up[i].e_tot
+        
         tmp_h_tot = aux_up[i].e_tot .+ p_c ./ (ρarea ./ aux_up[i].area)
-        @info "tmp_h_tot" tmp_h_tot
+        #@info "tmp_h_tot" tmp_h_tot
         @info "ρarea" ρarea
         @info "Ic.(CCG.WVector.(w_up))" Ic.(CCG.WVector.(w_up))
         @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
         @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
-        @info "tendency after" tends_ρae_tot
+        @info "tendency after advection" tends_ρae_tot
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
         
 
@@ -692,6 +695,7 @@ function filter_updraft_vars(
         ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
+        e_tot_surf = FT(61013)
         prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
