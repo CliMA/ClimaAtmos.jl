@@ -57,20 +57,17 @@ import Random
 Random.seed!(1234)
 
 # TODO: flip order so that NamedTuple() is fallback.
-function additional_cache(Y, parsed_args, params, atmos, dt;)
-    FT = typeof(dt)
+function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
-
-    thermo_dispatcher = CA.ThermoDispatcher(atmos)
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
             Y,
+            default_cache,
             params,
             radiation_mode;
             idealized_insolation,
             idealized_clouds,
-            thermo_dispatcher,
             data_loader = CA.rrtmgp_data_loader,
         )
     else
@@ -99,7 +96,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             Y,
             comms_ctx,
         ),
-        (; thermo_dispatcher),
         (; Δt = dt),
         TCU.turbconv_cache(
             Y,

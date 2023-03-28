@@ -412,3 +412,8 @@ function get_integrator(args, kwargs)
     @time "Define integrator" integrator = ODE.init(args...; kwargs...)
     return integrator
 end
+
+thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
+thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
+thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
+    TD.PhaseNonEquil{FT}

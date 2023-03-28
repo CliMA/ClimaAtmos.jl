@@ -91,10 +91,9 @@ function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜK, ᶜts, T_sfc, params, thermo_dispatcher) = p
+    (; ᶜts, T_sfc, params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
-    (; ᶜinterp) = p.operators
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -104,8 +103,7 @@ function rrtmgp_model_callback!(integrator)
 
     ᶜp = RRTMGPI.array2field(radiation_model.center_pressure, axes(Y.c))
     ᶜT = RRTMGPI.array2field(radiation_model.center_temperature, axes(Y.c))
-    compute_kinetic!(ᶜK, Y)
-    thermo_state!(Y, p, ᶜinterp; time = t)
+    set_precomputed_quantities!(Y, p, t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
@@ -218,109 +216,74 @@ function rrtmgp_model_callback!(integrator)
 end
 
 function save_to_disk_func(integrator)
-
     (; t, u, p) = integrator
-    (; ᶜinterp, curlₕ) = p.operators
-    (; output_dir) = p.simulation
     Y = u
-
-    if p.atmos.precip_model isa Microphysics0Moment
-        (;
-            ᶜts,
-            ᶜp,
-            ᶜS_ρq_tot,
-            ᶜ3d_rain,
-            ᶜ3d_snow,
-            params,
-            ᶜK,
-            col_integrated_rain,
-            col_integrated_snow,
-            T_sfc,
-            ts_sfc,
-        ) = p
-    else
-        (; ᶜts, ᶜp, params, ᶜK, T_sfc, ts_sfc) = p
-    end
-
+    (; params) = p
+    (; curlₕ) = p.operators
+    (; output_dir) = p.simulation
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    cm_params = CAP.microphysics_params(params)
 
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    # kinetic
-    compute_kinetic!(ᶜK, Y)
+    function common_diagnostics(ᶜu, ᶜts)
+        ᶜρ = TD.air_density.(thermo_params, ᶜts)
+        diagnostics = (;
+            u_velocity = Geometry.UVector.(ᶜu),
+            v_velocity = Geometry.VVector.(ᶜu),
+            w_velocity = Geometry.WVector.(ᶜu),
+            temperature = TD.air_temperature.(thermo_params, ᶜts),
+            potential_temperature = TD.dry_pottemp.(thermo_params, ᶜts),
+            buoyancy = CAP.grav(params) .* (p.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
+        )
+        if !(p.atmos.moisture_model isa DryModel)
+            diagnostics = (;
+                diagnostics...,
+                q_vap = TD.vapor_specific_humidity.(thermo_params, ᶜts),
+                q_liq = TD.liquid_specific_humidity.(thermo_params, ᶜts),
+                q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
+                relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
+            )
+        end
+        return diagnostics
+    end
 
-    # thermo state
-    thermo_state!(Y, p, ᶜinterp; time = t)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
-    ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
-    ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
+    set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
 
-    # vorticity
-    dry_diagnostic = (;
+    (; ᶜu, ᶜK, ᶜts, ᶜp, T_sfc, ts_sfc) = p
+    dycore_diagnostic = (;
+        common_diagnostics(ᶜu, ᶜts)...,
         pressure = ᶜp,
-        temperature = ᶜT,
-        potential_temperature = ᶜθ,
         kinetic_energy = ᶜK,
         sfc_temperature = T_sfc,
         sfc_qt = TD.total_specific_humidity.(thermo_params, ts_sfc),
     )
-    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    if point_type <: Geometry.Abstract3DPoint
+
+    if eltype(Fields.coordinate_field(axes(Y.c))) <: Geometry.Abstract3DPoint
         ᶜvort = @. Geometry.WVector(curlₕ(Y.c.uₕ))
-        if !integrator.p.ghost_buffer.skip_dss
+        if !p.ghost_buffer.skip_dss
             Spaces.weighted_dss!(ᶜvort)
         end
-        dry_diagnostic = (; dry_diagnostic..., vorticity = ᶜvort)
+        dycore_diagnostic = (; dycore_diagnostic..., vorticity = ᶜvort)
     end
-    # cloudwater (liquid and ice), watervapor and RH for moist simulation
-    if :ρq_tot in propertynames(Y.c)
 
-        ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
-        ᶜcloud_liquid = @. ᶜq.liq
-        ᶜcloud_ice = @. ᶜq.ice
-        ᶜwatervapor = @. TD.vapor_specific_humidity(ᶜq)
-        ᶜRH = @. TD.relative_humidity(thermo_params, ᶜts)
-
-        moist_diagnostic = (;
-            cloud_liquid = ᶜcloud_liquid,
-            cloud_ice = ᶜcloud_ice,
-            water_vapor = ᶜwatervapor,
-            relative_humidity = ᶜRH,
+    if p.atmos.precip_model isa Microphysics0Moment
+        (; ᶜS_ρq_tot, col_integrated_rain, col_integrated_snow) = p
+        Fields.bycolumn(axes(Y.c)) do colidx
+            precipitation_tendency!(p.Yₜ, Y, p, t, colidx, p.precip_model)
+        end # TODO: Set the diagnostics without computing the tendency.
+        precip_diagnostic = (;
+            precipitation_removal = ᶜS_ρq_tot,
+            column_integrated_rain = col_integrated_rain,
+            column_integrated_snow = col_integrated_snow,
         )
-        # precipitation
-        if p.atmos.precip_model isa Microphysics0Moment
-            @. ᶜS_ρq_tot =
-                Y.c.ρ * CM.Microphysics0M.remove_precipitation(
-                    cm_params,
-                    TD.PhasePartition(thermo_params, ᶜts),
-                )
-
-            # rain vs snow
-            @. ᶜ3d_rain = ifelse(ᶜT >= FT(273.15), ᶜS_ρq_tot, FT(0))
-            @. ᶜ3d_snow = ifelse(ᶜT < FT(273.15), ᶜS_ρq_tot, FT(0))
-
-            CCO.column_integral_definite!(col_integrated_rain, ᶜ3d_rain)
-            CCO.column_integral_definite!(col_integrated_snow, ᶜ3d_snow)
-
-            @. col_integrated_rain /= CAP.ρ_cloud_liq(params)
-            @. col_integrated_snow /= CAP.ρ_cloud_liq(params)
-
-
-            moist_diagnostic = (
-                moist_diagnostic...,
-                precipitation_removal = ᶜS_ρq_tot,
-                column_integrated_rain = col_integrated_rain,
-                column_integrated_snow = col_integrated_snow,
-            )
-        end
+    elseif p.atmos.precip_model isa Microphysics1Moment
+        # TODO: Get column integrals for the land model.
+        precip_diagnostic =
+            (; q_rai = Y.c.ρq_rai ./ Y.c.ρ, q_sno = Y.c.ρq_sno ./ Y.c.ρ)
     else
-        moist_diagnostic = NamedTuple()
+        precip_diagnostic = NamedTuple()
     end
 
-    if :edmf_cache in propertynames(p) && p.simulation.is_debugging_tc
-
+    if p.atmos.turbconv_model isa TC.EDMFModel
         tc_cent(p) = p.edmf_cache.aux.cent.turbconv
         tc_face(p) = p.edmf_cache.aux.face.turbconv
         turbulence_convection_diagnostic = (;
@@ -365,6 +328,9 @@ function save_to_disk_func(integrator)
             bulk_up_filter_flag_2 = tc_cent(p).bulk.filter_flag_2,
             bulk_up_filter_flag_3 = tc_cent(p).bulk.filter_flag_3,
             bulk_up_filter_flag_4 = tc_cent(p).bulk.filter_flag_4,
+            cloud_fraction = tc_cent(p).bulk.area .*
+                             tc_cent(p).bulk.cloud_fraction .+
+                             tc_cent(p).en.area .* tc_cent(p).en.cloud_fraction,
         )
     else
         turbulence_convection_diagnostic = NamedTuple()
@@ -438,8 +404,8 @@ function save_to_disk_func(integrator)
     end
 
     diagnostic = merge(
-        dry_diagnostic,
-        moist_diagnostic,
+        dycore_diagnostic,
+        precip_diagnostic,
         vert_diff_diagnostic,
         rad_diagnostic,
         rad_clear_diagnostic,
