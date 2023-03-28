@@ -147,6 +147,9 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
         ᶜS_ρq_tot = similar(Y.c, FT),
         ᶜS_ρq_rai = similar(Y.c, FT),
         ᶜS_ρq_sno = similar(Y.c, FT),
+        ᶜS_qr_evap = similar(Y.c, FT),
+        ᶜS_qs_sub_dep = similar(Y.c, FT),
+        ᶜS_qs_melt = similar(Y.c, FT),
     )
 end
 
@@ -157,8 +160,9 @@ function compute_precipitation_cache!(
     ::Microphysics1Moment,
     ::TC.EDMFModel,
 )
-    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno) = p
+    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_qr_evap, ᶜS_qs_sub_dep, ᶜS_qs_melt) = p
 
+    # SGS precipitation sources from updrafts and environment
     e_tot_tendency_precip_formation_en =
         p.edmf_cache.aux.cent.turbconv.en.e_tot_tendency_precip_formation[colidx]
     e_tot_tendency_precip_formation_bulk =
@@ -176,20 +180,45 @@ function compute_precipitation_cache!(
     qs_tendency_precip_formation_bulk =
         p.edmf_cache.aux.cent.turbconv.bulk.qs_tendency_precip_formation[colidx]
 
+    # Grid scale precipitation sinks
+    #e_tot_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.e_tot_tendency_precip_sinks[colidx]
+    #qt_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.qt_tendency_precip_sinks[colidx]
+    #qr_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.qr_tendency_precip_sinks[colidx]
+    #qs_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.qs_tendency_precip_sinks[colidx]
+
+    ᶜS_qr_evap =
+    ᶜS_qs_sub_dep =
+    ᶜS_qs_melt =
+
     @. ᶜS_ρe_tot[colidx] =
         Y.c.ρ[colidx] * (
             e_tot_tendency_precip_formation_bulk +
-            e_tot_tendency_precip_formation_en
+            e_tot_tendency_precip_formation_en -
+            ᶜS_qr_evap * (I_l + Φ) -
+            ᶜS_qs_sub_dep * (I_i + Φ) +
+            ᶜS_qs_melt * L_f
         )
     @. ᶜS_ρq_tot[colidx] =
-        Y.c.ρ[colidx] *
-        (qt_tendency_precip_formation_bulk + qt_tendency_precip_formation_en)
+        Y.c.ρ[colidx] * (
+            qt_tendency_precip_formation_bulk +
+            qt_tendency_precip_formation_en -
+            ᶜS_qr_evap -
+            ᶜS_qs_sub_dep
+        )
     @. ᶜS_ρq_rai[colidx] =
-        Y.c.ρ[colidx] *
-        (qr_tendency_precip_formation_bulk + qr_tendency_precip_formation_en)
+        Y.c.ρ[colidx] * (
+            qr_tendency_precip_formation_bulk +
+            qr_tendency_precip_formation_en +
+            ᶜS_qr_evap -
+            ᶜS_qs_melt
+        )
     @. ᶜS_ρq_sno[colidx] =
-        Y.c.ρ[colidx] *
-        (qs_tendency_precip_formation_bulk + qs_tendency_precip_formation_en)
+        Y.c.ρ[colidx] * (
+            qs_tendency_precip_formation_bulk +
+            qs_tendency_precip_formation_en +
+            ᶜS_qs_sub_dep +
+            ᶜS_qs_melt
+        )
 end
 
 """

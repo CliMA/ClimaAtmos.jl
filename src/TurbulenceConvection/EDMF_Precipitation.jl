@@ -202,10 +202,6 @@ function grid_mean_precipitation_sink_tendencies(
             S_qs_sub_dep = -min(qs / Δt, -tmp)
         end
 
-        aux_tc.qr_tendency_evap[k] = S_qr_evap
-        aux_tc.qs_tendency_melt[k] = S_qs_melt
-        aux_tc.qs_tendency_dep_sub[k] = S_qs_sub_dep
-
         aux_tc.e_tot_tendency_precip_sinks[k] =
             -S_qr_evap * (I_l + Φ) - S_qs_sub_dep * (I_i + Φ) + S_qs_melt * L_f
         aux_tc.qt_tendency_precip_sinks[k] = -S_qr_evap - S_qs_sub_dep
