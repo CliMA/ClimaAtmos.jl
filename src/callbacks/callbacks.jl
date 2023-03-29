@@ -289,7 +289,6 @@ function save_to_disk_func(integrator)
         turbulence_convection_diagnostic = (;
             bulk_up_area = tc_cent(p).bulk.area,
             bulk_up_h_tot = tc_cent(p).bulk.h_tot,
-            bulk_up_buoyancy = tc_cent(p).bulk.buoy,
             bulk_up_q_tot = tc_cent(p).bulk.q_tot,
             bulk_up_q_liq = tc_cent(p).bulk.q_liq,
             bulk_up_q_ice = tc_cent(p).bulk.q_ice,
@@ -313,7 +312,6 @@ function save_to_disk_func(integrator)
             env_h_tot = tc_cent(p).en.h_tot,
             env_RH = tc_cent(p).en.RH,
             env_temperature = tc_cent(p).en.T,
-            env_buoyancy = tc_cent(p).en.buoy,
             env_cloud_fraction = tc_cent(p).en.cloud_fraction,
             env_TKE = tc_cent(p).en.tke,
             env_e_tot_tendency_precip_formation = tc_cent(
@@ -322,6 +320,8 @@ function save_to_disk_func(integrator)
             env_qt_tendency_precip_formation = tc_cent(
                 p,
             ).en.qt_tendency_precip_formation,
+            face_env_buoyancy = tc_face(p).en.buoy,
+            face_up1_buoyancy = tc_face(p).bulk.buoy_up1,
             face_bulk_w = tc_face(p).bulk.w,
             face_env_w = tc_face(p).en.w,
             bulk_up_filter_flag_1 = tc_cent(p).bulk.filter_flag_1,
