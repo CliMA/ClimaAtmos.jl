@@ -207,7 +207,17 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --topography DCMIP200 --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres_topography --out_dir longrun_bw_rhoe_highres_topography
-        artifact_paths: "longrun_bw_rhoe_highres_topography/*"
+        artifact_paths: "longrun_bw_rhoe_highres_topography_dcmip/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
+      
+      - label: ":computer: baroclinic wave (ρe_tot) high resolution topography div-damping (dcmip)"
+        command:
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --topography DCMIP200 --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 10.0
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres_topography --out_dir longrun_bw_rhoe_highres_topography
+        artifact_paths: "longrun_bw_rhoe_highres_topography_dd10_dcmip/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
@@ -217,11 +227,22 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 100secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --topography Earth --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 1.0
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres_topography --out_dir longrun_bw_rhoe_highres_topography
-        artifact_paths: "longrun_bw_rhoe_highres_topography/*"
+        artifact_paths: "longrun_bw_rhoe_highres_topography_earth/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
+      
+      - label: ":computer: baroclinic wave (ρe_tot) high resolution topography div-damping (earth)"
+        command:
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 100secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres_topography --topography Earth --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 10.0
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres_topography --out_dir longrun_bw_rhoe_highres_topography
+        artifact_paths: "longrun_bw_rhoe_highres_topography_dd10_earth/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
+
 
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (dcmip)"
         command:
@@ -235,27 +256,37 @@ steps:
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --topography Earth --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 100secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor true
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --topography Earth --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 100secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 1.0
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres_topography --out_dir longrun_bw_rhoe_equil_highres_topography
         artifact_paths: "longrun_bw_rhoe_equil_highres_topography_earth/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (dcmip)"
+      
+      - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography div-damping (earth)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --topography Earth --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 50secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 1.0
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --topography Earth --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition MoistBaroclinicWave --dt 100secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 10.0
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres_topography --out_dir longrun_bw_rhoe_equil_highres_topography
+        artifact_paths: "longrun_bw_rhoe_equil_highres_topography_earth_dd10/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
+
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography div-damping (earth)"
+        command:
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --topography Earth --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 50secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true --divergence_damping_factor 10.0
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres_topography --out_dir longrun_hs_rhoe_equil_highres_topography
-        artifact_paths: "longrun_hs_rhoe_equil_highres_topography/*"
+        artifact_paths: "longrun_hs_rhoe_equil_highres_topography_dd10/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
       
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (Earth)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --topography DCMIP200 --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 150secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --topography Earth --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 150secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_topography --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres_topography --out_dir longrun_hs_rhoe_equil_highres_topography
         artifact_paths: "longrun_hs_rhoe_equil_highres_topography_earth/*"
         env:
