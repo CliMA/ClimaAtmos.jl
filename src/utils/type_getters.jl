@@ -85,11 +85,13 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi")
+    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
     elseif topography == "Agnesi"
         warp_function = topography_agnesi
+    elseif topography == "Schar"
+        warp_function = topography_schar
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
@@ -267,6 +269,7 @@ function get_initial_condition(parsed_args)
             "Bomex",
             "AgnesiHProfile",
             "DryDensityCurrentProfile",
+            "ScharProfile",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
         else
