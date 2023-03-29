@@ -143,20 +143,6 @@ struct RadiationTRMM_LBA{R}
     end
 end
 
-"""
-    ThermoDispatcher
-
-A dispatching type for selecting the
-precise thermodynamics method call to
-be used.
-"""
-Base.@kwdef struct ThermoDispatcher{EF, MM}
-    energy_form::EF
-    moisture_model::MM
-end
-Base.broadcastable(x::ThermoDispatcher) = tuple(x)
-
-
 # TODO: remove AbstractPerformanceMode and all subtypes
 # This is temporarily needed to investigate performance of
 # our handling of tracers.

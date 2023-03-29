@@ -346,14 +346,3 @@ function get_surface_scheme(FT, parsed_args)
         surface_scheme
     end
 end
-
-"""
-    ThermoDispatcher(atmos)
-
-A helper method for creating a thermodynamics dispatcher
-from the model specification struct.
-"""
-function ThermoDispatcher(atmos)
-    (; energy_form, moisture_model) = atmos
-    return ThermoDispatcher(; energy_form, moisture_model)
-end
