@@ -158,6 +158,7 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --t_end 8days --dt_save_to_disk 8days --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_hydrostatic_balance_rhoe_ft64 --out_dir sphere_hydrostatic_balance_rhoe_ft64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_hydrostatic_balance_rhoe_ft64 --fig_dir sphere_hydrostatic_balance_rhoe_ft64 --case_name dry_held_suarez
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
         agents:
           slurm_mem: 20GB
@@ -202,24 +203,28 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs --t_end 20days --dt_save_to_disk 10days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_held_suarez_rhotheta --fig_dir sphere_held_suarez_rhotheta --case_name dry_held_suarez
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) hightop"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --forcing held_suarez --job_id sphere_held_suarez_rhoe_hightop --regression_test true --dt 500secs --t_end 8days --dt_save_to_disk 4days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_hightop --out_dir sphere_held_suarez_rhoe_hightop
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_held_suarez_rhoe_hightop --fig_dir sphere_held_suarez_rhoe_hightop --case_name dry_held_suarez
         artifact_paths: "sphere_held_suarez_rhoe_hightop/*"
 
       - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 4days --dt_save_to_disk 4days --regression_test true --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge --fig_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge --case_name moist_held_suarez
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
       - label: ":computer: SSP held suarez (ρe) equilmoist hightop sponge"
         command:
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 5days --dt_save_to_disk 5days --regression_test true --ode_algo SSP333 --regression_test true"
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 5days --dt_save_to_disk 5days --regression_test true --ode_algo SSP333 --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --fig_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --case_name moist_held_suarez
         artifact_paths: "sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
   - group: "Sphere Examples (Aquaplanet)"
@@ -229,12 +234,14 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --idealized_insolation false --vert_diff true --surface_scheme monin_obukhov --moist equil --rad allskywithclear --non_orographic_gravity_wave true --orographic_gravity_wave true --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --zd_rayleigh 30e3 --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw --dt 400secs --t_end 18hours --dt_save_to_disk 18hours --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --fig_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --case_name aquaplanet
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist with EDMF"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmf --vert_diff true --surface_scheme bulk --moist dry --dt 1secs --t_end 20secs --FLOAT_TYPE Float64 --turbconv edmf --config sphere --z_stretch false --post_process false --apply_limiter false --dt_save_to_sol 10secs --dt_save_to_disk 10secs
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --out_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --fig_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --case_name dry_held_suarez
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmf/*"
         agents:
           slurm_mem: 20GB
