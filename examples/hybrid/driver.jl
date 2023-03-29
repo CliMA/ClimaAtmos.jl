@@ -42,7 +42,7 @@ include("get_simulation_and_args_integrator.jl")
 simulation = get_simulation(FT, parsed_args)
 initial_condition = CA.get_initial_condition(parsed_args)
 
-# TODO: use import istead of using
+# TODO: use import instead of using
 using Colors
 using OrdinaryDiffEq
 using PrettyTables

@@ -794,7 +794,7 @@ function surface_params(::Rico, thermo_params)
     psurface::FT = 1.0154e5
     Tsurface::FT = 299.8
 
-    # Saturated surface condtions for a given surface temperature and pressure
+    # Saturated surface conditions for a given surface temperature and pressure
     p_sat_surface =
         TD.saturation_vapor_pressure(thermo_params, Tsurface, TD.Liquid())
     ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)

@@ -5,7 +5,7 @@ The gravity wave drag on the wind velocities (``\overline{\vec{v}}=(u,v)``) are
 ```math
 \frac{\partial \overline{\vec{v}}}{ \partial t} = ... - \underbrace{\frac{\partial \overline{\vec{v}'w'}}{\partial z}\Big|_{GW} }_{\vec{X}} 
 ``` 
-with $\vec{X} = (X_\lambda, X_\phi)$ representing the subgrid scale zonal and meridional components of the gravity wave drag and is calculated wiht the parameterization. 
+with $\vec{X} = (X_\lambda, X_\phi)$ representing the subgrid scale zonal and meridional components of the gravity wave drag and is calculated with the parameterization. 
 
 ## Non-orographic gravity wave
 The non-orographic gravity wave drag parameterization follows the spectra methods described in [alexander1999](@cite). The following assumptions are made for this parameterization to work:
