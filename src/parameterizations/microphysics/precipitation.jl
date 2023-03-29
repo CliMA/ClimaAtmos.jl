@@ -137,7 +137,6 @@ end
 #####
 ##### 1-Moment coupled to sgs
 #####
-# TODO: move 1-moment microphysics cache / tendency here
 function precipitation_cache(Y, precip_model::Microphysics1Moment)
     FT = Spaces.undertype(axes(Y.c))
 
@@ -148,8 +147,8 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
         ᶜS_ρq_rai = similar(Y.c, FT),
         ᶜS_ρq_sno = similar(Y.c, FT),
         ᶜS_qr_evap = similar(Y.c, FT),
-        ᶜS_qs_sub_dep = similar(Y.c, FT),
-        ᶜS_qs_melt = similar(Y.c, FT),
+        #ᶜS_qs_sub_dep = similar(Y.c, FT),
+        #ᶜS_qs_melt = similar(Y.c, FT),
     )
 end
 
@@ -160,7 +159,27 @@ function compute_precipitation_cache!(
     ::Microphysics1Moment,
     ::TC.EDMFModel,
 )
-    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_qr_evap, ᶜS_qs_sub_dep, ᶜS_qs_melt) = p
+    (;
+        params,
+        ᶜts,
+        ᶜΦ,
+        ᶜT,
+        Δt,
+        ᶜS_ρe_tot,
+        ᶜS_ρq_tot,
+        ᶜS_ρq_rai,
+        ᶜS_ρq_sno,
+        ᶜS_qr_evap,
+        #ᶜS_qs_sub_dep,
+        #ᶜS_qs_melt
+    ) = p
+
+    FT = Spaces.undertype(axes(Y.c))
+
+    th_p = CAP.thermodynamics_params(params)
+    mp_p = CAP.microphysics_params(params)
+    rain_type = CM.CommonTypes.RainType()
+    snow_type = CM.CommonTypes.SnowType()
 
     # SGS precipitation sources from updrafts and environment
     e_tot_tendency_precip_formation_en =
@@ -181,43 +200,96 @@ function compute_precipitation_cache!(
         p.edmf_cache.aux.cent.turbconv.bulk.qs_tendency_precip_formation[colidx]
 
     # Grid scale precipitation sinks
-    #e_tot_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.e_tot_tendency_precip_sinks[colidx]
-    #qt_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.qt_tendency_precip_sinks[colidx]
-    #qr_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.qr_tendency_precip_sinks[colidx]
-    #qs_tendency_precip_sinks = p.edmf_cache.aux.cent.turbconv.qs_tendency_precip_sinks[colidx]
+    # (evaporation, melting, deposition/sublimation)
+    ρ_c = Y.c.ρ[colidx]
+    ρq_rai = Y.c.ρq_rai[colidx]
+    ρq_sno = Y.c.ρq_sno[colidx]
+    @. ᶜT[colidx] = TD.air_temperature(th_p, ᶜts[colidx])
 
-    ᶜS_qr_evap =
-    ᶜS_qs_sub_dep =
-    ᶜS_qs_melt =
+    @. ᶜS_qr_evap[colidx] = -min(
+        max(ρq_rai / ρ_c / Δt, FT(0)),
+        CM1.evaporation_sublimation(
+            mp_p,
+            rain_type,
+            TD.PhasePartition(th_p, ᶜts[colidx]),
+            ρq_rai / ρ_c,
+            ρ_c,
+            ᶜT[colidx],
+        ),
+    )
+    #@info "RHS_evap" ᶜS_qr_evap
+    #@info "ρq_rai" ρq_rai
+    #@info "ρ" ρ_c
+    #@info "T" ᶜT
 
+    #@. ᶜS_qs_melt[colidx] = -min(
+    #    ρq_sno / ρ_c / Δt,
+    #    CM1.snow_melt(
+    #        mp_p,
+    #        ρq_sno / ρ_c,
+    #        ρ_c,
+    #        TD.air_temperature(th_p, ᶜts[colidx]),
+    #    )
+    #)
+    #@. ᶜS_qs_sub_dep[colidx] = CM1.evaporation_sublimation(
+    #    mp_p,
+    #    snow_type,
+    #    TD.PhasePartition(th_p, ᶜts[colidx]),
+    #    ρq_sno / ρ_c,
+    #    ρ_c,
+    #    TD.air_temperature(th_p, ᶜts[colidx]),
+    #)
+    #@. ᶜS_qs_sub_dep[colidx] = ifelse(
+    #    ᶜS_qs_sub_dep[colidx] > FT(0),
+    #    min(
+    #        TD.vapor_specific_humidity(th_p, ᶜts[colidx]) / Δt,
+    #        ᶜS_qs_sub_dep[colidx]
+    #    ),
+    #    -min(ρq_sno / ρ_c / Δt, -ᶜS_qs_sub_dep[colidx])
+    #)
+
+    # Total microphysics source terms
     @. ᶜS_ρe_tot[colidx] =
         Y.c.ρ[colidx] * (
             e_tot_tendency_precip_formation_bulk +
-            e_tot_tendency_precip_formation_en -
-            ᶜS_qr_evap * (I_l + Φ) -
-            ᶜS_qs_sub_dep * (I_i + Φ) +
-            ᶜS_qs_melt * L_f
+            e_tot_tendency_precip_formation_en
+            #-
+            #ᶜS_qr_evap[colidx] * (
+            #    TD.internal_energy_liquid(th_p, ᶜts[colidx]) +
+            #    ᶜΦ[colidx]
+            #)
+            #-
+            #ᶜS_qs_sub_dep[colidx] * (
+            #    TD.internal_energy_ice(th_p, ᶜts[colidx]) +
+            #    ᶜΦ[colidx]
+            #) +
+            #ᶜS_qs_melt[colidx] * TD.latent_heat_fusion(th_p, ᶜts[colidx])
         )
     @. ᶜS_ρq_tot[colidx] =
         Y.c.ρ[colidx] * (
             qt_tendency_precip_formation_bulk +
-            qt_tendency_precip_formation_en -
-            ᶜS_qr_evap -
-            ᶜS_qs_sub_dep
+            qt_tendency_precip_formation_en
+            #-
+            #ᶜS_qr_evap[colidx]
+            #-
+            #ᶜS_qs_sub_dep[colidx]
         )
     @. ᶜS_ρq_rai[colidx] =
         Y.c.ρ[colidx] * (
             qr_tendency_precip_formation_bulk +
-            qr_tendency_precip_formation_en +
-            ᶜS_qr_evap -
-            ᶜS_qs_melt
+            qr_tendency_precip_formation_en
+            #+
+            #ᶜS_qr_evap[colidx]
+            #-
+            #ᶜS_qs_melt[colidx]
         )
     @. ᶜS_ρq_sno[colidx] =
         Y.c.ρ[colidx] * (
             qs_tendency_precip_formation_bulk +
-            qs_tendency_precip_formation_en +
-            ᶜS_qs_sub_dep +
-            ᶜS_qs_melt
+            qs_tendency_precip_formation_en
+            #+
+            #ᶜS_qs_sub_dep[colidx] +
+            #ᶜS_qs_melt[colidx]
         )
 end
 

@@ -167,14 +167,6 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
-    TC.grid_mean_precipitation_sink_tendencies(
-        p.precip_model,
-        grid,
-        state,
-        tc_params,
-        Δt,
-    )
-
     # Ensure that, when a tendency is not computed with an IMEX formulation,
     # both its implicit and its explicit components are computed here.
 
