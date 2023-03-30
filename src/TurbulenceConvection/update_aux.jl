@@ -81,7 +81,7 @@ function update_aux!(
                 aux_up[i].area[k] = 0
                 aux_up[i].e_kin[k] = e_kin[k]
             end
-            ts_up = if edmf.moisture_model isa DryModel
+            aux_up[i].ts[k] = if edmf.moisture_model isa DryModel
                 TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
             elseif edmf.moisture_model isa EquilMoistModel
                 TD.PhaseEquil_pθq(
@@ -93,7 +93,7 @@ function update_aux!(
             elseif edmf.moisture_model isa NonEquilMoistModel
                 error("Unsupported moisture model")
             end
-            aux_up[i].ts[k] = ts_up
+            ts_up = aux_up[i].ts[k]
             aux_up[i].e_tot[k] =
                 TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin[k], e_pot)
             aux_up[i].h_tot[k] = TD.total_specific_enthalpy(
