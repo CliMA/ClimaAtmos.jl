@@ -480,7 +480,7 @@ steps:
       - label: ":balloon: SCM EDMF Bomex (JFNK IMEX EDMF)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --config column --turbconv edmf --debugging_tc true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
           --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
           --z_elem 60 --z_stretch false --z_max 3e3
