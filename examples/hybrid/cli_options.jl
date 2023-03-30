@@ -258,6 +258,10 @@ function parse_commandline()
         help = "Viscous sponge [`true`, `false` (default)]"
         arg_type = String
         default = "false"
+        "--laplacian_viscosity"
+        help = "Order 2 viscous damping[`true`, `false` (default)]"
+        arg_type = String
+        default = "false"
         "--zd_rayleigh"
         help = "Rayleigh sponge height"
         arg_type = Float64
@@ -276,6 +280,10 @@ function parse_commandline()
         default = Float64(15e3)
         "--kappa_2_sponge"
         help = "Viscous sponge coefficient"
+        arg_type = Float64
+        default = Float64(1e6)
+        "--kappa_2_visc"
+        help = "Viscous order 2 coefficient"
         arg_type = Float64
         default = Float64(1e6)
         "--start_date"
