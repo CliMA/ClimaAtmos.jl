@@ -740,6 +740,7 @@ function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
     moisture_names = moisture_model isa CA.EquilMoistModel ? ("qt",) : ()
 
     ### remap to lat/lon
+
     datafile_latlon = output_dir * "/hs-remapped.nc"
     apply_remap(
         datafile_latlon,
