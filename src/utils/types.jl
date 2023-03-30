@@ -48,6 +48,10 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     κ₂::FT
 end
 
+Base.@kwdef struct LaplacianViscosity{FT} <: AbstractSponge
+    κ₂::FT
+end
+
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
     α_uₕ::FT

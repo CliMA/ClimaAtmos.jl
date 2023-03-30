@@ -70,10 +70,13 @@ function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")
         nothing
-    elseif vs_name in ("true", true, "ViscousSponge")
+    elseif vs_name in ("ViscousSponge")
         zd = parsed_args["zd_viscous"]
         κ₂ = parsed_args["kappa_2_sponge"]
         ViscousSponge{FT}(; zd, κ₂)
+    elseif vs_name in ("LaplacianViscosity")
+        κ₂ = parsed_args["kappa_2_sponge"]
+        LaplacianViscosity{FT}(; κ₂)
     else
         error("Uncaught viscous sponge model `$vs_name`.")
     end
