@@ -70,11 +70,11 @@ function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")
         nothing
-    elseif vs_name in ("ViscousSponge")
+    elseif vs_name in ("true", true, "ViscousSponge")
         zd = parsed_args["zd_viscous"]
         κ₂ = parsed_args["kappa_2_sponge"]
         ViscousSponge{FT}(; zd, κ₂)
-    elseif vs_name in ("LaplacianViscosity")
+    elseif vs_name in ("true", true, "LaplacianViscosity")
         κ₂ = parsed_args["kappa_2_sponge"]
         LaplacianViscosity{FT}(; κ₂)
     else

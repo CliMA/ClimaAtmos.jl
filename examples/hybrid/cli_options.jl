@@ -256,8 +256,8 @@ function parse_commandline()
         default = false
         "--viscous_sponge"
         help = "Viscous sponge [`true`, `false` (default)]"
-        arg_type = Bool
-        default = false
+        arg_type = String
+        default = "false"
         "--zd_rayleigh"
         help = "Rayleigh sponge height"
         arg_type = Float64

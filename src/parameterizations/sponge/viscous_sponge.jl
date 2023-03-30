@@ -51,12 +51,8 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
 end
 
 
-### Laplacian Viscosity
-laplacian_viscosity_cache(::Nothing, Y) = NamedTuple()
-laplacian_viscosity_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
-function laplacian_viscosity_cache(laplacian_viscosity::LaplacianViscosity, Y)
-    (; κ₂, zd) = laplacian_viscosity
+function viscous_sponge_cache(viscous_sponge::LaplacianViscosity, Y)
+    (; κ₂) = viscous_sponge
     FT = Spaces.undertype(axes(Y.c))
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
@@ -68,8 +64,8 @@ function laplacian_viscosity_cache(laplacian_viscosity::LaplacianViscosity, Y)
     return (; ᶜκ₂, ᶠκ₂)
 end
 
-function laplacian_viscosity_tendency!(Yₜ, Y, p, t, ::LaplacianViscosity)
-    (; ᶜκ₂, κ₂, ᶜp) = p
+function viscous_sponge_tendency!(Yₜ, Y, p, t, ::LaplacianViscosity)
+    (; ᶜκ₂, ᶠκ₂, ᶜp) = p
     divₕ = Operators.Divergence()
     wdivₕ = Operators.WeakDivergence()
     gradₕ = Operators.Gradient()
@@ -84,13 +80,15 @@ function laplacian_viscosity_tendency!(Yₜ, Y, p, t, ::LaplacianViscosity)
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot += ᶜκ₂ * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
     end
-    @. Yₜ.c.uₕ +=
-        ᶜκ₂ * (
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
-                Geometry.Covariant12Axis(),
-                wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
-            )
-        )
-    @. Yₜ.f.w.components.data.:1 +=
+
+   # @. Yₜ.c.uₕ +=
+   #     ᶜκ₂ * (
+   #         wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
+   #             Geometry.Covariant12Axis(),
+   #             wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
+   #         )
+   #     )
+    @. Yₜ.c.uₕ += ᶜκ₂ * Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ)))
+    @. Yₜ.f.w.components.data.:1 += 
         ᶠκ₂ * wdivₕ(gradₕ(Y.f.w.components.data.:1))
 end
