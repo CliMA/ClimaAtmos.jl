@@ -4,6 +4,7 @@ using Dierckx
 using DiffEqBase
 using ImageFiltering
 using Interpolations
+using ArtifactWrappers
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
@@ -60,6 +61,7 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
     return atmos
 end
 
+include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 function get_numerics(parsed_args)
     # wrap each upwinding mode in a Val for dispatch
     numerics = (;

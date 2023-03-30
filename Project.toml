@@ -4,6 +4,7 @@ authors = ["Climate Modeling Alliance"]
 version = "0.9.0"
 
 [deps]
+ArtifactWrappers = "a14bc488-3040-4b00-9dc1-f6467924858a"
 AtmosphericProfilesLibrary = "86bc3604-9858-485a-bdbe-831ec50de11d"
 ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"

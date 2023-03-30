@@ -29,7 +29,6 @@ idealized_clouds = parsed_args["idealized_clouds"]
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos.InitialConditions as ICs
 
-include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
 
 import ClimaAtmos.TurbulenceConvection as TC
 include("TurbulenceConvectionUtils.jl")
