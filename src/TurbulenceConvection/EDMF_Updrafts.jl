@@ -20,9 +20,7 @@ function compute_precipitation_formation_tendencies(
 
     @inbounds for i in 1:N_up
         @inbounds for k in real_center_indices(grid)
-            T_up = aux_up[i].T[k]
-            q_tot_up = aux_up[i].q_tot[k]
-            ts_up = TD.PhaseEquil_pTq(thermo_params, p_c[k], T_up, q_tot_up)
+            ts_up = aux_up[i].ts[k]
 
             # autoconversion and accretion
             mph = precipitation_formation(
