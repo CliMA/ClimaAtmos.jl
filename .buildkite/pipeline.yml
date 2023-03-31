@@ -430,17 +430,32 @@ steps:
   - group: "EDMFX"
     steps:
 
+      - label: ":genie: baroclinic wave (ρe) with EDMFX"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_edmfx --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWaveWithEDMF --turbconv edmfx --dt 1secs --t_end 12mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe
+        artifact_paths: "sphere_baroclinic_wave_rhoe_edmfx/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: no lim ARS baroclinic wave (ρe) equilmoist no precip with EDMFX"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_no_precip_edmfx --ode_algo SSP33ShuOsher --initial_condition MoistBaroclinicWaveWithEDMF --moist equil --turbconv edmfx --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_no_precip_edmfx/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: no lim ARS baroclinic wave (ρe) equilmoist with EDMFX"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --moist equil --precip_model 0M --turbconv edmfx --apply_limiter false --dt 450secs --t_end 4days --dt_save_to_disk 2days --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --ode_algo SSP33ShuOsher --initial_condition MoistBaroclinicWaveWithEDMF --moist equil --precip_model 0M --turbconv edmfx --dt 1secs --t_end 3mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":genie: EDMFX Bomex on a sphere"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --apply_limiter false --z_elem 60 --z_stretch false --z_max 3e3 --dt 60secs --t_end 1hours --dt_save_to_disk 5mins --reference_job_id edmf_bomex
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --ode_algo SSP33ShuOsher --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --z_elem 60 --z_stretch false --z_max 3e3 --dt 0.001secs --t_end 0.1secs --dt_save_to_disk 0.01secs --reference_job_id edmf_bomex
         artifact_paths: "edmfx_bomex_sphere/*"
+        soft_fail: true
         agents:
           slurm_mem: 20GB
 

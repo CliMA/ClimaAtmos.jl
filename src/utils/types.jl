@@ -100,9 +100,9 @@ struct EDMFCoriolis{U, V, FT}
 end
 
 struct EDMFX{N, FT}
-    a_min::FT # WARNING: this should never be used outside of divide_by_ρa
+    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-EDMFX{N}(a_min::FT) where {N, FT} = EDMFX{N, FT}(a_min)
+EDMFX{N}(a_half::FT) where {N, FT} = EDMFX{N, FT}(a_half)
 n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::Any) = 0
 
@@ -124,6 +124,7 @@ Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
+Base.broadcastable(x::EDMFX) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"

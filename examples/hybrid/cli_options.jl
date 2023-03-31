@@ -127,6 +127,10 @@ function parse_commandline()
         help = "Denisity upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
         arg_type = Symbol
         default = :none
+        "--edmfx_upwinding"
+        help = "EDMFX upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none # TODO: change to :first_order (or higher?)
         "--ode_algo"
         help = "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
         arg_type = String

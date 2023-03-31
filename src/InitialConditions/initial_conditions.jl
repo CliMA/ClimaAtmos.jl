@@ -312,10 +312,40 @@ function (initial_condition::MoistBaroclinicWave)(params)
 end
 
 """
+    DryBaroclinicWaveWithEDMF(; perturb = true)
+
+The same `InitialCondition` as `MoistBaroclinicWave`, except with an initial TKE
+of 0 and an initial draft area fraction of 1. This is not a physically
+meaningful initial condition, and it should be removed once the new EDMF model
+is past its initial testing stage.
+"""
+Base.@kwdef struct DryBaroclinicWaveWithEDMF <: InitialCondition
+    perturb::Bool = true
+end
+
+function (initial_condition::DryBaroclinicWaveWithEDMF)(params)
+    (; perturb) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        (; z, lat, long) = local_geometry.coordinates
+        (; p, T_v, u, v) = baroclinic_wave_values(z, lat, long, params, perturb)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T_v),
+            velocity = Geometry.UVVector(u, v),
+            turbconv_state = EDMFState(; tke = FT(0), draft_area = FT(1)),
+        )
+    end
+    return local_state
+end
+
+"""
     MoistBaroclinicWaveWithEDMF(; perturb = true)
 
 The same `InitialCondition` as `MoistBaroclinicWave`, except with an initial TKE
-of 1 and an initial draft area fraction of 0.5. This is not a physically
+of 0 and an initial draft area fraction of 1. This is not a physically
 meaningful initial condition, and it should be removed once the new EDMF model
 is past its initial testing stage.
 """
@@ -336,7 +366,7 @@ function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
             geometry = local_geometry,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
             velocity = Geometry.UVVector(u, v),
-            turbconv_state = EDMFState(; tke = FT(1), draft_area = FT(0.5)),
+            turbconv_state = EDMFState(; tke = FT(0), draft_area = FT(1)),
         )
     end
     return local_state
