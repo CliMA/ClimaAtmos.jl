@@ -73,18 +73,3 @@ Base.iterate(
     state = Nstop,
 ) where {Nstart, Nstop, T <: CenterIndices{Nstart, Nstop}} =
     state < Nstart ? nothing : (Cent(state), state - 1)
-
-#=
-    findlast_center
-
-Grid-aware find-first / find-last indices with
-surface/toa (respectively) as the default index
-=#
-
-function findlast_center(f::Function, grid::Grid)
-    RI = real_center_indices(grid)
-    k = findlast(f, RI)
-    return RI[isnothing(k) ? kc_top_of_atmos(grid).i : k]
-end
-z_findlast_center(f::F, grid::Grid) where {F} =
-    grid.zc[findlast_center(f, grid)].z

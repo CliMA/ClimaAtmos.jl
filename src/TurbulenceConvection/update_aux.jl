@@ -290,7 +290,7 @@ function update_aux!(
     end
     # updraft pressure
     # TODO @. aux_up_f[i].nh_pressure = compute_nh_pressure(...)
-    compute_nh_pressure!(state, grid, edmf, surf)
+    compute_nh_pressure!(state, edmf, surf)
 
     #####
     ##### compute_eddy_diffusivities_tke
