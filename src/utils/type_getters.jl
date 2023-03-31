@@ -66,6 +66,7 @@ function get_numerics(parsed_args)
         energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"])),
         tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
         density_upwinding = Val(Symbol(parsed_args["density_upwinding"])),
+        edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"])),
         apply_limiter = parsed_args["apply_limiter"],
         bubble = parsed_args["bubble"],
     )
@@ -256,6 +257,7 @@ function get_initial_condition(parsed_args)
             "DryBaroclinicWave",
             "MoistBaroclinicWave",
             "DecayingProfile",
+            "DryBaroclinicWaveWithEDMF",
             "MoistBaroclinicWaveWithEDMF",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(

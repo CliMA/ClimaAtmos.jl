@@ -32,7 +32,7 @@ function temporary_quantities(atmos, center_space, face_space)
     FT = Spaces.undertype(center_space)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;
-        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜρh, ᶜρhʲ
+        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜh_tot, ᶜh_totʲ
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
@@ -51,9 +51,9 @@ function default_cache(
     comms_ctx,
 )
     FT = eltype(params)
-
-    (; energy_upwinding, tracer_upwinding, density_upwinding, apply_limiter) =
+    (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
         numerics
+    (; apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     R_d = FT(CAP.R_d(params))
@@ -129,15 +129,12 @@ function default_cache(
         energy_upwinding,
         tracer_upwinding,
         density_upwinding,
+        edmfx_upwinding,
         do_dss,
         ghost_buffer,
         net_energy_flux_toa,
         net_energy_flux_sfc,
-        precomputed_quantities(
-            atmos,
-            spaces.center_space,
-            spaces.face_space,
-        )...,
+        precomputed_quantities(Y, atmos)...,
         temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
         hyperdiffusion_cache(Y, atmos, do_dss)...,
     )
@@ -159,29 +156,30 @@ end
 function limited_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     set_precomputed_quantities!(Y, p, t)
-
-    (; ᶜu) = p
-
-    # Tracer conservation, horizontal advection
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
-        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu)
-    end
-
+    horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     NVTX.@range "tracer hyperdiffusion tendency" color = colorant"yellow" begin
         tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
-
-    return nothing
 end
 
 function limiters_func!(Y, p, t, ref_Y)
     (; limiter) = p
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     if !isnothing(limiter)
         for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
             Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
             Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
+        end
+        for j in 1:n
+            for ρaχ_name in
+                filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
+                ᶜρaχ_ref = ref_Y.c.sgsʲs.:($j).:($ρaχ_name)
+                ᶜρa_ref = ref_Y.c.sgsʲs.:($j).ρa
+                ᶜρaχ = Y.c.sgsʲs.:($j).:($ρaχ_name)
+                ᶜρa = Y.c.sgsʲs.:($j).ρa
+                Limiters.compute_bounds!(limiter, ᶜρaχ_ref, ᶜρa_ref)
+                Limiters.apply_limiter!(ᶜρaχ, ᶜρa, limiter)
+            end
         end
     end
 end
