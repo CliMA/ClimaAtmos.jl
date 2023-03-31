@@ -87,6 +87,7 @@ cent_aux_vars_edmf(::Type{FT}, local_geometry, atmos) where {FT} = (;
                 θ_liq_ice = FT(0),
             ),
         ),
+        mph = PrecipFormation{FT}(),
         θ_liq_ice_tendency_precip_sinks = FT(0),
         e_tot_tendency_precip_sinks = FT(0),
         qt_tendency_precip_sinks = FT(0),

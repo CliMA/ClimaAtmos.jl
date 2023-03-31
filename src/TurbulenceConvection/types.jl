@@ -6,13 +6,13 @@ Storage for tendencies due to precipitation formation
 $(DocStringExtensions.FIELDS)
 """
 Base.@kwdef struct PrecipFormation{FT}
-    θ_liq_ice_tendency::FT
-    e_tot_tendency::FT
-    qt_tendency::FT
-    ql_tendency::FT
-    qi_tendency::FT
-    qr_tendency::FT
-    qs_tendency::FT
+    θ_liq_ice_tendency::FT = FT(0)
+    e_tot_tendency::FT = FT(0)
+    qt_tendency::FT = FT(0)
+    ql_tendency::FT = FT(0)
+    qi_tendency::FT = FT(0)
+    qr_tendency::FT = FT(0)
+    qs_tendency::FT = FT(0)
 end
 
 """

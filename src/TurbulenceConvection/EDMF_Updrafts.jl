@@ -45,21 +45,19 @@ function compute_precipitation_formation_tendencies(
         end
     end
     # TODO - to be deleted once we sum all tendencies elsewhere
-    @inbounds for k in real_center_indices(grid)
-        aux_bulk.e_tot_tendency_precip_formation[k] = 0
-        aux_bulk.qt_tendency_precip_formation[k] = 0
-        aux_bulk.qr_tendency_precip_formation[k] = 0
-        aux_bulk.qs_tendency_precip_formation[k] = 0
-        @inbounds for i in 1:N_up
-            aux_bulk.e_tot_tendency_precip_formation[k] +=
-                aux_up[i].e_tot_tendency_precip_formation[k]
-            aux_bulk.qt_tendency_precip_formation[k] +=
-                aux_up[i].qt_tendency_precip_formation[k]
-            aux_bulk.qr_tendency_precip_formation[k] +=
-                aux_up[i].qr_tendency_precip_formation[k]
-            aux_bulk.qs_tendency_precip_formation[k] +=
-                aux_up[i].qs_tendency_precip_formation[k]
-        end
+    @. aux_bulk.e_tot_tendency_precip_formation = 0
+    @. aux_bulk.qt_tendency_precip_formation = 0
+    @. aux_bulk.qr_tendency_precip_formation = 0
+    @. aux_bulk.qs_tendency_precip_formation = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.e_tot_tendency_precip_formation +=
+            aux_up[i].e_tot_tendency_precip_formation
+        @. aux_bulk.qt_tendency_precip_formation +=
+            aux_up[i].qt_tendency_precip_formation
+        @. aux_bulk.qr_tendency_precip_formation +=
+            aux_up[i].qr_tendency_precip_formation
+        @. aux_bulk.qs_tendency_precip_formation +=
+            aux_up[i].qs_tendency_precip_formation
     end
     return nothing
 end
