@@ -124,7 +124,11 @@ function parse_commandline()
         "--tracer_upwinding"
         help = "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
         arg_type = Symbol
-        default = :none  # TODO: change to :zalesak
+        default = :none
+        "--density_upwinding"
+        help = "Denisity upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+        arg_type = Symbol
+        default = :none
         "--ode_algo"
         help = "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
         arg_type = String

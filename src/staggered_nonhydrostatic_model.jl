@@ -75,7 +75,8 @@ function default_cache(
         top = Operators.FirstOrderOneSided(),
     )
 
-    (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
+    (; energy_upwinding, tracer_upwinding, density_upwinding, apply_limiter) =
+        numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     R_d = FT(CAP.R_d(params))
@@ -203,6 +204,7 @@ function default_cache(
         params,
         energy_upwinding,
         tracer_upwinding,
+        density_upwinding,
         ghost_buffer = ghost_buffer,
         net_energy_flux_toa,
         net_energy_flux_sfc,

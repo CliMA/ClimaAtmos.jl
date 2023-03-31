@@ -65,6 +65,7 @@ function get_numerics(parsed_args)
     numerics = (;
         energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"])),
         tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
+        density_upwinding = Val(Symbol(parsed_args["density_upwinding"])),
         apply_limiter = parsed_args["apply_limiter"],
         bubble = parsed_args["bubble"],
     )
