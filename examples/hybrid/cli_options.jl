@@ -35,7 +35,7 @@ function parse_commandline()
         arg_type = String
         default = "sphere"
         "--initial_condition"
-        help = "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`]"
+        help = "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `Schar`]"
         arg_type = String
         default = "DecayingProfile"
         "--moist"
