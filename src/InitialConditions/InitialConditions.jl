@@ -11,6 +11,9 @@ import ..Microphysics0Moment
 import ..Microphysics1Moment
 import ..PerfStandard
 import ..PerfExperimental
+import ..EDMFX
+import ..n_mass_flux_subdomains
+import ..times_a
 
 import Thermodynamics.TemperatureProfiles: DecayingTemperatureProfile
 import ClimaCore: Fields, Geometry

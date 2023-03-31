@@ -24,19 +24,6 @@ import ClimaCore.Fields: ColumnField
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 
-# TODO: Rename ᶜK to ᶜκ, and rename ᶠw to ᶠuᵥ.
-function precomputed_quantities(Y, atmos)
-    FT = eltype(Y)
-    TST = thermo_state_type(atmos.moisture_model, FT)
-    return (;
-        ᶜu = similar(Y.c, Geometry.Covariant123Vector{FT}),
-        ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
-        ᶜK = similar(Y.c, FT),
-        ᶜts = similar(Y.c, TST),
-        ᶜp = similar(Y.c, FT),
-    )
-end
-
 function default_cache(
     Y,
     parsed_args,
@@ -219,7 +206,11 @@ function default_cache(
         ghost_buffer = ghost_buffer,
         net_energy_flux_toa,
         net_energy_flux_sfc,
-        precomputed_quantities(Y, atmos)...,
+        precomputed_quantities(
+            atmos,
+            spaces.center_space,
+            spaces.face_space,
+        )...,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
     return default_cache

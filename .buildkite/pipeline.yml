@@ -355,9 +355,26 @@ steps:
           slurm_mem: 20GB
 
       - label: ":dart: Dycore Consistency test"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id dycore_consistency --quicklook_reference_job_id edmf_bomex --dt 40secs --t_end 6hours --apply_limiter false --test_dycore_consistency true --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id dycore_consistency --reference_job_id edmf_bomex --dt 40secs --t_end 6hours --apply_limiter false --test_dycore_consistency true --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "dycore_consistency/*"
         soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+  - group: "EDMFX"
+    steps:
+
+      - label: ":genie: no lim ARS baroclinic wave (ρe) equilmoist with EDMFX"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --moist equil --precip_model 0M --turbconv edmfx --apply_limiter false --dt 450secs --t_end 4days --dt_save_to_disk 2days --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX Bomex on a sphere"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --apply_limiter false --z_elem 60 --z_stretch false --z_max 3e3 --dt 60secs --t_end 1hours --dt_save_to_disk 5mins --reference_job_id edmf_bomex
+        artifact_paths: "edmfx_bomex_sphere/*"
         agents:
           slurm_mem: 20GB
 
@@ -409,7 +426,7 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_nieuwstadt
+          --reference_job_id edmf_nieuwstadt
           --job_id edmf_nieuwstadt_jfnk_imex
           --dt 50secs
         artifact_paths: "edmf_nieuwstadt_jfnk_imex/*"
@@ -444,7 +461,7 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_soares
+          --reference_job_id edmf_soares
           --job_id edmf_soares_jfnk_imex
           --dt 50secs
         artifact_paths: "edmf_soares_jfnk_imex/*"
@@ -477,7 +494,7 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_bomex
+          --reference_job_id edmf_bomex
           --job_id edmf_bomex_jfnk
           --dt 15secs
         artifact_paths: "edmf_bomex_jfnk/*"
@@ -496,7 +513,7 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_bomex
+          --reference_job_id edmf_bomex
           --job_id edmf_bomex_jfnk_imex
           --dt 30secs
         artifact_paths: "edmf_bomex_jfnk_imex/*"
@@ -510,7 +527,7 @@ steps:
           --FLOAT_TYPE Float64
           --toml ./.buildkite/toml/bomex.toml
           --job_id toml_edmf_bomex
-          --quicklook_reference_job_id edmf_bomex
+          --reference_job_id edmf_bomex
           --dt 20secs
         artifact_paths: "toml_edmf_bomex/*"
         agents:
@@ -623,6 +640,12 @@ steps:
       - label: ":fire: Flame graph: perf target (with tracers)"
         command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_tracers --perf_mode PerfExperimental"
         artifact_paths: "flame_perf_target_tracers/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (edmfx)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmfx --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmfx"
+        artifact_paths: "flame_perf_target_edmfx/*"
         agents:
           slurm_mem: 20GB
 

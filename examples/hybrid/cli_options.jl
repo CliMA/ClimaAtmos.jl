@@ -179,7 +179,7 @@ function parse_commandline()
         "--job_id"
         help = "Uniquely identifying string for a particular job"
         arg_type = String
-        "--quicklook_reference_job_id"
+        "--reference_job_id"
         help = "Identifier of job to use as the \"reference\" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch (only used if `debugging_tc` is `true`)"
         arg_type = String
         "--trunc_stack_traces"

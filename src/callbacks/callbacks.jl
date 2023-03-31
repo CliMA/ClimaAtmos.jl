@@ -283,7 +283,54 @@ function save_to_disk_func(integrator)
         precip_diagnostic = NamedTuple()
     end
 
-    if p.atmos.turbconv_model isa TC.EDMFModel
+    # Adds a prefix to the front of each name in the named tuple. This function
+    # is not type stable, but that probably doesn't matter for diagnostics.
+    add_prefix(diagnostics::NamedTuple{names}, prefix) where {names} =
+        NamedTuple{Symbol.(prefix, names)}(values(diagnostics))
+
+    cloud_fraction(ts, area::FT) where {FT} =
+        TD.has_condensate(thermo_params, ts) && area > 1e-3 ? FT(1) : FT(0)
+
+    if p.atmos.turbconv_model isa EDMFX
+        (; ᶜu⁰, ᶜts⁰) = p
+        (; ᶜsgs⁰, ᶜsgs⁺, ᶜu⁺, ᶜts⁺) = diagnostic_edmfx_quantities(Y, p, t)
+        (; a_min) = p.atmos.turbconv_model
+        ᶜarea⁰ = ᶜsgs⁰.ρa ./ TD.air_density.(thermo_params, ᶜts⁰)
+        ᶜarea⁺ = ᶜsgs⁺.ρa ./ TD.air_density.(thermo_params, ᶜts⁺)
+        ᶜcloud_fraction⁰ = cloud_fraction.(ᶜts⁰, ᶜarea⁰)
+        ᶜcloud_fraction⁺ = cloud_fraction.(ᶜts⁺, ᶜarea⁺)
+        env_diagnostics = (;
+            common_diagnostics(ᶜu⁰, ᶜts⁰)...,
+            area = ᶜarea⁰,
+            cloud_fraction = ᶜcloud_fraction⁰,
+            tke = divide_by_ρa.(ᶜsgs⁰.ρatke, ᶜsgs⁰.ρa, 0, Y.c.ρ, a_min),
+        )
+        draft_diagnostics = (;
+            common_diagnostics(ᶜu⁺, ᶜts⁺)...,
+            area = ᶜarea⁺,
+            cloud_fraction = ᶜcloud_fraction⁺,
+        )
+        if p.atmos.precip_model isa Microphysics1Moment
+            ᶜq_rai⁰ =
+                divide_by_ρa.(ᶜsgs⁰.ρaq_rai, ᶜsgs⁰.ρa, Y.c.ρq_rai, Y.c.ρ, a_min)
+            ᶜq_sno⁰ =
+                divide_by_ρa.(ᶜsgs⁰.ρaq_sno, ᶜsgs⁰.ρa, Y.c.ρq_sno, Y.c.ρ, a_min)
+            ᶜq_rai⁺ =
+                divide_by_ρa.(ᶜsgs⁺.ρaq_rai, ᶜsgs⁺.ρa, Y.c.ρq_rai, Y.c.ρ, a_min)
+            ᶜq_sno⁺ =
+                divide_by_ρa.(ᶜsgs⁺.ρaq_sno, ᶜsgs⁺.ρa, Y.c.ρq_sno, Y.c.ρ, a_min)
+            env_diagnostics =
+                (; env_diagnostics..., q_rai = ᶜq_rai⁰, q_sno = ᶜq_sno⁰)
+            draft_diagnostics =
+                (; draft_diagnostics..., q_rai = ᶜq_rai⁺, q_sno = ᶜq_sno⁺)
+        end
+        turbulence_convection_diagnostic = (;
+            add_prefix(env_diagnostics, :env_)...,
+            add_prefix(draft_diagnostics, :draft_)...,
+            cloud_fraction = ᶜarea⁰ .* ᶜcloud_fraction⁰ .+
+                             ᶜarea⁺ .* ᶜcloud_fraction⁺,
+        )
+    elseif p.atmos.turbconv_model isa TC.EDMFModel
         tc_cent(p) = p.edmf_cache.aux.cent.turbconv
         tc_face(p) = p.edmf_cache.aux.face.turbconv
         turbulence_convection_diagnostic = (;
@@ -328,9 +375,14 @@ function save_to_disk_func(integrator)
             bulk_up_filter_flag_2 = tc_cent(p).bulk.filter_flag_2,
             bulk_up_filter_flag_3 = tc_cent(p).bulk.filter_flag_3,
             bulk_up_filter_flag_4 = tc_cent(p).bulk.filter_flag_4,
-            cloud_fraction = tc_cent(p).bulk.area .*
-                             tc_cent(p).bulk.cloud_fraction .+
-                             tc_cent(p).en.area .* tc_cent(p).en.cloud_fraction,
+            env_q_vap = tc_cent(p).en.q_tot .- tc_cent(p).en.q_liq .-
+                        tc_cent(p).en.q_ice,
+            draft_q_vap = tc_cent(p).bulk.q_tot .- tc_cent(p).bulk.q_liq .-
+                          tc_cent(p).bulk.q_ice,
+            cloud_fraction = tc_cent(p).en.area .*
+                             tc_cent(p).en.cloud_fraction .+
+                             tc_cent(p).bulk.area .*
+                             tc_cent(p).bulk.cloud_fraction,
         )
     else
         turbulence_convection_diagnostic = NamedTuple()
