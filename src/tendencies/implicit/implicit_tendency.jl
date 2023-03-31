@@ -89,7 +89,7 @@ end
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜρ = Y.c.ρ
     (; ᶠgradᵥ_ᶜΦ, ᶜp, ᶠu³, ᶜρ_ref, ᶜp_ref) = p
-    (; energy_upwinding, tracer_upwinding) = p
+    (; energy_upwinding, tracer_upwinding, density_upwinding) = p
     (; ᶠgradᵥ, ᶠinterp) = p.operators
 
     vertical_transport!(
@@ -98,7 +98,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         ᶜρ[colidx],
         ᶜρ[colidx],
         p,
-        Val(:none),
+        density_upwinding,
     )
 
     if :ρθ in propertynames(Y.c)
