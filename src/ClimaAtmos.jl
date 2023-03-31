@@ -20,10 +20,7 @@ include(joinpath("parameterizations", "radiation", "radiation.jl"))
 include("TurbulenceConvection/TurbulenceConvection.jl")
 import .TurbulenceConvection as TC
 
-include(joinpath("utils", "thermo_state.jl"))
 include("precomputed_quantities.jl")
-
-include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("InitialConditions", "InitialConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
@@ -59,6 +56,8 @@ include(joinpath("parameterizations", "sponge", "viscous_sponge.jl"))
 include(joinpath("tendencies", "advection.jl"))
 
 include("staggered_nonhydrostatic_model.jl")
+
+include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("utils", "model_getters.jl")) # high-level (using parsed_args) model getters
 include(joinpath("utils", "type_getters.jl"))

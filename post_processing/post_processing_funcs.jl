@@ -223,8 +223,8 @@ paperplots_baro_wave(::TotalEnergy, ::EquilMoistModel, args...) =
 
 # plots in the Ullrish et al 2014 paper: surface pressure, 850 temperature and vorticity at day 8 and day 10 (if the simulation lasts 10 days)
 function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, ᶜp, params, thermo_dispatcher) = p
-    (; ᶜinterp, curlₕ) = p.operators
+    (; ᶜts, ᶜp, params) = p
+    (; curlₕ) = p.operators
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -244,8 +244,7 @@ function paperplots_dry_baro_wave(sol, output_dir, p, nlat, nlon)
         iu = safe_index(ius, sol.t)
         Y = sol.u[iu]
         # compute pressure, temperature, vorticity
-        CA.thermo_state!(Y, p, ᶜinterp)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+        CA.set_precomputed_quantities!(Y, p, sol.t[iu]) # sets ᶜts and ᶜp
         ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
         curl_uh = @. curlₕ(Y.c.uₕ)
         ᶜvort = Geometry.WVector.(curl_uh)
@@ -335,8 +334,8 @@ end
 # plots for moist baroclinic wave: https://www.cesm.ucar.edu/events/wg-meetings/2018/presentations/amwg/jablonowski.pdf
 function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
     C123 = Geometry.Covariant123Vector
-    (; ᶜts, ᶜp, params, ᶜK, thermo_dispatcher) = p
-    (; ᶜinterp, ᶠinterp, curlₕ) = p.operators
+    (; ᶜts, ᶜp, params) = p
+    (; ᶜinterp, curlₕ) = p.operators
     last_day = floor(Int, sol.t[end] / (24 * 3600))
     days = [last_day - 2, last_day]
     thermo_params = CAP.thermodynamics_params(params)
@@ -363,10 +362,7 @@ function paperplots_moist_baro_wave_ρe(sol, output_dir, p, nlat, nlon)
         ᶜuvw_phy = @. C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
         ᶜuₕ_phy = @. Geometry.project(Geometry.UVAxis(), ᶜuvw_phy)
         ᶜw_phy = @. Geometry.project(Geometry.WAxis(), ᶜuvw_phy)
-        ᶠw_phy = ᶠinterp.(ᶜw_phy)
-        CA.compute_kinetic!(ᶜK, Y)
-        CA.thermo_state!(Y, p, ᶜinterp)
-        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+        CA.set_precomputed_quantities!(Y, p, sol.t[iu]) # sets ᶜts and ᶜp
 
         ᶜq = @. TD.PhasePartition(thermo_params, ᶜts)
         ᶜcloudwater = @. TD.condensate(ᶜq) # @. ᶜq.liq + ᶜq.ice
@@ -678,8 +674,7 @@ function postprocessing_edmf(sol, output_dir, fps)
 end
 
 function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
-    (; ᶜts, params, ᶜK, thermo_dispatcher, atmos) = p
-    (; ᶜinterp) = p.operators
+    (; ᶜts, params, atmos) = p
     (; moisture_model) = atmos
     thermo_params = CAP.thermodynamics_params(params)
     last_day = floor(Int, sol.t[end] / (24 * 3600))
@@ -722,9 +717,7 @@ function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
             ᶜuₕ_phy = Geometry.UVVector.(ᶜuₕ)
 
             # temperature
-            ᶠw = Y.f.w
-            CA.compute_kinetic!(ᶜK, Y)
-            CA.thermo_state!(Y, p, ᶜinterp)
+            CA.set_precomputed_quantities!(Y, p, sol.t[i]) # sets ᶜts
             ᶜT = @. TD.air_temperature(thermo_params, ᶜts)
             ᶜθ = @. TD.dry_pottemp(thermo_params, ᶜts)
 
@@ -747,6 +740,7 @@ function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
     moisture_names = moisture_model isa CA.EquilMoistModel ? ("qt",) : ()
 
     ### remap to lat/lon
+
     datafile_latlon = output_dir * "/hs-remapped.nc"
     apply_remap(
         datafile_latlon,
@@ -874,9 +868,6 @@ function paperplots_held_suarez(sol, output_dir, p, nlat, nlon)
 end
 
 function custom_postprocessing(sol, output_dir, p)
-    # TODO: remove closure over params
-    thermo_dispatcher = p.thermo_dispatcher
-    (; ᶜinterp) = p.operators
     thermo_params = CAP.thermodynamics_params(params)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
     n = length(sol.u)
@@ -896,10 +887,10 @@ function custom_postprocessing(sol, output_dir, p)
         alignment = :c,
     )
 
-    anim = @animate for Y in sol.u
-        ᶜts = CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
+    anim = @animate for (Y, t) in zip(sol.u, sol.t)
+        CA.set_precomputed_quantities!(Y, p, t) # sets ᶜts
         Plots.plot(
-            vec(TD.air_temperature.(thermo_params, ᶜts)),
+            vec(TD.air_temperature.(thermo_params, p.ᶜts)),
             vec(Fields.coordinate_field(Y.c).z ./ 1000);
             xlabel = "T [K]",
             ylabel = "z [km]",
@@ -924,11 +915,7 @@ function custom_postprocessing(sol, output_dir, p)
 end
 
 function postprocessing_plane(sol, output_dir, p)
-    # TODO: remove closure over params
-    C123 = Geometry.Covariant123Vector
-    (; ᶜinterp) = p.operators
-    thermo_dispatcher = p.thermo_dispatcher
-    thermo_params = CAP.thermodynamics_params(params)
+    thermo_params = CAP.thermodynamics_params(p.params)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
     n = length(sol.u)
     #! format: off
@@ -948,6 +935,7 @@ function postprocessing_plane(sol, output_dir, p)
     )
 
     Y = sol.u[end]
+    CA.set_precomputed_quantities!(Y, p, sol.t[end]) # sets ᶜts and ᶜu
 
     ## Plots for last timestep
     function gen_plot_plane(
@@ -961,7 +949,6 @@ function postprocessing_plane(sol, output_dir, p)
         # Set up Figure and Axes
         f = CairoMakie.Figure(; font = "CMU Serif")
         gaa = f[1, 1] = GridLayout()
-        FT = eltype(variable)
         Axis(gaa[1, 1], aspect = 2, title = title)
         paa = fieldcontourf!(variable)
         Colorbar(gaa[1, 2], paa, label = xlabel)
@@ -969,35 +956,27 @@ function postprocessing_plane(sol, output_dir, p)
         CairoMakie.save(fig_png, f)
     end
 
-    u_bar = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.w))
-    u_velo = @. Geometry.project(Geometry.UAxis(), u_bar)
     gen_plot_plane(
-        u_velo,
+        Geometry.UVector.(p.ᶜu),
         "horz_velocity.png",
         "Horizontal Velocity",
         "u[m/s]",
         "z[m]",
     )
 
-    w_velo = @. Geometry.project(Geometry.WAxis(), u_bar)
     gen_plot_plane(
-        w_velo,
+        Geometry.WVector.(p.ᶜu),
         "vert_velocity.png",
         "Vertical Velocity",
         "w[m/s]",
         "z[m]",
     )
 
-    thermo_dispatcher = p.thermo_dispatcher
-    thermo_params = CAP.thermodynamics_params(params)
-    ᶜts = CA.thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
-    θ = TD.virtual_pottemp.(thermo_params, ᶜts)
     gen_plot_plane(
-        θ,
+        TD.virtual_pottemp.(thermo_params, p.ᶜts),
         "virtual_pottemp.png",
         "Virtual Pottemp",
         "Theta[K]",
         "z[m]",
     )
-
 end

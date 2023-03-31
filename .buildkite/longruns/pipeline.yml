@@ -11,7 +11,7 @@ agents:
   config: cpu
   queue: central
   slurm_ntasks: 1
-  slurm_time: 24:00:00
+  slurm_time: 50:00:00
 
 timeout_in_minutes: 1440
 
@@ -67,7 +67,7 @@ steps:
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 100secs --max_newton_iters 2 --initial_condition MoistBaroclinicWave --t_end 100days --dt_save_to_disk 10days --job_id longrun_ssp_bw_rhoe_equil_highres --ode_algo SSP333"
+          - "mpiexec julia --project=examples examples/hybrid/driver.jl --moist equil --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 300secs --max_newton_iters 3 --initial_condition MoistBaroclinicWave --t_end 100days --dt_save_to_disk 10days --job_id longrun_ssp_bw_rhoe_equil_highres --ode_algo SSP333"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_bw_rhoe_equil_highres --out_dir longrun_ssp_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_bw_rhoe_equil_highres --fig_dir longrun_ssp_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_ssp_bw_rhoe_equil_highres/*"
@@ -80,6 +80,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 800days --job_id longrun_hs_rhoe_highres_hightop --dt_save_to_disk 10days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_highres_hightop --out_dir longrun_hs_rhoe_highres_hightop
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_highres_hightop --fig_dir longrun_hs_rhoe_highres_hightop --case_name dry_held_suarez
         artifact_paths: "longrun_hs_rhoe_highres_hightop/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -90,6 +91,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres --out_dir longrun_hs_rhoe_equil_highres
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equil_highres --fig_dir longrun_hs_rhoe_equil_highres --case_name moist_held_suarez
         artifact_paths: "longrun_hs_rhoe_equil_highres/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -98,8 +100,9 @@ steps:
 
       - label: ":computer: SSP held suarez (ρe_tot) equilmoist high resolution"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 75secs --max_newton_iters 2 --t_end 400days --dt_save_to_disk 10days --job_id longrun_ssp_hs_rhoe_equil_highres --ode_algo SSP333"
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 100secs --max_newton_iters 3 --t_end 400days --dt_save_to_disk 10days --job_id longrun_ssp_hs_rhoe_equil_highres --ode_algo SSP333
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_hs_rhoe_equil_highres --out_dir longrun_ssp_hs_rhoe_equil_highres
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_hs_rhoe_equil_highres --fig_dir longrun_ssp_hs_rhoe_equil_highres --case_name moist_held_suarez
         artifact_paths: "longrun_ssp_hs_rhoe_equil_highres/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -110,6 +113,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 150secs --t_end 400days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64 --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --fig_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -118,28 +122,31 @@ steps:
 
       - label: ":computer: SSP aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 75secs --max_newton_iters 2 --t_end 400days --fps 30 --job_id longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64 --ode_algo SSP333"
+          - "mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme monin_obukhov --moist equil --rad clearsky --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 100secs --max_newton_iters 3 --t_end 400days --fps 30 --job_id longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --dt_save_to_sol 10days --dt_save_to_disk 10days --FLOAT_TYPE Float64 --ode_algo SSP333"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --fig_dir longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64 --case_name aquaplanet
         artifact_paths: "longrun_ssp_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e5, 10)"
+      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme bulk --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 400days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 10days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
         artifact_paths: "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e5, 10) Float64"
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --rad clearsky --moist equil --vert_diff true --surface_scheme monin_obukhov --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3e3 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 35e3 --alpha_rayleigh_w 10 --alpha_rayleigh_uh 0 --dt 150secs --t_end 400days --dt_save_to_disk 10days --job_id longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --FLOAT_TYPE Float64
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --out_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --fig_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -154,6 +161,7 @@ steps:
         command:
           - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --t_end 2000days --dt_save_to_sol 10days --dt_save_to_disk 10days --fps 30 --job_id longrun_sphere_hydrostatic_balance_rhoe
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_sphere_hydrostatic_balance_rhoe --out_dir longrun_sphere_hydrostatic_balance_rhoe
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_sphere_hydrostatic_balance_rhoe --fig_dir longrun_sphere_hydrostatic_balance_rhoe --case_name dry_held_suarez
         artifact_paths: "longrun_sphere_hydrostatic_balance_rhoe/*"
         agents:
           slurm_cpus_per_task: 8
@@ -162,6 +170,7 @@ steps:
         command:
           - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 600days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 10days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_gray/*"
         agents:
           slurm_cpus_per_task: 8
@@ -187,6 +196,7 @@ steps:
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_scheme monin_obukhov --precip_model 0M --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 150secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_hs_rhoe_equil_highres_monin_obukhov
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres_monin_obukhov --out_dir longrun_hs_rhoe_equil_highres_monin_obukhov
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equil_highres_monin_obukhov --fig_dir longrun_hs_rhoe_equil_highres_monin_obukhov --case_name moist_held_suarez
         artifact_paths: "longrun_hs_rhoe_equil_highres_monin_obukhov/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"

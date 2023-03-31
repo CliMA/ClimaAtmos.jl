@@ -23,7 +23,7 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     vars = Dict()
     # vars[title] = (; fn = func to get variable(s), pfx = label prefix(es))
     vars["area fraction"] =     (;fn=(:bulk_up_area, :env_area), pfx = ("up", "en"))
-    vars["buoy"] =              (;fn=(:bulk_up_buoyancy, :env_buoyancy), pfx = ("up", "en"))
+    vars["buoy"] =              (;fn=(:face_up1_buoyancy, :face_env_buoyancy), pfx = ("up", "en"))
     vars["T"] =                 (;fn=(:bulk_up_temperature, :env_temperature), pfx = ("up", "en"))
     vars["CF"] =                (;fn=(:bulk_up_cloud_fraction, :env_cloud_fraction), pfx = ("up", "env"))
 

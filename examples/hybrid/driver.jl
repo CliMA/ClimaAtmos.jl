@@ -57,20 +57,17 @@ import Random
 Random.seed!(1234)
 
 # TODO: flip order so that NamedTuple() is fallback.
-function additional_cache(Y, parsed_args, params, atmos, dt;)
-    FT = typeof(dt)
+function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
-
-    thermo_dispatcher = CA.ThermoDispatcher(atmos)
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         CA.radiation_model_cache(
             Y,
+            default_cache,
             params,
             radiation_mode;
             idealized_insolation,
             idealized_clouds,
-            thermo_dispatcher,
             data_loader = CA.rrtmgp_data_loader,
         )
     else
@@ -99,7 +96,6 @@ function additional_cache(Y, parsed_args, params, atmos, dt;)
             Y,
             comms_ctx,
         ),
-        (; thermo_dispatcher),
         (; Δt = dt),
         TCU.turbconv_cache(
             Y,
@@ -305,9 +301,21 @@ import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 using ClimaCoreMakie, CairoMakie
+include(joinpath(pkgdir(CA), "post_processing", "contours_and_profiles.jl"))
 include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
+include(
+    joinpath(pkgdir(CA), "post_processing", "define_tc_quicklook_profiles.jl"),
+)
 
-if parsed_args["debugging_tc"]
+reference_job_id = parse_arg(parsed_args, "reference_job_id", simulation.job_id)
+
+is_edmfx = atmos.turbconv_model isa CA.EDMFX
+if is_edmfx && parsed_args["post_process"]
+    contours_and_profiles(simulation.output_dir, reference_job_id)
+    zip_and_cleanup_output(simulation.output_dir, "hdf5files.zip")
+end
+
+if parsed_args["debugging_tc"] && !is_edmfx
     include(
         joinpath(
             @__DIR__,
@@ -317,19 +325,9 @@ if parsed_args["debugging_tc"]
             "self_reference_or_path.jl",
         ),
     )
-    include(
-        joinpath(
-            pkgdir(CA),
-            "post_processing",
-            "define_tc_quicklook_profiles.jl",
-        ),
-    )
 
     main_branch_root = get_main_branch_buildkite_path()
-    quicklook_reference_job_id =
-        parse_arg(parsed_args, "quicklook_reference_job_id", simulation.job_id)
-    main_branch_data_path =
-        joinpath(main_branch_root, quicklook_reference_job_id)
+    main_branch_data_path = joinpath(main_branch_root, reference_job_id)
 
     day = floor(Int, simulation.t_end / (60 * 60 * 24))
     sec = floor(Int, simulation.t_end % (60 * 60 * 24))
@@ -364,7 +362,7 @@ end
 
 if sol_res.ret_code == :simulation_crashed
     error(
-        "The ClimaAtmos simulationhas crashed. See the stack trace for details.",
+        "The ClimaAtmos simulation has crashed. See the stack trace for details.",
     )
 end
 # Simulation did not crash
@@ -382,7 +380,7 @@ if simulation.is_distributed
     )
 end
 
-if !simulation.is_distributed && parsed_args["post_process"]
+if !simulation.is_distributed && parsed_args["post_process"] && !is_edmfx
     ENV["GKSwstype"] = "nul" # avoid displaying plots
     if CA.is_baro_wave(parsed_args)
         paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)

@@ -312,7 +312,7 @@ function get_turbconv_model(
     turbconv_params,
 )
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in (nothing, "edmf")
+    @assert turbconv in (nothing, "edmf", "edmfx")
 
     return if turbconv == "edmf"
         TC.EDMFModel(
@@ -322,6 +322,8 @@ function get_turbconv_model(
             parsed_args,
             turbconv_params,
         )
+    elseif turbconv == "edmfx"
+        EDMFX{turbconv_params.updraft_number}(turbconv_params.min_area)
     else
         nothing
     end
@@ -345,15 +347,4 @@ function get_surface_scheme(FT, parsed_args)
     elseif surface_scheme == nothing
         surface_scheme
     end
-end
-
-"""
-    ThermoDispatcher(atmos)
-
-A helper method for creating a thermodynamics dispatcher
-from the model specification struct.
-"""
-function ThermoDispatcher(atmos)
-    (; energy_form, moisture_model) = atmos
-    return ThermoDispatcher(; energy_form, moisture_model)
 end

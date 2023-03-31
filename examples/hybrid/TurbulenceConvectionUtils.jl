@@ -27,15 +27,15 @@ include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
 
 turbconv_cache(
     Y,
-    turbconv_model::Nothing,
+    turbconv_model,
     atmos,
     param_set,
     parsed_args,
     initial_condition,
 ) = (; turbconv_model)
 
-implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
-explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, _) = nothing
+explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, _) = nothing
 
 #####
 ##### EDMF

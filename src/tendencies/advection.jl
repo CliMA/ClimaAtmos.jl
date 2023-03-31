@@ -15,18 +15,17 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜu_bar, ᶜK, ᶜΦ, ᶜts, ᶜp, ᶜω³, ᶠω¹², params) = p
-    (; ᶜρ_ref, ᶜp_ref) = p
+    (; ᶜu, ᶜK, ᶜΦ, ᶜp, ᶜω³, ᶠω¹², ᶜp_ref) = p
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     # Mass conservation
-    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜu_bar)
+    @. Yₜ.c.ρ -= divₕ(ᶜρ * ᶜu)
 
     # Energy conservation
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜu_bar)
+        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜu)
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜu_bar)
+        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜu)
     end
 
     # Momentum conservation
@@ -54,11 +53,8 @@ end
 function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    C123 = Geometry.Covariant123Vector
-    (; ᶠu_tilde, ᶜu_bar, ᶜK, ᶜp, ᶜω³, ᶠω¹², ᶠu³, ᶜf) = p
-    (; ᶜdivᵥ, ᶠinterp, ᶠwinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
-    # Mass conservation
+    (; ᶜu, ᶜK, ᶜω³, ᶠω¹², ᶠu³, ᶜf) = p
+    (; ᶠinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
     # Momentum conservation
@@ -68,11 +64,11 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠω¹²[colidx] × (ᶠinterp(ᶜρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
         ) / (ᶜρ[colidx] * ᶜJ[colidx]) +
         (ᶜf[colidx] + ᶜω³[colidx]) ×
-        (Geometry.project(Geometry.Contravariant12Axis(), ᶜu_bar[colidx]))
+        Geometry.project(Geometry.Contravariant12Axis(), ᶜu[colidx])
     @. Yₜ.f.w[colidx] -=
-        ᶠω¹²[colidx] × ᶠinterp(
-            Geometry.project(Geometry.Contravariant12Axis(), ᶜu_bar[colidx]),
-        ) + ᶠgradᵥ(ᶜK[colidx])
+        ᶠω¹²[colidx] ×
+        ᶠinterp(Geometry.project(Geometry.Contravariant12Axis(), ᶜu[colidx])) +
+        ᶠgradᵥ(ᶜK[colidx])
 
     return nothing
 end

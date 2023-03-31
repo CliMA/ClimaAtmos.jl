@@ -33,13 +33,7 @@ function precipitation_cache(Y, precip_model::Microphysics0Moment)
     )
 end
 
-function compute_precipitation_cache!(
-    Y,
-    p,
-    colidx,
-    ::Microphysics0Moment,
-    ::Nothing,
-)
+function compute_precipitation_cache!(Y, p, colidx, ::Microphysics0Moment, _)
     (; ᶜts, ᶜS_ρq_tot, params) = p
     cm_params = CAP.microphysics_params(params)
     thermo_params = CAP.thermodynamics_params(params)

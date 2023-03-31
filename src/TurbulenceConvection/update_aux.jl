@@ -81,7 +81,7 @@ function update_aux!(
                 aux_up[i].area[k] = 0
                 aux_up[i].e_kin[k] = e_kin[k]
             end
-            ts_up_i = if edmf.moisture_model isa DryModel
+            aux_up[i].ts[k] = if edmf.moisture_model isa DryModel
                 TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
             elseif edmf.moisture_model isa EquilMoistModel
                 TD.PhaseEquil_pθq(
@@ -93,17 +93,19 @@ function update_aux!(
             elseif edmf.moisture_model isa NonEquilMoistModel
                 error("Unsupported moisture model")
             end
-            aux_up[i].e_tot[k] = TD.total_energy(
-                thermo_params,
-                ts_up_i,
-                aux_up[i].e_kin[k],
-                e_pot,
-            )
+            ts_up = aux_up[i].ts[k]
+            aux_up[i].e_tot[k] =
+                TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin[k], e_pot)
             aux_up[i].h_tot[k] = TD.total_specific_enthalpy(
                 thermo_params,
-                ts_up_i,
+                ts_up,
                 aux_up[i].e_tot[k],
             )
+            aux_up[i].q_liq[k] =
+                TD.liquid_specific_humidity(thermo_params, ts_up)
+            aux_up[i].q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_up)
+            aux_up[i].T[k] = TD.air_temperature(thermo_params, ts_up)
+            aux_up[i].RH[k] = TD.relative_humidity(thermo_params, ts_up)
         end
 
         #####
@@ -158,6 +160,7 @@ function update_aux!(
             error("Add support got non-equilibrium thermo states")
         end
         ts_en = ts_env[k]
+        aux_en.ts[k] = ts_env[k]
         aux_en.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts_en)
         aux_en.e_tot[k] =
             TD.total_energy(thermo_params, ts_en, aux_en.e_kin[k], e_pot)
@@ -166,68 +169,46 @@ function update_aux!(
         aux_en.θ_dry[k] = TD.dry_pottemp(thermo_params, ts_en)
         aux_en.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts_en)
         aux_en.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_en)
-        rho = TD.air_density(thermo_params, ts_en)
-        aux_en.buoy[k] = buoyancy_c(thermo_params, ρ_c[k], rho)
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
     end
 
     microphysics(grid, state, edmf, edmf.precip_model, Δt, param_set)
 
+    # compute the buoyancy
+    LBF_ρ = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(ρ_f[kf_surf]))
+    #LBF_ρ = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(ρ_c[kc_surf]))
+    LBF_a = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(edmf.surface_area))
+    @. aux_en_f.buoy = buoyancy_c(
+        thermo_params,
+        ρ_f,
+        LBF_ρ(TD.air_density(thermo_params, aux_en.ts)),
+    )
+    @inbounds for i in 1:N_up
+        @. aux_up_f[i].buoy = buoyancy_c(
+            thermo_params,
+            ρ_f,
+            LBF_ρ(TD.air_density(thermo_params, aux_up[i].ts)),
+        )
+    end
+    @. aux_gm_f.buoy = (1.0 - LBF_a(aux_bulk.area)) * aux_en_f.buoy
+    @inbounds for i in 1:N_up
+        @. aux_gm_f.buoy += LBF_a(aux_up[i].area) * aux_up_f[i].buoy
+    end
+    @inbounds for i in 1:N_up
+        @. aux_up_f[i].buoy -= aux_gm_f.buoy
+    end
+    # Only needed for diagnostics/plotting
+    @. aux_en_f.buoy -= aux_gm_f.buoy
+    @. aux_tc_f.bulk.buoy_up1 = aux_up_f[1].buoy
+
     @inbounds for k in real_center_indices(grid)
-        a_bulk_c = aux_bulk.area[k]
-        @inbounds for i in 1:N_up
-            if aux_up[i].area[k] < edmf.minimum_area &&
-               k > kc_surf &&
-               aux_up[i].area[k - 1] > 0.0
-                qt = aux_up[i].q_tot[k - 1]
-                h = aux_up[i].θ_liq_ice[k - 1]
-                ts_up = if edmf.moisture_model isa DryModel
-                    TD.PhaseDry_pθ(thermo_params, p_c[k], h)
-                elseif edmf.moisture_model isa EquilMoistModel
-                    TD.PhaseEquil_pθq(thermo_params, p_c[k], h, qt)
-                elseif edmf.moisture_model isa NonEquilMoistModel
-                    error("Unsupported moisture model")
-                end
-
-            else
-                ts_up = if edmf.moisture_model isa DryModel
-                    TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
-                elseif edmf.moisture_model isa EquilMoistModel
-                    TD.PhaseEquil_pθq(
-                        thermo_params,
-                        p_c[k],
-                        aux_up[i].θ_liq_ice[k],
-                        aux_up[i].q_tot[k],
-                    )
-                elseif edmf.moisture_model isa NonEquilMoistModel
-                    error("Unsupported moisture model")
-                end
-            end
-            aux_up[i].q_liq[k] =
-                TD.liquid_specific_humidity(thermo_params, ts_up)
-            aux_up[i].q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_up)
-            aux_up[i].T[k] = TD.air_temperature(thermo_params, ts_up)
-            ρ = TD.air_density(thermo_params, ts_up)
-            aux_up[i].buoy[k] = buoyancy_c(thermo_params, ρ_c[k], ρ)
-            aux_up[i].RH[k] = TD.relative_humidity(thermo_params, ts_up)
-        end
-        aux_gm.buoy[k] = (1.0 - aux_bulk.area[k]) * aux_en.buoy[k]
-        @inbounds for i in 1:N_up
-            aux_gm.buoy[k] += aux_up[i].area[k] * aux_up[i].buoy[k]
-        end
-        @inbounds for i in 1:N_up
-            aux_up[i].buoy[k] -= aux_gm.buoy[k]
-        end
-        aux_en.buoy[k] -= aux_gm.buoy[k]
-
-
         #####
         ##### compute bulk thermodynamics
         #####
+        a_bulk_c = aux_bulk.area[k]
         aux_bulk.q_liq[k] = 0
         aux_bulk.q_ice[k] = 0
         aux_bulk.T[k] = 0
-        aux_bulk.buoy[k] = 0
         if a_bulk_c > 0
             @inbounds for i in 1:N_up
                 aux_bulk.q_liq[k] +=
@@ -235,8 +216,6 @@ function update_aux!(
                 aux_bulk.q_ice[k] +=
                     aux_up[i].area[k] * aux_up[i].q_ice[k] / a_bulk_c
                 aux_bulk.T[k] += aux_up[i].area[k] * aux_up[i].T[k] / a_bulk_c
-                aux_bulk.buoy[k] +=
-                    aux_up[i].area[k] * aux_up[i].buoy[k] / a_bulk_c
             end
         else
             aux_bulk.T[k] = aux_en.T[k]
@@ -256,10 +235,6 @@ function update_aux!(
         aux_gm.T[k] = (
             aux_bulk.area[k] * aux_bulk.T[k] +
             (1 - aux_bulk.area[k]) * aux_en.T[k]
-        )
-        aux_gm.buoy[k] = (
-            aux_bulk.area[k] * aux_bulk.buoy[k] +
-            (1 - aux_bulk.area[k]) * aux_en.buoy[k]
         )
 
         has_condensate =

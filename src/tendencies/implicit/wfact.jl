@@ -81,7 +81,7 @@ end
 function Wfact!(W, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
         p.test_dycore_consistency && fill_with_nans!(p)
-        precomputed_quantities!(Y, p, t)
+        set_precomputed_quantities!(Y, p, t)
         Fields.bycolumn(axes(Y.c)) do colidx
             Wfact!(W, Y, p, dtγ, t, colidx)
         end
@@ -90,21 +90,18 @@ end
 
 function Wfact!(W, Y, p, dtγ, t, colidx)
 
-    (; ᶠgradᵥ, ᶠinterp, ᶠinterp_stencil, ᶠupwind1, ᶠgradᵥ_stencil) = p.operators
-    (; ᶜinterp, ᶜinterp_stencil, ᶠupwind3, ᶜdivᵥ_stencil) = p.operators
+    (; ᶠgradᵥ, ᶠinterp, ᶠinterp_stencil, ᶠgradᵥ_stencil) = p.operators
+    (; ᶜinterp, ᶜinterp_stencil, ᶜdivᵥ_stencil) = p.operators
 
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
     ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
-    (; ᶜρ_ref, ᶜp_ref) = p
-    (; energy_upwinding, tracer_upwinding, thermo_dispatcher) = p
+    (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜρ_ref, ᶜp_ref, ∂ᶜK∂ᶠw_data, params) = p
+    (; energy_upwinding, tracer_upwinding) = p
 
     validate_flags!(Y, flags, energy_upwinding)
     FT = Spaces.undertype(axes(Y.c))
-    C123 = Geometry.Covariant123Vector
     compose = Operators.ComposeStencils()
 
     R_d = FT(CAP.R_d(params))

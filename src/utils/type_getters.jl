@@ -253,8 +253,12 @@ end
 
 function get_initial_condition(parsed_args)
     if isnothing(parsed_args["turbconv_case"])
-        if parsed_args["initial_condition"] in
-           ["DryBaroclinicWave", "MoistBaroclinicWave", "DecayingProfile"]
+        if parsed_args["initial_condition"] in [
+            "DryBaroclinicWave",
+            "MoistBaroclinicWave",
+            "DecayingProfile",
+            "MoistBaroclinicWaveWithEDMF",
+        ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
                 parsed_args["perturb_initstate"],
             )
@@ -415,3 +419,8 @@ function get_integrator(args, kwargs)
     @time "Define integrator" integrator = ODE.init(args...; kwargs...)
     return integrator
 end
+
+thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
+thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
+thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
+    TD.PhaseNonEquil{FT}
