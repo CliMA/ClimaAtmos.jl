@@ -67,7 +67,7 @@ mpiexec julia --project=$CA_EXAMPLE $DRIVER --forcing held_suarez --output_dir=$
 In the runscript, one needs to specify the following environmant variable:
 * `RESTART_FILE`: if run from a pre-existing hdf5 data saved from a previous simulation.
 
-Commonly used command line arguements for experiment setups are [here](https://clima.github.io/ClimaAtmos.jl/dev/cl_args/).
+Commonly used command line arguments for experiment setups are [here](https://clima.github.io/ClimaAtmos.jl/dev/cl_args/).
 
 
 

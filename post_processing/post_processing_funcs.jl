@@ -202,7 +202,7 @@ end
 
 function safe_index(ius, t)
     iu = if isempty(ius)
-        @warn "Cound not find desired time for plotting, falling back on last day."
+        @warn "Could not find desired time for plotting, falling back on last day."
         length(t)
     else
         first(ius)

@@ -225,7 +225,7 @@ function compute_has_func(summaries, funcs)
         # We can't just throw an error without tracking function
         # names, which seems complicated and brittle. Instead, we
         # warn that function names have changed. This means that
-        # we'll have gaps in our perfromance reports if we don't
+        # we'll have gaps in our performance reports if we don't
         # keep function names up to date, but fixing this should
         # be trivial and smooth since nothing other than fixing
         # the function names is required.
