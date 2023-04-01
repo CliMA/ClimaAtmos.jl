@@ -44,14 +44,6 @@ kf_top_of_atmos(grid::Grid) = CCO.PlusHalf(n_cells(grid) + 1)
 is_surface_center(grid::Grid, k) = k == kc_surface(grid)
 real_center_indices(grid::Grid) = CenterIndices(grid)
 
-struct FaceIndices{Nstart, Nstop, G}
-    grid::G
-    function FaceIndices(grid::G) where {G <: Grid}
-        Nstart, Nstop = kf_surface(grid).i, kf_top_of_atmos(grid).i
-        new{Nstart, Nstop, G}(grid)
-    end
-end
-
 struct CenterIndices{Nstart, Nstop, G}
     grid::G
     function CenterIndices(grid::G) where {G <: Grid}
@@ -61,20 +53,13 @@ struct CenterIndices{Nstart, Nstop, G}
 end
 
 Base.keys(ci::CenterIndices) = 1:length(ci)
-Base.keys(fi::FaceIndices) = 1:length(fi)
 
 n_start(::CenterIndices{Nstart}) where {Nstart} = Nstart
-n_start(::FaceIndices{Nstart}) where {Nstart} = Nstart
 n_stop(::CenterIndices{Nstart, Nstop}) where {Nstart, Nstop} = Nstop
-n_stop(::FaceIndices{Nstart, Nstop}) where {Nstart, Nstop} = Nstop
 
 Base.getindex(ci::CenterIndices, i::Int) =
     Cent(Base.getindex(n_start(ci):n_stop(ci), i))
-Base.getindex(fi::FaceIndices, i::Int) =
-    CCO.PlusHalf(Base.getindex(n_start(fi):n_stop(fi), i))
 
-Base.length(::FaceIndices{Nstart, Nstop}) where {Nstart, Nstop} =
-    Nstop - Nstart + 1
 Base.length(::CenterIndices{Nstart, Nstop}) where {Nstart, Nstop} =
     Nstop - Nstart + 1
 
@@ -84,22 +69,10 @@ Base.iterate(
 ) where {Nstart, Nstop} = state > Nstop ? nothing : (Cent(state), state + 1)
 
 Base.iterate(
-    fi::FaceIndices{Nstart, Nstop},
-    state = Nstart,
-) where {Nstart, Nstop} =
-    state > Nstop ? nothing : (CCO.PlusHalf(state), state + 1)
-
-Base.iterate(
     fi::Base.Iterators.Reverse{T},
     state = Nstop,
 ) where {Nstart, Nstop, T <: CenterIndices{Nstart, Nstop}} =
     state < Nstart ? nothing : (Cent(state), state - 1)
-
-Base.iterate(
-    fi::Base.Iterators.Reverse{T},
-    state = Nstop,
-) where {Nstart, Nstop, T <: FaceIndices{Nstart, Nstop}} =
-    state < Nstart ? nothing : (CCO.PlusHalf(state), state - 1)
 
 #=
     findlast_center
