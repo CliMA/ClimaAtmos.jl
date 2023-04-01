@@ -1,5 +1,4 @@
 function microphysics(
-    grid::Grid,
     state::State,
     edmf::EDMFModel,
     precip_model::AbstractPrecipitationModel,
