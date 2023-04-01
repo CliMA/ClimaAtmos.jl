@@ -24,6 +24,24 @@ import ClimaCore.Fields: ColumnField
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 
+# Fields used to store variables that only need to be used in a single function
+# but cannot be computed on the fly. Unlike the precomputed quantities, these
+# can be modified at any point, so they should never be assumed to be unchanged
+# between function calls.
+function temporary_quantities(atmos, center_space, face_space)
+    CT3 = Geometry.Contravariant3Vector
+    CT12 = Geometry.Contravariant12Vector
+    FT = Spaces.undertype(center_space)
+    n = n_mass_flux_subdomains(atmos.turbconv_model)
+    return (;
+        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜρh, ᶜρhʲ
+        ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
+        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
+        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
+        ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
+    )
+end
+
 function default_cache(
     Y,
     parsed_args,
@@ -213,6 +231,7 @@ function default_cache(
             spaces.center_space,
             spaces.face_space,
         )...,
+        temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
     return default_cache
