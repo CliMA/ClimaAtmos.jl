@@ -391,18 +391,18 @@ function q_surface_bc(
     return aux_gm.q_tot[kc_surf] + surface_scalar_coeff * sqrt(qt_var)
 end
 
-function compute_updraft_top(grid::Grid, state::State, i::Int)
+function compute_updraft_top(state::State, i::Int)
     aux_up = center_aux_updrafts(state)
-    return z_findlast_center(k -> aux_up[i].area[k] > 1e-3, grid)
+    (; value, z) = column_findlastvalue(a -> a[] > 1e-3, aux_up[i].area)
+    return z[]
 end
 
 function compute_plume_scale_height(
-    grid::Grid,
     state::State,
     H_up_min::FT,
     i::Int,
 )::FT where {FT}
-    updraft_top::FT = compute_updraft_top(grid, state, i)
+    updraft_top::FT = compute_updraft_top(state, i)
     return max(updraft_top, H_up_min)
 end
 

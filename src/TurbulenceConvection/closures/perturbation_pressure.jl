@@ -1,7 +1,6 @@
 """
     compute_nh_pressure!(
         state::State,
-        grid::Grid,
         edmf::EDMFModel,
         surf,
     )
@@ -14,16 +13,13 @@ Computes the
 for all updrafts, following [He2020](@cite), given:
 
  - `state`: state
- - `grid`: grid
  - `edmf`: EDMF model
  - `surf`: `SurfaceFluxes.SurfaceFluxConditions`
 """
-function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
+function compute_nh_pressure!(state::State, edmf::EDMFModel, surf)
 
     FT = float_type(state)
     N_up = n_updrafts(edmf)
-    kc_surf = kc_surface(grid)
-    kc_toa = kc_top_of_atmos(grid)
 
     Ifc = CCO.InterpolateF2C()
     wvec = CC.Geometry.WVector
@@ -37,7 +33,7 @@ function compute_nh_pressure!(state::State, grid::Grid, edmf::EDMFModel, surf)
     aux_en_f = face_aux_environment(state)
     ρ_f = aux_gm_f.ρ
     plume_scale_height = ntuple(N_up) do i
-        compute_plume_scale_height(grid, state, edmf.H_up_min, i)
+        compute_plume_scale_height(state, edmf.H_up_min, i)
     end
 
     # Note: Independence of aspect ratio hardcoded in implementation.
