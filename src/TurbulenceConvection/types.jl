@@ -16,6 +16,19 @@ Base.@kwdef struct PrecipFormation{FT}
 end
 
 """
+    PrecipSinks
+
+Storage for tendencies due to precipitation sinks
+
+$(DocStringExtensions.FIELDS)
+"""
+Base.@kwdef struct PrecipSinks{FT}
+    S_qr_evap::FT = FT(0)
+    S_qs_melt::FT = FT(0)
+    S_qs_sub_dep::FT = FT(0)
+end
+
+"""
     NoneqMoistureSources
 
 Storage for tendencies due to nonequilibrium moisture formation

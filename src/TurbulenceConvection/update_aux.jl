@@ -172,7 +172,7 @@ function update_aux!(
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
     end
 
-    microphysics(grid, state, edmf, edmf.precip_model, Δt, param_set)
+    microphysics(state, edmf, edmf.precip_model, Δt, param_set)
 
     # compute the buoyancy
     LBF_ρ = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(ρ_f[kf_surf]))
@@ -437,7 +437,6 @@ function update_aux!(
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
     compute_precipitation_formation_tendencies(
-        grid,
         state,
         edmf,
         edmf.precip_model,

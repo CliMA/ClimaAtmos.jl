@@ -169,7 +169,6 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     TC.compute_precipitation_sink_tendencies(
         p.precip_model,
-        grid,
         state,
         tc_params,
         Δt,
