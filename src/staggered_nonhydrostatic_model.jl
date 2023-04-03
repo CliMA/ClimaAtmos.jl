@@ -126,6 +126,7 @@ function default_cache(
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
+    ts_type = thermo_state_type(atmos.moisture_model, FT)
 
     sfc_conditions =
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
