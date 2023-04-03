@@ -40,6 +40,7 @@ function update_aux!(
     ρ_f = aux_gm_f.ρ
     p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
+    zc = Fields.coordinate_field(axes(ρ_c)).z
     aux_en_unsat = aux_en.unsat
     aux_en_sat = aux_en.sat
     m_entr_detr = aux_tc.ϕ_temporary
@@ -64,70 +65,80 @@ function update_aux!(
             ) / 2
     end
 
-    @inbounds for k in real_center_indices(grid)
+    e_pot(z) = geopotential(thermo_params, z)
+    thresh_area(prog_up, ρ_c) = prog_up[i].ρarea / ρ_c[k] >= edmf.minimum_area
+    @inbounds for i in 1:N_up
+        @. aux_up[i].θ_liq_ice = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            prog_up[i].ρaθ_liq_ice / prog_up[i].ρarea,
+            aux_gm.θ_liq_ice,
+        )
+        @. aux_up[i].q_tot = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            prog_up[i].ρaq_tot / prog_up[i].ρarea,
+            aux_gm.q_tot,
+        )
+        @. aux_up[i].area = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            prog_up[i].ρarea / ρ_c,
+            0,
+        )
+        @. aux_up[i].e_kin = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            aux_up[i].e_kin,
+            e_kin,
+        )
         #####
         ##### Set primitive variables
         #####
-        e_pot = geopotential(thermo_params, grid.zc.z[k])
-        @inbounds for i in 1:N_up
-            if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
-                aux_up[i].θ_liq_ice[k] =
-                    prog_up[i].ρaθ_liq_ice[k] / prog_up[i].ρarea[k]
-                aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / prog_up[i].ρarea[k]
-                aux_up[i].area[k] = prog_up[i].ρarea[k] / ρ_c[k]
-            else
-                aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
-                aux_up[i].q_tot[k] = aux_gm.q_tot[k]
-                aux_up[i].area[k] = 0
-                aux_up[i].e_kin[k] = e_kin[k]
-            end
-            aux_up[i].ts[k] = if edmf.moisture_model isa DryModel
-                TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
-            elseif edmf.moisture_model isa EquilMoistModel
-                TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p_c[k],
-                    aux_up[i].θ_liq_ice[k],
-                    aux_up[i].q_tot[k],
-                )
-            elseif edmf.moisture_model isa NonEquilMoistModel
-                error("Unsupported moisture model")
-            end
-            ts_up = aux_up[i].ts[k]
-            aux_up[i].e_tot[k] =
-                TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin[k], e_pot)
-            aux_up[i].h_tot[k] = TD.total_specific_enthalpy(
+        if edmf.moisture_model isa DryModel
+            @. aux_up[i].ts =
+                TD.PhaseDry_pθ(thermo_params, p_c, aux_up[i].θ_liq_ice)
+        elseif edmf.moisture_model isa EquilMoistModel
+            @. aux_up[i].ts = TD.PhaseEquil_pθq(
                 thermo_params,
-                ts_up,
-                aux_up[i].e_tot[k],
+                p_c,
+                aux_up[i].θ_liq_ice,
+                aux_up[i].q_tot,
             )
-            aux_up[i].q_liq[k] =
-                TD.liquid_specific_humidity(thermo_params, ts_up)
-            aux_up[i].q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_up)
-            aux_up[i].T[k] = TD.air_temperature(thermo_params, ts_up)
-            aux_up[i].RH[k] = TD.relative_humidity(thermo_params, ts_up)
+        elseif edmf.moisture_model isa NonEquilMoistModel
+            error("Unsupported moisture model")
         end
 
-        #####
-        ##### compute bulk
-        #####
-        aux_bulk.q_tot[k] = 0
-        aux_bulk.h_tot[k] = 0
-        aux_bulk.area[k] = sum(i -> aux_up[i].area[k], 1:N_up)
-        if aux_bulk.area[k] > 0
-            @inbounds for i in 1:N_up
-                a_k = aux_up[i].area[k]
-                a_bulk_k = aux_bulk.area[k]
-                aux_bulk.q_tot[k] += a_k * aux_up[i].q_tot[k] / a_bulk_k
-                aux_bulk.h_tot[k] += a_k * aux_up[i].h_tot[k] / a_bulk_k
-            end
-        else
-            aux_bulk.q_tot[k] = aux_gm.q_tot[k]
-            aux_bulk.h_tot[k] = aux_gm.h_tot[k]
-        end
-        aux_en.area[k] = 1 - aux_bulk.area[k]
-        aux_en.tke[k] = prog_en.ρatke[k] / (ρ_c[k] * aux_en.area[k])
+        ts_up = aux_up[i].ts
+        @. aux_up[i].e_tot =
+            TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin, e_pot(zc))
+        @. aux_up[i].h_tot =
+            TD.total_specific_enthalpy(thermo_params, ts_up, aux_up[i].e_tot)
+        @. aux_up[i].q_liq = TD.liquid_specific_humidity(thermo_params, ts_up)
+        @. aux_up[i].q_ice = TD.ice_specific_humidity(thermo_params, ts_up)
+        @. aux_up[i].T = TD.air_temperature(thermo_params, ts_up)
+        @. aux_up[i].RH = TD.relative_humidity(thermo_params, ts_up)
+
     end
+    #####
+    ##### compute bulk
+    #####
+    @. aux_bulk.area = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.area += aux_up[i].area
+    end
+
+    @. aux_bulk.q_tot = 0
+    @. aux_bulk.h_tot = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.q_tot += aux_up[i].area * aux_up[i].q_tot / aux_bulk.area
+        @. aux_bulk.h_tot += aux_up[i].area * aux_up[i].h_tot / aux_bulk.area
+    end
+    @inbounds for i in 1:N_up
+        @. aux_bulk.q_tot =
+            ifelse(aux_bulk.area > 0, aux_bulk.q_tot, aux_gm.q_tot)
+        @. aux_bulk.h_tot =
+            ifelse(aux_bulk.area > 0, aux_bulk.h_tot, aux_gm.h_tot)
+    end
+
+    @. aux_en.area = 1 - aux_bulk.area
+    @. aux_en.tke = prog_en.ρatke / (ρ_c * aux_en.area)
 
     @. aux_en_f.w = prog_gm_f.w / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
