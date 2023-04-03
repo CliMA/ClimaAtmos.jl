@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "c879eb223e097f222bcca221614fbe485db16bda"
+project_hash = "432e19586d2966dc5cf1b569c9a099656e855b6f"
 
 [[deps.AMD]]
 deps = ["Libdl", "LinearAlgebra", "SparseArrays", "Test"]
@@ -213,7 +213,7 @@ uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.6"
 
 [[deps.ClimaAtmos]]
-deps = ["AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "ClimaTimeSteppers", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "ImageFiltering", "Insolation", "Interpolations", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "NCDatasets", "NVTX", "OrdinaryDiffEq", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "StaticArrays", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics"]
+deps = ["AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaCorePlots", "ClimaCoreVTK", "ClimaTimeSteppers", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "ImageFiltering", "Insolation", "Interpolations", "IntervalSets", "JLD2", "LambertW", "LinearAlgebra", "NCDatasets", "NVTX", "OrdinaryDiffEq", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "StaticArrays", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.9.0"

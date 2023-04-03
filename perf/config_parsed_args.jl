@@ -6,12 +6,23 @@ for defining `parsed_args` is
     - Mid     precedence: args defined in `parsed_args_perf_target` (below)
     - Lowest  precedence: args defined in `cli_defaults(s)`
 julia --project=perf/ perf/config_parsed_args.jl --target_job sphere_baroclinic_wave_rhoe_equilmoist
+
+Example of interactive run:
+```
+julia --project=perf/
+push!(ARGS, "--job_id", "flame_perf_target_edmf");
+push!(ARGS, "--target_job", "sphere_baroclinic_wave_rhoe_equilmoist_edmf");
+push!(ARGS, "--moist", "dry");
+push!(ARGS, "--precip_model", "nothing");
+push!(ARGS, "--rad", "nothing");
+include("perf/config_parsed_args.jl")
+```
 =#
 ca_dir = joinpath(dirname(@__DIR__));
 include(joinpath(ca_dir, "examples", "hybrid", "cli_options.jl"))
 (s, _parsed_args) = parse_commandline()
 parsed_args_defaults = cli_defaults(s);
-dict = parsed_args_per_job_id();
+dict = parsed_args_per_job_id(; filter_name = "driver.jl");
 
 # Start with performance target, and override anything provided in ARGS
 parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
