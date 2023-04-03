@@ -81,7 +81,7 @@ function (initial_condition::DecayingProfile)(params)
 end
 
 """
-    AgnesiHProfile(; perturb = false)
+    AgnesiHProfile()
 
 An `InitialCondition` with a decaying temperature profile
 """
@@ -116,11 +116,11 @@ function (initial_condition::AgnesiHProfile)(params)
 end
 
 """
-    ScharProfile(; perturb = false)
+    ScharProfile
+
 An `InitialCondition` with a prescribed Brunt-Vaisala Frequency
 """
 Base.@kwdef struct ScharProfile <: InitialCondition end
-
 function (initial_condition::ScharProfile)(params)
     function local_state(local_geometry)
         FT = eltype(params)
@@ -140,7 +140,6 @@ function (initial_condition::ScharProfile)(params)
         ρ = p₀ / (R_d * T) * (π_exner)^(cp_d / R_d)
         p = ρ * R_d * T
         velocity = Geometry.UVVector(FT(10), FT(0))
-
         return LocalState(;
             params,
             geometry = local_geometry,

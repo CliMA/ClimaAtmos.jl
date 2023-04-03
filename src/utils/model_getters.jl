@@ -79,6 +79,18 @@ function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
+function get_laplacian_viscosity_model(parsed_args, ::Type{FT}) where {FT}
+    vs_name = parsed_args["laplacian_viscosity"]
+    return if vs_name in ("false", false, "none")
+        nothing
+    elseif vs_name in ("true", true, "LaplacianViscosity")
+        κ₂ = parsed_args["kappa_2_visc"]
+        LaplacianViscosity{FT}(; κ₂)
+    else
+        error("Uncaught viscous sponge model `$vs_name`.")
+    end
+end
+
 function get_rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)

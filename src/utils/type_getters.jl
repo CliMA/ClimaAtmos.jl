@@ -54,6 +54,7 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         viscous_sponge = get_viscous_sponge_model(parsed_args, FT),
+        laplacian_viscosity = get_laplacian_viscosity_model(parsed_args, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
     )
 
@@ -268,7 +269,7 @@ function get_initial_condition(parsed_args)
             "Bomex",
             "AgnesiHProfile",
             "DryDensityCurrentProfile",
-            "ScharProfile"
+            "ScharProfile",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
         else

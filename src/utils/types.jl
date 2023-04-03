@@ -54,6 +54,11 @@ Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     α_w::FT
 end
 
+abstract type Viscosity end
+Base.@kwdef struct LaplacianViscosity{FT} <: Viscosity
+    κ₂::FT
+end
+
 abstract type AbstractGravityWave end
 Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     source_pressure::FT = 31500
@@ -178,6 +183,7 @@ Base.@kwdef struct AtmosModel{
     VD,
     VS,
     RS,
+    LV,
 }
     model_config::MC = nothing
     coupling::C = nothing
@@ -198,6 +204,7 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
+    laplacian_viscosity::LV = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
