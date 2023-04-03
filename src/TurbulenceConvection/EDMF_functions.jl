@@ -1,5 +1,5 @@
 
-function update_cloud_frac(edmf::EDMFModel, grid::Grid, state::State)
+function update_cloud_frac(edmf::EDMFModel, state::State)
     # update grid-mean cloud fraction and cloud cover
     aux_bulk = center_aux_bulk(state)
     aux_gm = center_aux_grid_mean(state)

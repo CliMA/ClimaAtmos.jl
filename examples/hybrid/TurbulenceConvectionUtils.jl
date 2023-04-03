@@ -104,7 +104,7 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
+    assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
 
     surf = get_surface(
         p.atmos.model_config,
@@ -152,7 +152,7 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
+    assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
 
     surf = get_surface(
         p.atmos.model_config,
@@ -182,7 +182,7 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         TC.compute_implicit_turbconv_tendencies!(edmf, grid, state)
 
     # TODO: incrementally disable this and enable proper grid mean terms
-    compute_explicit_gm_tendencies!(edmf, grid, state, surf, tc_params)
+    compute_explicit_gm_tendencies!(edmf, state, surf, tc_params)
     imex_edmf_gm ||
         compute_implicit_gm_tendencies!(edmf, grid, state, surf, tc_params)
 

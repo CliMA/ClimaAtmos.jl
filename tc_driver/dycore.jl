@@ -18,7 +18,7 @@ include(joinpath(@__DIR__, "dycore_variables.jl"))
 ##### Methods
 #####
 
-function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
+function assign_thermo_aux!(state, moisture_model, thermo_params)
     If = CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     aux_gm = TC.center_aux_grid_mean(state)
     aux_gm_f = TC.face_aux_grid_mean(state)
@@ -69,7 +69,6 @@ end
 
 function compute_explicit_gm_tendencies!(
     edmf::TC.EDMFModel,
-    grid::TC.Grid,
     state::TC.State,
     surf,
     param_set::APS,
