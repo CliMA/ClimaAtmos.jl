@@ -29,7 +29,7 @@ center_space, face_space =
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)
 
-# Initialize Y with prescirbed wind, density, and buoyancy frequency
+# Initialize Y with prescribed wind, density, and buoyancy frequency
 # Figure 1 in Garner05
 Yc = map(ᶜlocal_geometry) do lg
     lat = lg.coordinates.lat

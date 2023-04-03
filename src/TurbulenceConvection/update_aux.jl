@@ -172,7 +172,7 @@ function update_aux!(
         aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
     end
 
-    microphysics(grid, state, edmf, edmf.precip_model, Δt, param_set)
+    microphysics(state, edmf, edmf.precip_model, Δt, param_set)
 
     # compute the buoyancy
     LBF_ρ = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(ρ_f[kf_surf]))
@@ -245,18 +245,19 @@ function update_aux!(
             0
         end
 
-        @. aux_gm.tke = aux_en.area * aux_en.tke
+    end
+    @. aux_gm.tke = aux_en.area * aux_en.tke
+    @. aux_gm.tke +=
+        0.5 *
+        aux_en.area *
+        LA.norm_sqr(C123(Ic(wvec(aux_en_f.w - prog_gm_f.w))))
+    @inbounds for i in 1:N_up
         @. aux_gm.tke +=
             0.5 *
-            aux_en.area *
-            LA.norm_sqr(C123(Ic(wvec(aux_en_f.w - prog_gm_f.w))))
-        @inbounds for i in 1:N_up
-            @. aux_gm.tke +=
-                0.5 *
-                aux_up[i].area *
-                LA.norm_sqr(C123(Ic(wvec(prog_up_f[i].w - prog_gm_f.w))))
-        end
+            aux_up[i].area *
+            LA.norm_sqr(C123(Ic(wvec(prog_up_f[i].w - prog_gm_f.w))))
     end
+
     #####
     ##### face variables: diagnose primitive, diagnose env and compute bulk
     #####
@@ -289,7 +290,7 @@ function update_aux!(
     end
     # updraft pressure
     # TODO @. aux_up_f[i].nh_pressure = compute_nh_pressure(...)
-    compute_nh_pressure!(state, grid, edmf, surf)
+    compute_nh_pressure!(state, edmf, surf)
 
     #####
     ##### compute_eddy_diffusivities_tke
@@ -436,7 +437,6 @@ function update_aux!(
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
     compute_precipitation_formation_tendencies(
-        grid,
         state,
         edmf,
         edmf.precip_model,

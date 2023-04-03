@@ -111,6 +111,7 @@ struct EDMFX{N, FT}
 end
 EDMFX{N}(a_min::FT) where {N, FT} = EDMFX{N, FT}(a_min)
 n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+n_mass_flux_subdomains(::Any) = 0
 
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end

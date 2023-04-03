@@ -391,18 +391,18 @@ function q_surface_bc(
     return aux_gm.q_tot[kc_surf] + surface_scalar_coeff * sqrt(qt_var)
 end
 
-function compute_updraft_top(grid::Grid, state::State, i::Int)
+function compute_updraft_top(state::State, i::Int)
     aux_up = center_aux_updrafts(state)
-    return z_findlast_center(k -> aux_up[i].area[k] > 1e-3, grid)
+    (; value, z) = column_findlastvalue(a -> a[] > 1e-3, aux_up[i].area)
+    return z[]
 end
 
 function compute_plume_scale_height(
-    grid::Grid,
     state::State,
     H_up_min::FT,
     i::Int,
 )::FT where {FT}
-    updraft_top::FT = compute_updraft_top(grid, state, i)
+    updraft_top::FT = compute_updraft_top(state, i)
     return max(updraft_top, H_up_min)
 end
 
@@ -590,17 +590,22 @@ function filter_updraft_vars(
             Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].w
     end
 
+    Δz = Fields.Δz_field(axes(ρ_c))
+    z = Fields.coordinate_field(axes(ρ_c)).z
+    Δz1 = Spaces.level(Δz, 1)
     @inbounds for i in 1:N_up
-        @inbounds for k in real_center_indices(grid)
-            is_surface_center(grid, k) && continue
-            prog_up[i].ρaq_tot[k] = max(prog_up[i].ρaq_tot[k], 0)
-            # this is needed to make sure Rico is unchanged.
-            # TODO : look into it further to see why
-            # a similar filtering of ρaθ_liq_ice breaks the simulation
-            if prog_up[i].ρarea[k] / ρ_c[k] < a_min
-                prog_up[i].ρaq_tot[k] = 0
-            end
-        end
+        # this is needed to make sure Rico is unchanged.
+        # TODO : look into it further to see why
+        # a similar filtering of ρaθ_liq_ice breaks the simulation
+        @. prog_up[i].ρaq_tot = ifelse(
+            z > Δz1 / 2,
+            ifelse(
+                prog_up[i].ρarea / ρ_c < a_min,
+                0,
+                max(prog_up[i].ρaq_tot, 0),
+            ),
+            prog_up[i].ρaq_tot,
+        )
     end
 
     Ic = CCO.InterpolateF2C()

@@ -14,6 +14,9 @@ import ..compute_kinetic!
 
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
+import ClimaCore.Operators as Operators
+import ClimaCore.Fields as Fields
+import ClimaCore.Spaces as Spaces
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Operators as CCO
 import LinearAlgebra as LA

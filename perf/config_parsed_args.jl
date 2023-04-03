@@ -1,6 +1,6 @@
 #=
 This script defines `parsed_args` for performance runs, and allows
-options to be overriden in several ways. In short the precedence
+options to be overridden in several ways. In short the precedence
 for defining `parsed_args` is
     - Highest precedence: args defined in `ARGS`
     - Mid     precedence: args defined in `parsed_args_perf_target` (below)
