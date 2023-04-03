@@ -169,6 +169,7 @@ function default_cache(
     net_energy_flux_toa[] = Geometry.WVector(FT(0))
     net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_sfc[] = Geometry.WVector(FT(0))
+    ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ)
 
     default_cache = (;
         simulation,
@@ -201,7 +202,7 @@ function default_cache(
         limiters,
         ᶜρh_kwargs...,
         ᶜΦ,
-        ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
+        ᶠgradᵥ_ᶜΦ,
         ᶜρ_ref,
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
