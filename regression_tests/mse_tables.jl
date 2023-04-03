@@ -33,7 +33,6 @@ all_best_mse["sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ
 all_best_mse["sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0.0
 all_best_mse["sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0.0
 all_best_mse["sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 0.0
-all_best_mse["sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0.0
 all_best_mse["sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist"][(:f, :w, :components, :data, 1)] = 0.0
 #
 all_best_mse["sphere_held_suarez_rhotheta"] = OrderedCollections.OrderedDict()
