@@ -361,80 +361,89 @@ function update_aux!(
     @. ∂θl∂z_sat = ifelse(shm == 0, ∂θl∂z, ∂θl∂z_sat)
     @. ∂θv∂z_unsat = ifelse(shm == 0, ∂θv∂z, ∂θv∂z_unsat)
 
-    @inbounds for k in real_center_indices(grid)
+    bg = center_aux_turbconv(state).buoy_grad
 
-        # buoyancy_gradients
-        if edmf.bg_closure == BuoyGradMean()
-            # First order approximation: Use environmental mean fields.
-            ts_en = ts_env[k]
-            bg_kwargs = (;
-                t_sat = aux_en.T[k],
-                qv_sat = TD.vapor_specific_humidity(thermo_params, ts_en),
-                qt_sat = aux_en.q_tot[k],
-                θ_sat = aux_en.θ_dry[k],
-                θ_liq_ice_sat = aux_en.θ_liq_ice[k],
-                ∂θv∂z_unsat = ∂θv∂z[k],
-                ∂qt∂z_sat = ∂qt∂z[k],
-                ∂θl∂z_sat = ∂θl∂z[k],
-                p = p_c[k],
-                en_cld_frac = aux_en.cloud_fraction[k],
-                ρ = ρ_c[k],
-            )
-            bg_model = EnvBuoyGrad(edmf.bg_closure; bg_kwargs...)
+    # buoyancy_gradients
+    if edmf.bg_closure isa BuoyGradMean
+        # First order approximation: Use environmental mean fields.
+        @. bg = buoyancy_gradients(
+            param_set,
+            edmf.moisture_model,
+            EnvBuoyGrad(
+                edmf.bg_closure,
+                aux_en.T,                                          # t_sat
+                TD.vapor_specific_humidity(thermo_params, ts_env), # qv_sat
+                aux_en.q_tot,                                      # qt_sat
+                aux_en.θ_dry,                                      # θ_sat
+                aux_en.θ_liq_ice,                                  # θ_liq_ice_sat
+                ∂θv∂z,                                             # ∂θv∂z_unsat
+                ∂qt∂z,                                             # ∂qt∂z_sat
+                ∂θl∂z,                                             # ∂θl∂z_sat
+                p_c,                                               # p
+                aux_en.cloud_fraction,                             # en_cld_frac
+                ρ_c,                                               # ρ
+            ),
+        )
+    elseif edmf.bg_closure isa BuoyGradQuadratures
+        @. bg = buoyancy_gradients(
+            param_set,
+            edmf.moisture_model,
+            EnvBuoyGrad(
+                edmf.bg_closure,
+                aux_en_sat.T,          # t_sat
+                aux_en_sat.q_vap,      # qv_sat
+                aux_en_sat.q_tot,      # qt_sat
+                aux_en_sat.θ_dry,      # θ_sat
+                aux_en_sat.θ_liq_ice,  # θ_liq_ice_sat
+                ∂θv∂z_unsat,           # ∂θv∂z_unsat
+                ∂qt∂z_sat,             # ∂qt∂z_sat
+                ∂θl∂z_sat,             # ∂θl∂z_sat
+                p_c,                   # p
+                aux_en.cloud_fraction, # en_cld_frac
+                ρ_c,                   # ρ
+            ),
+        )
+    else
+        error(
+            "Something went wrong. The buoyancy gradient model is not specified",
+        )
+    end
 
-        elseif edmf.bg_closure == BuoyGradQuadratures()
-
-            bg_kwargs = (;
-                t_sat = aux_en_sat.T[k],
-                qv_sat = aux_en_sat.q_vap[k],
-                qt_sat = aux_en_sat.q_tot[k],
-                θ_sat = aux_en_sat.θ_dry[k],
-                θ_liq_ice_sat = aux_en_sat.θ_liq_ice[k],
-                ∂θv∂z_unsat = ∂θv∂z_unsat[k],
-                ∂qt∂z_sat = ∂qt∂z_sat[k],
-                ∂θl∂z_sat = ∂θl∂z_sat[k],
-                p = p_c[k],
-                en_cld_frac = aux_en.cloud_fraction[k],
-                ρ = ρ_c[k],
-            )
-            bg_model = EnvBuoyGrad(edmf.bg_closure; bg_kwargs...)
-        else
-            error(
-                "Something went wrong. The buoyancy gradient model is not specified",
-            )
-        end
-        bg = buoyancy_gradients(param_set, edmf.moisture_model, bg_model)
-
-        # Limiting stratification scale (Deardorff, 1976)
-        # compute ∇Ri and Pr
-        ∇_Ri = gradient_Richardson_number(
+    # Limiting stratification scale (Deardorff, 1976)
+    # compute ∇Ri and Pr
+    @. aux_tc.prandtl_nvec = turbulent_Prandtl_number(
+        mix_len_params,
+        oblength,
+        gradient_Richardson_number(
             mix_len_params,
             bg.∂b∂z,
-            Shear²[k],
+            Shear²,
             FT(eps(FT)),
-        )
-        aux_tc.prandtl_nvec[k] =
-            turbulent_Prandtl_number(mix_len_params, oblength, ∇_Ri)
+        ),
+    )
 
-        ml_model = MinDisspLen{FT}(;
-            z = FT(grid.zc[k].z),
-            obukhov_length = oblength,
-            tke_surf = aux_en.tke[kc_surf],
-            ustar = get_ustar(surf),
-            Pr = aux_tc.prandtl_nvec[k],
-            p = p_c[k],
-            ∇b = bg,
-            Shear² = Shear²[k],
-            tke = aux_en.tke[k],
-            b_exch = b_exch[k],
-        )
+    tke_surf = aux_en.tke[kc_surf]
+    ustar_surf = get_ustar(surf)
 
-        aux_tc.mixing_length[k] =
-            mixing_length(mix_len_params, param_set, ml_model)
+    @. aux_tc.mixing_length = mixing_length(
+        mix_len_params,
+        param_set,
+        MinDisspLen{FT}(
+            zc,                  # z
+            oblength,            # obukhov_length
+            tke_surf,            # tke_surf
+            ustar_surf,          # ustar
+            aux_tc.prandtl_nvec, # Pr
+            p_c,                 # p
+            bg,                  # ∇b
+            Shear²,              # Shear²
+            aux_en.tke,          # tke
+            b_exch,              # b_exch
+        ),
+    )
 
-        KM[k] = c_m * aux_tc.mixing_length[k] * sqrt(max(aux_en.tke[k], 0))
-        KH[k] = KM[k] / aux_tc.prandtl_nvec[k]
-    end
+    @. KM = c_m * aux_tc.mixing_length * sqrt(max(aux_en.tke, 0))
+    @. KH = KM / aux_tc.prandtl_nvec
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
