@@ -216,51 +216,38 @@ function update_aux!(
     @. aux_en_f.buoy -= aux_gm_f.buoy
     @. aux_tc_f.bulk.buoy_up1 = aux_up_f[1].buoy
 
-    @inbounds for k in real_center_indices(grid)
-        #####
-        ##### compute bulk thermodynamics
-        #####
-        a_bulk_c = aux_bulk.area[k]
-        aux_bulk.q_liq[k] = 0
-        aux_bulk.q_ice[k] = 0
-        aux_bulk.T[k] = 0
-        if a_bulk_c > 0
-            @inbounds for i in 1:N_up
-                aux_bulk.q_liq[k] +=
-                    aux_up[i].area[k] * aux_up[i].q_liq[k] / a_bulk_c
-                aux_bulk.q_ice[k] +=
-                    aux_up[i].area[k] * aux_up[i].q_ice[k] / a_bulk_c
-                aux_bulk.T[k] += aux_up[i].area[k] * aux_up[i].T[k] / a_bulk_c
-            end
-        else
-            aux_bulk.T[k] = aux_en.T[k]
-        end
 
-        #####
-        ##### update_GMV_diagnostics
-        #####
-        aux_gm.q_liq[k] = (
-            aux_bulk.area[k] * aux_bulk.q_liq[k] +
-            (1 - aux_bulk.area[k]) * aux_en.q_liq[k]
-        )
-        aux_gm.q_ice[k] = (
-            aux_bulk.area[k] * aux_bulk.q_ice[k] +
-            (1 - aux_bulk.area[k]) * aux_en.q_ice[k]
-        )
-        aux_gm.T[k] = (
-            aux_bulk.area[k] * aux_bulk.T[k] +
-            (1 - aux_bulk.area[k]) * aux_en.T[k]
-        )
-
-        has_condensate =
-            TD.has_condensate(aux_bulk.q_liq[k] + aux_bulk.q_ice[k])
-        aux_bulk.cloud_fraction[k] = if has_condensate && a_bulk_c > 1e-3
-            1
-        else
-            0
-        end
-
+    #####
+    ##### compute bulk thermodynamics
+    #####
+    @. aux_bulk.q_liq = 0
+    @. aux_bulk.q_ice = 0
+    @. aux_bulk.T = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.q_liq += aux_up[i].area * aux_up[i].q_liq / aux_bulk.area
+        @. aux_bulk.q_ice += aux_up[i].area * aux_up[i].q_ice / aux_bulk.area
+        @. aux_bulk.T += aux_up[i].area * aux_up[i].T / aux_bulk.area
     end
+    @. aux_bulk.q_liq = ifelse(aux_bulk.area > 0, aux_bulk.q_liq, 0)
+    @. aux_bulk.q_ice = ifelse(aux_bulk.area > 0, aux_bulk.q_ice, 0)
+    @. aux_bulk.T = ifelse(aux_bulk.area > 0, aux_bulk.T, aux_en.T)
+
+    #####
+    ##### update_GMV_diagnostics
+    #####
+    @. aux_gm.q_liq =
+        aux_bulk.area * aux_bulk.q_liq + (1 - aux_bulk.area) * aux_en.q_liq
+    @. aux_gm.q_ice =
+        aux_bulk.area * aux_bulk.q_ice + (1 - aux_bulk.area) * aux_en.q_ice
+    @. aux_gm.T = aux_bulk.area * aux_bulk.T + (1 - aux_bulk.area) * aux_en.T
+
+    @. aux_bulk.cloud_fraction = ifelse(
+        TD.has_condensate(aux_bulk.q_liq + aux_bulk.q_ice) &&
+        aux_bulk.area > 1e-3,
+        1,
+        0,
+    )
+
     @. aux_gm.tke = aux_en.area * aux_en.tke
     @. aux_gm.tke +=
         0.5 *
