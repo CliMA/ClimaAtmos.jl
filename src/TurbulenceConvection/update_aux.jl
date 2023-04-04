@@ -149,39 +149,43 @@ function update_aux!(
     @. aux_en.e_kin =
         LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
 
-    @inbounds for k in real_center_indices(grid)
-        e_pot = geopotential(thermo_params, grid.zc.z[k])
+    #####
+    ##### decompose_environment
+    #####
+    val1(aux_bulk) = 1 / (1 - aux_bulk.area)
+    val2(aux_bulk) = aux_bulk.area * val1(aux_bulk)
+    #Yair - this is here to prevent negative QT
+    @. aux_en.q_tot =
+        max(val1(aux_bulk) * aux_gm.q_tot - val2(aux_bulk) * aux_bulk.q_tot, 0)
+    @. aux_en.h_tot =
+        val1(aux_bulk) * aux_gm.h_tot - val2(aux_bulk) * aux_bulk.h_tot
 
-        #####
-        ##### decompose_environment
-        #####
-        a_bulk_c = aux_bulk.area[k]
-        val1 = 1 / (1 - a_bulk_c)
-        val2 = a_bulk_c * val1
-        aux_en.q_tot[k] =
-            max(val1 * aux_gm.q_tot[k] - val2 * aux_bulk.q_tot[k], 0) #Yair - this is here to prevent negative QT
-        aux_en.h_tot[k] = val1 * aux_gm.h_tot[k] - val2 * aux_bulk.h_tot[k]
-
-        h_en = enthalpy(aux_en.h_tot[k], e_pot, aux_en.e_kin[k])
-        ts_env[k] = if edmf.moisture_model isa DryModel
-            TD.PhaseDry_ph(thermo_params, p_c[k], h_en)
-        elseif edmf.moisture_model isa EquilMoistModel
-            TD.PhaseEquil_phq(thermo_params, p_c[k], h_en, aux_en.q_tot[k])
-        elseif edmf.moisture_model isa NonEquilMoistModel
-            error("Add support got non-equilibrium thermo states")
-        end
-        ts_en = ts_env[k]
-        aux_en.ts[k] = ts_env[k]
-        aux_en.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts_en)
-        aux_en.e_tot[k] =
-            TD.total_energy(thermo_params, ts_en, aux_en.e_kin[k], e_pot)
-        aux_en.T[k] = TD.air_temperature(thermo_params, ts_en)
-        aux_en.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts_en)
-        aux_en.θ_dry[k] = TD.dry_pottemp(thermo_params, ts_en)
-        aux_en.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts_en)
-        aux_en.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_en)
-        aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
+    if edmf.moisture_model isa DryModel
+        @. aux_en.ts = TD.PhaseDry_ph(
+            thermo_params,
+            p_c,
+            enthalpy(aux_en.h_tot, e_pot(zc), aux_en.e_kin),
+        )
+    elseif edmf.moisture_model isa EquilMoistModel
+        @. aux_en.ts = TD.PhaseEquil_phq(
+            thermo_params,
+            p_c,
+            enthalpy(aux_en.h_tot, e_pot(zc), aux_en.e_kin),
+            aux_en.q_tot,
+        )
+    elseif edmf.moisture_model isa NonEquilMoistModel
+        error("Add support got non-equilibrium thermo states")
     end
+    ts_en = aux_en.ts
+    @. aux_en.θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_en)
+    @. aux_en.e_tot =
+        TD.total_energy(thermo_params, ts_en, aux_en.e_kin, e_pot(zc))
+    @. aux_en.T = TD.air_temperature(thermo_params, ts_en)
+    @. aux_en.θ_virt = TD.virtual_pottemp(thermo_params, ts_en)
+    @. aux_en.θ_dry = TD.dry_pottemp(thermo_params, ts_en)
+    @. aux_en.q_liq = TD.liquid_specific_humidity(thermo_params, ts_en)
+    @. aux_en.q_ice = TD.ice_specific_humidity(thermo_params, ts_en)
+    @. aux_en.RH = TD.relative_humidity(thermo_params, ts_en)
 
     microphysics(state, edmf, edmf.precip_model, Δt, param_set)
 
