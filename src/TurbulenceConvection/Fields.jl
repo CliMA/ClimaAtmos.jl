@@ -131,14 +131,6 @@ end
 
 # TODO: move these things into ClimaCore
 
-isa_center_space(space) = false
-isa_center_space(::CC.Spaces.CenterFiniteDifferenceSpace) = true
-isa_center_space(::CC.Spaces.CenterExtrudedFiniteDifferenceSpace) = true
-
-isa_face_space(space) = false
-isa_face_space(::CC.Spaces.FaceFiniteDifferenceSpace) = true
-isa_face_space(::CC.Spaces.FaceExtrudedFiniteDifferenceSpace) = true
-
 const CallableZType = Union{Function, Dierckx.Spline1D}
 
 function set_z!(
