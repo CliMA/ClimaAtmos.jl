@@ -216,9 +216,9 @@ version = "0.1.12"
 
 [[deps.CloudMicrophysics]]
 deps = ["DocStringExtensions", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "7fb9a5a860f5bcfb68879354b53381f848551162"
+git-tree-sha1 = "38ca863ba9b748f4a893573e039a7d2687885db2"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.10.0"
+version = "0.10.2"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
@@ -343,9 +343,9 @@ version = "0.1.0+0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "ChainRulesCore", "DataStructures", "Distributions", "DocStringExtensions", "EnumX", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PreallocationTools", "Printf", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "Setfield", "SparseArrays", "Static", "StaticArraysCore", "Statistics", "Tricks", "TruncatedStacktraces", "ZygoteRules"]
-git-tree-sha1 = "15a24aa2414fad34136724c4a16e556f264ddd11"
+git-tree-sha1 = "117b2d02e737aeefd58cd4a4803abecadd37c8cc"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.122.1"
+version = "6.122.2"
 
 [[deps.DiffEqCallbacks]]
 deps = ["DataStructures", "DiffEqBase", "ForwardDiff", "LinearAlgebra", "Markdown", "NLsolve", "Parameters", "RecipesBase", "RecursiveArrayTools", "SciMLBase", "StaticArraysCore"]
@@ -377,9 +377,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "da9e1a9058f8d3eec3a8c9fe4faacfb89180066b"
+git-tree-sha1 = "13027f188d26206b9e7b863036f87d2f2e7d013a"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.86"
+version = "0.25.87"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -1393,9 +1393,9 @@ version = "5.10.1+0"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "KernelAbstractions", "RootSolvers", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "700b837ce4d997da60c592129aaadb7593121e63"
+git-tree-sha1 = "3ea39309416c87d7e3479c31426024c173a37a19"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.6.1"
+version = "0.6.2"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["DocStringExtensions"]
@@ -1448,9 +1448,9 @@ version = "1.0.1"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "1c7cd13268e5941df47884aac6efdb29189a7224"
+git-tree-sha1 = "dd055cd2ef16f8d373a7dc833f4ddf72165524c5"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.10.1"
+version = "0.10.2"
 
 [[deps.ThreadingUtilities]]
 deps = ["ManualMemory"]
