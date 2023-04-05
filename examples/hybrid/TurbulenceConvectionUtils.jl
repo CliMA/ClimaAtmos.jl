@@ -19,7 +19,6 @@ import TerminalLoggers
 const ca_dir = pkgdir(ClimaAtmos)
 
 include(joinpath(ca_dir, "tc_driver", "dycore.jl"))
-include(joinpath(ca_dir, "tc_driver", "Surface.jl"))
 
 #####
 ##### No TurbulenceConvection scheme
@@ -106,7 +105,7 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
 
-    surf = get_surface(
+    surf = CA.get_surface(
         p.atmos.model_config,
         surf_params,
         grid,
@@ -154,7 +153,7 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
 
-    surf = get_surface(
+    surf = CA.get_surface(
         p.atmos.model_config,
         surf_params,
         grid,

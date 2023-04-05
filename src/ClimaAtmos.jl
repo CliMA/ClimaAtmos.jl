@@ -61,8 +61,11 @@ include(joinpath("tendencies", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("parameterizations", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterizations", "sponge", "viscous_sponge.jl"))
 include(joinpath("tendencies", "advection.jl"))
+include(joinpath("dycore_equations", "sgs_flux_tendencies.jl"))
 
 include("staggered_nonhydrostatic_model.jl")
+
+include(joinpath("utils", "surface.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
 
