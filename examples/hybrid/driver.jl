@@ -1,8 +1,9 @@
 import ClimaAtmos as CA
 
+include("cli_options.jl")
+(s, parsed_args_defaults) = parse_commandline()
 if !(@isdefined parsed_args)
-    include("cli_options.jl")
-    (s, parsed_args) = parse_commandline()
+    parsed_args = parsed_args_defaults
 end
 
 include("nvtx.jl")
