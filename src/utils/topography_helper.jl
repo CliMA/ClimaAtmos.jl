@@ -49,9 +49,9 @@ for use with tests of gravity waves with topography.
 function topography_agnesi(coords)
     x = coords.x
     FT = eltype(x)
-    h_c = FT(1000)
-    a_c = FT(1000)
-    x_c = FT(19000)
+    h_c = FT(1)
+    a_c = FT(10000)
+    x_c = FT(120000)
     zₛ = @. h_c / (1 + ((x - x_c) / a_c)^2)
     return zₛ
 end
@@ -75,5 +75,44 @@ function topography_schar(coords)
     a_c = FT(5000)
     x_c = FT(30000)
     zₛ = @. h_c * exp(-((x - x_c) / a_c)^2) * (cospi((x - x_c) / λ_c))^2
+    return zₛ
+end
+
+"""
+    topography_schar(x,z)
+x = horizontal coordinate [m]
+z = vertical coordinate [m]
+h_c = 250 [m]
+a_c = 5000 [m]
+x_c = 30000 [m]
+Assumes [0, 60] km domain.
+Generate a single mountain profile (Schar mountain)
+for use with tests of gravity waves with topography.
+"""
+function topography_schar_high(coords)
+    x = coords.x
+    FT = eltype(x)
+    h_c = FT(1000)
+    λ_c = FT(4000)
+    a_c = FT(5000)
+    x_c = FT(30000)
+    zₛ = @. h_c * exp(-((x - x_c) / a_c)^2) * (cospi((x - x_c) / λ_c))^2
+    return zₛ
+end
+
+"""
+    topography_triangle(x,z)
+x = horizontal coordinate [m]
+z = vertical coordinate [m]
+Generate a single mountain profile (Schar mountain)
+for use with tests of gravity waves with topography.
+"""
+function topography_triangle(coords)
+    x = coords.x
+    FT = eltype(x)
+    a_c = FT(10000)
+    x_c = FT(30000)
+    h_c = FT(1000)
+    zₛ = @. ifelse(abs(x-x_c) < a_c, FT(h_c - abs(x-x_c)/a_c * h_c), FT(0))
     return zₛ
 end

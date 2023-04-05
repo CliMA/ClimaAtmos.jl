@@ -85,13 +85,17 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
+    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar", "ScharHigh", "Triangle")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
     elseif topography == "Agnesi"
         warp_function = topography_agnesi
     elseif topography == "Schar"
         warp_function = topography_schar
+    elseif topography == "ScharHigh"
+        warp_function = topography_schar_high
+    elseif topography == "Triangle"
+        warp_function = topography_triangle
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
