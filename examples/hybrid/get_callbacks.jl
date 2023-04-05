@@ -90,7 +90,7 @@ function turb_conv_affect_filter!(integrator)
     Fields.bycolumn(axes(Y.c)) do colidx
         state = TC.tc_column_state(Y, p, nothing, colidx)
         grid = TC.Grid(state)
-        surf = TCU.get_surface(
+        surf = CA.get_surface(
             p.atmos.model_config,
             surf_params,
             grid,

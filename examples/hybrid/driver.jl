@@ -33,8 +33,6 @@ import ClimaAtmos.InitialConditions as ICs
 include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
 
 import ClimaAtmos.TurbulenceConvection as TC
-include("TurbulenceConvectionUtils.jl")
-import .TurbulenceConvectionUtils as TCU
 
 atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
@@ -93,7 +91,7 @@ function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
         ),
         CA.orographic_gravity_wave_cache(atmos.orographic_gravity_wave, Y),
         (; Δt = dt),
-        TCU.turbconv_cache(
+        CA.turbconv_cache(
             Y,
             turbconv_model,
             atmos,
@@ -137,7 +135,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         )
 
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        TCU.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        CA.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able
