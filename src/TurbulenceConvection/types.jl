@@ -49,16 +49,19 @@ $(DocStringExtensions.FIELDS)
 """
 Base.@kwdef struct GradBuoy{FT}
     "environmental vertical buoyancy gradient"
-    ∂b∂z::FT
+    ∂b∂z::FT = FT(0)
     "vertical buoyancy gradient in the unsaturated part of the environment"
-    ∂b∂z_unsat::FT
+    ∂b∂z_unsat::FT = FT(0)
     "vertical buoyancy gradient in the saturated part of the environment"
-    ∂b∂z_sat::FT
+    ∂b∂z_sat::FT = FT(0)
 end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 struct BuoyGradQuadratures <: AbstractEnvBuoyGradClosure end
+
+Base.broadcastable(x::BuoyGradMean) = tuple(x)
+Base.broadcastable(x::BuoyGradQuadratures) = tuple(x)
 
 """
     EnvBuoyGrad
@@ -92,11 +95,11 @@ Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
     ρ::FT
 end
 function EnvBuoyGrad(
-    ::EBG;
+    ::EBG,
     t_sat::FT,
-    bg_kwargs...,
+    args...,
 ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
-    return EnvBuoyGrad{FT, EBG}(; t_sat, bg_kwargs...)
+    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
 end
 
 Base.@kwdef struct MixingLengthParams{FT}
@@ -111,6 +114,7 @@ Base.@kwdef struct MixingLengthParams{FT}
     smin_rm::FT # upper ratio limit for smin function
     l_max::FT
 end
+Base.broadcastable(x::MixingLengthParams) = tuple(x)
 
 """
     MinDisspLen
