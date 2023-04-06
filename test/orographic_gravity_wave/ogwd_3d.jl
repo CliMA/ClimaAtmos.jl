@@ -6,6 +6,7 @@ import ClimaAtmos as CA
 import Thermodynamics as TD
 import CLIMAParameters as CP
 import ClimaComms
+using ClimaCoreTempestRemap
 
 using ImageFiltering
 using Interpolations
@@ -15,7 +16,6 @@ using ClimaCorePlots
 
 const FT = Float64
 
-include("../../examples/hybrid/orographic_gravity_wave_helper.jl")
 include("../../post_processing/remap/remap_helpers.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
@@ -200,22 +200,9 @@ cp_d = 1004.0
 epsilon = 0.622
 @. Y.c.ρ = gfdl_ca_p / Y.c.T / R_d / (1 - Y.c.qt + Y.c.qt / epsilon)
 
-# Prepare topo data
-TOPO_DIR = joinpath(@__DIR__, "topo_data_ogwd_3d_test/")
-if !isdir(TOPO_DIR)
-    mkdir(TOPO_DIR)
-end
-if !isfile(joinpath(TOPO_DIR, "topo_info.hdf5")) & ClimaComms.iamroot(comms_ctx)
-    include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-    # download topo data
-    datafile_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
-    @show datafile_rll
-    get_topo_info(Y, TOPO_DIR, datafile_rll, comms_ctx)
-end
-
 # Initialize cache vars for orographic gravity wave
 ogw = CA.OrographicGravityWave{FT}()
-p = CA.orographic_gravity_wave_cache(ogw, TOPO_DIR, Y, comms_ctx)
+p = CA.orographic_gravity_wave_cache(ogw, Y)
 
 (; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) = p
 (; topo_ᶠτ_sat, topo_ᶠVτ) = p

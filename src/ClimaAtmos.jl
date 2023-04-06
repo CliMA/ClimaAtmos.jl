@@ -44,6 +44,13 @@ include(
     joinpath(
         "parameterizations",
         "gravity_wave_drag",
+        "orographic_gravity_wave_helper.jl",
+    ),
+)
+include(
+    joinpath(
+        "parameterizations",
+        "gravity_wave_drag",
         "orographic_gravity_wave.jl",
     ),
 )
