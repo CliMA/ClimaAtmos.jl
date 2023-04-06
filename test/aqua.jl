@@ -20,7 +20,7 @@ using Aqua
     # then please lower the limit based on the new number of ambiguities.
     # We're trying to drive this number down to zero to reduce latency.
     @info "Number of method ambiguities: $(length(ambs))"
-    @test length(ambs) ≤ 118
+    @test length(ambs) ≤ 5
 
     # returns a vector of all unbound args
     # ua = Aqua.detect_unbound_args_recursively(ClimaCore)
