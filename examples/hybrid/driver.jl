@@ -381,11 +381,12 @@ if simulation.is_distributed
     )
 end
 
-if !simulation.is_distributed && parsed_args["post_process"] && !is_edmfx
+if !simulation.is_distributed &&
+   parsed_args["post_process"] &&
+   !is_edmfx &&
+   !(atmos.model_config isa CA.SphericalModel)
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if CA.is_baro_wave(parsed_args)
-        paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
-    elseif CA.is_column_without_edmf(parsed_args)
+    if CA.is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
     elseif CA.is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
@@ -395,10 +396,6 @@ if !simulation.is_distributed && parsed_args["post_process"] && !is_edmfx
         postprocessing_box(sol, simulation.output_dir)
     elseif atmos.model_config isa CA.PlaneModel
         postprocessing_plane(sol, simulation.output_dir, p)
-    elseif atmos.model_config isa CA.SphericalModel
-        paperplots_held_suarez(sol, simulation.output_dir, p, 90, 180)
-    elseif atmos.forcing_type isa CA.HeldSuarezForcing
-        custom_postprocessing(sol, simulation.output_dir, p)
     else
         error("Uncaught case")
     end
