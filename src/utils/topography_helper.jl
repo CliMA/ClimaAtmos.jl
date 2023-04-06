@@ -49,7 +49,7 @@ for use with tests of gravity waves with topography.
 function topography_agnesi(coords)
     x = coords.x
     FT = eltype(x)
-    h_c = FT(1)
+    h_c = FT(1000)
     a_c = FT(10000)
     x_c = FT(120000)
     zₛ = @. h_c / (1 + ((x - x_c) / a_c)^2)
