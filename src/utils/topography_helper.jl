@@ -92,7 +92,7 @@ for use with tests of gravity waves with topography.
 function topography_schar_high(coords)
     x = coords.x
     FT = eltype(x)
-    h_c = FT(1000)
+    h_c = FT(2500)
     λ_c = FT(4000)
     a_c = FT(5000)
     x_c = FT(30000)

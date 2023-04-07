@@ -25,6 +25,19 @@ f = Figure(; font = "CMU Serif")
 gaa = f[1, 1] = GridLayout()
 (; ᶜinterp) = p.operators;
 C123 = Geometry.Covariant123Vector
+var = Fields.coordinate_field(Y.f).z
+Axis(gaa[1, 1], aspect=2, title = "Surface Elevation")
+limits!(xlow-1000, xhigh+1000, 0 , 1500)
+paa = fieldcontourf!(var)
+Colorbar(gaa[1, 2], paa, label = "u [m/s]")
+fig_png = joinpath("./plots/testimage_z.png")
+CairoMakie.save(fig_png, f)
+
+
+f = Figure(; font = "CMU Serif")
+gaa = f[1, 1] = GridLayout()
+(; ᶜinterp) = p.operators;
+C123 = Geometry.Covariant123Vector
 u_bar = @. C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))
 var = @. Geometry.project(Geometry.UAxis(), u_bar)
 Axis(gaa[1, 1], aspect=2, title = "Horizontal Velocity")
@@ -59,6 +72,17 @@ limits!(xlow, xhigh, 0 , 10000)
 paa = fieldcontourf!(var)
 Colorbar(gaa[1, 2], paa, label = "w [m/s]")
 fig_png = joinpath("./plots/testimage_w.png")
+CairoMakie.save(fig_png, f)
+
+
+f = Figure(; font = "CMU Serif")
+gaa = f[1, 1] = GridLayout()
+var = @. Geometry.project(Geometry.WAxis(), u_bar)
+Axis(gaa[1, 1], aspect=2, title = "Vertical Velocity")
+limits!(xlow, xhigh, 0 , 10000)
+paa = fieldcontourf!(var, levels = FT(-1.5):0.15:FT(1.5))
+Colorbar(gaa[1, 2], paa, label = "w [m/s]")
+fig_png = joinpath("./plots/testimage_w_clim.png")
 CairoMakie.save(fig_png, f)
 
 f = Figure(; font = "CMU Serif")
