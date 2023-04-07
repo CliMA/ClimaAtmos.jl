@@ -1,12 +1,15 @@
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+CLIMAParameters = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
 ClimaAtmos = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterCitations = "daee34ce-89f3-4625-b898-19384cb65244"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 RootSolvers = "7181ea78-2dcb-4de3-ab41-2b8ab5a31e74"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
