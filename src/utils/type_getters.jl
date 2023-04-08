@@ -84,6 +84,7 @@ function get_numerics(parsed_args)
     return numerics
 end
 
+import .AtmosArtifacts as AA
 function get_spaces(parsed_args, params, comms_ctx)
 
     FT = eltype(params)
@@ -104,7 +105,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
-        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        data_path = joinpath(AA.topo_elev_dataset_path(), "ETOPO1_coarse.nc")
         earth_spline = NCDataset(data_path) do data
             zlevels = data["elevation"][:]
             lon = data["longitude"][:]

@@ -15,18 +15,17 @@ Not yet included in our codebase
 =#
 
 using ClimaCore: InputOutput
+import .AtmosArtifacts as AA
 
 orographic_gravity_wave_cache(::Nothing, Y) = NamedTuple()
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-
 function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y)
     FT = Spaces.undertype(axes(Y.c))
     (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit) = ogw
 
-    orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+    orographic_info_rll = joinpath(AA.topo_res_path(), "topo_drag.res.nc")
     topo_info = get_OGW_info(Y, orographic_info_rll)
 
     return (;

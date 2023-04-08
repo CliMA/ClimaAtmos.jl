@@ -21,8 +21,8 @@ include("../../post_processing/remap/remap_helpers.jl")
 comms_ctx = ClimaComms.SingletonCommsContext()
 
 # load gfdl data
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-ncfile = joinpath(gfdl_ogw_data_path(), "gfdl_ogw.nc")
+import ClimaAtmos.AtmosArtifacts as AA
+ncfile = joinpath(AA.gfdl_ogw_data_path(), "gfdl_ogw.nc")
 nt = NCDataset(ncfile) do ds
     lon = ds["lon"][:]
     lat = ds["lat"][:]
@@ -74,8 +74,8 @@ end
 p_center = 0.5 * (p_half[:, :, 1:(end - 1), :] .+ p_half[:, :, 2:end, :])
 
 # earth warp
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+import ClimaAtmos.AtmosArtifacts as AA
+data_path = joinpath(AA.topo_elev_dataset_path(), "ETOPO1_coarse.nc")
 earth_spline = NCDataset(data_path) do data
     zlevels = data["elevation"][:]
     lon = data["longitude"][:]
