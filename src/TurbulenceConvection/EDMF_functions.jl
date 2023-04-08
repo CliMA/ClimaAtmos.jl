@@ -445,6 +445,8 @@ function compute_implicit_up_tendencies!(
     aux_up = center_aux_updrafts(state)
     ts = center_aux_grid_mean_ts(state)
     p_c = center_aux_grid_mean_p(state)
+    prog_gm = center_prog_grid_mean(state)
+    ρ_c = prog_gm.ρ
 
     # Solve for updraft area fraction
 
@@ -469,16 +471,17 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot))
+        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) - p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
         
         tmp_h_tot = aux_up[i].e_tot .+ p_c ./ (ρarea ./ aux_up[i].area)
+        @info "p_c, ρ_c", p_c, ρ_c
         #@info "tmp_h_tot" tmp_h_tot
         # @info "ρarea" ρarea
         # @info "Ic.(CCG.WVector.(w_up))" Ic.(CCG.WVector.(w_up))
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)
-        # @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))
+        @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
-        # @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
+        @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
         # @info "tendency after advection" tends_ρarea, tends_ρae_tot
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
         
