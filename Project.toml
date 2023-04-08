@@ -48,6 +48,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
 AtmosphericProfilesLibrary = "0.1"
+CLIMAParameters = "0.7"
 ClimaComms = "0.3"
 ClimaCore = "0.10"
 ClimaCorePlots = "0.2"
