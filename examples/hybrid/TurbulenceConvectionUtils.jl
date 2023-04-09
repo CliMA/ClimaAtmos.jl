@@ -135,6 +135,8 @@ end
 
 function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt) = p
+    (; t) = p.integrator
+    @info t
     (; edmf, param_set, surf_params, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
