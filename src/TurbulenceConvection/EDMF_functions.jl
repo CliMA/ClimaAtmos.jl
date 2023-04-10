@@ -466,9 +466,6 @@ function compute_implicit_up_tendencies!(
         ρarea = prog_up[i].ρarea
         ρ_up = prog_up[i].ρarea ./ aux_up[i].area
         a_min = edmf.minimum_area
-        if aux_up[i].area .< a_min
-            ρ_up .= ρ_c
-        end
         @. ρ_up = ifelse(
             aux_up[i].area < a_min,
             ρ_c,
