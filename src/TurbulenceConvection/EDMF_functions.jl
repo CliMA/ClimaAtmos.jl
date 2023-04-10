@@ -473,9 +473,7 @@ function compute_implicit_up_tendencies!(
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
         @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) - p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
         
-        tmp_h_tot = aux_up[i].e_tot .+ p_c ./ (ρarea ./ aux_up[i].area)
-        @info "p_c, ρ_c", p_c, ρ_c
-        #@info "tmp_h_tot" tmp_h_tot
+        #@info "p_c, ρ_c", p_c, ρ_c
         # @info "ρarea" ρarea
         # @info "Ic.(CCG.WVector.(w_up))" Ic.(CCG.WVector.(w_up))
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)
