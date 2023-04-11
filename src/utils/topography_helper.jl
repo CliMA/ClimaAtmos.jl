@@ -110,7 +110,7 @@ for use with tests of gravity waves with topography.
 function topography_triangle(coords)
     x = coords.x
     FT = eltype(x)
-    a_c = FT(10000)
+    a_c = FT(30000)
     x_c = FT(30000)
     h_c = FT(1000)
     zₛ = @. ifelse(abs(x-x_c) < a_c, FT(h_c - abs(x-x_c)/a_c * h_c), FT(0))
