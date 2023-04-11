@@ -84,18 +84,18 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method) dt2 tend60m"
+      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method) dt10 tend360m"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config column --turbconv edmf --debugging_tc true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
           --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
           --z_elem 60 --z_stretch false --z_max 3e3
-          --t_end 60mins --dt_save_to_sol 1mins --dt_save_to_disk 1mins
+          --t_end 360mins --dt_save_to_sol 1mins --dt_save_to_disk 1mins
           --moist equil
-          --job_id edmf_bomex_dt2_tend60m
-          --dt 2secs
-        artifact_paths: "edmf_bomex_dt2_tend60m/*"
+          --job_id edmf_bomex_dt10_tend360m
+          --dt 10secs
+        artifact_paths: "edmf_bomex_dt10_tend360m/*"
         agents:
           slurm_mem: 20GB
 
