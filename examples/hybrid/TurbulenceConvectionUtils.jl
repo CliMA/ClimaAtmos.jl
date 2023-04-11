@@ -205,7 +205,7 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     )
     #@info "tendency before filter"  Yₜ.c.turbconv.up[1].ρarea, Yₜ.c.turbconv.up[1].ρae_tot
     Yₜ_turbconv .+= (Y_filtered_turbconv .- Y_turbconv) ./ Δt
-    #@info "tendency after filter" Yₜ.c.turbconv.up[1].ρarea, Yₜ.c.turbconv.up[1].ρae_tot
+    @info "tendency after filter" Yₜ.c.turbconv.up[1].ρarea, Yₜ.c.turbconv.up[1].ρae_tot
     return nothing
 end
 

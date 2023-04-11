@@ -478,7 +478,7 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) #- p_c / ρ_up * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
+        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) - p_c / ρ_up * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
         
         #@info "p_c, ρ_c", p_c, ρ_c
         # @info "ρarea" ρarea
@@ -510,6 +510,7 @@ function compute_implicit_up_tendencies!(
         tends_w = tendencies_up_f[i].w
         @. tends_w += -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
         tends_w[kf_surf] = zero(tends_w[kf_surf])
+        @info "tendency after advection" tends_w
     end
 
     return nothing
