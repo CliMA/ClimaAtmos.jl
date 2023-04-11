@@ -548,28 +548,28 @@ function compute_explicit_up_tendencies!(
         # Augment the tendencies of updraft area, tracers and vertical velocity
 
         # entrainment and detrainment - could be moved to implicit
-        # @. tendencies_up[i].ρarea +=
-        #     prog_up[i].ρarea *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     (aux_up[i].entr - aux_up[i].detr)
-        # @. tendencies_up[i].ρae_tot +=
-        #     prog_up[i].ρarea *
-        #     aux_en.h_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].entr -
-        #     prog_up[i].ρarea * aux_up[i].h_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].detr
-        # @. tendencies_up[i].ρaq_tot +=
-        #     prog_up[i].ρarea *
-        #     aux_en.q_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].entr -
-        #     prog_up[i].ρaq_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].detr
-        # @. tendencies_up_f[i].w +=
-        #     w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
+        @. tendencies_up[i].ρarea +=
+            prog_up[i].ρarea *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            (aux_up[i].entr - aux_up[i].detr)
+        @. tendencies_up[i].ρae_tot +=
+            prog_up[i].ρarea *
+            aux_en.h_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].entr -
+            prog_up[i].ρarea * aux_up[i].h_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].detr
+        @. tendencies_up[i].ρaq_tot +=
+            prog_up[i].ρarea *
+            aux_en.q_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].entr -
+            prog_up[i].ρaq_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].detr
+        @. tendencies_up_f[i].w +=
+            w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
         #@. tendencies_up[i].ρae_tot +=
@@ -630,6 +630,7 @@ function filter_updraft_vars(
         @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
         @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
+        @. prog_up[i].ρae_tot = max(prog_up[i].ρae_tot, 0) #flag 2 #testing
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
     end
