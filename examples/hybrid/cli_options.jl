@@ -1,4 +1,6 @@
+include(joinpath(dirname(dirname(@__DIR__)), "src", "utils", "yaml_helper.jl"))
 import ArgParse
+
 function parse_commandline()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table s begin
@@ -490,16 +492,14 @@ parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
 include("examples/hybrid/driver.jl")
 ```
 """
-function parsed_args_per_job_id(; trigger = "driver.jl")
+function parsed_args_per_job_id(; filter_name = "driver.jl")
     ca_dir = joinpath(@__DIR__, "..", "..")
     buildkite_yaml = joinpath(ca_dir, ".buildkite", "pipeline.yml")
-    parsed_args_per_job_id(buildkite_yaml; trigger)
+    parsed_args_per_job_id(buildkite_yaml; filter_name)
 end
 
-function parsed_args_per_job_id(buildkite_yaml; trigger = "driver.jl")
-    buildkite_commands = readlines(buildkite_yaml)
-    filter!(x -> occursin(trigger, x), buildkite_commands)
-
+function parsed_args_per_job_id(buildkite_yaml; filter_name = "driver.jl")
+    buildkite_commands = commands_from_yaml(buildkite_yaml; filter_name)
     @assert length(buildkite_commands) > 0 # sanity check
     result = Dict()
     for bkcs in buildkite_commands

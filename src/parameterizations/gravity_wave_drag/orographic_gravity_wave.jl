@@ -16,25 +16,18 @@ Not yet included in our codebase
 
 using ClimaCore: InputOutput
 
-orographic_gravity_wave_cache(::Nothing, topo_dir, Y, comms_ctx) = NamedTuple()
+orographic_gravity_wave_cache(::Nothing, Y) = NamedTuple()
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
+include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
-function orographic_gravity_wave_cache(
-    ogw::OrographicGravityWave,
-    topo_dir,
-    Y,
-    comms_ctx,
-)
+function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y)
     FT = Spaces.undertype(axes(Y.c))
     (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit) = ogw
-    hdfreader =
-        InputOutput.HDF5Reader(joinpath(topo_dir, "topo_info.hdf5"), comms_ctx)
-    topo_info = InputOutput.read_field(hdfreader, "topo_info")
-    Base.close(hdfreader)
 
-    rm(topo_dir, recursive = true)
+    orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+    topo_info = get_OGW_info(Y, orographic_info_rll)
 
     return (;
         Fr_crit = Fr_crit,

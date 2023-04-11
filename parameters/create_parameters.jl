@@ -11,12 +11,6 @@ import Thermodynamics as TD
 import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 import ClimaCore
 
-# TODO: move to corresponding packages
-# disable for now as causing problems
-Base.broadcastable(ps::SF.Parameters.SurfaceFluxesParameters) = tuple(ps)
-Base.broadcastable(ps::CM.Parameters.CloudMicrophysicsParameters) = tuple(ps)
-Base.broadcastable(ps::TD.Parameters.ThermodynamicsParameters) = tuple(ps)
-
 function override_climaatmos_defaults(
     defaults::NamedTuple,
     overrides::NamedTuple,

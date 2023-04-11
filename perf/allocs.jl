@@ -35,7 +35,7 @@ end
 
 #! format: off
 
-dict = parsed_args_per_job_id(; trigger = "benchmark.jl")
+dict = parsed_args_per_job_id(; filter_name = "benchmark.jl")
 for k in keys(dict)
     dict[k]["job_id"] = "allocs_"*dict[k]["job_id"]
 

@@ -4,7 +4,7 @@ This document outlines how regression tests work and how to update PRs to pass r
 
 ## The basic idea of how regression tests work
 
-When a particular job opts-in to testing regressions (using the `regression_test` command line option), we compare the solution dataset (the prognostic state at the last timestep) of that job with a reference dataset.
+When a particular job opts-in to testing regressions (using the `regression_test` command line option and the `julia --project=examples regression_tests/test_mse.jl` command), we compare the solution dataset (the prognostic state at the last timestep) of that job with a reference dataset.
 
 We don't always have a reference to compare against, due to what we'll call **failure modes**. For a full list of failure modes, see [Failure modes](#Failure-modes), but here are a few examples:
 
@@ -41,7 +41,7 @@ To update the mse tables:
 
 To add a new regression test:
 
- - Set the command-line `regression_test` to true for the new (or existing) job
+ - Set the command-line `regression_test` to true, and add `julia --color=yes --project=examples regression_tests/test_mse.jl --job_id [job_id] --out_dir [job_id]` as a separate command for the new (or existing) job
  - Copy the `all_best_mse` dict template from the job's log
  - Paste the `all_best_mse` dict template into `regression_test/mse_tables.jl`
 

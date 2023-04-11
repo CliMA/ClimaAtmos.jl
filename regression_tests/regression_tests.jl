@@ -43,5 +43,4 @@ function perform_regression_tests(
     open(computed_mse_filename, "w") do io
         JSON.print(io, computed_mse)
     end
-    NCRegressionTests.test_mse(computed_mse, best_mse)
 end

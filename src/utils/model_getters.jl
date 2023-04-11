@@ -43,7 +43,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         ClimaHyperdiffusion{enable_qt, FT}(; κ₄, divergence_damping_factor)
     elseif hyperdiff_name == "TempestHyperdiffusion"
         TempestHyperdiffusion{enable_qt, FT}(; κ₄, divergence_damping_factor)
-    elseif hyperdiff_name == "none" || hyperdiff_name == "false"
+    elseif hyperdiff_name in ("none", "false", false)
         nothing
     else
         error("Uncaught diffusion model type.")

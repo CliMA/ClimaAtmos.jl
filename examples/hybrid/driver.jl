@@ -1,8 +1,9 @@
 import ClimaAtmos as CA
 
+include("cli_options.jl")
+(s, parsed_args_defaults) = parse_commandline()
 if !(@isdefined parsed_args)
-    include("cli_options.jl")
-    (s, parsed_args) = parse_commandline()
+    parsed_args = parsed_args_defaults
 end
 
 include("nvtx.jl")
@@ -32,8 +33,6 @@ import ClimaAtmos.InitialConditions as ICs
 include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
 
 import ClimaAtmos.TurbulenceConvection as TC
-include("TurbulenceConvectionUtils.jl")
-import .TurbulenceConvectionUtils as TCU
 
 atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
 @info "AtmosModel: \n$(summary(atmos))"
@@ -91,14 +90,9 @@ function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
             atmos.model_config,
             Y,
         ),
-        CA.orographic_gravity_wave_cache(
-            atmos.orographic_gravity_wave,
-            TOPO_DIR,
-            Y,
-            comms_ctx,
-        ),
+        CA.orographic_gravity_wave_cache(atmos.orographic_gravity_wave, Y),
         (; Δt = dt),
-        TCU.turbconv_cache(
+        CA.turbconv_cache(
             Y,
             turbconv_model,
             atmos,
@@ -143,7 +137,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         )
 
         CA.radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        TCU.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        CA.explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         CA.precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
     end
     # TODO: make bycolumn-able
@@ -201,25 +195,6 @@ else
         spaces.face_space,
     )
     t_start = FT(0)
-end
-
-# prepare topographic data if it runs with topography
-if parsed_args["orographic_gravity_wave"] == true
-    const TOPO_DIR = joinpath(@__DIR__, "topo_data/")
-    if !isdir(TOPO_DIR)
-        mkdir(TOPO_DIR)
-    end
-    include("orographic_gravity_wave_helper.jl")
-    if !isfile(joinpath(TOPO_DIR, "topo_info.hdf5")) &
-       ClimaComms.iamroot(comms_ctx)
-        include(joinpath(pkgdir(CA), "artifacts", "artifact_funcs.jl"))
-        # download topo data
-        datafile_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
-        @show datafile_rll
-        get_topo_info(Y, TOPO_DIR, datafile_rll, comms_ctx)
-    end
-else
-    const TOPO_DIR = nothing
 end
 
 @time "Allocating cache (p)" begin
@@ -382,11 +357,12 @@ if simulation.is_distributed
     )
 end
 
-if !simulation.is_distributed && parsed_args["post_process"] && !is_edmfx
+if !simulation.is_distributed &&
+   parsed_args["post_process"] &&
+   !is_edmfx &&
+   !(atmos.model_config isa CA.SphericalModel)
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if CA.is_baro_wave(parsed_args)
-        paperplots_baro_wave(atmos, sol, simulation.output_dir, p, 90, 180)
-    elseif CA.is_column_without_edmf(parsed_args)
+    if CA.is_column_without_edmf(parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
     elseif CA.is_column_edmf(parsed_args)
         postprocessing_edmf(sol, simulation.output_dir, fps)
@@ -396,10 +372,6 @@ if !simulation.is_distributed && parsed_args["post_process"] && !is_edmfx
         postprocessing_box(sol, simulation.output_dir)
     elseif atmos.model_config isa CA.PlaneModel
         postprocessing_plane(sol, simulation.output_dir, p)
-    elseif atmos.model_config isa CA.SphericalModel
-        paperplots_held_suarez(sol, simulation.output_dir, p, 90, 180)
-    elseif atmos.forcing_type isa CA.HeldSuarezForcing
-        custom_postprocessing(sol, simulation.output_dir, p)
     else
         error("Uncaught case")
     end

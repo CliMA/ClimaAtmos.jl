@@ -40,6 +40,7 @@ function update_aux!(
     ρ_f = aux_gm_f.ρ
     p_c = center_aux_grid_mean_p(state)
     ρ_c = prog_gm.ρ
+    zc = Fields.coordinate_field(axes(ρ_c)).z
     aux_en_unsat = aux_en.unsat
     aux_en_sat = aux_en.sat
     m_entr_detr = aux_tc.ϕ_temporary
@@ -64,70 +65,80 @@ function update_aux!(
             ) / 2
     end
 
-    @inbounds for k in real_center_indices(grid)
+    e_pot(z) = geopotential(thermo_params, z)
+    thresh_area(prog_up, ρ_c) = prog_up[i].ρarea / ρ_c[k] >= edmf.minimum_area
+    @inbounds for i in 1:N_up
+        @. aux_up[i].θ_liq_ice = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            prog_up[i].ρaθ_liq_ice / prog_up[i].ρarea,
+            aux_gm.θ_liq_ice,
+        )
+        @. aux_up[i].q_tot = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            prog_up[i].ρaq_tot / prog_up[i].ρarea,
+            aux_gm.q_tot,
+        )
+        @. aux_up[i].area = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            prog_up[i].ρarea / ρ_c,
+            0,
+        )
+        @. aux_up[i].e_kin = ifelse(
+            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
+            aux_up[i].e_kin,
+            e_kin,
+        )
         #####
         ##### Set primitive variables
         #####
-        e_pot = geopotential(thermo_params, grid.zc.z[k])
-        @inbounds for i in 1:N_up
-            if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
-                aux_up[i].θ_liq_ice[k] =
-                    prog_up[i].ρaθ_liq_ice[k] / prog_up[i].ρarea[k]
-                aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / prog_up[i].ρarea[k]
-                aux_up[i].area[k] = prog_up[i].ρarea[k] / ρ_c[k]
-            else
-                aux_up[i].θ_liq_ice[k] = aux_gm.θ_liq_ice[k]
-                aux_up[i].q_tot[k] = aux_gm.q_tot[k]
-                aux_up[i].area[k] = 0
-                aux_up[i].e_kin[k] = e_kin[k]
-            end
-            aux_up[i].ts[k] = if edmf.moisture_model isa DryModel
-                TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
-            elseif edmf.moisture_model isa EquilMoistModel
-                TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p_c[k],
-                    aux_up[i].θ_liq_ice[k],
-                    aux_up[i].q_tot[k],
-                )
-            elseif edmf.moisture_model isa NonEquilMoistModel
-                error("Unsupported moisture model")
-            end
-            ts_up = aux_up[i].ts[k]
-            aux_up[i].e_tot[k] =
-                TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin[k], e_pot)
-            aux_up[i].h_tot[k] = TD.total_specific_enthalpy(
+        if edmf.moisture_model isa DryModel
+            @. aux_up[i].ts =
+                TD.PhaseDry_pθ(thermo_params, p_c, aux_up[i].θ_liq_ice)
+        elseif edmf.moisture_model isa EquilMoistModel
+            @. aux_up[i].ts = TD.PhaseEquil_pθq(
                 thermo_params,
-                ts_up,
-                aux_up[i].e_tot[k],
+                p_c,
+                aux_up[i].θ_liq_ice,
+                aux_up[i].q_tot,
             )
-            aux_up[i].q_liq[k] =
-                TD.liquid_specific_humidity(thermo_params, ts_up)
-            aux_up[i].q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_up)
-            aux_up[i].T[k] = TD.air_temperature(thermo_params, ts_up)
-            aux_up[i].RH[k] = TD.relative_humidity(thermo_params, ts_up)
+        elseif edmf.moisture_model isa NonEquilMoistModel
+            error("Unsupported moisture model")
         end
 
-        #####
-        ##### compute bulk
-        #####
-        aux_bulk.q_tot[k] = 0
-        aux_bulk.h_tot[k] = 0
-        aux_bulk.area[k] = sum(i -> aux_up[i].area[k], 1:N_up)
-        if aux_bulk.area[k] > 0
-            @inbounds for i in 1:N_up
-                a_k = aux_up[i].area[k]
-                a_bulk_k = aux_bulk.area[k]
-                aux_bulk.q_tot[k] += a_k * aux_up[i].q_tot[k] / a_bulk_k
-                aux_bulk.h_tot[k] += a_k * aux_up[i].h_tot[k] / a_bulk_k
-            end
-        else
-            aux_bulk.q_tot[k] = aux_gm.q_tot[k]
-            aux_bulk.h_tot[k] = aux_gm.h_tot[k]
-        end
-        aux_en.area[k] = 1 - aux_bulk.area[k]
-        aux_en.tke[k] = prog_en.ρatke[k] / (ρ_c[k] * aux_en.area[k])
+        ts_up = aux_up[i].ts
+        @. aux_up[i].e_tot =
+            TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin, e_pot(zc))
+        @. aux_up[i].h_tot =
+            TD.total_specific_enthalpy(thermo_params, ts_up, aux_up[i].e_tot)
+        @. aux_up[i].q_liq = TD.liquid_specific_humidity(thermo_params, ts_up)
+        @. aux_up[i].q_ice = TD.ice_specific_humidity(thermo_params, ts_up)
+        @. aux_up[i].T = TD.air_temperature(thermo_params, ts_up)
+        @. aux_up[i].RH = TD.relative_humidity(thermo_params, ts_up)
+
     end
+    #####
+    ##### compute bulk
+    #####
+    @. aux_bulk.area = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.area += aux_up[i].area
+    end
+
+    @. aux_bulk.q_tot = 0
+    @. aux_bulk.h_tot = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.q_tot += aux_up[i].area * aux_up[i].q_tot / aux_bulk.area
+        @. aux_bulk.h_tot += aux_up[i].area * aux_up[i].h_tot / aux_bulk.area
+    end
+    @inbounds for i in 1:N_up
+        @. aux_bulk.q_tot =
+            ifelse(aux_bulk.area > 0, aux_bulk.q_tot, aux_gm.q_tot)
+        @. aux_bulk.h_tot =
+            ifelse(aux_bulk.area > 0, aux_bulk.h_tot, aux_gm.h_tot)
+    end
+
+    @. aux_en.area = 1 - aux_bulk.area
+    @. aux_en.tke = prog_en.ρatke / (ρ_c * aux_en.area)
 
     @. aux_en_f.w = prog_gm_f.w / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
@@ -138,39 +149,43 @@ function update_aux!(
     @. aux_en.e_kin =
         LA.norm_sqr(C123(prog_gm_uₕ) + C123(Ic(wvec(aux_en_f.w)))) / 2
 
-    @inbounds for k in real_center_indices(grid)
-        e_pot = geopotential(thermo_params, grid.zc.z[k])
+    #####
+    ##### decompose_environment
+    #####
+    val1(aux_bulk) = 1 / (1 - aux_bulk.area)
+    val2(aux_bulk) = aux_bulk.area * val1(aux_bulk)
+    #Yair - this is here to prevent negative QT
+    @. aux_en.q_tot =
+        max(val1(aux_bulk) * aux_gm.q_tot - val2(aux_bulk) * aux_bulk.q_tot, 0)
+    @. aux_en.h_tot =
+        val1(aux_bulk) * aux_gm.h_tot - val2(aux_bulk) * aux_bulk.h_tot
 
-        #####
-        ##### decompose_environment
-        #####
-        a_bulk_c = aux_bulk.area[k]
-        val1 = 1 / (1 - a_bulk_c)
-        val2 = a_bulk_c * val1
-        aux_en.q_tot[k] =
-            max(val1 * aux_gm.q_tot[k] - val2 * aux_bulk.q_tot[k], 0) #Yair - this is here to prevent negative QT
-        aux_en.h_tot[k] = val1 * aux_gm.h_tot[k] - val2 * aux_bulk.h_tot[k]
-
-        h_en = enthalpy(aux_en.h_tot[k], e_pot, aux_en.e_kin[k])
-        ts_env[k] = if edmf.moisture_model isa DryModel
-            TD.PhaseDry_ph(thermo_params, p_c[k], h_en)
-        elseif edmf.moisture_model isa EquilMoistModel
-            TD.PhaseEquil_phq(thermo_params, p_c[k], h_en, aux_en.q_tot[k])
-        elseif edmf.moisture_model isa NonEquilMoistModel
-            error("Add support got non-equilibrium thermo states")
-        end
-        ts_en = ts_env[k]
-        aux_en.ts[k] = ts_env[k]
-        aux_en.θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts_en)
-        aux_en.e_tot[k] =
-            TD.total_energy(thermo_params, ts_en, aux_en.e_kin[k], e_pot)
-        aux_en.T[k] = TD.air_temperature(thermo_params, ts_en)
-        aux_en.θ_virt[k] = TD.virtual_pottemp(thermo_params, ts_en)
-        aux_en.θ_dry[k] = TD.dry_pottemp(thermo_params, ts_en)
-        aux_en.q_liq[k] = TD.liquid_specific_humidity(thermo_params, ts_en)
-        aux_en.q_ice[k] = TD.ice_specific_humidity(thermo_params, ts_en)
-        aux_en.RH[k] = TD.relative_humidity(thermo_params, ts_en)
+    if edmf.moisture_model isa DryModel
+        @. aux_en.ts = TD.PhaseDry_ph(
+            thermo_params,
+            p_c,
+            enthalpy(aux_en.h_tot, e_pot(zc), aux_en.e_kin),
+        )
+    elseif edmf.moisture_model isa EquilMoistModel
+        @. aux_en.ts = TD.PhaseEquil_phq(
+            thermo_params,
+            p_c,
+            enthalpy(aux_en.h_tot, e_pot(zc), aux_en.e_kin),
+            aux_en.q_tot,
+        )
+    elseif edmf.moisture_model isa NonEquilMoistModel
+        error("Add support got non-equilibrium thermo states")
     end
+    ts_en = aux_en.ts
+    @. aux_en.θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_en)
+    @. aux_en.e_tot =
+        TD.total_energy(thermo_params, ts_en, aux_en.e_kin, e_pot(zc))
+    @. aux_en.T = TD.air_temperature(thermo_params, ts_en)
+    @. aux_en.θ_virt = TD.virtual_pottemp(thermo_params, ts_en)
+    @. aux_en.θ_dry = TD.dry_pottemp(thermo_params, ts_en)
+    @. aux_en.q_liq = TD.liquid_specific_humidity(thermo_params, ts_en)
+    @. aux_en.q_ice = TD.ice_specific_humidity(thermo_params, ts_en)
+    @. aux_en.RH = TD.relative_humidity(thermo_params, ts_en)
 
     microphysics(state, edmf, edmf.precip_model, Δt, param_set)
 
@@ -201,51 +216,38 @@ function update_aux!(
     @. aux_en_f.buoy -= aux_gm_f.buoy
     @. aux_tc_f.bulk.buoy_up1 = aux_up_f[1].buoy
 
-    @inbounds for k in real_center_indices(grid)
-        #####
-        ##### compute bulk thermodynamics
-        #####
-        a_bulk_c = aux_bulk.area[k]
-        aux_bulk.q_liq[k] = 0
-        aux_bulk.q_ice[k] = 0
-        aux_bulk.T[k] = 0
-        if a_bulk_c > 0
-            @inbounds for i in 1:N_up
-                aux_bulk.q_liq[k] +=
-                    aux_up[i].area[k] * aux_up[i].q_liq[k] / a_bulk_c
-                aux_bulk.q_ice[k] +=
-                    aux_up[i].area[k] * aux_up[i].q_ice[k] / a_bulk_c
-                aux_bulk.T[k] += aux_up[i].area[k] * aux_up[i].T[k] / a_bulk_c
-            end
-        else
-            aux_bulk.T[k] = aux_en.T[k]
-        end
 
-        #####
-        ##### update_GMV_diagnostics
-        #####
-        aux_gm.q_liq[k] = (
-            aux_bulk.area[k] * aux_bulk.q_liq[k] +
-            (1 - aux_bulk.area[k]) * aux_en.q_liq[k]
-        )
-        aux_gm.q_ice[k] = (
-            aux_bulk.area[k] * aux_bulk.q_ice[k] +
-            (1 - aux_bulk.area[k]) * aux_en.q_ice[k]
-        )
-        aux_gm.T[k] = (
-            aux_bulk.area[k] * aux_bulk.T[k] +
-            (1 - aux_bulk.area[k]) * aux_en.T[k]
-        )
-
-        has_condensate =
-            TD.has_condensate(aux_bulk.q_liq[k] + aux_bulk.q_ice[k])
-        aux_bulk.cloud_fraction[k] = if has_condensate && a_bulk_c > 1e-3
-            1
-        else
-            0
-        end
-
+    #####
+    ##### compute bulk thermodynamics
+    #####
+    @. aux_bulk.q_liq = 0
+    @. aux_bulk.q_ice = 0
+    @. aux_bulk.T = 0
+    @inbounds for i in 1:N_up
+        @. aux_bulk.q_liq += aux_up[i].area * aux_up[i].q_liq / aux_bulk.area
+        @. aux_bulk.q_ice += aux_up[i].area * aux_up[i].q_ice / aux_bulk.area
+        @. aux_bulk.T += aux_up[i].area * aux_up[i].T / aux_bulk.area
     end
+    @. aux_bulk.q_liq = ifelse(aux_bulk.area > 0, aux_bulk.q_liq, 0)
+    @. aux_bulk.q_ice = ifelse(aux_bulk.area > 0, aux_bulk.q_ice, 0)
+    @. aux_bulk.T = ifelse(aux_bulk.area > 0, aux_bulk.T, aux_en.T)
+
+    #####
+    ##### update_GMV_diagnostics
+    #####
+    @. aux_gm.q_liq =
+        aux_bulk.area * aux_bulk.q_liq + (1 - aux_bulk.area) * aux_en.q_liq
+    @. aux_gm.q_ice =
+        aux_bulk.area * aux_bulk.q_ice + (1 - aux_bulk.area) * aux_en.q_ice
+    @. aux_gm.T = aux_bulk.area * aux_bulk.T + (1 - aux_bulk.area) * aux_en.T
+
+    @. aux_bulk.cloud_fraction = ifelse(
+        TD.has_condensate(aux_bulk.q_liq + aux_bulk.q_ice) &&
+        aux_bulk.area > 1e-3,
+        1,
+        0,
+    )
+
     @. aux_gm.tke = aux_en.area * aux_en.tke
     @. aux_gm.tke +=
         0.5 *
@@ -359,80 +361,89 @@ function update_aux!(
     @. ∂θl∂z_sat = ifelse(shm == 0, ∂θl∂z, ∂θl∂z_sat)
     @. ∂θv∂z_unsat = ifelse(shm == 0, ∂θv∂z, ∂θv∂z_unsat)
 
-    @inbounds for k in real_center_indices(grid)
+    bg = center_aux_turbconv(state).buoy_grad
 
-        # buoyancy_gradients
-        if edmf.bg_closure == BuoyGradMean()
-            # First order approximation: Use environmental mean fields.
-            ts_en = ts_env[k]
-            bg_kwargs = (;
-                t_sat = aux_en.T[k],
-                qv_sat = TD.vapor_specific_humidity(thermo_params, ts_en),
-                qt_sat = aux_en.q_tot[k],
-                θ_sat = aux_en.θ_dry[k],
-                θ_liq_ice_sat = aux_en.θ_liq_ice[k],
-                ∂θv∂z_unsat = ∂θv∂z[k],
-                ∂qt∂z_sat = ∂qt∂z[k],
-                ∂θl∂z_sat = ∂θl∂z[k],
-                p = p_c[k],
-                en_cld_frac = aux_en.cloud_fraction[k],
-                ρ = ρ_c[k],
-            )
-            bg_model = EnvBuoyGrad(edmf.bg_closure; bg_kwargs...)
+    # buoyancy_gradients
+    if edmf.bg_closure isa BuoyGradMean
+        # First order approximation: Use environmental mean fields.
+        @. bg = buoyancy_gradients(
+            param_set,
+            edmf.moisture_model,
+            EnvBuoyGrad(
+                edmf.bg_closure,
+                aux_en.T,                                          # t_sat
+                TD.vapor_specific_humidity(thermo_params, ts_env), # qv_sat
+                aux_en.q_tot,                                      # qt_sat
+                aux_en.θ_dry,                                      # θ_sat
+                aux_en.θ_liq_ice,                                  # θ_liq_ice_sat
+                ∂θv∂z,                                             # ∂θv∂z_unsat
+                ∂qt∂z,                                             # ∂qt∂z_sat
+                ∂θl∂z,                                             # ∂θl∂z_sat
+                p_c,                                               # p
+                aux_en.cloud_fraction,                             # en_cld_frac
+                ρ_c,                                               # ρ
+            ),
+        )
+    elseif edmf.bg_closure isa BuoyGradQuadratures
+        @. bg = buoyancy_gradients(
+            param_set,
+            edmf.moisture_model,
+            EnvBuoyGrad(
+                edmf.bg_closure,
+                aux_en_sat.T,          # t_sat
+                aux_en_sat.q_vap,      # qv_sat
+                aux_en_sat.q_tot,      # qt_sat
+                aux_en_sat.θ_dry,      # θ_sat
+                aux_en_sat.θ_liq_ice,  # θ_liq_ice_sat
+                ∂θv∂z_unsat,           # ∂θv∂z_unsat
+                ∂qt∂z_sat,             # ∂qt∂z_sat
+                ∂θl∂z_sat,             # ∂θl∂z_sat
+                p_c,                   # p
+                aux_en.cloud_fraction, # en_cld_frac
+                ρ_c,                   # ρ
+            ),
+        )
+    else
+        error(
+            "Something went wrong. The buoyancy gradient model is not specified",
+        )
+    end
 
-        elseif edmf.bg_closure == BuoyGradQuadratures()
-
-            bg_kwargs = (;
-                t_sat = aux_en_sat.T[k],
-                qv_sat = aux_en_sat.q_vap[k],
-                qt_sat = aux_en_sat.q_tot[k],
-                θ_sat = aux_en_sat.θ_dry[k],
-                θ_liq_ice_sat = aux_en_sat.θ_liq_ice[k],
-                ∂θv∂z_unsat = ∂θv∂z_unsat[k],
-                ∂qt∂z_sat = ∂qt∂z_sat[k],
-                ∂θl∂z_sat = ∂θl∂z_sat[k],
-                p = p_c[k],
-                en_cld_frac = aux_en.cloud_fraction[k],
-                ρ = ρ_c[k],
-            )
-            bg_model = EnvBuoyGrad(edmf.bg_closure; bg_kwargs...)
-        else
-            error(
-                "Something went wrong. The buoyancy gradient model is not specified",
-            )
-        end
-        bg = buoyancy_gradients(param_set, edmf.moisture_model, bg_model)
-
-        # Limiting stratification scale (Deardorff, 1976)
-        # compute ∇Ri and Pr
-        ∇_Ri = gradient_Richardson_number(
+    # Limiting stratification scale (Deardorff, 1976)
+    # compute ∇Ri and Pr
+    @. aux_tc.prandtl_nvec = turbulent_Prandtl_number(
+        mix_len_params,
+        oblength,
+        gradient_Richardson_number(
             mix_len_params,
             bg.∂b∂z,
-            Shear²[k],
+            Shear²,
             FT(eps(FT)),
-        )
-        aux_tc.prandtl_nvec[k] =
-            turbulent_Prandtl_number(mix_len_params, oblength, ∇_Ri)
+        ),
+    )
 
-        ml_model = MinDisspLen{FT}(;
-            z = FT(grid.zc[k].z),
-            obukhov_length = oblength,
-            tke_surf = aux_en.tke[kc_surf],
-            ustar = get_ustar(surf),
-            Pr = aux_tc.prandtl_nvec[k],
-            p = p_c[k],
-            ∇b = bg,
-            Shear² = Shear²[k],
-            tke = aux_en.tke[k],
-            b_exch = b_exch[k],
-        )
+    tke_surf = aux_en.tke[kc_surf]
+    ustar_surf = get_ustar(surf)
 
-        aux_tc.mixing_length[k] =
-            mixing_length(mix_len_params, param_set, ml_model)
+    @. aux_tc.mixing_length = mixing_length(
+        mix_len_params,
+        param_set,
+        MinDisspLen{FT}(
+            zc,                  # z
+            oblength,            # obukhov_length
+            tke_surf,            # tke_surf
+            ustar_surf,          # ustar
+            aux_tc.prandtl_nvec, # Pr
+            p_c,                 # p
+            bg,                  # ∇b
+            Shear²,              # Shear²
+            aux_en.tke,          # tke
+            b_exch,              # b_exch
+        ),
+    )
 
-        KM[k] = c_m * aux_tc.mixing_length[k] * sqrt(max(aux_en.tke[k], 0))
-        KH[k] = KM[k] / aux_tc.prandtl_nvec[k]
-    end
+    @. KM = c_m * aux_tc.mixing_length * sqrt(max(aux_en.tke, 0))
+    @. KH = KM / aux_tc.prandtl_nvec
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 

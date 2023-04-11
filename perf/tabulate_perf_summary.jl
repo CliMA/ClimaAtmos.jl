@@ -2,6 +2,7 @@ import Plots
 import Dates
 import JSON
 import OrderedCollections
+include(joinpath(@__DIR__, "..", "src", "utils", "yaml_helper.jl"))
 
 function sorted_dataset_folder(; dir = pwd())
     matching_paths = String[]
@@ -26,9 +27,8 @@ all metrics can be found in `get_summary`.
 
 ca_dir = joinpath(dirname(@__DIR__))
 
-function get_job_ids(buildkite_yaml; trigger = "--perf_summary true")
-    buildkite_commands = readlines(buildkite_yaml)
-    filter!(x -> occursin(trigger, x), buildkite_commands)
+function get_job_ids(buildkite_yaml; filter_name = "--perf_summary true")
+    buildkite_commands = commands_from_yaml(buildkite_yaml; filter_name)
     @assert length(buildkite_commands) > 0 # sanity check
     job_ids = map(buildkite_commands) do bkcs
         strip(first(split(last(split(bkcs, "--job_id ")), " ")), '\"')
@@ -39,7 +39,7 @@ end
 function combine_PRs_performance_benchmarks(path)
     job_ids = get_job_ids(
         joinpath(ca_dir, ".buildkite", "pipeline.yml");
-        trigger = "--perf_summary true",
+        filter_name = "--perf_summary true",
     )
     # Combine summaries into one dict
     summaries = OrderedCollections.OrderedDict()

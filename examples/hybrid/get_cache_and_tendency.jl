@@ -44,7 +44,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
         Fields.bycolumn(axes(Y.c)) do colidx
             CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             if p.turbconv_model isa CA.TurbulenceConvection.EDMFModel
-                TCU.implicit_sgs_flux_tendency!(
+                CA.implicit_sgs_flux_tendency!(
                     Yₜ,
                     Y,
                     p,
