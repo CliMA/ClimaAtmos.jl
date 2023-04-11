@@ -89,7 +89,11 @@ function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
             atmos.model_config,
             Y,
         ),
-        CA.orographic_gravity_wave_cache(atmos.orographic_gravity_wave, Y),
+        CA.orographic_gravity_wave_cache(
+            atmos.orographic_gravity_wave,
+            Y,
+            CAP.planet_radius(params),
+        ),
         (; Δt = dt),
         CA.turbconv_cache(
             Y,
