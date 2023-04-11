@@ -467,6 +467,8 @@ function compute_implicit_up_tendencies!(
     aux_up = center_aux_updrafts(state)
     ts = center_aux_grid_mean_ts(state)
     p_c = center_aux_grid_mean_p(state)
+    prog_gm = center_prog_grid_mean(state)
+    ρ_c = prog_gm.ρ
 
     # Solve for updraft area fraction
 
@@ -484,6 +486,13 @@ function compute_implicit_up_tendencies!(
         w_up = prog_up_f[i].w
 
         ρarea = prog_up[i].ρarea
+        ρ_up = prog_up[i].ρarea ./ aux_up[i].area
+        a_min = edmf.minimum_area
+        @. ρ_up = ifelse(
+            aux_up[i].area < a_min,
+            ρ_c,
+            ρ_up,
+        )
         ρaq_tot = prog_up[i].ρaq_tot
 
         tends_ρarea = tendencies_up[i].ρarea
@@ -491,7 +500,7 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot))
+        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) - p_c / ρ_up * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
         
         tmp_h_tot = aux_up[i].e_tot .+ p_c ./ (ρarea ./ aux_up[i].area)
         #@info "tmp_h_tot" tmp_h_tot
@@ -677,11 +686,11 @@ function filter_updraft_vars(
             FT(0),
             prog_up[i].ρarea,
         )
-        #@. prog_up[i].ρaθ_liq_ice = ifelse(
-        #    Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
-        #    FT(0),
-        #    prog_up[i].ρaθ_liq_ice,
-        #)
+        @. prog_up[i].ρae_tot = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+            FT(0),
+            prog_up[i].ρae_tot,
+        )
         @. prog_up[i].ρaq_tot = ifelse(
             Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
             FT(0),
