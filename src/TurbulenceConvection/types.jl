@@ -241,7 +241,7 @@ function EDMFModel(
 
     surface_area = turbconv_params.surface_area
     max_area = turbconv_params.max_area
-    minimum_area = turbconv_params.min_area
+    minimum_area = turbconv_params.min_area * FT(10)
 
     bg_closure = BuoyGradMean()
     if !(moisture_model isa EquilMoistModel)

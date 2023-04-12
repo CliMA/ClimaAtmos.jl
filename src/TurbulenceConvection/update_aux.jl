@@ -11,11 +11,24 @@ function update_aux!(
     ##### Unpack common variables
     #####
 
+    (; previous_t, dt_stage) = state.p
+    FT = eltype(t)
+    N_up = n_updrafts(edmf)
+    aux_up = center_aux_updrafts(state)
+    if (t - previous_t[]) > eps(FT)
+        dt_stage[] = t - previous_t[]
+        previous_t[] = t
+        @inbounds for i in 1:N_up
+            @. aux_up[i].previous_area = aux_up[i].area
+            #@info t, previous_t[], dt_stage[], aux_up[i].previous_area, aux_up[i].area
+        end   
+    end
+
     a_bulk_bcs = a_bulk_boundary_conditions(surf, edmf)
     Ifb = CCO.InterpolateC2F(; a_bulk_bcs...)
     thermo_params = TCP.thermodynamics_params(param_set)
     microphys_params = TCP.microphysics_params(param_set)
-    N_up = n_updrafts(edmf)
+    
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
     c_m = mixing_length_params(edmf).c_m
@@ -25,7 +38,6 @@ function update_aux!(
     FT = float_type(state)
     prog_gm = center_prog_grid_mean(state)
     prog_gm_f = face_prog_grid_mean(state)
-    aux_up = center_aux_updrafts(state)
     aux_up_f = face_aux_updrafts(state)
     aux_en = center_aux_environment(state)
     aux_en_f = face_aux_environment(state)
@@ -68,10 +80,10 @@ function update_aux!(
     e_pot(z) = geopotential(thermo_params, z)
     thresh_area(prog_up, ρ_c) = prog_up[i].ρarea / ρ_c[k] >= edmf.minimum_area
     @inbounds for i in 1:N_up
-        @. aux_up[i].θ_liq_ice = ifelse(
+        @. aux_up[i].e_tot = ifelse(
             prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            prog_up[i].ρaθ_liq_ice / prog_up[i].ρarea,
-            aux_gm.θ_liq_ice,
+            prog_up[i].ρae_tot / prog_up[i].ρarea,
+            aux_gm.e_tot,
         )
         @. aux_up[i].q_tot = ifelse(
             prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
@@ -91,52 +103,23 @@ function update_aux!(
         #####
         ##### Set primitive variables
         #####
-        e_pot = geopotential(thermo_params, grid.zc.z[k])
-        @inbounds for i in 1:N_up
-            if prog_up[i].ρarea[k] / ρ_c[k] >= edmf.minimum_area
-                aux_up[i].e_tot[k] =
-                    prog_up[i].ρae_tot[k] / prog_up[i].ρarea[k]
-                aux_up[i].q_tot[k] = prog_up[i].ρaq_tot[k] / prog_up[i].ρarea[k]
-                aux_up[i].area[k] = prog_up[i].ρarea[k] / ρ_c[k]
-            else
-                aux_up[i].e_tot[k] = aux_gm.e_tot[k]
-                aux_up[i].q_tot[k] = aux_gm.q_tot[k]
-                aux_up[i].area[k] = 0
-                aux_up[i].e_kin[k] = e_kin[k]
-            end
-            e_int = aux_up[i].e_tot[k] - aux_up[i].e_kin[k] - e_pot
-            ts_up_i = TD.PhaseEquil_peq(
-            #ts_up_i = if edmf.moisture_model isa DryModel
-            #    TD.PhaseDry_pθ(thermo_params, p_c[k], aux_up[i].θ_liq_ice[k])
-            #elseif edmf.moisture_model isa EquilMoistModel
-            #    TD.PhaseEquil_pθq(
-                    thermo_params,
-                    p_c[k],
-                    e_int,
-                    aux_up[i].q_tot[k],
-                )
-            aux_up[i].θ_liq_ice[k] = TD.liquid_ice_pottemp(thermo_params, ts_up_i)
-            #elseif edmf.moisture_model isa NonEquilMoistModel
-            #    error("Unsupported moisture model")
-            #end
-            #aux_up[i].e_tot[k] = TD.total_energy(
-            #    thermo_params,
-            #    ts_up_i,
-            #    aux_up[i].e_kin[k],
-            #    e_pot,
-            #)
-            aux_up[i].h_tot[k] = TD.total_specific_enthalpy(
+        e_int = @. aux_up[i].e_tot - aux_up[i].e_kin - e_pot(zc)
+        if edmf.moisture_model isa DryModel
+            @. aux_up[i].ts =
+                TD.PhaseDry_pe(thermo_params, p_c, e_int)
+        elseif edmf.moisture_model isa EquilMoistModel
+            @. aux_up[i].ts = TD.PhaseEquil_peq(
                 thermo_params,
-                ts_up_i,
-                aux_up[i].e_tot[k],
+                p_c,
+                e_int,
+                aux_up[i].q_tot,
             )
         elseif edmf.moisture_model isa NonEquilMoistModel
             error("Unsupported moisture model")
         end
 
         ts_up = aux_up[i].ts
-        @. aux_up[i].e_tot =
-            TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin, e_pot(zc))
+        @. aux_up[i].θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_up)
         @. aux_up[i].h_tot =
             TD.total_specific_enthalpy(thermo_params, ts_up, aux_up[i].e_tot)
         @. aux_up[i].q_liq = TD.liquid_specific_humidity(thermo_params, ts_up)
@@ -144,7 +127,14 @@ function update_aux!(
         @. aux_up[i].T = TD.air_temperature(thermo_params, ts_up)
         @. aux_up[i].RH = TD.relative_humidity(thermo_params, ts_up)
 
+        # area tendency
+        if dt_stage[] > eps(FT)
+            @. aux_up[i].area_tendency = (aux_up[i].area - aux_up[i].previous_area) / dt_stage[]
+            #@info aux_up[i].area_tendency
+        end
+
     end
+
     #####
     ##### compute bulk
     #####

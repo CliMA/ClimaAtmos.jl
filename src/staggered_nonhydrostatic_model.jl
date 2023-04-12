@@ -232,6 +232,8 @@ function default_cache(
             spaces.face_space,
         )...,
         temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
+        previous_t = Ref(FT(0)),
+        dt_stage = Ref(FT(0)),
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
     return default_cache
