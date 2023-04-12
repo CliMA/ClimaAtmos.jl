@@ -562,9 +562,7 @@ function compute_explicit_up_tendencies!(
             aux_up[i].entr -
             prog_up[i].ρarea * aux_up[i].h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr - p_c / ρ_c * prog_up[i].ρarea *
-            Ic(wcomponent(CCG.WVector(w_up))) *
-            (aux_up[i].entr - aux_up[i].detr)
+            aux_up[i].detr - p_c / ρ_c * prog_up[i].ρarea * Ic(wcomponent(CCG.WVector(w_up))) * (aux_up[i].entr - aux_up[i].detr)
         @. tendencies_up[i].ρaq_tot +=
             prog_up[i].ρarea *
             aux_en.q_tot *
@@ -577,10 +575,10 @@ function compute_explicit_up_tendencies!(
             w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
-        #@. tendencies_up[i].ρae_tot +=
-        #    prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
-        #@. tendencies_up[i].ρaq_tot +=
-        #    prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
+        @. tendencies_up[i].ρae_tot +=
+           prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
+        @. tendencies_up[i].ρaq_tot +=
+           prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
 
         # buoyancy and pressure
         @. tendencies_up_f[i].w += CCG.Covariant3Vector(

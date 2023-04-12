@@ -69,33 +69,213 @@ steps:
   - group: "TurbulenceConvection"
     steps:
 
-      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method) dt5 tend120m"
+      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true
+          --config column --turbconv edmf --debugging_tc true --regression_test true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
-          --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
-          --z_elem 60 --z_stretch false --z_max 3e3
-          --t_end 120mins --dt_save_to_sol 1mins --dt_save_to_disk 1mins
-          --moist equil
-          --job_id edmf_bomex_dt5_tend120m
-          --dt 5secs
-        artifact_paths: "edmf_bomex_dt5_tend120m/*"
+          --turbconv_case Nieuwstadt
+          --z_elem 200 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist dry
+          --job_id edmf_nieuwstadt
+          --dt 0.5secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_nieuwstadt --out_dir edmf_nieuwstadt
+        artifact_paths: "edmf_nieuwstadt/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method) dt5 tend360m"
+      - label: ":balloon: SCM EDMF Soares"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Soares
+          --z_elem 150 --z_stretch false --z_max 3750
+          --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --job_id edmf_soares
+          --dt 0.25secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_soares --out_dir edmf_soares
+        artifact_paths: "edmf_soares/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
           --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
           --z_elem 60 --z_stretch false --z_max 3e3
-          --t_end 360mins --dt_save_to_sol 1mins --dt_save_to_disk 1mins
+          --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
-          --job_id edmf_bomex_dt5_tend360m
+          --job_id edmf_bomex
           --dt 5secs
-        artifact_paths: "edmf_bomex_dt5_tend360m/*"
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_bomex --out_dir edmf_bomex
+        artifact_paths: "edmf_bomex/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Bomex (JFNK)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
+          --z_elem 60 --z_stretch false --z_max 3e3
+          --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --use_krylov_method true
+          --reference_job_id edmf_bomex
+          --job_id edmf_bomex_jfnk
+          --dt 15secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_bomex_jfnk --out_dir edmf_bomex_jfnk
+        artifact_paths: "edmf_bomex_jfnk/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF DYCOMS_RF01"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case DYCOMS_RF01 --subsidence DYCOMS --edmf_coriolis DYCOMS_RF01 --rad DYCOMS_RF01
+          --z_elem 30 --z_stretch false --z_max 1500
+          --t_end 4hours --dt_save_to_sol 5mins --dt_save_to_disk 2mins
+          --moist equil
+          --job_id edmf_dycoms_rf01
+          --dt 2secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_dycoms_rf01 --out_dir edmf_dycoms_rf01
+        artifact_paths: "edmf_dycoms_rf01/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF LifeCycleTan2018"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case LifeCycleTan2018 --subsidence LifeCycleTan2018 --edmf_coriolis LifeCycleTan2018 --ls_adv LifeCycleTan2018
+          --z_elem 75 --z_stretch false --z_max 3e3
+          --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
+          --moist equil
+          --job_id edmf_life_cycle_tan2018
+          --dt 2secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_life_cycle_tan2018 --out_dir edmf_life_cycle_tan2018
+        artifact_paths: "edmf_life_cycle_tan2018/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF Rico"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Rico --ls_adv Rico --subsidence Rico
+          --z_elem 100 --z_stretch false --z_max 4000
+          --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
+          --moist equil --precip_model 1M
+          --job_id edmf_rico
+          --dt 0.25secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_rico --out_dir edmf_rico
+        artifact_paths: "edmf_rico/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":balloon: SCM EDMF TRMM_LBA (Short, 1-moment micro, sponge)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case TRMM_LBA --rad TRMM_LBA
+          --z_elem 82 --z_stretch false --z_max 16400
+          --rayleigh_sponge true --zd_rayleigh 15000
+          --t_end 1hours --dt_save_to_sol 5mins --dt_save_to_disk 1mins
+          --moist equil --precip_model 1M
+          --job_id edmf_trmm
+          --dt 0.03secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_trmm --out_dir edmf_trmm
+        artifact_paths: "edmf_trmm/*"
+        agents:
+          slurm_mem: 20GB
+
+  - group: "Performance"
+    steps:
+
+      # Benchmarks
+      - label: ":computer: Benchmark: perf target (default)"
+        command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: Benchmark: perf target (Rosenbrock)"
+        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id bm_perf_target_rosenbrock --ode_algo ODE.Rosenbrock23"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: Benchmark: perf target (Threaded)"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target_threaded --enable_threading true"
+        agents:
+          slurm_mem: 20GB
+          slurm_cpus_per_task: 8
+
+      # Flame graphs
+      - label: ":fire: Flame graph: perf target (default)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target"
+        artifact_paths: "flame_perf_target/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (with tracers)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_tracers --perf_mode PerfExperimental"
+        artifact_paths: "flame_perf_target_tracers/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (edmfx)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmfx --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmfx"
+        artifact_paths: "flame_perf_target_edmfx/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (edmf)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmf --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
+        artifact_paths: "flame_perf_target_edmf/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (Threaded)"
+        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_threaded --enable_threading true"
+        artifact_paths: "flame_perf_target_threaded/*"
+        agents:
+          slurm_cpus_per_task: 8
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (Callbacks)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
+        artifact_paths: "flame_perf_target_callbacks/*"
+        agents:
+          slurm_mem: 20GB
+
+      # Inference
+      - label: ":rocket: JET n-failures (inference)"
+        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
+        agents:
+          slurm_mem: 20GB
+
+      # Latency
+      - label: ":mag::rocket: Invalidations"
+        command: "julia --color=yes --project=perf perf/invalidations.jl --job_id invalidations"
+        artifact_paths: "invalidations/*"
         agents:
           slurm_mem: 20GB
 
