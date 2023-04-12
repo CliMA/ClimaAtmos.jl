@@ -285,7 +285,7 @@ function set_edmf_surface_bc(
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
         # hard coded for bomex
-        e_tot_surf = FT(61013)
+        #e_tot_surf = FT(61013)
         a_surf = area_surface_bc(surf, edmf, i)
         T_surf = TD.air_temperature(thermo_params, ts_up_i_surf)
 
@@ -478,7 +478,7 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) - p_c / ρ_up * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
+        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) - p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
         
         #@info "p_c, ρ_c", p_c, ρ_c
         # @info "ρarea" ρarea
@@ -688,7 +688,7 @@ function filter_updraft_vars(
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
         # hard coded for bomex
-        e_tot_surf = FT(61013)
+        #e_tot_surf = FT(61013)
         prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
