@@ -22,7 +22,7 @@ import ..TurbulenceConvection.Parameters.AbstractTurbulenceConvectionParameters 
 ##### TurbulenceConvection sgs flux tendencies and cache
 #####
 
-function assign_thermo_aux!(state, moisture_model, thermo_params)
+function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
     If = Operators.InterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
@@ -32,6 +32,7 @@ function assign_thermo_aux!(state, moisture_model, thermo_params)
     prog_gm = TC.center_prog_grid_mean(state)
     ᶜts = TC.center_aux_grid_mean_ts(state)
     p_c = TC.center_aux_grid_mean_p(state)
+    e_kin = TC.center_aux_grid_mean_e_kin(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
     @. ρ_f = If(ρ_c)
@@ -46,6 +47,11 @@ function assign_thermo_aux!(state, moisture_model, thermo_params)
         TD.total_specific_enthalpy(thermo_params, ᶜts, prog_gm.ρe_tot / ρ_c)
     @. p_c = TD.air_pressure(thermo_params, ᶜts)
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ᶜts)
+    @. aux_gm.e_tot = prog_gm.ρe_tot / ρ_c
+    #@. aux_gm.e_tot =
+    #    e_kin +
+    #    TC.geopotential(thermo_params, grid.zc.z) +
+    #    TD.internal_energy(thermo_params, ᶜts)
     return
 end
 
@@ -137,6 +143,7 @@ function turbconv_aux(atmos, edmf, Y, ::Type{FT}) where {FT}
         θ_liq_ice = FT(0),
         q_tot = FT(0),
         h_tot = FT(0),
+        e_tot = FT(0),
         TC.cent_aux_vars_edmf(FT, local_geometry, atmos)...,
     )
     fspace = axes(Y.f)
@@ -201,7 +208,7 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
+    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
     surf = get_surface(
         p.atmos.model_config,
@@ -250,7 +257,7 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         parent(state.aux.cent) .= NaN
     end
 
-    assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
+    assign_thermo_aux!(state, grid, edmf.moisture_model, thermo_params)
 
     surf = get_surface(
         p.atmos.model_config,

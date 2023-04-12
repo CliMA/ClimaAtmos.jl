@@ -72,7 +72,7 @@ steps:
       - label: ":balloon: SCM EDMF: Nieuwstadt (Dry)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --config column --turbconv edmf --debugging_tc true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
           --turbconv_case Nieuwstadt
           --z_elem 200 --z_stretch false --z_max 3750
@@ -80,8 +80,6 @@ steps:
           --moist dry
           --job_id edmf_nieuwstadt
           --dt 0.5secs
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_nieuwstadt --out_dir edmf_nieuwstadt
         artifact_paths: "edmf_nieuwstadt/*"
         agents:
           slurm_mem: 20GB
@@ -89,7 +87,7 @@ steps:
       - label: ":balloon: SCM EDMF Soares"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --config column --turbconv edmf --debugging_tc true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
           --turbconv_case Soares
           --z_elem 150 --z_stretch false --z_max 3750
@@ -97,8 +95,6 @@ steps:
           --moist equil
           --job_id edmf_soares
           --dt 0.25secs
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_soares --out_dir edmf_soares
         artifact_paths: "edmf_soares/*"
         agents:
           slurm_mem: 20GB
@@ -113,7 +109,7 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id edmf_bomex
-          --dt 5secs
+          --dt 20secs
         artifact_paths: "edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -129,9 +125,7 @@ steps:
           --moist equil
           --use_krylov_method true
           --job_id edmf_bomex_jfnk
-          --dt 15secs
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_bomex_jfnk --out_dir edmf_bomex_jfnk
+          --dt 5secs
         artifact_paths: "edmf_bomex_jfnk/*"
         agents:
           slurm_mem: 20GB
@@ -147,8 +141,6 @@ steps:
           --moist equil
           --job_id edmf_dycoms_rf01
           --dt 6secs
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_dycoms_rf01 --out_dir edmf_dycoms_rf01
         artifact_paths: "edmf_dycoms_rf01/*"
         agents:
           slurm_mem: 20GB
@@ -164,8 +156,6 @@ steps:
           --moist equil
           --job_id edmf_life_cycle_tan2018
           --dt 6secs
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_life_cycle_tan2018 --out_dir edmf_life_cycle_tan2018
         artifact_paths: "edmf_life_cycle_tan2018/*"
         agents:
           slurm_mem: 20GB
@@ -181,8 +171,6 @@ steps:
           --moist equil --precip_model 1M
           --job_id edmf_rico
           --dt 0.75secs
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_rico --out_dir edmf_rico
         artifact_paths: "edmf_rico/*"
         agents:
           slurm_mem: 20GB
@@ -198,7 +186,7 @@ steps:
           --t_end 1hours --dt_save_to_sol 5mins --dt_save_to_disk 1mins
           --moist equil --precip_model 1M
           --job_id edmf_trmm
-          --dt 0.02secs
+          --dt 0.1secs
         artifact_paths: "edmf_trmm/*"
         agents:
           slurm_mem: 20GB
