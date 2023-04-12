@@ -257,7 +257,7 @@ function non_orographic_gravity_wave_forcing(
 )
     FT = eltype(ᶜz)
     # add an extra layer above model top so that forcing between the very top 
-    # model layer and the upper boudnary can be calculated 
+    # model layer and the upper boundary can be calculated 
     append!(ᶜu, FT(2) * ᶜu[end] - ᶜu[end - 1])
     append!(ᶜρ, ᶜρ[end] * ᶜρ[end] / ᶜρ[end - 1])
     append!(ᶜbf, ᶜbf[end])

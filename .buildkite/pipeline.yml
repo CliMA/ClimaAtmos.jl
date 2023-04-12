@@ -130,6 +130,8 @@ steps:
           --use_krylov_method true
           --job_id edmf_bomex_jfnk
           --dt 15secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_bomex_jfnk --out_dir edmf_bomex_jfnk
         artifact_paths: "edmf_bomex_jfnk/*"
         agents:
           slurm_mem: 20GB
@@ -145,6 +147,8 @@ steps:
           --moist equil
           --job_id edmf_dycoms_rf01
           --dt 6secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_dycoms_rf01 --out_dir edmf_dycoms_rf01
         artifact_paths: "edmf_dycoms_rf01/*"
         agents:
           slurm_mem: 20GB
@@ -160,6 +164,8 @@ steps:
           --moist equil
           --job_id edmf_life_cycle_tan2018
           --dt 6secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_life_cycle_tan2018 --out_dir edmf_life_cycle_tan2018
         artifact_paths: "edmf_life_cycle_tan2018/*"
         agents:
           slurm_mem: 20GB
@@ -175,6 +181,8 @@ steps:
           --moist equil --precip_model 1M
           --job_id edmf_rico
           --dt 0.75secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_rico --out_dir edmf_rico
         artifact_paths: "edmf_rico/*"
         agents:
           slurm_mem: 20GB

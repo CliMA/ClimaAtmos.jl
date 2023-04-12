@@ -87,17 +87,10 @@ end
 =#
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    FT = Spaces.undertype(axes(Y.c))
     ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ᶠu³, params, thermo_dispatcher) = p
-    (; ᶜρ_ref, ᶜp_ref) = p
-    (; energy_upwinding, tracer_upwinding, simulation) = p
-    (; ᶠgradᵥ, ᶜinterp, ᶠinterp, ᶠwinterp) = p.operators
-    thermo_params = CAP.thermodynamics_params(params)
-    dt = simulation.dt
-    # TODO: can we move this to implicit tendencies?
+    (; ᶠgradᵥ_ᶜΦ, ᶜp, ᶠu³, ᶜρ_ref, ᶜp_ref) = p
+    (; energy_upwinding, tracer_upwinding, density_upwinding) = p
+    (; ᶠgradᵥ, ᶠinterp) = p.operators
 
     vertical_transport!(
         Yₜ.c.ρ[colidx],
@@ -105,7 +98,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         ᶜρ[colidx],
         ᶜρ[colidx],
         p,
-        Val(:none),
+        density_upwinding,
     )
 
     if :ρθ in propertynames(Y.c)

@@ -24,8 +24,23 @@ import ClimaCore.Fields: ColumnField
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 
-# To add additional terms to the explicit part of the tendency, define new
-# methods for `additional_cache` and `additional_tendency!`.
+# Fields used to store variables that only need to be used in a single function
+# but cannot be computed on the fly. Unlike the precomputed quantities, these
+# can be modified at any point, so they should never be assumed to be unchanged
+# between function calls.
+function temporary_quantities(atmos, center_space, face_space)
+    CT3 = Geometry.Contravariant3Vector
+    CT12 = Geometry.Contravariant12Vector
+    FT = Spaces.undertype(center_space)
+    n = n_mass_flux_subdomains(atmos.turbconv_model)
+    return (;
+        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜρh, ᶜρhʲ
+        ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
+        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
+        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
+        ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
+    )
+end
 
 function default_cache(
     Y,
@@ -78,7 +93,8 @@ function default_cache(
         top = Operators.FirstOrderOneSided(),
     )
 
-    (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
+    (; energy_upwinding, tracer_upwinding, density_upwinding, apply_limiter) =
+        numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     R_d = FT(CAP.R_d(params))
@@ -108,7 +124,6 @@ function default_cache(
     sfc_conditions =
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
 
-    ts_type = thermo_state_type(atmos.moisture_model, FT)
     quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
     skip_dss = !(quadrature_style isa Spaces.Quadratures.GLL)
     if skip_dss
@@ -155,7 +170,7 @@ function default_cache(
     net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_sfc[] = Geometry.WVector(FT(0))
 
-    return (;
+    default_cache = (;
         simulation,
         operators = (;
             ᶜdivᵥ,
@@ -185,24 +200,21 @@ function default_cache(
         Yₜ = similar(Y), # only needed when using increment formulation
         limiters,
         ᶜρh_kwargs...,
-        ᶜK = similar(Y.c, FT),
-        ᶠu_tilde = similar(Y.f, Geometry.Contravariant123Vector{FT}),
-        ᶜu_bar = similar(Y.c, Geometry.Covariant123Vector{FT}),
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜρ_ref,
         ᶜp_ref,
-        ᶜts = similar(Y.c, ts_type),
-        ᶜp = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
-        ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
         sfc_conditions,
         z_sfc,
         T_sfc,
-        ts_sfc = similar(Spaces.level(Y.f, half), ts_type),
+        ts_sfc = similar(
+            Spaces.level(Y.f, half),
+            thermo_state_type(atmos.moisture_model, FT),
+        ),
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
@@ -210,10 +222,19 @@ function default_cache(
         params,
         energy_upwinding,
         tracer_upwinding,
+        density_upwinding,
         ghost_buffer = ghost_buffer,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        precomputed_quantities(
+            atmos,
+            spaces.center_space,
+            spaces.face_space,
+        )...,
+        temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
     )
+    set_precomputed_quantities!(Y, default_cache, FT(0))
+    return default_cache
 end
 
 function dss!(Y, p, t)
@@ -228,22 +249,17 @@ function dss!(Y, p, t)
 end
 
 function horizontal_limiter_tendency!(Yₜ, Y, p, t)
-    divₕ = Operators.Divergence()
-    C123 = Geometry.Covariant123Vector
-
-    (; ᶜu_bar) = p
-    (; ᶜinterp) = p.operators
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    @. ᶜu_bar = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
-
     Yₜ .= zero(eltype(Yₜ))
+    set_precomputed_quantities!(Y, p, t)
+
+    (; ᶜu) = p
+    divₕ = Operators.Divergence()
 
     # Tracer conservation, horizontal advection
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜρc = getproperty(Y.c, ᶜρc_name)
         ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
+        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu)
     end
 
     # Call hyperdiffusion

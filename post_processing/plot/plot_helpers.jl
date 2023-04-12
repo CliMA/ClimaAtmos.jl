@@ -1,5 +1,6 @@
 using NCDatasets
 import ClimaCoreSpectra: power_spectrum_1d, power_spectrum_2d
+using Statistics
 
 function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
     for day in [8, 10, 100]
@@ -350,5 +351,160 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
         else
             @warn "day$day.0.nc DOES NOT EXIST!!!"
         end
+    end
+end
+
+# plots in the held-suarez paper: https://journals.ametsoc.org/view/journals/bams/75/10/1520-0477_1994_075_1825_apftio_2_0_co_2.xml?tab_body=pdf
+calc_zonalave_timeave(x) =
+    dropdims(dropdims(mean(mean(x, dims = 1), dims = 4), dims = 4), dims = 1)
+calc_zonalave_variance(x) = calc_zonalave_timeave((x .- mean(x, dims = 1)) .^ 2)
+
+function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
+    days = map(x -> parse(Int, split(basename(x), ".")[1][4:end]), nc_files)
+    # filter days for plotting:
+    # if simulated time is more than 200 days, days after day 200 will be collected and used for longterm average
+    # if simulated time is less than 200 days, the last day will be used to create a napshot
+    if maximum(days) > 200
+        filter!(x -> x > 200, days)
+    else
+        filter!(x -> x == maximum(days), days)
+    end
+
+    # identify nc files for plotting 
+    nc_file = []
+    for day in unique(days)
+        push!(nc_file, filter(x -> occursin(string(day), x), nc_files)...)
+    end
+
+    println("files to generate the plots:")
+    println.(nc_file)
+
+    # collect data from all nc files and combine data from different time step into one array
+    for (i, ifile) in enumerate(nc_file)
+        nc = NCDataset(ifile, "r")
+        if i == 1
+            global lat = nc["lat"][:]
+            global z = nc["z"][:]
+            global u = nc["u"][:]
+            global T = nc["temperature"][:]
+            global θ = nc["potential_temperature"][:]
+            if moist
+                global qt = nc["qt"][:]
+            end
+        else
+            u = cat(u, nc["u"][:], dims = 4)
+            T = cat(T, nc["temperature"][:], dims = 4)
+            θ = cat(θ, nc["potential_temperature"][:], dims = 4)
+            if moist
+                qt = cat(qt, nc["qt"][:], dims = 4)
+            end
+        end
+    end
+
+    # compute longterm zonal mean statistics
+    u_timeave_zonalave = calc_zonalave_timeave(u)
+    T_timeave_zonalave = calc_zonalave_timeave(T)
+    θ_timeave_zonalave = calc_zonalave_timeave(θ)
+    T2_timeave_zonalave = calc_zonalave_variance(T)
+    @info T2_timeave_zonalave
+
+    if moist
+        qt_timeave_zonalave = calc_zonalave_timeave(qt)
+    end
+
+    # plot!!
+    fig = []
+    push!(
+        fig,
+        Plots.contourf(
+            lat,
+            z,
+            u_timeave_zonalave',
+            color = :balance,
+            clim = (-30, 30),
+            linewidth = 0,
+            yaxis = :log,
+            title = "u",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+    )
+
+    push!(
+        fig,
+        Plots.contourf(
+            lat,
+            z,
+            T_timeave_zonalave',
+            levels = 190:10:310,
+            clim = (190, 310),
+            contour_labels = true,
+            yaxis = :log,
+            title = "T",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+    )
+
+    push!(
+        fig,
+        Plots.contourf(
+            lat,
+            z,
+            θ_timeave_zonalave',
+            levels = 260:10:360,
+            clim = (260, 360),
+            contour_labels = true,
+            yaxis = :log,
+            title = "theta",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+    )
+
+    push!(
+        fig,
+        Plots.contourf(
+            lat,
+            z,
+            T2_timeave_zonalave',
+            color = :balance,
+            clim = (0, 40),
+            linewidth = 0,
+            yaxis = :log,
+            title = "[T^2]",
+            xlabel = "lat (deg N)",
+            ylabel = "z (m)",
+        ),
+    )
+
+    if moist
+        push!(
+            fig,
+            Plots.contourf(
+                lat,
+                z,
+                qt_timeave_zonalave' * 1000,
+                color = :balance,
+                levels = -10:2:30,
+                linewidth = 0,
+                yaxis = :log,
+                title = "qt",
+                xlabel = "lat (deg N)",
+                ylabel = "z (m)",
+            ),
+        )
+    end
+
+    if !moist
+        png(
+            Plots.plot(fig..., layout = (2, 2), size = (800, 800)),
+            fig_dir * "/diagnostics.png",
+        )
+    else
+        png(
+            Plots.plot(fig..., layout = (2, 3), size = (1200, 800)),
+            fig_dir * "/diagnostics.png",
+        )
     end
 end

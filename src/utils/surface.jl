@@ -1,6 +1,16 @@
 import StaticArrays as SA
 import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
+import ClimaCore.Fields as Fields
+using ClimaCore.Utilities: half
+import .TurbulenceConvection as TC
+import .TurbulenceConvection.Parameters as TCP
+import ..SingleColumnModel
+import ..SphericalModel
+
+#####
+##### TurbulenceConvection surface utility functions
+#####
 
 function get_surface(
     surf_params::Union{
@@ -135,8 +145,6 @@ function get_surface(
     return SF.surface_conditions(surf_flux_params, sc, scheme)
 end
 
-using ClimaCore.Utilities: half
-import ClimaAtmos: SingleColumnModel, SphericalModel
 get_surface(::SingleColumnModel, args...) = get_surface(args...)
 function get_surface(
     ::SphericalModel,
@@ -147,6 +155,6 @@ function get_surface(
 )
     # TODO: remove this kludge
     sfc_conditions = state.p.sfc_conditions[state.colidx]
-    sfc_conditions_inst = CC.Fields._first(sfc_conditions)
+    sfc_conditions_inst = Fields._first(sfc_conditions)
     return sfc_conditions_inst
 end

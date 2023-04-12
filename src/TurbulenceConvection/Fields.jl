@@ -64,38 +64,6 @@ Base.@propagate_inbounds Base.setindex!(
     "Attempting to setindex with a face index (PlusHalf) into a Center field",
 )
 
-# TODO: deprecate, we should not overload getindex/setindex for ordinary arrays.
-Base.@propagate_inbounds Base.getindex(arr::AbstractArray, i::Cent) =
-    Base.getindex(arr, i.i)
-Base.@propagate_inbounds Base.setindex!(arr::AbstractArray, v, i::Cent) =
-    Base.setindex!(arr, v, i.i)
-Base.@propagate_inbounds Base.getindex(arr::AbstractArray, i::CCO.PlusHalf) =
-    Base.getindex(arr, i.i)
-Base.@propagate_inbounds Base.setindex!(
-    arr::AbstractArray,
-    v,
-    i::CCO.PlusHalf,
-) = Base.setindex!(arr, v, i.i)
-Base.@propagate_inbounds Base.getindex(arr::AbstractArray, i::Int, j::Cent) =
-    Base.getindex(arr, i, j.i)
-Base.@propagate_inbounds Base.setindex!(
-    arr::AbstractArray,
-    v,
-    i::Int,
-    j::Cent,
-) = Base.setindex!(arr, v, i, j.i)
-Base.@propagate_inbounds Base.getindex(
-    arr::AbstractArray,
-    i::Int,
-    j::CCO.PlusHalf,
-) = Base.getindex(arr, i, j.i)
-Base.@propagate_inbounds Base.setindex!(
-    arr::AbstractArray,
-    v,
-    i::Int,
-    j::CCO.PlusHalf,
-) = Base.setindex!(arr, v, i, j.i)
-
 # Constant field
 function FieldFromNamedTuple(space, nt::NamedTuple)
     cmv(z) = nt
@@ -129,18 +97,7 @@ function Base.cumsum!(
     )
 end
 
-get_Δz(field::CC.Fields.FiniteDifferenceField) =
-    parent(CC.Fields.weighted_jacobian(field))
-
 # TODO: move these things into ClimaCore
-
-isa_center_space(space) = false
-isa_center_space(::CC.Spaces.CenterFiniteDifferenceSpace) = true
-isa_center_space(::CC.Spaces.CenterExtrudedFiniteDifferenceSpace) = true
-
-isa_face_space(space) = false
-isa_face_space(::CC.Spaces.FaceFiniteDifferenceSpace) = true
-isa_face_space(::CC.Spaces.FaceExtrudedFiniteDifferenceSpace) = true
 
 const CallableZType = Union{Function, Dierckx.Spline1D}
 
@@ -158,4 +115,48 @@ function set_z!(field::CC.Fields.Field, u::Real, v::Real)
     uconst(coord) = u
     vconst(coord) = v
     @. field = CCG.Covariant12Vector(CCG.UVVector(uconst(lg), vconst(lg)))
+end
+
+# TODO: move to ClimaCore.
+
+"""
+    column_findfirstvalue(fn, field::Fields.ColumnField)
+
+A (;value, z)::NamedTuple containing the value and first z-location
+at which the condition, returned by `fn`, is met. If no value
+is found, the _last_ value is returned.
+"""
+function column_findfirstvalue(fn, field::Fields.ColumnField)
+    space = axes(field)
+    zfield = Fields.coordinate_field(space).z
+    li = Operators.left_idx(space)
+    ri = Operators.right_idx(space)
+    @inbounds for j in li:ri
+        level_field = Spaces.level(field, j)
+        if fn(level_field)
+            return (; value = level_field, z = Spaces.level(zfield, j))
+        end
+    end
+    return (; value = Spaces.level(field, ri), z = Spaces.level(zfield, ri))
+end
+
+"""
+    column_findlastvalue(fn, field::Fields.ColumnField)
+
+A (;value, z)::NamedTuple containing the value and last z-location
+at which the condition, returned by `fn`, is met. If no value
+is found, the _first_ value is returned.
+"""
+function column_findlastvalue(fn, field::Fields.ColumnField)
+    space = axes(field)
+    zfield = Fields.coordinate_field(space).z
+    li = Operators.left_idx(space)
+    ri = Operators.right_idx(space)
+    @inbounds for j in ri:-1:li
+        level_field = Spaces.level(field, j)
+        if fn(level_field)
+            return (; value = level_field, z = Spaces.level(zfield, j))
+        end
+    end
+    return (; value = Spaces.level(field, li), z = Spaces.level(zfield, li))
 end

@@ -65,6 +65,7 @@ function get_numerics(parsed_args)
     numerics = (;
         energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"])),
         tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
+        density_upwinding = Val(Symbol(parsed_args["density_upwinding"])),
         apply_limiter = parsed_args["apply_limiter"],
         bubble = parsed_args["bubble"],
     )
@@ -251,8 +252,12 @@ end
 
 function get_initial_condition(parsed_args)
     if isnothing(parsed_args["turbconv_case"])
-        if parsed_args["initial_condition"] in
-           ["DryBaroclinicWave", "MoistBaroclinicWave", "DecayingProfile"]
+        if parsed_args["initial_condition"] in [
+            "DryBaroclinicWave",
+            "MoistBaroclinicWave",
+            "DecayingProfile",
+            "MoistBaroclinicWaveWithEDMF",
+        ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
                 parsed_args["perturb_initstate"],
             )
@@ -278,6 +283,9 @@ end
 
 import ClimaTimeSteppers as CTS
 import OrdinaryDiffEq as ODE
+
+is_explicit_CTS_algo_type(alg_or_tableau) =
+    alg_or_tableau <: CTS.ERKAlgorithmName
 
 is_imex_CTS_algo_type(alg_or_tableau) =
     alg_or_tableau <: CTS.IMEXARKAlgorithmName
@@ -361,7 +369,9 @@ function ode_configuration(Y, parsed_args, atmos)
     end
     @info "Using ODE config: `$alg_or_tableau`"
 
-    if !is_implicit_type(alg_or_tableau)
+    if is_explicit_CTS_algo_type(alg_or_tableau)
+        return CTS.ExplicitAlgorithm(alg_or_tableau())
+    elseif !is_implicit_type(alg_or_tableau)
         return alg_or_tableau()
     elseif is_ordinary_diffeq_newton(alg_or_tableau)
         if parsed_args["max_newton_iters"] == 1
@@ -412,3 +422,8 @@ function get_integrator(args, kwargs)
     @time "Define integrator" integrator = ODE.init(args...; kwargs...)
     return integrator
 end
+
+thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
+thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
+thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
+    TD.PhaseNonEquil{FT}

@@ -9,7 +9,7 @@ import JLD2
 
 is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
-is_turbconv_var(symbol) = symbol == :turbconv
+is_turbconv_var(symbol) = symbol in (:turbconv, :sgsʲs, :sgs⁰)
 is_tracer_var(symbol) = !(
     symbol == :ρ ||
     is_energy_var(symbol) ||
@@ -138,4 +138,20 @@ function verify_callbacks(t)
             ),
         )
     end
+end
+
+"""
+    times_a(variables, a)
+
+Given a NamedTuple that specifies variables of the form `ρ` or `ρχ`, generates a
+NamedTuple containing variables of the form `ρa` or `ρaχ`, respectively,
+multiplying the value of each variable by `a`. Any variables whose names do not
+begin with `ρ` (e.g., velocities) are omitted from the result.
+"""
+@generated function times_a(variables::NamedTuple{names}, a) where {names}
+    old_name_strs = filter(startswith('ρ'), string.(names))
+    new_name_strs = map(str -> "ρa" * str[nextind(str, 2):end], old_name_strs)
+    value_exprs = map(str -> :(variables.$(Symbol(str)) * a), old_name_strs)
+    tuple_expr = Expr(:tuple, value_exprs...)
+    return :(NamedTuple{$(Symbol.(new_name_strs))}($tuple_expr))
 end

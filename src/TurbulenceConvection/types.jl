@@ -6,13 +6,26 @@ Storage for tendencies due to precipitation formation
 $(DocStringExtensions.FIELDS)
 """
 Base.@kwdef struct PrecipFormation{FT}
-    θ_liq_ice_tendency::FT
-    e_tot_tendency::FT
-    qt_tendency::FT
-    ql_tendency::FT
-    qi_tendency::FT
-    qr_tendency::FT
-    qs_tendency::FT
+    θ_liq_ice_tendency::FT = FT(0)
+    e_tot_tendency::FT = FT(0)
+    qt_tendency::FT = FT(0)
+    ql_tendency::FT = FT(0)
+    qi_tendency::FT = FT(0)
+    qr_tendency::FT = FT(0)
+    qs_tendency::FT = FT(0)
+end
+
+"""
+    PrecipSinks
+
+Storage for tendencies due to precipitation sinks
+
+$(DocStringExtensions.FIELDS)
+"""
+Base.@kwdef struct PrecipSinks{FT}
+    S_qr_evap::FT = FT(0)
+    S_qs_melt::FT = FT(0)
+    S_qs_sub_dep::FT = FT(0)
 end
 
 """
@@ -36,16 +49,19 @@ $(DocStringExtensions.FIELDS)
 """
 Base.@kwdef struct GradBuoy{FT}
     "environmental vertical buoyancy gradient"
-    ∂b∂z::FT
+    ∂b∂z::FT = FT(0)
     "vertical buoyancy gradient in the unsaturated part of the environment"
-    ∂b∂z_unsat::FT
+    ∂b∂z_unsat::FT = FT(0)
     "vertical buoyancy gradient in the saturated part of the environment"
-    ∂b∂z_sat::FT
+    ∂b∂z_sat::FT = FT(0)
 end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 struct BuoyGradQuadratures <: AbstractEnvBuoyGradClosure end
+
+Base.broadcastable(x::BuoyGradMean) = tuple(x)
+Base.broadcastable(x::BuoyGradQuadratures) = tuple(x)
 
 """
     EnvBuoyGrad
@@ -79,11 +95,11 @@ Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
     ρ::FT
 end
 function EnvBuoyGrad(
-    ::EBG;
+    ::EBG,
     t_sat::FT,
-    bg_kwargs...,
+    args...,
 ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
-    return EnvBuoyGrad{FT, EBG}(; t_sat, bg_kwargs...)
+    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
 end
 
 Base.@kwdef struct MixingLengthParams{FT}
@@ -98,6 +114,7 @@ Base.@kwdef struct MixingLengthParams{FT}
     smin_rm::FT # upper ratio limit for smin function
     l_max::FT
 end
+Base.broadcastable(x::MixingLengthParams) = tuple(x)
 
 """
     MinDisspLen

@@ -311,6 +311,37 @@ function (initial_condition::MoistBaroclinicWave)(params)
     return local_state
 end
 
+"""
+    MoistBaroclinicWaveWithEDMF(; perturb = true)
+
+The same `InitialCondition` as `MoistBaroclinicWave`, except with an initial TKE
+of 1 and an initial draft area fraction of 0.5. This is not a physically
+meaningful initial condition, and it should be removed once the new EDMF model
+is past its initial testing stage.
+"""
+Base.@kwdef struct MoistBaroclinicWaveWithEDMF <: InitialCondition
+    perturb::Bool = true
+end
+
+function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
+    (; perturb) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        (; z, lat, long) = local_geometry.coordinates
+        (; p, T, q_tot, u, v) =
+            moist_baroclinic_wave_values(z, lat, long, params, perturb)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            velocity = Geometry.UVVector(u, v),
+            turbconv_state = EDMFState(; tke = FT(1), draft_area = FT(0.5)),
+        )
+    end
+    return local_state
+end
+
 ##
 ## EDMF Test Cases
 ##
@@ -794,7 +825,7 @@ function surface_params(::Rico, thermo_params)
     psurface::FT = 1.0154e5
     Tsurface::FT = 299.8
 
-    # Saturated surface condtions for a given surface temperature and pressure
+    # Saturated surface conditions for a given surface temperature and pressure
     p_sat_surface =
         TD.saturation_vapor_pressure(thermo_params, Tsurface, TD.Liquid())
     ϵ_v = TD.Parameters.R_d(thermo_params) / TD.Parameters.R_v(thermo_params)

@@ -199,9 +199,9 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     if :ρq_tot in propertynames(Y.c)
         nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
         nc_RH[:, 1] = diag.relative_humidity
-        nc_cloudliq[:, 1] = diag.cloud_liquid
-        nc_cloudice[:, 1] = diag.cloud_ice
-        nc_watervapor[:, 1] = diag.water_vapor
+        nc_cloudliq[:, 1] = diag.q_liq
+        nc_cloudice[:, 1] = diag.q_ice
+        nc_watervapor[:, 1] = diag.q_vap
     end
 
     if :precipitation_removal in propertynames(diag)

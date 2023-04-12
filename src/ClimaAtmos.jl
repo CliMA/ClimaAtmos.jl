@@ -20,10 +20,7 @@ include(joinpath("parameterizations", "radiation", "radiation.jl"))
 include("TurbulenceConvection/TurbulenceConvection.jl")
 import .TurbulenceConvection as TC
 
-include(joinpath("utils", "thermo_state.jl"))
 include("precomputed_quantities.jl")
-
-include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("InitialConditions", "InitialConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
@@ -47,6 +44,13 @@ include(
     joinpath(
         "parameterizations",
         "gravity_wave_drag",
+        "orographic_gravity_wave_helper.jl",
+    ),
+)
+include(
+    joinpath(
+        "parameterizations",
+        "gravity_wave_drag",
         "orographic_gravity_wave.jl",
     ),
 )
@@ -57,10 +61,16 @@ include(joinpath("tendencies", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("parameterizations", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterizations", "sponge", "viscous_sponge.jl"))
 include(joinpath("tendencies", "advection.jl"))
+include(joinpath("dycore_equations", "sgs_flux_tendencies.jl"))
 
 include("staggered_nonhydrostatic_model.jl")
 
+include(joinpath("utils", "surface.jl"))
+
+include(joinpath("callbacks", "callbacks.jl"))
+
 include(joinpath("utils", "model_getters.jl")) # high-level (using parsed_args) model getters
 include(joinpath("utils", "type_getters.jl"))
+include(joinpath("utils", "yaml_helper.jl"))
 
 end # module
