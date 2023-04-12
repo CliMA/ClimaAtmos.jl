@@ -629,12 +629,12 @@ function filter_updraft_vars(
 
     @inbounds for i in 1:N_up
         @. aux_bulk.filter_flag_1 = ifelse(prog_up[i].ρarea < FT(0), 1, 0)
-        @. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρae_tot < FT(0), 1, 0)
+        #@. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρae_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_3 = ifelse(prog_up[i].ρaq_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
         @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
-        @. prog_up[i].ρae_tot = max(prog_up[i].ρae_tot, 0) #flag 2 #testing
+        #@. prog_up[i].ρae_tot = max(prog_up[i].ρae_tot, 0) #flag 2 #testing
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
     end
