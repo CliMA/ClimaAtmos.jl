@@ -455,11 +455,11 @@ function compute_implicit_up_tendencies!(
     LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
 
     @inbounds for i in 1:N_up
-        @info "ρarea" prog_up[i].ρarea
-        @info "ρae_tot" prog_up[i].ρae_tot
+        #@info "ρarea" prog_up[i].ρarea
+        #@info "ρae_tot" prog_up[i].ρae_tot
         #@info "h_tot" aux_up[i].h_tot
-        @info "e_tot" aux_up[i].e_tot
-        @info "w_up" prog_up_f[i].w
+        #@info "e_tot" aux_up[i].e_tot
+        #@info "w_up" prog_up_f[i].w
 
         w_up = prog_up_f[i].w
 
@@ -484,10 +484,10 @@ function compute_implicit_up_tendencies!(
         # @info "ρarea" ρarea
         # @info "Ic.(CCG.WVector.(w_up))" Ic.(CCG.WVector.(w_up))
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea)
-        @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))
+        #@info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea))
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
-        @info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
-        @info "tendency after advection" tends_ρarea, tends_ρae_tot
+        #@info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
+        #@info "tendency after advection" tends_ρarea, tends_ρae_tot
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
         
 
@@ -510,7 +510,7 @@ function compute_implicit_up_tendencies!(
         tends_w = tendencies_up_f[i].w
         @. tends_w += -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
         tends_w[kf_surf] = zero(tends_w[kf_surf])
-        @info "tendency after advection" tends_w
+        #@info "tendency after advection" tends_w
     end
 
     return nothing
