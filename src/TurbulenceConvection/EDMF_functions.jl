@@ -534,7 +534,9 @@ function compute_explicit_up_tendencies!(
     prog_up_f = face_prog_updrafts(state)
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
+    p_c = center_aux_grid_mean_p(state)
     prog_gm = center_prog_grid_mean(state)
+    ρ_c = prog_gm.ρ
 
     Ic = CCO.InterpolateF2C()
     # We know that, since W = 0 at z = 0, BCs for entr, detr,
@@ -549,28 +551,30 @@ function compute_explicit_up_tendencies!(
         # Augment the tendencies of updraft area, tracers and vertical velocity
 
         # entrainment and detrainment - could be moved to implicit
-        # @. tendencies_up[i].ρarea +=
-        #     prog_up[i].ρarea *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     (aux_up[i].entr - aux_up[i].detr)
-        # @. tendencies_up[i].ρae_tot +=
-        #     prog_up[i].ρarea *
-        #     aux_en.h_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].entr -
-        #     prog_up[i].ρarea * aux_up[i].h_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].detr
-        # @. tendencies_up[i].ρaq_tot +=
-        #     prog_up[i].ρarea *
-        #     aux_en.q_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].entr -
-        #     prog_up[i].ρaq_tot *
-        #     Ic(wcomponent(CCG.WVector(w_up))) *
-        #     aux_up[i].detr
-        # @. tendencies_up_f[i].w +=
-        #     w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
+        @. tendencies_up[i].ρarea +=
+            prog_up[i].ρarea *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            (aux_up[i].entr - aux_up[i].detr)
+        @. tendencies_up[i].ρae_tot +=
+            prog_up[i].ρarea *
+            aux_en.h_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].entr -
+            prog_up[i].ρarea * aux_up[i].h_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].detr - p_c / ρ_c * prog_up[i].ρarea *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            (aux_up[i].entr - aux_up[i].detr)
+        @. tendencies_up[i].ρaq_tot +=
+            prog_up[i].ρarea *
+            aux_en.q_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].entr -
+            prog_up[i].ρaq_tot *
+            Ic(wcomponent(CCG.WVector(w_up))) *
+            aux_up[i].detr
+        @. tendencies_up_f[i].w +=
+            w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
         #@. tendencies_up[i].ρae_tot +=
