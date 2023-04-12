@@ -11,7 +11,7 @@ agents:
   config: cpu
   queue: central
   slurm_ntasks: 1
-  slurm_time: 50:00:00
+  slurm_time: 72:00:00
 
 timeout_in_minutes: 1440
 
