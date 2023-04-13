@@ -568,10 +568,10 @@ function compute_explicit_up_tendencies!(
             w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
-        @. tendencies_up[i].ρah_tot +=
-           prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
-        @. tendencies_up[i].ρaq_tot +=
-           prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
+        # @. tendencies_up[i].ρah_tot +=
+        #    prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
+        # @. tendencies_up[i].ρaq_tot +=
+        #    prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
 
         # buoyancy and pressure
         @. tendencies_up_f[i].w += CCG.Covariant3Vector(

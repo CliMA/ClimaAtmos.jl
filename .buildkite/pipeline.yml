@@ -98,6 +98,21 @@ steps:
         artifact_paths: "edmf_soares/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":balloon: SCM EDMF Bomex 1m (Default: Newton's method)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config column --turbconv edmf --debugging_tc true
+          --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
+          --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
+          --z_elem 60 --z_stretch false --z_max 3e3
+          --t_end 1mins --dt_save_to_sol 10secs --dt_save_to_disk 10secs
+          --moist equil
+          --job_id edmf_bomex_1m
+          --dt 5secs
+        artifact_paths: "edmf_bomex_1m/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":balloon: SCM EDMF Bomex (Default: Newton's method)"
         command: >
@@ -109,7 +124,7 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id edmf_bomex
-          --dt 10secs
+          --dt 5secs
         artifact_paths: "edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -140,7 +155,7 @@ steps:
           --t_end 4hours --dt_save_to_sol 5mins --dt_save_to_disk 2mins
           --moist equil
           --job_id edmf_dycoms_rf01
-          --dt 6secs
+          --dt 2secs
         artifact_paths: "edmf_dycoms_rf01/*"
         agents:
           slurm_mem: 20GB
@@ -170,7 +185,7 @@ steps:
           --t_end 24hours --dt_save_to_sol 5mins --dt_save_to_disk 8mins
           --moist equil --precip_model 1M
           --job_id edmf_rico
-          --dt 0.75secs
+          --dt 0.25secs
         artifact_paths: "edmf_rico/*"
         agents:
           slurm_mem: 20GB

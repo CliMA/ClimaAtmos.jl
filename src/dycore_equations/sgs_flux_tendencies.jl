@@ -47,10 +47,11 @@ function assign_thermo_aux!(state, grid, moisture_model, thermo_params)
         TD.total_specific_enthalpy(thermo_params, ᶜts, prog_gm.ρe_tot / ρ_c)
     @. p_c = TD.air_pressure(thermo_params, ᶜts)
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ᶜts)
-    @. aux_gm.e_tot =
-        e_kin +
-        TC.geopotential(thermo_params, grid.zc.z) +
-        TD.internal_energy(thermo_params, ᶜts)
+    #@. aux_gm.e_tot =
+    #    e_kin +
+    #    TC.geopotential(thermo_params, grid.zc.z) +
+    #    TD.internal_energy(thermo_params, ᶜts)
+    @. aux_gm.e_tot = prog_gm.ρe_tot / ρ_c
     return
 end
 
@@ -238,7 +239,7 @@ end
 
 function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     (; edmf_cache, Δt) = p
-    @info "t" t
+    #@info "t" t
     (; edmf, param_set, surf_params, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
