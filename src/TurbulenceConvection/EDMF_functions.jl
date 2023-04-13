@@ -578,10 +578,6 @@ function compute_explicit_up_tendencies!(
             CCG.WVector(aux_up_f[i].buoy + aux_up_f[i].nh_pressure),
         )
 
-        # volume term
-        @. tendencies_up[i].ρae_tot += -p_c * aux_up[i].area_tendency
-        @info "-p_c * aux_up[i].area_tendency" -p_c .* aux_up[i].area_tendency
-
         # TODO - to be removed?
         tendencies_up[i].ρarea[kc_surf] = 0
         tendencies_up[i].ρah_tot[kc_surf] = 0

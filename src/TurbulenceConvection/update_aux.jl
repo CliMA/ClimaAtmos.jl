@@ -93,15 +93,15 @@ function update_aux!(
         #####
         ##### Set primitive variables
         #####
-        e_int = @. aux_up[i].e_tot - aux_up[i].e_kin - e_pot(zc)
+        h_int = @. aux_up[i].h_tot - aux_up[i].e_kin - e_pot(zc)
         if edmf.moisture_model isa DryModel
             @. aux_up[i].ts =
-                TD.PhaseDry_pe(thermo_params, p_c, e_int)
+                TD.PhaseDry_ph(thermo_params, p_c, h_int)
         elseif edmf.moisture_model isa EquilMoistModel
-            @. aux_up[i].ts = TD.PhaseEquil_peq(
+            @. aux_up[i].ts = TD.PhaseEquil_phq(
                 thermo_params,
                 p_c,
-                e_int,
+                h_int,
                 aux_up[i].q_tot,
             )
         elseif edmf.moisture_model isa NonEquilMoistModel
@@ -110,8 +110,8 @@ function update_aux!(
 
         ts_up = aux_up[i].ts
         @. aux_up[i].θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_up)
-        @. aux_up[i].h_tot =
-            TD.total_specific_enthalpy(thermo_params, ts_up, aux_up[i].e_tot)
+        @. aux_up[i].e_tot =
+            TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin, e_pot(zc))
         @. aux_up[i].q_liq = TD.liquid_specific_humidity(thermo_params, ts_up)
         @. aux_up[i].q_ice = TD.ice_specific_humidity(thermo_params, ts_up)
         @. aux_up[i].T = TD.air_temperature(thermo_params, ts_up)
