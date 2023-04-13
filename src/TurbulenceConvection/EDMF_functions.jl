@@ -473,7 +473,7 @@ function compute_implicit_up_tendencies!(
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρah_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot))
+        @. tends_ρah_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρah_tot))
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
         
         #@info "p_c, ρ_c", p_c, ρ_c
@@ -554,7 +554,7 @@ function compute_explicit_up_tendencies!(
             aux_en.h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
             aux_up[i].entr -
-            prog_up[i].ρarea * aux_up[i].h_tot *
+            prog_up[i].ρah_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
             aux_up[i].detr
         @. tendencies_up[i].ρaq_tot +=
@@ -628,7 +628,7 @@ function filter_updraft_vars(
         @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
         @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
-        #@. prog_up[i].ρae_tot = max(prog_up[i].ρah_tot, 0) #flag 2 #testing
+        #@. prog_up[i].ρah_tot = max(prog_up[i].ρah_tot, 0) #flag 2 #testing
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
     end
