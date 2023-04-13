@@ -211,6 +211,8 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         t,
         tc_params,
     )
+    println("SURF")
+    @show surf
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
 
