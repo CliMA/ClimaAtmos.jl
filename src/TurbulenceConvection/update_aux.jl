@@ -11,18 +11,8 @@ function update_aux!(
     ##### Unpack common variables
     #####
 
-    (; previous_t, dt_stage) = state.p
-    FT = eltype(t)
     N_up = n_updrafts(edmf)
     aux_up = center_aux_updrafts(state)
-    if (t - previous_t[]) > eps(FT)
-        dt_stage[] = t - previous_t[]
-        previous_t[] = t
-        @inbounds for i in 1:N_up
-            @. aux_up[i].previous_area = aux_up[i].area
-            #@info t, previous_t[], dt_stage[], aux_up[i].previous_area, aux_up[i].area
-        end   
-    end
 
     a_bulk_bcs = a_bulk_boundary_conditions(surf, edmf)
     Ifb = CCO.InterpolateC2F(; a_bulk_bcs...)
@@ -80,10 +70,10 @@ function update_aux!(
     e_pot(z) = geopotential(thermo_params, z)
     thresh_area(prog_up, ρ_c) = prog_up[i].ρarea / ρ_c[k] >= edmf.minimum_area
     @inbounds for i in 1:N_up
-        @. aux_up[i].e_tot = ifelse(
+        @. aux_up[i].h_tot = ifelse(
             prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            prog_up[i].ρae_tot / prog_up[i].ρarea,
-            aux_gm.e_tot,
+            prog_up[i].ρah_tot / prog_up[i].ρarea,
+            aux_gm.h_tot,
         )
         @. aux_up[i].q_tot = ifelse(
             prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
@@ -126,12 +116,6 @@ function update_aux!(
         @. aux_up[i].q_ice = TD.ice_specific_humidity(thermo_params, ts_up)
         @. aux_up[i].T = TD.air_temperature(thermo_params, ts_up)
         @. aux_up[i].RH = TD.relative_humidity(thermo_params, ts_up)
-
-        # area tendency
-        if dt_stage[] > eps(FT)
-            @. aux_up[i].area_tendency = (aux_up[i].area - aux_up[i].previous_area) / dt_stage[]
-            #@info aux_up[i].area_tendency
-        end
 
     end
 

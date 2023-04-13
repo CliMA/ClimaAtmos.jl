@@ -287,11 +287,12 @@ function set_edmf_surface_bc(
         #@info "ts_up_i_surf" ts_up_i_surf
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
+        h_tot_surf = TD.total_specific_enthalpy(thermo_params, ts_up_i_surf, e_tot_surf)
         a_surf = area_surface_bc(surf, edmf, i)
         T_surf = TD.air_temperature(thermo_params, ts_up_i_surf)
 
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
+        prog_up[i].ρah_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * h_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
         prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
             CCG.WVector(FT(0)),
@@ -465,22 +466,14 @@ function compute_implicit_up_tendencies!(
         w_up = prog_up_f[i].w
 
         ρarea = prog_up[i].ρarea
-        ρ_up = prog_up[i].ρarea ./ aux_up[i].area
-        a_min = edmf.minimum_area
-        @. ρ_up = ifelse(
-            aux_up[i].area < a_min,
-            ρ_c,
-            ρ_up,
-        )
         ρaq_tot = prog_up[i].ρaq_tot
 
         tends_ρarea = tendencies_up[i].ρarea
-        tends_ρae_tot = tendencies_up[i].ρae_tot
+        tends_ρah_tot = tendencies_up[i].ρah_tot
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
-        volume_term = @. - p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) #- p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
+        @. tends_ρah_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot))
         
         #@info "p_c, ρ_c", p_c, ρ_c
         # @info "ρarea" ρarea
@@ -490,12 +483,9 @@ function compute_implicit_up_tendencies!(
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
         #@info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
         #@info "tendency after advection" tends_ρarea, tends_ρae_tot
-        @info "volume_term" volume_term
-        @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
-        
 
         tends_ρarea[kc_surf] = 0
-        tends_ρae_tot[kc_surf] = 0
+        tends_ρah_tot[kc_surf] = 0
         tends_ρaq_tot[kc_surf] = 0
     end
 
@@ -558,16 +548,14 @@ function compute_explicit_up_tendencies!(
             prog_up[i].ρarea *
             Ic(wcomponent(CCG.WVector(w_up))) *
             (aux_up[i].entr - aux_up[i].detr)
-        volume_term_entr = @. - p_c / ρ_c * prog_up[i].ρarea * Ic(wcomponent(CCG.WVector(w_up))) * (aux_up[i].entr - aux_up[i].detr)
-        @. tendencies_up[i].ρae_tot +=
+        @. tendencies_up[i].ρah_tot +=
             prog_up[i].ρarea *
             aux_en.h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
             aux_up[i].entr -
             prog_up[i].ρarea * aux_up[i].h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr #- p_c / ρ_c * prog_up[i].ρarea * Ic(wcomponent(CCG.WVector(w_up))) * (aux_up[i].entr - aux_up[i].detr)
-        @info "volume_term_entr" volume_term_entr
+            aux_up[i].detr
         @. tendencies_up[i].ρaq_tot +=
             prog_up[i].ρarea *
             aux_en.q_tot *
@@ -580,7 +568,7 @@ function compute_explicit_up_tendencies!(
             w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
-        @. tendencies_up[i].ρae_tot +=
+        @. tendencies_up[i].ρah_tot +=
            prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
         @. tendencies_up[i].ρaq_tot +=
            prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
@@ -596,7 +584,7 @@ function compute_explicit_up_tendencies!(
 
         # TODO - to be removed?
         tendencies_up[i].ρarea[kc_surf] = 0
-        tendencies_up[i].ρae_tot[kc_surf] = 0
+        tendencies_up[i].ρah_tot[kc_surf] = 0
         tendencies_up[i].ρaq_tot[kc_surf] = 0
         tendencies_up_f[i].w[kf_surf] = zero(tendencies_up_f[i].w[kf_surf])
     end
@@ -638,12 +626,12 @@ function filter_updraft_vars(
 
     @inbounds for i in 1:N_up
         @. aux_bulk.filter_flag_1 = ifelse(prog_up[i].ρarea < FT(0), 1, 0)
-        #@. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρae_tot < FT(0), 1, 0)
+        #@. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρah_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_3 = ifelse(prog_up[i].ρaq_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
         @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
-        #@. prog_up[i].ρae_tot = max(prog_up[i].ρae_tot, 0) #flag 2 #testing
+        #@. prog_up[i].ρae_tot = max(prog_up[i].ρah_tot, 0) #flag 2 #testing
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
     end
@@ -682,10 +670,10 @@ function filter_updraft_vars(
             FT(0),
             prog_up[i].ρarea,
         )
-        @. prog_up[i].ρae_tot = ifelse(
+        @. prog_up[i].ρah_tot = ifelse(
             Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
             FT(0),
-            prog_up[i].ρae_tot,
+            prog_up[i].ρah_tot,
         )
         @. prog_up[i].ρaq_tot = ifelse(
             Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
@@ -706,7 +694,8 @@ function filter_updraft_vars(
         ts_up_i_surf = TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
         e_tot_surf =
             TD.total_energy(thermo_params, ts_up_i_surf, e_kin[kc_surf], e_pot_surf)
-        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
+        h_tot_surf = TD.total_specific_enthalpy(thermo_params, ts_up_i_surf, e_tot_surf)
+        prog_up[i].ρah_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * h_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
     return nothing
