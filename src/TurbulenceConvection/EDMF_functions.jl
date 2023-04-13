@@ -466,6 +466,7 @@ function compute_implicit_up_tendencies!(
         w_up = prog_up_f[i].w
 
         ρarea = prog_up[i].ρarea
+        ρah_tot = prog_up[i].ρah_tot
         ρaq_tot = prog_up[i].ρaq_tot
 
         tends_ρarea = tendencies_up[i].ρarea
