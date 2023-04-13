@@ -867,5 +867,7 @@ function initial_surface_pressure(initial_condition, thermo_params)
     FT = eltype(thermo_params)
     surf_params = surface_params(initial_condition, thermo_params)
     surf_ts = TC.surface_thermo_state(surf_params, thermo_params, FT(0))
+    println("PRESSURE_0")
+    println(TD.air_pressure(thermo_params, surf_ts))
     return TD.air_pressure(thermo_params, surf_ts)
 end
