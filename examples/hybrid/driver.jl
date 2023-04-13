@@ -77,6 +77,7 @@ function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
         CA.hyperdiffusion_cache(atmos.hyperdiff, Y),
         CA.rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
         CA.viscous_sponge_cache(atmos.viscous_sponge, Y),
+        CA.laplacian_viscosity_cache(atmos.laplacian_viscosity, Y),
         CA.precipitation_cache(Y, precip_model),
         CA.subsidence_cache(Y, atmos.subsidence),
         CA.large_scale_advection_cache(Y, atmos.ls_adv),
@@ -105,6 +106,7 @@ end
 function additional_tendency!(Yₜ, Y, p, t)
     CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
     CA.viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
+    CA.laplacian_viscosity_tendency!(Yₜ, Y, p, t, p.atmos.laplacian_viscosity)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx

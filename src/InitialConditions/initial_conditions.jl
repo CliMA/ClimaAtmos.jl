@@ -81,7 +81,7 @@ function (initial_condition::DecayingProfile)(params)
 end
 
 """
-    AgnesiHProfile(; perturb = false)
+    AgnesiHProfile()
 
 An `InitialCondition` with a decaying temperature profile
 """
@@ -109,6 +109,41 @@ function (initial_condition::AgnesiHProfile)(params)
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T_bar),
+            velocity = velocity,
+        )
+    end
+    return local_state
+end
+
+"""
+    ScharProfile
+
+An `InitialCondition` with a prescribed Brunt-Vaisala Frequency
+"""
+Base.@kwdef struct ScharProfile <: InitialCondition end
+function (initial_condition::ScharProfile)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+
+        thermo_params = CAP.thermodynamics_params(params)
+        g = CAP.grav(params)
+        R_d = CAP.R_d(params)
+        cp_d = CAP.cp_d(params)
+        cv_d = CAP.cv_d(params)
+        p₀ = CAP.MSLP(params)
+        (; x, z) = local_geometry.coordinates
+        θ₀ = FT(280.0)
+        𝒩 = FT(0.01)
+        θ = θ₀ * exp(𝒩^2 * z / g)
+        π_exner = 1 + g^2 / (cp_d * θ₀ * 𝒩^2) * (exp(-𝒩^2 * z / g) - 1)
+        T = π_exner * θ # temperature
+        ρ = p₀ / (R_d * T) * (π_exner)^(cp_d / R_d)
+        p = ρ * R_d * T
+        velocity = Geometry.UVVector(FT(10), FT(0))
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
             velocity = velocity,
         )
     end

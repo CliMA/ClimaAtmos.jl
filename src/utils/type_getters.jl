@@ -54,6 +54,7 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         viscous_sponge = get_viscous_sponge_model(parsed_args, FT),
+        laplacian_viscosity = get_laplacian_viscosity_model(parsed_args, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
     )
 
@@ -84,11 +85,17 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi")
+    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar", "ScharHigh", "Triangle")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
     elseif topography == "Agnesi"
         warp_function = topography_agnesi
+    elseif topography == "Schar"
+        warp_function = topography_schar
+    elseif topography == "ScharHigh"
+        warp_function = topography_schar_high
+    elseif topography == "Triangle"
+        warp_function = topography_triangle
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
@@ -266,6 +273,7 @@ function get_initial_condition(parsed_args)
             "Bomex",
             "AgnesiHProfile",
             "DryDensityCurrentProfile",
+            "ScharProfile",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
         else

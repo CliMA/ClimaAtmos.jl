@@ -100,10 +100,16 @@ function default_cache(
     R_d = FT(CAP.R_d(params))
     MSLP = FT(CAP.MSLP(params))
     grav = FT(CAP.grav(params))
+    cv_d = FT(CAP.cv_d(params))
+    T_0 = FT(CAP.T_0(params))
     T_ref = FT(255)
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
     ᶜρ_ref = @. MSLP * exp(-grav * ᶜcoord.z / (R_d * T_ref)) / (R_d * T_ref)
     ᶜp_ref = @. ᶜρ_ref * R_d * T_ref
+    ᶜh_ref = @. ᶜp_ref / ᶜρ_ref + (cv_d * (T_ref - T_0) + grav * ᶜcoord.z)
+    if !parsed_args["use_hyperdiff_reference_state"]
+        ᶜh_ref .*= 0
+    end
     if !parsed_args["use_reference_state"]
         ᶜρ_ref .*= 0
         ᶜp_ref .*= 0
@@ -120,6 +126,7 @@ function default_cache(
     end
     ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
+    ts_type = thermo_state_type(atmos.moisture_model, FT)
 
     sfc_conditions =
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
@@ -169,6 +176,7 @@ function default_cache(
     net_energy_flux_toa[] = Geometry.WVector(FT(0))
     net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_sfc[] = Geometry.WVector(FT(0))
+    ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ)
 
     default_cache = (;
         simulation,
@@ -201,9 +209,12 @@ function default_cache(
         limiters,
         ᶜρh_kwargs...,
         ᶜΦ,
-        ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
+        ᶠgradᵥ_ᶜΦ,
         ᶜρ_ref,
         ᶜp_ref,
+        ᶜh_ref,
+        ᶜts = similar(Y.c, ts_type),
+        ᶜp = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),
         ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
         ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
