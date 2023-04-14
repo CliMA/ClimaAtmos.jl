@@ -659,6 +659,15 @@ function filter_updraft_vars(
             ),
             prog_up[i].ρaq_tot,
         )
+        @. prog_up[i].ρarea = ifelse(
+            z > Δz1 / 2,
+            ifelse(
+                prog_up[i].ρarea / ρ_c < a_min,
+                0,
+                max(prog_up[i].ρarea, 0),
+            ),
+            prog_up[i].ρarea,
+        )
         @. prog_up[i].ρah_tot = ifelse(
             z > Δz1 / 2,
             ifelse(
