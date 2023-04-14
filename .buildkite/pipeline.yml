@@ -79,7 +79,7 @@ steps:
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist dry
           --job_id edmf_nieuwstadt
-          --dt 0.2secs
+          --dt 0.5secs
         artifact_paths: "edmf_nieuwstadt/*"
         agents:
           slurm_mem: 20GB
@@ -94,7 +94,7 @@ steps:
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id edmf_soares
-          --dt 0.1secs
+          --dt 0.25secs
         artifact_paths: "edmf_soares/*"
         agents:
           slurm_mem: 20GB
@@ -109,7 +109,7 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --job_id edmf_bomex
-          --dt 10secs
+          --dt 20secs
         artifact_paths: "edmf_bomex/*"
         agents:
           slurm_mem: 20GB
