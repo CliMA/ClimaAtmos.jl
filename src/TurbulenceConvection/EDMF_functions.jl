@@ -489,7 +489,7 @@ function compute_implicit_up_tendencies!(
         #@info "diff_term", diff_term
 
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) + volume_term #+ diff_term #- p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
+        @. tends_ρae_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) #+ volume_term #+ diff_term #- p_c / ρ_c * -(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea)))
         
         #@info "p_c, ρ_c", p_c, ρ_c
         # @info "ρarea" ρarea
@@ -499,12 +499,12 @@ function compute_implicit_up_tendencies!(
         # @info "LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)" LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot)
         #@info "-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))" .-∇c.(LBF.(Ic.(CCG.WVector.(w_up)) .* ρarea .* aux_up[i].h_tot))
         #@info "tendency after advection" tends_ρarea, tends_ρae_tot
-        #@info "volume_term" volume_term
+        @info "volume_term" volume_term
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
         
         # volume term
-        #@. tends_ρae_tot += -p_c * aux_up[i].area_tendency
-        #@info "area_tendency" .-p_c .* aux_up[i].area_tendency
+        @. tends_ρae_tot += -p_c * aux_up[i].area_tendency
+        @info "area_tendency" .-p_c .* aux_up[i].area_tendency
 
         tends_ρarea[kc_surf] = 0
         tends_ρae_tot[kc_surf] = 0
@@ -563,7 +563,7 @@ function compute_explicit_up_tendencies!(
 
     @inbounds for i in 1:N_up
 
-        #@info "area" aux_up[i].area
+        @info "area" aux_up[i].area
         #@info "e_tot" aux_up[i].e_tot
 
         w_up = prog_up_f[i].w
@@ -583,8 +583,8 @@ function compute_explicit_up_tendencies!(
             aux_up[i].entr -
             prog_up[i].ρarea * aux_up[i].h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr + volume_term_entr #- p_c / ρ_c * prog_up[i].ρarea * Ic(wcomponent(CCG.WVector(w_up))) * (aux_up[i].entr - aux_up[i].detr)
-        #@info "volume_term_entr" volume_term_entr
+            aux_up[i].detr #+ volume_term_entr #- p_c / ρ_c * prog_up[i].ρarea * Ic(wcomponent(CCG.WVector(w_up))) * (aux_up[i].entr - aux_up[i].detr)
+        @info "volume_term_entr" volume_term_entr
         @. tendencies_up[i].ρaq_tot +=
             prog_up[i].ρarea *
             aux_en.q_tot *
