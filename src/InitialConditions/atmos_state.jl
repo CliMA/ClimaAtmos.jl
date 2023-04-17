@@ -104,10 +104,15 @@ function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel, gs_vars)
     n = TC.n_updrafts(turbconv_model)
     a_draft = max(ls.turbconv_state.draft_area, n * turbconv_model.minimum_area)
     ρa = ls.ρ * a_draft / n
-    ρaθ_liq_ice = ρa * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state)
+    ρae_tot =
+        ρa * (
+            TD.internal_energy(ls.thermo_params, ls.thermo_state) +
+            norm_sqr(ls.velocity) / 2 +
+            CAP.grav(ls.params) * ls.geometry.coordinates.z
+        )
     ρaq_tot = ρa * TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
     en = (; ρatke = (ls.ρ - n * ρa) * ls.turbconv_state.tke)
-    up = ntuple(_ -> (; ρarea = ρa, ρaθ_liq_ice, ρaq_tot), Val(n))
+    up = ntuple(_ -> (; ρarea = ρa, ρae_tot, ρaq_tot), Val(n))
     return (; turbconv = (; en, up))
 end
 function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)

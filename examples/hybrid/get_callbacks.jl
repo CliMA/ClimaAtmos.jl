@@ -8,7 +8,8 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     FT = eltype(params)
     (; dt) = simulation
 
-    tc_callbacks = CA.call_every_n_steps(turb_conv_affect_filter!)
+    tc_callbacks =
+        CA.call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
     flux_accumulation_callback = CA.call_every_n_steps(
         CA.flux_accumulation!;
         skip_first = true,

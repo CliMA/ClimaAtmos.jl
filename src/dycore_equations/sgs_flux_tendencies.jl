@@ -46,6 +46,7 @@ function assign_thermo_aux!(state, moisture_model, thermo_params)
         TD.total_specific_enthalpy(thermo_params, ᶜts, prog_gm.ρe_tot / ρ_c)
     @. p_c = TD.air_pressure(thermo_params, ᶜts)
     @. aux_gm.θ_virt = TD.virtual_pottemp(thermo_params, ᶜts)
+    @. aux_gm.e_tot = prog_gm.ρe_tot / ρ_c
     return
 end
 
@@ -114,6 +115,7 @@ function turbconv_aux(atmos, edmf, Y, ::Type{FT}) where {FT}
         θ_liq_ice = FT(0),
         q_tot = FT(0),
         h_tot = FT(0),
+        e_tot = FT(0),
         TC.cent_aux_vars_edmf(FT, local_geometry, atmos)...,
     )
     fspace = axes(Y.f)

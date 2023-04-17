@@ -69,10 +69,10 @@ function update_aux!(
     e_pot(z) = geopotential(thermo_params, z)
     thresh_area(prog_up, ρ_c) = prog_up[i].ρarea / ρ_c[k] >= edmf.minimum_area
     @inbounds for i in 1:N_up
-        @. aux_up[i].θ_liq_ice = ifelse(
+        @. aux_up[i].e_tot = ifelse(
             prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            prog_up[i].ρaθ_liq_ice / prog_up[i].ρarea,
-            aux_gm.θ_liq_ice,
+            prog_up[i].ρae_tot / prog_up[i].ρarea,
+            aux_gm.e_tot,
         )
         @. aux_up[i].q_tot = ifelse(
             prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
@@ -92,23 +92,18 @@ function update_aux!(
         #####
         ##### Set primitive variables
         #####
+        e_int = @. aux_up[i].e_tot - aux_up[i].e_kin - e_pot(zc)
         if edmf.moisture_model isa DryModel
-            @. aux_up[i].ts =
-                TD.PhaseDry_pθ(thermo_params, p_c, aux_up[i].θ_liq_ice)
+            @. aux_up[i].ts = TD.PhaseDry_pe(thermo_params, p_c, e_int)
         elseif edmf.moisture_model isa EquilMoistModel
-            @. aux_up[i].ts = TD.PhaseEquil_pθq(
-                thermo_params,
-                p_c,
-                aux_up[i].θ_liq_ice,
-                aux_up[i].q_tot,
-            )
+            @. aux_up[i].ts =
+                TD.PhaseEquil_peq(thermo_params, p_c, e_int, aux_up[i].q_tot)
         elseif edmf.moisture_model isa NonEquilMoistModel
             error("Unsupported moisture model")
         end
 
         ts_up = aux_up[i].ts
-        @. aux_up[i].e_tot =
-            TD.total_energy(thermo_params, ts_up, aux_up[i].e_kin, e_pot(zc))
+        @. aux_up[i].θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_up)
         @. aux_up[i].h_tot =
             TD.total_specific_enthalpy(thermo_params, ts_up, aux_up[i].e_tot)
         @. aux_up[i].q_liq = TD.liquid_specific_humidity(thermo_params, ts_up)
