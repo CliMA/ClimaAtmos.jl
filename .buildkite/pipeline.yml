@@ -39,11 +39,6 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Instantiate ode compat examples"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.status()'"
-
       - echo "--- Instantiate perf"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
@@ -711,11 +706,6 @@ steps:
       # Benchmarks
       - label: ":computer: Benchmark: perf target (default)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: Benchmark: perf target (Rosenbrock)"
-        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id bm_perf_target_rosenbrock --ode_algo ODE.Rosenbrock23"
         agents:
           slurm_mem: 20GB
 
