@@ -60,7 +60,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
 
     (:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ(ᶜρs / ᶜρ)))
     ## Remove a reference enthalpy hᵣ from the hyperdiffusion term
-    ## ᶜχ = ∇ ⋅ (∇ₕ(hₜ - hᵣ)) = ∇³(h′) 
+    ## ᶜχ = ∇ ⋅ (∇ₕ(hₜ - hᵣ)) = ∇²(h′) 
     ## Assume reference e_kinᵣ is zero.
     ## Where hᵣ = e_totᵣ + pᵣ/ρᵣ = cᵥ_d(Tᵣ - T₀) + gz + pᵣ/ρᵣ
     ## T₀ is the triple point temperature
