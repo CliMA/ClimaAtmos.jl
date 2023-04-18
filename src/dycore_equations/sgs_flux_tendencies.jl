@@ -74,29 +74,6 @@ function compute_implicit_gm_tendencies!(
     return nothing
 end
 
-function compute_explicit_gm_tendencies!(
-    edmf::TC.EDMFModel,
-    state::TC.State,
-    surf,
-    param_set::APS,
-)
-    tendencies_gm = TC.center_tendencies_grid_mean(state)
-    prog_gm = TC.center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
-    aux_tc = TC.center_aux_turbconv(state)
-
-    # Apply precipitation tendencies
-    @. tendencies_gm.ρe_tot += ρ_c * aux_tc.e_tot_tendency_precip_sinks
-    if hasproperty(tendencies_gm, :ρq_tot)
-        @. tendencies_gm.ρq_tot += ρ_c * aux_tc.qt_tendency_precip_sinks
-    end
-    if edmf.precip_model isa Microphysics1Moment
-        @. tendencies_gm.ρq_rai += ρ_c * aux_tc.qr_tendency_precip_sinks
-        @. tendencies_gm.ρq_sno += ρ_c * aux_tc.qs_tendency_precip_sinks
-    end
-    return nothing
-end
-
 #####
 ##### No TurbulenceConvection scheme
 #####
@@ -264,13 +241,6 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
-    TC.compute_precipitation_sink_tendencies(
-        p.precip_model,
-        state,
-        tc_params,
-        Δt,
-    )
-
     # Ensure that, when a tendency is not computed with an IMEX formulation,
     # both its implicit and its explicit components are computed here.
 
@@ -279,7 +249,6 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         TC.compute_implicit_turbconv_tendencies!(edmf, grid, state)
 
     # TODO: incrementally disable this and enable proper grid mean terms
-    compute_explicit_gm_tendencies!(edmf, state, surf, tc_params)
     imex_edmf_gm ||
         compute_implicit_gm_tendencies!(edmf, grid, state, surf, tc_params)
 
