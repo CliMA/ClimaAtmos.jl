@@ -32,27 +32,27 @@ function vertical_transport_jac!(
     ::Val{:first_order},
 )
     (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠupwind1) = operators
-    # To convert ᶠw to ᶠw_data, we extract the third vector component.
-    to_scalar(vector) = vector.u₃
-    FT = Spaces.undertype(axes(ᶜρ))
+    # To convert ᶠw to ᶠw_data, we extract the third vector component and add an epsilon to it to avoid cancellation errors in upwinding.
+    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ref_εw = tuple(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠw + ref_εw, ᶜρc / ᶜρ) /
-        to_scalar(ᶠw + ref_εw),
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(
+            Geometry.Covariant3Vector(magnitude_plus_eps(ᶠw)),
+            ᶜρc / ᶜρ,
+        ) / magnitude_plus_eps(ᶠw),
     ))
     return nothing
 end
 function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, operators, ::Val)
-    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠinterp, ᶠupwind3) = operators
-    # To convert ᶠw to ᶠw_data, we extract the third vector component.
-    to_scalar(vector) = vector.u₃
-    FT = Spaces.undertype(axes(ᶜρ))
+    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠupwind3) = operators
+    # To convert ᶠw to ᶠw_data, we extract the third vector component and add an epsilon to it to avoid cancellation errors in upwinding.
+    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ref_εw = tuple(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠw + ref_εw, ᶜρc / ᶜρ) /
-        to_scalar(ᶠw + ref_εw),
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(
+            Geometry.Covariant3Vector(magnitude_plus_eps(ᶠw)),
+            ᶜρc / ᶜρ,
+        ) / magnitude_plus_eps(ᶠw),
     ))
     return nothing
 end
