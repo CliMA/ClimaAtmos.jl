@@ -14,10 +14,10 @@ FT = Float32
 
 # DC
 xmin = 0.0
-xmax = 60000
-zmax = 25000
-xlow = (xmax/2) - 10000.0
-xhigh = (xmax/2) + 10000.0
+xmax = 120000
+zmax = 30000
+xlow = (xmax/2) - 25000.0
+xhigh = (xmax/2) + 25000.0
 zhigh = 25000
 
 ### Zoomed-in Horizontal Velocity Plot
@@ -41,7 +41,8 @@ C123 = Geometry.Covariant123Vector
 u_bar = @. C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))
 var = @. Geometry.project(Geometry.UAxis(), u_bar)
 Axis(gaa[1, 1], aspect=2, title = "Horizontal Velocity")
-limits!(xlow, xhigh, 0 , 10000)
+limits!(xlow-1000, xhigh+1000, 0 , 1500)
+#limits!(xlow, xhigh, 0 , 10000)
 #paa = fieldcontourf!(var, levels = FT(-10):0.01:FT(10))
 paa = fieldcontourf!(var)
 Colorbar(gaa[1, 2], paa, label = "u [m/s]")
@@ -55,7 +56,8 @@ C123 = Geometry.Covariant123Vector
 u_bar = @. C123(Y.c.uₕ) + C123(ᶜinterp(Y.f.w))
 var = @. Geometry.project(Geometry.UAxis(), u_bar)
 Axis(gaa[1, 1], aspect=2, title = "Horizontal Velocity")
-limits!(0, xmax, 0 , zmax)
+limits!(xlow-20000, xhigh+20000, 0 , 30000)
+#limits!(0, xmax, 0 , zmax)
 #paa = fieldcontourf!(var .- Geometry.UVector.(Float32.(20)), levels = FT(-0.10):0.01:FT(0.10))
 paa = fieldcontourf!(var)
 Colorbar(gaa[1, 2], paa, label = "u [m/s]")
@@ -67,7 +69,8 @@ f = Figure(; font = "CMU Serif")
 gaa = f[1, 1] = GridLayout()
 var = @. Geometry.project(Geometry.WAxis(), u_bar)
 Axis(gaa[1, 1], aspect=2, title = "Vertical Velocity")
-limits!(xlow, xhigh, 0 , 10000)
+limits!(xlow-1000, xhigh+1000, 0 , 1500)
+#limits!(xlow, xhigh, 0 , 10000)
 #paa = fieldcontourf!(var, levels = FT(-0.015):0.002:FT(0.015))
 paa = fieldcontourf!(var)
 Colorbar(gaa[1, 2], paa, label = "w [m/s]")
@@ -79,8 +82,8 @@ f = Figure(; font = "CMU Serif")
 gaa = f[1, 1] = GridLayout()
 var = @. Geometry.project(Geometry.WAxis(), u_bar)
 Axis(gaa[1, 1], aspect=2, title = "Vertical Velocity")
-limits!(xlow, xhigh, 0 , 10000)
-paa = fieldcontourf!(var, levels = FT(-1.5):0.15:FT(1.5))
+limits!(xlow, xhigh, 0 , 20000)
+paa = fieldcontourf!(var, levels = -2:0.2:2)
 Colorbar(gaa[1, 2], paa, label = "w [m/s]")
 fig_png = joinpath("./plots/testimage_w_clim.png")
 CairoMakie.save(fig_png, f)
@@ -89,8 +92,8 @@ f = Figure(; font = "CMU Serif")
 gaa = f[1, 1] = GridLayout()
 var = @. Geometry.project(Geometry.WAxis(), u_bar)
 Axis(gaa[1, 1], aspect=2, title = "Vertical Velocity")
-#paa = fieldcontourf!(var, levels = FT(-0.015):0.002:FT(0.015))
-limits!(0, xmax, 0 , zmax)
+#paa = fieldcontourf!(var)
+limits!(xlow, xhigh, 0 , zmax)
 paa = fieldcontourf!(var)
 Colorbar(gaa[1, 2], paa, label = "w [m/s]")
 fig_png = joinpath("./plots/testimage_w_full.png")
