@@ -16,18 +16,6 @@ Base.@kwdef struct PrecipFormation{FT}
 end
 
 """
-    NoneqMoistureSources
-
-Storage for tendencies due to nonequilibrium moisture formation
-
-$(DocStringExtensions.FIELDS)
-"""
-Base.@kwdef struct NoneqMoistureSources{FT}
-    ql_tendency::FT
-    qi_tendency::FT
-end
-
-"""
     GradBuoy
 
 Environmental buoyancy gradients.
@@ -133,12 +121,6 @@ Base.@kwdef struct MinDisspLen{FT}
     b_exch::FT
 end
 
-Base.@kwdef struct PressureModelParams{FT}
-    α_b::FT # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
-    α_a::FT # factor multiplier for pressure advection
-    α_d::FT # factor multiplier for pressure drag
-end
-
 abstract type AbstractSurfaceParameters{FT <: Real} end
 
 const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
@@ -200,8 +182,7 @@ get_ρu_flux(surf) = surf.ρτxz
 get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
 
-
-struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP}
+struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP}
     surface_area::FT
     max_area::FT
     minimum_area::FT
@@ -209,8 +190,6 @@ struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP}
     precip_model::PM
     bg_closure::EBGC
     mixing_length_params::MLP
-    pressure_model_params::PMP
-    H_up_min::FT # minimum updraft top to avoid zero division in pressure drag and turb-entr
     zero_uv_fluxes::Bool
 end
 function EDMFModel(
@@ -238,15 +217,6 @@ function EDMFModel(
         )
     end
 
-    # minimum updraft top to avoid zero division in pressure drag and turb-entr
-    H_up_min = turbconv_params.min_updraft_top
-
-    pressure_model_params = PressureModelParams{FT}(;
-        α_b = turbconv_params.pressure_normalmode_buoy_coeff1,
-        α_a = turbconv_params.pressure_normalmode_adv_coeff,
-        α_d = turbconv_params.pressure_normalmode_drag_coeff,
-    )
-
     mixing_length_params = MixingLengthParams{FT}(;
         ω_pr = turbconv_params.Prandtl_number_scale,
         c_m = turbconv_params.tke_ed_coeff,
@@ -264,8 +234,7 @@ function EDMFModel(
     PM = typeof(precip_model)
     EBGC = typeof(bg_closure)
     MLP = typeof(mixing_length_params)
-    PMP = typeof(pressure_model_params)
-    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP, PMP}(
+    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP}(
         surface_area,
         max_area,
         minimum_area,
@@ -273,8 +242,6 @@ function EDMFModel(
         precip_model,
         bg_closure,
         mixing_length_params,
-        pressure_model_params,
-        H_up_min,
         zero_uv_fluxes,
     )
 end
@@ -282,7 +249,6 @@ end
 parameter_set(obj) = obj.param_set
 n_updrafts(::EDMFModel{N_up}) where {N_up} = N_up
 Base.eltype(::EDMFModel{N_up, FT}) where {N_up, FT} = FT
-pressure_model_params(m::EDMFModel) = m.pressure_model_params
 mixing_length_params(m::EDMFModel) = m.mixing_length_params
 
 Base.broadcastable(edmf::EDMFModel) = tuple(edmf)

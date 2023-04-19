@@ -355,8 +355,21 @@ function update_aux!(
         )
     end
     # updraft pressure
-    # TODO @. aux_up_f[i].nh_pressure = compute_nh_pressure(...)
-    compute_nh_pressure!(state, edmf, surf)
+    wvec = CC.Geometry.WVector
+    w_bcs =
+        (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
+    ∇ = CCO.DivergenceC2F(; w_bcs...)
+    @inbounds for i in 1:N_up
+        updraft_top = compute_updraft_top(aux_up[i].area)
+        @. aux_up_f[i].nh_pressure = compute_nh_pressure!(
+            param_set,
+            aux_up_f[i].buoy,
+            wcomponent(CCG.WVector(prog_up_f[i].w)),
+            ∇(Ic(CCG.WVector(prog_up_f[i].w))),
+            wcomponent(CCG.WVector(prog_up_f[i].w - aux_en_f.w)),
+            updraft_top,
+        )
+    end
 
     #####
     ##### compute_eddy_diffusivities_tke
