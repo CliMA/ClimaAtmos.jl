@@ -43,6 +43,7 @@ function update_aux!(
     zc = Fields.coordinate_field(axes(ρ_c)).z
     aux_en_unsat = aux_en.unsat
     aux_en_sat = aux_en.sat
+    mph = center_aux_turbconv(state).mph
     m_entr_detr = aux_tc.ϕ_temporary
     ∇m_entr_detr = aux_tc.ψ_temporary
     wvec = CC.Geometry.WVector
@@ -187,7 +188,70 @@ function update_aux!(
     @. aux_en.q_ice = TD.ice_specific_humidity(thermo_params, ts_en)
     @. aux_en.RH = TD.relative_humidity(thermo_params, ts_en)
 
-    microphysics(state, edmf, edmf.precip_model, Δt, param_set)
+    # compute rain formation in the environment (autoconversion and accretion)
+    @. mph = precipitation_formation(
+        param_set,
+        edmf.precip_model,
+        prog_gm,
+        aux_en.area,
+        zc,
+        Δt,
+        ts_en,
+    )
+    # TODO: move ..._tendency_precip_formation to diagnostics
+    @. aux_en.e_tot_tendency_precip_formation = mph.e_tot_tendency * aux_en.area
+    @. aux_en.qt_tendency_precip_formation = mph.qt_tendency * aux_en.area
+    @. aux_en.qr_tendency_precip_formation = mph.qr_tendency * aux_en.area
+    @. aux_en.qs_tendency_precip_formation = mph.qs_tendency * aux_en.area
+
+    @. aux_en.cloud_fraction =
+        ifelse(TD.has_condensate(thermo_params, ts_en), 1, 0)
+
+    # TODO: shouldn't we always populate aux_en_sat and aux_en_unsat?
+    # Otherwise we may be using values from other timesteps / stages
+    # update_sat_unsat
+    conditional_assign!(aux_en_sat.θ_dry, ts_en, TD.dry_pottemp, thermo_params)
+    conditional_assign!(
+        aux_en_sat.θ_liq_ice,
+        ts_en,
+        TD.liquid_ice_pottemp,
+        thermo_params,
+    )
+    conditional_assign!(aux_en_sat.T, ts_en, TD.air_temperature, thermo_params)
+    conditional_assign!(
+        aux_en_sat.q_tot,
+        ts_en,
+        TD.total_specific_humidity,
+        thermo_params,
+    )
+    conditional_assign!(
+        aux_en_sat.q_vap,
+        ts_en,
+        TD.vapor_specific_humidity,
+        thermo_params,
+    )
+
+    conditional_assign!(
+        aux_en_unsat.θ_dry,
+        ts_en,
+        TD.dry_pottemp,
+        thermo_params,
+        x -> !x,
+    )
+    conditional_assign!(
+        aux_en_unsat.θ_virt,
+        ts_en,
+        TD.virtual_pottemp,
+        thermo_params,
+        x -> !x,
+    )
+    conditional_assign!(
+        aux_en_unsat.q_tot,
+        ts_en,
+        TD.total_specific_humidity,
+        thermo_params,
+        x -> !x,
+    )
 
     # compute the buoyancy
     LBF_ρ = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(ρ_f[kf_surf]))
@@ -447,12 +511,43 @@ function update_aux!(
 
     compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
 
-    compute_precipitation_formation_tendencies(
-        state,
-        edmf,
-        edmf.precip_model,
-        Δt,
-        param_set,
-    )
+    # compute precipitation formation tendencies from updrafts
+    @. aux_bulk.e_tot_tendency_precip_formation = 0
+    @. aux_bulk.qt_tendency_precip_formation = 0
+    @. aux_bulk.qr_tendency_precip_formation = 0
+    @. aux_bulk.qs_tendency_precip_formation = 0
+    @inbounds for i in 1:N_up
+        # autoconversion and accretion
+        @. mph = precipitation_formation(
+            param_set,
+            edmf.precip_model,
+            prog_gm,
+            aux_up[i].area,
+            zc,
+            Δt,
+            aux_up[i].ts,
+        )
+        @. aux_up[i].θ_liq_ice_tendency_precip_formation =
+            mph.θ_liq_ice_tendency * aux_up[i].area
+        @. aux_up[i].e_tot_tendency_precip_formation =
+            mph.e_tot_tendency * aux_up[i].area
+        @. aux_up[i].qt_tendency_precip_formation =
+            mph.qt_tendency * aux_up[i].area
+        @. aux_up[i].qr_tendency_precip_formation =
+            mph.qr_tendency * aux_up[i].area
+        @. aux_up[i].qs_tendency_precip_formation =
+            mph.qs_tendency * aux_up[i].area
+
+        # TODO - to be deleted once we sum all tendencies elsewhere
+        @. aux_bulk.e_tot_tendency_precip_formation +=
+            aux_up[i].e_tot_tendency_precip_formation
+        @. aux_bulk.qt_tendency_precip_formation +=
+            aux_up[i].qt_tendency_precip_formation
+        @. aux_bulk.qr_tendency_precip_formation +=
+            aux_up[i].qr_tendency_precip_formation
+        @. aux_bulk.qs_tendency_precip_formation +=
+            aux_up[i].qs_tendency_precip_formation
+    end
+
     return nothing
 end
