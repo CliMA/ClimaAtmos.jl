@@ -1133,7 +1133,7 @@ function clip_values!(model)
     @. p_lev = max(p_lev, p_min)
 end
 update_concentrations!(::GrayRadiation, model) = nothing
-update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_dry!(
+update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
     model.solver.as.p_lev,
     model.solver.as.col_dry,
     model.params,
