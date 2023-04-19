@@ -673,7 +673,8 @@ end
 ##
 
 # By default, use the dycore's surface parametrization.
-surface_params(::InitialCondition, thermo_params) = nothing
+surface_params(::InitialCondition, thermo_params) =
+    surface_params(Bomex(), thermo_params)
 
 function surface_params(::Nieuwstadt, thermo_params)
     FT = eltype(thermo_params)
