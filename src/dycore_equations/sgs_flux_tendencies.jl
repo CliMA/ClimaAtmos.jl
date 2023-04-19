@@ -188,10 +188,9 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         t,
         tc_params,
     )
+    TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
-
-    TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
     imex_edmf_turbconv &&
         TC.compute_implicit_turbconv_tendencies!(edmf, grid, state)
@@ -236,10 +235,9 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
         t,
         tc_params,
     )
+    TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
     TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
-
-    TC.update_aux!(edmf, grid, state, surf, tc_params, t, Δt)
 
     # Ensure that, when a tendency is not computed with an IMEX formulation,
     # both its implicit and its explicit components are computed here.
