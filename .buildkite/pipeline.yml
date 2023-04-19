@@ -39,11 +39,6 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Instantiate ode compat examples"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.status()'"
-
       - echo "--- Instantiate perf"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
@@ -220,7 +215,7 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --regression_test true --tracer_upwinding first_order
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_first_upwind_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
@@ -228,14 +223,14 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding first_order --energy_upwinding first_order --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: SSP 3rd-order tracer upwind baroclinic wave (ρe_tot) equilmoist"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding third_order
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_third_upwind_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
@@ -243,7 +238,7 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding third_order --energy_upwinding third_order --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
@@ -731,11 +726,6 @@ steps:
       # Benchmarks
       - label: ":computer: Benchmark: perf target (default)"
         command: "julia --color=yes --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":computer: Benchmark: perf target (Rosenbrock)"
-        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id bm_perf_target_rosenbrock --ode_algo ODE.Rosenbrock23"
         agents:
           slurm_mem: 20GB
 
