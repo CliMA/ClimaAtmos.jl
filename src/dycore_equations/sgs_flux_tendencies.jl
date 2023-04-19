@@ -170,7 +170,15 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     Y_filtered.c[colidx] .= Y.c[colidx]
     Y_filtered.f[colidx] .= Y.f[colidx]
 
-    state = TC.tc_column_state(Y_filtered, p, Yₜ, colidx)
+    state = TC.tc_column_state(
+        Y_filtered,
+        p,
+        Yₜ,
+        colidx,
+        surf_params,
+        thermo_params,
+        t,
+    )
 
     grid = TC.Grid(state)
     if test_consistency
@@ -218,7 +226,15 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     Y_filtered.c[colidx] .= Y.c[colidx]
     Y_filtered.f[colidx] .= Y.f[colidx]
 
-    state = TC.tc_column_state(Y_filtered, p, Yₜ, colidx)
+    state = TC.tc_column_state(
+        Y_filtered,
+        p,
+        Yₜ,
+        colidx,
+        surf_params,
+        thermo_params,
+        t,
+    )
 
     grid = TC.Grid(state)
     if test_consistency

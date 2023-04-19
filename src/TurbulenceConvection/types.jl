@@ -194,8 +194,7 @@ ch(surf) = surf.Ch
 bflux(surf) = surf.buoy_flux
 get_ustar(surf) = surf.ustar
 get_ρe_tot_flux(surf, thermo_params, ts_in) = shf(surf) + lhf(surf)
-get_ρq_tot_flux(surf, thermo_params, ts_in) =
-    lhf(surf) / TD.latent_heat_vapor(thermo_params, ts_in)
+get_ρq_tot_flux(surf) = surf.evaporation
 get_ρu_flux(surf) = surf.ρτxz
 get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
@@ -319,9 +318,10 @@ function Base.summary(io::IO, edmf::EDMFModel)
 end
 
 
-struct State{P, A, T, CACHE, C}
+struct State{P, A, TS, T, CACHE, C}
     prog::P
     aux::A
+    ts::TS
     tendencies::T
     p::CACHE
     colidx::C
@@ -394,7 +394,15 @@ float_type(state::State) = eltype(state.prog)
 float_type(field::CC.Fields.Field) = eltype(parent(field))
 
 
-function tc_column_state(prog, p, tendencies, colidx)
+function tc_column_state(
+    prog,
+    p,
+    tendencies,
+    colidx,
+    surf_params,
+    thermo_params,
+    t,
+)
     prog_cent_column = CC.column(prog.c, colidx)
     prog_face_column = CC.column(prog.f, colidx)
     aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
@@ -409,11 +417,20 @@ function tc_column_state(prog, p, tendencies, colidx)
         cent = tends_cent_column,
         face = tends_face_column,
     )
+    ts = surface_thermo_state(surf_params, thermo_params, t)
 
-    return State(prog_column, aux_column, tends_column, p, colidx)
+    return State(prog_column, aux_column, ts, tends_column, p, colidx)
 end
 
-function tc_column_state(prog, p, tendencies::Nothing, colidx)
+function tc_column_state(
+    prog,
+    p,
+    tendencies::Nothing,
+    colidx,
+    surf_params,
+    thermo_params,
+    t,
+)
     prog_cent_column = CC.column(prog.c, colidx)
     prog_face_column = CC.column(prog.f, colidx)
     aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
@@ -423,6 +440,7 @@ function tc_column_state(prog, p, tendencies::Nothing, colidx)
     aux_column =
         CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
     tends_column = nothing
+    ts = surface_thermo_state(surf_params, thermo_params, t)
 
-    return State(prog_column, aux_column, tends_column, p, colidx)
+    return State(prog_column, aux_column, ts, tends_column, p, colidx)
 end
