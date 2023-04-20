@@ -71,6 +71,11 @@ microph_scaling_melt(ps::ATCP) = ps.microph_scaling_melt
 ##### Forwarding parameters
 #####
 
+const TCPS = TurbulenceConvectionParameters
+for fn in fieldnames(TCPS)
+    @eval $(fn)(ps::ATCP) = ps.$(fn)
+end
+
 ##### Forwarding Thermodynamics.jl
 
 const TDPS = TD.Parameters.ThermodynamicsParameters
