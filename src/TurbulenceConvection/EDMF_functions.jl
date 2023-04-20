@@ -126,14 +126,10 @@ function compute_sgs_flux!(
 
     # apply surface BC as SGS flux at lowest level
     lg_surf = CC.Fields.local_geometry_field(axes(ρ_f))[kf_surf]
-    sgs_flux_h_tot[kf_surf] = CCG.Covariant3Vector(
-        CCG.WVector(get_ρe_tot_flux(surf, thermo_params, ts_gm[kc_surf])),
-        lg_surf,
-    )
-    sgs_flux_q_tot[kf_surf] = CCG.Covariant3Vector(
-        CCG.WVector(get_ρq_tot_flux(surf, thermo_params, ts_gm[kc_surf])),
-        lg_surf,
-    )
+    sgs_flux_h_tot[kf_surf] =
+        CCG.Covariant3Vector(CCG.WVector(get_ρe_tot_flux(surf)), lg_surf)
+    sgs_flux_q_tot[kf_surf] =
+        CCG.Covariant3Vector(CCG.WVector(get_ρq_tot_flux(surf)), lg_surf)
     ρu_flux = edmf.zero_uv_fluxes ? FT(0) : get_ρu_flux(surf)
     ρv_flux = edmf.zero_uv_fluxes ? FT(0) : get_ρv_flux(surf)
     sgs_flux_uₕ[kf_surf] =
@@ -187,11 +183,9 @@ function compute_diffusive_fluxes(
     @. aux_tc_f.ρ_ae_KM = IfKM(aeKM) * ρ_f
 
     aeKHq_tot_bc =
-        -get_ρq_tot_flux(surf, thermo_params, ts_gm[kc_surf]) / a_en[kc_surf] /
-        aux_tc_f.ρ_ae_KH[kf_surf]
+        -get_ρq_tot_flux(surf) / a_en[kc_surf] / aux_tc_f.ρ_ae_KH[kf_surf]
     aeKHh_tot_bc =
-        -get_ρe_tot_flux(surf, thermo_params, ts_gm[kc_surf]) / a_en[kc_surf] /
-        aux_tc_f.ρ_ae_KH[kf_surf]
+        -get_ρe_tot_flux(surf) / a_en[kc_surf] / aux_tc_f.ρ_ae_KH[kf_surf]
     ρu_flux = edmf.zero_uv_fluxes ? FT(0) : get_ρu_flux(surf)
     ρv_flux = edmf.zero_uv_fluxes ? FT(0) : get_ρv_flux(surf)
     aeKMu_bc = -ρu_flux / a_en[kc_surf] / aux_tc_f.ρ_ae_KM[kf_surf]
@@ -344,8 +338,8 @@ function θ_surface_bc(
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = center_aux_grid_mean(state)
     kc_surf = kc_surface(grid)
-    ts_gm = center_aux_grid_mean_ts(state)
-    c_p = TD.cp_m(thermo_params, ts_gm[kc_surf])
+    ts_sfc = state.ts_sfc
+    c_p = TD.cp_m(thermo_params, ts_sfc)
     (; ustar, zLL, oblength, ρLL) = surface_helper(surf, grid, state)
     bflux(surf) > 0 || return aux_gm.θ_liq_ice[kc_surf]
     a_total = edmf.surface_area
@@ -374,17 +368,15 @@ function q_surface_bc(
 )
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = center_aux_grid_mean(state)
-    prog_gm = center_prog_grid_mean(state)
     kc_surf = kc_surface(grid)
     bflux(surf) > 0 || return aux_gm.q_tot[kc_surf]
     a_total = edmf.surface_area
     a_ = area_surface_bc(surf, edmf, i)
     (; ustar, zLL, oblength, ρLL) = surface_helper(surf, grid, state)
-    ts_gm = center_aux_grid_mean_ts(state)
-    ρq_tot_flux = get_ρq_tot_flux(surf, thermo_params, ts_gm[kc_surf])
+    ρ_q_tot_flux = get_ρq_tot_flux(surf)
     qt_var = get_surface_variance(
-        ρq_tot_flux / ρLL,
-        ρq_tot_flux / ρLL,
+        ρ_q_tot_flux / ρLL,
+        ρ_q_tot_flux / ρLL,
         ustar,
         zLL,
         oblength,
