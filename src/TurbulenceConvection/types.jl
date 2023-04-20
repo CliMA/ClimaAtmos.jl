@@ -77,20 +77,6 @@ function EnvBuoyGrad(
     return EnvBuoyGrad{FT, EBG}(t_sat, args...)
 end
 
-Base.@kwdef struct MixingLengthParams{FT}
-    ω_pr::FT # cospectral budget factor for turbulent Prandtl number
-    c_m::FT # tke diffusivity coefficient
-    c_d::FT # tke dissipation coefficient
-    c_b::FT # static stability coefficient
-    κ_star²::FT # Ratio of TKE to squared friction velocity in surface layer
-    Pr_n::FT # turbulent Prandtl number in neutral conditions
-    Ri_c::FT # critical Richardson number
-    smin_ub::FT # lower limit for smin function
-    smin_rm::FT # upper ratio limit for smin function
-    l_max::FT
-end
-Base.broadcastable(x::MixingLengthParams) = tuple(x)
-
 """
     MinDisspLen
 
@@ -181,14 +167,13 @@ get_ρu_flux(surf) = surf.ρτxz
 get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
 
-struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP}
+struct EDMFModel{N_up, FT, MM, PM, EBGC}
     surface_area::FT
     max_area::FT
     minimum_area::FT
     moisture_model::MM
     precip_model::PM
     bg_closure::EBGC
-    mixing_length_params::MLP
     zero_uv_fluxes::Bool
 end
 function EDMFModel(
@@ -216,31 +201,16 @@ function EDMFModel(
         )
     end
 
-    mixing_length_params = MixingLengthParams{FT}(;
-        ω_pr = turbconv_params.Prandtl_number_scale,
-        c_m = turbconv_params.tke_ed_coeff,
-        c_d = turbconv_params.tke_diss_coeff,
-        c_b = turbconv_params.static_stab_coeff, # this is here due to a value error in CliMAParmameters.j,
-        κ_star² = turbconv_params.tke_surf_scale,
-        Pr_n = turbconv_params.Prandtl_number_0,
-        Ri_c = turbconv_params.Ri_crit,
-        smin_ub = turbconv_params.smin_ub,
-        smin_rm = turbconv_params.smin_rm,
-        l_max = turbconv_params.l_max,
-    )
-
     MM = typeof(moisture_model)
     PM = typeof(precip_model)
     EBGC = typeof(bg_closure)
-    MLP = typeof(mixing_length_params)
-    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP}(
+    return EDMFModel{n_updrafts, FT, MM, PM, EBGC}(
         surface_area,
         max_area,
         minimum_area,
         moisture_model,
         precip_model,
         bg_closure,
-        mixing_length_params,
         zero_uv_fluxes,
     )
 end
@@ -248,7 +218,6 @@ end
 parameter_set(obj) = obj.param_set
 n_updrafts(::EDMFModel{N_up}) where {N_up} = N_up
 Base.eltype(::EDMFModel{N_up, FT}) where {N_up, FT} = FT
-mixing_length_params(m::EDMFModel) = m.mixing_length_params
 
 Base.broadcastable(edmf::EDMFModel) = tuple(edmf)
 
