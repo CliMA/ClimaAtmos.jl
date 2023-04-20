@@ -236,7 +236,6 @@ function affect_filter!(
     surf,
     t::Real,
 )
-    prog_en = center_prog_environment(state)
     ###
     ### Filters
     ###
@@ -258,25 +257,37 @@ function set_edmf_surface_bc(
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
     prog_gm = center_prog_grid_mean(state)
+    prog_gm_uₕ = grid_mean_uₕ(state)
     prog_up = center_prog_updrafts(state)
-    prog_en = center_prog_environment(state)
     prog_up_f = face_prog_updrafts(state)
     ts_gm = center_aux_grid_mean_ts(state)
-    cp = TD.cp_m(thermo_params, ts_gm[kc_surf])
     ρ_c = prog_gm.ρ
-    ae_surf::FT = 1
+    p_c = TD.air_pressure.(thermo_params, ts_gm)
+    C123 = CCG.Covariant123Vector
+    Ic = CCO.InterpolateF2C()
     @inbounds for i in 1:N_up
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
+        e_kin = @. LA.norm_sqr(
+            C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f[i].w))),
+        ) / 2
+        e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
+        ts_up_i_surf =
+            TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
+        e_tot_surf = TD.total_energy(
+            thermo_params,
+            ts_up_i_surf,
+            e_kin[kc_surf],
+            e_pot_surf,
+        )
         a_surf = area_surface_bc(surf, edmf, i)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
+        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
         prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
             CCG.WVector(FT(0)),
             CC.Fields.local_geometry_field(axes(prog_up_f))[kf_surf],
         )
-        ae_surf -= a_surf
     end
     return nothing
 end
@@ -330,17 +341,13 @@ function θ_surface_bc(
     i::Int,
     param_set::APS,
 )
-    FT = eltype(edmf)
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = center_aux_grid_mean(state)
-    prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
     kc_surf = kc_surface(grid)
     ts_gm = center_aux_grid_mean_ts(state)
     c_p = TD.cp_m(thermo_params, ts_gm[kc_surf])
     (; ustar, zLL, oblength, ρLL) = surface_helper(surf, grid, state)
-
-    bflux(surf) > 0 || return FT(0)
+    bflux(surf) > 0 || return aux_gm.θ_liq_ice[kc_surf]
     a_total = edmf.surface_area
     a_ = area_surface_bc(surf, edmf, i)
     ρθ_liq_ice_flux = shf(surf) / c_p # assuming no ql,qi flux
@@ -365,11 +372,9 @@ function q_surface_bc(
     i::Int,
     param_set,
 )
-    FT = eltype(edmf)
     thermo_params = TCP.thermodynamics_params(param_set)
     aux_gm = center_aux_grid_mean(state)
     prog_gm = center_prog_grid_mean(state)
-    ρ_c = prog_gm.ρ
     kc_surf = kc_surface(grid)
     bflux(surf) > 0 || return aux_gm.q_tot[kc_surf]
     a_total = edmf.surface_area
@@ -405,6 +410,11 @@ function compute_implicit_up_tendencies!(
     prog_up_f = face_prog_updrafts(state)
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
+    aux_up = center_aux_updrafts(state)
+    ts = center_aux_grid_mean_ts(state)
+    p_c = center_aux_grid_mean_p(state)
+    prog_gm = center_prog_grid_mean(state)
+    ρ_c = prog_gm.ρ
 
     # Solve for updraft area fraction
 
@@ -416,19 +426,23 @@ function compute_implicit_up_tendencies!(
         w_up = prog_up_f[i].w
 
         ρarea = prog_up[i].ρarea
-        ρaθ_liq_ice = prog_up[i].ρaθ_liq_ice
+        ρae_tot = prog_up[i].ρae_tot
         ρaq_tot = prog_up[i].ρaq_tot
 
         tends_ρarea = tendencies_up[i].ρarea
-        tends_ρaθ_liq_ice = tendencies_up[i].ρaθ_liq_ice
+        tends_ρae_tot = tendencies_up[i].ρae_tot
         tends_ρaq_tot = tendencies_up[i].ρaq_tot
 
+        volume_term =
+            @. -p_c / ρ_c * (-(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))))
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
-        @. tends_ρaθ_liq_ice += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaθ_liq_ice))
+        @. tends_ρae_tot +=
+            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) +
+            volume_term
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
 
         tends_ρarea[kc_surf] = 0
-        tends_ρaθ_liq_ice[kc_surf] = 0
+        tends_ρae_tot[kc_surf] = 0
         tends_ρaq_tot[kc_surf] = 0
     end
 
@@ -470,6 +484,8 @@ function compute_explicit_up_tendencies!(
     tendencies_up = center_tendencies_updrafts(state)
     tendencies_up_f = face_tendencies_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
+    p_c = center_aux_grid_mean_p(state)
+    ρ_c = prog_gm.ρ
 
     Ic = CCO.InterpolateF2C()
     # We know that, since W = 0 at z = 0, BCs for entr, detr,
@@ -484,18 +500,23 @@ function compute_explicit_up_tendencies!(
         # Augment the tendencies of updraft area, tracers and vertical velocity
 
         # entrainment and detrainment - could be moved to implicit
+        volume_term_entr = @. -p_c / ρ_c *
+           prog_up[i].ρarea *
+           Ic(wcomponent(CCG.WVector(w_up))) *
+           (aux_up[i].entr - aux_up[i].detr)
         @. tendencies_up[i].ρarea +=
             prog_up[i].ρarea *
             Ic(wcomponent(CCG.WVector(w_up))) *
             (aux_up[i].entr - aux_up[i].detr)
-        @. tendencies_up[i].ρaθ_liq_ice +=
+        @. tendencies_up[i].ρae_tot +=
             prog_up[i].ρarea *
-            aux_en.θ_liq_ice *
+            aux_en.h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
             aux_up[i].entr -
-            prog_up[i].ρaθ_liq_ice *
+            prog_up[i].ρarea *
+            aux_up[i].h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr
+            aux_up[i].detr + volume_term_entr
         @. tendencies_up[i].ρaq_tot +=
             prog_up[i].ρarea *
             aux_en.q_tot *
@@ -508,8 +529,8 @@ function compute_explicit_up_tendencies!(
             w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
-        @. tendencies_up[i].ρaθ_liq_ice +=
-            prog_gm.ρ * aux_up[i].θ_liq_ice_tendency_precip_formation
+        @. tendencies_up[i].ρae_tot +=
+            prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
         @. tendencies_up[i].ρaq_tot +=
             prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
 
@@ -520,7 +541,7 @@ function compute_explicit_up_tendencies!(
 
         # TODO - to be removed?
         tendencies_up[i].ρarea[kc_surf] = 0
-        tendencies_up[i].ρaθ_liq_ice[kc_surf] = 0
+        tendencies_up[i].ρae_tot[kc_surf] = 0
         tendencies_up[i].ρaq_tot[kc_surf] = 0
         tendencies_up_f[i].w[kf_surf] = zero(tendencies_up_f[i].w[kf_surf])
     end
@@ -539,13 +560,17 @@ function filter_updraft_vars(
     FT = float_type(state)
     N_up = n_updrafts(edmf)
 
+    thermo_params = TCP.thermodynamics_params(param_set)
     prog_up = center_prog_updrafts(state)
     prog_gm = center_prog_grid_mean(state)
+    prog_gm_uₕ = grid_mean_uₕ(state)
     aux_gm_f = face_aux_grid_mean(state)
     aux_bulk = center_aux_bulk(state)
     prog_up_f = face_prog_updrafts(state)
     ρ_c = prog_gm.ρ
     ρ_f = aux_gm_f.ρ
+    ts_gm = center_aux_grid_mean_ts(state)
+    p_c = TD.air_pressure.(thermo_params, ts_gm)
     If = CCO.InterpolateC2F(;
         bottom = CCO.Extrapolate(),
         top = CCO.Extrapolate(),
@@ -556,12 +581,10 @@ function filter_updraft_vars(
 
     @inbounds for i in 1:N_up
         @. aux_bulk.filter_flag_1 = ifelse(prog_up[i].ρarea < FT(0), 1, 0)
-        @. aux_bulk.filter_flag_2 = ifelse(prog_up[i].ρaθ_liq_ice < FT(0), 1, 0)
         @. aux_bulk.filter_flag_3 = ifelse(prog_up[i].ρaq_tot < FT(0), 1, 0)
         @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
 
         @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
-        @. prog_up[i].ρaθ_liq_ice = max(prog_up[i].ρaθ_liq_ice, 0) #flag_2
         @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
         @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
     end
@@ -591,19 +614,30 @@ function filter_updraft_vars(
             ),
             prog_up[i].ρaq_tot,
         )
+        @. prog_up[i].ρarea = ifelse(
+            z > Δz1 / 2,
+            ifelse(prog_up[i].ρarea / ρ_c < a_min, 0, max(prog_up[i].ρarea, 0)),
+            prog_up[i].ρarea,
+        )
+        @. prog_up[i].ρae_tot = ifelse(
+            z > Δz1 / 2,
+            ifelse(prog_up[i].ρarea / ρ_c < a_min, 0, prog_up[i].ρae_tot),
+            prog_up[i].ρae_tot,
+        )
     end
 
     Ic = CCO.InterpolateF2C()
+    C123 = CCG.Covariant123Vector
     @inbounds for i in 1:N_up
         @. prog_up[i].ρarea = ifelse(
             Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
             FT(0),
             prog_up[i].ρarea,
         )
-        @. prog_up[i].ρaθ_liq_ice = ifelse(
+        @. prog_up[i].ρae_tot = ifelse(
             Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
             FT(0),
-            prog_up[i].ρaθ_liq_ice,
+            prog_up[i].ρae_tot,
         )
         @. prog_up[i].ρaq_tot = ifelse(
             Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
@@ -613,9 +647,21 @@ function filter_updraft_vars(
 
         θ_surf = θ_surface_bc(surf, grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(surf, grid, state, edmf, i, param_set)
+        e_kin = @. LA.norm_sqr(
+            C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f[i].w))),
+        ) / 2
+        e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
+        ts_up_i_surf =
+            TD.PhaseEquil_pθq(thermo_params, p_c[kc_surf], θ_surf, q_surf)
+        e_tot_surf = TD.total_energy(
+            thermo_params,
+            ts_up_i_surf,
+            e_kin[kc_surf],
+            e_pot_surf,
+        )
         a_surf = area_surface_bc(surf, edmf, i)
         prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρaθ_liq_ice[kc_surf] = prog_up[i].ρarea[kc_surf] * θ_surf
+        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
         prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
     end
     return nothing

@@ -136,7 +136,7 @@ and the ``-\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p) \boldsymbol{u}^j) + RHS
+\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p) \boldsymbol{u}^j) - p \frac{\partial}{\partial t} \frac{\hat{\rho}^j}{\rho^j} + RHS
 ```
 which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
 ```math
