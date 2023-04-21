@@ -11,13 +11,8 @@ function buoyancy_c(thermo_params, ρ::FT, ρ_i::FT) where {FT}
 end
 
 # MO scaling of near surface tke and scalar variance
-function get_surface_tke(
-    mixing_length_params,
-    ustar::FT,
-    zLL::FT,
-    oblength::FT,
-) where {FT}
-    κ_star² = mixing_length_params.κ_star²
+function get_surface_tke(param_set, ustar::FT, zLL::FT, oblength::FT) where {FT}
+    κ_star² = TCP.κ_star²(param_set)
     if oblength < 0
         return (
             (κ_star² + cbrt(zLL / oblength * zLL / oblength)) * ustar * ustar
@@ -46,23 +41,23 @@ function get_surface_variance(
 end
 
 function gradient_Richardson_number(
-    mixing_length_params,
+    param_set,
     ∂b∂z::FT,
     Shear²::FT,
     ϵ::FT,
 ) where {FT}
-    Ri_c::FT = mixing_length_params.Ri_c
+    Ri_c = TCP.Ri_crit(param_set)
     return min(∂b∂z / max(Shear², ϵ), Ri_c)
 end
 
 # Turbulent Prandtl number given the obukhov length sign and the gradient Richardson number
 function turbulent_Prandtl_number(
-    mixing_length_params,
+    param_set,
     obukhov_length::FT,
     ∇Ri::FT,
 ) where {FT}
-    ω_pr = mixing_length_params.ω_pr
-    Pr_n = mixing_length_params.Pr_n
+    ω_pr = TCP.Prandtl_number_scale(param_set)
+    Pr_n = TCP.Prandtl_number_0(param_set)
     if obukhov_length > 0 && ∇Ri > 0 #stable
         # CSB (Dan Li, 2019, eq. 75), where ω_pr = ω_1 + 1 = 53.0/13.0
         prandtl_nvec =

@@ -18,7 +18,7 @@ function update_aux!(
     N_up = n_updrafts(edmf)
     kc_surf = kc_surface(grid)
     kf_surf = kf_surface(grid)
-    c_m = mixing_length_params(edmf).c_m
+    c_m = TCP.tke_ed_coeff(param_set)
     KM = center_aux_turbconv(state).KM
     KH = center_aux_turbconv(state).KH
     oblength = obukhov_length(surf)
@@ -422,7 +422,6 @@ function update_aux!(
     shm = copy(cf)
     pshm = parent(shm)
     shrink_mask!(pshm, vec(cf))
-    mix_len_params = mixing_length_params(edmf)
 
     # Since NaN*0 ≠ 0, we need to conditionally replace
     # our gradients by their default values.
@@ -484,34 +483,25 @@ function update_aux!(
     # Limiting stratification scale (Deardorff, 1976)
     # compute ∇Ri and Pr
     @. aux_tc.prandtl_nvec = turbulent_Prandtl_number(
-        mix_len_params,
+        param_set,
         oblength,
-        gradient_Richardson_number(
-            mix_len_params,
-            bg.∂b∂z,
-            Shear²,
-            FT(eps(FT)),
-        ),
+        gradient_Richardson_number(param_set, bg.∂b∂z, Shear², FT(eps(FT))),
     )
 
     tke_surf = aux_en.tke[kc_surf]
     ustar_surf = get_ustar(surf)
 
     @. aux_tc.mixing_length = mixing_length(
-        mix_len_params,
         param_set,
-        MinDisspLen{FT}(
-            zc,                  # z
-            oblength,            # obukhov_length
-            tke_surf,            # tke_surf
-            ustar_surf,          # ustar
-            aux_tc.prandtl_nvec, # Pr
-            p_c,                 # p
-            bg,                  # ∇b
-            Shear²,              # Shear²
-            aux_en.tke,          # tke
-            b_exch,              # b_exch
-        ),
+        ustar_surf,
+        zc,
+        tke_surf,
+        bg.∂b∂z,
+        aux_en.tke,
+        oblength,
+        Shear²,
+        aux_tc.prandtl_nvec,
+        b_exch,
     )
 
     @. KM = c_m * aux_tc.mixing_length * sqrt(max(aux_en.tke, 0))
