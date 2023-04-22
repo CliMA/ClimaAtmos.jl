@@ -227,12 +227,6 @@ thermo_params = TD.Parameters.ThermodynamicsParameters{FT}(; pairs...)
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
 )
-ᶠgradᵥ = Operators.GradientC2F(
-    bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-)
-operators = (; ᶜgradᵥ, ᶠgradᵥ, ᶠinterp)
-p = merge(p, (; operators))
 
 # z 
 ᶜz = Fields.coordinate_field(Y.c).z

@@ -362,7 +362,6 @@ function vertical_diffusion_boundary_layer_tendency!(
     ::VerticalDiffusion,
 )
     ᶜρ = Y.c.ρ
-    (; ᶠinterp) = p.operators
     FT = Spaces.undertype(axes(ᶜρ))
     (; ᶜp, ᶠK_E) = p # assume ᶜts and ᶜp have been updated
     (; C_E) = p.atmos.vert_diff

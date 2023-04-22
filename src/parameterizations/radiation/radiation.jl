@@ -217,7 +217,6 @@ function radiation_model_cache(
 end
 function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
     (; ᶠradiation_flux) = p
-    ᶜdivᵥ = Operators.DivergenceF2C()
     if :ρθ in propertynames(Y.c)
         error("radiation_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)

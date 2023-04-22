@@ -5,7 +5,6 @@ import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
-import ClimaCore.Operators as CCO
 import ClimaCore.Spaces
 import OrdinaryDiffEq as ODE
 import ClimaAtmos.Parameters as CAP
@@ -219,7 +218,6 @@ function save_to_disk_func(integrator)
     (; t, u, p) = integrator
     Y = u
     (; params) = p
-    (; curlₕ) = p.operators
     (; output_dir) = p.simulation
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)

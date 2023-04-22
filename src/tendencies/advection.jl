@@ -5,13 +5,8 @@
 using LinearAlgebra: ×, dot
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
-import ClimaCore.Operators as Operators
 
 function horizontal_advection_tendency!(Yₜ, Y, p, t)
-    divₕ = Operators.Divergence()
-    gradₕ = Operators.Gradient()
-    curlₕ = Operators.Curl()
-
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
@@ -35,9 +30,8 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.uₕ -= gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ)
     elseif point_type <: Geometry.Abstract2DPoint
         ᶜω³ .= tuple(zero(eltype(ᶜω³)))
-        @. ᶠω¹² = Geometry.Contravariant12Vector(curlₕ(ᶠw))
-        @. Yₜ.c.uₕ -=
-            Geometry.Covariant12Vector(gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
+        @. ᶠω¹² = CT12(curlₕ(ᶠw))
+        @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp - ᶜp_ref) / ᶜρ + gradₕ(ᶜK + ᶜΦ))
     end
 
     return nothing
@@ -54,7 +48,6 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     (; ᶜu, ᶜK, ᶜω³, ᶠω¹², ᶠu³, ᶜf) = p
-    (; ᶠinterp, ᶠcurlᵥ, ᶜinterp, ᶠgradᵥ) = p.operators
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
     # Momentum conservation
@@ -63,12 +56,9 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         ᶜinterp(
             ᶠω¹²[colidx] × (ᶠinterp(ᶜρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
         ) / (ᶜρ[colidx] * ᶜJ[colidx]) +
-        (ᶜf[colidx] + ᶜω³[colidx]) ×
-        Geometry.project(Geometry.Contravariant12Axis(), ᶜu[colidx])
+        (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
     @. Yₜ.f.w[colidx] -=
-        ᶠω¹²[colidx] ×
-        ᶠinterp(Geometry.project(Geometry.Contravariant12Axis(), ᶜu[colidx])) +
-        ᶠgradᵥ(ᶜK[colidx])
+        ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
 
     return nothing
 end

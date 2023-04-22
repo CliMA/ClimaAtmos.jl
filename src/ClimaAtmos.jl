@@ -5,6 +5,7 @@ using NVTX, Colors
 include("Parameters.jl")
 import .Parameters as CAP
 
+include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("utils", "types.jl"))
 include(joinpath("utils", "utilities.jl"))

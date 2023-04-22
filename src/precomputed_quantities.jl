@@ -3,7 +3,7 @@
 #####
 
 import Thermodynamics as TD
-import ClimaCore: Geometry, Spaces, Fields
+import ClimaCore: Spaces, Fields
 
 """
     precomputed_quantities(atmos, center_space, face_space)
@@ -30,9 +30,6 @@ In addition, there are several other SGS quantities for the EDMFX model:
 TODO: Rename `ᶜK` to `ᶜκ`, and rename `ᶠw` to `ᶠuᵥ`.
 """
 function precomputed_quantities(atmos, center_space, face_space)
-    C3 = Geometry.Covariant3Vector
-    C123 = Geometry.Covariant123Vector
-    CT3 = Geometry.Contravariant3Vector
     FT = Spaces.undertype(center_space)
     TST = thermo_state_type(atmos.moisture_model, FT)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -75,12 +72,7 @@ end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
 function set_ᶠuₕ³!(ᶠuₕ³, Y)
-    ᶠwinterp = Operators.WeightedInterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
     Fields.bycolumn(axes(Y.c)) do colidx
-        CT3 = Geometry.Contravariant3Vector
         ᶜJ = Fields.local_geometry_field(Y.c).J
         @. ᶠuₕ³[colidx] =
             ᶠwinterp(Y.c.ρ[colidx] * ᶜJ[colidx], CT3(Y.c.uₕ[colidx]))
@@ -110,10 +102,7 @@ end
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠw, and it is also used to set the SGS quantities based on ᶠw⁰ and ᶠwʲ.
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠw, ᶜuₕ, ᶠuₕ³)
-    ᶜinterp = Operators.InterpolateF2C()
     Fields.bycolumn(axes(ᶜu)) do colidx
-        C123 = Geometry.Covariant123Vector
-        CT3 = Geometry.Contravariant3Vector
         @. ᶜu[colidx] = C123(ᶜuₕ[colidx]) + ᶜinterp(C123(ᶠw[colidx]))
         @. ᶠu³[colidx] = ᶠuₕ³[colidx] + CT3(ᶠw[colidx])
         compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠw[colidx])
@@ -126,10 +115,6 @@ get_ʲs(sgsʲs, ::Val{symbol}) where {symbol} =
     map(sgsʲ -> sgsʲ.:($symbol), sgsʲs)
 
 function set_ᶠw⁰!(ᶠw⁰, Y, ᶜρa⁰, a_min)
-    ᶠinterp = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
     w⁰(ρa⁰, ρaʲs, wʲs, ρ, w, a_min) =
         divide_by_ρa(ρ * w - sum(ρaʲs .* wʲs), ρa⁰, ρ * w, ρ, a_min)
     Fields.bycolumn(axes(Y.c)) do colidx
@@ -146,9 +131,7 @@ end
 
 # TODO: Ask Tapio whether this function is correct.
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠw⁰, turbconv_model)
-    ᶜinterp = Operators.InterpolateF2C()
     function do_col!(ᶜK, Yc, Yf, ᶜρa⁰, ᶠw⁰)
-        CT3 = Geometry.Contravariant3Vector
         @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠw⁰ - Yf.w, CT3(ᶠw⁰ - Yf.w))) / 2 / Yc.ρ
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             ᶜρaʲ = Yc.sgsʲs[j].ρa
@@ -370,10 +353,6 @@ be used to generate diagnostics for EDMFX, and it should only be called after
 `set_precomputed_quantities!` has been called.
 """
 function diagnostic_edmfx_quantities(Y, p, t)
-    ᶠinterp = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
     (; energy_form, moisture_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, energy_form, moisture_model)
