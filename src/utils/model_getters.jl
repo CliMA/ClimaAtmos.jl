@@ -35,18 +35,15 @@ function get_coupling_type(parsed_args)
 end
 
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
-    enable_qt = parsed_args["enable_qt_hyperdiffusion"]
     hyperdiff_name = parsed_args["hyperdiff"]
     κ₄ = FT(parsed_args["kappa_4"])
     divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
-    return if hyperdiff_name == "ClimaHyperdiffusion"
-        ClimaHyperdiffusion{enable_qt, FT}(; κ₄, divergence_damping_factor)
-    elseif hyperdiff_name == "TempestHyperdiffusion"
-        TempestHyperdiffusion{enable_qt, FT}(; κ₄, divergence_damping_factor)
+    return if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
+        ClimaHyperdiffusion(; κ₄, divergence_damping_factor)
     elseif hyperdiff_name in ("none", "false", false)
         nothing
     else
-        error("Uncaught diffusion model type.")
+        error("Uncaught hyperdiffusion model type.")
     end
 end
 

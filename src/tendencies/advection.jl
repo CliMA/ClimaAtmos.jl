@@ -10,7 +10,9 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜu, ᶜK, ᶜΦ, ᶜp, ᶜω³, ᶠω¹², ᶜp_ref) = p
+    (; ᶜu, ᶜK, ᶜΦ, ᶜp, ᶜp_ref) = p
+    ᶜω³ = p.ᶜtemp_CT3
+    ᶠω¹² = p.ᶠtemp_CT12
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
 
     # Mass conservation
@@ -47,7 +49,9 @@ end
 function explicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
-    (; ᶜu, ᶜK, ᶜω³, ᶠω¹², ᶠu³, ᶜf) = p
+    (; ᶜu, ᶜK, ᶠu³, ᶜf) = p
+    ᶜω³ = p.ᶜtemp_CT3
+    ᶠω¹² = p.ᶠtemp_CT12
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
 
     # Momentum conservation

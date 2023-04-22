@@ -66,6 +66,9 @@ function remaining_tendency!(Yₜ, Y, p, t)
         end
         @nvtx "horizontal" color = colorant"orange" begin
             CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
+            @nvtx "hyperdiffusion tendency" color = colorant"yellow" begin
+                CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
+            end
         end
         @nvtx "vertical" color = colorant"orange" begin
             CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
