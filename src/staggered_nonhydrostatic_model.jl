@@ -29,8 +29,6 @@ import ClimaCore.Fields: ColumnField
 # can be modified at any point, so they should never be assumed to be unchanged
 # between function calls.
 function temporary_quantities(atmos, center_space, face_space)
-    CT3 = Geometry.Contravariant3Vector
-    CT12 = Geometry.Contravariant12Vector
     FT = Spaces.undertype(center_space)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;
@@ -53,45 +51,6 @@ function default_cache(
     comms_ctx,
 )
     FT = eltype(params)
-
-    curlₕ = Operators.Curl()
-    ᶜinterp = Operators.InterpolateF2C()
-    ᶠinterp = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-    ᶠwinterp = Operators.WeightedInterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-    ᶜdivᵥ = Operators.DivergenceF2C(
-        top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-        bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-    )
-    ᶠgradᵥ = Operators.GradientC2F(
-        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    )
-    ᶜgradᵥ = Operators.GradientF2C()
-    ᶠcurlᵥ = Operators.CurlC2F(
-        bottom = Operators.SetCurl(
-            Geometry.Contravariant12Vector(FT(0), FT(0)),
-        ),
-        top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
-    )
-    ᶠupwind1 = Operators.UpwindBiasedProductC2F()
-    ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
-        bottom = Operators.ThirdOrderOneSided(),
-        top = Operators.ThirdOrderOneSided(),
-    )
-    ᶠfct_boris_book = Operators.FCTBorisBook(
-        bottom = Operators.FirstOrderOneSided(),
-        top = Operators.FirstOrderOneSided(),
-    )
-    ᶠfct_zalesak = Operators.FCTZalesak(
-        bottom = Operators.FirstOrderOneSided(),
-        top = Operators.FirstOrderOneSided(),
-    )
 
     (; energy_upwinding, tracer_upwinding, density_upwinding, apply_limiter) =
         numerics
@@ -118,7 +77,7 @@ function default_cache(
         ᶜf = map(_ -> f, ᶜcoord)
         lat_sfc = map(_ -> eltype(params)(0), Fields.level(ᶜcoord, 1))
     end
-    ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
+    ᶜf = @. CT3(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
 
     sfc_conditions =
@@ -172,25 +131,6 @@ function default_cache(
 
     default_cache = (;
         simulation,
-        operators = (;
-            ᶜdivᵥ,
-            ᶜgradᵥ,
-            ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ),
-            ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ),
-            ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp),
-            ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp),
-            ᶠwinterp_stencil = Operators.Operator2Stencil(ᶠwinterp),
-            ᶠinterp,
-            ᶠwinterp,
-            ᶠcurlᵥ,
-            ᶜinterp,
-            ᶠgradᵥ,
-            curlₕ,
-            ᶠupwind1,
-            ᶠupwind3,
-            ᶠfct_boris_book,
-            ᶠfct_zalesak,
-        ),
         spaces,
         atmos,
         comms_ctx,
@@ -253,7 +193,6 @@ function horizontal_limiter_tendency!(Yₜ, Y, p, t)
     set_precomputed_quantities!(Y, p, t)
 
     (; ᶜu) = p
-    divₕ = Operators.Divergence()
 
     # Tracer conservation, horizontal advection
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))

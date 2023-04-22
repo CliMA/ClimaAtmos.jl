@@ -46,13 +46,13 @@ end
 Like `atmos_center_variables`, but for cell faces.
 """
 atmos_face_variables(ls, atmos_model) = (;
-    w = Geometry.project(Geometry.Covariant3Axis(), ls.velocity, ls.geometry),
+    w = C3(ls.velocity, ls.geometry),
     turbconv_face_variables(ls, atmos_model.turbconv_model)...,
 )
 
 grid_scale_center_variables(ls, atmos_model) = (;
     ρ = ls.ρ,
-    uₕ = Geometry.project(Geometry.Covariant12Axis(), ls.velocity, ls.geometry),
+    uₕ = C12(ls.velocity, ls.geometry),
     energy_variables(ls, atmos_model.energy_form)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
     precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
@@ -127,14 +127,14 @@ turbconv_face_variables(ls, ::Nothing) = (;)
 turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
     turbconv = (;
         up = ntuple(
-            _ -> (; w = Geometry.Covariant3Vector(zero(eltype(ls)))),
+            _ -> (; w = C3(zero(eltype(ls)))),
             Val(TC.n_updrafts(turbconv_model)),
         )
     )
 )
 turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
     sgsʲs = ntuple(
-        _ -> (; w = Geometry.Covariant3Vector(zero(eltype(ls)))),
+        _ -> (; w = C3(zero(eltype(ls)))),
         Val(n_mass_flux_subdomains(turbconv_model)),
     )
 )

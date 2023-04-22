@@ -5,7 +5,6 @@
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces
-import ClimaCore.Operators as Operators
 
 viscous_sponge_cache(::Nothing, Y) = NamedTuple()
 viscous_sponge_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -25,13 +24,6 @@ end
 
 function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
     (; ᶜβ_viscous, ᶠβ_viscous, ᶜp) = p
-    divₕ = Operators.Divergence()
-    wdivₕ = Operators.WeakDivergence()
-    gradₕ = Operators.Gradient()
-    wgradₕ = Operators.WeakGradient()
-    curlₕ = Operators.Curl()
-    wcurlₕ = Operators.WeakCurl()
-
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     if :ρθ in propertynames(Y.c)
