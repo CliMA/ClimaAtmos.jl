@@ -73,7 +73,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             energy_upwinding,
         )
     elseif :ρe_tot in propertynames(Y.c)
-        (; ᶜρh) = p
+        ᶜρh = p.ᶜtemp_scalar
         @. ᶜρh[colidx] = Y.c.ρe_tot[colidx] + ᶜp[colidx]
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],

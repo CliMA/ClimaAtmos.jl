@@ -157,7 +157,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         )
     elseif :ρe_tot in propertynames(Y.c)
         ᶜρe = Y.c.ρe_tot
-        (; ᶜρh) = p
+        ᶜρh = p.ᶜtemp_scalar
         @. ᶜρh[colidx] = ᶜρe[colidx] + ᶜp[colidx]
         # vertical_transport!(Yₜ.c.ρe_tot, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
         vertical_transport_jac!(

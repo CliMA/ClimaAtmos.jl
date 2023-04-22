@@ -85,13 +85,9 @@ function parse_commandline()
         help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
         arg_type = String
         "--hyperdiff"
-        help = "Hyperdiffusion [`ClimaHyperdiffusion` (default), `TempestHyperdiffusion`, `none` (or `false`)]"
+        help = "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
         arg_type = String
         default = "ClimaHyperdiffusion"
-        "--enable_qt_hyperdiffusion"
-        help = "Enable the hyperdiffusion of specific humidity [`true` (default), `false`] (TODO: reconcile this with `ρe_tot` or remove if instability fixed with limiters)"
-        arg_type = Bool
-        default = true
         "--idealized_insolation"
         help = "Use idealized insolation in radiation model [`false`, `true` (default)]"
         arg_type = Bool

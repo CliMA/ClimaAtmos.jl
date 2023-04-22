@@ -6,47 +6,41 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
-hyperdiffusion_cache(hyperdiff::Nothing, Y) = NamedTuple()
-
-function hyperdiffusion_cache(hyperdiff::AbstractHyperdiffusion, Y)
+function hyperdiffusion_cache(Y, atmos, do_dss)
+    isnothing(atmos.hyperdiff) && return (;)
     FT = Spaces.undertype(axes(Y.c))
     moist_kwargs = if (:ρq_tot in propertynames(Y.c))
         (; ᶜχρq_tot = similar(Y.c, FT))
     else
         NamedTuple()
     end
-    tempest_kwargs = if hyperdiff isa TempestHyperdiffusion
-        (; ᶠχw_data = similar(Y.f, FT))
-    else
-        NamedTuple()
+    quantities =
+        (; ᶜχ = similar(Y.c, FT), moist_kwargs..., ᶜχuₕ = similar(Y.c, C12{FT}))
+    if do_dss
+        quantities = (;
+            quantities...,
+            hyperdiffusion_ghost_buffer = map(
+                Spaces.create_dss_buffer,
+                quantities,
+            ),
+        )
     end
-
-    return (;
-        ᶜχ = similar(Y.c, FT),
-        moist_kwargs...,
-        ᶜχuₕ = similar(Y.c, C12{FT}),
-        tempest_kwargs...,
-    )
+    return quantities
 end
 
 function hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    p.atmos.hyperdiff isa Nothing && return nothing
-
-    NVTX.@range "hyperdiffusion tendency" color = colorant"yellow" begin
-        hyperdiffusion_tendency!(Yₜ, Y, p, t, p.atmos.hyperdiff)
-    end
-end
-
-function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
+    isnothing(p.atmos.hyperdiff) && return nothing
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
 
-    (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
-    (; ghost_buffer) = p
+    (; do_dss, ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
     (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
     point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
     is_2d_pt = point_type <: Geometry.Abstract2DPoint
     is_3d_pt = !is_2d_pt
+    if do_dss
+        buffer = p.hyperdiffusion_ghost_buffer
+    end
 
     ᶜρs = :ρe_tot in propertynames(Y.c) ? Y.c.ρe_tot : Y.c.ρθ
     ᵗρs = :ρe_tot in propertynames(Y.c) ? Yₜ.c.ρe_tot : Yₜ.c.ρθ
@@ -57,15 +51,17 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     is_3d_pt && (@. ᶜχuₕ = wgradₕ(divₕ(ᶜuₕ)) - C12(wcurlₕ(C3(curlₕ(ᶜuₕ)))))
     is_2d_pt && (@. ᶜχuₕ = C12(wgradₕ(divₕ(ᶜuₕ))))
 
-    NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-        Spaces.weighted_dss_start2!(ᶜχ, ghost_buffer.χ)
-        Spaces.weighted_dss_start2!(ᶜχuₕ, ghost_buffer.χuₕ)
+    if do_dss
+        NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
+            Spaces.weighted_dss_start2!(ᶜχ, buffer.ᶜχ)
+            Spaces.weighted_dss_start2!(ᶜχuₕ, buffer.ᶜχuₕ)
 
-        Spaces.weighted_dss_internal2!(ᶜχ, ghost_buffer.χ)
-        Spaces.weighted_dss_internal2!(ᶜχuₕ, ghost_buffer.χuₕ)
+            Spaces.weighted_dss_internal2!(ᶜχ, buffer.ᶜχ)
+            Spaces.weighted_dss_internal2!(ᶜχuₕ, buffer.ᶜχuₕ)
 
-        Spaces.weighted_dss_ghost2!(ᶜχ, ghost_buffer.χ)
-        Spaces.weighted_dss_ghost2!(ᶜχuₕ, ghost_buffer.χuₕ)
+            Spaces.weighted_dss_ghost2!(ᶜχ, buffer.ᶜχ)
+            Spaces.weighted_dss_ghost2!(ᶜχuₕ, buffer.ᶜχuₕ)
+        end
     end
 
     @. ᵗρs -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
@@ -81,90 +77,31 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     return nothing
 end
 
-function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::TempestHyperdiffusion)
-    !(:ρθ in propertynames(Y.c)) &&
-        (error("TempestHyperdiffusion is only compatible with ρθ"))
+function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    isnothing(p.atmos.hyperdiff) && return nothing
+    !(:ρq_tot in propertynames(Y.c)) && return nothing
     ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
-    (; ghost_buffer) = p
-    (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
-    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    is_ρq_tot = :ρq_tot in propertynames(Y.c)
-    is_2d_pt = point_type <: Geometry.Abstract2DPoint
-    is_3d_pt = !is_2d_pt
-
-    @. ᶜχ = wdivₕ(gradₕ(ᶜρ)) # ᶜχρ
-    Spaces.weighted_dss2!(ᶜχ, ghost_buffer.χ)
-    @. Yₜ.c.ρ -= κ₄ * wdivₕ(gradₕ(ᶜχ))
-
-    @. ᶜχ = wdivₕ(gradₕ(Y.c.ρθ)) # ᶜχρθ
-    Spaces.weighted_dss2!(ᶜχ, ghost_buffer.χ)
-    @. Yₜ.c.ρθ -= κ₄ * wdivₕ(gradₕ(ᶜχ))
-
-    (; ᶠχw_data) = p
-    @. ᶠχw_data = wdivₕ(gradₕ(Y.f.w.components.data.:1))
-    Spaces.weighted_dss2!(ᶠχw_data, ghost_buffer.χ)
-    @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠχw_data))
-
-    if is_ρq_tot
-        (; ᶜχρq_tot) = p
-        @. ᶜχρq_tot = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
-        Spaces.weighted_dss2!(ᶜχρq_tot, ghost_buffer.χ)
-        @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
-        @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
+    (; κ₄) = p.atmos.hyperdiff
+    if p.do_dss
+        buffer = p.hyperdiffusion_ghost_buffer
     end
 
-    if is_3d_pt
-        @. ᶜχuₕ = wgradₕ(divₕ(ᶜuₕ)) - C12(wcurlₕ(C3(curlₕ(ᶜuₕ))))
-        Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
-        @. Yₜ.c.uₕ -=
-            κ₄ * (
-                divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                C12(wcurlₕ(C3(curlₕ(ᶜχuₕ))))
-            )
-    elseif is_2d_pt
-        @. ᶜχuₕ = C12(wgradₕ(divₕ(ᶜuₕ)))
-        Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
-        @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜχuₕ)))
-    end
-    return nothing
-end
+    (; ᶜχρq_tot) = p
+    @. ᶜχρq_tot = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
 
-function hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
-    p.atmos.hyperdiff isa Nothing && return nothing
-
-    NVTX.@range "hyperdiffusion_tracers_tendency" color = colorant"yellow" begin
-
-        ᶜρ = Y.c.ρ
-        (; ghost_buffer) = p
-        (; κ₄) = p.atmos.hyperdiff
-
-        is_ρq_tot =
-            :ρq_tot in propertynames(Y.c) &&
-            q_tot_hyperdiffusion_enabled(p.atmos.hyperdiff)
-
-        if is_ρq_tot
-            (; ᶜχρq_tot) = p
-            @. ᶜχρq_tot = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
-        end
-
+    if p.do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            is_ρq_tot &&
-                (Spaces.weighted_dss_start2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-            is_ρq_tot && (Spaces.weighted_dss_internal2!(
-                ᶜχρq_tot,
-                ghost_buffer.ᶜχρq_tot,
-            ))
-            is_ρq_tot &&
-                (Spaces.weighted_dss_ghost2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+            Spaces.weighted_dss_start2!(ᶜχρq_tot, buffer.ᶜχρq_tot)
+            Spaces.weighted_dss_internal2!(ᶜχρq_tot, buffer.ᶜχρq_tot)
+            Spaces.weighted_dss_ghost2!(ᶜχρq_tot, buffer.ᶜχρq_tot)
         end
-
-        if is_ρq_tot
-            @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
-            @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot)) # NOTE: we limit `ρq`, not `ρ`, so this redistribution of `ρ` is not guaranteed to exactly conserve `ρ`
-        end
-
     end
+
+    # TODO: Since we are not applying the limiter to density, the mass
+    # redistributed by hyperdiffusion will not be conserved by the limiter. Is
+    # this a significant problem?
+
+    @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
+    @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
     return nothing
 end
