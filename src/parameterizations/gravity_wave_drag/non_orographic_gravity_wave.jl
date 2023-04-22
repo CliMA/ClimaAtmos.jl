@@ -125,7 +125,6 @@ function non_orographic_gravity_wave_tendency!(
         gw_c0,
         gw_nk,
     ) = p
-    (; ᶜgradᵥ, ᶠinterp) = p.operators
 
     if model_config isa SingleColumnModel
         (; gw_source_height) = p

@@ -11,6 +11,8 @@ import ..Microphysics0Moment
 import ..Microphysics1Moment
 import ..PerfStandard
 import ..PerfExperimental
+import ..C3
+import ..C12
 import ..EDMFX
 import ..n_mass_flux_subdomains
 import ..times_a

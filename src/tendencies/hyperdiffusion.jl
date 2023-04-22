@@ -24,7 +24,7 @@ function hyperdiffusion_cache(hyperdiff::AbstractHyperdiffusion, Y)
     return (;
         ᶜχ = similar(Y.c, FT),
         moist_kwargs...,
-        ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
+        ᶜχuₕ = similar(Y.c, C12{FT}),
         tempest_kwargs...,
     )
 end
@@ -40,12 +40,6 @@ end
 function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
-    divₕ = Operators.Divergence()
-    wdivₕ = Operators.WeakDivergence()
-    gradₕ = Operators.Gradient()
-    wgradₕ = Operators.WeakGradient()
-    curlₕ = Operators.Curl()
-    wcurlₕ = Operators.WeakCurl()
 
     (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
     (; ghost_buffer) = p
@@ -60,13 +54,8 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
     (:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ(ᶜρs / ᶜρ)))
     !(:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ((ᶜρs + ᶜp) / ᶜρ)))
 
-    is_3d_pt && (@. ᶜχuₕ =
-        wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
-            Geometry.Covariant12Axis(),
-            wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
-        ))
-    is_2d_pt && (@. ᶜχuₕ =
-        Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ))))
+    is_3d_pt && (@. ᶜχuₕ = wgradₕ(divₕ(ᶜuₕ)) - C12(wcurlₕ(C3(curlₕ(ᶜuₕ)))))
+    is_2d_pt && (@. ᶜχuₕ = C12(wgradₕ(divₕ(ᶜuₕ))))
 
     NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
         Spaces.weighted_dss_start2!(ᶜχ, ghost_buffer.χ)
@@ -84,34 +73,15 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
         @. Yₜ.c.uₕ -=
             κ₄ * (
                 divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                Geometry.project(
-                    Geometry.Covariant12Axis(),
-                    wcurlₕ(
-                        Geometry.project(
-                            Geometry.Covariant3Axis(),
-                            curlₕ(ᶜχuₕ),
-                        ),
-                    ),
-                )
+                C12(wcurlₕ(C3(curlₕ(ᶜχuₕ))))
             )
     elseif is_2d_pt
-        @. Yₜ.c.uₕ -=
-            κ₄ *
-            divergence_damping_factor *
-            Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜχuₕ)))
+        @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜχuₕ)))
     end
     return nothing
 end
 
 function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::TempestHyperdiffusion)
-
-    divₕ = Operators.Divergence()
-    wdivₕ = Operators.WeakDivergence()
-    gradₕ = Operators.Gradient()
-    wgradₕ = Operators.WeakGradient()
-    curlₕ = Operators.Curl()
-    wcurlₕ = Operators.WeakCurl()
-
     !(:ρθ in propertynames(Y.c)) &&
         (error("TempestHyperdiffusion is only compatible with ρθ"))
     ᶜρ = Y.c.ρ
@@ -146,25 +116,17 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::TempestHyperdiffusion)
     end
 
     if is_3d_pt
-        @. ᶜχuₕ =
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
-                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
-            )
+        @. ᶜχuₕ = wgradₕ(divₕ(ᶜuₕ)) - C12(wcurlₕ(C3(curlₕ(ᶜuₕ))))
         Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
         @. Yₜ.c.uₕ -=
             κ₄ * (
                 divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                Geometry.Covariant12Vector(
-                    wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜχuₕ))),
-                )
+                C12(wcurlₕ(C3(curlₕ(ᶜχuₕ))))
             )
     elseif is_2d_pt
-        @. ᶜχuₕ = Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜuₕ)))
+        @. ᶜχuₕ = C12(wgradₕ(divₕ(ᶜuₕ)))
         Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
-        @. Yₜ.c.uₕ -=
-            κ₄ *
-            divergence_damping_factor *
-            Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜχuₕ)))
+        @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜχuₕ)))
     end
     return nothing
 end
@@ -175,9 +137,6 @@ function hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
     NVTX.@range "hyperdiffusion_tracers_tendency" color = colorant"yellow" begin
 
         ᶜρ = Y.c.ρ
-        wdivₕ = Operators.WeakDivergence()
-        gradₕ = Operators.Gradient()
-
         (; ghost_buffer) = p
         (; κ₄) = p.atmos.hyperdiff
 

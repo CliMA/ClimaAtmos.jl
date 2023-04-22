@@ -75,9 +75,6 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     (; hmax, hmin, t11, t12, t21, t22) = p.topo_info
     FT = Spaces.undertype(axes(Y.c))
 
-    # operators
-    (; ᶜgradᵥ, ᶠinterp) = p.operators
-
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
     grav = FT(CAP.grav(params))
@@ -220,7 +217,6 @@ function calc_nonpropagating_forcing!(
     k_pbl,
     grav,
 )
-    (; ᶠinterp) = p.operators
     FT = eltype(grav)
     ᶠp = ᶠinterp.(ᶜp)
     # compute k_ref: the upper bound for nonpropagating drag to function
@@ -384,7 +380,6 @@ function calc_saturation_profile!(
     ᶜp,
     k_pbl,
 )
-    (; ᶠinterp) = p.operators
     (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p
     FT = eltype(Fr_crit)
     γ = topo_γ
@@ -451,20 +446,9 @@ function calc_saturation_profile!(
 
 end
 
-function ᶜd2dz2(ᶜscalar, p)
-    (; ᶜgradᵥ) = p.operators
+ᶜd2dz2(ᶜscalar, p) =
+    Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
 
-    return Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
-end
+ᶜddz(ᶠscalar, p) = Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
 
-function ᶜddz(ᶠscalar, p)
-    (; ᶜgradᵥ) = p.operators
-
-    return Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
-end
-
-function ᶠddz(ᶜscalar, p)
-    (; ᶠgradᵥ) = p.operators
-
-    return Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1
-end
+ᶠddz(ᶜscalar, p) = Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1
