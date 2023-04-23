@@ -54,7 +54,7 @@ end
 function dss_callback(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
-    if !ghost_buffer.skip_dss
+    if integrator.p.do_dss
         NVTX.@range "dss callback" color = colorant"yellow" begin
             Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
             Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
@@ -257,7 +257,7 @@ function save_to_disk_func(integrator)
 
     if eltype(Fields.coordinate_field(axes(Y.c))) <: Geometry.Abstract3DPoint
         ᶜvort = @. Geometry.WVector(curlₕ(Y.c.uₕ))
-        if !p.ghost_buffer.skip_dss
+        if p.do_dss
             Spaces.weighted_dss!(ᶜvort)
         end
         dycore_diagnostic = (; dycore_diagnostic..., vorticity = ᶜvort)

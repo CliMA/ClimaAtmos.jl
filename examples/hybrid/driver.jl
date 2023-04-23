@@ -74,7 +74,6 @@ function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
     end
 
     return merge(
-        CA.hyperdiffusion_cache(atmos.hyperdiff, Y),
         CA.rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
         CA.viscous_sponge_cache(atmos.viscous_sponge, Y),
         CA.precipitation_cache(Y, precip_model),
@@ -103,7 +102,6 @@ function additional_cache(Y, default_cache, parsed_args, params, atmos, dt)
 end
 
 function additional_tendency!(Yₜ, Y, p, t)
-    CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
     CA.viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
 
     # Vertical tendencies

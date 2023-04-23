@@ -23,17 +23,10 @@ struct Coupled <: AbstractCoupling end
 struct Decoupled <: AbstractCoupling end
 
 abstract type AbstractHyperdiffusion end
-Base.@kwdef struct ClimaHyperdiffusion{B, FT} <: AbstractHyperdiffusion
+Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     κ₄::FT
     divergence_damping_factor::FT
 end
-Base.@kwdef struct TempestHyperdiffusion{B, FT} <: AbstractHyperdiffusion
-    κ₄::FT
-    divergence_damping_factor::FT
-end
-
-q_tot_hyperdiffusion_enabled(::ClimaHyperdiffusion{B}) where {B} = B
-q_tot_hyperdiffusion_enabled(::TempestHyperdiffusion{B}) where {B} = B
 
 abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
