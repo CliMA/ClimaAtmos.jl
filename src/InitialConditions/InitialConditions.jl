@@ -15,7 +15,7 @@ import ..C3
 import ..C12
 import ..EDMFX
 import ..n_mass_flux_subdomains
-import ..times_a
+import ..gs_to_sgs
 
 import Thermodynamics.TemperatureProfiles: DecayingTemperatureProfile
 import ClimaCore: Fields, Geometry

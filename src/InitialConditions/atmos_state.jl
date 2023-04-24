@@ -119,7 +119,7 @@ function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
-    sgsʲs = ntuple(_ -> times_a(gs_vars, a_draft / n), Val(n))
+    sgsʲs = ntuple(_ -> gs_to_sgs(gs_vars, a_draft / n), Val(n))
     return (; sgs⁰, sgsʲs)
 end
 

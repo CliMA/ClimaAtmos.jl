@@ -290,43 +290,24 @@ function save_to_disk_func(integrator)
         TD.has_condensate(thermo_params, ts) && area > 1e-3 ? FT(1) : FT(0)
 
     if p.atmos.turbconv_model isa EDMFX
-        (; ᶜu⁰, ᶜts⁰) = p
-        (; ᶜsgs⁰, ᶜsgs⁺, ᶜu⁺, ᶜts⁺) = diagnostic_edmfx_quantities(Y, p, t)
-        (; a_min) = p.atmos.turbconv_model
-        ᶜarea⁰ = ᶜsgs⁰.ρa ./ TD.air_density.(thermo_params, ᶜts⁰)
-        ᶜarea⁺ = ᶜsgs⁺.ρa ./ TD.air_density.(thermo_params, ᶜts⁺)
-        ᶜcloud_fraction⁰ = cloud_fraction.(ᶜts⁰, ᶜarea⁰)
-        ᶜcloud_fraction⁺ = cloud_fraction.(ᶜts⁺, ᶜarea⁺)
+        (; ᶜspecific⁰, ᶜu⁰, ᶜts⁰) = p
+        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = diagnostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             common_diagnostics(ᶜu⁰, ᶜts⁰)...,
-            area = ᶜarea⁰,
-            cloud_fraction = ᶜcloud_fraction⁰,
-            tke = divide_by_ρa.(ᶜsgs⁰.ρatke, ᶜsgs⁰.ρa, 0, Y.c.ρ, a_min),
+            area = ᶜa⁰,
+            cloud_fraction = cloud_fraction.(ᶜts⁰, ᶜa⁰),
+            tke = ᶜspecific⁰.tke,
         )
         draft_diagnostics = (;
             common_diagnostics(ᶜu⁺, ᶜts⁺)...,
-            area = ᶜarea⁺,
-            cloud_fraction = ᶜcloud_fraction⁺,
+            area = ᶜa⁺,
+            cloud_fraction = cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
-        if p.atmos.precip_model isa Microphysics1Moment
-            ᶜq_rai⁰ =
-                divide_by_ρa.(ᶜsgs⁰.ρaq_rai, ᶜsgs⁰.ρa, Y.c.ρq_rai, Y.c.ρ, a_min)
-            ᶜq_sno⁰ =
-                divide_by_ρa.(ᶜsgs⁰.ρaq_sno, ᶜsgs⁰.ρa, Y.c.ρq_sno, Y.c.ρ, a_min)
-            ᶜq_rai⁺ =
-                divide_by_ρa.(ᶜsgs⁺.ρaq_rai, ᶜsgs⁺.ρa, Y.c.ρq_rai, Y.c.ρ, a_min)
-            ᶜq_sno⁺ =
-                divide_by_ρa.(ᶜsgs⁺.ρaq_sno, ᶜsgs⁺.ρa, Y.c.ρq_sno, Y.c.ρ, a_min)
-            env_diagnostics =
-                (; env_diagnostics..., q_rai = ᶜq_rai⁰, q_sno = ᶜq_sno⁰)
-            draft_diagnostics =
-                (; draft_diagnostics..., q_rai = ᶜq_rai⁺, q_sno = ᶜq_sno⁺)
-        end
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = ᶜarea⁰ .* ᶜcloud_fraction⁰ .+
-                             ᶜarea⁺ .* ᶜcloud_fraction⁺,
+            cloud_fraction = ᶜa⁰ .* cloud_fraction.(ᶜts⁰, ᶜa⁰) .+
+                             ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa TC.EDMFModel
         tc_cent(p) = p.edmf_cache.aux.cent.turbconv

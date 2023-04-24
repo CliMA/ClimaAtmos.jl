@@ -12,6 +12,7 @@ include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "classify_case.jl"))
 include(joinpath("utils", "topography_helper.jl"))
+include(joinpath("utils", "variable_manipulations.jl"))
 
 include(joinpath("parameterizations", "radiation", "radiation_utilities.jl"))
 include(joinpath("parameterizations", "radiation", "RRTMGPInterface.jl"))
