@@ -206,13 +206,133 @@ steps:
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist"
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt150 newton 3"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding zalesak
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist
-        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist/*"
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3 --dt 150secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt150_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt175 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3 --dt 175secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt175_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt200 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3 --dt 200secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt200_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt225 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3 --dt 225secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt225_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt250 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3 --dt 250secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt250_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt275 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3 --dt 275secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt275_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt300 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3 --dt 300secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt300_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt325 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3 --dt 325secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt325_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt350 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3 --dt 350secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt350_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt375 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3 --dt 375secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt375_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt400 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3 --dt 400secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt400_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt425 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3 --dt 425secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt425_newton3/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":computer: SSP zalesak tracer upwind baroclinic wave (ρe_tot) equilmoist dt450 newton 3"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3 --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --max_newton_iters 3 --tracer_upwinding zalesak
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3 --fig_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3 --out_dir sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3
+        artifact_paths: "sphere_zalesak_upwind_ssp_baroclinic_wave_rhoe_equilmoist_dt450_newton3/*"
         agents:
           slurm_mem: 20GB
 

@@ -387,7 +387,6 @@ function ode_configuration(Y, parsed_args, atmos)
         return alg_or_tableau(; linsolve = linsolve!, nlsolve)
     elseif is_imex_CTS_algo_type(alg_or_tableau)
         newtons_method = CTS.NewtonsMethod(;
-            verbose = CTS.Verbose(),
             max_iters = parsed_args["max_newton_iters"],
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;

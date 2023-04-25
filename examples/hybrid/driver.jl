@@ -176,8 +176,8 @@ import ClimaAtmos.Parameters as CAP
 include("get_cache_and_tendency.jl")
 
 import ClimaCore: enable_threading
-# const enable_clima_core_threading = parsed_args["enable_threading"]
-# enable_threading() = enable_clima_core_threading
+const enable_clima_core_threading = parsed_args["enable_threading"]
+enable_threading() = enable_clima_core_threading
 
 @time "Allocating Y" if simulation.restart
     (Y, t_start) = CA.get_state_restart(comms_ctx)
