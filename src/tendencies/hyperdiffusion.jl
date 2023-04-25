@@ -123,7 +123,7 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     (; do_dss, ᶜspecific, ᶜ∇²specific_tracers) = p
     if n > 0
-        (; ᶜspecificʲs, ᶜ∇²specific_tracersʲs) = p
+        (; ᶜspecificʲs, ᶜ∇²specific_tracersʲs, ᶜp) = p
     end
     if do_dss
         buffer = p.hyperdiffusion_ghost_buffer
@@ -169,6 +169,8 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜρaχʲₜ -= κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
             @. Yₜ.c.sgsʲs.:($$j).ρa -=
                 κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+            @. Yₜ.c.sgsʲs.:($$j).ρae_tot +=
+                ᶜp / (Y.c.ρ) * κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
         end
     end
 end
