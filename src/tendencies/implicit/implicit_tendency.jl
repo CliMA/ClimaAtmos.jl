@@ -122,6 +122,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
                 dt,
                 edmfx_upwinding,
             )
+            # This assumes Yₜ.c.sgsʲs.:($$j).ρa only contains the vertical advection
+            @. Yₜ.c.sgsʲs.:($$j).ρae_tot[colidx] -=
+                (ᶜp[colidx] / Y.c.ρ[colidx]) * Yₜ.c.sgsʲs.:($$j).ρa[colidx]
         end
         for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
             matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))

@@ -27,12 +27,13 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         if :ρθ in propertynames(Y.c)
             @. Yₜ.c.sgsʲs.:($$j).ρaθ -= divₕ(Y.c.sgsʲs.:($$j).ρaθ * ᶜuʲs.:($$j))
         elseif :ρe_tot in propertynames(Y.c)
-            @. Yₜ.c.sgsʲs.:($$j).ρae_tot -= divₕ(
-                (
-                    Y.c.sgsʲs.:($$j).ρae_tot +
-                    Y.c.sgsʲs.:($$j).ρa * ᶜp / ᶜρʲs.:($$j)
-                ) * ᶜuʲs.:($$j),
-            )
+            @. Yₜ.c.sgsʲs.:($$j).ρae_tot -=
+                divₕ(
+                    (
+                        Y.c.sgsʲs.:($$j).ρae_tot +
+                        Y.c.sgsʲs.:($$j).ρa * ᶜp / ᶜρʲs.:($$j)
+                    ) * ᶜuʲs.:($$j),
+                ) + (ᶜp / Y.c.ρ) * divₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
         end
     end
 

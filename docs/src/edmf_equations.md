@@ -136,7 +136,7 @@ and the ``-\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p) \boldsymbol{u}^j) - p \frac{\partial}{\partial t} \frac{\hat{\rho}^j}{\rho^j} + RHS
+\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p) \boldsymbol{u}^j) - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j + RHS
 ```
 which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
 ```math
@@ -148,7 +148,7 @@ is discretized using
 \frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
 - D_h[ (\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
 - D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p}{\hat{\rho}^j} \right)
-  \right] - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
+  \right] - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
 ```
 where
 ```math
