@@ -257,7 +257,6 @@ function get_initial_condition(parsed_args)
             "DryBaroclinicWave",
             "MoistBaroclinicWave",
             "DecayingProfile",
-            "DryBaroclinicWaveWithEDMF",
             "MoistBaroclinicWaveWithEDMF",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
