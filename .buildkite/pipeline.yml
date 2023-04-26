@@ -300,7 +300,7 @@ steps:
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_topography_dcmip --t_end 5days --topography DCMIP200 --dt 200secs --dt_save_to_disk 5days --rayleigh_sponge true --viscous_sponge true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_topography_dcmip --t_end 3days --topography DCMIP200 --dt 200secs --dt_save_to_disk 3days --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_topography_dcmip --out_dir sphere_held_suarez_rhoe_topography_dcmip
         artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/*"
 

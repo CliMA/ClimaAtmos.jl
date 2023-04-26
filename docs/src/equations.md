@@ -180,6 +180,13 @@ Similarly for vertical velocity
   - (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h
   - \frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\text{ref}}}{\rho} \nabla_v \Phi - \nabla_v K .
 ```
+
+This is stabilized with the addition of 4th-order hyperviscosity
+```math
+-\nu_u \nabla^2(\nabla^2(w)),
+```
+where ``w`` is the magnitude of ``\boldsymbol{u}_v``.
+
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
 ```math
 (\mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
@@ -189,6 +196,15 @@ and the ``\frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\tex
 \frac{1}{I^f(\rho)} \mathcal{G}^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho - \rho_{\text{ref}})}{I^f(\rho)} \mathcal{G}^f_v[\Phi] - \mathcal{G}^f_v[K] ,
 ```
 with the latter treated implicitly.
+
+The hyperviscosity term is
+```math
+- \nu_u \hat{\mathcal{D}}_h (\mathcal{G}_h (\psi) )
+```
+where
+```math
+\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h (w)\right) \right]
+```
 
 
 ### Total energy

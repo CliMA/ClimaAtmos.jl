@@ -12,6 +12,7 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜ∇²uₕ = similar(Y.c, C12{FT}),
+        ᶠ∇²w = similar(Y.f, FT),
         ᶜ∇²specific_energy = similar(Y.c, FT),
         ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
     )
@@ -19,6 +20,7 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
         n == 0 ? (;) :
         (;
             ᶜ∇²tke⁰ = similar(Y.c, FT),
+            ᶠ∇²wʲs = similar(Y.f, NTuple{n, FT}),
             ᶜ∇²specific_energyʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²specific_tracersʲs = remove_energy_var.(
                 specific_sgsʲs.(Y.c, atmos.turbconv_model)
@@ -44,10 +46,17 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; κ₄, divergence_damping_factor) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²specific_energy) = p
+    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶠ∇²w, ᶜ∇²specific_energy) = p
     if n > 0
-        (; ᶜρa⁰, ᶜspecific⁰, ᶜρʲs, ᶜspecificʲs, ᶜ∇²tke⁰, ᶜ∇²specific_energyʲs) =
-            p
+        (;
+            ᶜρa⁰,
+            ᶜspecific⁰,
+            ᶜρʲs,
+            ᶜspecificʲs,
+            ᶜ∇²tke⁰,
+            ᶠ∇²wʲs,
+            ᶜ∇²specific_energyʲs,
+        ) = p
     end
     if do_dss
         buffer = p.hyperdiffusion_ghost_buffer
@@ -60,6 +69,8 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. ᶜ∇²uₕ -= C12(wcurlₕ(C3(curlₕ(Y.c.uₕ))))
     end
 
+    @. ᶠ∇²w = wdivₕ(gradₕ(Y.f.w.components.data.:1))
+
     if :θ in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
     elseif :e_tot in propertynames(ᶜspecific)
@@ -69,6 +80,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
     end
     for j in 1:n
+        @. ᶠ∇²wʲs.:($$j) = wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).w.components.data.:1))
         if :θ in propertynames(ᶜspecificʲs.:($j))
             @. ᶜ∇²specific_energyʲs.:($$j) = wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
         elseif :e_tot in propertynames(ᶜspecificʲs.:($j))
@@ -85,9 +97,11 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 Spaces.weighted_dss_ghost2!,
             )
                 dss!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
+                dss!(ᶠ∇²w, buffer.ᶠ∇²w)
                 dss!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
                 if n > 0
                     dss!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
+                    dss!(ᶠ∇²wʲs, buffer.ᶠ∇²wʲs)
                     dss!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
                 end
             end
@@ -101,12 +115,16 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.uₕ += κ₄ * C12(wcurlₕ(C3(curlₕ(ᶜ∇²uₕ))))
     end
 
+    @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠ∇²w))
+
     ᶜρ_energyₜ = :θ in propertynames(ᶜspecific) ? Yₜ.c.ρθ : Yₜ.c.ρe_tot
     @. ᶜρ_energyₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
     if n > 0
         @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
     for j in 1:n
+        @. Yₜ.f.sgsʲs.:($$j).w.components.data.:1 -=
+            κ₄ * wdivₕ(gradₕ(ᶠ∇²wʲs.:($$j)))
         ᶜρa_energyʲₜ =
             :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :
             Yₜ.c.sgsʲs.:($j).ρae_tot
