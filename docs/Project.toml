@@ -13,4 +13,4 @@ TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
-DiffEqBase = "5, 6"
+DiffEqBase = "6"
