@@ -108,10 +108,10 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
             κ₄ *
             divergence_damping_factor *
             Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜχuₕ)))
-        (; ᶠχw_data) = p
-        @. ᶠχw_data = wdivₕ(gradₕ(Y.f.w.components.data.:1))
-        Spaces.weighted_dss2!(ᶠχw_data, ghost_buffer.χ)
-        @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠχw_data))
+#        (; ᶠχw_data) = p
+#        @. ᶠχw_data = wdivₕ(gradₕ(Y.f.w.components.data.:1))
+#        Spaces.weighted_dss2!(ᶠχw_data, ghost_buffer.χ)
+#        @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠχw_data))
     end
     return nothing
 end
