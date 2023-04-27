@@ -29,6 +29,9 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
     edmfx_adv_test = parsed_args["edmfx_adv_test"]
     @assert edmfx_adv_test in (false, true)
 
+    edmfx_entr_detr = parsed_args["edmfx_entr_detr"]
+    @assert edmfx_entr_detr in (false, true)
+
     model_config = get_model_config(parsed_args)
     vert_diff = get_vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
     atmos = AtmosModel(;
@@ -42,6 +45,7 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         edmfx_adv_test,
+        edmfx_entr_detr,
         precip_model,
         forcing_type,
         turbconv_model = get_turbconv_model(

@@ -166,6 +166,7 @@ Base.@kwdef struct AtmosModel{
     LA,
     EC,
     EAT,
+    EED,
     TCM,
     SS,
     NOGW,
@@ -187,6 +188,7 @@ Base.@kwdef struct AtmosModel{
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
     edmfx_adv_test::EAT = nothing
+    edmfx_entr_detr::EED = nothing
     turbconv_model::TCM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing

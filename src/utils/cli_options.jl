@@ -62,6 +62,10 @@ function argparse_settings()
         help = "EDMFX advection test switches off all velocity tendencies in GM and turbconc [`false` (default), `true`]"
         arg_type = Bool
         default = false
+        "--edmfx_entr_detr"
+        help = "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true` (default), `false`]"
+        arg_type = Bool
+        default = true
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String
