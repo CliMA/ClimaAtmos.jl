@@ -19,7 +19,8 @@ vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_boo
         ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                ᶜχ / dt -
+                ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(ᶠupwind1(ᶠu³, ᶜχ))) / ᶜρ,
             ),
         ),
     ))
@@ -29,7 +30,8 @@ vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
                 ᶜχ / dt,
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                ᶜχ / dt -
+                ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(ᶠupwind1(ᶠu³, ᶜχ))) / ᶜρ,
             ),
         ),
     ))
