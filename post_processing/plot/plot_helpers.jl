@@ -406,7 +406,6 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
     T_timeave_zonalave = calc_zonalave_timeave(T)
     θ_timeave_zonalave = calc_zonalave_timeave(θ)
     T2_timeave_zonalave = calc_zonalave_variance(T)
-    @info T2_timeave_zonalave
 
     if moist
         qt_timeave_zonalave = calc_zonalave_timeave(qt)
