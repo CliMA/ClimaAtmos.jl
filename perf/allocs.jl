@@ -44,7 +44,7 @@ for k in keys(dict)
     dict[k]["z_elem"] = 18
 end
 cli_options = [
-    non_default_command_line_flags_parsed_args(dict["perf_target_unthreaded"]),
+    non_default_command_line_flags_parsed_args(dict["bm_perf_target"]),
 ]
 #! format: on
 
