@@ -155,6 +155,14 @@ steps:
       - label: ":computer: Schar mountain experiment (stretched grid)"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 120000.0 --z_max 25000.0 --x_elem 100 --z_elem 45 --dt 0.5secs --t_end 14400.0secs --z_stretch true --dz_bottom 200.0 --dz_top 1000.0 --vert_diff false --kappa_4 5e7 --dt_save_to_disk 3600secs --initial_condition ScharProfile --topography Schar --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_schar_mountain_test_stretched --use_reference_state false --ode_algo SSP33ShuOsher"
         artifact_paths: "plane_schar_mountain_test_stretched/*"
+      
+      - label: ":computer: Schar mountain experiment (uniform grid, theta)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 120000.0 --z_max 25000.0 --x_elem 100 --z_elem 45 --dt 0.5secs --t_end 14400.0secs --z_stretch false --vert_diff false --kappa_4 5e7 --dt_save_to_disk 3600secs --initial_condition ScharProfile --topography Schar --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_schar_mountain_test_theta --use_reference_state false --ode_algo SSP33ShuOsher --energy_name rhotheta"
+        artifact_paths: "plane_schar_mountain_test_theta/*"
+      
+      - label: ":computer: Schar mountain experiment (stretched grid, theta)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 120000.0 --z_max 25000.0 --x_elem 100 --z_elem 45 --dt 0.5secs --t_end 14400.0secs --z_stretch true --dz_bottom 200.0 --dz_top 1000.0 --vert_diff false --kappa_4 5e7 --dt_save_to_disk 3600secs --initial_condition ScharProfile --topography Schar --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_schar_mountain_test_stretched_theta --use_reference_state false --ode_algo SSP33ShuOsher --energy_name rhotheta"
+        artifact_paths: "plane_schar_mountain_test_stretched_theta/*"
 
       - label: ":computer: Density current experiment"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 51200.0 --z_max 6400.0 --x_elem 80 --z_elem 90 --dt 0.3secs --t_end 900.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 3600secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id plane_density_current_test"
