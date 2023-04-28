@@ -105,7 +105,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
             linear_interpolation(
                 (lon, lat),
-                zlevels,
+                esmth,
                 extrapolation_bc = (Periodic(), Flat()),
             )
         end
