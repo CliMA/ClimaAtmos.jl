@@ -29,7 +29,7 @@ import ClimaCore.Fields as Fields
 function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     @. ∂ᶜρcₜ∂ᶠw =
-        -(ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠw) * ᶠinterp(ᶜρc / ᶜρ)))
+        -(ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠw) * ᶠinterp(ᶜρc / ᶜρ)))
     return nothing
 end
 function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:first_order})
@@ -37,9 +37,8 @@ function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val
     # epsilon to it to avoid cancellation errors in upwinding.
     magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) *
-        ᶠset_upwind_bcs(ᶠupwind1(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ)) /
+    @. ∂ᶜρcₜ∂ᶠw = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ) /
         magnitude_plus_eps(ᶠw),
     ))
     return nothing
@@ -49,9 +48,8 @@ function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val
     # epsilon to it to avoid cancellation errors in upwinding.
     magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) *
-        ᶠset_upwind_bcs(ᶠupwind3(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ)) /
+    @. ∂ᶜρcₜ∂ᶠw = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ) /
         magnitude_plus_eps(ᶠw),
     ))
     return nothing
