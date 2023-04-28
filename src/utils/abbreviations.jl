@@ -19,6 +19,10 @@ const wcurlₕ = Operators.WeakCurl()
 
 const ᶜinterp = Operators.InterpolateF2C()
 const ᶜdivᵥ = Operators.DivergenceF2C()
+const ᶜadvdivᵥ = Operators.DivergenceF2C(
+    bottom = Operators.SetValue(CT3(0)),
+    top = Operators.SetValue(CT3(0)),
+) # divergence applied to advective fluxes is zero at the boundaries
 const ᶜgradᵥ = Operators.GradientF2C()
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
@@ -49,13 +53,6 @@ const ᶠcurlᵥ = Operators.CurlC2F(
     top = Operators.SetCurl(CT12(0, 0)),
 )
 
-# TODO: Allow the upwinding operators to fully specify their own boundary
-# conditions, so that we do not need to wrap them in a SetBoundaryOperator.
-# Note: forgetting to wrap them will cause non-deterministic errors/segfaults!
-const ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
-    bottom = Operators.SetValue(CT3(0)),
-    top = Operators.SetValue(CT3(0)),
-)
 const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
 const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     bottom = Operators.ThirdOrderOneSided(),
@@ -72,6 +69,7 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
 
 const ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp)
 const ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ)
+const ᶜadvdivᵥ_stencil = Operators.Operator2Stencil(ᶜadvdivᵥ)
 const ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp)
 const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
 

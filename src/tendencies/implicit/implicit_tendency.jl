@@ -9,28 +9,28 @@ import ClimaCore: Fields
 # TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
 # expressions are less convoluted?
 vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}) =
-    @. ᶜρχₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
+    @. ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
 vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}) =
-    @. ᶜρχₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(ᶠupwind1(ᶠu³, ᶜχ))))
+    @. ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
 vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}) =
-    @. ᶜρχₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(ᶠupwind3(ᶠu³, ᶜχ))))
+    @. ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
 vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book}) =
-    @. ᶜρχₜ = -(ᶜdivᵥ(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(
+    @. ᶜρχₜ = -(ᶜadvdivᵥ(
+        ᶠwinterp(ᶜJ, ᶜρ) * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-            ),
+                ᶜχ / dt - ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+            )
         ),
     ))
 vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}) =
-    @. ᶜρχₜ = -(ᶜdivᵥ(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(
+    @. ᶜρχₜ = -(ᶜadvdivᵥ(
+        ᶠwinterp(ᶜJ, ᶜρ) * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
                 ᶜχ / dt,
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-            ),
+                ᶜχ / dt - ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+            )
         ),
     ))
 
