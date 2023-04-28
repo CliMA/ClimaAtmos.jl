@@ -54,6 +54,10 @@ function additional_tendency!(Yₜ, Y, p, t)
         precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+
+        # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+        # please DO NOT add additional velocity tendencies after this function
+        zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(

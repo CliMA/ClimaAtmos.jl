@@ -134,7 +134,7 @@ turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
 )
 turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
     sgsʲs = ntuple(
-        _ -> (; w = C3(zero(eltype(ls)))),
+        _ -> (; w = C3(ls.turbconv_state.velocity, ls.geometry)),
         Val(n_mass_flux_subdomains(turbconv_model)),
     )
 )

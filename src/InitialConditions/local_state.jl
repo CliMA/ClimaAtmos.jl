@@ -69,9 +69,12 @@ struct NoTurbconvState{FT} <: TurbconvState{FT} end
 
 Stores the values of `tke` and `draft_area` for the `turbconv_model`. If
 `draft_area` is omitted, it is set to 0.
+Currently, we input physical velocity w into EDMFState, and this will be wrong with topography
 """
 struct EDMFState{FT} <: TurbconvState{FT}
     tke::FT
     draft_area::FT
+    velocity::Geometry.WVector{FT}
 end
-EDMFState(; tke, draft_area = 0) = EDMFState{typeof(tke)}(tke, draft_area)
+EDMFState(; tke, draft_area = 0, velocity = Geometry.WVector(0)) =
+    EDMFState{typeof(tke)}(tke, draft_area, velocity)

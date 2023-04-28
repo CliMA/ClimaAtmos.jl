@@ -379,6 +379,53 @@ function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
 end
 
 ##
+## EDMFX Test
+##
+"""
+    DryAdiabaticProfileEDMFX(; perturb = true)
+
+An `InitialCondition` with a dry adiabatic temperature profile, and with an optional
+perturbation to the temperature.
+"""
+Base.@kwdef struct DryAdiabaticProfileEDMFX <: InitialCondition
+    perturb::Bool = true
+end
+
+draft_area(::Type{FT}) where {FT} =
+    z -> if (z >= 2500.0) && (z <= 5500.0)
+        FT(0.5) * exp(-(z - 4000.0)^2 / 2 / 1000.0^2)
+    else
+        FT(0)
+    end
+
+function (initial_condition::DryAdiabaticProfileEDMFX)(params)
+    (; perturb) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        thermo_params = CAP.thermodynamics_params(params)
+
+        temp_profile = DryAdiabaticProfile{FT}(thermo_params, FT(300), FT(200))
+        (; z) = local_geometry.coordinates
+        T, p = temp_profile(thermo_params, z)
+        if perturb
+            T += rand(FT) * FT(0.1) * (z < 5000)
+        end
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            turbconv_state = EDMFState(;
+                tke = FT(0),
+                draft_area = draft_area(FT)(z),
+                velocity = Geometry.WVector(FT(1.0)),
+            ),
+        )
+    end
+    return local_state
+end
+
+##
 ## EDMF Test Cases
 ##
 

@@ -17,7 +17,8 @@ import ..EDMFX
 import ..n_mass_flux_subdomains
 import ..gs_to_sgs
 
-import Thermodynamics.TemperatureProfiles: DecayingTemperatureProfile
+import Thermodynamics.TemperatureProfiles:
+    DecayingTemperatureProfile, DryAdiabaticProfile
 import ClimaCore: Fields, Geometry
 import LinearAlgebra: norm_sqr
 

@@ -30,6 +30,7 @@ include(joinpath("InitialConditions", "InitialConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("tendencies", "pressure_work.jl"))
+include(joinpath("tendencies", "zero_velocity.jl"))
 
 include(joinpath("tendencies", "implicit", "wfact.jl"))
 include(joinpath("tendencies", "implicit", "schur_complement_W.jl"))
