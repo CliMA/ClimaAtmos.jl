@@ -1,39 +1,59 @@
-function mixing_length(
-    mix_len_params,
-    param_set,
-    ml_model::MinDisspLen{FT},
-) where {FT}
-    c_m = mix_len_params.c_m
-    c_d = mix_len_params.c_d
-    smin_ub = mix_len_params.smin_ub
-    smin_rm = mix_len_params.smin_rm
-    l_max = mix_len_params.l_max
-    c_b = mix_len_params.c_b
-    g::FT = TCP.grav(param_set)
-    molmass_ratio::FT = TCP.molmass_ratio(param_set)
-    vkc::FT = TCP.von_karman_const(param_set)
-    ustar = ml_model.ustar
-    z = ml_model.z
-    tke_surf = ml_model.tke_surf
-    ∂b∂z = ml_model.∇b.∂b∂z
-    tke = ml_model.tke
+"""
+function mixing_length(param_set, ustar_surf, zc, tke_surf, ∂b∂z, tke,
+                       obukhov_length, Shear², Pr, b_exch)
+where:
+- `param_set`: set with model parameters
+- `ustar_surf`: friction velocity
+- `zc`: height
+- `tke_surf`: env kinetic energy at first cell center
+- `∂b∂z`: buoyancy gradient
+- `tke`: env turbulent kinetic energy
+- `obukhov_length`: surface Monin Obukhov length
+- `Shear²`: shear term
+- `Pr`: Prandtl number
+- `b_exch`: subdomain echange term
 
+Returns mixing length as a smooth minimum between
+wall-constrained length scale,
+production-dissipation balanced length scale and
+effective static stability length scale.
+"""
+function mixing_length(
+    param_set,
+    ustar_surf::FT,
+    zc::FT,
+    tke_surf::FT,
+    ∂b∂z::FT,
+    tke::FT,
+    obukhov_length::FT,
+    Shear²::FT,
+    Pr::FT,
+    b_exch::FT,
+) where {FT}
+
+    c_m = TCP.tke_ed_coeff(param_set)
+    c_d = TCP.tke_diss_coeff(param_set)
+    smin_ub = TCP.smin_ub(param_set)
+    smin_rm = TCP.smin_rm(param_set)
+    l_max = TCP.l_max(param_set)
+    c_b = TCP.static_stab_coeff(param_set)
+    vkc = TCP.von_karman_const(param_set)
+
+    # compute the l_W - the wall constraint mixing length
+    # which imposes an upper limit on the size of eddies near the surface
     # kz scale (surface layer)
-    if ml_model.obukhov_length < 0.0 #unstable
+    if obukhov_length < 0.0 #unstable
         l_W =
-            vkc * z / (sqrt(tke_surf / ustar / ustar) * c_m) *
-            min((1 - 100 * z / ml_model.obukhov_length)^FT(0.2), 1 / vkc)
+            vkc * zc / (sqrt(tke_surf / ustar_surf / ustar_surf) * c_m) *
+            min((1 - 100 * zc / obukhov_length)^FT(0.2), 1 / vkc)
     else # neutral or stable
-        l_W = vkc * z / (sqrt(tke_surf / ustar / ustar) * c_m)
+        l_W = vkc * zc / (sqrt(tke_surf / ustar_surf / ustar_surf) * c_m)
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
-    a_pd = c_m * (ml_model.Shear² - ∂b∂z / ml_model.Pr) * sqrt(tke)
+    a_pd = c_m * (Shear² - ∂b∂z / Pr) * sqrt(tke)
     # Dissipation term
     c_neg = c_d * tke * sqrt(tke)
-    # Subdomain exchange term
-    b_exch = ml_model.b_exch
-
     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -b_exch * b_exch
         l_TKE = max(
             -b_exch / 2 / a_pd +
@@ -60,8 +80,6 @@ function mixing_length(
         (l_TKE < eps(FT) || l_TKE > l_max) ? l_max : l_TKE,
         (l_W < eps(FT) || l_W > l_max) ? l_max : l_W,
     )
-
     # get soft minimum
-    mix_len = lamb_smooth_minimum(l, smin_ub, smin_rm)
-    return mix_len
+    return lamb_smooth_minimum(l, smin_ub, smin_rm)
 end

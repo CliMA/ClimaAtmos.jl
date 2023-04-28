@@ -117,12 +117,17 @@ By breaking the curl and cross product terms into horizontal and vertical contri
 the vertical momentum equation. The horizontal momentum equation is only solved in the grid-mean.
 
 #### Vertical momentum
-Similarly for vertical velocity
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v^j  =
   - (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^h
   - \frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j + RHS .
 ```
+
+This is stabilized with the addition of 4th-order hyperviscosity
+```math
+-\nu_u \nabla^2(\nabla^2(w^j)),
+```
+where ``w^j`` is the magnitude of ``\boldsymbol{u}_v^j``.
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^h`` term is discretized as
 ```math
@@ -133,10 +138,19 @@ and the ``-\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_
 -\frac{1}{I^f(\rho^j)} G^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho^j - \rho_{\text{ref}})}{I^f(\rho^j)} G^f_v[\Phi] - G^f_v[K^j] ,
 ```
 
+The hyperviscosity term is
+```math
+- \nu_u \hat{\mathcal{D}}_h (\mathcal{G}_h (\psi) )
+```
+where
+```math
+\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h (w^j)\right) \right]
+```
+
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p) \boldsymbol{u}^j) + RHS
+\frac{\partial}{\partial t} \hat{\rho}^j e^j = - \nabla \cdot((\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p) \boldsymbol{u}^j) - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j + RHS
 ```
 which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
 ```math
@@ -148,7 +162,7 @@ is discretized using
 \frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
 - D_h[ (\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
 - D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p}{\hat{\rho}^j} \right)
-  \right] - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
+  \right] - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
 ```
 where
 ```math

@@ -6,214 +6,189 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
-hyperdiffusion_cache(hyperdiff::Nothing, Y) = NamedTuple()
-
-function hyperdiffusion_cache(hyperdiff::AbstractHyperdiffusion, Y)
-    FT = Spaces.undertype(axes(Y.c))
-    moist_kwargs = if (:ρq_tot in propertynames(Y.c))
-        (; ᶜχρq_tot = similar(Y.c, FT))
-    else
-        NamedTuple()
-    end
-    tempest_kwargs = if hyperdiff isa TempestHyperdiffusion
-        (; ᶠχw_data = similar(Y.f, FT))
-    else
-        NamedTuple()
-    end
-
-    return (;
-        ᶜχ = similar(Y.c, FT),
-        moist_kwargs...,
-        ᶜχuₕ = similar(Y.c, Geometry.Covariant12Vector{FT}),
-        tempest_kwargs...,
+function hyperdiffusion_cache(Y, atmos, do_dss)
+    isnothing(atmos.hyperdiff) && return (;)
+    FT = eltype(Y)
+    n = n_mass_flux_subdomains(atmos.turbconv_model)
+    gs_quantities = (;
+        ᶜ∇²uₕ = similar(Y.c, C12{FT}),
+        ᶠ∇²w = similar(Y.f, FT),
+        ᶜ∇²specific_energy = similar(Y.c, FT),
+        ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
     )
+    sgs_quantities =
+        n == 0 ? (;) :
+        (;
+            ᶜ∇²tke⁰ = similar(Y.c, FT),
+            ᶠ∇²wʲs = similar(Y.f, NTuple{n, FT}),
+            ᶜ∇²specific_energyʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∇²specific_tracersʲs = remove_energy_var.(
+                specific_sgsʲs.(Y.c, atmos.turbconv_model)
+            ),
+        )
+    quantities = (; gs_quantities..., sgs_quantities...)
+    if do_dss
+        quantities = (;
+            quantities...,
+            hyperdiffusion_ghost_buffer = map(
+                Spaces.create_dss_buffer,
+                quantities,
+            ),
+        )
+    end
+    return quantities
 end
 
 function hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    p.atmos.hyperdiff isa Nothing && return nothing
+    (; hyperdiff, turbconv_model) = p.atmos
+    isnothing(hyperdiff) && return nothing
 
-    NVTX.@range "hyperdiffusion tendency" color = colorant"yellow" begin
-        hyperdiffusion_tendency!(Yₜ, Y, p, t, p.atmos.hyperdiff)
+    (; κ₄, divergence_damping_factor) = hyperdiff
+    n = n_mass_flux_subdomains(turbconv_model)
+    point_type = eltype(Fields.coordinate_field(Y.c))
+    (; do_dss, ᶜp, ᶜh_ref, ᶜspecific, ᶜ∇²uₕ, ᶠ∇²w, ᶜ∇²specific_energy) = p
+    if n > 0
+        (;
+            ᶜρa⁰,
+            ᶜspecific⁰,
+            ᶜρʲs,
+            ᶜspecificʲs,
+            ᶜ∇²tke⁰,
+            ᶠ∇²wʲs,
+            ᶜ∇²specific_energyʲs,
+        ) = p
     end
-end
-
-function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::ClimaHyperdiffusion)
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    divₕ = Operators.Divergence()
-    wdivₕ = Operators.WeakDivergence()
-    gradₕ = Operators.Gradient()
-    wgradₕ = Operators.WeakGradient()
-    curlₕ = Operators.Curl()
-    wcurlₕ = Operators.WeakCurl()
-
-    (; ᶜp, ᶜχ, ᶜχuₕ, ᶜh_ref) = p # assume ᶜp has been updated
-    (; ghost_buffer) = p
-    (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
-    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    is_2d_pt = point_type <: Geometry.Abstract2DPoint
-    is_3d_pt = !is_2d_pt
-
-    ᶜρs = :ρe_tot in propertynames(Y.c) ? Y.c.ρe_tot : Y.c.ρθ
-    ᵗρs = :ρe_tot in propertynames(Y.c) ? Yₜ.c.ρe_tot : Yₜ.c.ρθ
-
-    (:ρθ in propertynames(Y.c)) && (@. ᶜχ = wdivₕ(gradₕ(ᶜρs / ᶜρ)))
-    ## Remove a reference enthalpy hᵣ from the hyperdiffusion term
-    ## ᶜχ = ∇ ⋅ (∇ₕ(hₜ - hᵣ)) = ∇³(h′) 
-    ## Assume reference e_kinᵣ is zero.
-    ## Where hᵣ = e_totᵣ + pᵣ/ρᵣ = cᵥ_d(Tᵣ - T₀) + gz + pᵣ/ρᵣ
-    ## T₀ is the triple point temperature
-    ## Tᵣ is the reference temperature
-    ## [p,ρ]ᵣ are reference values for [pressure, density] defined in the default cache
-    !(:ρθ in propertynames(Y.c)) &&
-        (@. ᶜχ = wdivₕ(gradₕ((ᶜρs + ᶜp) / ᶜρ - ᶜh_ref)))
-
-    is_3d_pt && (@. ᶜχuₕ =
-        wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
-            Geometry.Covariant12Axis(),
-            wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
-        ))
-    is_2d_pt && (@. ᶜχuₕ =
-        Geometry.project(Geometry.Covariant12Axis(), wgradₕ(divₕ(ᶜuₕ))))
-
-    NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-        Spaces.weighted_dss_start2!(ᶜχ, ghost_buffer.χ)
-        Spaces.weighted_dss_start2!(ᶜχuₕ, ghost_buffer.χuₕ)
-
-        Spaces.weighted_dss_internal2!(ᶜχ, ghost_buffer.χ)
-        Spaces.weighted_dss_internal2!(ᶜχuₕ, ghost_buffer.χuₕ)
-
-        Spaces.weighted_dss_ghost2!(ᶜχ, ghost_buffer.χ)
-        Spaces.weighted_dss_ghost2!(ᶜχuₕ, ghost_buffer.χuₕ)
+    if do_dss
+        buffer = p.hyperdiffusion_ghost_buffer
     end
 
-    @. ᵗρs -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχ))
-    if is_3d_pt
-        @. Yₜ.c.uₕ -=
-            κ₄ * (
-                divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                Geometry.project(
-                    Geometry.Covariant12Axis(),
-                    wcurlₕ(
-                        Geometry.project(
-                            Geometry.Covariant3Axis(),
-                            curlₕ(ᶜχuₕ),
-                        ),
-                    ),
-                )
-            )
-    elseif is_2d_pt
-        @. Yₜ.c.uₕ -=
-            κ₄ *
-            divergence_damping_factor *
-            Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜχuₕ)))
-    end
-    return nothing
-end
-
-function hyperdiffusion_tendency!(Yₜ, Y, p, t, ::TempestHyperdiffusion)
-
-    divₕ = Operators.Divergence()
-    wdivₕ = Operators.WeakDivergence()
-    gradₕ = Operators.Gradient()
-    wgradₕ = Operators.WeakGradient()
-    curlₕ = Operators.Curl()
-    wcurlₕ = Operators.WeakCurl()
-
-    !(:ρθ in propertynames(Y.c)) &&
-        (error("TempestHyperdiffusion is only compatible with ρθ"))
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    (; ᶜp, ᶜχ, ᶜχuₕ) = p # assume ᶜp has been updated
-    (; ghost_buffer) = p
-    (; κ₄, divergence_damping_factor) = p.atmos.hyperdiff
-    point_type = eltype(Fields.local_geometry_field(axes(Y.c)).coordinates)
-    is_ρq_tot = :ρq_tot in propertynames(Y.c)
-    is_2d_pt = point_type <: Geometry.Abstract2DPoint
-    is_3d_pt = !is_2d_pt
-
-    @. ᶜχ = wdivₕ(gradₕ(ᶜρ)) # ᶜχρ
-    Spaces.weighted_dss2!(ᶜχ, ghost_buffer.χ)
-    @. Yₜ.c.ρ -= κ₄ * wdivₕ(gradₕ(ᶜχ))
-
-    @. ᶜχ = wdivₕ(gradₕ(Y.c.ρθ)) # ᶜχρθ
-    Spaces.weighted_dss2!(ᶜχ, ghost_buffer.χ)
-    @. Yₜ.c.ρθ -= κ₄ * wdivₕ(gradₕ(ᶜχ))
-
-    (; ᶠχw_data) = p
-    @. ᶠχw_data = wdivₕ(gradₕ(Y.f.w.components.data.:1))
-    Spaces.weighted_dss2!(ᶠχw_data, ghost_buffer.χ)
-    @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠχw_data))
-
-    if is_ρq_tot
-        (; ᶜχρq_tot) = p
-        @. ᶜχρq_tot = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
-        Spaces.weighted_dss2!(ᶜχρq_tot, ghost_buffer.χ)
-        @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
-        @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
+    @. ᶜ∇²uₕ = C12(wgradₕ(divₕ(Y.c.uₕ)))
+    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    if point_type <: Geometry.Abstract3DPoint
+        # TODO: Are these vector conversions correct when there is topography?
+        @. ᶜ∇²uₕ -= C12(wcurlₕ(C3(curlₕ(Y.c.uₕ))))
     end
 
-    if is_3d_pt
-        @. ᶜχuₕ =
-            wgradₕ(divₕ(ᶜuₕ)) - Geometry.Covariant12Vector(
-                wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜuₕ))),
-            )
-        Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
-        @. Yₜ.c.uₕ -=
-            κ₄ * (
-                divergence_damping_factor * wgradₕ(divₕ(ᶜχuₕ)) -
-                Geometry.Covariant12Vector(
-                    wcurlₕ(Geometry.Covariant3Vector(curlₕ(ᶜχuₕ))),
-                )
-            )
-    elseif is_2d_pt
-        @. ᶜχuₕ = Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜuₕ)))
-        Spaces.weighted_dss2!(ᶜχuₕ, ghost_buffer.χuₕ)
-        @. Yₜ.c.uₕ -=
-            κ₄ *
-            divergence_damping_factor *
-            Geometry.Covariant12Vector(wgradₕ(divₕ(ᶜχuₕ)))
+    @. ᶠ∇²w = wdivₕ(gradₕ(Y.f.w.components.data.:1))
+
+    if :θ in propertynames(ᶜspecific)
+        @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
+    elseif :e_tot in propertynames(ᶜspecific)
+        @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ - ᶜh_ref))
     end
-    return nothing
-end
-
-function hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
-    p.atmos.hyperdiff isa Nothing && return nothing
-
-    NVTX.@range "hyperdiffusion_tracers_tendency" color = colorant"yellow" begin
-
-        ᶜρ = Y.c.ρ
-        wdivₕ = Operators.WeakDivergence()
-        gradₕ = Operators.Gradient()
-
-        (; ghost_buffer) = p
-        (; κ₄) = p.atmos.hyperdiff
-
-        is_ρq_tot =
-            :ρq_tot in propertynames(Y.c) &&
-            q_tot_hyperdiffusion_enabled(p.atmos.hyperdiff)
-
-        if is_ρq_tot
-            (; ᶜχρq_tot) = p
-            @. ᶜχρq_tot = wdivₕ(gradₕ(Y.c.ρq_tot / ᶜρ))
+    if n > 0
+        @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
+    end
+    for j in 1:n
+        @. ᶠ∇²wʲs.:($$j) = wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).w.components.data.:1))
+        if :θ in propertynames(ᶜspecificʲs.:($j))
+            @. ᶜ∇²specific_energyʲs.:($$j) = wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
+        elseif :e_tot in propertynames(ᶜspecificʲs.:($j))
+            @. ᶜ∇²specific_energyʲs.:($$j) =
+                wdivₕ(gradₕ(ᶜspecificʲs.:($$j).e_tot + ᶜp / ᶜρʲs.:($$j)))
         end
+    end
 
+    if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            is_ρq_tot &&
-                (Spaces.weighted_dss_start2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
-            is_ρq_tot && (Spaces.weighted_dss_internal2!(
-                ᶜχρq_tot,
-                ghost_buffer.ᶜχρq_tot,
-            ))
-            is_ρq_tot &&
-                (Spaces.weighted_dss_ghost2!(ᶜχρq_tot, ghost_buffer.ᶜχρq_tot))
+            for dss! in (
+                Spaces.weighted_dss_start2!,
+                Spaces.weighted_dss_internal2!,
+                Spaces.weighted_dss_ghost2!,
+            )
+                dss!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
+                dss!(ᶠ∇²w, buffer.ᶠ∇²w)
+                dss!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
+                if n > 0
+                    dss!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
+                    dss!(ᶠ∇²wʲs, buffer.ᶠ∇²wʲs)
+                    dss!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
+                end
+            end
         end
-
-        if is_ρq_tot
-            @. Yₜ.c.ρq_tot -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot))
-            @. Yₜ.c.ρ -= κ₄ * wdivₕ(ᶜρ * gradₕ(ᶜχρq_tot)) # NOTE: we limit `ρq`, not `ρ`, so this redistribution of `ρ` is not guaranteed to exactly conserve `ρ`
-        end
-
     end
-    return nothing
+
+    @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜ∇²uₕ)))
+    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    if point_type <: Geometry.Abstract3DPoint
+        # TODO: Are these vector conversions correct when there is topography?
+        @. Yₜ.c.uₕ += κ₄ * C12(wcurlₕ(C3(curlₕ(ᶜ∇²uₕ))))
+    end
+
+    @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠ∇²w))
+
+    ᶜρ_energyₜ = :θ in propertynames(ᶜspecific) ? Yₜ.c.ρθ : Yₜ.c.ρe_tot
+    @. ᶜρ_energyₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
+    if n > 0
+        @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
+    end
+    for j in 1:n
+        @. Yₜ.f.sgsʲs.:($$j).w.components.data.:1 -=
+            κ₄ * wdivₕ(gradₕ(ᶠ∇²wʲs.:($$j)))
+        ᶜρa_energyʲₜ =
+            :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :
+            Yₜ.c.sgsʲs.:($j).ρae_tot
+        @. ᶜρa_energyʲₜ -=
+            κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²specific_energyʲs.:($$j)))
+    end
+end
+
+function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    (; hyperdiff, turbconv_model) = p.atmos
+    isnothing(hyperdiff) && return nothing
+
+    (; κ₄) = hyperdiff
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; do_dss, ᶜspecific, ᶜ∇²specific_tracers) = p
+    if n > 0
+        (; ᶜspecificʲs, ᶜ∇²specific_tracersʲs, ᶜp) = p
+    end
+    if do_dss
+        buffer = p.hyperdiffusion_ghost_buffer
+    end
+
+    for χ_name in propertynames(ᶜ∇²specific_tracers)
+        @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
+    end
+    for j in 1:n
+        for χ_name in propertynames(ᶜ∇²specific_tracersʲs.:($j))
+            @. ᶜ∇²specific_tracersʲs.:($$j).:($$χ_name) =
+                wdivₕ(gradₕ(ᶜspecificʲs.:($$j).:($$χ_name)))
+        end
+    end
+
+    if do_dss
+        NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
+            for dss! in (
+                Spaces.weighted_dss_start2!,
+                Spaces.weighted_dss_internal2!,
+                Spaces.weighted_dss_ghost2!,
+            )
+                dss!(ᶜ∇²specific_tracers, buffer.ᶜ∇²specific_tracers)
+                if n > 0
+                    dss!(ᶜ∇²specific_tracersʲs, buffer.ᶜ∇²specific_tracersʲs)
+                end
+            end
+        end
+    end
+
+    # TODO: Since we are not applying the limiter to density (or area-weighted
+    # density), the mass redistributed by hyperdiffusion will not be conserved
+    # by the limiter. Is this a significant problem?
+    # TODO: Figure out why caching the duplicated tendencies in ᶜtemp_scalar
+    # triggers allocations.
+    for (ᶜρχₜ, ᶜ∇²χ, _) in matching_subfields(Yₜ.c, ᶜ∇²specific_tracers)
+        @. ᶜρχₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+        @. Yₜ.c.ρ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+    end
+    for j in 1:n
+        for (ᶜρaχʲₜ, ᶜ∇²χʲ, _) in
+            matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜ∇²specific_tracersʲs.:($j))
+            @. ᶜρaχʲₜ -= κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+            @. Yₜ.c.sgsʲs.:($$j).ρa -=
+                κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+            @. Yₜ.c.sgsʲs.:($$j).ρae_tot +=
+                ᶜp / (Y.c.ρ) * κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+        end
+    end
 end

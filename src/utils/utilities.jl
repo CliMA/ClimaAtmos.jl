@@ -2,16 +2,17 @@
 ##### Utility functions
 #####
 import ClimaComms
-import ClimaCore: Spaces, Topologies, Geometry, Operators, Fields
+import ClimaCore: Spaces, Topologies, Fields
 import LinearAlgebra: norm_sqr
 import DiffEqBase
 import JLD2
 
-is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot)
+is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρaθ, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
-is_turbconv_var(symbol) = symbol == :turbconv
+is_turbconv_var(symbol) = symbol in (:turbconv, :sgsʲs, :sgs⁰)
 is_tracer_var(symbol) = !(
     symbol == :ρ ||
+    symbol == :ρa ||
     is_energy_var(symbol) ||
     is_momentum_var(symbol) ||
     is_turbconv_var(symbol)
@@ -59,16 +60,13 @@ individual velocity components:
 - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
 function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Field)
-    @assert eltype(uₕ) <:
-            Union{Geometry.Covariant1Vector, Geometry.Covariant12Vector}
-    @assert eltype(uᵥ) <: Geometry.Covariant3Vector
-    C123 = Geometry.Covariant123Vector
-    CON123 = Geometry.Contravariant123Vector
-    Ic = Operators.InterpolateF2C()
-    κ .=
-        1 / 2 .* (
-            dot.(C123.(uₕ), CON123.(uₕ)) .+ Ic.(dot.(C123.(uᵥ), CON123.(uᵥ))) .+
-            2 .* dot.(CON123.(uₕ), Ic.(C123.(uᵥ)))
+    @assert eltype(uₕ) <: Union{C1, C2, C12}
+    @assert eltype(uᵥ) <: C3
+    @. κ =
+        1 / 2 * (
+            dot(C123(uₕ), CT123(uₕ)) +
+            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
+            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
         )
 end
 

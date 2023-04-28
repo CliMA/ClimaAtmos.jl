@@ -8,7 +8,8 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     FT = eltype(params)
     (; dt) = simulation
 
-    tc_callbacks = CA.call_every_n_steps(turb_conv_affect_filter!)
+    tc_callbacks =
+        CA.call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
     flux_accumulation_callback = CA.call_every_n_steps(
         CA.flux_accumulation!;
         skip_first = true,
@@ -28,7 +29,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             ()
         end
 
-    if !isnothing(atmos.turbconv_model)
+    if p.atmos.turbconv_model isa TC.EDMFModel
         additional_callbacks = (additional_callbacks..., tc_callbacks)
     end
 
@@ -80,18 +81,26 @@ end
 
 function turb_conv_affect_filter!(integrator)
     p = integrator.p
-    (; edmf_cache, Δt) = p
-    (; ᶜinterp) = p.operators
-    (; edmf, param_set, aux, surf_params) = edmf_cache
+    (; edmf_cache) = p
+    (; edmf, param_set, surf_params) = edmf_cache
     t = integrator.t
     Y = integrator.u
     tc_params = CAP.turbconv_params(param_set)
+    thermo_params = CAP.thermodynamics_params(param_set)
 
-    CA.thermo_state!(Y, p, ᶜinterp; time = t) # set ᶜts for set_edmf_surface_bc
+    CA.set_precomputed_quantities!(Y, p, t) # sets ᶜts for set_edmf_surface_bc
     Fields.bycolumn(axes(Y.c)) do colidx
-        state = TC.tc_column_state(Y, p, nothing, colidx)
+        state = TC.tc_column_state(
+            Y,
+            p,
+            nothing,
+            colidx,
+            surf_params,
+            thermo_params,
+            t,
+        )
         grid = TC.Grid(state)
-        surf = TCU.get_surface(
+        surf = CA.get_surface(
             p.atmos.model_config,
             surf_params,
             grid,

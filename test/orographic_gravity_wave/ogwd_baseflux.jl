@@ -5,9 +5,9 @@ using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces, Geometry
 import ClimaComms, Logging
 using Plots
 using Interpolations
+using ClimaCoreTempestRemap
 const FT = Float64
 
-include("../../examples/hybrid/orographic_gravity_wave_helper.jl")
 include("../../post_processing/remap/remap_helpers.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
@@ -29,7 +29,7 @@ center_space, face_space =
 ᶜlocal_geometry = Fields.local_geometry_field(center_space)
 ᶠlocal_geometry = Fields.local_geometry_field(face_space)
 
-# Initialize Y with prescirbed wind, density, and buoyancy frequency
+# Initialize Y with prescribed wind, density, and buoyancy frequency
 # Figure 1 in Garner05
 Yc = map(ᶜlocal_geometry) do lg
     lat = lg.coordinates.lat
@@ -45,22 +45,9 @@ Yf = map(ᶠlocal_geometry) do lg
 end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 
-# Prepare topo data
-TOPO_DIR = joinpath(@__DIR__, "topo_data_ogwd_baseflux_test/")
-if !isdir(TOPO_DIR)
-    mkdir(TOPO_DIR)
-end
-if !isfile(joinpath(TOPO_DIR, "topo_info.hdf5")) & ClimaComms.iamroot(comms_ctx)
-    include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-    # download topo data
-    datafile_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
-    @show datafile_rll
-    get_topo_info(Y, TOPO_DIR, datafile_rll, comms_ctx)
-end
-
 # Initialize cache vars for orographic gravity wave
 ogw = CA.OrographicGravityWave{FT}()
-p = CA.orographic_gravity_wave_cache(ogw, TOPO_DIR, Y, comms_ctx)
+p = CA.orographic_gravity_wave_cache(ogw, Y)
 
 # Unpack cache vars
 (; topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) = p

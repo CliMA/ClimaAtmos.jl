@@ -33,7 +33,10 @@ function get_params()
     end
     mkpath(fig_dir)
 
-    nc_files = filter(x -> endswith(x, ".nc"), readdir(nc_dir, join = true))
+    nc_files = filter(
+        x -> startswith(basename(x), "day") && endswith(x, ".nc"),
+        readdir(nc_dir, join = true),
+    )
 
     return (; nc_files, fig_dir, case_name)
 end
@@ -48,10 +51,10 @@ elseif case_name == "moist_baroclinic_wave"
         generate_paperplots_moist_baro_wave(args...)
 elseif case_name == "dry_held_suarez"
     generate_paperplots(case_name, args...) =
-        generate_paperplots_dry_held_suarez(args...)
-elseif case_name == "moist_held_suarez" || "aquaplanet"
+        generate_paperplots_held_suarez(args...; moist = false)
+elseif case_name == "moist_held_suarez" || case_name == "aquaplanet"
     generate_paperplots(case_name, args...) =
-        generate_paperplots_moist_held_suarez(args...)
+        generate_paperplots_held_suarez(args...; moist = true)
 else
     error("Unknown `case_name`: $(case_name)")
 end

@@ -11,7 +11,6 @@ dirs = (
     joinpath(root, "perf"),
     joinpath(root, "docs"),
     joinpath(root, "examples"),
-    joinpath(root, "ode_compat_examples"),
 )
 
 cd(root) do

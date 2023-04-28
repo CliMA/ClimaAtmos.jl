@@ -14,6 +14,9 @@ import ..compute_kinetic!
 
 import ClimaCore as CC
 import ClimaCore.Geometry as CCG
+import ClimaCore.Operators as Operators
+import ClimaCore.Fields as Fields
+import ClimaCore.Spaces as Spaces
 import ClimaCore.Geometry: ⊗
 import ClimaCore.Operators as CCO
 import LinearAlgebra as LA
@@ -35,12 +38,6 @@ const liq_type = CM.CommonTypes.LiquidType()
 const ice_type = CM.CommonTypes.IceType()
 const rain_type = CM.CommonTypes.RainType()
 const snow_type = CM.CommonTypes.SnowType()
-
-# TODO: This is type piracy, move this into CloudMicrophysics
-Base.broadcastable(x::CM.CommonTypes.LiquidType) = tuple(x)
-Base.broadcastable(x::CM.CommonTypes.IceType) = tuple(x)
-Base.broadcastable(x::CM.CommonTypes.RainType) = tuple(x)
-Base.broadcastable(x::CM.CommonTypes.SnowType) = tuple(x)
 
 include("Parameters.jl")
 import .Parameters as TCP
@@ -76,10 +73,8 @@ function debug_state(state, code_location::String)
     ######
 
     vars_positive = [
-        vec(prog_gm.ρe_tot),
         vec(prog_gm_f.w),
         vec(prog_up[1].ρarea),
-        vec(prog_up[1].ρaθ_liq_ice),
         vec(prog_up_f[1].w),
         vec(aux_en.area),
         vec(aux_en.θ_liq_ice),
@@ -120,16 +115,13 @@ include("Fields.jl")
 include("types.jl")
 include("Operators.jl")
 
-include("microphysics_coupling.jl")
 include("turbulence_functions.jl")
 include("utility_functions.jl")
 include("variables.jl")
-include("EDMF_Precipitation.jl")
-include("EDMF_Environment.jl")
-include("EDMF_Updrafts.jl")
 include("update_aux.jl")
 include("EDMF_functions.jl")
 include("thermodynamics.jl")
+include("closures/microphysics.jl")
 include("closures/perturbation_pressure.jl")
 include("closures/entr_detr.jl")
 include("closures/mixing_length.jl")

@@ -23,7 +23,7 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
     vars = Dict()
     # vars[title] = (; fn = func to get variable(s), pfx = label prefix(es))
     vars["area fraction"] =     (;fn=(:bulk_up_area, :env_area), pfx = ("up", "en"))
-    vars["buoy"] =              (;fn=(:bulk_up_buoyancy, :env_buoyancy), pfx = ("up", "en"))
+    vars["buoy"] =              (;fn=(:face_up1_buoyancy, :face_env_buoyancy), pfx = ("up", "en"))
     vars["T"] =                 (;fn=(:bulk_up_temperature, :env_temperature), pfx = ("up", "en"))
     vars["CF"] =                (;fn=(:bulk_up_cloud_fraction, :env_cloud_fraction), pfx = ("up", "env"))
 
@@ -71,7 +71,12 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
                     z = parent(Fields.coordinate_field(axes(var)).z)[:]
                     vardata = parent(var)[:]
                     prefix = isempty(v.pfx[j]) ? "" : "$(v.pfx[j]) "
-                    plot!(p_all[i], vardata, z; label = "$prefix$data_source")
+                    Plots.plot!(
+                        p_all[i],
+                        vardata,
+                        z;
+                        label = "$prefix$data_source",
+                    )
                 end
             elseif v.pfx isa String
                 fn = getfun(D, v.fn)
@@ -80,7 +85,7 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
                 z = parent(Fields.coordinate_field(axes(var)).z)[:]
                 vardata = parent(var)[:]
                 prefix = isempty(v.pfx) ? "" : "$(v.pfx) "
-                plot!(p_all[i], vardata, z; label = "$prefix$data_source")
+                Plots.plot!(p_all[i], vardata, z; label = "$prefix$data_source")
             end
         end
     end

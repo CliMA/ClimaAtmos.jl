@@ -5,7 +5,6 @@
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
-import ClimaCore.Operators as Operators
 
 large_scale_advection_cache(Y, ls_adv::Nothing) = (; ls_adv)
 function large_scale_advection_cache(Y, ls_adv::LargeScaleAdvection)

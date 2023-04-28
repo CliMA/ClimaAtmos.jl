@@ -16,23 +16,17 @@ abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
 struct SphericalModel <: AbstractModelConfig end
 struct BoxModel <: AbstractModelConfig end
+struct PlaneModel <: AbstractModelConfig end
 
 abstract type AbstractCoupling end
 struct Coupled <: AbstractCoupling end
 struct Decoupled <: AbstractCoupling end
 
 abstract type AbstractHyperdiffusion end
-Base.@kwdef struct ClimaHyperdiffusion{B, FT} <: AbstractHyperdiffusion
+Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     κ₄::FT
     divergence_damping_factor::FT
 end
-Base.@kwdef struct TempestHyperdiffusion{B, FT} <: AbstractHyperdiffusion
-    κ₄::FT
-    divergence_damping_factor::FT
-end
-
-q_tot_hyperdiffusion_enabled(::ClimaHyperdiffusion{B}) where {B} = B
-q_tot_hyperdiffusion_enabled(::TempestHyperdiffusion{B}) where {B} = B
 
 abstract type AbstractVerticalDiffusion end
 Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
@@ -105,6 +99,13 @@ struct EDMFCoriolis{U, V, FT}
     coriolis_param::FT
 end
 
+struct EDMFX{N, FT}
+    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
+end
+EDMFX{N}(a_half::FT) where {N, FT} = EDMFX{N, FT}(a_half)
+n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+n_mass_flux_subdomains(::Any) = 0
+
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 
@@ -123,6 +124,7 @@ Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
+Base.broadcastable(x::EDMFX) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -141,20 +143,6 @@ struct RadiationTRMM_LBA{R}
         return new{typeof(rad_profile)}(rad_profile)
     end
 end
-
-"""
-    ThermoDispatcher
-
-A dispatching type for selecting the
-precise thermodynamics method call to
-be used.
-"""
-Base.@kwdef struct ThermoDispatcher{EF, MM}
-    energy_form::EF
-    moisture_model::MM
-end
-Base.broadcastable(x::ThermoDispatcher) = tuple(x)
-
 
 # TODO: remove AbstractPerformanceMode and all subtypes
 # This is temporarily needed to investigate performance of

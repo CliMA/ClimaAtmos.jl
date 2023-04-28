@@ -24,8 +24,21 @@ import ClimaCore.Fields: ColumnField
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 
-# To add additional terms to the explicit part of the tendency, define new
-# methods for `additional_cache` and `additional_tendency!`.
+# Fields used to store variables that only need to be used in a single function
+# but cannot be computed on the fly. Unlike the precomputed quantities, these
+# can be modified at any point, so they should never be assumed to be unchanged
+# between function calls.
+function temporary_quantities(atmos, center_space, face_space)
+    FT = Spaces.undertype(center_space)
+    n = n_mass_flux_subdomains(atmos.turbconv_model)
+    return (;
+        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜh_tot, ᶜh_totʲ
+        ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
+        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
+        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
+        ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
+    )
+end
 
 function default_cache(
     Y,
@@ -38,47 +51,9 @@ function default_cache(
     comms_ctx,
 )
     FT = eltype(params)
-
-    curlₕ = Operators.Curl()
-    ᶜinterp = Operators.InterpolateF2C()
-    ᶠinterp = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-    ᶠwinterp = Operators.WeightedInterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
-    ᶜdivᵥ = Operators.DivergenceF2C(
-        top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-        bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
-    )
-    ᶠgradᵥ = Operators.GradientC2F(
-        bottom = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-        top = Operators.SetGradient(Geometry.Covariant3Vector(FT(0))),
-    )
-    ᶜgradᵥ = Operators.GradientF2C()
-    ᶠcurlᵥ = Operators.CurlC2F(
-        bottom = Operators.SetCurl(
-            Geometry.Contravariant12Vector(FT(0), FT(0)),
-        ),
-        top = Operators.SetCurl(Geometry.Contravariant12Vector(FT(0), FT(0))),
-    )
-    ᶠupwind1 = Operators.UpwindBiasedProductC2F()
-    ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
-        bottom = Operators.ThirdOrderOneSided(),
-        top = Operators.ThirdOrderOneSided(),
-    )
-    ᶠfct_boris_book = Operators.FCTBorisBook(
-        bottom = Operators.FirstOrderOneSided(),
-        top = Operators.FirstOrderOneSided(),
-    )
-    ᶠfct_zalesak = Operators.FCTZalesak(
-        bottom = Operators.FirstOrderOneSided(),
-        top = Operators.FirstOrderOneSided(),
-    )
-
-    (; energy_upwinding, tracer_upwinding, apply_limiter) = numerics
+    (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
+        numerics
+    (; apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     R_d = FT(CAP.R_d(params))
@@ -108,80 +83,29 @@ function default_cache(
         ᶜf = map(_ -> f, ᶜcoord)
         lat_sfc = map(_ -> eltype(params)(0), Fields.level(ᶜcoord, 1))
     end
-    ᶜf = @. Geometry.Contravariant3Vector(Geometry.WVector(ᶜf))
+    ᶜf = @. CT3(Geometry.WVector(ᶜf))
     T_sfc = @. 29 * exp(-lat_sfc^2 / (2 * 26^2)) + 271
 
     sfc_conditions =
         similar(Fields.level(Y.f, half), SF.SurfaceFluxConditions{FT})
 
-    ts_type = thermo_state_type(atmos.moisture_model, FT)
     quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
-    skip_dss = !(quadrature_style isa Spaces.Quadratures.GLL)
-    if skip_dss
-        ghost_buffer = (
-            c = nothing,
-            f = nothing,
-            χ = nothing, # for hyperdiffusion
-            χw = nothing, # for hyperdiffusion
-            χuₕ = nothing, # for hyperdiffusion
-            skip_dss = skip_dss, # skip DSS on non-GLL quadrature meshes
-        )
-        (:ρq_tot in propertynames(Y.c)) &&
-            (ghost_buffer = (ghost_buffer..., ᶜχρq_tot = nothing))
-    else
-        ghost_buffer = (
-            c = Spaces.create_dss_buffer(Y.c),
-            f = Spaces.create_dss_buffer(Y.f),
-            χ = Spaces.create_dss_buffer(Y.c.ρ), # for hyperdiffusion
-            χw = Spaces.create_dss_buffer(Y.f.w.components.data.:1), # for hyperdiffusion
-            χuₕ = Spaces.create_dss_buffer(Y.c.uₕ), # for hyperdiffusion
-            skip_dss = skip_dss, # skip DSS on non-GLL quadrature meshes
-        )
-        (:ρq_tot in propertynames(Y.c)) && (
-            ghost_buffer = (
-                ghost_buffer...,
-                ᶜχρq_tot = Spaces.create_dss_buffer(Y.c.ρ),
-            )
-        )
-    end
-    if apply_limiter
-        tracers = filter(is_tracer_var, propertynames(Y.c))
-        make_limiter =
-            ᶜρc_name ->
-                Limiters.QuasiMonotoneLimiter(getproperty(Y.c, ᶜρc_name))
-        limiters = NamedTuple{tracers}(map(make_limiter, tracers))
-    else
-        limiters = nothing
-    end
-    pnc = propertynames(Y.c)
-    ᶜρh_kwargs = :ρe_tot in pnc ? (; ᶜρh = similar(Y.c, FT)) : ()
+    do_dss = quadrature_style isa Spaces.Quadratures.GLL
+    ghost_buffer =
+        !do_dss ? (;) :
+        (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
+
+    limiter =
+        apply_limiter ? Limiters.QuasiMonotoneLimiter(similar(Y.c, FT)) :
+        nothing
 
     net_energy_flux_toa = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_toa[] = Geometry.WVector(FT(0))
     net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
     net_energy_flux_sfc[] = Geometry.WVector(FT(0))
 
-    return (;
+    default_cache = (;
         simulation,
-        operators = (;
-            ᶜdivᵥ,
-            ᶜgradᵥ,
-            ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ),
-            ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ),
-            ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp),
-            ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp),
-            ᶠwinterp_stencil = Operators.Operator2Stencil(ᶠwinterp),
-            ᶠinterp,
-            ᶠwinterp,
-            ᶠcurlᵥ,
-            ᶜinterp,
-            ᶠgradᵥ,
-            curlₕ,
-            ᶠupwind1,
-            ᶠupwind3,
-            ᶠfct_boris_book,
-            ᶠfct_zalesak,
-        ),
         spaces,
         atmos,
         comms_ctx,
@@ -189,27 +113,21 @@ function default_cache(
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
         Yₜ = similar(Y), # only needed when using increment formulation
-        limiters,
-        ᶜρh_kwargs...,
-        ᶜK = similar(Y.c, FT),
-        ᶠu_tilde = similar(Y.f, Geometry.Contravariant123Vector{FT}),
-        ᶜu_bar = similar(Y.c, Geometry.Covariant123Vector{FT}),
+        limiter,
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜρ_ref,
         ᶜp_ref,
         ᶜh_ref,
-        ᶜts = similar(Y.c, ts_type),
-        ᶜp = similar(Y.c, FT),
         ᶜT = similar(Y.c, FT),
-        ᶜω³ = similar(Y.c, Geometry.Contravariant3Vector{FT}),
-        ᶠω¹² = similar(Y.f, Geometry.Contravariant12Vector{FT}),
-        ᶠu³ = similar(Y.f, Geometry.Contravariant3Vector{FT}),
         ᶜf,
         sfc_conditions,
         z_sfc,
         T_sfc,
-        ts_sfc = similar(Spaces.level(Y.f, half), ts_type),
+        ts_sfc = similar(
+            Spaces.level(Y.f, half),
+            thermo_state_type(atmos.moisture_model, FT),
+        ),
         ∂ᶜK∂ᶠw_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
@@ -217,14 +135,22 @@ function default_cache(
         params,
         energy_upwinding,
         tracer_upwinding,
-        ghost_buffer = ghost_buffer,
+        density_upwinding,
+        edmfx_upwinding,
+        do_dss,
+        ghost_buffer,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        precomputed_quantities(Y, atmos)...,
+        temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
+        hyperdiffusion_cache(Y, atmos, do_dss)...,
     )
+    set_precomputed_quantities!(Y, default_cache, FT(0))
+    return default_cache
 end
 
 function dss!(Y, p, t)
-    if !p.ghost_buffer.skip_dss
+    if p.do_dss
         Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)
         Spaces.weighted_dss_start2!(Y.f, p.ghost_buffer.f)
         Spaces.weighted_dss_internal2!(Y.c, p.ghost_buffer.c)
@@ -234,40 +160,33 @@ function dss!(Y, p, t)
     end
 end
 
-function horizontal_limiter_tendency!(Yₜ, Y, p, t)
-    divₕ = Operators.Divergence()
-    C123 = Geometry.Covariant123Vector
-
-    (; ᶜu_bar) = p
-    (; ᶜinterp) = p.operators
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    @. ᶜu_bar = C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))
-
+function limited_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
-
-    # Tracer conservation, horizontal advection
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
-        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        @. ᶜρcₜ -= divₕ(ᶜρc * ᶜu_bar)
+    set_precomputed_quantities!(Y, p, t)
+    horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
+    NVTX.@range "tracer hyperdiffusion tendency" color = colorant"yellow" begin
+        tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
-
-    # Call hyperdiffusion
-    hyperdiffusion_tracers_tendency!(Yₜ, Y, p, t)
-
-    return nothing
 end
 
 function limiters_func!(Y, p, t, ref_Y)
-    (; limiters) = p
-    if !isnothing(limiters)
-        for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-            ρc_limiter = getproperty(limiters, ᶜρc_name)
-            ᶜρc_ref = getproperty(ref_Y.c, ᶜρc_name)
-            ᶜρc = getproperty(Y.c, ᶜρc_name)
-            Limiters.compute_bounds!(ρc_limiter, ᶜρc_ref, ref_Y.c.ρ)
-            Limiters.apply_limiter!(ᶜρc, Y.c.ρ, ρc_limiter)
+    (; limiter) = p
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    if !isnothing(limiter)
+        for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
+            Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
+            Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
+        end
+        for j in 1:n
+            for ρaχ_name in
+                filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
+                ᶜρaχ_ref = ref_Y.c.sgsʲs.:($j).:($ρaχ_name)
+                ᶜρa_ref = ref_Y.c.sgsʲs.:($j).ρa
+                ᶜρaχ = Y.c.sgsʲs.:($j).:($ρaχ_name)
+                ᶜρa = Y.c.sgsʲs.:($j).ρa
+                Limiters.compute_bounds!(limiter, ᶜρaχ_ref, ᶜρa_ref)
+                Limiters.apply_limiter!(ᶜρaχ, ᶜρa, limiter)
+            end
         end
     end
 end

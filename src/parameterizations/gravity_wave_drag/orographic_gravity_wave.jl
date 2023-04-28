@@ -16,25 +16,18 @@ Not yet included in our codebase
 
 using ClimaCore: InputOutput
 
-orographic_gravity_wave_cache(::Nothing, topo_dir, Y, comms_ctx) = NamedTuple()
+orographic_gravity_wave_cache(::Nothing, Y) = NamedTuple()
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
+include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
-function orographic_gravity_wave_cache(
-    ogw::OrographicGravityWave,
-    topo_dir,
-    Y,
-    comms_ctx,
-)
+function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y)
     FT = Spaces.undertype(axes(Y.c))
     (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit) = ogw
-    hdfreader =
-        InputOutput.HDF5Reader(joinpath(topo_dir, "topo_info.hdf5"), comms_ctx)
-    topo_info = InputOutput.read_field(hdfreader, "topo_info")
-    Base.close(hdfreader)
 
-    rm(topo_dir, recursive = true)
+    orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+    topo_info = get_OGW_info(Y, orographic_info_rll)
 
     return (;
         Fr_crit = Fr_crit,
@@ -81,9 +74,6 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) = p
     (; hmax, hmin, t11, t12, t21, t22) = p.topo_info
     FT = Spaces.undertype(axes(Y.c))
-
-    # operators
-    (; ᶜgradᵥ, ᶠinterp) = p.operators
 
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
@@ -227,7 +217,6 @@ function calc_nonpropagating_forcing!(
     k_pbl,
     grav,
 )
-    (; ᶠinterp) = p.operators
     FT = eltype(grav)
     ᶠp = ᶠinterp.(ᶜp)
     # compute k_ref: the upper bound for nonpropagating drag to function
@@ -391,7 +380,6 @@ function calc_saturation_profile!(
     ᶜp,
     k_pbl,
 )
-    (; ᶠinterp) = p.operators
     (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p
     FT = eltype(Fr_crit)
     γ = topo_γ
@@ -413,7 +401,7 @@ function calc_saturation_profile!(
     )
     L1 = @. topo_L0 *
        max(FT(0.5), min(FT(2.0), FT(1.0) - FT(2.0) * ᶠVτ * ᶠd2Vτdz / ᶠN^2))
-    # the coeffient FT(2.0) is the correction for coarse sampling of d2v/dz2
+    # the coefficient FT(2.0) is the correction for coarse sampling of d2v/dz2
     FrU_clp0 = FrU_clp
     FrU_sat0 = FrU_sat
     for k in 0:(length(parent(τ_sat)) - 1)
@@ -458,20 +446,9 @@ function calc_saturation_profile!(
 
 end
 
-function ᶜd2dz2(ᶜscalar, p)
-    (; ᶜgradᵥ) = p.operators
+ᶜd2dz2(ᶜscalar, p) =
+    Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
 
-    return Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
-end
+ᶜddz(ᶠscalar, p) = Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
 
-function ᶜddz(ᶠscalar, p)
-    (; ᶜgradᵥ) = p.operators
-
-    return Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
-end
-
-function ᶠddz(ᶜscalar, p)
-    (; ᶠgradᵥ) = p.operators
-
-    return Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1
-end
+ᶠddz(ᶜscalar, p) = Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1

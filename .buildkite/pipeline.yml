@@ -39,11 +39,6 @@ steps:
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Instantiate ode compat examples"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=ode_compat_examples -e 'using Pkg; Pkg.status()'"
-
       - echo "--- Instantiate perf"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
@@ -113,7 +108,9 @@ steps:
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/*"
 
       - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --initial_condition IsothermalProfile --non_orographic_gravity_wave true --t_end 1500secs --dt 500secs --dt_save_to_disk 500secs --job_id single_column_nonorographic_gravity_wave --regression_test true"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --initial_condition IsothermalProfile --non_orographic_gravity_wave true --t_end 1500secs --dt 500secs --dt_save_to_disk 500secs --job_id single_column_nonorographic_gravity_wave --regression_test true
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id single_column_nonorographic_gravity_wave --out_dir single_column_nonorographic_gravity_wave
         artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Box Examples"
@@ -141,13 +138,36 @@ steps:
           --job_id bomex_box_hydrostatic_balance_rhoe
         artifact_paths: "bomex_box_hydrostatic_balance_rhoe/*"
 
+  - group: "Plane Examples"
+    steps:
+      - label: ":computer: Agnesi linear hydrostatic mountain experiment (uniform)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 240000.0 --z_max 25000.0 --x_elem 80 --z_elem 90 --dt 1.5secs --t_end 14400.0secs --z_stretch false --vert_diff false --kappa_4 1e6 --dt_save_to_disk 3600secs --initial_condition AgnesiHProfile --topography Agnesi --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_agnesi_mountain_test_uniform --use_reference_state false"
+        artifact_paths: "plane_agnesi_mountain_test_uniform/*"
+      
+      - label: ":computer: Agnesi linear hydrostatic mountain experiment (stretched)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 240000.0 --z_max 25000.0 --x_elem 80 --z_elem 45 --dt 1.5secs --t_end 14400.0secs --vert_diff false --kappa_4 1e6 --dt_save_to_disk 3600secs --initial_condition AgnesiHProfile --topography Agnesi --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_agnesi_mountain_test_stretched --use_reference_state false --z_stretch true --dz_bottom 200.0 --dz_top 1000.0"
+        artifact_paths: "plane_agnesi_mountain_test_stretched/*"
+      
+      - label: ":computer: Schar mountain experiment (uniform grid)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 120000.0 --z_max 25000.0 --x_elem 100 --z_elem 45 --dt 0.5secs --t_end 14400.0secs --z_stretch false --vert_diff false --kappa_4 5e7 --dt_save_to_disk 3600secs --initial_condition ScharProfile --topography Schar --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_schar_mountain_test_uniform --use_reference_state false --ode_algo SSP33ShuOsher"
+        artifact_paths: "plane_schar_mountain_test_uniform/*"
+      
+      - label: ":computer: Schar mountain experiment (stretched grid)"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 120000.0 --z_max 25000.0 --x_elem 100 --z_elem 45 --dt 0.5secs --t_end 14400.0secs --z_stretch true --dz_bottom 200.0 --dz_top 1000.0 --vert_diff false --kappa_4 5e7 --dt_save_to_disk 3600secs --initial_condition ScharProfile --topography Schar --rayleigh_sponge true --alpha_rayleigh_uh 0.0 --alpha_rayleigh_w 0.1 --job_id plane_schar_mountain_test_stretched --use_reference_state false --ode_algo SSP33ShuOsher"
+        artifact_paths: "plane_schar_mountain_test_stretched/*"
+
+      - label: ":computer: Density current experiment"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 51200.0 --z_max 6400.0 --x_elem 80 --z_elem 90 --dt 0.3secs --t_end 900.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 3600secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id plane_density_current_test"
+        artifact_paths: "plane_density_current_test/*"
+
   - group: "Sphere Examples (Dycore)"
     steps:
 
       - label: ":computer: hydrostatic balance (ρe) float64"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --t_end 8days --dt_save_to_disk 8days --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64 --bubble true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --perturb_initstate false --discrete_hydrostatic_balance true --use_reference_state false --hyperdiff false --dt_save_to_sol 600secs --t_end 8days --dt_save_to_disk 8days --job_id sphere_hydrostatic_balance_rhoe_ft64 --FLOAT_TYPE Float64
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_hydrostatic_balance_rhoe_ft64 --out_dir sphere_hydrostatic_balance_rhoe_ft64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_hydrostatic_balance_rhoe_ft64 --fig_dir sphere_hydrostatic_balance_rhoe_ft64 --case_name dry_held_suarez
         artifact_paths: "sphere_hydrostatic_balance_rhoe_ft64/*"
         agents:
           slurm_mem: 20GB
@@ -157,6 +177,7 @@ steps:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --dt_save_to_disk 2days --initial_condition DryBaroclinicWave --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe --fig_dir sphere_baroclinic_wave_rhoe --case_name dry_baroclinic_wave
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: baroclinic wave (ρe) h_elem8"
@@ -171,46 +192,82 @@ steps:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 2days --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_equilmoist --out_dir sphere_baroclinic_wave_rhoe_equilmoist
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist --out_dir sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist"
         command:
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 2days --ode_algo SSP333 --regression_test true"
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist --regression_test true --dt 450secs --dt_save_to_disk 2days --ode_algo SSP333
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
+      - label: ":computer: SSP 1st-order tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding first_order --energy_upwinding first_order --regression_test true
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist check conservation float64"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --bubble true --dt 450secs --ode_algo SSP333 --dt_save_to_disk 2days"
-        artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
-        soft_fail: true
+      - label: ":computer: SSP 3rd-order tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding third_order --energy_upwinding third_order --regression_test true
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
+
+      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
 
       - label: ":computer: held suarez (ρθ)"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --energy_name rhotheta --forcing held_suarez --job_id sphere_held_suarez_rhotheta --regression_test true --dt 500secs --t_end 20days --dt_save_to_disk 10days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_held_suarez_rhotheta --fig_dir sphere_held_suarez_rhotheta --case_name dry_held_suarez
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) hightop"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --forcing held_suarez --job_id sphere_held_suarez_rhoe_hightop --regression_test true --dt 500secs --t_end 8days --dt_save_to_disk 4days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_hightop --out_dir sphere_held_suarez_rhoe_hightop
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_held_suarez_rhoe_hightop --fig_dir sphere_held_suarez_rhoe_hightop --case_name dry_held_suarez
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_held_suarez_rhoe_hightop --out_dir sphere_held_suarez_rhoe_hightop
         artifact_paths: "sphere_held_suarez_rhoe_hightop/*"
 
       - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 4days --dt_save_to_disk 4days --regression_test true --apply_limiter false
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge --fig_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge --case_name moist_held_suarez
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
       - label: ":computer: SSP held suarez (ρe) equilmoist hightop sponge"
         command:
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 5days --dt_save_to_disk 5days --regression_test true --ode_algo SSP333 --regression_test true"
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 5days --dt_save_to_disk 5days --regression_test true --ode_algo SSP333
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --fig_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --case_name moist_held_suarez
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge
         artifact_paths: "sphere_ssp_held_suarez_rhoe_equilmoist_hightop_sponge/*"
+
+      - label: ":computer: SSP 1st-order tracer & energy upwind held suarez (ρe) equilmoist hightop sponge"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 5days --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding first_order --energy_upwinding first_order
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --fig_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --case_name moist_held_suarez
+        artifact_paths: "sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge/*"
+
+      - label: ":computer: SSP 3rd-order tracer & energy upwind held suarez (ρe) equilmoist hightop sponge"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --viscous_sponge true --zd_rayleigh 30e3 --zd_viscous 30e3 --job_id sphere_ssp_third_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --dt 450secs --t_end 5days --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding third_order --energy_upwinding third_order
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_third_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --out_dir sphere_ssp_third_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_third_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --fig_dir sphere_ssp_third_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge --case_name moist_held_suarez
+        artifact_paths: "sphere_ssp_third_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
   - group: "Sphere Examples (Aquaplanet)"
     steps:
@@ -219,12 +276,15 @@ steps:
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --idealized_insolation false --vert_diff true --surface_scheme monin_obukhov --moist equil --rad allskywithclear --non_orographic_gravity_wave true --orographic_gravity_wave true --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --zd_rayleigh 30e3 --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw --dt 400secs --t_end 18hours --dt_save_to_disk 18hours --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --fig_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --case_name aquaplanet
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw/*"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist with EDMF"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmf --vert_diff true --surface_scheme bulk --moist dry --dt 1secs --t_end 20secs --FLOAT_TYPE Float64 --turbconv edmf --config sphere --z_stretch false --post_process false --apply_limiter false --dt_save_to_sol 10secs --dt_save_to_disk 10secs
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --out_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --fig_dir sphere_baroclinic_wave_rhoe_equilmoist_edmf --case_name dry_held_suarez
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmf/*"
         agents:
           slurm_mem: 20GB
@@ -240,9 +300,9 @@ steps:
 
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_topography_dcmip --t_end 5days --topography DCMIP200 --dt 200secs --dt_save_to_disk 5days --rayleigh_sponge true --viscous_sponge true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --forcing held_suarez --job_id sphere_held_suarez_rhoe_topography_dcmip --t_end 3days --topography DCMIP200 --dt 200secs --dt_save_to_disk 3days --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_topography_dcmip --out_dir sphere_held_suarez_rhoe_topography_dcmip
-        artifact_paths: "sphere_held_suarez_rhoe_dcmip_topography_dcmip/*"
+        artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/*"
 
       - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
         command:
@@ -338,8 +398,26 @@ steps:
           slurm_mem: 20GB
 
       - label: ":dart: Dycore Consistency test"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id dycore_consistency --quicklook_reference_job_id edmf_bomex --dt 40secs --t_end 6hours --apply_limiter false --test_dycore_consistency true --debugging_tc true --dt_save_to_disk 5mins"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config column --FLOAT_TYPE Float64 --hyperdiff false --moist equil --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --turbconv edmf --turbconv_case Bomex --dt_save_to_sol 5mins --z_elem 60 --z_stretch false --z_max 3e3 --use_krylov_method true --job_id dycore_consistency --reference_job_id edmf_bomex --dt 40secs --t_end 6hours --apply_limiter false --test_dycore_consistency true --debugging_tc true --dt_save_to_disk 5mins"
         artifact_paths: "dycore_consistency/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+  - group: "EDMFX"
+    steps:
+
+      - label: ":genie: explicit baroclinic wave (ρe) equilmoist with EDMFX"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --ode_algo SSP33ShuOsher --apply_limiter false --moist equil --precip_model 0M --turbconv edmfx --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX Bomex on a sphere"
+        command:
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --ode_algo SSP33ShuOsher --apply_limiter false --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --z_elem 60 --z_stretch false --z_max 3e3 --dt 0.001secs --t_end 0.1secs --dt_save_to_disk 0.01secs --reference_job_id edmf_bomex
+        artifact_paths: "edmfx_bomex_sphere/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
@@ -361,6 +439,8 @@ steps:
           --use_krylov_method true
           --job_id edmf_gabls_jfnk_imex
           --dt 600secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_gabls_jfnk_imex --out_dir edmf_gabls_jfnk_imex
         artifact_paths: "edmf_gabls_jfnk_imex/*"
         agents:
           slurm_mem: 20GB
@@ -376,6 +456,8 @@ steps:
           --moist dry
           --job_id edmf_nieuwstadt
           --dt 0.5secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_nieuwstadt --out_dir edmf_nieuwstadt
         artifact_paths: "edmf_nieuwstadt/*"
         agents:
           slurm_mem: 20GB
@@ -392,9 +474,11 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_nieuwstadt
+          --reference_job_id edmf_nieuwstadt
           --job_id edmf_nieuwstadt_jfnk_imex
           --dt 50secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_nieuwstadt_jfnk_imex --out_dir edmf_nieuwstadt_jfnk_imex
         artifact_paths: "edmf_nieuwstadt_jfnk_imex/*"
         soft_fail: true
         agents:
@@ -411,6 +495,8 @@ steps:
           --moist equil
           --job_id edmf_soares
           --dt 0.25secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_soares --out_dir edmf_soares
         artifact_paths: "edmf_soares/*"
         agents:
           slurm_mem: 20GB
@@ -427,9 +513,11 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_soares
+          --reference_job_id edmf_soares
           --job_id edmf_soares_jfnk_imex
           --dt 50secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_soares_jfnk_imex --out_dir edmf_soares_jfnk_imex
         artifact_paths: "edmf_soares_jfnk_imex/*"
         soft_fail: true
         agents:
@@ -446,6 +534,8 @@ steps:
           --moist equil
           --job_id edmf_bomex
           --dt 20secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_bomex --out_dir edmf_bomex
         artifact_paths: "edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -460,9 +550,11 @@ steps:
           --t_end 6hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
           --moist equil
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_bomex
+          --reference_job_id edmf_bomex
           --job_id edmf_bomex_jfnk
           --dt 15secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_bomex_jfnk --out_dir edmf_bomex_jfnk
         artifact_paths: "edmf_bomex_jfnk/*"
         agents:
           slurm_mem: 20GB
@@ -470,7 +562,7 @@ steps:
       - label: ":balloon: SCM EDMF Bomex (JFNK IMEX EDMF)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config column --turbconv edmf --debugging_tc true --regression_test true
+          --config column --turbconv edmf --debugging_tc true
           --FLOAT_TYPE Float64 --hyperdiff false --apply_limiter false
           --turbconv_case Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex
           --z_elem 60 --z_stretch false --z_max 3e3
@@ -479,7 +571,7 @@ steps:
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
-          --quicklook_reference_job_id edmf_bomex
+          --reference_job_id edmf_bomex
           --job_id edmf_bomex_jfnk_imex
           --dt 30secs
         artifact_paths: "edmf_bomex_jfnk_imex/*"
@@ -493,8 +585,10 @@ steps:
           --FLOAT_TYPE Float64
           --toml ./.buildkite/toml/bomex.toml
           --job_id toml_edmf_bomex
-          --quicklook_reference_job_id edmf_bomex
+          --reference_job_id edmf_bomex
           --dt 20secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id toml_edmf_bomex --out_dir toml_edmf_bomex
         artifact_paths: "toml_edmf_bomex/*"
         agents:
           slurm_mem: 20GB
@@ -510,6 +604,8 @@ steps:
           --moist equil
           --job_id edmf_dycoms_rf01
           --dt 6secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_dycoms_rf01 --out_dir edmf_dycoms_rf01
         artifact_paths: "edmf_dycoms_rf01/*"
         agents:
           slurm_mem: 20GB
@@ -525,6 +621,8 @@ steps:
           --moist equil
           --job_id edmf_life_cycle_tan2018
           --dt 6secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_life_cycle_tan2018 --out_dir edmf_life_cycle_tan2018
         artifact_paths: "edmf_life_cycle_tan2018/*"
         agents:
           slurm_mem: 20GB
@@ -540,6 +638,8 @@ steps:
           --moist equil --precip_model 1M
           --job_id edmf_rico
           --dt 0.75secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_rico --out_dir edmf_rico
         artifact_paths: "edmf_rico/*"
         agents:
           slurm_mem: 20GB
@@ -556,6 +656,8 @@ steps:
           --moist equil --precip_model 1M
           --job_id edmf_trmm
           --dt 0.1secs
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id edmf_trmm --out_dir edmf_trmm
         artifact_paths: "edmf_trmm/*"
         agents:
           slurm_mem: 20GB
@@ -585,11 +687,6 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":computer: Benchmark: perf target (Rosenbrock)"
-        command: "julia --color=yes --project=ode_compat_examples perf/benchmark.jl --job_id bm_perf_target_rosenbrock --ode_algo ODE.Rosenbrock23"
-        agents:
-          slurm_mem: 20GB
-
       - label: ":computer: Benchmark: perf target (Threaded)"
         command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target_threaded --enable_threading true"
         agents:
@@ -606,6 +703,12 @@ steps:
       - label: ":fire: Flame graph: perf target (with tracers)"
         command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_tracers --perf_mode PerfExperimental"
         artifact_paths: "flame_perf_target_tracers/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":fire: Flame graph: perf target (edmfx)"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_edmfx --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmfx"
+        artifact_paths: "flame_perf_target_edmfx/*"
         agents:
           slurm_mem: 20GB
 

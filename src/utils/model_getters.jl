@@ -18,6 +18,8 @@ function get_model_config(parsed_args)
         SingleColumnModel()
     elseif config == "box"
         BoxModel()
+    elseif config == "plane"
+        PlaneModel()
     end
 end
 
@@ -33,18 +35,15 @@ function get_coupling_type(parsed_args)
 end
 
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
-    enable_qt = parsed_args["enable_qt_hyperdiffusion"]
     hyperdiff_name = parsed_args["hyperdiff"]
     κ₄ = FT(parsed_args["kappa_4"])
-    divergence_damping_factor = FT(1)
-    return if hyperdiff_name == "ClimaHyperdiffusion"
-        ClimaHyperdiffusion{enable_qt, FT}(; κ₄, divergence_damping_factor)
-    elseif hyperdiff_name == "TempestHyperdiffusion"
-        TempestHyperdiffusion{enable_qt, FT}(; κ₄, divergence_damping_factor)
-    elseif hyperdiff_name == "none" || hyperdiff_name == "false"
+    divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
+    return if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
+        ClimaHyperdiffusion(; κ₄, divergence_damping_factor)
+    elseif hyperdiff_name in ("none", "false", false)
         nothing
     else
-        error("Uncaught diffusion model type.")
+        error("Uncaught hyperdiffusion model type.")
     end
 end
 
@@ -310,7 +309,7 @@ function get_turbconv_model(
     turbconv_params,
 )
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in (nothing, "edmf")
+    @assert turbconv in (nothing, "edmf", "edmfx")
 
     return if turbconv == "edmf"
         TC.EDMFModel(
@@ -320,6 +319,8 @@ function get_turbconv_model(
             parsed_args,
             turbconv_params,
         )
+    elseif turbconv == "edmfx"
+        EDMFX{turbconv_params.updraft_number}(turbconv_params.min_area)
     else
         nothing
     end
@@ -343,15 +344,4 @@ function get_surface_scheme(FT, parsed_args)
     elseif surface_scheme == nothing
         surface_scheme
     end
-end
-
-"""
-    ThermoDispatcher(atmos)
-
-A helper method for creating a thermodynamics dispatcher
-from the model specification struct.
-"""
-function ThermoDispatcher(atmos)
-    (; energy_form, moisture_model) = atmos
-    return ThermoDispatcher(; energy_form, moisture_model)
 end

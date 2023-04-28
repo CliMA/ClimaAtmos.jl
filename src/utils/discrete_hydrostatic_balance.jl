@@ -2,7 +2,6 @@ import Thermodynamics as TD
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
-import ClimaCore.Operators as Operators
 import ClimaAtmos.InitialConditions as ICs
 
 """
@@ -11,7 +10,6 @@ Modify the energy variable in state `Y` given Y and the cache `p` so that
 `Y` is in discrete hydrostatic balance.
 """
 function set_discrete_hydrostatic_balanced_state!(Y, p)
-    ᶜinterp = Operators.InterpolateF2C()
     FT = Spaces.undertype(axes(Y.c))
     ᶠgradᵥ_ᶜp = similar(Y.f.w)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
@@ -74,10 +72,6 @@ function set_discrete_hydrostatic_balanced_pressure!(
     p1,
     colidx,
 )
-    ᶠinterp = Operators.InterpolateC2F(
-        bottom = Operators.Extrapolate(),
-        top = Operators.Extrapolate(),
-    )
     @. ᶠgradᵥ_ᶜp[colidx] = -(ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(ᶜρ[colidx]))
     ᶜp_data = Fields.field_values(ᶜp[colidx])
     ᶠgradᵥ_ᶜp_data = Fields.field_values(ᶠgradᵥ_ᶜp[colidx])

@@ -35,7 +35,7 @@ end
 
 #! format: off
 
-dict = parsed_args_per_job_id(; trigger = "benchmark.jl")
+dict = parsed_args_per_job_id(; filter_name = "benchmark.jl")
 for k in keys(dict)
     dict[k]["job_id"] = "allocs_"*dict[k]["job_id"]
 
@@ -44,7 +44,7 @@ for k in keys(dict)
     dict[k]["z_elem"] = 18
 end
 cli_options = [
-    non_default_command_line_flags_parsed_args(dict["perf_target_unthreaded"]),
+    non_default_command_line_flags_parsed_args(dict["bm_perf_target"]),
 ]
 #! format: on
 

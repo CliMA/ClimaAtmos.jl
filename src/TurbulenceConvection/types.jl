@@ -6,25 +6,13 @@ Storage for tendencies due to precipitation formation
 $(DocStringExtensions.FIELDS)
 """
 Base.@kwdef struct PrecipFormation{FT}
-    θ_liq_ice_tendency::FT
-    e_tot_tendency::FT
-    qt_tendency::FT
-    ql_tendency::FT
-    qi_tendency::FT
-    qr_tendency::FT
-    qs_tendency::FT
-end
-
-"""
-    NoneqMoistureSources
-
-Storage for tendencies due to nonequilibrium moisture formation
-
-$(DocStringExtensions.FIELDS)
-"""
-Base.@kwdef struct NoneqMoistureSources{FT}
-    ql_tendency::FT
-    qi_tendency::FT
+    θ_liq_ice_tendency::FT = FT(0)
+    e_tot_tendency::FT = FT(0)
+    qt_tendency::FT = FT(0)
+    ql_tendency::FT = FT(0)
+    qi_tendency::FT = FT(0)
+    qr_tendency::FT = FT(0)
+    qs_tendency::FT = FT(0)
 end
 
 """
@@ -36,16 +24,19 @@ $(DocStringExtensions.FIELDS)
 """
 Base.@kwdef struct GradBuoy{FT}
     "environmental vertical buoyancy gradient"
-    ∂b∂z::FT
+    ∂b∂z::FT = FT(0)
     "vertical buoyancy gradient in the unsaturated part of the environment"
-    ∂b∂z_unsat::FT
+    ∂b∂z_unsat::FT = FT(0)
     "vertical buoyancy gradient in the saturated part of the environment"
-    ∂b∂z_sat::FT
+    ∂b∂z_sat::FT = FT(0)
 end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 struct BuoyGradQuadratures <: AbstractEnvBuoyGradClosure end
+
+Base.broadcastable(x::BuoyGradMean) = tuple(x)
+Base.broadcastable(x::BuoyGradQuadratures) = tuple(x)
 
 """
     EnvBuoyGrad
@@ -79,24 +70,11 @@ Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
     ρ::FT
 end
 function EnvBuoyGrad(
-    ::EBG;
+    ::EBG,
     t_sat::FT,
-    bg_kwargs...,
+    args...,
 ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
-    return EnvBuoyGrad{FT, EBG}(; t_sat, bg_kwargs...)
-end
-
-Base.@kwdef struct MixingLengthParams{FT}
-    ω_pr::FT # cospectral budget factor for turbulent Prandtl number
-    c_m::FT # tke diffusivity coefficient
-    c_d::FT # tke dissipation coefficient
-    c_b::FT # static stability coefficient
-    κ_star²::FT # Ratio of TKE to squared friction velocity in surface layer
-    Pr_n::FT # turbulent Prandtl number in neutral conditions
-    Ri_c::FT # critical Richardson number
-    smin_ub::FT # lower limit for smin function
-    smin_rm::FT # upper ratio limit for smin function
-    l_max::FT
+    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
 end
 
 """
@@ -127,12 +105,6 @@ Base.@kwdef struct MinDisspLen{FT}
     tke::FT
     "Updraft tke source"
     b_exch::FT
-end
-
-Base.@kwdef struct PressureModelParams{FT}
-    α_b::FT # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
-    α_a::FT # factor multiplier for pressure advection
-    α_d::FT # factor multiplier for pressure drag
 end
 
 abstract type AbstractSurfaceParameters{FT <: Real} end
@@ -189,24 +161,19 @@ cm(surf) = surf.Cd
 ch(surf) = surf.Ch
 bflux(surf) = surf.buoy_flux
 get_ustar(surf) = surf.ustar
-get_ρe_tot_flux(surf, thermo_params, ts_in) = shf(surf) + lhf(surf)
-get_ρq_tot_flux(surf, thermo_params, ts_in) =
-    lhf(surf) / TD.latent_heat_vapor(thermo_params, ts_in)
+get_ρe_tot_flux(surf) = shf(surf) + lhf(surf)
+get_ρq_tot_flux(surf) = surf.evaporation
 get_ρu_flux(surf) = surf.ρτxz
 get_ρv_flux(surf) = surf.ρτyz
 obukhov_length(surf) = surf.L_MO
 
-
-struct EDMFModel{N_up, FT, MM, PM, EBGC, MLP, PMP}
+struct EDMFModel{N_up, FT, MM, PM, EBGC}
     surface_area::FT
     max_area::FT
     minimum_area::FT
     moisture_model::MM
     precip_model::PM
     bg_closure::EBGC
-    mixing_length_params::MLP
-    pressure_model_params::PMP
-    H_up_min::FT # minimum updraft top to avoid zero division in pressure drag and turb-entr
     zero_uv_fluxes::Bool
 end
 function EDMFModel(
@@ -234,43 +201,16 @@ function EDMFModel(
         )
     end
 
-    # minimum updraft top to avoid zero division in pressure drag and turb-entr
-    H_up_min = turbconv_params.min_updraft_top
-
-    pressure_model_params = PressureModelParams{FT}(;
-        α_b = turbconv_params.pressure_normalmode_buoy_coeff1,
-        α_a = turbconv_params.pressure_normalmode_adv_coeff,
-        α_d = turbconv_params.pressure_normalmode_drag_coeff,
-    )
-
-    mixing_length_params = MixingLengthParams{FT}(;
-        ω_pr = turbconv_params.Prandtl_number_scale,
-        c_m = turbconv_params.tke_ed_coeff,
-        c_d = turbconv_params.tke_diss_coeff,
-        c_b = turbconv_params.static_stab_coeff, # this is here due to a value error in CliMAParmameters.j,
-        κ_star² = turbconv_params.tke_surf_scale,
-        Pr_n = turbconv_params.Prandtl_number_0,
-        Ri_c = turbconv_params.Ri_crit,
-        smin_ub = turbconv_params.smin_ub,
-        smin_rm = turbconv_params.smin_rm,
-        l_max = turbconv_params.l_max,
-    )
-
     MM = typeof(moisture_model)
     PM = typeof(precip_model)
     EBGC = typeof(bg_closure)
-    MLP = typeof(mixing_length_params)
-    PMP = typeof(pressure_model_params)
-    return EDMFModel{n_updrafts, FT, MM, PM, EBGC, MLP, PMP}(
+    return EDMFModel{n_updrafts, FT, MM, PM, EBGC}(
         surface_area,
         max_area,
         minimum_area,
         moisture_model,
         precip_model,
         bg_closure,
-        mixing_length_params,
-        pressure_model_params,
-        H_up_min,
         zero_uv_fluxes,
     )
 end
@@ -278,8 +218,6 @@ end
 parameter_set(obj) = obj.param_set
 n_updrafts(::EDMFModel{N_up}) where {N_up} = N_up
 Base.eltype(::EDMFModel{N_up, FT}) where {N_up, FT} = FT
-pressure_model_params(m::EDMFModel) = m.pressure_model_params
-mixing_length_params(m::EDMFModel) = m.mixing_length_params
 
 Base.broadcastable(edmf::EDMFModel) = tuple(edmf)
 
@@ -315,9 +253,10 @@ function Base.summary(io::IO, edmf::EDMFModel)
 end
 
 
-struct State{P, A, T, CACHE, C}
+struct State{P, A, TS, T, CACHE, C}
     prog::P
     aux::A
+    ts_sfc::TS
     tendencies::T
     p::CACHE
     colidx::C
@@ -390,7 +329,15 @@ float_type(state::State) = eltype(state.prog)
 float_type(field::CC.Fields.Field) = eltype(parent(field))
 
 
-function tc_column_state(prog, p, tendencies, colidx)
+function tc_column_state(
+    prog,
+    p,
+    tendencies,
+    colidx,
+    surf_params,
+    thermo_params,
+    t,
+)
     prog_cent_column = CC.column(prog.c, colidx)
     prog_face_column = CC.column(prog.f, colidx)
     aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
@@ -405,11 +352,20 @@ function tc_column_state(prog, p, tendencies, colidx)
         cent = tends_cent_column,
         face = tends_face_column,
     )
+    ts = surface_thermo_state(surf_params, thermo_params, t)
 
-    return State(prog_column, aux_column, tends_column, p, colidx)
+    return State(prog_column, aux_column, ts, tends_column, p, colidx)
 end
 
-function tc_column_state(prog, p, tendencies::Nothing, colidx)
+function tc_column_state(
+    prog,
+    p,
+    tendencies::Nothing,
+    colidx,
+    surf_params,
+    thermo_params,
+    t,
+)
     prog_cent_column = CC.column(prog.c, colidx)
     prog_face_column = CC.column(prog.f, colidx)
     aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
@@ -419,6 +375,7 @@ function tc_column_state(prog, p, tendencies::Nothing, colidx)
     aux_column =
         CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
     tends_column = nothing
+    ts_sfc = surface_thermo_state(surf_params, thermo_params, t)
 
-    return State(prog_column, aux_column, tends_column, p, colidx)
+    return State(prog_column, aux_column, ts_sfc, tends_column, p, colidx)
 end

@@ -33,25 +33,32 @@ In order to extend this function to new sub-models, add more functions of the
 form `variables(ls, model, args...)`, where `args` can be used for dispatch or
 for avoiding duplicate computations.
 """
-atmos_center_variables(ls, atmos_model::AtmosModel) = (;
-    ρ = ls.ρ,
-    uₕ = Geometry.project(Geometry.Covariant12Axis(), ls.velocity, ls.geometry),
-    energy_variables(ls, atmos_model.energy_form)...,
-    moisture_variables(ls, atmos_model.moisture_model)...,
-    precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
-    turbconv_center_variables(ls, atmos_model.turbconv_model)...,
-)
+function atmos_center_variables(ls, atmos_model)
+    gs_vars = grid_scale_center_variables(ls, atmos_model)
+    sgs_vars =
+        turbconv_center_variables(ls, atmos_model.turbconv_model, gs_vars)
+    return (; gs_vars..., sgs_vars...)
+end
 
 """
     atmos_face_variables(ls, atmos_model)
 
 Like `atmos_center_variables`, but for cell faces.
 """
-atmos_face_variables(ls, atmos_model::AtmosModel) = (;
-    w = Geometry.project(Geometry.Covariant3Axis(), ls.velocity, ls.geometry),
+atmos_face_variables(ls, atmos_model) = (;
+    w = C3(ls.velocity, ls.geometry),
     turbconv_face_variables(ls, atmos_model.turbconv_model)...,
 )
 
+grid_scale_center_variables(ls, atmos_model) = (;
+    ρ = ls.ρ,
+    uₕ = C12(ls.velocity, ls.geometry),
+    energy_variables(ls, atmos_model.energy_form)...,
+    moisture_variables(ls, atmos_model.moisture_model)...,
+    precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
+)
+
+# TODO: Rename ρθ to ρθ_liq_ice.
 energy_variables(ls, ::PotentialTemperature) =
     (; ρθ = ls.ρ * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state))
 energy_variables(ls, ::TotalEnergy) = (;
@@ -90,28 +97,44 @@ precip_variables(ls, _, ::PerfExperimental) =
     (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
 
 # We can use paper-based cases for LES type configurations (no TKE)
-# or SGS type configurations (initial TKE needed)
-turbconv_center_variables(ls, ::Nothing) = (;)
-function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel)
-    ρa = ls.ρ * turbconv_model.minimum_area
-    ρaθ_liq_ice = ρa * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state)
-    ρaq_tot = ρa * TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    n_up = TC.n_updrafts(turbconv_model)
-    ρa_en_tke = (ls.ρ - n_up * ρa) * ls.turbconv_state.tke
-    return (;
-        turbconv = (;
-            en = (; ρatke = ρa_en_tke),
-            up = ntuple(_ -> (; ρarea = ρa, ρaθ_liq_ice, ρaq_tot), Val(n_up)),
+# or SGS type configurations (initial TKE needed), so we do not need to assert
+# that there is no TKE when there is no turbconv_model.
+turbconv_center_variables(ls, ::Nothing, gs_vars) = (;)
+function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel, gs_vars)
+    n = TC.n_updrafts(turbconv_model)
+    a_draft = max(ls.turbconv_state.draft_area, n * turbconv_model.minimum_area)
+    ρa = ls.ρ * a_draft / n
+    ρae_tot =
+        ρa * (
+            TD.internal_energy(ls.thermo_params, ls.thermo_state) +
+            norm_sqr(ls.velocity) / 2 +
+            CAP.grav(ls.params) * ls.geometry.coordinates.z
         )
-    )
+    ρaq_tot = ρa * TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    en = (; ρatke = (ls.ρ - n * ρa) * ls.turbconv_state.tke)
+    up = ntuple(_ -> (; ρarea = ρa, ρae_tot, ρaq_tot), Val(n))
+    return (; turbconv = (; en, up))
+end
+function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
+    n = n_mass_flux_subdomains(turbconv_model)
+    a_draft = ls.turbconv_state.draft_area
+    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    sgsʲs = ntuple(_ -> gs_to_sgs(gs_vars, a_draft / n), Val(n))
+    return (; sgs⁰, sgsʲs)
 end
 
 turbconv_face_variables(ls, ::Nothing) = (;)
 turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
     turbconv = (;
         up = ntuple(
-            _ -> (; w = Geometry.Covariant3Vector(zero(eltype(ls)))),
+            _ -> (; w = C3(zero(eltype(ls)))),
             Val(TC.n_updrafts(turbconv_model)),
         )
+    )
+)
+turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
+    sgsʲs = ntuple(
+        _ -> (; w = C3(zero(eltype(ls)))),
+        Val(n_mass_flux_subdomains(turbconv_model)),
     )
 )

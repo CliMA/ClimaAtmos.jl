@@ -49,7 +49,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         )
         if CA.is_cts_algo(ode_algo)
             CTS.ClimaODEFunction(;
-                T_lim! = CA.horizontal_limiter_tendency!,
+                T_lim! = CA.limited_tendency!,
                 T_exp! = remaining_tendency!,
                 T_imp! = implicit_func,
                 # Can we just pass implicit_tendency! and jac_prototype etc.?

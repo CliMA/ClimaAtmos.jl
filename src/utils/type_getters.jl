@@ -65,6 +65,8 @@ function get_numerics(parsed_args)
     numerics = (;
         energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"])),
         tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
+        density_upwinding = Val(Symbol(parsed_args["density_upwinding"])),
+        edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"])),
         apply_limiter = parsed_args["apply_limiter"],
         bubble = parsed_args["bubble"],
     )
@@ -83,9 +85,13 @@ function get_spaces(parsed_args, params, comms_ctx)
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth")
+    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
+    elseif topography == "Agnesi"
+        warp_function = topography_agnesi
+    elseif topography == "Schar"
+        warp_function = topography_schar
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
@@ -99,7 +105,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
             linear_interpolation(
                 (lon, lat),
-                zlevels,
+                esmth,
                 extrapolation_bc = (Periodic(), Flat()),
             )
         end
@@ -177,7 +183,35 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(
+            h_space,
+            z_max,
+            z_elem,
+            z_stretch;
+            surface_warp = warp_function,
+        )
+    elseif parsed_args["config"] == "plane"
+        FT = eltype(params)
+        nh_poly = parsed_args["nh_poly"]
+        quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+        x_elem = Int(parsed_args["x_elem"])
+        x_max = FT(parsed_args["x_max"])
+        horizontal_mesh =
+            periodic_line_mesh(; x_max = x_max, x_elem = x_elem)
+        h_space =
+            make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
+        z_stretch = if parsed_args["z_stretch"]
+            Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+        else
+            Meshes.Uniform()
+        end
+        make_hybrid_spaces(
+            h_space,
+            z_max,
+            z_elem,
+            z_stretch;
+            surface_warp = warp_function,
+        )
     end
     return (;
         center_space,
@@ -221,13 +255,22 @@ end
 
 function get_initial_condition(parsed_args)
     if isnothing(parsed_args["turbconv_case"])
-        if parsed_args["initial_condition"] in
-           ["DryBaroclinicWave", "MoistBaroclinicWave", "DecayingProfile"]
+        if parsed_args["initial_condition"] in [
+            "DryBaroclinicWave",
+            "MoistBaroclinicWave",
+            "DecayingProfile",
+            "MoistBaroclinicWaveWithEDMF",
+        ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
                 parsed_args["perturb_initstate"],
             )
-        elseif parsed_args["initial_condition"] in
-               ["IsothermalProfile", "Bomex"]
+        elseif parsed_args["initial_condition"] in [
+            "IsothermalProfile",
+            "Bomex",
+            "AgnesiHProfile",
+            "DryDensityCurrentProfile",
+            "ScharProfile",
+        ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
         else
             error(
@@ -244,6 +287,9 @@ end
 
 import ClimaTimeSteppers as CTS
 import OrdinaryDiffEq as ODE
+
+is_explicit_CTS_algo_type(alg_or_tableau) =
+    alg_or_tableau <: CTS.ERKAlgorithmName
 
 is_imex_CTS_algo_type(alg_or_tableau) =
     alg_or_tableau <: CTS.IMEXARKAlgorithmName
@@ -327,7 +373,9 @@ function ode_configuration(Y, parsed_args, atmos)
     end
     @info "Using ODE config: `$alg_or_tableau`"
 
-    if !is_implicit_type(alg_or_tableau)
+    if is_explicit_CTS_algo_type(alg_or_tableau)
+        return CTS.ExplicitAlgorithm(alg_or_tableau())
+    elseif !is_implicit_type(alg_or_tableau)
         return alg_or_tableau()
     elseif is_ordinary_diffeq_newton(alg_or_tableau)
         if parsed_args["max_newton_iters"] == 1
@@ -378,3 +426,8 @@ function get_integrator(args, kwargs)
     @time "Define integrator" integrator = ODE.init(args...; kwargs...)
     return integrator
 end
+
+thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
+thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
+thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
+    TD.PhaseNonEquil{FT}

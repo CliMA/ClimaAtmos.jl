@@ -30,20 +30,18 @@ radiation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 function radiation_model_cache(
     Y,
+    default_cache,
     params,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode = RRTMGPI.ClearSkyRadiation();
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
     idealized_insolation = true,
     idealized_clouds = false,
-    thermo_dispatcher,
     data_loader,
 )
     (; idealized_h2o) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
-    ᶜinterp = Operators.InterpolateF2C()
     rrtmgp_params = CAP.rrtmgp_params(params)
-    thermo_params = CAP.thermodynamics_params(params)
     if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
         error("idealized_h2o can't be used with $radiation_mode")
     end
@@ -87,10 +85,8 @@ function radiation_model_cache(
                 input_center_pressure,
                 input_center_volume_mixing_ratio_o3,
             )
-            ᶜts = thermo_state(Y, thermo_params, thermo_dispatcher, ᶜinterp)
-            ᶜp = @. TD.air_pressure(thermo_params, ᶜts)
             center_volume_mixing_ratio_o3 =
-                RRTMGPI.field2array(@. FT(pressure2ozone(ᶜp)))
+                RRTMGPI.field2array(@. FT(pressure2ozone(default_cache.ᶜp)))
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value
@@ -221,7 +217,6 @@ function radiation_model_cache(
 end
 function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
     (; ᶠradiation_flux) = p
-    ᶜdivᵥ = Operators.DivergenceF2C()
     if :ρθ in propertynames(Y.c)
         error("radiation_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)

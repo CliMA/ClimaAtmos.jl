@@ -2,156 +2,167 @@
 ##### Implicit tendencies
 #####
 
-import Thermodynamics as TD
-import LinearAlgebra: norm_sqr, dot
-import ClimaCore.Fields as Fields
-import ClimaCore.Geometry as Geometry
-import ClimaCore.Operators as Operators
-import ClimaCore.Spaces as Spaces
-
-# TODO: add types and use dispatch instead of specializing with Val
-#       for operators and optionally populate cache
+import ClimaCore: Fields
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
-function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:none})
-    (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠinterp) = p.operators
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜρc / ᶜρ)))
-end
-function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:first_order})
-    (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1) = p.operators
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ)))
-end
-function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:third_order})
-    (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind3) = p.operators
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
-    @. ᶜρcₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜρc / ᶜρ)))
-end
-function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:boris_book})
-    (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1, ᶠupwind3, ᶠfct_boris_book) = p.operators
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
-    @. ᶜρcₜ =
-        -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-            ᶠwinterp(ᶜJ, ᶜρ) * ᶠfct_boris_book(
-                ᶠupwind3(ᶠu³, ᶜρc / ᶜρ) - ᶠupwind1(ᶠu³, ᶜρc / ᶜρ),
-                (ᶜρc / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) /
-                ᶜρ,
+# TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
+# expressions are less convoluted?
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}) =
+    @. ᶜρχₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}) =
+    @. ᶜρχₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(ᶠupwind1(ᶠu³, ᶜχ))))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}) =
+    @. ᶜρχₜ = -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(ᶠupwind3(ᶠu³, ᶜχ))))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book}) =
+    @. ᶜρχₜ = -(ᶜdivᵥ(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(
+            ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
+                ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
+                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
             ),
-        )
-end
-function vertical_transport!(ᶜρcₜ, ᶠu³, ᶜρ, ᶜρc, p, ::Val{:zalesak})
-    (; dt) = p.simulation
-    (; ᶜdivᵥ, ᶠwinterp, ᶠupwind1, ᶠupwind3, ᶠfct_zalesak) = p.operators
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρc)).J
-    @. ᶜρcₜ =
-        -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) - ᶜdivᵥ(
-            ᶠwinterp(ᶜJ, ᶜρ) * ᶠfct_zalesak(
-                ᶠupwind3(ᶠu³, ᶜρc / ᶜρ) - ᶠupwind1(ᶠu³, ᶜρc / ᶜρ),
-                ᶜρc / ᶜρ / dt,
-                (ᶜρc / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜρc / ᶜρ))) /
-                ᶜρ,
+        ),
+    ))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}) =
+    @. ᶜρχₜ = -(ᶜdivᵥ(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠset_upwind_bcs(
+            ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
+                ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
+                ᶜχ / dt,
+                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
             ),
-        )
-end
-
-#=
-
-TODO: can we delete this?
-
-# Used for automatically computing the Jacobian ∂Yₜ/∂Y. Currently requires
-# allocation because the cache is stored separately from Y, which means that
-# similar(Y, <:Dual) doesn't allocate an appropriate cache for computing Yₜ.
-
-function implicit_cache_vars(
-    Y::Fields.FieldVector{T},
-    p,
-) where {T <: AbstractFloat}
-    (; ᶜK, ᶜts, ᶜp) = p
-    return (; ᶜK, ᶜts, ᶜp)
-end
-
-import ForwardDiff: Dual
-function implicit_cache_vars(Y::Fields.FieldVector{T}, p) where {T <: Dual}
-    ᶜρ = Y.c.ρ
-    ᶜK = similar(ᶜρ)
-    ᶜts = similar(ᶜρ, eltype(p.ts).name.wrapper{eltype(ᶜρ)})
-    ᶜp = similar(ᶜρ)
-    return (; ᶜK, ᶜts, ᶜp)
-end
-=#
+        ),
+    ))
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    FT = Spaces.undertype(axes(Y.c))
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠw = Y.f.w
-    (; ᶜK, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ᶠu³, params, thermo_dispatcher) = p
-    (; ᶜρ_ref, ᶜp_ref) = p
-    (; energy_upwinding, tracer_upwinding, simulation) = p
-    (; ᶠgradᵥ, ᶜinterp, ᶠinterp, ᶠwinterp) = p.operators
-    thermo_params = CAP.thermodynamics_params(params)
-    dt = simulation.dt
-    # TODO: can we move this to implicit tendencies?
+    (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
+        p
+    (; turbconv_model, rayleigh_sponge) = p.atmos
+    (; dt) = p.simulation
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    (; ᶜspecific, ᶠu³, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, ᶜtemp_scalar) = p
+    if n > 0
+        (; ᶜspecific⁰, ᶜρa⁰, ᶠu³⁰, ᶜspecificʲs, ᶠu³ʲs, ᶜρʲs) = p
+    end
 
+    ᶜ1 = ᶜtemp_scalar
+    @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
     vertical_transport!(
         Yₜ.c.ρ[colidx],
+        ᶜJ[colidx],
+        Y.c.ρ[colidx],
         ᶠu³[colidx],
-        ᶜρ[colidx],
-        ᶜρ[colidx],
-        p,
-        Val(:none),
+        ᶜ1[colidx],
+        dt,
+        density_upwinding,
     )
-
-    if :ρθ in propertynames(Y.c)
+    for j in 1:n
         vertical_transport!(
-            Yₜ.c.ρθ[colidx],
-            ᶠu³[colidx],
-            ᶜρ[colidx],
-            Y.c.ρθ[colidx],
-            p,
-            energy_upwinding,
+            Yₜ.c.sgsʲs.:($j).ρa[colidx],
+            ᶜJ[colidx],
+            Y.c.sgsʲs.:($j).ρa[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            ᶜ1[colidx],
+            dt,
+            edmfx_upwinding,
         )
-    elseif :ρe_tot in propertynames(Y.c)
-        (; ᶜρh) = p
-        @. ᶜρh[colidx] = Y.c.ρe_tot[colidx] + ᶜp[colidx]
+    end
+
+    if :ρe_tot in propertynames(Yₜ.c)
+        ᶜh_tot = ᶜtemp_scalar
+        @. ᶜh_tot[colidx] = ᶜspecific.e_tot[colidx] + ᶜp[colidx] / Y.c.ρ[colidx]
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
+            ᶜJ[colidx],
+            Y.c.ρ[colidx],
             ᶠu³[colidx],
-            ᶜρ[colidx],
-            ᶜρh[colidx],
-            p,
+            ᶜh_tot[colidx],
+            dt,
             energy_upwinding,
         )
     end
-
-    Yₜ.c.uₕ[colidx] .= tuple(zero(eltype(Yₜ.c.uₕ[colidx])))
-
-    @. Yₜ.f.w[colidx] = -(
-        ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) / ᶠinterp(ᶜρ[colidx]) +
-        (ᶠinterp(ᶜρ[colidx] - ᶜρ_ref[colidx])) / ᶠinterp(ᶜρ[colidx]) *
-        ᶠgradᵥ_ᶜΦ[colidx]
-    )
-    if p.atmos.rayleigh_sponge isa RayleighSponge
-        @. Yₜ.f.w[colidx] -= p.ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
-    end
-
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ᶜρcₜ = getproperty(Yₜ.c, ᶜρc_name)
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
+    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+        χ_name == :e_tot && continue
         vertical_transport!(
-            ᶜρcₜ[colidx],
+            ᶜρχₜ[colidx],
+            ᶜJ[colidx],
+            Y.c.ρ[colidx],
             ᶠu³[colidx],
-            ᶜρ[colidx],
-            ᶜρc[colidx],
-            p,
-            tracer_upwinding,
+            ᶜχ[colidx],
+            dt,
+            χ_name == :θ ? energy_upwinding : tracer_upwinding,
         )
     end
-    return nothing
+    if n > 0
+        for (ᶜρaχ⁰ₜ, ᶜχ⁰, _) in matching_subfields(Yₜ.c.sgs⁰, ᶜspecific⁰)
+            vertical_transport!(
+                ᶜρaχ⁰ₜ[colidx],
+                ᶜJ[colidx],
+                ᶜρa⁰[colidx],
+                ᶠu³⁰[colidx],
+                ᶜχ⁰[colidx],
+                dt,
+                edmfx_upwinding,
+            )
+        end
+    end
+    for j in 1:n
+        if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
+            ᶜh_totʲ = ᶜtemp_scalar
+            @. ᶜh_totʲ[colidx] =
+                ᶜspecificʲs.:($$j).e_tot[colidx] +
+                ᶜp[colidx] / ᶜρʲs.:($$j)[colidx]
+            vertical_transport!(
+                Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
+                ᶜJ[colidx],
+                Y.c.sgsʲs.:($j).ρa[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                ᶜh_totʲ[colidx],
+                dt,
+                edmfx_upwinding,
+            )
+            # This assumes Yₜ.c.sgsʲs.:($$j).ρa only contains the vertical advection
+            @. Yₜ.c.sgsʲs.:($$j).ρae_tot[colidx] -=
+                (ᶜp[colidx] / Y.c.ρ[colidx]) * Yₜ.c.sgsʲs.:($$j).ρa[colidx]
+        end
+        for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
+            matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
+            χ_name == :e_tot && continue
+            vertical_transport!(
+                ᶜρaχʲₜ[colidx],
+                ᶜJ[colidx],
+                Y.c.sgsʲs.:($j).ρa[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                ᶜχʲ[colidx],
+                dt,
+                edmfx_upwinding,
+            )
+        end
+    end
+
+    @. Yₜ.c.uₕ[colidx] = zero(Yₜ.c.uₕ[colidx])
+
+    @. Yₜ.f.w[colidx] =
+        -(
+            ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
+            ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+        ) / ᶠinterp(Y.c.ρ[colidx])
+    for j in 1:n
+        @. Yₜ.f.sgsʲs.:($$j).w[colidx] =
+            -(
+                ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
+                ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
+                ᶠgradᵥ_ᶜΦ[colidx]
+            ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
+    end
+
+    if rayleigh_sponge isa RayleighSponge
+        (; ᶠβ_rayleigh_w) = p
+        @. Yₜ.f.w[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).w[colidx] -=
+                ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).w[colidx]
+        end
+    end
 end

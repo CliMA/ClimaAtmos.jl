@@ -1,10 +1,7 @@
 import ClimaAtmos as CA
 using ClimaCore: Fields
 
-# To add additional terms to the explicit part of the tendency, define new
-# methods for `additional_cache` and `additional_tendency!`.
-
-get_cache(
+function get_cache(
     Y,
     parsed_args,
     params,
@@ -13,8 +10,8 @@ get_cache(
     numerics,
     simulation,
     comms_ctx,
-) = merge(
-    CA.default_cache(
+)
+    default_cache = CA.default_cache(
         Y,
         parsed_args,
         params,
@@ -23,23 +20,31 @@ get_cache(
         numerics,
         simulation,
         comms_ctx,
-    ),
-    additional_cache(Y, parsed_args, params, atmos, simulation.dt),
-)
+    )
+    merge(
+        default_cache,
+        additional_cache(
+            Y,
+            default_cache,
+            parsed_args,
+            params,
+            atmos,
+            simulation.dt,
+        ),
+    )
+end
 
 function implicit_tendency!(Yₜ, Y, p, t)
     p.test_dycore_consistency && CA.fill_with_nans!(p)
-    @nvtx "precomputed quantities" color = colorant"orange" begin
-        CA.precomputed_quantities!(Y, p, t)
-    end
     @nvtx "implicit tendency" color = colorant"yellow" begin
+        Yₜ .= zero(eltype(Yₜ))
+        @nvtx "precomputed quantities" color = colorant"orange" begin
+            CA.set_precomputed_quantities!(Y, p, t)
+        end
         Fields.bycolumn(axes(Y.c)) do colidx
             CA.implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-
             if p.turbconv_model isa CA.TurbulenceConvection.EDMFModel
-                parent(Yₜ.c.turbconv[colidx]) .= zero(eltype(Yₜ))
-                parent(Yₜ.f.turbconv[colidx]) .= zero(eltype(Yₜ))
-                TCU.implicit_sgs_flux_tendency!(
+                CA.implicit_sgs_flux_tendency!(
                     Yₜ,
                     Y,
                     p,
@@ -57,10 +62,13 @@ function remaining_tendency!(Yₜ, Y, p, t)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin
-            CA.precomputed_quantities!(Y, p, t)
+            CA.set_precomputed_quantities!(Y, p, t)
         end
         @nvtx "horizontal" color = colorant"orange" begin
             CA.horizontal_advection_tendency!(Yₜ, Y, p, t)
+            @nvtx "hyperdiffusion tendency" color = colorant"yellow" begin
+                CA.hyperdiffusion_tendency!(Yₜ, Y, p, t)
+            end
         end
         @nvtx "vertical" color = colorant"orange" begin
             CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t)

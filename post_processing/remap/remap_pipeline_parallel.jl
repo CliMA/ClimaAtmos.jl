@@ -23,7 +23,7 @@ weightfile_0 = create_weightfile(data_files[1], remap_tmpdir, nlat, nlon)
     nlon = $nlon
 end
 pmap(data_files) do data_file
-    @info "Processor $(myid()) proccessing: $data_file"
+    @info "Processor $(myid()) processing: $data_file"
     remap2latlon(data_file, out_dir, remap_tmpdir, weightfile, nlat, nlon)
 end
 rm(remap_tmpdir; recursive = true)

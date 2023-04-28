@@ -6,53 +6,53 @@ using LinearAlgebra: norm_sqr
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
-import ClimaCore.Geometry as Geometry
 
-# In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if
-# this is not the case, the additional term should be added to the
-# result of this function.
-# In addition, we approximate the Jacobian for vertical transport with
-# FCT using the Jacobian for third-order upwinding (since only FCT
-# requires dt, we do not need to pass dt to this function).
-
-# TODO: store operators in `energy_upwinding` so that not all of them are always needed
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, operators, ::Val{:none})
-    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠinterp) = operators
+# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠw * ᶠinterp(ᶜρc / ᶜρ)), then
+# ∂(ᶜρcₜ)/∂(ᶠw_data) =
+#     -ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * ᶠw_unit * ᶠinterp(ᶜc)) -
+#     ᶜdivᵥ_stencil(ᶠw) * ᶠinterp_stencil(1) * ∂(ᶜρc)/∂(ᶠw_data)
+# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠw, ᶜρc / ᶜρ)), then
+# ∂(ᶜρcₜ)/∂(ᶠw_data) =
+#     -ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) *
+#     ᶠupwind(ᶠw + εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + εw)) -
+#     ᶜdivᵥ_stencil(ᶠinterp(ᶜρ)) * ᶠupwind_stencil(ᶠw, 1 / ᶜρ) *
+#     ∂(ᶜρc)/∂(ᶠw_data)
+# The εw is only necessary in case w = 0.
+# Since Operator2Stencil has not yet been extended to upwinding operators,
+# ᶠupwind_stencil is not available.
+# In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if this is
+# not the case, the additional term should be added to the result of this
+# function.
+# In addition, we approximate the Jacobian for vertical transport with FCT using
+# the Jacobian for third-order upwinding (since only FCT requires dt, we do not
+# need to pass dt to this function).
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     @. ∂ᶜρcₜ∂ᶠw =
         -(ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠw) * ᶠinterp(ᶜρc / ᶜρ)))
     return nothing
 end
-function vertical_transport_jac!(
-    ∂ᶜρcₜ∂ᶠw,
-    ᶠw,
-    ᶜρ,
-    ᶜρc,
-    operators,
-    ::Val{:first_order},
-)
-    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠupwind1) = operators
-    # To convert ᶠw to ᶠw_data, we extract the third vector component.
-    to_scalar(vector) = vector.u₃
-    FT = Spaces.undertype(axes(ᶜρ))
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:first_order})
+    # To convert ᶠw to ᶠw_data, we extract the third vector component and add an
+    # epsilon to it to avoid cancellation errors in upwinding.
+    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ref_εw = tuple(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠw + ref_εw, ᶜρc / ᶜρ) /
-        to_scalar(ᶠw + ref_εw),
+        ᶠwinterp(ᶜJ, ᶜρ) *
+        ᶠset_upwind_bcs(ᶠupwind1(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ)) /
+        magnitude_plus_eps(ᶠw),
     ))
     return nothing
 end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, operators, ::Val)
-    (; ᶜdivᵥ_stencil, ᶠwinterp, ᶠinterp, ᶠupwind3) = operators
-    # To convert ᶠw to ᶠw_data, we extract the third vector component.
-    to_scalar(vector) = vector.u₃
-    FT = Spaces.undertype(axes(ᶜρ))
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val)
+    # To convert ᶠw to ᶠw_data, we extract the third vector component and add an
+    # epsilon to it to avoid cancellation errors in upwinding.
+    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ref_εw = tuple(Geometry.Covariant3Vector(eps(FT)))
     @. ∂ᶜρcₜ∂ᶠw = -(ᶜdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠw + ref_εw, ᶜρc / ᶜρ) /
-        to_scalar(ᶠw + ref_εw),
+        ᶠwinterp(ᶜJ, ᶜρ) *
+        ᶠset_upwind_bcs(ᶠupwind3(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ)) /
+        magnitude_plus_eps(ᶠw),
     ))
     return nothing
 end
@@ -81,7 +81,7 @@ end
 function Wfact!(W, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
         p.test_dycore_consistency && fill_with_nans!(p)
-        precomputed_quantities!(Y, p, t)
+        set_precomputed_quantities!(Y, p, t)
         Fields.bycolumn(axes(Y.c)) do colidx
             Wfact!(W, Y, p, dtγ, t, colidx)
         end
@@ -89,22 +89,15 @@ function Wfact!(W, Y, p, dtγ, t)
 end
 
 function Wfact!(W, Y, p, dtγ, t, colidx)
-
-    (; ᶠgradᵥ, ᶠinterp, ᶠinterp_stencil, ᶠupwind1, ᶠgradᵥ_stencil) = p.operators
-    (; ᶜinterp, ᶜinterp_stencil, ᶠupwind3, ᶜdivᵥ_stencil) = p.operators
-
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
     ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
     ᶠw = Y.f.w
-    (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜts, ᶜp, ∂ᶜK∂ᶠw_data, params) = p
-    (; ᶜρ_ref, ᶜp_ref) = p
-    (; energy_upwinding, tracer_upwinding, thermo_dispatcher) = p
+    (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜρ_ref, ᶜp_ref, ∂ᶜK∂ᶠw_data, params) = p
+    (; energy_upwinding, tracer_upwinding) = p
 
     validate_flags!(Y, flags, energy_upwinding)
     FT = Spaces.undertype(axes(Y.c))
-    C123 = Geometry.Covariant123Vector
     compose = Operators.ComposeStencils()
 
     R_d = FT(CAP.R_d(params))
@@ -124,19 +117,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     # valued stencil coefficient.
     @inline to_scalar_coefs(vector_coefs) =
         map(vector_coef -> vector_coef.u₃, vector_coefs)
-    # If ᶜρcₜ = -ᶜdivᵥ(ᶠinterp(ᶜρc) * ᶠw), then
-    # ∂(ᶜρcₜ)/∂(ᶠw_data) =
-    #     -ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) * ᶠw_unit) -
-    #     ᶜdivᵥ_stencil(ᶠw) * ᶠinterp_stencil(1) * ∂(ᶜρc)/∂(ᶠw_data)
-    # If ᶜρcₜ = -ᶜdivᵥ(ᶠinterp(ᶜρ) * ᶠupwind(ᶠw, ᶜρc / ᶜρ)), then
-    # ∂(ᶜρcₜ)/∂(ᶠw_data) =
-    #     -ᶜdivᵥ_stencil(ᶠinterp(ᶜρc) *
-    #     ᶠupwind(ᶠw + εw, ᶜρc) / to_scalar(ᶠw + εw)) -
-    #     ᶜdivᵥ_stencil(ᶠinterp(ᶜρ)) * ᶠupwind_stencil(ᶠw, 1 / ᶜρ) *
-    #     ∂(ᶜρc)/∂(ᶠw_data)
-    # The εw is only necessary in case w = 0.
-    # Since Operator2Stencil has not yet been extended to upwinding
-    # operators, ᶠupwind_stencil is not available.
 
     # ᶜinterp(ᶠw) =
     #     ᶜinterp(ᶠw)_data * ᶜinterp(ᶠw)_unit =
@@ -162,7 +142,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         ᶠw[colidx],
         ᶜρ[colidx],
         ᶜρ[colidx],
-        p.operators,
         Val(:none),
     )
 
@@ -174,12 +153,11 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
             ᶠw[colidx],
             ᶜρ[colidx],
             ᶜρθ[colidx],
-            p.operators,
             energy_upwinding,
         )
     elseif :ρe_tot in propertynames(Y.c)
         ᶜρe = Y.c.ρe_tot
-        (; ᶜρh) = p
+        ᶜρh = p.ᶜtemp_scalar
         @. ᶜρh[colidx] = ᶜρe[colidx] + ᶜp[colidx]
         # vertical_transport!(Yₜ.c.ρe_tot, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
         vertical_transport_jac!(
@@ -187,7 +165,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
             ᶠw[colidx],
             ᶜρ[colidx],
             ᶜρh[colidx],
-            p.operators,
             energy_upwinding,
         )
         if energy_upwinding === Val(:none)
@@ -327,7 +304,6 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
             ᶠw[colidx],
             ᶜρ[colidx],
             ᶜρc[colidx],
-            p.operators,
             tracer_upwinding,
         )
     end
