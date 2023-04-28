@@ -74,7 +74,8 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if :θ in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
     elseif :e_tot in propertynames(ᶜspecific)
-        @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ - ᶜh_ref))
+        @. ᶜ∇²specific_energy =
+            wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ - ᶜh_ref))
     end
     if n > 0
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
