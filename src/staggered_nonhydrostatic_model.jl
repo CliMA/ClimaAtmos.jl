@@ -65,7 +65,7 @@ function default_cache(
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
     ᶜρ_ref = @. MSLP * exp(-grav * ᶜcoord.z / (R_d * T_ref)) / (R_d * T_ref)
     ᶜp_ref = @. ᶜρ_ref * R_d * T_ref
-    ᶜh_ref = @. ᶜp_ref / ᶜρ_ref + (cv_d * (T_ref - T_0) + grav * ᶜcoord.z)
+    ᶜh_ref = @. TD.total_specific_enthalpy(cv_d*(T_ref-T_0) + grav * ᶜcoord.z, R_d, T_ref)
     if !parsed_args["use_hyperdiff_reference_state"]
         ᶜh_ref .*= 0
     end
