@@ -12,6 +12,7 @@ end
 
 function get_model_config(parsed_args)
     config = parsed_args["config"]
+    @assert config in ("sphere", "column", "box", "plane")
     return if config == "sphere"
         SphericalModel()
     elseif config == "column"

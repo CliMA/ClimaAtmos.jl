@@ -1,4 +1,3 @@
-include(joinpath(dirname(dirname(@__DIR__)), "src", "utils", "yaml_helper.jl"))
 import ArgParse
 
 function parse_commandline()
@@ -474,7 +473,7 @@ whose keys are the `job_id`s from buildkite yaml.
 To run the `sphere_aquaplanet_rhoe_equilmoist_allsky`
 buildkite job from the standard buildkite pipeline, use:
 ```
-using Revise; include("examples/hybrid/cli_options.jl");
+using Revise; include("src/utils/cli_options.jl");
 dict = parsed_args_per_job_id();
 parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
 include("examples/hybrid/driver.jl")
