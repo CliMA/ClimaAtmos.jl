@@ -6,6 +6,11 @@ using ImageFiltering
 using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import LinearAlgebra
+import ClimaCore.Fields
+import OrdinaryDiffEq as ODE
+import ClimaTimeSteppers as CTS
+import DiffEqCallbacks as DEQ
 
 function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
 
@@ -285,9 +290,6 @@ function get_initial_condition(parsed_args)
     end
 end
 
-import ClimaTimeSteppers as CTS
-import OrdinaryDiffEq as ODE
-
 is_explicit_CTS_algo_type(alg_or_tableau) =
     alg_or_tableau <: CTS.ERKAlgorithmName
 
@@ -431,3 +433,188 @@ thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
 thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
 thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
+
+
+function get_callbacks(parsed_args, simulation, atmos, params)
+    FT = eltype(params)
+    (; dt) = simulation
+
+    tc_callbacks =
+        call_every_n_steps(turb_conv_affect_filter!; skip_first = true)
+    flux_accumulation_callback = call_every_n_steps(
+        flux_accumulation!;
+        skip_first = true,
+        call_at_end = true,
+    )
+
+    additional_callbacks =
+        if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+            # TODO: better if-else criteria?
+            dt_rad = if parsed_args["config"] == "column"
+                dt
+            else
+                FT(time_to_seconds(parsed_args["dt_rad"]))
+            end
+            (call_every_dt(rrtmgp_model_callback!, dt_rad),)
+        else
+            ()
+        end
+
+    if atmos.turbconv_model isa TC.EDMFModel
+        additional_callbacks = (additional_callbacks..., tc_callbacks)
+    end
+
+    if parsed_args["check_conservation"]
+        additional_callbacks =
+            (flux_accumulation_callback, additional_callbacks...)
+    end
+
+    dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
+    dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
+
+    dss_cb = if startswith(parsed_args["ode_algo"], "ODE.")
+        call_every_n_steps(dss_callback)
+    else
+        nothing
+    end
+    save_to_disk_callback = if dt_save_to_disk == Inf
+        nothing
+    elseif simulation.restart
+        call_every_dt(save_to_disk_func, dt_save_to_disk; skip_first = true)
+    else
+        call_every_dt(save_to_disk_func, dt_save_to_disk)
+    end
+
+    save_restart_callback = if dt_save_restart == Inf
+        nothing
+    else
+        call_every_dt(save_restart_func, dt_save_restart)
+    end
+
+    gc_callback = if simulation.is_distributed
+        call_every_n_steps(
+            gc_func,
+            parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
+            skip_first = true,
+        )
+    else
+        nothing
+    end
+
+    return ODE.CallbackSet(
+        dss_cb,
+        save_to_disk_callback,
+        save_restart_callback,
+        gc_callback,
+        additional_callbacks...,
+    )
+end
+
+
+function get_cache(
+    Y,
+    parsed_args,
+    params,
+    spaces,
+    atmos,
+    numerics,
+    simulation,
+    initial_condition,
+    comms_ctx,
+)
+    _default_cache = default_cache(
+        Y,
+        parsed_args,
+        params,
+        atmos,
+        spaces,
+        numerics,
+        simulation,
+        comms_ctx,
+    )
+    merge(
+        _default_cache,
+        additional_cache(
+            Y,
+            _default_cache,
+            parsed_args,
+            params,
+            atmos,
+            simulation.dt,
+            initial_condition,
+        ),
+    )
+end
+
+function get_simulation(::Type{FT}, parsed_args) where {FT}
+
+    job_id = if isnothing(parsed_args["job_id"])
+        (s, default_parsed_args) = parse_commandline()
+        job_id_from_parsed_args(s, parsed_args)
+    else
+        parsed_args["job_id"]
+    end
+    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+    out_dir = parsed_args["output_dir"]
+    output_dir = isnothing(out_dir) ? default_output : out_dir
+    mkpath(output_dir)
+
+    sim = (;
+        is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
+        is_debugging_tc = parsed_args["debugging_tc"],
+        output_dir,
+        restart = haskey(ENV, "RESTART_FILE"),
+        job_id,
+        dt = FT(time_to_seconds(parsed_args["dt"])),
+        start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
+        t_end = FT(time_to_seconds(parsed_args["t_end"])),
+    )
+    n_steps = floor(Int, sim.t_end / sim.dt)
+    @info(
+        "Time info:",
+        dt = parsed_args["dt"],
+        t_end = parsed_args["t_end"],
+        floor_n_steps = n_steps,
+    )
+
+    return sim
+end
+
+function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
+    (; atmos, simulation) = p
+    (; dt) = simulation
+    dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
+
+    @time "Define ode function" func = if parsed_args["split_ode"]
+        implicit_func = ODE.ODEFunction(
+            implicit_tendency!;
+            jac_kwargs(ode_algo, Y, atmos.energy_form)...,
+            tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
+        )
+        if is_cts_algo(ode_algo)
+            CTS.ClimaODEFunction(;
+                T_lim! = limited_tendency!,
+                T_exp! = remaining_tendency!,
+                T_imp! = implicit_func,
+                # Can we just pass implicit_tendency! and jac_prototype etc.?
+                lim! = limiters_func!,
+                dss!,
+            )
+        else
+            ODE.SplitFunction(implicit_func, remaining_tendency!)
+        end
+    else
+        remaining_tendency! # should be total_tendency!
+    end
+    problem = ODE.ODEProblem(func, Y, tspan, p)
+    saveat = if dt_save_to_sol == Inf
+        tspan[2]
+    elseif tspan[2] % dt_save_to_sol == 0
+        dt_save_to_sol
+    else
+        [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
+    end # ensure that tspan[2] is always saved
+    args = (problem, ode_algo)
+    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
+    return (args, kwargs)
+end

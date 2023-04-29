@@ -1,14 +1,7 @@
-using NVTX, Colors
+import ClimaComms
+import NVTX
+using Colors
 
-if NVTX.isactive()
-    NVTX.enable_gc_hooks()
-    # makes output on buildkite a bit nicer
-    if ClimaComms.iamroot(comms_ctx)
-        atexit() do
-            println("--- Saving profiler information")
-        end
-    end
-end
 # for compatibility until we move everything into src:
 macro nvtx(message, args...)
     expr = args[end]

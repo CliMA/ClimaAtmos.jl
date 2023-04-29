@@ -1,5 +1,5 @@
 const ca_dir = joinpath(@__DIR__, "..", "..")
-include(joinpath(ca_dir, "examples", "hybrid", "cli_options.jl"))
+include(joinpath(ca_dir, "src", "utils", "cli_options.jl"))
 using PrettyTables
 (s, parsed_args) = parse_commandline();
 flags = map(arg -> arg.dest_name, s.args_table.fields)

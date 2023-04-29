@@ -1,8 +1,8 @@
 const ca_dir = joinpath(@__DIR__, "..", "..")
-include(joinpath(ca_dir, "examples", "hybrid", "cli_options.jl"))
+include(joinpath(ca_dir, "src", "utils", "cli_options.jl"))
+include(joinpath(ca_dir, "src", "utils", "yaml_helper.jl"))
 using PrettyTables
 (s, parsed_args) = parse_commandline();
-include(joinpath(ca_dir, "src", "utils", "yaml_helper.jl"))
 
 buildkite_yaml = joinpath(ca_dir, ".buildkite", "pipeline.yml");
 buildkite_commands =

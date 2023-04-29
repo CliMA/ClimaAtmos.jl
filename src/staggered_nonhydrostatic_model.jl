@@ -142,6 +142,67 @@ function default_cache(
     return default_cache
 end
 
+
+# TODO: flip order so that NamedTuple() is fallback.
+function additional_cache(
+    Y,
+    default_cache,
+    parsed_args,
+    params,
+    atmos,
+    dt,
+    initial_condition,
+)
+    (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
+
+    idealized_insolation = parsed_args["idealized_insolation"]
+    @assert idealized_insolation in (true, false)
+    idealized_clouds = parsed_args["idealized_clouds"]
+    @assert idealized_clouds in (true, false)
+
+    radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
+        radiation_model_cache(
+            Y,
+            default_cache,
+            params,
+            radiation_mode;
+            idealized_insolation,
+            idealized_clouds,
+            data_loader = rrtmgp_data_loader,
+        )
+    else
+        radiation_model_cache(Y, params, radiation_mode)
+    end
+
+    return merge(
+        rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
+        viscous_sponge_cache(atmos.viscous_sponge, Y),
+        precipitation_cache(Y, precip_model),
+        subsidence_cache(Y, atmos.subsidence),
+        large_scale_advection_cache(Y, atmos.ls_adv),
+        edmf_coriolis_cache(Y, atmos.edmf_coriolis),
+        forcing_cache(Y, forcing_type),
+        radiation_cache,
+        vertical_diffusion_boundary_layer_cache(Y, atmos),
+        non_orographic_gravity_wave_cache(
+            atmos.non_orographic_gravity_wave,
+            atmos.model_config,
+            Y,
+        ),
+        orographic_gravity_wave_cache(atmos.orographic_gravity_wave, Y),
+        (; Δt = dt),
+        turbconv_cache(
+            Y,
+            turbconv_model,
+            atmos,
+            params,
+            parsed_args,
+            initial_condition,
+        ),
+    )
+end
+
+
 function dss!(Y, p, t)
     if p.do_dss
         Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)

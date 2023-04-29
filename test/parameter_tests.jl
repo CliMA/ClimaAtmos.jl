@@ -1,7 +1,7 @@
 using Test
 import CLIMAParameters as CP
 
-include("../examples/hybrid/cli_options.jl")
+include("../src/utils/cli_options.jl")
 include("../parameters/create_parameters.jl")
 
 FT = Float64

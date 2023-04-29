@@ -2,6 +2,29 @@
 ##### Implicit tendencies
 #####
 
+function implicit_tendency!(Yₜ, Y, p, t)
+    p.test_dycore_consistency && fill_with_nans!(p)
+    @nvtx "implicit tendency" color = colorant"yellow" begin
+        Yₜ .= zero(eltype(Yₜ))
+        @nvtx "precomputed quantities" color = colorant"orange" begin
+            set_precomputed_quantities!(Y, p, t)
+        end
+        Fields.bycolumn(axes(Y.c)) do colidx
+            implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
+            if p.turbconv_model isa TurbulenceConvection.EDMFModel
+                implicit_sgs_flux_tendency!(
+                    Yₜ,
+                    Y,
+                    p,
+                    t,
+                    colidx,
+                    p.turbconv_model,
+                )
+            end
+        end
+    end
+end
+
 import ClimaCore: Fields
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
