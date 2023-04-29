@@ -212,9 +212,10 @@ where
 ```math
 \frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R),
 ```
-which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
+which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy (optionally, on the perturbation of 
+total enthalpy from a prescribed reference enthalpy $h_{ref}$):
 ```math
-- \nu_h \nabla \cdot \left( \rho \nabla^3 \left(\frac{ρe + p}{ρ} \right)\right)
+- \nu_h \nabla \cdot \left( \rho \nabla^3 \left(\frac{ρe + p}{ρ} - h_{ref}\right)\right)
 ```
 
 This is discretized using

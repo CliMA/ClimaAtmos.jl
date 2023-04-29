@@ -46,7 +46,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; κ₄, divergence_damping_factor) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶠ∇²w, ᶜ∇²specific_energy) = p
+    (; do_dss, ᶜp, ᶜh_ref, ᶜspecific, ᶜ∇²uₕ, ᶠ∇²w, ᶜ∇²specific_energy) = p
     if n > 0
         (;
             ᶜρa⁰,
@@ -74,7 +74,8 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if :θ in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
     elseif :e_tot in propertynames(ᶜspecific)
-        @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
+        @. ᶜ∇²specific_energy =
+            wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ - ᶜh_ref))
     end
     if n > 0
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
