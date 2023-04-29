@@ -9,7 +9,7 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 using ClimaCore.Utilities: half
 
-struct SchurComplementW{F, FT, J1, J2, J3, J4, J5, J6, J7, S, A, T}
+struct SchurComplementW{ET, F, FT, J1, J2, J3, J4, J5, J6, J7, S, A, T}
     # whether this struct is used to compute Wfact_t or Wfact
     transform::Bool
 
@@ -127,7 +127,15 @@ function SchurComplementW(Y, transform, flags, test = false)
         ) for _ in 1:Threads.nthreads()
     ]
 
+    ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
+    ET = if isempty(ᶜ𝕋_names)
+        Nothing
+    else
+        cid = Fields.ColumnIndex((1, 1), 1)
+        typeof(getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field[cid], ᶜ𝕋_names[1]))
+    end
     SchurComplementW{
+        ET,
         typeof(flags),
         typeof(dtγ_ref),
         typeof(∂ᶜρₜ∂ᶠ𝕄),
@@ -159,6 +167,10 @@ function SchurComplementW(Y, transform, flags, test = false)
         similar(Y),
     )
 end
+
+∂ᶜ𝕋ₜ∂ᶠ𝕄_field_eltype(A::T) where {T <: SchurComplementW} =
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field_eltype(T)
+∂ᶜ𝕋ₜ∂ᶠ𝕄_field_eltype(::Type{T}) where {ET, T <: SchurComplementW{ET}} = ET
 
 # We only use Wfact, but the implicit/IMEX solvers require us to pass
 # jac_prototype, then call similar(jac_prototype) to obtain J and Wfact. Here
@@ -267,6 +279,7 @@ function LinearAlgebra.ldiv!(
         # Compute Schur complement
         Fields.bycolumn(axes(x.c)) do colidx
             _ldiv_serial!(
+                A,
                 x.c[colidx],
                 x.f[colidx],
                 b.c[colidx],
@@ -290,6 +303,7 @@ function LinearAlgebra.ldiv!(
 end
 
 function _ldiv_serial!(
+    A::SchurComplementW,
     xc,
     xf,
     bc,
@@ -327,8 +341,8 @@ function _ldiv_serial!(
     xᶜρ = xc.ρ
     bᶜρ = bc.ρ
     ᶜ𝔼_name = filter(is_energy_var, propertynames(xc))[1]
-    xᶜ𝔼 = getproperty(xc, ᶜ𝔼_name)
-    bᶜ𝔼 = getproperty(bc, ᶜ𝔼_name)
+    xᶜ𝔼 = getproperty(xc, ᶜ𝔼_name)::typeof(xc.ρ)
+    bᶜ𝔼 = getproperty(bc, ᶜ𝔼_name)::typeof(xc.ρ)
     ᶠ𝕄_name = filter(is_momentum_var, propertynames(xf))[1]
     xᶠ𝕄 = getproperty(xf, ᶠ𝕄_name).components.data.:1
     bᶠ𝕄 = getproperty(bf, ᶠ𝕄_name).components.data.:1
@@ -345,10 +359,11 @@ function _ldiv_serial!(
     # implicit tendencies.
     @. xᶜρ = -bᶜρ + dtγ * apply(∂ᶜρₜ∂ᶠ𝕄, xᶠ𝕄)
     @. xᶜ𝔼 = -bᶜ𝔼 + dtγ * apply(∂ᶜ𝔼ₜ∂ᶠ𝕄, xᶠ𝕄)
-    for ᶜ𝕋_name in filter(is_tracer_var, propertynames(xc))
-        xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)
-        bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)
-        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)
+    map(filter(is_tracer_var, propertynames(xc))) do ᶜ𝕋_name
+        Base.@_inline_meta
+        xᶜ𝕋 = getproperty(xc, ᶜ𝕋_name)::typeof(xc.ρ)
+        bᶜ𝕋 = getproperty(bc, ᶜ𝕋_name)::typeof(xc.ρ)
+        ∂ᶜ𝕋ₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_name)::∂ᶜ𝕋ₜ∂ᶠ𝕄_field_eltype(A)
         @. xᶜ𝕋 = -bᶜ𝕋 + dtγ * apply(∂ᶜ𝕋ₜ∂ᶠ𝕄, xᶠ𝕄)
     end
     if :turbconv in propertynames(xc)
