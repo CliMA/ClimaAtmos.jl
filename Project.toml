@@ -4,6 +4,7 @@ authors = ["Climate Modeling Alliance"]
 version = "0.10.0"
 
 [deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 ArtifactWrappers = "a14bc488-3040-4b00-9dc1-f6467924858a"
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 AtmosphericProfilesLibrary = "86bc3604-9858-485a-bdbe-831ec50de11d"
@@ -47,6 +48,7 @@ Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
+ArgParse = "1"
 ArtifactWrappers = "0.2"
 AtmosphericProfilesLibrary = "0.1"
 CLIMAParameters = "0.7"
