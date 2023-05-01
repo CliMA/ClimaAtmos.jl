@@ -1,6 +1,6 @@
 import ArgParse
 
-function parse_commandline()
+function argparse_settings()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table s begin
         "--FLOAT_TYPE"
@@ -346,8 +346,11 @@ function parse_commandline()
         help = "A toml file used to override model parameters and configurations. In the case of conflicts, CLI arguments take priority over the toml"
         arg_type = String
     end
-    parsed_args = ArgParse.parse_args(ARGS, s)
-    return (s, parsed_args)
+    return s
+end
+
+function parse_commandline(s::ArgParse.ArgParseSettings)
+    return ArgParse.parse_args(ARGS, s)
 end
 
 function cli_defaults(s::ArgParse.ArgParseSettings)

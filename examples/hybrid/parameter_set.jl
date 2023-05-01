@@ -53,19 +53,22 @@ function merge_parsed_args_with_toml(toml_dict, parsed_args, default_args)
     toml_value(val) = val
 
     for (key, value) in parsed_args
-        if parsed_args[key] != default_args[key] || !haskey(toml_dict.data, key)
-            toml_dict.data[key] = Dict(
-                "type" => toml_type(value),
-                "value" => toml_value(value),
-                "alias" => key,
-            )
-        end
-        parsed_args[key] = if toml_dict.data[key]["value"] == ""
-            nothing
-        elseif parsed_args[key] isa Symbol
-            Symbol(toml_dict.data[key]["value"])
-        else
-            toml_dict.data[key]["value"]
+        if haskey(default_args, key)
+            if parsed_args[key] != default_args[key] ||
+               !haskey(toml_dict.data, key)
+                toml_dict.data[key] = Dict(
+                    "type" => toml_type(value),
+                    "value" => toml_value(value),
+                    "alias" => key,
+                )
+            end
+            parsed_args[key] = if toml_dict.data[key]["value"] == ""
+                nothing
+            elseif parsed_args[key] isa Symbol
+                Symbol(toml_dict.data[key]["value"])
+            else
+                toml_dict.data[key]["value"]
+            end
         end
     end
     return toml_dict, parsed_args
