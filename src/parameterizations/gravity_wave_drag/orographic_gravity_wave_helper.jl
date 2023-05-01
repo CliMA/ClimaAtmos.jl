@@ -12,6 +12,7 @@ Calculate orographic tensor (T) from
     - earth_radius: radius of the Earth
 """
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
+    println("comute T tensor")
     FT = eltype(elev)
     bfscale = FT(1e-2)
 
@@ -44,13 +45,15 @@ Calculate the horizontal gradient of scalar A on the Earth surface
 """
 function calc_∇A(A, lon, lat, earth_radius)
     FT = eltype(A)
+    dlat = lat[2] - lat[1]
+    dlon = lon[2] - lon[1]
     dAdx =
         vcat(
             (A[2, :] .- A[1, :])',
             (A[3:end, :] .- A[1:(end - 2), :]) / FT(2),
             (A[end, :] .- A[end - 1, :])',
         ) ./ (
-            deg2rad(maximum(lon) - minimum(lon)) * earth_radius .*
+            deg2rad(dlon) * earth_radius .*
             reshape(repeat(cosd.(lat), length(lon)), length(lat), :)'
         )
     dAdy =
@@ -58,7 +61,7 @@ function calc_∇A(A, lon, lat, earth_radius)
             A[:, 2] .- A[:, 1],
             (A[:, 3:end] .- A[:, 1:(end - 2)]) / FT(2),
             A[:, end] .- A[:, end - 1],
-        ) ./ (deg2rad(maximum(lat) - minimum(lat)) * earth_radius)
+        ) ./ (deg2rad(dlat) * earth_radius)
     return (dAdx, dAdy)
 end
 
@@ -70,25 +73,33 @@ Calculated hmax used in orographic gravity wave
     - lon: longitude
     - lat: latitude
 """
-function calc_hmax_latlon(elev, lon, lat)
+function calc_hmax_latlon(elev, lon, lat, earth_radius)
+    println("compute hmax")
     FT = eltype(elev)
+
+    elev[elev .< FT(0)] .= FT(0)
 
     dlat = lat[2] - lat[1]
     dlon = lon[2] - lon[1]
-    scale =
-        [lat[1], lat..., lat[end]][3:end] .-
-        [lat[1], lat..., lat[end]][1:(end - 2)]
+    # scale =
+    #     [lat[1], lat..., lat[end]][3:end] .-
+    #     [lat[1], lat..., lat[end]][1:(end - 2)]
+
+    scale = sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(10000e3) #FT(200e3) 
 
     # compute weights for the spatial running mean using the Blackman kernel
-    ilat_range = Int.(floor.(scale ./ dlat))
+    ilat_range = Int.(round.(scale ./ dlat))
     ilon_range =
         min.(
-            Int.(floor.(scale ./ (dlon .* cosd.(lat)))),
-            Int(floor(length(lon) / 16)),
+            Int.(round.(scale ./ (dlon .* cosd.(lat)))),
+            Int(round(length(lon) / 16)),
         )
 
     hmax = zeros(size(elev))
     for (i, ilon) in enumerate(lon)
+        if i % 10 ==1
+            println("i = $i, and ilon = $ilon")
+        end
         for (j, jlat) in enumerate(lat)
             # irange may not need clipping at the boundaries since it is on the closed lat circle
             irange =
@@ -123,9 +134,18 @@ function calc_hmax_latlon(elev, lon, lat)
                         )',
                     )
                 )
+
+            arc1 = arc ./ max.(arc, deg2rad(scale[j]))
             hp_wts =
                 FT(0.42) .+ FT(0.50) .* cos.(pi * arc) .+
                 FT(0.08) .* cos.(FT(2) * pi * arc)
+            # hp_wts =
+            #     1.0 .* (
+            #     FT(0.42) .+ FT(0.50) .* cos.(pi * arc1) .+
+            #     FT(0.08) .* cos.(FT(2) * pi * arc1))
+            # hp_wts =
+            #     FT(0.42) .+ FT(0.50) .* cos.(arc) .+
+            #     FT(0.08) .* cos.(FT(2) * arc)
 
             # high pass elevation and use its 4th moment as hmax
             elev_highpass = elev[irange, jrange] .* hp_wts
@@ -147,6 +167,7 @@ Calculate velocity potential
     - earth_radius: radius of the Earth 
 """
 function calc_velocity_potential(elev, lon, lat, earth_radius)
+    println("compute velocity potential")
     FT = eltype(elev)
 
     dlat = lat[2] - lat[1]
@@ -156,15 +177,18 @@ function calc_velocity_potential(elev, lon, lat, earth_radius)
         [lat[1], lat..., lat[end]][1:(end - 2)]
 
     # compute weights for the spatial running mean using the Blackman kernel
-    ilat_range = Int.(floor.(scale ./ dlat))
+    ilat_range = Int.(round.(scale ./ dlat))
     ilon_range =
         min.(
-            Int.(floor.(scale ./ (dlon .* cosd.(lat)))),
-            Int(floor(length(lon) / 8)),
+            Int.(round.(scale ./ (dlon .* cosd.(lat)))),
+            Int(round(length(lon) / 8)),
         )
 
     χ = zeros(size(elev))
     for (i, ilon) in enumerate(lon)
+        if i % 10 ==1
+            println("i = $i, and ilon = $ilon")
+        end
         for (j, jlat) in enumerate(lat)
             # irange may not need clipping at the boundaries since it is on the closed lat circle
             irange =
