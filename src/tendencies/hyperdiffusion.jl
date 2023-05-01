@@ -187,8 +187,6 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜρaχʲₜ -= κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
             @. Yₜ.c.sgsʲs.:($$j).ρa -=
                 κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
-            @. Yₜ.c.sgsʲs.:($$j).ρae_tot +=
-                ᶜp / (Y.c.ρ) * κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
         end
     end
 end

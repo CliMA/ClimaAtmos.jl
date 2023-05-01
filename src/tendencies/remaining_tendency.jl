@@ -52,6 +52,8 @@ function additional_tendency!(Yₜ, Y, p, t)
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
         explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
+        # NOTE: All ρa tendencies should be applied before calling this function
+        pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
     end
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(
