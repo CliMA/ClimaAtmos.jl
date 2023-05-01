@@ -65,8 +65,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜ∇²uₕ = C12(wgradₕ(divₕ(Y.c.uₕ)))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     if point_type <: Geometry.Abstract3DPoint
-        # TODO: Are these vector conversions correct when there is topography?
-        @. ᶜ∇²uₕ -= C12(wcurlₕ(C3(curlₕ(Y.c.uₕ))))
+        @. ᶜ∇²uₕ -= C12(wcurlₕ(C123(curlₕ(Y.c.uₕ))))
     end
 
     @. ᶠ∇²w = wdivₕ(gradₕ(Y.f.w.components.data.:1))
@@ -111,8 +110,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜ∇²uₕ)))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     if point_type <: Geometry.Abstract3DPoint
-        # TODO: Are these vector conversions correct when there is topography?
-        @. Yₜ.c.uₕ += κ₄ * C12(wcurlₕ(C3(curlₕ(ᶜ∇²uₕ))))
+        @. Yₜ.c.uₕ += κ₄ * C12(wcurlₕ(C123(curlₕ(ᶜ∇²uₕ))))
     end
 
     @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠ∇²w))
