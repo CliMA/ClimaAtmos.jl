@@ -8,6 +8,8 @@ import .Parameters as CAP
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("utils", "types.jl"))
+include(joinpath("utils", "nvtx.jl"))
+include(joinpath("utils", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "classify_case.jl"))
@@ -31,6 +33,7 @@ include(joinpath("tendencies", "implicit", "wfact.jl"))
 include(joinpath("tendencies", "implicit", "schur_complement_W.jl"))
 include(joinpath("tendencies", "implicit", "implicit_tendency.jl"))
 
+include(joinpath("tendencies", "remaining_tendency.jl"))
 include(joinpath("tendencies", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("tendencies", "forcing", "subsidence.jl"))
 include(joinpath("parameterizations", "held_suarez", "held_suarez.jl"))

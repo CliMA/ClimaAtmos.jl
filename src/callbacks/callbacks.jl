@@ -85,6 +85,45 @@ function flux_accumulation!(integrator)
     end
 end
 
+function turb_conv_affect_filter!(integrator)
+    p = integrator.p
+    (; edmf_cache) = p
+    (; edmf, param_set, surf_params) = edmf_cache
+    t = integrator.t
+    Y = integrator.u
+    tc_params = CAP.turbconv_params(param_set)
+    thermo_params = CAP.thermodynamics_params(param_set)
+
+    set_precomputed_quantities!(Y, p, t) # sets ᶜts for set_edmf_surface_bc
+    Fields.bycolumn(axes(Y.c)) do colidx
+        state = TC.tc_column_state(
+            Y,
+            p,
+            nothing,
+            colidx,
+            surf_params,
+            thermo_params,
+            t,
+        )
+        grid = TC.Grid(state)
+        surf = get_surface(
+            p.atmos.model_config,
+            surf_params,
+            grid,
+            state,
+            t,
+            tc_params,
+        )
+        TC.affect_filter!(edmf, grid, state, tc_params, surf, t)
+    end
+
+    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # paying for an additional `∑tendencies!` call, which is required
+    # to support supplying a continuous representation of the
+    # solution.
+    ODE.u_modified!(integrator, false)
+end
+
 function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p

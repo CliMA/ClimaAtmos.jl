@@ -1,6 +1,7 @@
 # Track some important dependencies:
-example_dir = joinpath(dirname(@__DIR__), "examples")
-include(joinpath(example_dir, "hybrid", "cli_options.jl"));
+ca_dir = dirname(@__DIR__)
+example_dir = joinpath(ca_dir, "examples")
+include(joinpath(ca_dir, "src", "utils", "cli_options.jl"));
 
 import ClimaAtmos
 import ClimaCore
