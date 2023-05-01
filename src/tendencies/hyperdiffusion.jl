@@ -12,7 +12,6 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜ∇²uₕ = similar(Y.c, C12{FT}),
-        ᶠ∇²w = similar(Y.f, FT),
         ᶜ∇²specific_energy = similar(Y.c, FT),
         ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
     )
@@ -46,7 +45,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; κ₄, divergence_damping_factor) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶠ∇²w, ᶜ∇²specific_energy) = p
+    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²specific_energy) = p
     if n > 0
         (;
             ᶜρa⁰,
@@ -68,8 +67,6 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # TODO: Are these vector conversions correct when there is topography?
         @. ᶜ∇²uₕ -= C12(wcurlₕ(C3(curlₕ(Y.c.uₕ))))
     end
-
-    @. ᶠ∇²w = wdivₕ(gradₕ(Y.f.w.components.data.:1))
 
     if :θ in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
@@ -97,7 +94,6 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 Spaces.weighted_dss_ghost2!,
             )
                 dss!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
-                dss!(ᶠ∇²w, buffer.ᶠ∇²w)
                 dss!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
                 if n > 0
                     dss!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
@@ -114,8 +110,6 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # TODO: Are these vector conversions correct when there is topography?
         @. Yₜ.c.uₕ += κ₄ * C12(wcurlₕ(C3(curlₕ(ᶜ∇²uₕ))))
     end
-
-    @. Yₜ.f.w.components.data.:1 -= κ₄ * wdivₕ(gradₕ(ᶠ∇²w))
 
     ᶜρ_energyₜ = :θ in propertynames(ᶜspecific) ? Yₜ.c.ρθ : Yₜ.c.ρe_tot
     @. ᶜρ_energyₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
