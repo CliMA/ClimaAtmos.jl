@@ -87,10 +87,11 @@ end
 
 # Remap base flux to regular lat/lon grid for visualization
 TOPO_DIR = joinpath(@__DIR__, "remap_data/")
-if !isdir(TOPO_DIR)
-    mkdir(TOPO_DIR)
+REMAP_DIR = joinpath(TOPO_DIR, "ogwd_baseflux")
+if !isdir(REMAP_DIR)
+    mkpath(REMAP_DIR)
 end
-datafile_cg = joinpath(TOPO_DIR, "data_cg.nc")
+datafile_cg = joinpath(REMAP_DIR, "data_cg.nc")
 nc = NCDataset(datafile_cg, "c")
 def_space_coord(nc, center_space, type = "cgll")
 nc_time = def_time_coord(nc)
@@ -103,10 +104,10 @@ close(nc)
 
 nlat = 90
 nlon = 180
-weightfile = joinpath(TOPO_DIR, "remap_weights.nc")
+weightfile = joinpath(REMAP_DIR, "remap_weights.nc")
 create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon)
 
-datafile_rll = joinpath(TOPO_DIR, "data_rll.nc")
+datafile_rll = joinpath(REMAP_DIR, "data_rll.nc")
 apply_remap(datafile_rll, datafile_cg, weightfile, ["tau_x", "tau_y"])
 
 # Plot the zonal and meridional components of the base flux

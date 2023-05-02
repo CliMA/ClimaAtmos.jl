@@ -74,7 +74,6 @@ end
 p_center = 0.5 * (p_half[:, :, 1:(end - 1), :] .+ p_half[:, :, 2:end, :])
 
 # earth warp
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
 earth_spline = NCDataset(data_path) do data
     zlevels = data["elevation"][:]
@@ -351,9 +350,9 @@ output_dir = "orographic_gravity_wave_test_3d"
 mkpath(output_dir)
 
 # remap uforcing and vforcing to regular lat/lon grid
-REMAP_DIR = joinpath(@__DIR__, "remap_data/")
+REMAP_DIR = joinpath(@__DIR__, "ogwd_3d", "remap_data/")
 if !isdir(REMAP_DIR)
-    mkdir(REMAP_DIR)
+    mkpath(REMAP_DIR)
 end
 datafile_cg = joinpath(REMAP_DIR, "data_cg.nc")
 nc = NCDataset(datafile_cg, "c")
