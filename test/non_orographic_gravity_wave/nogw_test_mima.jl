@@ -78,8 +78,8 @@ end
 
 
 # MiMA data
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
-mima_data = joinpath(mima_gwf_path(), "mima_gwf.nc")
+import ClimaAtmos.AtmosArtifacts as AA
+mima_data = joinpath(AA.mima_gwf_path(), "mima_gwf.nc")
 
 nt = NCDataset(mima_data) do ds
     lon = ds["lon"][:]

@@ -52,9 +52,9 @@ params = non_orographic_gravity_wave_cache(
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 damp_level = length(center_z)
 
-include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
+import ClimaAtmos.AtmosArtifacts as AA
 
-era_data = joinpath(era_global_dataset_path(), "box-era5-monthly.nc")
+era_data = joinpath(AA.era_global_dataset_path(), "box-era5-monthly.nc")
 
 nt = NCDataset(era_data) do ds
     lon = ds["longitude"][:]

@@ -5,6 +5,8 @@ using NVTX, Colors
 include("Parameters.jl")
 import .Parameters as CAP
 
+include(joinpath("utils", "AtmosArtifacts.jl"))
+import .AtmosArtifacts as AA
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("utils", "types.jl"))
