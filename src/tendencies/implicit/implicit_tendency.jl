@@ -2,6 +2,8 @@
 ##### Implicit tendencies
 #####
 
+import ClimaCore: Fields, Geometry
+
 function implicit_tendency!(Yₜ, Y, p, t)
     p.test_dycore_consistency && fill_with_nans!(p)
     @nvtx "implicit tendency" color = colorant"yellow" begin
@@ -23,11 +25,13 @@ function implicit_tendency!(Yₜ, Y, p, t)
             end
             # NOTE: All ρa tendencies should be applied before calling this function
             pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+
+            # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+            # please DO NOT add additional velocity tendencies after this function
+            zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
         end
     end
 end
-
-import ClimaCore: Fields
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
@@ -171,6 +175,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
         ) / ᶠinterp(Y.c.ρ[colidx])
     for j in 1:n
+
         @. Yₜ.f.sgsʲs.:($$j).w[colidx] =
             -(
                 ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +

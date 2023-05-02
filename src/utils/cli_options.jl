@@ -58,6 +58,10 @@ function parse_commandline()
         "--edmf_coriolis"
         help = "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
         arg_type = String
+        "--edmfx_adv_test"
+        help = "EDMFX advection test switches off all velocity tendencies in GM and turbconc [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String

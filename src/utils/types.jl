@@ -164,6 +164,7 @@ Base.@kwdef struct AtmosModel{
     RM,
     LA,
     EC,
+    EAT,
     TCM,
     SS,
     NOGW,
@@ -184,6 +185,7 @@ Base.@kwdef struct AtmosModel{
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
+    edmfx_adv_test::EAT = nothing
     turbconv_model::TCM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing

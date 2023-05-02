@@ -25,6 +25,9 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
     diffuse_momentum =
         !(forcing_type isa HeldSuarezForcing) && !isnothing(surface_scheme)
 
+    edmfx_adv_test = parsed_args["edmfx_adv_test"]
+    @assert edmfx_adv_test in (false, true)
+
     model_config = get_model_config(parsed_args)
     vert_diff = get_vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
     atmos = AtmosModel(;
@@ -37,6 +40,7 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
+        edmfx_adv_test,
         precip_model,
         forcing_type,
         turbconv_model = get_turbconv_model(
@@ -265,6 +269,7 @@ function get_initial_condition(parsed_args)
             "MoistBaroclinicWave",
             "DecayingProfile",
             "MoistBaroclinicWaveWithEDMF",
+            "DryAdiabaticProfileEDMFX",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
                 parsed_args["perturb_initstate"],
