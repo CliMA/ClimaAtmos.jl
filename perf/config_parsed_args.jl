@@ -21,7 +21,7 @@ include("perf/config_parsed_args.jl")
 ca_dir = dirname(@__DIR__)
 include(joinpath(ca_dir, "src", "utils", "cli_options.jl"));
 include(joinpath(ca_dir, "src", "utils", "yaml_helper.jl"))
-(s, _parsed_args) = parse_commandline()
+s = argparse_settings();
 parsed_args_defaults = cli_defaults(s);
 dict = parsed_args_per_job_id(; filter_name = "driver.jl");
 
