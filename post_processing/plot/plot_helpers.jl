@@ -3,7 +3,7 @@ import ClimaCoreSpectra: power_spectrum_1d, power_spectrum_2d
 using Statistics
 
 function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
-    for day in [8, 10, 100]
+    for day in [3,4]
         ncfile = filter(x -> endswith(x, "day$day.0.nc"), nc_files)
         if !isempty(ncfile)
             nt = NCDataset(ncfile[1], "r") do nc
@@ -65,7 +65,7 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
 end
 
 function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
-    for day in [8, 10, 100]
+    for day in [3,4]
         ncfile = filter(x -> endswith(x, "day$day.0.nc"), nc_files)
         if !isempty(ncfile)
             nt = NCDataset(ncfile[1], "r") do nc
