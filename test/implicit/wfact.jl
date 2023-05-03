@@ -13,21 +13,21 @@ function verify_wfact_matrix(W, Y, p, dtγ, t)
     ᶜ𝔼_name = filter(CA.is_energy_var, propertynames(Y.c))[1]
 
     @assert matrix_column(∂ᶜρₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
-            exact_column_jacobian_block(args..., (:c, :ρ), (:f, :w))
+            exact_column_jacobian_block(args..., (:c, :ρ), (:f, :u₃))
     @assert matrix_column(∂ᶠ𝕄ₜ∂ᶜ𝔼, axes(Y.c), i, j, h) ≈
-            exact_column_jacobian_block(args..., (:f, :w), (:c, ᶜ𝔼_name))
+            exact_column_jacobian_block(args..., (:f, :u₃), (:c, ᶜ𝔼_name))
     @assert matrix_column(∂ᶠ𝕄ₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
-            exact_column_jacobian_block(args..., (:f, :w), (:f, :w))
+            exact_column_jacobian_block(args..., (:f, :u₃), (:f, :u₃))
     for ᶜρc_name in filter(CA.is_tracer_var, propertynames(Y.c))
         ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
         ᶜρc_tuple = (:c, ᶜρc_name)
         @assert matrix_column(∂ᶜρcₜ∂ᶠ𝕄, axes(Y.f), i, j, h) ≈
-                exact_column_jacobian_block(args..., ᶜρc_tuple, (:f, :w))
+                exact_column_jacobian_block(args..., ᶜρc_tuple, (:f, :u₃))
     end
 
     ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx = matrix_column(∂ᶜ𝔼ₜ∂ᶠ𝕄, axes(Y.f), i, j, h)
     ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact =
-        exact_column_jacobian_block(args..., (:c, ᶜ𝔼_name), (:f, :w))
+        exact_column_jacobian_block(args..., (:c, ᶜ𝔼_name), (:f, :u₃))
     if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
         @assert ∂ᶜ𝔼ₜ∂ᶠ𝕄_approx ≈ ∂ᶜ𝔼ₜ∂ᶠ𝕄_exact
     else
@@ -37,7 +37,7 @@ function verify_wfact_matrix(W, Y, p, dtγ, t)
     end
 
     ∂ᶠ𝕄ₜ∂ᶜρ_approx = matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(Y.c), i, j, h)
-    ∂ᶠ𝕄ₜ∂ᶜρ_exact = exact_column_jacobian_block(args..., (:f, :w), (:c, :ρ))
+    ∂ᶠ𝕄ₜ∂ᶜρ_exact = exact_column_jacobian_block(args..., (:f, :u₃), (:c, :ρ))
     if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
         @assert ∂ᶠ𝕄ₜ∂ᶜρ_approx ≈ ∂ᶠ𝕄ₜ∂ᶜρ_exact
     else

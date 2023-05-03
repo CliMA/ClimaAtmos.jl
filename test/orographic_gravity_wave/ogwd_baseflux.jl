@@ -41,7 +41,7 @@ Yc = map(ᶜlocal_geometry) do lg
     return (; ρ = FT(1.0), uₕ = uₕ, N = 0.01)
 end
 Yf = map(ᶠlocal_geometry) do lg
-    return (; w = Geometry.Covariant3Vector(FT(0), lg))
+    return (; u₃ = Geometry.Covariant3Vector(FT(0), lg))
 end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 

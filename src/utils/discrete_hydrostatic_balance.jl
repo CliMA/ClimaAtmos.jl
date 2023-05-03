@@ -11,7 +11,7 @@ Modify the energy variable in state `Y` given Y and the cache `p` so that
 """
 function set_discrete_hydrostatic_balanced_state!(Y, p)
     FT = Spaces.undertype(axes(Y.c))
-    ᶠgradᵥ_ᶜp = similar(Y.f.w)
+    ᶠgradᵥ_ᶜp = similar(Y.f.u₃)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         set_discrete_hydrostatic_balanced_pressure!(
             p.ᶜp,
@@ -41,7 +41,8 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
                 p.params,
                 p.ᶜts,
                 ᶜlocal_geometry,
-                Geometry.UVWVector(Y.c.uₕ) + Geometry.UVWVector(ᶜinterp(Y.f.w)),
+                Geometry.UVWVector(Y.c.uₕ) +
+                Geometry.UVWVector(ᶜinterp(Y.f.u₃)),
             ),
             p.atmos.energy_form,
         ),
@@ -53,7 +54,7 @@ end
 Construct discrete hydrostatic balanced pressure `ᶜp` from density `ᶜρ`, 
 potential energy gradient `ᶠgradᵥ_ᶜΦ`, and surface pressure `p1`.
 
-Yₜ.f.w = 0 ==>
+Yₜ.f.u₃ = 0 ==>
 -(ᶠgradᵥ_ᶜp / ᶠinterp(ᶜρ) + ᶠgradᵥ_ᶜΦ) = 0 ==>
 ᶠgradᵥ_ᶜp = -(ᶠgradᵥ_ᶜΦ * ᶠinterp(ᶜρ))
 

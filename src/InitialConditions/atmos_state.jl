@@ -46,7 +46,7 @@ end
 Like `atmos_center_variables`, but for cell faces.
 """
 atmos_face_variables(ls, atmos_model) = (;
-    w = C3(ls.velocity, ls.geometry),
+    u₃ = C3(ls.velocity, ls.geometry),
     turbconv_face_variables(ls, atmos_model.turbconv_model)...,
 )
 
@@ -134,7 +134,7 @@ turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
 )
 turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
     sgsʲs = ntuple(
-        _ -> (; w = C3(ls.turbconv_state.velocity, ls.geometry)),
+        _ -> (; u₃ = C3(ls.turbconv_state.velocity, ls.geometry)),
         Val(n_mass_flux_subdomains(turbconv_model)),
     )
 )

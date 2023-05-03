@@ -65,7 +65,7 @@ function compute_sgs_flux!(
     # TODO: we shouldn't need to call parent here
     a_en = aux_en.area
     w_en = aux_en_f.w
-    w_gm = prog_gm_f.w
+    w_gm = prog_gm_f.u₃
     h_tot_gm = aux_gm.h_tot
     q_tot_gm = aux_gm.q_tot
     a_en_bcs = a_en_boundary_conditions(surf, edmf)

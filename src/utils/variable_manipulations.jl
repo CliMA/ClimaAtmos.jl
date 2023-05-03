@@ -269,36 +269,36 @@ subdomain states are stored in `gs.sgsʲs`.
 ρa⁰(gs) = gs.ρ - mapreduce(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
 
 """
-    w⁺(ρaʲs, wʲs, ρ, w, turbconv_model)
+    u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) 
 
-Computes the average mass-flux subdomain vertical velocity `w⁺` by dividing the
+Computes the average mass-flux subdomain vertical velocity `u₃⁺` by dividing the
 total momentum `ρaw⁺` by the total area-weighted density `ρa⁺`, both of which
 are computed from the tuples of subdomain densities and velocities `ρaʲs` and
-`wʲs`. The division is computed using `divide_by_ρa` to avoid issues when `a⁺`
+`u₃ʲs`. The division is computed using `divide_by_ρa` to avoid issues when `a⁺`
 is small.
 """
-w⁺(ρaʲs, wʲs, ρ, w, turbconv_model) = divide_by_ρa(
-    mapreduce(*, +, ρaʲs, wʲs),
+u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
+    mapreduce(*, +, ρaʲs, u₃ʲs),
     reduce(+, ρaʲs),
-    ρ * w,
+    ρ * u₃,
     ρ,
     turbconv_model,
 )
 
 """
-    w⁰(ρaʲs, wʲs, ρ, w, turbconv_model)
+    u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model)
 
-Computes the environment vertical velocity `w⁰` by dividing the environment
+Computes the environment vertical velocity `u₃⁰` by dividing the environment
 momentum `ρaw⁰` by the environment area-weighted density `ρa⁰`, both of which
 are computed from the domain decomposition of the grid-scale quantities `ρw` and
 `ρ` into the mass-flux subdomain quantities `ρawʲs` and `ρaʲs` and the
 environment quantities. The division is computed using `divide_by_ρa` to avoid
 issues when `a⁰` is small.
 """
-w⁰(ρaʲs, wʲs, ρ, w, turbconv_model) = divide_by_ρa(
-    ρ * w - mapreduce(*, +, ρaʲs, wʲs),
+u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
+    ρ * u₃ - mapreduce(*, +, ρaʲs, u₃ʲs),
     ρ - reduce(+, ρaʲs),
-    ρ * w,
+    ρ * u₃,
     ρ,
     turbconv_model,
 )

@@ -73,7 +73,7 @@ function debug_state(state, code_location::String)
     ######
 
     vars_positive = [
-        vec(prog_gm_f.w),
+        vec(prog_gm_f.u₃),
         vec(prog_up[1].ρarea),
         vec(prog_up_f[1].w),
         vec(aux_en.area),

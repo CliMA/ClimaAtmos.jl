@@ -136,7 +136,7 @@ function update_aux!(
     @. aux_en.area = 1 - aux_bulk.area
     @. aux_en.tke = prog_en.ρatke / (ρ_c * aux_en.area)
 
-    @. aux_en_f.w = prog_gm_f.w / (1 - Ifb(aux_bulk.area))
+    @. aux_en_f.w = prog_gm_f.u₃ / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
         @. aux_en_f.w -=
             Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
@@ -311,12 +311,12 @@ function update_aux!(
     @. aux_gm.tke +=
         0.5 *
         aux_en.area *
-        LA.norm_sqr(C123(Ic(wvec(aux_en_f.w - prog_gm_f.w))))
+        LA.norm_sqr(C123(Ic(wvec(aux_en_f.w - prog_gm_f.u₃))))
     @inbounds for i in 1:N_up
         @. aux_gm.tke +=
             0.5 *
             aux_up[i].area *
-            LA.norm_sqr(C123(Ic(wvec(prog_up_f[i].w - prog_gm_f.w))))
+            LA.norm_sqr(C123(Ic(wvec(prog_up_f[i].w - prog_gm_f.u₃))))
     end
 
     #####
