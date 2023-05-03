@@ -71,7 +71,7 @@ Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     dϕ_s::FT = -5
 end
 
-Base.@kwdef struct OrographicGravityWave{FT} <: AbstractGravityWave
+Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
     γ::FT = 0.4
     ϵ::FT = 0.0
     β::FT = 0.5
@@ -80,6 +80,7 @@ Base.@kwdef struct OrographicGravityWave{FT} <: AbstractGravityWave
     a0::FT = 0.9
     a1::FT = 3.0
     Fr_crit::FT = 0.7
+    topo_info::S = "gfdl_restart"
 end
 
 abstract type AbstractForcing end

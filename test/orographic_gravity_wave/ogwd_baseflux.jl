@@ -46,8 +46,8 @@ end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 
 # Initialize cache vars for orographic gravity wave
-ogw = CA.OrographicGravityWave{FT}()
-p = CA.orographic_gravity_wave_cache(ogw, Y)
+ogw = CA.OrographicGravityWave{FT, String}()
+p = CA.orographic_gravity_wave_cache(ogw, Y, FT(radius))
 
 # Unpack cache vars
 (; topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) = p

@@ -130,9 +130,11 @@ end
 
 function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
-    @assert ogw_name in (true, false)
-    return if ogw_name == true
-        OrographicGravityWave{FT}()
+    @assert ogw_name in (nothing, "gfdl_restart", "raw_topo")
+    return if ogw_name == "gfdl_restart"
+        OrographicGravityWave{FT, String}()
+    elseif ogw_name == "raw_topo"
+        OrographicGravityWave{FT, String}(topo_info = "raw_topo")
     else
         nothing
     end
