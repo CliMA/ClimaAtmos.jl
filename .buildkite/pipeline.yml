@@ -279,6 +279,8 @@ steps:
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --fig_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw --case_name aquaplanet
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist with EDMF"
         command:
@@ -309,6 +311,8 @@ steps:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --vert_diff true --surface_scheme bulk --moist equil --forcing held_suarez --precip_model 0M --job_id sphere_held_suarez_rhoe_equilmoist_topography_dcmip --dt 200secs --t_end 2days --dt_save_to_disk 2days --topography DCMIP200 --rayleigh_sponge true --viscous_sponge true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_equilmoist_topography_dcmip --out_dir sphere_held_suarez_rhoe_equilmoist_topography_dcmip
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/*"
+        agents:
+          slurm_mem: 20GB
 
   - group: "MPI Examples"
     steps:

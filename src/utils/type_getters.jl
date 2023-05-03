@@ -6,6 +6,7 @@ using ImageFiltering
 using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import OrdinaryDiffEq as ODE
@@ -66,6 +67,7 @@ function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
     )
 
+    @info "AtmosModel: \n$(summary(atmos))"
     return atmos
 end
 
@@ -496,7 +498,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
         call_every_dt(save_restart_func, dt_save_restart)
     end
 
-    gc_callback = if simulation.is_distributed
+    gc_callback = if CA.is_distributed(simulation.comms_ctx)
         call_every_n_steps(
             gc_func,
             parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
@@ -525,7 +527,6 @@ function get_cache(
     numerics,
     simulation,
     initial_condition,
-    comms_ctx,
 )
     _default_cache = default_cache(
         Y,
@@ -535,7 +536,6 @@ function get_cache(
         spaces,
         numerics,
         simulation,
-        comms_ctx,
     )
     merge(
         _default_cache,
@@ -551,7 +551,7 @@ function get_cache(
     )
 end
 
-function get_simulation(::Type{FT}, parsed_args) where {FT}
+function get_simulation(::Type{FT}, parsed_args, comms_ctx) where {FT}
 
     job_id = if isnothing(parsed_args["job_id"])
         s = argparse_settings()
@@ -565,7 +565,7 @@ function get_simulation(::Type{FT}, parsed_args) where {FT}
     mkpath(output_dir)
 
     sim = (;
-        is_distributed = haskey(ENV, "CLIMACORE_DISTRIBUTED"),
+        comms_ctx,
         is_debugging_tc = parsed_args["debugging_tc"],
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),

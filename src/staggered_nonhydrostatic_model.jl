@@ -48,7 +48,6 @@ function default_cache(
     spaces,
     numerics,
     simulation,
-    comms_ctx,
 )
     FT = eltype(params)
     (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
@@ -102,7 +101,7 @@ function default_cache(
         simulation,
         spaces,
         atmos,
-        comms_ctx,
+        comms_ctx = Spaces_comm_context(axes(Y.c)),
         test_dycore_consistency = parsed_args["test_dycore_consistency"],
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
