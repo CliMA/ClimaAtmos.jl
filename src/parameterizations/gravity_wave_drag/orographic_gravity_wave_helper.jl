@@ -1,5 +1,6 @@
 using NCDatasets
 using Interpolations
+using Statistics: mean
 
 """
     calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
@@ -85,13 +86,13 @@ function calc_hmax_latlon(elev, lon, lat, earth_radius)
     #     [lat[1], lat..., lat[end]][3:end] .-
     #     [lat[1], lat..., lat[end]][1:(end - 2)]
 
-    scale = sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(10000e3) #FT(200e3) 
-
+    scale = sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(100e3) #FT(10000e3) #FT(200e3) 
+    
     # compute weights for the spatial running mean using the Blackman kernel
-    ilat_range = Int.(round.(scale ./ dlat))
+    ilat_range = Int.(round.(scale ./ deg2rad(dlat)))
     ilon_range =
         min.(
-            Int.(round.(scale ./ (dlon .* cosd.(lat)))),
+            Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
             Int(round(length(lon) / 16)),
         )
 
@@ -136,19 +137,19 @@ function calc_hmax_latlon(elev, lon, lat, earth_radius)
                 )
 
             arc1 = arc ./ max.(arc, deg2rad(scale[j]))
-            hp_wts =
-                FT(0.42) .+ FT(0.50) .* cos.(pi * arc) .+
-                FT(0.08) .* cos.(FT(2) * pi * arc)
             # hp_wts =
-            #     1.0 .* (
-            #     FT(0.42) .+ FT(0.50) .* cos.(pi * arc1) .+
-            #     FT(0.08) .* cos.(FT(2) * pi * arc1))
+            #     FT(0.42) .+ FT(0.50) .* cos.(pi * arc) .+
+            #     FT(0.08) .* cos.(FT(2) * pi * arc)
+            hp_wts =
+                1.0 .* (
+                FT(0.42) .+ FT(0.50) .* cos.(pi * arc1) .+
+                FT(0.08) .* cos.(FT(2) * pi * arc1))
             # hp_wts =
             #     FT(0.42) .+ FT(0.50) .* cos.(arc) .+
             #     FT(0.08) .* cos.(FT(2) * arc)
 
             # high pass elevation and use its 4th moment as hmax
-            elev_highpass = elev[irange, jrange] .* hp_wts
+            elev_highpass = elev[irange, jrange] .* FT(1) #hp_wts
             hmax[i, j] =
                 (mean((elev_highpass .- mean(elev_highpass)) .^ FT(4)))^FT(0.25)
         end
@@ -172,15 +173,17 @@ function calc_velocity_potential(elev, lon, lat, earth_radius)
 
     dlat = lat[2] - lat[1]
     dlon = lon[2] - lon[1]
-    scale =
-        [lat[1], lat..., lat[end]][3:end] .-
-        [lat[1], lat..., lat[end]][1:(end - 2)]
+    # scale =
+    #     [lat[1], lat..., lat[end]][3:end] .-
+    #     [lat[1], lat..., lat[end]][1:(end - 2)]
+
+    scale = sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(200e3) #FT(10000e3) #FT(200e3) 
 
     # compute weights for the spatial running mean using the Blackman kernel
-    ilat_range = Int.(round.(scale ./ dlat))
+    ilat_range = Int.(round.(scale ./ deg2rad(dlat)))
     ilon_range =
         min.(
-            Int.(round.(scale ./ (dlon .* cosd.(lat)))),
+            Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
             Int(round(length(lon) / 8)),
         )
 
