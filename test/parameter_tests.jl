@@ -6,7 +6,7 @@ include("../parameters/create_parameters.jl")
 
 FT = Float64
 
-(s, _) = parse_commandline()
+s = argparse_settings()
 default_args = cli_defaults(s)
 
 @testset "Test types" begin

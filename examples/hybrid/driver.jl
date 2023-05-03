@@ -1,8 +1,8 @@
 import ClimaAtmos as CA
 
-(s, parsed_args_defaults) = CA.parse_commandline()
+s = CA.argparse_settings()
 if !(@isdefined parsed_args)
-    parsed_args = parsed_args_defaults
+    parsed_args = CA.parse_commandline(s)
 end
 
 # TODO: can we move this into src/?
