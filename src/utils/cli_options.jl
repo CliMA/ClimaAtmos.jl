@@ -386,6 +386,7 @@ function job_id_from_parsed_args(defaults::Dict, parsed_args)
     warn = false
     for k in keys(_parsed_args)
         # Skip defaults to alleviate verbose names
+        !haskey(defaults, k) && continue
         defaults[k] == _parsed_args[k] && continue
 
         if _parsed_args[k] isa String
