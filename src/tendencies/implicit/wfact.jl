@@ -7,15 +7,15 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
-# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠw * ᶠinterp(ᶜρc / ᶜρ)), then
+# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu₃ * ᶠinterp(ᶜρc / ᶜρ)), then
 # ∂(ᶜρcₜ)/∂(ᶠw_data) =
 #     -ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * ᶠw_unit * ᶠinterp(ᶜc)) -
-#     ᶜdivᵥ_stencil(ᶠw) * ᶠinterp_stencil(1) * ∂(ᶜρc)/∂(ᶠw_data)
-# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠw, ᶜρc / ᶜρ)), then
+#     ᶜdivᵥ_stencil(ᶠu₃) * ᶠinterp_stencil(1) * ∂(ᶜρc)/∂(ᶠw_data)
+# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu₃, ᶜρc / ᶜρ)), then
 # ∂(ᶜρcₜ)/∂(ᶠw_data) =
 #     -ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) *
-#     ᶠupwind(ᶠw + εw, ᶜρc / ᶜρ) / to_scalar(ᶠw + εw)) -
-#     ᶜdivᵥ_stencil(ᶠinterp(ᶜρ)) * ᶠupwind_stencil(ᶠw, 1 / ᶜρ) *
+#     ᶠupwind(ᶠu₃ + εw, ᶜρc / ᶜρ) / to_scalar(ᶠu₃ + εw)) -
+#     ᶜdivᵥ_stencil(ᶠinterp(ᶜρ)) * ᶠupwind_stencil(ᶠu₃, 1 / ᶜρ) *
 #     ∂(ᶜρc)/∂(ᶠw_data)
 # The εw is only necessary in case w = 0.
 # Since Operator2Stencil has not yet been extended to upwinding operators,
@@ -26,31 +26,31 @@ import ClimaCore.Fields as Fields
 # In addition, we approximate the Jacobian for vertical transport with FCT using
 # the Jacobian for third-order upwinding (since only FCT requires dt, we do not
 # need to pass dt to this function).
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:none})
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠw =
-        -(ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠw) * ᶠinterp(ᶜρc / ᶜρ)))
+    @. ∂ᶜρcₜ∂ᶠu₃ =
+        -(ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠu₃) * ᶠinterp(ᶜρc / ᶜρ)))
     return nothing
 end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val{:first_order})
-    # To convert ᶠw to ᶠw_data, we extract the third vector component and add an
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:first_order})
+    # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
     # epsilon to it to avoid cancellation errors in upwinding.
     magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠw = -(ᶜadvdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ) /
-        magnitude_plus_eps(ᶠw),
+    @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
+        magnitude_plus_eps(ᶠu₃),
     ))
     return nothing
 end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠw, ᶠw, ᶜρ, ᶜρc, ::Val)
-    # To convert ᶠw to ᶠw_data, we extract the third vector component and add an
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val)
+    # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
     # epsilon to it to avoid cancellation errors in upwinding.
     magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠw = -(ᶜadvdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(C3(magnitude_plus_eps(ᶠw)), ᶜρc / ᶜρ) /
-        magnitude_plus_eps(ᶠw),
+    @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
+        magnitude_plus_eps(ᶠu₃),
     ))
     return nothing
 end
@@ -90,7 +90,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
     ᶜρ = Y.c.ρ
-    ᶠw = Y.f.w
+    ᶠu₃ = Y.f.u₃
     (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜρ_ref, ᶜp_ref, ∂ᶜK∂ᶠw_data, params) = p
     (; energy_upwinding, tracer_upwinding) = p
 
@@ -106,9 +106,9 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
 
     dtγ_ref[] = dtγ
 
-    # If we let ᶠw_data = ᶠw.components.data.:1 and ᶠw_unit = one.(ᶠw), then
-    # ᶠw == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠw.
-    ᶠw_data = ᶠw.components.data.:1
+    # If we let ᶠw_data = ᶠu₃.components.data.:1 and ᶠw_unit = one.(ᶠu₃), then
+    # ᶠu₃ == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠu₃.
+    ᶠw_data = ᶠu₃.components.data.:1
 
     # To convert ∂(ᶠwₜ)/∂(ᶜ𝔼) to ∂(ᶠw_data)ₜ/∂(ᶜ𝔼) and ∂(ᶠwₜ)/∂(ᶠw_data) to
     # ∂(ᶠw_data)ₜ/∂(ᶠw_data), we extract the third component of each vector-
@@ -116,28 +116,28 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     @inline to_scalar_coefs(vector_coefs) =
         map(vector_coef -> vector_coef.u₃, vector_coefs)
 
-    # ᶜinterp(ᶠw) =
-    #     ᶜinterp(ᶠw)_data * ᶜinterp(ᶠw)_unit =
-    #     ᶜinterp(ᶠw_data) * ᶜinterp(ᶠw)_unit
-    # norm_sqr(ᶜinterp(ᶠw)) =
-    #     norm_sqr(ᶜinterp(ᶠw_data) * ᶜinterp(ᶠw)_unit) =
-    #     ᶜinterp(ᶠw_data)^2 * norm_sqr(ᶜinterp(ᶠw)_unit)
+    # ᶜinterp(ᶠu₃) =
+    #     ᶜinterp(ᶠu₃)_data * ᶜinterp(ᶠu₃)_unit =
+    #     ᶜinterp(ᶠw_data) * ᶜinterp(ᶠu₃)_unit
+    # norm_sqr(ᶜinterp(ᶠu₃)) =
+    #     norm_sqr(ᶜinterp(ᶠw_data) * ᶜinterp(ᶠu₃)_unit) =
+    #     ᶜinterp(ᶠw_data)^2 * norm_sqr(ᶜinterp(ᶠu₃)_unit)
     # ᶜK =
-    #     norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠw))) / 2 =
-    #     norm_sqr(ᶜuₕ) / 2 + norm_sqr(ᶜinterp(ᶠw)) / 2 =
-    #     norm_sqr(ᶜuₕ) / 2 + ᶜinterp(ᶠw_data)^2 * norm_sqr(ᶜinterp(ᶠw)_unit) / 2
+    #     norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠu₃))) / 2 =
+    #     norm_sqr(ᶜuₕ) / 2 + norm_sqr(ᶜinterp(ᶠu₃)) / 2 =
+    #     norm_sqr(ᶜuₕ) / 2 + ᶜinterp(ᶠw_data)^2 * norm_sqr(ᶜinterp(ᶠu₃)_unit) / 2
     # ∂(ᶜK)/∂(ᶠw_data) =
     #     ∂(ᶜK)/∂(ᶜinterp(ᶠw_data)) * ∂(ᶜinterp(ᶠw_data))/∂(ᶠw_data) =
-    #     ᶜinterp(ᶠw_data) * norm_sqr(ᶜinterp(ᶠw)_unit) * ᶜinterp_stencil(1)
+    #     ᶜinterp(ᶠw_data) * norm_sqr(ᶜinterp(ᶠu₃)_unit) * ᶜinterp_stencil(1)
     @. ∂ᶜK∂ᶠw_data[colidx] =
         ᶜinterp(ᶠw_data[colidx]) *
-        norm_sqr(one(ᶜinterp(ᶠw[colidx]))) *
+        norm_sqr(one(ᶜinterp(ᶠu₃[colidx]))) *
         ᶜinterp_stencil(one(ᶠw_data[colidx]))
 
-    # vertical_transport!(Yₜ.c.ρ, ᶠw, ᶜρ, ᶜρ, dt, Val(:none))
+    # vertical_transport!(Yₜ.c.ρ, ᶠu₃, ᶜρ, ᶜρ, dt, Val(:none))
     vertical_transport_jac!(
         ∂ᶜρₜ∂ᶠ𝕄[colidx],
-        ᶠw[colidx],
+        ᶠu₃[colidx],
         ᶜρ[colidx],
         ᶜρ[colidx],
         Val(:none),
@@ -145,10 +145,10 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
 
     if :ρθ in propertynames(Y.c)
         ᶜρθ = Y.c.ρθ
-        # vertical_transport!(Yₜ.c.ρθ, ᶠw, ᶜρ, ᶜρθ, dt, energy_upwinding)
+        # vertical_transport!(Yₜ.c.ρθ, ᶠu₃, ᶜρ, ᶜρθ, dt, energy_upwinding)
         vertical_transport_jac!(
             ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-            ᶠw[colidx],
+            ᶠu₃[colidx],
             ᶜρ[colidx],
             ᶜρθ[colidx],
             energy_upwinding,
@@ -157,10 +157,10 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         ᶜρe = Y.c.ρe_tot
         ᶜρh = p.ᶜtemp_scalar
         @. ᶜρh[colidx] = ᶜρe[colidx] + ᶜp[colidx]
-        # vertical_transport!(Yₜ.c.ρe_tot, ᶠw, ᶜρ, ᶜρh, dt, energy_upwinding)
+        # vertical_transport!(Yₜ.c.ρe_tot, ᶠu₃, ᶜρ, ᶜρh, dt, energy_upwinding)
         vertical_transport_jac!(
             ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-            ᶠw[colidx],
+            ᶠu₃[colidx],
             ᶜρ[colidx],
             ᶜρh[colidx],
             energy_upwinding,
@@ -172,7 +172,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
                 # If we ignore the dependence of pressure on moisture,
                 # ∂(ᶜp)/∂(ᶜK) = -ᶜρ * R_d / cv_d
                 @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 -= compose(
-                    ᶜdivᵥ_stencil(ᶠw[colidx]),
+                    ᶜdivᵥ_stencil(ᶠu₃[colidx]),
                     compose(
                         ᶠinterp_stencil(one(ᶜp[colidx])),
                         -(ᶜρ[colidx] * R_d / cv_d) * ∂ᶜK∂ᶠw_data[colidx],
@@ -288,7 +288,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     end
 
     if p.atmos.rayleigh_sponge isa RayleighSponge
-        # ᶠwₜ -= p.ᶠβ_rayleigh_w * ᶠw
+        # ᶠwₜ -= p.ᶠβ_rayleigh_w * ᶠu₃
         # ∂(ᶠwₜ)/∂(ᶠw_data) -= p.ᶠβ_rayleigh_w
         @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx].coefs.:2 -= p.ᶠβ_rayleigh_w[colidx]
     end
@@ -296,10 +296,10 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
         ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
         ᶜρc = getproperty(Y.c, ᶜρc_name)
-        # vertical_transport!(ᶜρcₜ, ᶠw, ᶜρ, ᶜρc, dt, tracer_upwinding)
+        # vertical_transport!(ᶜρcₜ, ᶠu₃, ᶜρ, ᶜρc, dt, tracer_upwinding)
         vertical_transport_jac!(
             ∂ᶜρcₜ∂ᶠ𝕄[colidx],
-            ᶠw[colidx],
+            ᶠu₃[colidx],
             ᶜρ[colidx],
             ᶜρc[colidx],
             tracer_upwinding,

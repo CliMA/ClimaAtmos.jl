@@ -23,13 +23,13 @@ except for `ᶜp` (we assume that the pressure is the same across all subdomains
     - `_ʲs`: a tuple of the values for the mass-flux subdomains
 In addition, there are several other SGS quantities for the EDMFX model:
     - `ᶜρa⁰`: the area-weighted air density of the environment on cell centers
-    - `ᶠw⁰`: the vertical component of the covariant velocity of the environment
+    - `ᶠu₃⁰`: the vertical component of the covariant velocity of the environment
         on cell faces
     - `ᶜρ⁰`: the air density of the environment on cell centers
     - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
         centers
 
-TODO: Rename `ᶜK` to `ᶜκ`, and rename `ᶠw` to `ᶠuᵥ`.
+TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
@@ -48,7 +48,7 @@ function precomputed_quantities(Y, atmos)
         (;
             ᶜspecific⁰ = specific_full_sgs⁰.(Y.c, atmos.turbconv_model),
             ᶜρa⁰ = similar(Y.c, FT),
-            ᶠw⁰ = similar(Y.f, C3{FT}),
+            ᶠu₃⁰ = similar(Y.f, C3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
@@ -76,58 +76,65 @@ end
 """
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
 
-Modifies `Y.f.w` so that `ᶠu³` is 0 at the surface. If `turbconv_model` is
-EDMFX, also modifies `Y.f.sgsʲs` so that each `wʲ` is equal to `w` at the
+Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. If `turbconv_model` is
+EDMFX, also modifies `Y.f.sgsʲs` so that each `u₃ʲ` is equal to `u₃` at the
 surface.
 """
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
-    sfc_w₃ = Fields.level(Y.f.w.components.data.:1, half)
+    sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g = Fields.local_geometry_field(sfc_w₃).gⁱʲ.components.data
+    sfc_g = Fields.local_geometry_field(sfc_u₃).gⁱʲ.components.data
     end_index = fieldcount(eltype(sfc_g)) # This will be 4 in 2D and 9 in 3D.
     sfc_g³³ = sfc_g.:($end_index) # For both 2D and 3D spaces, g³³ = g[end].
-    @. sfc_w₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
+    @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
     for j in 1:n_mass_flux_subdomains(turbconv_model)
-        sfc_w₃ʲ = Fields.level(Y.f.sgsʲs.:($j).w.components.data.:1, half)
-        @. sfc_w₃ʲ = sfc_w₃
+        sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
+        @. sfc_u₃ʲ = sfc_u₃
     end
 end
 
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
-# ᶠw, and it is also used to set the SGS quantities based on ᶠw⁰ and ᶠwʲ.
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠw, ᶜuₕ, ᶠuₕ³)
+# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
+function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     Fields.bycolumn(axes(ᶜu)) do colidx
-        @. ᶜu[colidx] = C123(ᶜuₕ[colidx]) + ᶜinterp(C123(ᶠw[colidx]))
-        @. ᶠu³[colidx] = ᶠuₕ³[colidx] + CT3(ᶠw[colidx])
-        compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠw[colidx])
+        @. ᶜu[colidx] = C123(ᶜuₕ[colidx]) + ᶜinterp(C123(ᶠu₃[colidx]))
+        @. ᶠu³[colidx] = ᶠuₕ³[colidx] + CT3(ᶠu₃[colidx])
+        compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠu₃[colidx])
     end
 end
 
-function set_sgs_ᶠw!(w_function, ᶠw, Y, turbconv_model)
+function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
-    wʲs(sgsʲs) = map(sgsʲ -> sgsʲ.w, sgsʲs)
+    u₃ʲs(sgsʲs) = map(sgsʲ -> sgsʲ.u₃, sgsʲs)
     Fields.bycolumn(axes(Y.c)) do colidx
-        @. ᶠw[colidx] = w_function(
+        @. ᶠu₃[colidx] = w_function(
             ᶠinterp(ρaʲs(Y.c.sgsʲs[colidx])),
-            wʲs(Y.f.sgsʲs[colidx]),
+            u₃ʲs(Y.f.sgsʲs[colidx]),
             ᶠinterp(Y.c.ρ[colidx]),
-            Y.f.w[colidx],
+            Y.f.u₃[colidx],
             turbconv_model,
         )
     end
 end
 
-function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠw⁰, turbconv_model)
-    function do_col!(ᶜK, Yc, Yf, ᶜρa⁰, ᶠw⁰)
-        @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠw⁰ - Yf.w, CT3(ᶠw⁰ - Yf.w))) / 2 / Yc.ρ
+function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
+    function do_col!(ᶜK, Yc, Yf, ᶜρa⁰, ᶠu₃⁰)
+        @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             ᶜρaʲ = Yc.sgsʲs.:($j).ρa
-            ᶠwʲ = Yf.sgsʲs.:($j).w
-            @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠwʲ - Yf.w, CT3(ᶠwʲ - Yf.w))) / 2 / Yc.ρ
+            ᶠu₃ʲ = Yf.sgsʲs.:($j).u₃
+            @. ᶜK +=
+                ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
         end
     end
     Fields.bycolumn(axes(Y.c)) do colidx
-        do_col!(ᶜK[colidx], Y.c[colidx], Y.f[colidx], ᶜρa⁰[colidx], ᶠw⁰[colidx])
+        do_col!(
+            ᶜK[colidx],
+            Y.c[colidx],
+            Y.f[colidx],
+            ᶜρa⁰[colidx],
+            ᶠu₃⁰[colidx],
+        )
     end
 end
 
@@ -229,7 +236,7 @@ function set_precomputed_quantities!(Y, p, t)
     # like enforce_constraints!).
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.w, Y.c.uₕ, ᶠuₕ³)
+    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
@@ -241,7 +248,7 @@ function set_precomputed_quantities!(Y, p, t)
         # function of ᶜK itself. So, unless we run a nonlinear solver here, this
         # circular dependency will prevent us from computing the exact value of
         # ᶜK. For now, we will make the anelastic approximation ᶜρ⁰ ≈ ᶜρʲ ≈ ᶜρ.
-        # add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠw⁰, turbconv_model)
+        # add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
@@ -249,12 +256,12 @@ function set_precomputed_quantities!(Y, p, t)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     if n > 0
-        (; ᶜspecific⁰, ᶜρa⁰, ᶠw⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
+        (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
         (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
         @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
         @. ᶜρa⁰ = ρa⁰(Y.c)
-        set_sgs_ᶠw!(w⁰, ᶠw⁰, Y, turbconv_model)
-        set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠw⁰, Y.c.uₕ, ᶠuₕ³)
+        set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+        set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
         @. ᶜK⁰ += ᶜspecific⁰.tke
         @. ᶜts⁰ = ts_sgs(thermo_args..., ᶜspecific⁰, ᶜK⁰, ᶜΦ, ᶜp)
         @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
@@ -263,18 +270,18 @@ function set_precomputed_quantities!(Y, p, t)
             ᶜuʲ = ᶜuʲs.:($j)
             ᶠu³ʲ = ᶠu³ʲs.:($j)
             ᶜKʲ = ᶜKʲs.:($j)
-            ᶠwʲ = Y.f.sgsʲs.:($j).w
+            ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
             ᶜspecificʲ = ᶜspecificʲs.:($j)
             ᶜtsʲ = ᶜtsʲs.:($j)
             ᶜρʲ = ᶜρʲs.:($j)
-            set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠwʲ, Y.c.uₕ, ᶠuₕ³)
+            set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
             @. ᶜtsʲ = ts_sgs(thermo_args..., ᶜspecificʲ, ᶜKʲ, ᶜΦ, ᶜp)
             @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
             # When ᶜe_intʲ = ᶜe_int and ᶜq_totʲ = ᶜq_tot, we still observe that
             # ᶜρʲ != ᶜρ. This is because the conversion from ᶜρ to ᶜp to ᶜρʲ
             # introduces a tiny round-off error of order epsilon to ᶜρʲ. If left
-            # unchecked, this round-off error then changes the tendency of ᶠwʲ,
+            # unchecked, this round-off error then changes the tendency of ᶠu₃ʲ,
             # which in turn introduces an error to ᶠu³ʲ, which then increases
             # the error in ᶜρʲ. For now, we will filter ᶜρʲ to fix this. Note
             # that this will no longer be necessary after we add diffusion.
@@ -288,7 +295,7 @@ end
 """
     diagnostic_sgs_quantities(Y, p, t)
 
-Allocates, sets, and returns `ᶜspecific⁺`, `ᶠw⁺`, `ᶜu⁺`, `ᶠu³⁺`, `ᶜK⁺`, `ᶜts⁺`,
+Allocates, sets, and returns `ᶜspecific⁺`, `ᶠu₃⁺`, `ᶜu⁺`, `ᶠu³⁺`, `ᶜK⁺`, `ᶜts⁺`,
 `ᶜa⁺`, and `ᶜa⁰` in a way that is consistent with `set_precomputed_quantities!`.
 This function assumes that `set_precomputed_quantities!` has already been
 called.
@@ -301,11 +308,11 @@ function diagnostic_sgs_quantities(Y, p, t)
     ᶠuₕ³ = p.ᶠtemp_CT3
     set_ᶠuₕ³!(ᶠuₕ³, Y)
     ᶜspecific⁺ = @. specific_sgs⁺(Y.c, turbconv_model)
-    (ᶠw⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) = similar.((p.ᶠw⁰, p.ᶜu⁰, p.ᶠu³⁰, p.ᶜK⁰))
-    set_sgs_ᶠw!(w⁺, ᶠw⁺, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠw⁺, Y.c.uₕ, ᶠuₕ³)
+    (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) = similar.((p.ᶠu₃⁰, p.ᶜu⁰, p.ᶠu³⁰, p.ᶜK⁰))
+    set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
+    set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³)
     ᶜts⁺ = @. ts_sgs(thermo_args..., ᶜspecific⁺, ᶜK⁺, ᶜΦ, ᶜp)
     ᶜa⁺ = @. ρa⁺(Y.c) / TD.air_density(thermo_params, ᶜts⁺)
     ᶜa⁰ = @. ᶜρa⁰ / ᶜρ⁰
-    return (; ᶜspecific⁺, ᶠw⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
+    return (; ᶜspecific⁺, ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
 end

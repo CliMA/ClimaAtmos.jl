@@ -188,7 +188,7 @@ Yc.v_phy .= gfdl_ca_vcomp
 Yc.T .= gfdl_ca_temp
 Yc.qt .= gfdl_ca_sphum
 Yf = map(ᶠlocal_geometry) do lg
-    return (; w = Geometry.Covariant3Vector(FT(0), lg))
+    return (; u₃ = Geometry.Covariant3Vector(FT(0), lg))
 end
 Y = Fields.FieldVector(c = Yc, f = Yf)
 

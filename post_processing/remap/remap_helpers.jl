@@ -184,9 +184,9 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     nc_u[:, 1] = uh_phy.components.data.:1
     nc_v[:, 1] = uh_phy.components.data.:2
     # physical vertical velocity
-    ᶠw_phy = Geometry.WVector.(Y.f.w)
-    ᶜw_phy = ᶜinterp.(ᶠw_phy)
-    nc_w[:, 1] = ᶜw_phy
+    ᶠw = Geometry.WVector.(Y.f.u₃)
+    ᶜw = ᶜinterp.(ᶠw)
+    nc_w[:, 1] = ᶜw
     # diagnostic variables
     nc_pres[:, 1] = diag.pressure
     nc_T[:, 1] = diag.temperature

@@ -169,14 +169,14 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
     @. Yₜ.c.uₕ[colidx] = zero(Yₜ.c.uₕ[colidx])
 
-    @. Yₜ.f.w[colidx] =
+    @. Yₜ.f.u₃[colidx] =
         -(
             ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
             ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
         ) / ᶠinterp(Y.c.ρ[colidx])
     for j in 1:n
 
-        @. Yₜ.f.sgsʲs.:($$j).w[colidx] =
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] =
             -(
                 ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
                 ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
@@ -186,10 +186,10 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p
-        @. Yₜ.f.w[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.w[colidx]
+        @. Yₜ.f.u₃[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.u₃[colidx]
         for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).w[colidx] -=
-                ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).w[colidx]
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).u₃[colidx]
         end
     end
 end

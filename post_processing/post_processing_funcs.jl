@@ -123,7 +123,7 @@ function postprocessing_box(sol, output_dir)
     end
 
     Y = sol.u[end]
-    ᶠw = Geometry.WVector.(Y.f.w).components.data.:1
+    ᶠw = Geometry.WVector.(Y.f.u₃).components.data.:1
     p = Plots.plot(
         ᶠw,
         slice = (:, FT(parsed_args["y_max"] / 2), :),
@@ -177,7 +177,7 @@ function postprocessing(sol, output_dir, fps)
     Plots.mp4(anim, joinpath(output_dir, "v.mp4"), fps = fps)
 
     anim = Plots.@animate for Y in sol.u
-        ᶠw = Geometry.WVector.(Y.f.w).components.data.:1
+        ᶠw = Geometry.WVector.(Y.f.u₃).components.data.:1
         Plots.plot(
             ᶠw,
             level = ClimaCore.Utilities.PlusHalf(3),
@@ -247,9 +247,9 @@ function custom_postprocessing(sol, output_dir, p)
     Plots.mp4(anim, joinpath(output_dir, "T.mp4"), fps = 10)
 
     anim = @animate for Y in sol.u
-        w_phy = Geometry.WVector.(Y.f.w).components.data.:1
+        w = Geometry.WVector.(Y.f.u₃).components.data.:1
         Plots.plot(
-            vec(w_phy),
+            vec(w),
             vec(Fields.coordinate_field(Y.f).z ./ 1000);
             xlabel = "w [m/s]",
             ylabel = "z [km]",

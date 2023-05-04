@@ -77,7 +77,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
     end
     for j in 1:n
-        @. ᶠ∇²wʲs.:($$j) = wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).w.components.data.:1))
+        @. ᶠ∇²wʲs.:($$j) = wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).u₃.components.data.:1))
         if :θ in propertynames(ᶜspecificʲs.:($j))
             @. ᶜ∇²specific_energyʲs.:($$j) = wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
         elseif :e_tot in propertynames(ᶜspecificʲs.:($j))
@@ -117,7 +117,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
     for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).w.components.data.:1 -=
+        @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 -=
             κ₄ * wdivₕ(gradₕ(ᶠ∇²wʲs.:($$j)))
         ᶜρa_energyʲₜ =
             :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :

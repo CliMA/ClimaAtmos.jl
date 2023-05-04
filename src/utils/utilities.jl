@@ -8,7 +8,7 @@ import DiffEqBase
 import JLD2
 
 is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρaθ, :ρae_tot)
-is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :w, :ρw)
+is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
 is_turbconv_var(symbol) = symbol in (:turbconv, :sgsʲs, :sgs⁰)
 is_tracer_var(symbol) = !(
     symbol == :ρ ||
@@ -77,7 +77,7 @@ Compute the specific kinetic energy at cell centers, storing in `κ`, where `Y`
 is the model state.s
 """
 compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
-    compute_kinetic!(κ, Y.c.uₕ, Y.f.w)
+    compute_kinetic!(κ, Y.c.uₕ, Y.f.u₃)
 
 time_to_seconds(t::Number) =
     t == Inf ? t : error("Uncaught case in computing time from given string.")

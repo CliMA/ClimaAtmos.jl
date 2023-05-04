@@ -85,9 +85,9 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     for j in 1:n
         @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
     end
-    @. ᶠω¹² += CT12(curlₕ(Y.f.w))
+    @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
     for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).w))
+        @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
@@ -98,7 +98,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
             ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
             (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
-        @. Yₜ.f.w[colidx] -=
+        @. Yₜ.f.u₃[colidx] -=
             ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
         for j in 1:n
             # TODO: Figure out why putting these extractions outside of the
@@ -106,7 +106,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             (; ᶜuʲs, ᶜKʲs) = p
             local ᶠω¹²ʲs = p.ᶠtemp_CT12ʲs # Adding `local` reduces allocations.
 
-            @. Yₜ.f.sgsʲs.:($$j).w[colidx] -=
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
                 ᶠgradᵥ(ᶜKʲs.:($$j)[colidx])
         end

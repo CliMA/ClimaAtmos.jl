@@ -38,6 +38,6 @@ function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
                 wcurlₕ(Geometry.project(Geometry.Covariant3Axis(), curlₕ(ᶜuₕ))),
             )
         )
-    @. Yₜ.f.w.components.data.:1 +=
-        ᶠβ_viscous * wdivₕ(gradₕ(Y.f.w.components.data.:1))
+    @. Yₜ.f.u₃.components.data.:1 +=
+        ᶠβ_viscous * wdivₕ(gradₕ(Y.f.u₃.components.data.:1))
 end
