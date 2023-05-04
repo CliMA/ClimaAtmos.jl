@@ -332,9 +332,8 @@ function argparse_settings()
         arg_type = Bool
         default = false
         "--orographic_gravity_wave"
-        help = "Apply parameterization for orographic drag on horizontal mean flow"
-        arg_type = Bool
-        default = false
+        help = "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
+        arg_type = String
         "--perf_summary"
         help = "Flag for collecting performance summary information"
         arg_type = Bool

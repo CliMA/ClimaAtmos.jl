@@ -1,5 +1,55 @@
 using NCDatasets
 using Interpolations
+using Statistics: mean
+
+"""
+    calc_hmax_latlon(elev, lon, lat)
+
+    Calculated hmax used in orographic gravity wave
+    - elev: surface elevation
+    - lon: longitude
+    - lat: latitude
+"""
+function calc_hmax_latlon(elev, lon, lat, earth_radius)
+    println("compute hmax")
+    FT = eltype(elev)
+
+    # remove ocean topography
+    elev[elev .< FT(0)] .= FT(0)
+
+    dlat = lat[2] - lat[1]
+    dlon = lon[2] - lon[1]
+
+    scale =
+        sind(40) ./ earth_radius ./ sind.(max.(FT(20), abs.(lat))) .* FT(100e3) # FT(200e3) is used in the codes sent by Steve Garner
+
+    ilat_range = Int.(round.(scale ./ deg2rad(dlat)))
+    ilon_range =
+        min.(
+            Int.(round.(scale ./ (deg2rad(dlon) .* cosd.(lat)))),
+            Int(round(length(lon) / 16)),
+        )
+
+    hmax = zeros(size(elev))
+    for i in 1:length(lon)
+        for j in 1:length(lat)
+            # TODO: irange may not need clipping at the boundaries since it is on the closed lat circle
+            irange =
+                max(i - ilon_range[j], 1):min(i + ilon_range[j], length(lon))
+            jrange =
+                max(j - ilat_range[j], 1):min(j + ilat_range[j], length(lat))
+
+            # 4th moments of elevation
+            hmax[i, j] =
+                (mean(
+                    (elev[irange, jrange] .- mean(elev[irange, jrange])) .^
+                    FT(4),
+                ))^FT(0.25)
+        end
+    end
+    hmax[:, abs.(lat) .> FT(89)] .= FT(0)
+    return hmax
+end
 
 function get_OGW_info(Y, orographic_info_rll)
     FT = Spaces.undertype(axes(Y.c))

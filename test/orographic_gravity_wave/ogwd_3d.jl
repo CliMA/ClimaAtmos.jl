@@ -200,8 +200,8 @@ epsilon = 0.622
 @. Y.c.ρ = gfdl_ca_p / Y.c.T / R_d / (1 - Y.c.qt + Y.c.qt / epsilon)
 
 # Initialize cache vars for orographic gravity wave
-ogw = CA.OrographicGravityWave{FT}()
-p = CA.orographic_gravity_wave_cache(ogw, Y)
+ogw = CA.OrographicGravityWave{FT, String}()
+p = CA.orographic_gravity_wave_cache(ogw, Y, FT(radius))
 
 (; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) = p
 (; topo_ᶠτ_sat, topo_ᶠVτ) = p

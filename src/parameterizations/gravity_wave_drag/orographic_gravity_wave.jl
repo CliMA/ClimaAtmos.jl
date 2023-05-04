@@ -16,18 +16,24 @@ Not yet included in our codebase
 
 using ClimaCore: InputOutput
 
-orographic_gravity_wave_cache(::Nothing, Y) = NamedTuple()
+orographic_gravity_wave_cache(::Nothing, Y, radius) = NamedTuple()
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
-function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y)
+function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
     FT = Spaces.undertype(axes(Y.c))
     (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit) = ogw
 
-    orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
-    topo_info = get_OGW_info(Y, orographic_info_rll)
+    if ogw.topo_info == "gfdl_restart"
+        orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
+        topo_info = get_OGW_info(Y, orographic_info_rll)
+    elseif ogw.topo_info == "raw_topo"
+        # TODO: right now this option is not working since we have not figure out the T tensor computation
+        elevation_rll = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        topo_info = compute_OGW_info(Y, elevation_rll, radius)
+    end
 
     return (;
         Fr_crit = Fr_crit,
