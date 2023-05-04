@@ -92,7 +92,7 @@ all_best_mse["edmf_life_cycle_tan2018"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_life_cycle_tan2018"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_life_cycle_tan2018"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
 all_best_mse["edmf_life_cycle_tan2018"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0
-all_best_mse["edmf_life_cycle_tan2018"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_life_cycle_tan2018"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_rico"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_rico"][(:c, :ρ)] = 0
@@ -104,7 +104,7 @@ all_best_mse["edmf_rico"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_rico"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_rico"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
 all_best_mse["edmf_rico"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0
-all_best_mse["edmf_rico"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_rico"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_soares"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_soares"][(:c, :ρ)] = 0
@@ -113,7 +113,7 @@ all_best_mse["edmf_soares"][(:c, :uₕ, :components, :data, 1)] = 0
 all_best_mse["edmf_soares"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_soares"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_soares"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
-all_best_mse["edmf_soares"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_soares"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_nieuwstadt"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_nieuwstadt"][(:c, :ρ)] = 0
@@ -122,7 +122,7 @@ all_best_mse["edmf_nieuwstadt"][(:c, :uₕ, :components, :data, 1)] = 0
 all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_nieuwstadt"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
-all_best_mse["edmf_nieuwstadt"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_nieuwstadt"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_bomex"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_bomex"][(:c, :ρ)] = 0
@@ -134,7 +134,7 @@ all_best_mse["edmf_bomex"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
 all_best_mse["edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0
-all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_bomex"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["toml_edmf_bomex"] = OrderedCollections.OrderedDict()
 all_best_mse["toml_edmf_bomex"][(:c, :ρ)] = 0
@@ -146,7 +146,7 @@ all_best_mse["toml_edmf_bomex"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["toml_edmf_bomex"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["toml_edmf_bomex"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
 all_best_mse["toml_edmf_bomex"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0
-all_best_mse["toml_edmf_bomex"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["toml_edmf_bomex"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_bomex_jfnk"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_bomex_jfnk"][(:c, :ρ)] = 0
@@ -158,7 +158,7 @@ all_best_mse["edmf_bomex_jfnk"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_bomex_jfnk"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_bomex_jfnk"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
 all_best_mse["edmf_bomex_jfnk"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0
-all_best_mse["edmf_bomex_jfnk"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_bomex_jfnk"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_dycoms_rf01"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_dycoms_rf01"][(:c, :ρ)] = 0
@@ -170,7 +170,7 @@ all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :en, :ρatke)] = 0
 all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρarea)] = 0
 all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρae_tot)] = 0
 all_best_mse["edmf_dycoms_rf01"][(:c, :turbconv, :up, 1, :ρaq_tot)] = 0
-all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :u₃, :components, :data, 1)] = 0
+all_best_mse["edmf_dycoms_rf01"][(:f, :turbconv, :up, 1, :w, :components, :data, 1)] = 0
 #
 all_best_mse["edmf_trmm"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_trmm"][(:c, :ρ)] = 0
