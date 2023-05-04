@@ -1,7 +1,6 @@
 import NCRegressionTests
 import JSON
 import ClimaCore.Fields as Fields
-include(joinpath(@__DIR__, "mse_tables.jl"))
 include(joinpath(@__DIR__, "compute_mse.jl"))
 
 function perform_regression_tests(
