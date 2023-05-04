@@ -216,6 +216,7 @@ if !CA.is_distributed(comms_ctx) &&
     end
 end
 
+include(joinpath(@__DIR__, "..", "..", "regression_tests", "mse_tables.jl"))
 if parsed_args["regression_test"]
     # Test results against main branch
     include(
@@ -227,6 +228,13 @@ if parsed_args["regression_test"]
             "regression_tests.jl",
         ),
     )
+    @testset "Test regression table entries" begin
+        mse_keys = sort(collect(keys(all_best_mse[simulation.job_id])))
+        pcs = collect(Fields.property_chains(sol.u[end]))
+        for prop_chain in mse_keys
+            @test prop_chain in pcs
+        end
+    end
     perform_regression_tests(
         simulation.job_id,
         sol.u[end],
@@ -234,6 +242,8 @@ if parsed_args["regression_test"]
         simulation.output_dir,
     )
 end
+
+
 
 if parsed_args["check_conservation"]
     @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 25 * eps(FT)
