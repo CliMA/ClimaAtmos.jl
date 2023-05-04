@@ -101,7 +101,7 @@ function default_cache(
         simulation,
         spaces,
         atmos,
-        comms_ctx = Spaces_comm_context(axes(Y.c)),
+        comms_ctx = Fields.comm_context(axes(Y.c)),
         test_dycore_consistency = parsed_args["test_dycore_consistency"],
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,

@@ -627,3 +627,30 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
     return (args, kwargs)
 end
+
+import ClimaComms, Logging, NVTX
+function get_comms_context(device = ClimaComms.CPUDevice())
+    comms_ctx = ClimaComms.context(device)
+    ClimaComms.init(comms_ctx)
+    if ClimaComms.iamroot(comms_ctx)
+        Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Info))
+    else
+        Logging.global_logger(Logging.NullLogger())
+    end
+    if comms_ctx isa ClimaComms.SingletonCommsContext
+        @info "Setting up single-process ClimaAtmos run"
+    else
+        @info "Setting up distributed ClimaAtmos run" nprocs =
+            ClimaComms.nprocs(comms_ctx)
+    end
+    if NVTX.isactive()
+        # makes output on buildkite a bit nicer
+        if ClimaComms.iamroot(comms_ctx)
+            atexit() do
+                println("--- Saving profiler information")
+            end
+        end
+    end
+
+    return comms_ctx
+end
