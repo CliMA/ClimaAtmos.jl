@@ -415,14 +415,14 @@ steps:
 
       - label: ":genie: explicit baroclinic wave (ρe) equilmoist with EDMFX"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --ode_algo SSP33ShuOsher --apply_limiter false --moist equil --precip_model 0M --turbconv edmfx --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist --vert_diff true --C_E 0 --surface_scheme bulk
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --ode_algo SSP33ShuOsher --apply_limiter false --moist equil --precip_model 0M --turbconv edmfx --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":genie: EDMFX Bomex on a sphere"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --ode_algo SSP33ShuOsher --apply_limiter false --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --z_elem 60 --z_stretch false --z_max 3e3 --dt 0.001secs --t_end 0.1secs --dt_save_to_disk 0.01secs --reference_job_id edmf_bomex --vert_diff true --C_E 0 --surface_scheme bulk
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --ode_algo SSP33ShuOsher --apply_limiter false --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --z_elem 60 --z_stretch false --z_max 3e3 --dt 0.001secs --t_end 0.1secs --dt_save_to_disk 0.01secs --reference_job_id edmf_bomex
         artifact_paths: "edmfx_bomex_sphere/*"
         soft_fail: true
         agents:
@@ -436,7 +436,6 @@ steps:
           --x_max 1e4 --y_max 1e4 --x_elem 2 --y_elem 2 --z_elem 45 --z_max 30e3 --dz_bottom 50
           --moist equil --ode_algo SSP33ShuOsher --apply_limiter false --dt 0.1secs --t_end 1000secs
           --dt_save_to_disk 10secs
-          --vert_diff true --C_E 0 --surface_scheme bulk
 
         artifact_paths: "edmfx_adv_test_box/*"
         agents:

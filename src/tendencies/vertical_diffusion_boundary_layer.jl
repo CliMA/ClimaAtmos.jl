@@ -33,7 +33,6 @@ function vertical_diffusion_boundary_layer_cache(Y, atmos, ::VerticalDiffusion)
         Geometry.Covariant12Vector(FT(0), FT(0))
     ρ_dif_flux_uₕ = similar(z_bottom, typeof(tensor))
     ρ_dif_flux_h_tot = similar(z_bottom, Geometry.WVector{FT})
-    buoy_flux_surface = similar(z_bottom, FT)
     if :ρq_tot in propertynames(Y.c)
         ρ_dif_flux_q_tot = similar(z_bottom, Geometry.WVector{FT})
     else
@@ -114,7 +113,6 @@ function vertical_diffusion_boundary_layer_cache(Y, atmos, ::VerticalDiffusion)
         ρ_dif_flux_uₕ,
         ρ_dif_flux_h_tot,
         ρ_dif_flux_q_tot,
-        buoy_flux_surface,
         coupling,
         z_bottom,
     )
@@ -265,7 +263,6 @@ function get_surface_fluxes!(Y, p, t, colidx, ::VerticalDiffusion)
         uₕ_int_phys,
         params,
         coupling,
-        buoy_flux_surface,
     ) = p
     FT = eltype(params)
 
@@ -351,9 +348,6 @@ function get_surface_fluxes!(Y, p, t, colidx, ::VerticalDiffusion)
             )
         end
     end
-
-    @. buoy_flux_surface[colidx] = sfc_conditions[colidx].buoy_flux
-
 end
 
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) =
