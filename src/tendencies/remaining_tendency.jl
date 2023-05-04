@@ -50,6 +50,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         )
 
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
         # NOTE: All ρa tendencies should be applied before calling this function

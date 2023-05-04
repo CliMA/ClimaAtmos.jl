@@ -64,6 +64,7 @@ include(
 )
 include(joinpath("tendencies", "hyperdiffusion.jl"))
 include(joinpath("tendencies", "edmf_coriolis.jl"))
+include(joinpath("tendencies", "edmfx_closures.jl"))
 include(joinpath("parameterizations", "microphysics", "precipitation.jl"))
 include(joinpath("tendencies", "vertical_diffusion_boundary_layer.jl"))
 include(joinpath("parameterizations", "sponge", "rayleigh_sponge.jl"))
