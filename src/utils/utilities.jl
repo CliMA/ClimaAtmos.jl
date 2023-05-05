@@ -142,18 +142,3 @@ using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.AbstractCommsContext) = true # deprecate after upgrading
 # is_distributed(::ClimaComms.MPICommsContext) = true # use this after upgrading
-
-
-# TODO: remove after upgrading to latest ClimaCore:
-Spaces_comm_context(field::Fields.Field) = Spaces_comm_context(axes(field))
-
-Spaces_comm_context(space::Spaces.ExtrudedFiniteDifferenceSpace) =
-    Spaces_comm_context(space.horizontal_space)
-Spaces_comm_context(space::Spaces.SpectralElementSpace2D) =
-    Spaces_comm_context(space.topology)
-Spaces_comm_context(space::S) where {S <: Spaces.AbstractSpace} =
-    ClimaComms.SingletonCommsContext()
-import ClimaCore.Topologies as Topologies
-Spaces_comm_context(topology::Topologies.Topology2D) = topology.context
-Spaces_comm_context(topology::T) where {T <: Topologies.AbstractTopology} =
-    ClimaComms.SingletonCommsContext()

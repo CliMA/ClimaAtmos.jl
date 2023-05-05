@@ -23,7 +23,7 @@ indicating one of:
 results for simulations that have crashed.
 """
 function solve_atmos!(integrator)
-    comms_ctx = Spaces_comm_context(axes(integrator.u.c))
+    comms_ctx = Fields.comm_context(axes(integrator.u.c))
     try
         if CA.is_distributed(comms_ctx)
             ODE.step!(integrator)

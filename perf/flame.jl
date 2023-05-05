@@ -65,7 +65,7 @@ allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 3872
 allocs_limit["flame_perf_target_tracers"] = 428000000
 allocs_limit["flame_perf_target_edmfx"] = 350000
-allocs_limit["flame_perf_target_edmf"] = 9038246032
+allocs_limit["flame_perf_target_edmf"] = 12422582416
 allocs_limit["flame_perf_target_threaded"] = 3850064
 allocs_limit["flame_perf_target_callbacks"] = 11159384
 

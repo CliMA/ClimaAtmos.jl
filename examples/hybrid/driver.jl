@@ -1,21 +1,13 @@
 import ClimaAtmos as CA
+import ClimaComms
 
 s = CA.argparse_settings()
 if !(@isdefined parsed_args)
     parsed_args = CA.parse_commandline(s)
 end
 
-# TODO: can we move this into src/?
-using NVTX
-using ClimaComms
-if NVTX.isactive()
-    NVTX.enable_gc_hooks()
-    # makes output on buildkite a bit nicer
-    if ClimaComms.iamroot(comms_ctx) # TODO: this looks broken
-        atexit() do
-            println("--- Saving profiler information")
-        end
-    end
+if !(@isdefined comms_ctx) # Coupler compatibility
+    const comms_ctx = CA.get_comms_context(ClimaComms.CPUDevice())
 end
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
@@ -23,7 +15,6 @@ const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
 include("parameter_set.jl")
 params, parsed_args = create_parameter_set(FT, parsed_args, CA.cli_defaults(s))
 
-include("comms.jl")
 import ClimaAtmos.InitialConditions as ICs
 
 atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
@@ -32,12 +23,10 @@ simulation = CA.get_simulation(FT, parsed_args, comms_ctx)
 initial_condition = CA.get_initial_condition(parsed_args)
 
 # TODO: use import instead of using
-using Colors
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
 using JLD2
-using ClimaCore.DataLayouts
 using NCDatasets
 using ClimaCore
 using ClimaTimeSteppers
