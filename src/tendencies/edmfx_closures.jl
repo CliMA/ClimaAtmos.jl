@@ -119,7 +119,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
-    (; params, ᶜp, ᶜρ_ref, buoy_flux_surface) = p
+    (; params, ᶜp, ᶜρ_ref, sfc_conditions) = p
     (; ᶜρʲs, ᶜtsʲs, ᶜuʲs, ᶜspecificʲs, ᶜentr_detrʲs) = p
     (; ᶜρ⁰, ᶜts⁰, ᶜu⁰, ᶜspecific⁰) = p
 
@@ -134,7 +134,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             ᶜz[colidx],
             ᶜp[colidx],
             Y.c.ρ[colidx],
-            buoy_flux_surface[colidx],
+            sfc_conditions[colidx].buoy_flux,
             Y.c.sgsʲs.:($$j).ρa[colidx] / ᶜρʲs.:($$j)[colidx],
             get_physical_w(ᶜuʲs.:($$j)[colidx], ᶜlg[colidx]),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)[colidx]),
