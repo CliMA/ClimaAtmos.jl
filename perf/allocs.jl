@@ -2,6 +2,7 @@
 ca_dir = dirname(@__DIR__)
 example_dir = joinpath(ca_dir, "examples")
 include(joinpath(ca_dir, "src", "utils", "cli_options.jl"));
+include(joinpath(ca_dir, "src", "utils", "yaml_helper.jl"));
 
 import ClimaAtmos
 import ClimaCore
