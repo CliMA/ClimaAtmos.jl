@@ -275,7 +275,7 @@ function get_initial_condition(parsed_args)
             "MoistBaroclinicWave",
             "DecayingProfile",
             "MoistBaroclinicWaveWithEDMF",
-            "DryAdiabaticProfileEDMFX",
+            "MoistAdiabaticProfileEDMFX",
         ]
             return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
                 parsed_args["perturb_initstate"],
