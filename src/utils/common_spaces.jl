@@ -34,15 +34,18 @@ end
 function make_horizontal_space(
     mesh,
     quad,
-    ::ClimaComms.SingletonCommsContext,
+    comms_ctx::ClimaComms.SingletonCommsContext,
     bubble,
 )
     if mesh isa Meshes.AbstractMesh1D
-        topology = Topologies.IntervalTopology(mesh)
+        topology = Topologies.IntervalTopology(comms_ctx, mesh)
         space = Spaces.SpectralElementSpace1D(topology, quad)
     elseif mesh isa Meshes.AbstractMesh2D
-        topology =
-            Topologies.Topology2D(mesh, Topologies.spacefillingcurve(mesh))
+        topology = Topologies.Topology2D(
+            comms_ctx,
+            mesh,
+            Topologies.spacefillingcurve(mesh),
+        )
         space = Spaces.SpectralElementSpace2D(
             topology,
             quad;
