@@ -24,15 +24,16 @@ include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
 function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
     FT = Spaces.undertype(axes(Y.c))
-    (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit) = ogw
+    (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
 
     if ogw.topo_info == "gfdl_restart"
         orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
-        topo_info = get_OGW_info(Y, orographic_info_rll)
+        topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == "raw_topo"
-        # TODO: right now this option is not working since we have not figure out the T tensor computation
+        # TODO: right now this option may easily crash 
+        # because we did not incorporate any smoothing when interpolate back to model grid
         elevation_rll = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-        topo_info = compute_OGW_info(Y, elevation_rll, radius)
+        topo_info = compute_OGW_info(Y, elevation_rll, radius, γ, h_frac)
     end
 
     return (;
