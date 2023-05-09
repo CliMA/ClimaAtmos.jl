@@ -14,6 +14,7 @@ import ..PerfExperimental
 import ..C3
 import ..C12
 import ..EDMFX
+import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
 import ..gs_to_sgs
 

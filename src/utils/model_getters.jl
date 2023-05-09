@@ -312,7 +312,7 @@ function get_turbconv_model(
     turbconv_params,
 )
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in (nothing, "edmf", "edmfx")
+    @assert turbconv in (nothing, "edmf", "edmfx", "diagnostic_edmfx")
 
     return if turbconv == "edmf"
         TC.EDMFModel(
@@ -324,6 +324,8 @@ function get_turbconv_model(
         )
     elseif turbconv == "edmfx"
         EDMFX{turbconv_params.updraft_number}(turbconv_params.min_area)
+    elseif turbconv == "diagnostic_edmfx"
+        DiagnosticEDMFX{turbconv_params.updraft_number}(turbconv_params.min_area)
     else
         nothing
     end

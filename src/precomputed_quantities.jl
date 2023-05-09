@@ -52,6 +52,7 @@ function precomputed_quantities(Y, atmos)
     )
     sgs_quantities =
         n == 0 ? (;) :
+        atmos.turbconv_model isa EDMFX ? 
         (;
             ᶜspecific⁰ = specific_full_sgs⁰.(Y.c, atmos.turbconv_model),
             ᶜρa⁰ = similar(Y.c, FT),
@@ -71,6 +72,25 @@ function precomputed_quantities(Y, atmos)
                 atmos.energy_form isa TotalEnergy ?
                 (; ᶜh_totʲs = similar(Y.c, NTuple{n, FT})) : (;)
             )...,
+        ) : 
+        (;
+            ᶜρa⁰ = similar(Y.c, FT),
+            ᶠu₃⁰ = similar(Y.f, C3{FT}),
+            ᶠu³⁰ = similar(Y.f, CT3{FT}),
+            ᶜK⁰ = similar(Y.c, FT),
+            ᶜtke = similar(Y.c, FT),
+            ᶜts⁰ = similar(Y.c, TST),
+            ᶜρ⁰ = similar(Y.c, FT),
+            ᶜh_tot⁰ = similar(Y.c, FT),
+            ᶜq_tot⁰ = similar(Y.c, FT),
+            ᶜρaʲs = similar(Y.c, NTuple{n, FT}),
+            ᶠu₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
+            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
+            ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜh_totʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
         )
     return (; gs_quantities..., sgs_quantities...)
 end
@@ -96,9 +116,11 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
     sfc_g³³ = g³³_field(sfc_u₃)
     @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
-        sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
-        @. sfc_u₃ʲ = sfc_u₃
+    if turbconv_model isa EDMFX
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
+            @. sfc_u₃ʲ = sfc_u₃
+        end
     end
 end
 
@@ -271,28 +293,30 @@ function set_precomputed_quantities!(Y, p, t)
     end
 
     if n > 0
-        (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
-        (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
-        @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
-        @. ᶜρa⁰ = ρa⁰(Y.c)
-        set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
-        set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
-        @. ᶜK⁰ += ᶜspecific⁰.tke
-        @. ᶜts⁰ = ts_sgs(thermo_args..., ᶜspecific⁰, ᶜK⁰, ᶜΦ, ᶜp)
-        @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
-        @. ᶜspecificʲs = specific_sgsʲs(Y.c, turbconv_model)
-        for j in 1:n
-            ᶜuʲ = ᶜuʲs.:($j)
-            ᶠu³ʲ = ᶠu³ʲs.:($j)
-            ᶜKʲ = ᶜKʲs.:($j)
-            ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-            ᶜspecificʲ = ᶜspecificʲs.:($j)
-            ᶜtsʲ = ᶜtsʲs.:($j)
-            ᶜρʲ = ᶜρʲs.:($j)
-            set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
-            @. ᶜtsʲ = ts_sgs(thermo_args..., ᶜspecificʲ, ᶜKʲ, ᶜΦ, ᶜp)
-            @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
-
+        if turbconv_model isa EDMFX
+            (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
+            (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
+            @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
+            @. ᶜρa⁰ = ρa⁰(Y.c)
+            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+            @. ᶜK⁰ += ᶜspecific⁰.tke
+            @. ᶜts⁰ = ts_sgs(thermo_args..., ᶜspecific⁰, ᶜK⁰, ᶜΦ, ᶜp)
+            @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+            @. ᶜspecificʲs = specific_sgsʲs(Y.c, turbconv_model)
+            for j in 1:n
+                ᶜuʲ = ᶜuʲs.:($j)
+                ᶠu³ʲ = ᶠu³ʲs.:($j)
+                ᶜKʲ = ᶜKʲs.:($j)
+                ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
+                ᶜspecificʲ = ᶜspecificʲs.:($j)
+                ᶜtsʲ = ᶜtsʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
+                @. ᶜtsʲ = ts_sgs(thermo_args..., ᶜspecificʲ, ᶜKʲ, ᶜΦ, ᶜp)
+                @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+            end
+            
             # When ᶜe_intʲ = ᶜe_int and ᶜq_totʲ = ᶜq_tot, we still observe that
             # ᶜρʲ != ᶜρ. This is because the conversion from ᶜρ to ᶜp to ᶜρʲ
             # introduces a tiny round-off error of order epsilon to ᶜρʲ. If left
@@ -310,6 +334,29 @@ function set_precomputed_quantities!(Y, p, t)
                     ᶜtsʲ,
                     ᶜspecificʲ.e_tot,
                 )
+            end
+        else
+            (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
+            (; ᶜspecificʲs, ᶜρaʲ, ᶠu₃ʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
+            @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
+            @. ᶜρa⁰ = ρa⁰(Y.c)
+            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+            @. ᶜK⁰ += ᶜspecific⁰.tke
+            @. ᶜts⁰ = ts_sgs(thermo_args..., ᶜspecific⁰, ᶜK⁰, ᶜΦ, ᶜp)
+            @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+            @. ᶜspecificʲs = specific_sgsʲs(Y.c, turbconv_model)
+            for j in 1:n
+                ᶜuʲ = ᶜuʲs.:($j)
+                ᶠu³ʲ = ᶠu³ʲs.:($j)
+                ᶜKʲ = ᶜKʲs.:($j)
+                ᶠu₃ʲ = ᶠu₃ʲs.:($j)
+                ᶜspecificʲ = ᶜspecificʲs.:($j)
+                ᶜtsʲ = ᶜtsʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
+                @. ᶜtsʲ = ts_sgs(thermo_args..., ᶜspecificʲ, ᶜKʲ, ᶜΦ, ᶜp)
+                @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
             end
         end
     end

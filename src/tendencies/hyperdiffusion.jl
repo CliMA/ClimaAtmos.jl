@@ -17,6 +17,7 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     )
     sgs_quantities =
         n == 0 ? (;) :
+        atmos.turbconv_model isa EDMFX ?
         (;
             ᶜ∇²tke⁰ = similar(Y.c, FT),
             ᶠ∇²wʲs = similar(Y.f, NTuple{n, FT}),
@@ -24,6 +25,9 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
             ᶜ∇²specific_tracersʲs = remove_energy_var.(
                 specific_sgsʲs.(Y.c, atmos.turbconv_model)
             ),
+        ) :
+        (; 
+            ᶜ∇²tke⁰ = similar(Y.c, FT),
         )
     quantities = (; gs_quantities..., sgs_quantities...)
     if do_dss
@@ -46,7 +50,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²specific_energy) = p
-    if n > 0
+    if turbconv_model isa EDMFX
         (;
             ᶜρa⁰,
             ᶜspecific⁰,
@@ -76,13 +80,15 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if n > 0
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
     end
-    for j in 1:n
-        @. ᶠ∇²wʲs.:($$j) = wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).u₃.components.data.:1))
-        if :θ in propertynames(ᶜspecificʲs.:($j))
-            @. ᶜ∇²specific_energyʲs.:($$j) = wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
-        elseif :e_tot in propertynames(ᶜspecificʲs.:($j))
-            @. ᶜ∇²specific_energyʲs.:($$j) =
-                wdivₕ(gradₕ(ᶜspecificʲs.:($$j).e_tot + ᶜp / ᶜρʲs.:($$j)))
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            @. ᶠ∇²wʲs.:($$j) = wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).u₃.components.data.:1))
+            if :θ in propertynames(ᶜspecificʲs.:($j))
+                @. ᶜ∇²specific_energyʲs.:($$j) = wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
+            elseif :e_tot in propertynames(ᶜspecificʲs.:($j))
+                @. ᶜ∇²specific_energyʲs.:($$j) =
+                    wdivₕ(gradₕ(ᶜspecificʲs.:($$j).e_tot + ᶜp / ᶜρʲs.:($$j)))
+            end
         end
     end
 
@@ -116,14 +122,16 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if n > 0
         @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 -=
-            κ₄ * wdivₕ(gradₕ(ᶠ∇²wʲs.:($$j)))
-        ᶜρa_energyʲₜ =
-            :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :
-            Yₜ.c.sgsʲs.:($j).ρae_tot
-        @. ᶜρa_energyʲₜ -=
-            κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²specific_energyʲs.:($$j)))
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 -=
+                κ₄ * wdivₕ(gradₕ(ᶠ∇²wʲs.:($$j)))
+            ᶜρa_energyʲₜ =
+                :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :
+                Yₜ.c.sgsʲs.:($j).ρae_tot
+            @. ᶜρa_energyʲₜ -=
+                κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²specific_energyʲs.:($$j)))
+        end
     end
 end
 
@@ -144,10 +152,12 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     for χ_name in propertynames(ᶜ∇²specific_tracers)
         @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
     end
-    for j in 1:n
-        for χ_name in propertynames(ᶜ∇²specific_tracersʲs.:($j))
-            @. ᶜ∇²specific_tracersʲs.:($$j).:($$χ_name) =
-                wdivₕ(gradₕ(ᶜspecificʲs.:($$j).:($$χ_name)))
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            for χ_name in propertynames(ᶜ∇²specific_tracersʲs.:($j))
+                @. ᶜ∇²specific_tracersʲs.:($$j).:($$χ_name) =
+                    wdivₕ(gradₕ(ᶜspecificʲs.:($$j).:($$χ_name)))
+            end
         end
     end
 
@@ -175,12 +185,14 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. ᶜρχₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
         @. Yₜ.c.ρ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
-    for j in 1:n
-        for (ᶜρaχʲₜ, ᶜ∇²χʲ, _) in
-            matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜ∇²specific_tracersʲs.:($j))
-            @. ᶜρaχʲₜ -= κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            for (ᶜρaχʲₜ, ᶜ∇²χʲ, _) in
+                matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜ∇²specific_tracersʲs.:($j))
+                @. ᶜρaχʲₜ -= κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+                @. Yₜ.c.sgsʲs.:($$j).ρa -=
+                    κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
+            end
         end
     end
 end

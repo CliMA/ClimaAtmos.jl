@@ -86,16 +86,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         dt,
         density_upwinding,
     )
-    for j in 1:n
-        vertical_transport!(
-            Yₜ.c.sgsʲs.:($j).ρa[colidx],
-            ᶜJ[colidx],
-            Y.c.sgsʲs.:($j).ρa[colidx],
-            ᶠu³ʲs.:($j)[colidx],
-            ᶜ1[colidx],
-            dt,
-            edmfx_upwinding,
-        )
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            vertical_transport!(
+                Yₜ.c.sgsʲs.:($j).ρa[colidx],
+                ᶜJ[colidx],
+                Y.c.sgsʲs.:($j).ρa[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                ᶜ1[colidx],
+                dt,
+                edmfx_upwinding,
+            )
+        end
     end
 
     if :ρe_tot in propertynames(Yₜ.c)
@@ -135,31 +137,33 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             )
         end
     end
-    for j in 1:n
-        if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
-            (; ᶜh_totʲs) = p
-            vertical_transport!(
-                Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
-                ᶜJ[colidx],
-                Y.c.sgsʲs.:($j).ρa[colidx],
-                ᶠu³ʲs.:($j)[colidx],
-                ᶜh_totʲs.:($j)[colidx],
-                dt,
-                edmfx_upwinding,
-            )
-        end
-        for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
-            matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
-            χ_name == :e_tot && continue
-            vertical_transport!(
-                ᶜρaχʲₜ[colidx],
-                ᶜJ[colidx],
-                Y.c.sgsʲs.:($j).ρa[colidx],
-                ᶠu³ʲs.:($j)[colidx],
-                ᶜχʲ[colidx],
-                dt,
-                edmfx_upwinding,
-            )
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
+                (; ᶜh_totʲs) = p
+                vertical_transport!(
+                    Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
+                    ᶜJ[colidx],
+                    Y.c.sgsʲs.:($j).ρa[colidx],
+                    ᶠu³ʲs.:($j)[colidx],
+                    ᶜh_totʲs.:($j)[colidx],
+                    dt,
+                    edmfx_upwinding,
+                )
+            end
+            for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
+                matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
+                χ_name == :e_tot && continue
+                vertical_transport!(
+                    ᶜρaχʲₜ[colidx],
+                    ᶜJ[colidx],
+                    Y.c.sgsʲs.:($j).ρa[colidx],
+                    ᶠu³ʲs.:($j)[colidx],
+                    ᶜχʲ[colidx],
+                    dt,
+                    edmfx_upwinding,
+                )
+            end
         end
     end
 
@@ -170,21 +174,25 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
             ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
         ) / ᶠinterp(Y.c.ρ[colidx])
-    for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] =
-            -(
-                ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
-                ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
-                ᶠgradᵥ_ᶜΦ[colidx]
-            ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
+    if turbconv_model isa EDMFX
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] =
+                -(
+                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
+                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
+                    ᶠgradᵥ_ᶜΦ[colidx]
+                ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
+        end
     end
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p
         @. Yₜ.f.u₃[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.u₃[colidx]
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-                ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).u₃[colidx]
+        if turbconv_model isa EDMFX
+            for j in 1:n
+                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                    ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).u₃[colidx]
+            end
         end
     end
 end

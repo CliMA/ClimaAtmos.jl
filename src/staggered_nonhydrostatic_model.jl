@@ -235,15 +235,17 @@ function limiters_func!(Y, p, t, ref_Y)
             Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
             Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
         end
-        for j in 1:n
-            for ρaχ_name in
-                filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
-                ᶜρaχ_ref = ref_Y.c.sgsʲs.:($j).:($ρaχ_name)
-                ᶜρa_ref = ref_Y.c.sgsʲs.:($j).ρa
-                ᶜρaχ = Y.c.sgsʲs.:($j).:($ρaχ_name)
-                ᶜρa = Y.c.sgsʲs.:($j).ρa
-                Limiters.compute_bounds!(limiter, ᶜρaχ_ref, ᶜρa_ref)
-                Limiters.apply_limiter!(ᶜρaχ, ᶜρa, limiter)
+        if p.atmos.turbconv_model isa EDMFX
+            for j in 1:n
+                for ρaχ_name in
+                    filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
+                    ᶜρaχ_ref = ref_Y.c.sgsʲs.:($j).:($ρaχ_name)
+                    ᶜρa_ref = ref_Y.c.sgsʲs.:($j).ρa
+                    ᶜρaχ = Y.c.sgsʲs.:($j).:($ρaχ_name)
+                    ᶜρa = Y.c.sgsʲs.:($j).ρa
+                    Limiters.compute_bounds!(limiter, ᶜρaχ_ref, ᶜρa_ref)
+                    Limiters.apply_limiter!(ᶜρaχ, ᶜρa, limiter)
+                end
             end
         end
     end

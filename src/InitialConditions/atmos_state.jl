@@ -123,6 +123,13 @@ function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
     return (; sgs⁰, sgsʲs)
 end
 
+function turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars)
+    n = n_mass_flux_subdomains(turbconv_model)
+    a_draft = ls.turbconv_state.draft_area
+    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    return (; sgs⁰)
+end
+
 turbconv_face_variables(ls, ::Nothing) = (;)
 turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
     turbconv = (;
@@ -138,3 +145,4 @@ turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
         Val(n_mass_flux_subdomains(turbconv_model)),
     )
 )
+turbconv_face_variables(ls, turbconv_model::DiagnosticEDMFX) = (;)
