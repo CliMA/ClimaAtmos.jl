@@ -8,6 +8,7 @@ import ClimaCore.Operators as Operators
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import OrdinaryDiffEq as ODE
+import Insolation
 import Thermodynamics as TD
 import .Parameters as CAP
 import RRTMGP
@@ -15,6 +16,9 @@ import .RRTMGPInterface as RRTMGPI
 
 using Dierckx: Spline1D
 using StatsBase: mean
+
+# TODO: Move to Insolation.jl
+Base.broadcastable(x::Insolation.OrbitalData) = tuple(x)
 
 #####
 ##### No Radiation
@@ -59,6 +63,7 @@ function radiation_model_cache(
         latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     local radiation_model
+    orbital_data = Insolation.OrbitalData()
     data_loader(joinpath("atmos_state", "clearsky_as.nc")) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
@@ -208,6 +213,7 @@ function radiation_model_cache(
     end
     return (;
         idealized_insolation,
+        orbital_data,
         idealized_h2o,
         idealized_clouds,
         radiation_model,

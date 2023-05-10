@@ -186,6 +186,7 @@ function rrtmgp_model_callback!(integrator)
         max_zenith_angle = FT(π) / 2 - eps(FT)
         irradiance = FT(CAP.tot_solar_irrad(params))
         au = FT(CAP.astro_unit(params))
+        (; orbital_data) = p
 
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -200,6 +201,7 @@ function rrtmgp_model_callback!(integrator)
             ref_insolation_params = tuple(insolation_params)
             @. insolation_tuple = instantaneous_zenith_angle(
                 current_datetime,
+                orbital_data,
                 Float64(bottom_coords.long),
                 Float64(bottom_coords.lat),
                 ref_insolation_params,
@@ -212,6 +214,7 @@ function rrtmgp_model_callback!(integrator)
             # assume that the latitude and longitude are both 0 for flat space
             insolation_tuple = instantaneous_zenith_angle(
                 current_datetime,
+                orbital_data,
                 0.0,
                 0.0,
                 insolation_params,
