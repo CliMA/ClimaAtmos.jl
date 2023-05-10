@@ -1,7 +1,7 @@
 status = [
-  # "ci 1.8.5 - ubuntu-latest",
-  # "ci 1.8.5 - windows-latest",
-  # "ci 1.8.5 - macos-latest",
+  # "ci 1.9.0 - ubuntu-latest",
+  # "ci 1.9.0 - windows-latest",
+  # "ci 1.9.0 - macos-latest",
   "buildkite/climaatmos-ci",
   "docbuild",
   "format",

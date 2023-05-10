@@ -13,7 +13,7 @@ Here is a sbatch script template for setting up simulations using multithreading
 #SBATCH --output=$YOUR_SIMULATION_LOG_DIR/simulation.log
 
 module purge
-module load julia/1.8.5
+module load julia/1.9.0
 
 export JULIA_MPI_BINARY=system
 export JULIA_CUDA_USE_BINARYBUILDER=false
@@ -43,7 +43,7 @@ Here is a sbatch script template for setting up simulations using mpi on caltech
 #SBATCH --output=$YOUR_SIMULATION_LOG_DIR/simulation.log
 
 module purge
-module load julia/1.8.5 openmpi/4.1.1 hdf5/1.12.1-ompi411
+module load julia/1.9.0 openmpi/4.1.1 hdf5/1.12.1-ompi411
 
 export JULIA_MPI_BINARY=system
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}

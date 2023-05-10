@@ -13,7 +13,7 @@ profiling=disable
 # set up environment and agents
 cat << EOM
 env:
-  JULIA_VERSION: "1.8.5"
+  JULIA_VERSION: "1.9.0"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   CUDA_VERSION: "11.3"
