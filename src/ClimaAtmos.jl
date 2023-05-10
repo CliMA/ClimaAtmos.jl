@@ -3,6 +3,8 @@ module ClimaAtmos
 using NVTX, Colors
 import Thermodynamics as TD
 
+include(joinpath(@__DIR__, "..", "artifacts", "artifact_funcs.jl"))
+
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 

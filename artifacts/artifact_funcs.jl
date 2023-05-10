@@ -74,3 +74,12 @@ function gfdl_ogw_data_path()
     )
     return AW.get_data_folder(gfdl_data)
 end
+
+function rrtmgp_artifact_path(path)
+    artifact_name = "RRTMGPReferenceData"
+    artifacts_file = joinpath(path, "test", "Artifacts.toml")
+    return joinpath(
+        Pkg.Artifacts.ensure_artifact_installed(artifact_name, artifacts_file),
+        artifact_name,
+    )
+end

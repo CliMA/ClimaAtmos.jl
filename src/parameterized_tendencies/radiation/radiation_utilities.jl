@@ -12,15 +12,7 @@ import RRTMGP
 Returns the filename of an artifact stored in
 `RRTMGPReferenceData/<file_name>`.
 """
-function rrtmgp_artifact(file_name)
-    artifact_name = "RRTMGPReferenceData"
-    artifacts_file = joinpath(pkgdir(RRTMGP), "test", "Artifacts.toml")
-    data_folder = joinpath(
-        Pkg.Artifacts.ensure_artifact_installed(artifact_name, artifacts_file),
-        artifact_name,
-    )
-    return joinpath(data_folder, file_name)
-end
+rrtmgp_artifact(file_name) = joinpath(rrtmgp_artifact_path(), file_name)
 
 """
     data_loader(fn, file_name)
