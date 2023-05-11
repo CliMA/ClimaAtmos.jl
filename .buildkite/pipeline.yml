@@ -211,13 +211,15 @@ steps:
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
-      - label: ":computer: SSP 3rd-order tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+      - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --dt 450secs --dt_save_to_disk 5days --ode_algo SSP333 --tracer_upwinding third_order --energy_upwinding third_order --regression_test true
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
-          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-        artifact_paths: "sphere_third_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --dt 350secs --max_newton_iters 4 --t_end 8days --dt_save_to_disk 4days --ode_algo SSP333 --tracer_upwinding zalesak --energy_upwinding zalesak --regression_test true
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --fig_dir sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --case_name moist_baroclinic_wave
+          - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
@@ -440,7 +442,7 @@ steps:
         artifact_paths: "edmfx_adv_test_box/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: EDMFX advection test in a sphere"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_adv_test_sphere
