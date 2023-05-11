@@ -79,6 +79,17 @@ is the model state.s
 compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
     compute_kinetic!(κ, Y.c.uₕ, Y.f.u₃)
 
+"""
+    g³³_field(field)
+
+Extracts the value of `g³³` from `Fields.local_geometry_field(field)`.
+"""
+function g³³_field(field)
+    g_field = Fields.local_geometry_field(field).gⁱʲ.components.data
+    end_index = fieldcount(eltype(g_field)) # This will be 4 in 2D and 9 in 3D.
+    return g_field.:($end_index) # For both 2D and 3D spaces, g³³ = g[end].
+end
+
 time_to_seconds(t::Number) =
     t == Inf ? t : error("Uncaught case in computing time from given string.")
 

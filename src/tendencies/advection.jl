@@ -10,7 +10,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu, ᶜK, ᶜp, ᶜΦ, ᶜp_ref) = p
     if n > 0
-        (; ᶜu⁰, ᶜuʲs, ᶜρʲs) = p
+        (; ᶜu⁰, ᶜuʲs) = p
     end
 
     @. Yₜ.c.ρ -= divₕ(Y.c.ρ * ᶜu)
@@ -21,18 +21,16 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜu)
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot -= divₕ((Y.c.ρe_tot + ᶜp) * ᶜu)
+        (; ᶜh_tot) = p
+        @. Yₜ.c.ρe_tot -= divₕ(Y.c.ρ * ᶜh_tot * ᶜu)
     end
     for j in 1:n
         if :ρθ in propertynames(Y.c)
             @. Yₜ.c.sgsʲs.:($$j).ρaθ -= divₕ(Y.c.sgsʲs.:($$j).ρaθ * ᶜuʲs.:($$j))
         elseif :ρe_tot in propertynames(Y.c)
-            @. Yₜ.c.sgsʲs.:($$j).ρae_tot -= divₕ(
-                (
-                    Y.c.sgsʲs.:($$j).ρae_tot +
-                    Y.c.sgsʲs.:($$j).ρa * ᶜp / ᶜρʲs.:($$j)
-                ) * ᶜuʲs.:($$j),
-            )
+            (; ᶜh_totʲs) = p
+            @. Yₜ.c.sgsʲs.:($$j).ρae_tot -=
+                divₕ(Y.c.sgsʲs.:($$j).ρa * ᶜh_totʲs.:($$j) * ᶜuʲs.:($$j))
         end
     end
 
