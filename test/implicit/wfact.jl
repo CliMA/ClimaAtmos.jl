@@ -38,12 +38,5 @@ function verify_wfact_matrix(W, Y, p, dtγ, t)
 
     ∂ᶠ𝕄ₜ∂ᶜρ_approx = matrix_column(∂ᶠ𝕄ₜ∂ᶜρ, axes(Y.c), i, j, h)
     ∂ᶠ𝕄ₜ∂ᶜρ_exact = exact_column_jacobian_block(args..., (:f, :u₃), (:c, :ρ))
-    if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-        @assert ∂ᶠ𝕄ₜ∂ᶜρ_approx ≈ ∂ᶠ𝕄ₜ∂ᶜρ_exact
-    else
-        err = norm(∂ᶠ𝕄ₜ∂ᶜρ_approx .- ∂ᶠ𝕄ₜ∂ᶜρ_exact) / norm(∂ᶠ𝕄ₜ∂ᶜρ_exact)
-        @assert err < 0.03
-        # Note: the highest value seen so far for ρe_tot is ~0.01, and the
-        # highest value seen so far for ρθ is ~0.02
-    end
+    @assert ∂ᶠ𝕄ₜ∂ᶜρ_approx ≈ ∂ᶠ𝕄ₜ∂ᶜρ_exact
 end

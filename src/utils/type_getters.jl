@@ -345,10 +345,8 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
 is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
-jacobi_flags(::TotalEnergy) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
-jacobi_flags(::PotentialTemperature) =
-    (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact, ∂ᶠ𝕄ₜ∂ᶜρ_mode = :exact)
+jacobi_flags(::TotalEnergy) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK)
+jacobi_flags(::PotentialTemperature) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact)
 
 function jac_kwargs(ode_algo, Y, energy_form)
     if is_implicit(ode_algo)
