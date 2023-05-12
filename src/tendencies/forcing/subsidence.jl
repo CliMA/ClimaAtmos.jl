@@ -30,33 +30,23 @@ function subsidence_cache(Y, subsidence::Subsidence)
         ᶜ∇q_ice_gm = similar(Y.c, FT), # TODO: fix types
         ᶜMSE_gm_toa = similar(toa(Y.c), FT),
         ᶜq_tot_gm_toa = similar(toa(Y.c), FT),
-        ᶜh_tot = similar(Y.c, FT),
     )
 end
 
 function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
     (; moisture_model) = p
-    thermo_params = CAP.thermodynamics_params(p.params)
     subsidence_profile = p.subsidence.prof
-    FT = Spaces.undertype(axes(Y.c))
-
     ᶜ∇MSE_gm = p.ᶜ∇MSE_gm[colidx]
     ᶜsubsidence = p.ᶜsubsidence[colidx]
     ᶜ∇q_tot_gm = p.ᶜ∇q_tot_gm[colidx]
     ᶜK = p.ᶜK[colidx]
     ᶜh_tot = p.ᶜh_tot[colidx]
-    ᶜts = p.ᶜts[colidx]
     ᶜMSE_gm_toa = p.ᶜMSE_gm_toa[colidx]
     ᶜq_tot_gm_toa = p.ᶜq_tot_gm_toa[colidx]
 
     toa(f) = Spaces.level(f, Spaces.nlevels(axes(f)))
     wvec = Geometry.WVector
     ∇c = Operators.DivergenceF2C()
-    @. ᶜh_tot = TD.total_specific_enthalpy(
-        thermo_params,
-        ᶜts,
-        Y.c.ρe_tot[colidx] / Y.c.ρ[colidx],
-    )
 
     z = Fields.coordinate_field(axes(ᶜsubsidence))
     @. ᶜsubsidence = subsidence_profile(z.z)
@@ -84,8 +74,8 @@ function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
             Operators.RightBiasedC2F(; top = Operators.SetValue(q_liq_gm_toa))
         RBq_ice =
             Operators.RightBiasedC2F(; top = Operators.SetValue(q_ice_gm_toa))
-        @. ᶜ∇q_liq_gm = ∇c(wvec(RBq(Y.c.q_liq[colidx])))
-        @. ᶜ∇q_ice_gm = ∇c(wvec(RBq(Y.c.q_ice[colidx])))
+        @. ᶜ∇q_liq_gm = ∇c(wvec(RBq_liq(Y.c.q_liq[colidx])))
+        @. ᶜ∇q_ice_gm = ∇c(wvec(RBq_ice(Y.c.q_ice[colidx])))
     end
 
     # LS Subsidence

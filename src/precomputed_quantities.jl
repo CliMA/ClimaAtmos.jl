@@ -17,6 +17,9 @@ Allocates and returns the precomputed quantities:
     - `ᶜts`: the thermodynamic state on cell centers
     - `ᶜp`: the air pressure on cell centers
 
+If the `energy_form` is TotalEnergy, there is an additional quantity:
+    - `ᶜh_tot`: the total enthalpy on cell centers
+
 If the `turbconv_model` is EDMFX, there also two SGS versions of every quantity
 except for `ᶜp` (we assume that the pressure is the same across all subdomains):
     - `_⁰`: the value for the environment
@@ -42,6 +45,10 @@ function precomputed_quantities(Y, atmos)
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
+        (
+            atmos.energy_form isa TotalEnergy ?
+            (; ᶜh_tot = similar(Y.c, FT)) : (;)
+        )...,
     )
     sgs_quantities =
         n == 0 ? (;) :
@@ -60,6 +67,10 @@ function precomputed_quantities(Y, atmos)
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            (
+                atmos.energy_form isa TotalEnergy ?
+                (; ᶜh_totʲs = similar(Y.c, NTuple{n, FT})) : (;)
+            )...,
         )
     return (; gs_quantities..., sgs_quantities...)
 end
@@ -83,9 +94,7 @@ surface.
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
-    sfc_g = Fields.local_geometry_field(sfc_u₃).gⁱʲ.components.data
-    end_index = fieldcount(eltype(sfc_g)) # This will be 4 in 2D and 9 in 3D.
-    sfc_g³³ = sfc_g.:($end_index) # For both 2D and 3D spaces, g³³ = g[end].
+    sfc_g³³ = g³³_field(sfc_u₃)
     @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
@@ -255,6 +264,12 @@ function set_precomputed_quantities!(Y, p, t)
     @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
+    if energy_form isa TotalEnergy
+        (; ᶜh_tot) = p
+        @. ᶜh_tot =
+            TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+    end
+
     if n > 0
         (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
         (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
@@ -286,6 +301,16 @@ function set_precomputed_quantities!(Y, p, t)
             # the error in ᶜρʲ. For now, we will filter ᶜρʲ to fix this. Note
             # that this will no longer be necessary after we add diffusion.
             @. ᶜρʲ = ifelse(abs(ᶜρʲ - Y.c.ρ) <= 2 * eps(Y.c.ρ), Y.c.ρ, ᶜρʲ)
+
+            if energy_form isa TotalEnergy
+                (; ᶜh_totʲs) = p
+                ᶜh_totʲ = ᶜh_totʲs.:($j)
+                @. ᶜh_totʲ = TD.total_specific_enthalpy(
+                    thermo_params,
+                    ᶜtsʲ,
+                    ᶜspecificʲ.e_tot,
+                )
+            end
         end
     end
 

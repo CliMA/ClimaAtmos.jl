@@ -99,8 +99,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     end
 
     if :ρe_tot in propertynames(Yₜ.c)
-        ᶜh_tot = ᶜtemp_scalar
-        @. ᶜh_tot[colidx] = ᶜspecific.e_tot[colidx] + ᶜp[colidx] / Y.c.ρ[colidx]
+        (; ᶜh_tot) = p
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
             ᶜJ[colidx],
@@ -138,16 +137,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     end
     for j in 1:n
         if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
-            ᶜh_totʲ = ᶜtemp_scalar
-            @. ᶜh_totʲ[colidx] =
-                ᶜspecificʲs.:($$j).e_tot[colidx] +
-                ᶜp[colidx] / ᶜρʲs.:($$j)[colidx]
+            (; ᶜh_totʲs) = p
             vertical_transport!(
                 Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
                 ᶜJ[colidx],
                 Y.c.sgsʲs.:($j).ρa[colidx],
                 ᶠu³ʲs.:($j)[colidx],
-                ᶜh_totʲ[colidx],
+                ᶜh_totʲs.:($j)[colidx],
                 dt,
                 edmfx_upwinding,
             )
@@ -175,7 +171,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
         ) / ᶠinterp(Y.c.ρ[colidx])
     for j in 1:n
-
         @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] =
             -(
                 ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +

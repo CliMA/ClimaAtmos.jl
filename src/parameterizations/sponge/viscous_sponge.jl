@@ -23,13 +23,14 @@ function viscous_sponge_cache(viscous_sponge::ViscousSponge, Y)
 end
 
 function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
-    (; ᶜβ_viscous, ᶠβ_viscous, ᶜp) = p
+    (; ᶜβ_viscous, ᶠβ_viscous) = p
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
     elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ((Y.c.ρe_tot + ᶜp) / ᶜρ))
+        (; ᶜh_tot) = p
+        @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(ᶜh_tot))
     end
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (

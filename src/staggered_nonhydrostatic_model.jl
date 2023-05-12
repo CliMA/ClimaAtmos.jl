@@ -32,7 +32,7 @@ function temporary_quantities(atmos, center_space, face_space)
     FT = Spaces.undertype(center_space)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;
-        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜh_tot, ᶜh_totʲ
+        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²

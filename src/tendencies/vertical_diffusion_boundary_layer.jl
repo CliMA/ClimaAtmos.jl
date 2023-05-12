@@ -396,16 +396,13 @@ function vertical_diffusion_boundary_layer_tendency!(
     end
 
     if :ρe_tot in propertynames(Y.c)
+        (; ᶜh_tot) = p
         ᶜdivᵥ = Operators.DivergenceF2C(
             top = Operators.SetValue(Geometry.WVector(FT(0))),
             bottom = Operators.SetValue(ρ_dif_flux_h_tot[colidx]),
         )
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(
-            -(
-                ᶠK_E[colidx] *
-                ᶠinterp(ᶜρ[colidx]) *
-                ᶠgradᵥ((Y.c.ρe_tot[colidx] + ᶜp[colidx]) / ᶜρ[colidx])
-            ),
+            -(ᶠK_E[colidx] * ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ(ᶜh_tot[colidx])),
         )
     end
 
