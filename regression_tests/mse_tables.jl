@@ -83,12 +83,12 @@ all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :ρq_tot)] 
 all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:f, :u₃, :components, :data, 1)] = 0.0
 #
 all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρ)] = 0.0
-all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :uₕ, :components, :data, 1)] = 0.0
-all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :uₕ, :components, :data, 2)] = 0.0
-all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρe_tot)] = 0.0
-all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρq_tot)] = 0.0
-all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:f, :u₃, :components, :data, 1)] = 0.0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρ)] = 0.368392059246862
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :uₕ, :components, :data, 1)] = 805964.6886908296
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :uₕ, :components, :data, 2)] = 1.3045948104340408e6
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρe_tot)] = 29.630841248478678
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρq_tot)] = 43988.74760514929
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:f, :u₃, :components, :data, 1)] = 2.0091481790161123e6
 #
 all_best_mse["edmf_life_cycle_tan2018"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_life_cycle_tan2018"][(:c, :ρ)] = 0.0
