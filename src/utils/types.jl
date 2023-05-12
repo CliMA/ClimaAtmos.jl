@@ -75,6 +75,7 @@ Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
     γ::FT = 0.4
     ϵ::FT = 0.0
     β::FT = 0.5
+    h_frac::FT = 0.1
     ρscale::FT = 1.2
     L0::FT = 80e3
     a0::FT = 0.9

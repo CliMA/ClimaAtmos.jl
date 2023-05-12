@@ -82,6 +82,14 @@ all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :ρe_tot)] 
 all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:c, :ρq_tot)] = 0.0
 all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"][(:f, :u₃, :components, :data, 1)] = 0.0
 #
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"] = OrderedCollections.OrderedDict()
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρ)] = 0.0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :uₕ, :components, :data, 1)] = 0.0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :uₕ, :components, :data, 2)] = 0.0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρe_tot)] = 0.0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:c, :ρq_tot)] = 0.0
+all_best_mse["sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw"][(:f, :u₃, :components, :data, 1)] = 0.0
+#
 all_best_mse["edmf_life_cycle_tan2018"] = OrderedCollections.OrderedDict()
 all_best_mse["edmf_life_cycle_tan2018"][(:c, :ρ)] = 0.0
 all_best_mse["edmf_life_cycle_tan2018"][(:c, :ρe_tot)] = 0.0
