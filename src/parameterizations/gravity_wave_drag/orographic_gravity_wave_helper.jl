@@ -237,6 +237,7 @@ function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
 
     # compute hmax and hmin
     hpoz = calc_hpoz_latlon(elev, lon, lat, earth_radius)
+    hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
     hmax = @. (
         abs(hpoz) * (γ + FT(2)) / (FT(2) * γ) * (FT(1) - h_frac^(FT(2) * γ)) / (FT(1) - h_frac^(γ + FT(2)))
     )^(FT(1) / (FT(2) - γ))
