@@ -13,7 +13,6 @@
 [![ghaci][gha-ci-img]][gha-ci-url]
 [![buildkite][bk-ci-img]][bk-ci-url]
 [![codecov][codecov-img]][codecov-url]
-[![bors][bors-img]][bors-url]
 [![discussions][discussions-img]][discussions-url]
 [![col-prac][col-prac-img]][col-prac-url]
 
@@ -31,9 +30,6 @@
 
 [codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/CliMA/ClimaAtmos.jl
-
-[bors-img]: https://bors.tech/images/badge_small.svg
-[bors-url]: https://app.bors.tech/repositories/35474
 
 [col-prac-img]: https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square
 [col-prac-url]: https://github.com/SciML/ColPrac
