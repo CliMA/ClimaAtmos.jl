@@ -79,7 +79,7 @@ Regression tests are performed at the end of `examples/hybrid/driver.jl`, after 
 After these steps are performed at the end of the driver, additional jobs are run:
 
  1) Print `computed_mse` for all jobs to make updating `regression_tests/mse_tables.jl` easy
- 2) If we're on the staging branch (all tests have passed, and the PR is effectively merging), move the `NCDataset`s from the scratch directory onto the dedicated folder on the Caltech Central cluster.
+ 2) If we're on the github queue merging branch (all tests have passed, and the PR is effectively merging), move the `NCDataset`s from the scratch directory onto the dedicated folder on the Caltech Central cluster.
 
 ## How we track which dataset to compare against
 
