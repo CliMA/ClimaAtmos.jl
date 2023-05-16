@@ -43,13 +43,24 @@ function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc,
     ))
     return nothing
 end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val)
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:third_order})
     # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
     # epsilon to it to avoid cancellation errors in upwinding.
     magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
         ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
+        magnitude_plus_eps(ᶠu₃),
+    ))
+    return nothing
+end
+function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:zalesak})
+    # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
+    # epsilon to it to avoid cancellation errors in upwinding.
+    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
         magnitude_plus_eps(ᶠu₃),
     ))
     return nothing
