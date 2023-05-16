@@ -63,7 +63,8 @@ function radiation_model_cache(
         latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
     local radiation_model
-    orbital_data = Insolation.OrbitalData()
+    data_dir = joinpath(pkgdir(CAP), "artifacts")
+    orbital_data = Insolation.OrbitalData(data_dir)
     data_loader(joinpath("atmos_state", "clearsky_as.nc")) do input_data
         if radiation_mode isa RRTMGPI.GrayRadiation
             kwargs = (;
