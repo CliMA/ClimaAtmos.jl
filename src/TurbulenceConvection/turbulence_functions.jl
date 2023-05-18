@@ -1,10 +1,3 @@
-# convective velocity scale
-function get_wstar(bflux::FT) where {FT}
-    # average depth of the mixed layer (prescribed for now)
-    zi = FT(1000)
-    return cbrt(max(bflux * zi, 0))
-end
-
 function buoyancy_c(thermo_params, ρ::FT, ρ_i::FT) where {FT}
     g::FT = TD.Parameters.grav(thermo_params)
     return g * (ρ - ρ_i) / ρ
@@ -22,21 +15,19 @@ function get_surface_tke(param_set, ustar::FT, zLL::FT, oblength::FT) where {FT}
     end
 end
 function get_surface_variance(
-    flux1::FT,
-    flux2::FT,
+    flux,
     ustar::FT,
     zLL::FT,
     oblength::FT,
+    local_geometry_data,
 ) where {FT}
-    c_star1 = -flux1 / ustar
-    c_star2 = -flux2 / ustar
+    c_star = -flux / ustar
     if oblength < 0
         return 4 *
-               c_star1 *
-               c_star2 *
+               _norm_sqr(c_star, local_geometry_data) *
                (1 - FT(8.3) * zLL / oblength)^(-FT(2 / 3))
     else
-        return 4 * c_star1 * c_star2
+        return 4 * _norm_sqr(c_star, local_geometry_data)
     end
 end
 

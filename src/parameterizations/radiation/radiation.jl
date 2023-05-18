@@ -2,11 +2,7 @@
 ##### Radiation
 #####
 
-import ClimaCore.DataLayouts as DataLayouts
-import ClimaCore.Geometry as Geometry
-import ClimaCore.Operators as Operators
-import ClimaCore.Spaces as Spaces
-import ClimaCore.Fields as Fields
+import ClimaCore: Device, DataLayouts, Geometry, Spaces, Fields, Operators
 import OrdinaryDiffEq as ODE
 import Insolation
 import Thermodynamics as TD

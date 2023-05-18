@@ -107,65 +107,9 @@ Base.@kwdef struct MinDisspLen{FT}
     b_exch::FT
 end
 
-abstract type AbstractSurfaceParameters{FT <: Real} end
-
-const FloatOrFunc{FT} = Union{FT, Function, Dierckx.Spline1D}
-
-Base.@kwdef struct FixedSurfaceFlux{FT, TS, SHF, LHF} <:
-                   AbstractSurfaceParameters{FT}
-    zrough::FT
-    ts::TS
-    shf::SHF
-    lhf::LHF
-end
-
-Base.@kwdef struct FixedSurfaceFluxAndFrictionVelocity{FT, TS, SHF, LHF} <:
-                   AbstractSurfaceParameters{FT}
-    zrough::FT
-    ts::TS
-    shf::SHF
-    lhf::LHF
-    ustar::FT
-end
-
-Base.@kwdef struct FixedSurfaceCoeffs{FT, TS, CH, CM} <:
-                   AbstractSurfaceParameters{FT}
-    zrough::FT
-    ts::TS
-    ch::CH
-    cm::CM
-end
-
-Base.@kwdef struct MoninObukhovSurface{FT, TS} <: AbstractSurfaceParameters{FT}
-    zrough::FT
-    ts::TS
-end
-
 const_or_func(s::Function, t::Real) = s(t)
 const_or_func(s::Dierckx.Spline1D, t::Real) = s(t)
 const_or_func(s, t::Real) = s
-
-surface_thermo_state(s::AbstractSurfaceParameters, thermo_params, t::Real = 0) =
-    const_or_func(s.ts, t)
-sensible_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
-    const_or_func(s.shf, t)
-latent_heat_flux(s::AbstractSurfaceParameters, t::Real = 0) =
-    const_or_func(s.lhf, t)
-
-fixed_ustar(::FixedSurfaceFluxAndFrictionVelocity) = true
-fixed_ustar(::FixedSurfaceFlux) = false
-
-shf(surf) = surf.shf
-lhf(surf) = surf.lhf
-cm(surf) = surf.Cd
-ch(surf) = surf.Ch
-bflux(surf) = surf.buoy_flux
-get_ustar(surf) = surf.ustar
-get_ρe_tot_flux(surf) = shf(surf) + lhf(surf)
-get_ρq_tot_flux(surf) = surf.evaporation
-get_ρu_flux(surf) = surf.ρτxz
-get_ρv_flux(surf) = surf.ρτyz
-obukhov_length(surf) = surf.L_MO
 
 struct EDMFModel{N_up, FT, MM, PM, EBGC}
     surface_area::FT
@@ -253,74 +197,14 @@ function Base.summary(io::IO, edmf::EDMFModel)
 end
 
 
-struct State{P, A, TS, T, CACHE, C}
+struct State{P, A, T, CACHE, C, SC}
     prog::P
     aux::A
-    ts_sfc::TS
     tendencies::T
     p::CACHE
     colidx::C
+    surface_conditions::SC
 end
-
-"""
-    column_state(prog, aux, tendencies, colidx)
-
-Create a columnar state given full 3D states
- - `prog` prognostic state
- - `aux` auxiliary state
- - `tendencies` tendencies state
- - `colidx` column index
-
-## Example
-```julia
-Fields.bycolumn(axes(Y.c)) do colidx
-    state = TC.column_state(prog, aux, tendencies, colidx)
-    ...
-end
-"""
-function column_state(prog, p, tendencies, colidx)
-    prog_cent_column = CC.column(prog.cent, colidx)
-    prog_face_column = CC.column(prog.face, colidx)
-    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
-    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
-    tends_cent_column = CC.column(tendencies.cent, colidx)
-    tends_face_column = CC.column(tendencies.face, colidx)
-    prog_column =
-        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
-    aux_column =
-        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
-    tends_column = CC.Fields.FieldVector(
-        cent = tends_cent_column,
-        face = tends_face_column,
-    )
-
-    return State(prog_column, aux_column, tends_column, p, colidx)
-end
-
-function column_prog_aux(prog, p, colidx)
-    prog_cent_column = CC.column(prog.cent, colidx)
-    prog_face_column = CC.column(prog.face, colidx)
-    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
-    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
-    prog_column =
-        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
-    aux_column =
-        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
-
-    return State(prog_column, aux_column, nothing, p, colidx)
-end
-
-function column_diagnostics(diagnostics, colidx)
-    diag_cent_column = CC.column(diagnostics.cent, colidx)
-    diag_face_column = CC.column(diagnostics.face, colidx)
-    diag_svpc_column = CC.column(diagnostics.svpc, colidx)
-    return CC.Fields.FieldVector(
-        cent = diag_cent_column,
-        face = diag_face_column,
-        svpc = diag_svpc_column,
-    )
-end
-
 
 Grid(state::State) = Grid(axes(state.prog.cent))
 
@@ -328,16 +212,7 @@ float_type(state::State) = eltype(state.prog)
 # float_type(field::CC.Fields.Field) = CC.Spaces.undertype(axes(field))
 float_type(field::CC.Fields.Field) = eltype(parent(field))
 
-
-function tc_column_state(
-    prog,
-    p,
-    tendencies,
-    colidx,
-    surf_params,
-    thermo_params,
-    t,
-)
+function tc_column_state(prog, p, tendencies, colidx, t)
     prog_cent_column = CC.column(prog.c, colidx)
     prog_face_column = CC.column(prog.f, colidx)
     aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
@@ -352,20 +227,18 @@ function tc_column_state(
         cent = tends_cent_column,
         face = tends_face_column,
     )
-    ts = surface_thermo_state(surf_params, thermo_params, t)
-
-    return State(prog_column, aux_column, ts, tends_column, p, colidx)
+    surface_conditions = CC.column(p.sfc_conditions, colidx)[]
+    return State(
+        prog_column,
+        aux_column,
+        tends_column,
+        p,
+        colidx,
+        surface_conditions,
+    )
 end
 
-function tc_column_state(
-    prog,
-    p,
-    tendencies::Nothing,
-    colidx,
-    surf_params,
-    thermo_params,
-    t,
-)
+function tc_column_state(prog, p, tendencies::Nothing, colidx, t)
     prog_cent_column = CC.column(prog.c, colidx)
     prog_face_column = CC.column(prog.f, colidx)
     aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
@@ -375,7 +248,13 @@ function tc_column_state(
     aux_column =
         CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
     tends_column = nothing
-    ts_sfc = surface_thermo_state(surf_params, thermo_params, t)
-
-    return State(prog_column, aux_column, ts_sfc, tends_column, p, colidx)
+    surface_conditions = CC.column(p.sfc_conditions, colidx)[]
+    return State(
+        prog_column,
+        aux_column,
+        tends_column,
+        p,
+        colidx,
+        surface_conditions,
+    )
 end

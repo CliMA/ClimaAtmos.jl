@@ -18,10 +18,6 @@ struct SphericalModel <: AbstractModelConfig end
 struct BoxModel <: AbstractModelConfig end
 struct PlaneModel <: AbstractModelConfig end
 
-abstract type AbstractCoupling end
-struct Coupled <: AbstractCoupling end
-struct Decoupled <: AbstractCoupling end
-
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     κ₄::FT
@@ -111,17 +107,8 @@ n_mass_flux_subdomains(::Any) = 0
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 
-abstract type AbstractSurfaceScheme end
-struct BulkSurfaceScheme{T} <: AbstractSurfaceScheme
-    sfc_thermo_state_type::T
-end
-struct MoninObukhovSurface{T} <: AbstractSurfaceScheme
-    sfc_thermo_state_type::T
-end # TODO: unify with MoninObukhovSurface in TC
-
 # Define broadcasting for types
 Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
-Base.broadcastable(x::AbstractSurfaceScheme) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
 Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
@@ -156,7 +143,6 @@ Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
 Base.@kwdef struct AtmosModel{
     MC,
-    C,
     PEM,
     MM,
     EF,
@@ -178,7 +164,6 @@ Base.@kwdef struct AtmosModel{
     RS,
 }
     model_config::MC = nothing
-    coupling::C = nothing
     perf_mode::PEM = nothing
     moisture_model::MM = nothing
     energy_form::EF = nothing

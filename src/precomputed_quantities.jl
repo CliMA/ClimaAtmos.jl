@@ -1,7 +1,6 @@
 #####
 ##### Precomputed quantities
 #####
-
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
@@ -16,6 +15,7 @@ Allocates and returns the precomputed quantities:
     - `ᶜK`: the kinetic energy on cell centers
     - `ᶜts`: the thermodynamic state on cell centers
     - `ᶜp`: the air pressure on cell centers
+    - `sfc_conditions`: the conditions at the surface (at the bottom cell faces)
 
 If the `energy_form` is TotalEnergy, there is an additional quantity:
     - `ᶜh_tot`: the total enthalpy on cell centers
@@ -37,6 +37,7 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
     TST = thermo_state_type(atmos.moisture_model, FT)
+    SCT = SurfaceStates.surface_conditions_type(atmos, FT)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜspecific = specific_gs.(Y.c),
@@ -49,6 +50,7 @@ function precomputed_quantities(Y, atmos)
             atmos.energy_form isa TotalEnergy ?
             (; ᶜh_tot = similar(Y.c, FT)) : (;)
         )...,
+        sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
     sgs_quantities =
         n == 0 ? (;) :
@@ -87,9 +89,10 @@ end
 """
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
 
-Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. If `turbconv_model` is
-EDMFX, also modifies `Y.f.sgsʲs` so that each `u₃ʲ` is equal to `u₃` at the
-surface.
+Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
+`u³ = uₕ³ + u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. If
+the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
+`u₃ʲ` is equal to `u₃` at the surface.
 """
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
@@ -269,6 +272,8 @@ function set_precomputed_quantities!(Y, p, t)
         @. ᶜh_tot =
             TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
     end
+
+    SurfaceStates.update_surface_conditions!(Y, p, t)
 
     if n > 0
         (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p

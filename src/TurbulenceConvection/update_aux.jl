@@ -2,7 +2,6 @@ function update_aux!(
     edmf::EDMFModel,
     grid::Grid,
     state::State,
-    surf,
     param_set::APS,
     t::Real,
     Δt::Real,
@@ -10,8 +9,16 @@ function update_aux!(
     #####
     ##### Unpack common variables
     #####
-
-    a_bulk_bcs = a_bulk_boundary_conditions(surf, edmf)
+    surface_conditions = state.surface_conditions
+    a_bulk_bcs = (;
+        bottom = CCO.SetValue(
+            sum(
+                i -> area_surface_bc(surface_conditions, edmf),
+                1:n_updrafts(edmf),
+            ),
+        ),
+        top = CCO.Extrapolate(),
+    )
     Ifb = CCO.InterpolateC2F(; a_bulk_bcs...)
     thermo_params = TCP.thermodynamics_params(param_set)
     microphys_params = TCP.microphysics_params(param_set)
@@ -21,7 +28,7 @@ function update_aux!(
     c_m = TCP.tke_ed_coeff(param_set)
     KM = center_aux_turbconv(state).KM
     KH = center_aux_turbconv(state).KH
-    oblength = obukhov_length(surf)
+    oblength = surface_conditions.obukhov_length
     FT = float_type(state)
     prog_gm = center_prog_grid_mean(state)
     prog_gm_f = face_prog_grid_mean(state)
@@ -325,7 +332,7 @@ function update_aux!(
     parent(aux_tc_f.bulk.w) .= 0
     @inbounds for i in 1:N_up
         a_up = aux_up[i].area
-        a_up_bcs = a_up_boundary_conditions(surf, edmf, i)
+        a_up_bcs = a_up_boundary_conditions(surface_conditions, edmf)
         Ifu = CCO.InterpolateC2F(; a_up_bcs...)
         @. aux_tc_f.bulk.w += ifelse(
             Ifb(aux_bulk.area) > 0,
@@ -350,7 +357,6 @@ function update_aux!(
         )
     end
     # updraft pressure
-    wvec = CC.Geometry.WVector
     w_bcs =
         (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     ∇ = CCO.DivergenceC2F(; w_bcs...)
@@ -404,7 +410,8 @@ function update_aux!(
     # TODO: Will need to be changed with topography
     local_geometry = CC.Fields.local_geometry_field(axes(ρ_c))
     @. k̂ = CCG.Contravariant3Vector(CCG.WVector(FT(1)), local_geometry)
-    Ifuₕ = uₕ_bcs()
+    Ifuₕ =
+        CCO.InterpolateC2F(bottom = CCO.Extrapolate(), top = CCO.Extrapolate())
     ∇uvw = CCO.GradientF2C()
     @. uvw = C123(Ifuₕ(uₕ_gm)) + C123(CCG.WVector(w_en))
     @. Shear² = LA.norm_sqr(adjoint(∇uvw(uvw)) * k̂)
@@ -489,11 +496,10 @@ function update_aux!(
     )
 
     tke_surf = aux_en.tke[kc_surf]
-    ustar_surf = get_ustar(surf)
 
     @. aux_tc.mixing_length = mixing_length(
         param_set,
-        ustar_surf,
+        surface_conditions.ustar,
         zc,
         tke_surf,
         bg.∂b∂z,
@@ -507,7 +513,7 @@ function update_aux!(
     @. KM = c_m * aux_tc.mixing_length * sqrt(max(aux_en.tke, 0))
     @. KH = KM / aux_tc.prandtl_nvec
 
-    compute_diffusive_fluxes(edmf, grid, state, surf, param_set)
+    compute_diffusive_fluxes(edmf, grid, state, param_set)
 
     # compute precipitation formation tendencies from updrafts
     @. aux_bulk.e_tot_tendency_precip_formation = 0

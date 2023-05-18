@@ -21,6 +21,7 @@ atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
 numerics = CA.get_numerics(parsed_args)
 simulation = CA.get_simulation(FT, parsed_args, comms_ctx)
 initial_condition = CA.get_initial_condition(parsed_args)
+surface_setup = CA.get_surface_setup(parsed_args)
 
 # TODO: use import instead of using
 using OrdinaryDiffEq
@@ -69,6 +70,7 @@ end
         numerics,
         simulation,
         initial_condition,
+        surface_setup,
     )
 end
 

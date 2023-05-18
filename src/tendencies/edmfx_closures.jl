@@ -68,7 +68,7 @@ function pi_groups_entr_detr(
         # pressure scale height (height where pressure drops by 1/e)
         ref_H = ᶜp / (ᶜρ * g)
         # convective velocity
-        w_star = TC.get_wstar(buoy_flux_surface)
+        w_star = get_wstar(buoy_flux_surface)
 
         # non-dimensional pi-groups
         # TODO - using Π₁ blows things up
@@ -134,7 +134,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             ᶜz[colidx],
             ᶜp[colidx],
             Y.c.ρ[colidx],
-            sfc_conditions[colidx].buoy_flux,
+            sfc_conditions[colidx].buoyancy_flux,
             Y.c.sgsʲs.:($$j).ρa[colidx] / ᶜρʲs.:($$j)[colidx],
             get_physical_w(ᶜuʲs.:($$j)[colidx], ᶜlg[colidx]),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)[colidx]),

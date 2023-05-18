@@ -1,6 +1,6 @@
 import ClimaCoreTempestRemap
-import ClimaCore.Spaces as Spaces
-
+import ClimaCore: Spaces, Fields
+import ClimaAtmos: SurfaceStates, CT3
 """
     create_weightfile(
         weightfile::String,
@@ -211,18 +211,20 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     end
 
     if :sfc_flux_energy in propertynames(diag)
-        nc_sfc_flux_energy[:, 1] = diag.sfc_flux_energy.components.data.:1
+        sfc_flux_energy_phy = Geometry.WVector.(diag.sfc_flux_energy)
+        nc_sfc_flux_energy[:, 1] = sfc_flux_energy_phy.components.data.:1
         sfc_flux_momentum = diag.sfc_flux_momentum
-        w_unit =
-            Geometry.Covariant3Vector.(
-                Geometry.WVector.(ones(axes(sfc_flux_momentum)))
-            )
+        sfc_local_geometry = Fields.local_geometry_field(sfc_flux_momentum)
+        w_unit = @. CT3(
+            SurfaceStates.unit_basis_vector_data(CT3, sfc_local_geometry),
+        )
         sfc_flux_momentum_phy =
             Geometry.UVVector.(adjoint.(sfc_flux_momentum) .* w_unit)
         nc_sfc_flux_u[:, 1] = sfc_flux_momentum_phy.components.data.:1
         nc_sfc_flux_v[:, 1] = sfc_flux_momentum_phy.components.data.:2
         if :sfc_evaporation in propertynames(diag)
-            nc_sfc_evaporation[:, 1] = diag.sfc_evaporation.components.data.:1
+            sfc_evaporation_phy = Geometry.WVector.(diag.sfc_evaporation)
+            nc_sfc_evaporation[:, 1] = sfc_evaporation_phy.components.data.:1
         end
     end
 
