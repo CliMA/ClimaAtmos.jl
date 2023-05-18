@@ -32,6 +32,9 @@ function get_atmos(config::AtmosConfig, turbconv_params)
     edmfx_sgs_flux = parsed_args["edmfx_sgs_flux"]
     @assert edmfx_sgs_flux in (false, true)
 
+    edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
+    @assert edmfx_nh_pressure in (false, true)
+
     model_config = get_model_config(parsed_args)
     vert_diff = get_vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
     atmos = AtmosModel(;
@@ -46,6 +49,7 @@ function get_atmos(config::AtmosConfig, turbconv_params)
         edmfx_adv_test,
         edmfx_entr_detr,
         edmfx_sgs_flux,
+        edmfx_nh_pressure,
         precip_model,
         forcing_type,
         turbconv_model = get_turbconv_model(

@@ -70,6 +70,10 @@ function argparse_settings()
         help = "If set to true, it switches on EDMFX SGS flux.  [`true`, `false` (default)]"
         arg_type = Bool
         default = false
+        "--edmfx_nh_pressure"
+        help = "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String

@@ -163,6 +163,7 @@ Base.@kwdef struct AtmosModel{
     EAT,
     EED,
     ESF,
+    ENP,
     TCM,
     SS,
     NOGW,
@@ -185,6 +186,7 @@ Base.@kwdef struct AtmosModel{
     edmfx_adv_test::EAT = nothing
     edmfx_entr_detr::EED = nothing
     edmfx_sgs_flux::ESF = nothing
+    edmfx_nh_pressure::ENP = nothing
     turbconv_model::TCM = nothing
     surface_scheme::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing
@@ -332,7 +334,7 @@ end
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
 
 """
-Merges parsed_args with the toml_dict generated from CLIMAParameters. 
+Merges parsed_args with the toml_dict generated from CLIMAParameters.
 Priority for clashes: parsed_args > toml_dict > default_args
 Converts `nothing` to empty string, since CLIMAParameters does not support type Nothing.
 The dictionary overrides existing toml_dict values if there are clashes.
