@@ -13,6 +13,8 @@ env:
 agents:
   config: cpu
   queue: central
+  slurm_mem: 8G
+  modules: julia/1.8.5 ucx/1.13.1_cuda-11.2 cuda/11.2 openmpi/4.1.5_cuda-11.2 hdf5/1.12.2-ompi415
 
 steps:
   - label: "init :computer:"
@@ -27,6 +29,10 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
+
+      - echo "--- Configure CUDA"
+      # force the initialization of the CUDA runtime as it is lazily loaded by default
+      - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
 
       - echo "--- Instantiate test"
       - "julia --project=test -e 'using Pkg; Pkg.develop(path = \".\")'"
@@ -60,6 +66,17 @@ steps:
 
       - label: ":computer: Ensure mse tables are reset when necessary"
         command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
+
+  - group: "GPU"
+    steps:
+      - label: "Simple GPU test"
+        key: "gpu_example"
+        command:
+          - "JULIA_DEBUG=all julia --project -e 'using CUDA; CUDA.versioninfo()'"
+          - "JULIA_DEBUG=all julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_example --device CUDADevice"
+        artifact_paths: "gpu_example/*"
+        agents:
+          slurm_gres: "gpu:1"
 
   - group: "Gravity wave"
     steps:

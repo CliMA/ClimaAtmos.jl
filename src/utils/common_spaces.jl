@@ -87,8 +87,9 @@ function make_hybrid_spaces(
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
+    comms_ctx = ClimaComms.context(h_space)
     if surface_warp == nothing
-        z_topology = Topologies.IntervalTopology(z_mesh)
+        z_topology = Topologies.IntervalTopology(comms_ctx, z_mesh)
         z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
         center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
         face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
