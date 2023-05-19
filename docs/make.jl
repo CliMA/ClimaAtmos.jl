@@ -26,7 +26,7 @@ makedocs(
         "Contributor Guide" => "contributor_guide.md",
         "Equations" => "equations.md",
         "EDMF Equations" => "edmf_equations.md",
-        "Gravity wave" => "gravity_wave.md",
+        "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "REPL scripts" => "repl_scripts.md",
         "Command line arguments" => "cl_args.md",
         "API" => "api.md",
