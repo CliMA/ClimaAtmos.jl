@@ -88,17 +88,17 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            for dss! in (
-                Spaces.weighted_dss_start2!,
-                Spaces.weighted_dss_internal2!,
-                Spaces.weighted_dss_ghost2!,
+            for dss_op! in (
+                Spaces.weighted_dss_start!,
+                Spaces.weighted_dss_internal!,
+                Spaces.weighted_dss_ghost!,
             )
-                dss!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
-                dss!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
+                dss_op!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
+                dss_op!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
                 if n > 0
-                    dss!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
-                    dss!(ᶠ∇²wʲs, buffer.ᶠ∇²wʲs)
-                    dss!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
+                    dss_op!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
+                    dss_op!(ᶠ∇²wʲs, buffer.ᶠ∇²wʲs)
+                    dss_op!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
                 end
             end
         end
@@ -153,14 +153,14 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            for dss! in (
-                Spaces.weighted_dss_start2!,
-                Spaces.weighted_dss_internal2!,
-                Spaces.weighted_dss_ghost2!,
+            for dss_op! in (
+                Spaces.weighted_dss_start!,
+                Spaces.weighted_dss_internal!,
+                Spaces.weighted_dss_ghost!,
             )
-                dss!(ᶜ∇²specific_tracers, buffer.ᶜ∇²specific_tracers)
+                dss_op!(ᶜ∇²specific_tracers, buffer.ᶜ∇²specific_tracers)
                 if n > 0
-                    dss!(ᶜ∇²specific_tracersʲs, buffer.ᶜ∇²specific_tracersʲs)
+                    dss_op!(ᶜ∇²specific_tracersʲs, buffer.ᶜ∇²specific_tracersʲs)
                 end
             end
         end
