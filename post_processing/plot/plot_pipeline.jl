@@ -55,6 +55,9 @@ elseif case_name == "dry_held_suarez"
 elseif case_name == "moist_held_suarez" || case_name == "aquaplanet"
     generate_paperplots(case_name, args...) =
         generate_paperplots_held_suarez(args...; moist = true)
+elseif case_name == "elevation_spectrum"
+    generate_paperplots(case_name, args...) =
+        generate_elevation_spectra(args...)
 else
     error("Unknown `case_name`: $(case_name)")
 end

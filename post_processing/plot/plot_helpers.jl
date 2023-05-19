@@ -82,6 +82,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
                 w = nc["w"][:]
                 u = nc["u"][:]
                 v = nc["v"][:]
+                z_sfc = nc["sfc_elevation"][:]
                 (;
                     lon,
                     lat,
@@ -96,6 +97,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
                     w,
                     u,
                     v,
+                    z_sfc,
                 )
             end
             (;
@@ -112,6 +114,7 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
                 w,
                 u,
                 v,
+                z_sfc,
             ) = nt
 
             vert_intg_cloud_water =
@@ -300,6 +303,9 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
             v_2d_spectrum, wave_numbers, spherical, mesh_info =
                 power_spectrum_2d(FT, v[:, :, 1, 1], mass_weight) # use first level
 
+            orography_spectrum, wave_numbers, spherical, mesh_info =
+                power_spectrum_2d(FT, z_sfc[:, :, 1, 1], mass_weight) # use first level, for default CI config
+
             spectrum_2d = 0.5 .* (u_2d_spectrum + v_2d_spectrum)
 
             fig = []
@@ -343,14 +349,66 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
                 ),
             )
 
+            push!(
+                fig,
+                Plots.plot(
+                    collect(0:1:(mesh_info.num_fourier))[:], # plot against the zonal wavenumber, m
+                    sum(orography_spectrum[:, :, 1], dims = 2), # sum along the total wavenumber, n
+                    xlabel = "zonal wavenumber (m)",
+                    ylabel = "surface elevation spectrum",
+                    color = :balance,
+                    title = "zonal wavenumber orography spectrum day $day z $(round(z[1])) m",
+                ),
+            )
+
             png(
-                Plots.plot(fig..., layout = (3, 1), size = (600, 800)),
+                Plots.plot(fig..., layout = (4, 1), size = (600, 800)),
                 fig_dir * "/mbw_spectrum_day$day.png",
             )
 
         else
             @warn "day$day.0.nc DOES NOT EXIST!!!"
         end
+    end
+end
+
+function generate_elevation_spectra(fig_dir, nc_files)
+    ncfile = filter(x -> endswith(x, "day0.0.nc"), nc_files)
+    if !isempty(ncfile)
+        nt = NCDataset(ncfile[1], "r") do nc
+            z_sfc = nc["sfc_elevation"][:]
+            lon = nc["lon"][:]
+            lat = nc["lat"][:]
+            (; lon, lat, z_sfc)
+        end
+        (; lon, lat, z_sfc) = nt
+
+        FT = eltype(lat)
+        # Spectrum calculation
+        mass_weight = ones(FT, 1) # only 1 level
+
+        orography_spectrum, wave_numbers, spherical, mesh_info =
+            power_spectrum_2d(FT, z_sfc[:, :, 1, 1], mass_weight) # use first level, for default CI config
+
+        fig = []
+
+        push!(
+            fig,
+            Plots.plot(
+                collect(0:1:(mesh_info.num_fourier))[:], # plot against the zonal wavenumber, m
+                log.(sum(orography_spectrum[:, :, 1], dims = 2)), # sum along the total wavenumber, n
+                linewidth = 3,
+                xlabel = "zonal wavenumber",
+                ylabel = "log surface elevation spectrum",
+                color = :balance,
+                title = "Diagnostic: Surface elevation spectrum",
+            ),
+        )
+
+        png(Plots.plot(fig...), fig_dir * "/surface_elev_spectrum.png")
+
+    else
+        @warn "day0.0.nc DOES NOT EXIST!!!"
     end
 end
 
