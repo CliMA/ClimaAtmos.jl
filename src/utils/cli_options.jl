@@ -339,6 +339,10 @@ function argparse_settings()
         "--orographic_gravity_wave"
         help = "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
         arg_type = String
+        "--device"
+        help = "Device type to use [`CPUDevice` (default), `CUDADevice`]"
+        arg_type = String
+        default = "CPUDevice"
         "--perf_summary"
         help = "Flag for collecting performance summary information"
         arg_type = Bool

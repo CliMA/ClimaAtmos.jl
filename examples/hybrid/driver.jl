@@ -7,7 +7,7 @@ if !(@isdefined parsed_args)
 end
 
 if !(@isdefined comms_ctx) # Coupler compatibility
-    const comms_ctx = CA.get_comms_context(ClimaComms.CPUDevice())
+    const comms_ctx = CA.get_comms_context(parsed_args)
 end
 
 const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32

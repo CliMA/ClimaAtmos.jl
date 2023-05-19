@@ -626,7 +626,12 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
 end
 
 import ClimaComms, Logging, NVTX
-function get_comms_context(device = ClimaComms.CPUDevice())
+function get_comms_context(parsed_args)
+    device = if parsed_args["device"] == "CUDADevice"
+        ClimaComms.CUDADevice()
+    else
+        ClimaComms.CPUDevice()
+    end
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
     if ClimaComms.iamroot(comms_ctx)
