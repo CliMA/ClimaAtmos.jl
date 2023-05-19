@@ -170,10 +170,11 @@ function (initial_condition::DryDensityCurrentProfile)(params)
         FT = eltype(params)
         grav = CAP.grav(params)
         thermo_params = CAP.thermodynamics_params(params)
+        ndims = length(propertynames(local_geometry.coordinates))
         (; x, z) = local_geometry.coordinates
         x_c = FT(25600)
-        z_c = FT(2000)
         x_r = FT(4000)
+        z_c = FT(2000)
         z_r = FT(2000)
         r_c = FT(1)
         θ_b = FT(300)
@@ -185,9 +186,75 @@ function (initial_condition::DryDensityCurrentProfile)(params)
         T_0 = CAP.T_0(params)
 
         # auxiliary quantities
-        r = sqrt(((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2)
-        θ_p = r < r_c ? FT(1 / 2) * θ_c * (FT(1) + cospi(r / r_c)) : FT(0) # potential temperature perturbation
+        r² = FT(0)
+        r² += ((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2
+        if ndims == 3
+            (; y) = local_geometry.coordinates
+            y_r = FT(2000)
+            y_c = FT(3200)
+            r² += ((y - y_c) / y_r)^2
+        end
+        θ_p =
+            sqrt(r²) < r_c ? FT(1 / 2) * θ_c * (FT(1) + cospi(sqrt(r²) / r_c)) :
+            FT(0) # potential temperature perturbation
+        θ = θ_b + θ_p # potential temperature
+        π_exn = FT(1) - grav * z / cp_d / θ # exner function
+        T = π_exn * θ # temperature
+        p = p_0 * π_exn^(cp_d / R_d) # pressure
+        ρ = p / R_d / T # density
 
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+        )
+    end
+    return local_state
+end
+
+"""
+    RisingThermalBubbleProfile(; perturb = false)
+
+An `InitialCondition` with an isothermal background profile, with a positively
+buoyant bubble, and with an optional perturbation to the temperature.
+"""
+Base.@kwdef struct RisingThermalBubbleProfile <: InitialCondition
+    perturb::Bool = false
+end
+
+function (initial_condition::RisingThermalBubbleProfile)(params)
+    (; perturb) = initial_condition
+    function local_state(local_geometry)
+        FT = eltype(params)
+        grav = CAP.grav(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        ndims = length(propertynames(local_geometry.coordinates))
+        (; x, z) = local_geometry.coordinates
+        x_c = FT(500)
+        x_r = FT(250)
+        z_c = FT(350)
+        z_r = FT(250)
+        r_c = FT(1)
+        θ_b = FT(300)
+        θ_c = FT(0.5)
+        cp_d = CAP.cp_d(params)
+        cv_d = CAP.cv_d(params)
+        p_0 = CAP.MSLP(params)
+        R_d = CAP.R_d(params)
+        T_0 = CAP.T_0(params)
+
+        # auxiliary quantities
+        r² = FT(0)
+        r² += ((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2
+        if ndims == 3
+            (; y) = local_geometry.coordinates
+            y_c = FT(500)
+            y_r = FT(250)
+            r² += ((y - y_c) / y_r)^2
+        end
+        θ_p =
+            sqrt(r²) < r_c ? FT(1 / 2) * θ_c * (FT(1) + cospi(sqrt(r²) / r_c)) :
+            FT(0) # potential temperature perturbation
         θ = θ_b + θ_p # potential temperature
         π_exn = FT(1) - grav * z / cp_d / θ # exner function
         T = π_exn * θ # temperature
