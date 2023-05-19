@@ -85,13 +85,15 @@ function vertical_diffusion_boundary_layer_tendency!(
     FT = eltype(Y)
     interior_uₕ = Fields.level(Y.c.uₕ, 1)
     interior_coordinates = Fields.level(Fields.coordinate_field(Y.c), 1)
+    z_surface =
+        Fields.level(Fields.coordinate_field(Y.f).z[colidx], Fields.half)
     ᶠp = ᶠρK_E = p.ᶠtemp_scalar
     @. ᶠp[colidx] = ᶠinterp(ᶜp[colidx])
     @. ᶠρK_E[colidx] =
         ᶠinterp(Y.c.ρ[colidx]) * eddy_diffusivity_coefficient(
             C_E,
             norm(interior_uₕ[colidx]),
-            interior_coordinates.z[colidx],
+            interior_coordinates.z[colidx] - z_surface,
             ᶠp[colidx],
         )
 
