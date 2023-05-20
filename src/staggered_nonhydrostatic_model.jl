@@ -111,7 +111,7 @@ function default_cache(
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
         ᶜf,
-        ∂ᶜK∂ᶠw_data = similar(
+        ∂ᶜK∂ᶠu₃_data = similar(
             Y.c,
             Operators.StencilCoefs{-half, half, NTuple{2, FT}},
         ),

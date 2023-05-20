@@ -7,84 +7,55 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
-# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu₃ * ᶠinterp(ᶜρc / ᶜρ)), then
-# ∂(ᶜρcₜ)/∂(ᶠw_data) =
-#     -ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * ᶠw_unit * ᶠinterp(ᶜc)) -
-#     ᶜdivᵥ_stencil(ᶠu₃) * ᶠinterp_stencil(1) * ∂(ᶜρc)/∂(ᶠw_data)
-# If ᶜρcₜ = -ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu₃, ᶜρc / ᶜρ)), then
-# ∂(ᶜρcₜ)/∂(ᶠw_data) =
-#     -ᶜdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) *
-#     ᶠupwind(ᶠu₃ + εw, ᶜρc / ᶜρ) / to_scalar(ᶠu₃ + εw)) -
-#     ᶜdivᵥ_stencil(ᶠinterp(ᶜρ)) * ᶠupwind_stencil(ᶠu₃, 1 / ᶜρ) *
-#     ∂(ᶜρc)/∂(ᶠw_data)
-# The εw is only necessary in case w = 0.
+# From the chain rule, we know that
+# ∂(ᶜρχₜ)/∂(ᶠu₃_data) = ∂(ᶜρχₜ)/∂(ᶠu³_data) * ∂(ᶠu³_data)/∂(ᶠu₃_data),
+# where ∂(ᶠu³_data)/∂(ᶠu₃_data) = ᶠg³³.
+# If ᶜρχₜ = -ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)), then
+# ∂(ᶜρχₜ)/∂(ᶠu³_data) =
+#     -ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³_unit * ᶠinterp(ᶜχ)) -
+#     ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³) * ᶠinterp_stencil(1) *
+#     ∂(ᶜχ)/∂(ᶠu₃_data).
+# If ᶜρχₜ = -ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu³, ᶜχ)), then
+# ∂(ᶜρχₜ)/∂(ᶠu₃_data) =
+#     -ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu³, ᶜχ) / ᶠu³_data) -
+#     ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ)) * ᶠupwind_stencil(ᶠu³, 1) *
+#     ∂(ᶜχ)/∂(ᶠu₃_data).
+# Since ᶠu³_data can be 0, we need to modify the last derivative by replacing
+# ᶠu³ with CT3(ᶠu³_data + eps(ᶠu³_data)), which lets us avoid divisions by 0.
 # Since Operator2Stencil has not yet been extended to upwinding operators,
 # ᶠupwind_stencil is not available.
-# In vertical_transport_jac!, we assume that ∂(ᶜρc)/∂(ᶠw_data) = 0; if this is
-# not the case, the additional term should be added to the result of this
-# function.
-# In addition, we approximate the Jacobian for vertical transport with FCT using
-# the Jacobian for third-order upwinding (since only FCT requires dt, we do not
-# need to pass dt to this function).
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠu₃ =
-        -(ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠu₃) * ᶠinterp(ᶜρc / ᶜρ)))
-    return nothing
-end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:first_order})
-    # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
-    # epsilon to it to avoid cancellation errors in upwinding.
-    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
-        magnitude_plus_eps(ᶠu₃),
+# For simplicity, we approximate the value of ∂(ᶜρχₜ)/∂(ᶠu³_data) for FCT
+# (both Boris-Book and Zalesak) using the value for first-order upwinding.
+# In the following function, we assume that ∂(ᶜχ)/∂(ᶠu₃_data) = 0; if this is
+# not the case, the additional term should be added to this function's result.
+get_data_plus_ε(vector) = vector.u³ + eps(vector.u³)
+set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, ::Val{:none}) =
+    @. ∂ᶜρχₜ∂ᶠu₃_data =
+        -(ᶜadvdivᵥ_stencil(ᶠwinterp(ᶜJ, ᶜρ) * one(ᶠu³) * ᶠinterp(ᶜχ) * ᶠg³³))
+set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, ::Val{:first_order}) =
+    @. ∂ᶜρχₜ∂ᶠu₃_data = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(CT3(get_data_plus_ε(ᶠu³)), ᶜχ) /
+        get_data_plus_ε(ᶠu³) * ᶠg³³,
     ))
-    return nothing
-end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:third_order})
-    # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
-    # epsilon to it to avoid cancellation errors in upwinding.
-    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
-        magnitude_plus_eps(ᶠu₃),
+set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, ::Val{:third_order}) =
+    @. ∂ᶜρχₜ∂ᶠu₃_data = -(ᶜadvdivᵥ_stencil(
+        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(CT3(get_data_plus_ε(ᶠu³)), ᶜχ) /
+        get_data_plus_ε(ᶠu³) * ᶠg³³,
     ))
-    return nothing
-end
-function vertical_transport_jac!(∂ᶜρcₜ∂ᶠu₃, ᶠu₃, ᶜρ, ᶜρc, ::Val{:zalesak})
-    # To convert ᶠu₃ to ᶠw_data, we extract the third vector component and add an
-    # epsilon to it to avoid cancellation errors in upwinding.
-    magnitude_plus_eps(vector) = vector.u₃ + eps(vector.u₃)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    @. ∂ᶜρcₜ∂ᶠu₃ = -(ᶜadvdivᵥ_stencil(
-        ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(C3(magnitude_plus_eps(ᶠu₃)), ᶜρc / ᶜρ) /
-        magnitude_plus_eps(ᶠu₃),
-    ))
-    return nothing
-end
+set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, ::Val{:boris_book}) =
+    set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, Val(:first_order))
+set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, ::Val{:zalesak}) =
+    set_∂ᶜρχₜ∂ᶠu₃!(∂ᶜρχₜ∂ᶠu₃_data, ᶜJ, ᶜρ, ᶠu³, ᶜχ, ᶠg³³, Val(:first_order))
 
 function validate_flags!(Y, flags, energy_upwinding)
-    if :ρe_tot in propertynames(Y.c)
-        if energy_upwinding === Val(:none) && flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
-            error(
-                "∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :exact or :no_∂ᶜp∂ᶜK when using ρe_tot \
-                without upwinding",
-            )
-        elseif flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode != :no_∂ᶜp∂ᶜK
-            # TODO: Add Operator2Stencil for UpwindBiasedProductC2F to ClimaCore
-            # to allow exact Jacobian calculation.
-            error("∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe_tot with \
-                  upwinding")
-        end
-    end
-    # TODO: If we end up using :gradΦ_shenanigans, optimize it to
-    # `cached_stencil / ᶠinterp(ᶜρ)`.
-    if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode != :exact && flags.∂ᶠ𝕄ₜ∂ᶜρ_mode != :gradΦ_shenanigans
-        error("∂ᶠ𝕄ₜ∂ᶜρ_mode must be :exact or :gradΦ_shenanigans")
-    end
+    # TODO: Add Operator2Stencil for UpwindBiasedProductC2F to ClimaCore
+    # to allow exact Jacobian calculation.
+    :ρe_tot in propertynames(Y.c) &&
+        energy_upwinding !== Val(:none) &&
+        flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact &&
+        error(
+            "∂ᶜ𝔼ₜ∂ᶠ𝕄_mode must be :no_∂ᶜp∂ᶜK when using ρe_tot with upwinding",
+        )
 end
 
 function Wfact!(W, Y, p, dtγ, t)
@@ -100,10 +71,15 @@ end
 function Wfact!(W, Y, p, dtγ, t, colidx)
     (; flags, dtγ_ref) = W
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = W
+    (; ᶜspecific, ᶠu³, ᶜK, ᶜp) = p
+    (; ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, params, ∂ᶜK∂ᶠu₃_data) = p
+    (; energy_upwinding, tracer_upwinding, density_upwinding) = p
+
     ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
-    (; ᶜK, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜρ_ref, ᶜp_ref, ∂ᶜK∂ᶠw_data, params) = p
-    (; energy_upwinding, tracer_upwinding) = p
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠg³³ = g³³_field(Y.f)
 
     validate_flags!(Y, flags, energy_upwinding)
     FT = Spaces.undertype(axes(Y.c))
@@ -117,204 +93,200 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
 
     dtγ_ref[] = dtγ
 
-    # If we let ᶠw_data = ᶠu₃.components.data.:1 and ᶠw_unit = one.(ᶠu₃), then
-    # ᶠu₃ == ᶠw_data .* ᶠw_unit. The Jacobian blocks involve ᶠw_data, not ᶠu₃.
-    ᶠw_data = ᶠu₃.components.data.:1
+    # We can express the pressure as
+    # ᶜp = R_d * (ᶜρe_tot / cv_d + ᶜρ * (-(ᶜK + ᶜΦ) / cv_d + T_tri)) + O(ᶜq_tot)
+    # We will ignore all O(ᶜq_tot) terms when computing derivatives of pressure.
 
-    # To convert ∂(ᶠwₜ)/∂(ᶜ𝔼) to ∂(ᶠw_data)ₜ/∂(ᶜ𝔼) and ∂(ᶠwₜ)/∂(ᶠw_data) to
-    # ∂(ᶠw_data)ₜ/∂(ᶠw_data), we extract the third component of each vector-
-    # valued stencil coefficient.
-    @inline to_scalar_coefs(vector_coefs) =
-        map(vector_coef -> vector_coef.u₃, vector_coefs)
-
-    # ᶜinterp(ᶠu₃) =
-    #     ᶜinterp(ᶠu₃)_data * ᶜinterp(ᶠu₃)_unit =
-    #     ᶜinterp(ᶠw_data) * ᶜinterp(ᶠu₃)_unit
-    # norm_sqr(ᶜinterp(ᶠu₃)) =
-    #     norm_sqr(ᶜinterp(ᶠw_data) * ᶜinterp(ᶠu₃)_unit) =
-    #     ᶜinterp(ᶠw_data)^2 * norm_sqr(ᶜinterp(ᶠu₃)_unit)
     # ᶜK =
-    #     norm_sqr(C123(ᶜuₕ) + C123(ᶜinterp(ᶠu₃))) / 2 =
-    #     norm_sqr(ᶜuₕ) / 2 + norm_sqr(ᶜinterp(ᶠu₃)) / 2 =
-    #     norm_sqr(ᶜuₕ) / 2 + ᶜinterp(ᶠw_data)^2 * norm_sqr(ᶜinterp(ᶠu₃)_unit) / 2
-    # ∂(ᶜK)/∂(ᶠw_data) =
-    #     ∂(ᶜK)/∂(ᶜinterp(ᶠw_data)) * ∂(ᶜinterp(ᶠw_data))/∂(ᶠw_data) =
-    #     ᶜinterp(ᶠw_data) * norm_sqr(ᶜinterp(ᶠu₃)_unit) * ᶜinterp_stencil(1)
-    @. ∂ᶜK∂ᶠw_data[colidx] =
-        ᶜinterp(ᶠw_data[colidx]) *
-        norm_sqr(one(ᶜinterp(ᶠu₃[colidx]))) *
-        ᶜinterp_stencil(one(ᶠw_data[colidx]))
+    #     (
+    #         dot(C123(ᶜuₕ), CT123(ᶜuₕ)) +
+    #         ᶜinterp(dot(C123(ᶠu₃), CT123(ᶠu₃))) +
+    #         2 * dot(CT123(ᶜuₕ), ᶜinterp(C123(ᶠu₃)))
+    #     ) / 2 =
+    #     (
+    #         dot(C123(ᶜuₕ), CT123(ᶜuₕ)) +
+    #         ᶜinterp(ᶠu₃_data^2 * dot(C123(ᶠu₃_unit), CT123(ᶠu₃_unit))) +
+    #         2 * dot(CT123(ᶜuₕ), ᶜinterp(ᶠu₃_data * C123(ᶠu₃_unit)))
+    #     ) / 2 =
+    # ∂(ᶜK)/∂(ᶠu₃_data) =
+    #     (
+    #         ᶜinterp_stencil(2 * ᶠu₃_data * dot(C123(ᶠu₃_unit), CT123(ᶠu₃_unit))) +
+    #         2 * dot(CT123(ᶜuₕ), ᶜinterp_stencil(C123(ᶠu₃_unit)))
+    #     ) / 2 =
+    #     ᶜinterp_stencil(dot(C123(ᶠu₃_unit), CT123(ᶠu₃))) +
+    #     dot(CT123(ᶜuₕ), ᶜinterp_stencil(C123(ᶠu₃_unit)))
+    @. ∂ᶜK∂ᶠu₃_data[colidx] =
+        ᶜinterp_stencil(dot(C123(one(ᶠu₃[colidx])), CT123(ᶠu₃[colidx])))
+    @. ∂ᶜK∂ᶠu₃_data.coefs.:1[colidx] += dot(
+        CT123(ᶜuₕ[colidx]),
+        getindex(ᶜinterp_stencil(C123(one(ᶠu₃[colidx]))), 1),
+    )
+    @. ∂ᶜK∂ᶠu₃_data.coefs.:2[colidx] += dot(
+        CT123(ᶜuₕ[colidx]),
+        getindex(ᶜinterp_stencil(C123(one(ᶠu₃[colidx]))), 2),
+    )
+    # TODO: Figure out why rewriting this as shown below incurs allocations:
+    # @inline map_dot(vector, vectors) =
+    #     map(vector_coef -> dot(vector, vector_coef), vectors)
+    # @. ∂ᶜK∂ᶠu₃_data[colidx] =
+    #     ᶜinterp_stencil(dot(C123(one(ᶠu₃[colidx])), CT123(ᶠu₃[colidx]))) +
+    #     map_dot(CT123(ᶜuₕ[colidx]), ᶜinterp_stencil(C123(one(ᶠu₃[colidx]))))
 
-    # vertical_transport!(Yₜ.c.ρ, ᶠu₃, ᶜρ, ᶜρ, dt, Val(:none))
-    vertical_transport_jac!(
+    ᶜ1 = p.ᶜtemp_scalar
+    @. ᶜ1[colidx] = one(ᶜρ[colidx])
+    set_∂ᶜρχₜ∂ᶠu₃!(
         ∂ᶜρₜ∂ᶠ𝕄[colidx],
-        ᶠu₃[colidx],
+        ᶜJ[colidx],
         ᶜρ[colidx],
-        ᶜρ[colidx],
-        Val(:none),
+        ᶠu³[colidx],
+        ᶜ1[colidx],
+        ᶠg³³[colidx],
+        density_upwinding,
     )
 
     if :ρθ in propertynames(Y.c)
-        ᶜρθ = Y.c.ρθ
-        # vertical_transport!(Yₜ.c.ρθ, ᶠu₃, ᶜρ, ᶜρθ, dt, energy_upwinding)
-        vertical_transport_jac!(
+        set_∂ᶜρχₜ∂ᶠu₃!(
             ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-            ᶠu₃[colidx],
+            ᶜJ[colidx],
             ᶜρ[colidx],
-            ᶜρθ[colidx],
+            ᶠu³[colidx],
+            ᶜspecific.θ[colidx],
+            ᶠg³³[colidx],
             energy_upwinding,
         )
     elseif :ρe_tot in propertynames(Y.c)
-        ᶜρe = Y.c.ρe_tot
-        ᶜρh = p.ᶜtemp_scalar
-        @. ᶜρh[colidx] = ᶜρe[colidx] + ᶜp[colidx]
-        # vertical_transport!(Yₜ.c.ρe_tot, ᶠu₃, ᶜρ, ᶜρh, dt, energy_upwinding)
-        vertical_transport_jac!(
+        (; ᶜh_tot) = p
+        set_∂ᶜρχₜ∂ᶠu₃!(
             ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-            ᶠu₃[colidx],
+            ᶜJ[colidx],
             ᶜρ[colidx],
-            ᶜρh[colidx],
+            ᶠu³[colidx],
+            ᶜh_tot[colidx],
+            ᶠg³³[colidx],
             energy_upwinding,
         )
-        if energy_upwinding === Val(:none)
-            if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
-                # ∂(ᶜρh)/∂(ᶠw_data) = ∂(ᶜp)/∂(ᶠw_data) =
-                #     ∂(ᶜp)/∂(ᶜK) * ∂(ᶜK)/∂(ᶠw_data)
-                # If we ignore the dependence of pressure on moisture,
-                # ∂(ᶜp)/∂(ᶜK) = -ᶜρ * R_d / cv_d
+        if flags.∂ᶜ𝔼ₜ∂ᶠ𝕄_mode == :exact
+            # ∂(ᶜh_tot)/∂(ᶠu₃_data) =
+            #     ∂(ᶜp / ᶜρ)/∂(ᶠu₃_data) =
+            #     ∂(ᶜp / ᶜρ)/∂(ᶜK) * ∂(ᶜK)/∂(ᶠu₃_data)
+            # If we ignore the dependence of pressure on moisture,
+            # ∂(ᶜp / ᶜρ)/∂(ᶜK) = -R_d / cv_d
+            if energy_upwinding === Val(:none)
                 @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 -= compose(
-                    ᶜdivᵥ_stencil(ᶠu₃[colidx]),
+                    ᶜadvdivᵥ_stencil(
+                        ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]) * ᶠu³[colidx],
+                    ),
                     compose(
-                        ᶠinterp_stencil(one(ᶜp[colidx])),
-                        -(ᶜρ[colidx] * R_d / cv_d) * ∂ᶜK∂ᶠw_data[colidx],
+                        ᶠinterp_stencil(ᶜ1[colidx]),
+                        -R_d / cv_d * ∂ᶜK∂ᶠu₃_data[colidx],
                     ),
                 )
             end
         end
     end
+    for (∂ᶜ𝕋ₜ∂ᶠ𝕄, ᶜχ, _) in matching_subfields(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜspecific)
+        set_∂ᶜρχₜ∂ᶠu₃!(
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄[colidx],
+            ᶜJ[colidx],
+            ᶜρ[colidx],
+            ᶠu³[colidx],
+            ᶜχ[colidx],
+            ᶠg³³[colidx],
+            tracer_upwinding,
+        )
+    end
 
+    # We use map_get_data to convert ∂(ᶠu₃ₜ)/∂(X) to ∂(ᶠu₃_data)ₜ/∂(X).
+    @inline map_get_data(vectors) = map(vector -> vector.u₃, vectors)
+
+    # ᶠu₃ₜ = -(ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(ᶜρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)
     if :ρθ in propertynames(Y.c)
-        # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
-        # ∂(ᶠwₜ)/∂(ᶜρθ) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρθ)
-        # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
+        # ∂(ᶠu₃ₜ)/∂(ᶜρθ) =
+        #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) * ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρθ)
+        # ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) = -1 / ᶠinterp(ᶜρ)
         # If we ignore the dependence of pressure on moisture,
-        # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρθ) =
+        # ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρθ) =
         #     ᶠgradᵥ_stencil(
         #         R_d / (1 - κ_d) * (ᶜρθ * R_d / MSLP)^(κ_d / (1 - κ_d))
         #     )
-        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
+        ᶜρθ = Y.c.ρθ
+        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = map_get_data(
             -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
                 R_d / (1 - κ_d) * (ᶜρθ[colidx] * R_d / MSLP)^(κ_d / (1 - κ_d)),
             ),
         )
 
-        if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
-            # ∂(ᶠwₜ)/∂(ᶜρ) = ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
-            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
-            # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                (
-                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
-                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                ) / abs2(ᶠinterp(ᶜρ[colidx])) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-        elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
-            # ᶠwₜ = (
-            #     -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ′) -
-            #     ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ′) * ᶠinterp(ᶜρ)
-            # ), where ᶜρ′ = ᶜρ but we approximate ∂(ᶜρ′)/∂(ᶜρ) = 0
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                -(ᶠgradᵥ_ᶜΦ[colidx]) / ᶠinterp(ᶜρ[colidx]) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-        end
-    elseif :ρe_tot in propertynames(Y.c)
-        # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
-        # ∂(ᶠwₜ)/∂(ᶜρe) = ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe)
-        # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
-        # If we ignore the dependence of pressure on moisture,
-        # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρe) = ᶠgradᵥ_stencil(R_d / cv_d)
-        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = to_scalar_coefs(
-            -1 / ᶠinterp(ᶜρ[colidx]) *
-            ᶠgradᵥ_stencil(R_d / cv_d * one(ᶜρe[colidx])),
+        # ∂(ᶠu₃ₜ)/∂(ᶜρ) =
+        #     ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ - ᶜρ_ref)) * ∂(ᶠinterp(ᶜρ - ᶜρ_ref))/∂(ᶜρ) +
+        #     ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
+        # ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ - ᶜρ_ref)) = -ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ)
+        # ∂(ᶠinterp(ᶜρ - ᶜρ_ref))/∂(ᶜρ) = ᶠinterp_stencil(1)
+        # ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ)) =
+        #     (ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(ᶜρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
+        # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
+        @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = map_get_data(
+            (
+                ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
+                ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+            ) / abs2(ᶠinterp(ᶜρ[colidx])) * ᶠinterp_stencil(ᶜ1[colidx]),
         )
 
-        if flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :exact
-            # ᶠwₜ = -ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(ᶜρ) - (ᶠinterp(ᶜρ) - ᶠinterp(ᶜρ_ref)) / ᶠinterp(ᶜρ) * ᶠgradᵥ_ᶜΦ
-            # ∂(ᶠwₜ)/∂(ᶜρ) =
-            #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) +
-            #     ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
-            # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
-            # If we ignore the dependence of pressure on moisture,
-            # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜρ) =
-            #     ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri))
-            # ∂(ᶠwₜ)/∂(ᶠinterp(ᶜρ)) = (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
-            # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
-                    R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
-                ) +
-                (
-                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
-                    ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                ) / abs2(ᶠinterp(ᶜρ[colidx])) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-        elseif flags.∂ᶠ𝕄ₜ∂ᶜρ_mode == :gradΦ_shenanigans
-            # ᶠwₜ = (
-            #     -ᶠgradᵥ(ᶜp′) / ᶠinterp(ᶜρ′) -
-            #     ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ′) * ᶠinterp(ᶜρ)
-            # ), where ᶜρ′ = ᶜρ but we approximate ∂ᶜρ′/∂ᶜρ = 0, and where
-            # ᶜp′ = ᶜp but with ᶜK = 0
-            @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = to_scalar_coefs(
-                -1 / ᶠinterp(ᶜρ[colidx]) *
-                ᶠgradᵥ_stencil(R_d * (-(ᶜΦ[colidx]) / cv_d + T_tri)) -
-                ᶠgradᵥ_ᶜΦ[colidx] / ᶠinterp(ᶜρ[colidx]) *
-                ᶠinterp_stencil(one(ᶜρ[colidx])),
-            )
-        end
-    end
-
-    # ᶠwₜ = -ᶠgradᵥ(ᶜp) / ᶠinterp(ᶜρ) - ᶠgradᵥ_ᶜΦ
-    # ∂(ᶠwₜ)/∂(ᶠw_data) =
-    #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶠw_dataₜ) =
-    #     ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) * ∂(ᶠgradᵥ(ᶜp))/∂(ᶜK) * ∂(ᶜK)/∂(ᶠw_dataₜ)
-    # ∂(ᶠwₜ)/∂(ᶠgradᵥ(ᶜp)) = -1 / ᶠinterp(ᶜρ)
-    # If we ignore the dependence of pressure on moisture,
-    # ∂(ᶠgradᵥ(ᶜp))/∂(ᶜK) =
-    #     ᶜ𝔼_name == :ρe_tot ? ᶠgradᵥ_stencil(-ᶜρ * R_d / cv_d) : 0
-    if :ρθ in propertynames(Y.c)
+        # ∂(ᶠu₃ₜ)/∂(ᶠu₃_data) = 0
         ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] .=
             tuple(Operators.StencilCoefs{-1, 1}((FT(0), FT(0), FT(0))))
     elseif :ρe_tot in propertynames(Y.c)
-        @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = to_scalar_coefs(
+        # ∂(ᶠu₃ₜ)/∂(ᶜρe_tot) =
+        #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) * ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρe_tot)
+        # ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) = -1 / ᶠinterp(ᶜρ)
+        # If we ignore the dependence of pressure on moisture,
+        # ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρe_tot) = ᶠgradᵥ_stencil(R_d / cv_d)
+        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = map_get_data(
+            -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(R_d / cv_d * ᶜ1[colidx]),
+        )
+
+        # ∂(ᶠu₃ₜ)/∂(ᶜρ) =
+        #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) * ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρ) +
+        #     ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ - ᶜρ_ref)) * ∂(ᶠinterp(ᶜρ - ᶜρ_ref))/∂(ᶜρ) +
+        #     ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ)) * ∂(ᶠinterp(ᶜρ))/∂(ᶜρ)
+        # ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) = -1 / ᶠinterp(ᶜρ)
+        # If we ignore the dependence of pressure on moisture,
+        # ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρ) =
+        #     ᶠgradᵥ_stencil(R_d * (-(ᶜK + ᶜΦ) / cv_d + T_tri))
+        # ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ - ᶜρ_ref)) = -ᶠgradᵥ_ᶜΦ / ᶠinterp(ᶜρ)
+        # ∂(ᶠinterp(ᶜρ - ᶜρ_ref))/∂(ᶜρ) = ᶠinterp_stencil(1)
+        # ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ)) =
+        #     (ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(ᶜρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)^2
+        # ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) = ᶠinterp_stencil(1)
+        @. ∂ᶠ𝕄ₜ∂ᶜρ[colidx] = map_get_data(
+            -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
+                R_d * (-(ᶜK[colidx] + ᶜΦ[colidx]) / cv_d + T_tri),
+            ) +
+            (
+                ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
+                ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+            ) / abs2(ᶠinterp(ᶜρ[colidx])) * ᶠinterp_stencil(ᶜ1[colidx]),
+        )
+
+        # ∂(ᶠu₃ₜ)/∂(ᶠu₃_data) =
+        #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) * ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶠu₃_data) =
+        #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) * ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜK) * ∂(ᶜK)/∂(ᶠu₃_data)
+        # ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) = -1 / ᶠinterp(ᶜρ)
+        # If we ignore the dependence of pressure on moisture,
+        # ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜK) = ᶠgradᵥ_stencil(-ᶜρ * R_d / cv_d)
+        @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx] = map_get_data(
             compose(
                 -1 / ᶠinterp(ᶜρ[colidx]) *
                 ᶠgradᵥ_stencil(-(ᶜρ[colidx] * R_d / cv_d)),
-                ∂ᶜK∂ᶠw_data[colidx],
+                ∂ᶜK∂ᶠu₃_data[colidx],
             ),
         )
     end
 
     if p.atmos.rayleigh_sponge isa RayleighSponge
-        # ᶠwₜ -= p.ᶠβ_rayleigh_w * ᶠu₃
-        # ∂(ᶠwₜ)/∂(ᶠw_data) -= p.ᶠβ_rayleigh_w
+        # ᶠu₃ₜ -= p.ᶠβ_rayleigh_w * ᶠu₃
+        # ∂(ᶠu₃ₜ)/∂(ᶠu₃_data) -= p.ᶠβ_rayleigh_w * ᶠu₃_unit
         @. ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx].coefs.:2 -= p.ᶠβ_rayleigh_w[colidx]
     end
 
-    for ᶜρc_name in filter(is_tracer_var, propertynames(Y.c))
-        ∂ᶜρcₜ∂ᶠ𝕄 = getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜρc_name)
-        ᶜρc = getproperty(Y.c, ᶜρc_name)
-        # vertical_transport!(ᶜρcₜ, ᶠu₃, ᶜρ, ᶜρc, dt, tracer_upwinding)
-        vertical_transport_jac!(
-            ∂ᶜρcₜ∂ᶠ𝕄[colidx],
-            ᶠu₃[colidx],
-            ᶜρ[colidx],
-            ᶜρc[colidx],
-            tracer_upwinding,
-        )
-    end
     return nothing
 end
