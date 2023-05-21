@@ -14,6 +14,8 @@ function commands_from_yaml(yaml_file; filter_name = nothing)
     cmds = vcat(cmds...)
     cmds = map(x -> x["command"], cmds)
     cmds = vcat(cmds...)
+    cmds = map(x -> split(x, "\n"), cmds) # handle commands that run multiple scripts
+    cmds = vcat(cmds...)
     cmds = map(x -> x isa AbstractString ? x : join(x), cmds)
     if filter_name ≠ nothing
         filter!(x -> occursin(filter_name, x), cmds)
