@@ -63,9 +63,9 @@ allocs = @allocated OrdinaryDiffEq.step!(integrator)
 
 allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 4320
-allocs_limit["flame_perf_target_tracers"] = 428000000
-allocs_limit["flame_perf_target_edmfx"] = 354032
-allocs_limit["flame_perf_target_edmf"] = 12422582416
+allocs_limit["flame_perf_target_tracers"] = 185904
+allocs_limit["flame_perf_target_edmfx"] = 1040
+allocs_limit["flame_perf_target_edmf"] = 11739124336
 allocs_limit["flame_perf_target_threaded"] = 3850064
 allocs_limit["flame_perf_target_callbacks"] = 11159912
 
