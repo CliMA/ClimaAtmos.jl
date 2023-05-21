@@ -445,8 +445,14 @@ end
 parsed_args_from_ARGS(ARGS, parsed_args = Dict()) =
     parsed_args_from_ARGS_string(strip(join(ARGS, " ")), parsed_args)
 
+function cmd_args(cmd::AbstractString)
+    i = findfirst(".jl ", cmd)
+    isnothing(i) && error("No Julia file found in $cmd.")
+    length(cmd) == last(i) && return ""
+    return String(cmd[(last(i) + 1):length(cmd)])
+end
 parsed_args_from_command_line_flags(str, parsed_args = Dict()) =
-    parsed_args_from_ARGS_string(strip(last(split(str, ".jl"))), parsed_args)
+    parsed_args_from_ARGS_string(strip(cmd_args(str)), parsed_args)
 
 function parsed_args_from_ARGS_string(str, parsed_args = Dict())
     str = replace(str, "    " => " ", "   " => " ", "  " => " ")
