@@ -156,10 +156,6 @@ is_distributed(::ClimaComms.AbstractCommsContext) = true # deprecate after upgra
 
 # TODO: remove after upgrading ClimaCore
 import ClimaCore
-import ClimaTimeSteppers
-ClimaTimeSteppers.ct_ktypeof(x::ClimaCore.Fields.FieldVector) =
-    ClimaComms.array_type(x){eltype(parent(x)), 1}
-
 # TODO: remove after upgrading ClimaCore
 @inline ClimaCore.Fields._array_type(
     x::ClimaCore.Fields.FieldVector,
