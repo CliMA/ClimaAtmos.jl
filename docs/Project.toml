@@ -1,6 +1,7 @@
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 CLIMAParameters = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 ClimaAtmos = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
@@ -13,4 +14,5 @@ TerminalLoggers = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
+CUDA = "4"
 DiffEqBase = "6"
