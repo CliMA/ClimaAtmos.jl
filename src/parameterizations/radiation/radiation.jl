@@ -13,9 +13,6 @@ import .RRTMGPInterface as RRTMGPI
 using Dierckx: Spline1D
 using StatsBase: mean
 
-# TODO: Move to Insolation.jl
-Base.broadcastable(x::Insolation.OrbitalData) = tuple(x)
-
 #####
 ##### No Radiation
 #####
