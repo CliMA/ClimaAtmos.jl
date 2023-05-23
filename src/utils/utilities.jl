@@ -151,21 +151,10 @@ end
 
 using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
-is_distributed(::ClimaComms.AbstractCommsContext) = true # deprecate after upgrading
-# is_distributed(::ClimaComms.MPICommsContext) = true # use this after upgrading
-
-# TODO: remove after upgrading ClimaCore
-import ClimaCore
-# TODO: remove after upgrading ClimaCore
-@inline ClimaCore.Fields._array_type(
-    x::ClimaCore.Fields.FieldVector,
-    pns::Tuple,
-) = promote_type(
-    ClimaCore.Fields._array_type(getproperty(x, first(pns))),
-    ClimaCore.Fields._array_type(x, Base.tail(pns)),
-)
+is_distributed(::ClimaComms.MPICommsContext) = true
 
 # Move to weak dependency in ClimaCore
+import ClimaCore
 import Krylov
 Krylov.ktypeof(x::ClimaCore.Fields.FieldVector) =
     ClimaComms.array_type(x){eltype(parent(x)), 1}

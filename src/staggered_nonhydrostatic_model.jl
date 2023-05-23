@@ -3,6 +3,7 @@ using LinearAlgebra: ×, norm, dot
 import ClimaAtmos.Parameters as CAP
 using ClimaCore: Operators, Fields, Limiters, Geometry, Spaces
 
+import ClimaComms
 using ClimaCore.Geometry: ⊗
 
 import Thermodynamics as TD
@@ -98,7 +99,7 @@ function default_cache(
         simulation,
         spaces,
         atmos,
-        comms_ctx = Fields.comm_context(axes(Y.c)),
+        comms_ctx = ClimaComms.context(axes(Y.c)),
         sfc_setup = surface_setup(params),
         test_dycore_consistency = parsed_args["test_dycore_consistency"],
         moisture_model = atmos.moisture_model,
