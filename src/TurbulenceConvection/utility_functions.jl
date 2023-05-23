@@ -72,7 +72,13 @@ function compare(a::F, b::F, pn0 = "") where {F <: CC.Fields.Field}
     end
 end
 
-function conditional_assign!(v, ts, f::Function, thermo_params, cond = x -> x)
+function conditional_assign!(
+    v,
+    ts,
+    f::F,
+    thermo_params,
+    cond::CF = identity,
+) where {F, CF}
     @. v = ifelse(
         cond(TD.has_condensate(thermo_params, ts)),
         f(thermo_params, ts),
