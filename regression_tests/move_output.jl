@@ -21,7 +21,7 @@ if haskey(ENV, "BUILDKITE_COMMIT") && haskey(ENV, "BUILDKITE_BRANCH")
 
     using Glob
     @show readdir(joinpath(@__DIR__, ".."))
-    if startswith(branch, "gh-readonly-queue/main/")
+    if branch == "staging"
         commit_sha = commit[1:7]
         mkpath(cluster_data_prefix)
         path = joinpath(cluster_data_prefix, commit_sha)
