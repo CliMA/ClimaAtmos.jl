@@ -99,11 +99,6 @@ end
 
 @info "Running" job_id = simulation.job_id output_dir = simulation.output_dir tspan
 
-if ClimaComms.device(comms_ctx) isa ClimaComms.CUDADevice
-    @warn "Exiting early because upstream issues need to be solved."
-    @warn "This is a checkpoint for the CUDA progress."
-    exit(0)
-end
 sol_res = CA.solve_atmos!(integrator)
 
 import JSON
