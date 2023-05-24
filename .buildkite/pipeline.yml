@@ -73,7 +73,7 @@ steps:
         key: "gpu_example"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_example --device CUDADevice --ode_algo SSP33ShuOsher"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_example --device CUDADevice --ode_algo SSP33ShuOsher"
         artifact_paths: "gpu_example/*"
         agents:
           slurm_gres: "gpu:1"
