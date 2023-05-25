@@ -38,6 +38,13 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     return quantities
 end
 
+maybe_weighted_dss_start!(x, y) =
+    isempty(propertynames(x)) ? nothing : Spaces.weighted_dss_start!(x, y)
+maybe_weighted_dss_internal!(x, y) =
+    isempty(propertynames(x)) ? nothing : Spaces.weighted_dss_internal!(x, y)
+maybe_weighted_dss_ghost!(x, y) =
+    isempty(propertynames(x)) ? nothing : Spaces.weighted_dss_ghost!(x, y)
+
 function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
@@ -89,9 +96,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
             for dss_op! in (
-                Spaces.weighted_dss_start!,
-                Spaces.weighted_dss_internal!,
-                Spaces.weighted_dss_ghost!,
+                maybe_weighted_dss_start!,
+                maybe_weighted_dss_internal!,
+                maybe_weighted_dss_ghost!,
             )
                 dss_op!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
                 dss_op!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
@@ -154,9 +161,9 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
             for dss_op! in (
-                Spaces.weighted_dss_start!,
-                Spaces.weighted_dss_internal!,
-                Spaces.weighted_dss_ghost!,
+                maybe_weighted_dss_start!,
+                maybe_weighted_dss_internal!,
+                maybe_weighted_dss_ghost!,
             )
                 dss_op!(ᶜ∇²specific_tracers, buffer.ᶜ∇²specific_tracers)
                 if n > 0
