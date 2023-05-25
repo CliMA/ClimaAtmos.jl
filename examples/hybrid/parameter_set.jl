@@ -2,15 +2,11 @@ import ClimaAtmos as CA
 include(joinpath(pkgdir(CA), "parameters", "create_parameters.jl"))
 
 function create_parameter_set(::Type{FT}, parsed_args, default_args) where {FT}
-    toml_dict = if isnothing(parsed_args["toml"])
-        CP.create_toml_dict(FT; dict_type = "alias")
-    else
-        CP.create_toml_dict(
+    toml_dict = CP.create_toml_dict(
             FT;
             override_file = parsed_args["toml"],
             dict_type = "alias",
         )
-    end
     toml_dict, parsed_args =
         merge_parsed_args_with_toml(toml_dict, parsed_args, default_args)
     dt = FT(CA.time_to_seconds(parsed_args["dt"]))
