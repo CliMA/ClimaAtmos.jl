@@ -95,4 +95,6 @@ include(joinpath("utils", "type_getters.jl"))
 include(joinpath("utils", "yaml_helper.jl"))
 include(joinpath("solve.jl"))
 
+include("create_parameters.jl")
+
 end # module

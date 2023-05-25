@@ -1,19 +1,9 @@
-# Run with target_job compressible_edmf_bomex
-# Customizing specific jobs / specs in config_parsed_args.jl:
-ca_dir = joinpath(dirname(@__DIR__));
-include(joinpath(ca_dir, "perf", "config_parsed_args.jl")) # defines parsed_args
-
-ENV["CI_PERF_SKIP_INIT"] = true # we only need haskey(ENV, "CI_PERF_SKIP_INIT") == true
-
-filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
-
-try # capture integrator
-    include(filename)
-catch err
-    if err.error !== :exit_profile_init
-        rethrow(err.error)
-    end
-end
+import Random
+Random.seed!(1234)
+import ClimaAtmos as CA
+config = CA.AtmosPerfConfig()
+# To revive, define `args_integrator(::AtmosConfig)` and use that here
+integrator = CA.get_integrator(config)
 
 function do_work!(integrator_args, integrator_kwargs)
     integrator = get_integrator(integrator_args, integrator_kwargs)

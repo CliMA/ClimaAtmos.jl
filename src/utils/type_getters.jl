@@ -13,7 +13,9 @@ import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DEQ
 
-function get_atmos(::Type{FT}, parsed_args, turbconv_params) where {FT}
+function get_atmos(config::AtmosConfig, turbconv_params)
+    (; parsed_args) = config
+    FT = eltype(config)
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
@@ -497,7 +499,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
         call_every_dt(save_restart_func, dt_save_restart)
     end
 
-    gc_callback = if CA.is_distributed(simulation.comms_ctx)
+    gc_callback = if is_distributed(simulation.comms_ctx)
         call_every_n_steps(
             gc_func,
             parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
@@ -552,7 +554,9 @@ function get_cache(
     )
 end
 
-function get_simulation(::Type{FT}, parsed_args, comms_ctx) where {FT}
+function get_simulation(config::AtmosConfig, comms_ctx)
+    (; parsed_args) = config
+    FT = eltype(config)
 
     job_id = if isnothing(parsed_args["job_id"])
         s = argparse_settings()
@@ -655,4 +659,59 @@ function get_comms_context(parsed_args)
     end
 
     return comms_ctx
+end
+
+function get_integrator(config::AtmosConfig)
+    params = create_parameter_set(config)
+
+    atmos = get_atmos(config, params.turbconv_params)
+    numerics = get_numerics(config.parsed_args)
+    simulation = get_simulation(config, config.comms_ctx)
+    initial_condition = get_initial_condition(config.parsed_args)
+    surface_setup = get_surface_setup(config.parsed_args)
+
+    @time "Allocating Y" if simulation.restart
+        (Y, t_start) = get_state_restart(config.comms_ctx)
+        spaces = get_spaces_restart(Y)
+    else
+        spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+        Y = ICs.atmos_state(
+            initial_condition(params),
+            atmos,
+            spaces.center_space,
+            spaces.face_space,
+        )
+        t_start = Spaces.undertype(axes(Y.c))(0)
+    end
+
+    @time "Allocating cache (p)" begin
+        p = get_cache(
+            Y,
+            config.parsed_args,
+            params,
+            spaces,
+            atmos,
+            numerics,
+            simulation,
+            initial_condition,
+            surface_setup,
+        )
+    end
+
+    if config.parsed_args["discrete_hydrostatic_balance"]
+        set_discrete_hydrostatic_balanced_state!(Y, p)
+    end
+
+    @time "ode_configuration" ode_algo =
+        ode_configuration(Y, config.parsed_args, atmos)
+
+    @time "get_callbacks" callback =
+        get_callbacks(config.parsed_args, simulation, atmos, params)
+    tspan = (t_start, simulation.t_end)
+    @time "args_integrator" integrator_args, integrator_kwargs =
+        args_integrator(config.parsed_args, Y, p, tspan, ode_algo, callback)
+
+    @time "get_integrator" integrator =
+        get_integrator(integrator_args, integrator_kwargs)
+    return integrator
 end

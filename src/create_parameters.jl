@@ -1,15 +1,14 @@
-import ClimaAtmos as CA
-import ClimaAtmos.TurbulenceConvection as TC
+import .TurbulenceConvection as TC
+import .TurbulenceConvection.Parameters as TCP
 import CLIMAParameters as CP
 import RRTMGP.Parameters as RP
-import CloudMicrophysics as CM
-import Insolation.Parameters as IP
-import ClimaAtmos.Parameters as CAP
 import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
-import Thermodynamics as TD
-import ClimaAtmos.TurbulenceConvection.Parameters as TCP
 import ClimaCore
+import ClimaCore as CC
+import Insolation.Parameters as IP
+import Thermodynamics as TD
+import CloudMicrophysics as CM
 
 function override_climaatmos_defaults(
     defaults::NamedTuple,
@@ -123,5 +122,31 @@ function create_climaatmos_parameter_set(
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
-    return param_set, parsed_args
+    return param_set
+end
+
+# TODO: unify these parameters and refactor this method.
+function create_parameter_set(config::AtmosConfig)
+    (; toml_dict, parsed_args) = config
+    FT = eltype(config)
+    dt = FT(CA.time_to_seconds(parsed_args["dt"]))
+    return if CA.is_column_edmf(parsed_args)
+        overrides = (; MSLP = 100000.0, τ_precip = dt)
+        create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
+    elseif CA.is_column_without_edmf(parsed_args)
+        overrides = (; τ_precip = dt)
+        create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
+    else
+        overrides = (;
+            R_d = 287.0,
+            MSLP = 1.0e5,
+            grav = 9.80616,
+            Omega = 7.29212e-5,
+            planet_radius = 6.371229e6,
+            ρ_cloud_liq = 1e3,
+            τ_precip = dt,
+            qc_0 = 5e-6, # criterion for removal after supersaturation
+        )
+        create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
+    end
 end

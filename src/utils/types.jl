@@ -217,3 +217,145 @@ function Base.summary(io::IO, atmos::AtmosModel)
         print(io, s)
     end
 end
+
+struct AtmosConfig{FT, TD, PA, C}
+    toml_dict::TD
+    parsed_args::PA
+    comms_ctx::C
+end
+
+import ClimaCore
+
+"""
+    AtmosPerfConfig()
+
+Define an atmos config for performance runs, and allows
+options to be overridden in several ways. In short the
+precedence for defining `parsed_args` is
+
+    - Highest precedence: args defined in `ARGS`
+    - Mid     precedence: args defined in `parsed_args_perf_target` (below)
+    - Lowest  precedence: args defined in `cli_defaults(s)`
+
+# Example usage:
+
+Launch with `julia --project=perf/`
+
+```julia
+import ClimaAtmos as CA
+import Random
+Random.seed!(1234)
+config = CA.AtmosPerfConfig(;moist="dry")
+```
+"""
+function AtmosPerfConfig(s = argparse_settings())
+    @info "Using base performance parameters + provided CL arguments."
+    parsed_args_defaults = cli_defaults(s)
+    dict = parsed_args_per_job_id(; filter_name = "driver.jl")
+
+    # Start with performance target, and override anything provided in ARGS
+    parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
+
+    target_job = get(parsed_args_prescribed, "target_job", nothing)
+    parsed_args_perf_target = isnothing(target_job) ? Dict() : dict[target_job]
+
+    parsed_args_perf_target["forcing"] = "held_suarez"
+    parsed_args_perf_target["vert_diff"] = true
+    parsed_args_perf_target["surface_setup"] = "DefaultExchangeCoefficients"
+    parsed_args_perf_target["moist"] = "equil"
+    parsed_args_perf_target["enable_threading"] = false
+    parsed_args_perf_target["rad"] = "allskywithclear"
+    parsed_args_perf_target["precip_model"] = "0M"
+    parsed_args_perf_target["dt"] = "1secs"
+    parsed_args_perf_target["t_end"] = "10secs"
+    parsed_args_perf_target["dt_save_to_sol"] = Inf
+    parsed_args_perf_target["z_elem"] = 25
+    parsed_args_perf_target["h_elem"] = 12
+
+    parsed_args = merge(
+        parsed_args_defaults,
+        parsed_args_perf_target,
+        parsed_args_prescribed,
+    )
+    return AtmosConfig(s; parsed_args)
+end
+
+function AtmosConfig(
+    s = argparse_settings();
+    parsed_args = parse_commandline(s),
+)
+    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+    toml_dict = CP.create_toml_dict(
+        FT;
+        override_file = parsed_args["toml"],
+        dict_type = "alias",
+    )
+    toml_dict, parsed_args =
+        merge_parsed_args_with_toml(toml_dict, parsed_args, CA.cli_defaults(s))
+    comms_ctx = CA.get_comms_context(parsed_args)
+
+    # TODO: is there a better way? We need a better
+    #       mechanism on the ClimaCore side.
+    if parsed_args["enable_threading"]
+        @eval Main begin
+            import ClimaCore
+            ClimaCore.enable_threading() = true
+        end
+    end
+    if parsed_args["trunc_stack_traces"]
+        @eval Main begin
+            import ClimaCore
+            ClimaCore.Fields.truncate_printing_field_types() = true
+        end
+    end
+    if ClimaCore.enable_threading()
+        @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads."
+    else
+        @info "Running ClimaCore in unthreaded mode."
+    end
+
+    C = typeof(comms_ctx)
+    TD = typeof(toml_dict)
+    PA = typeof(parsed_args)
+    return AtmosConfig{FT, TD, PA, C}(toml_dict, parsed_args, comms_ctx)
+end
+Base.eltype(::AtmosConfig{FT}) where {FT} = FT
+
+"""
+Merges parsed_args with the toml_dict generated from CLIMAParameters. 
+Priority for clashes: parsed_args > toml_dict > default_args
+Converts `nothing` to empty string, since CLIMAParameters does not support type Nothing.
+The dictionary overrides existing toml_dict values if there are clashes.
+"""
+function merge_parsed_args_with_toml(toml_dict, parsed_args, default_args)
+    toml_type(val::AbstractFloat) = "float"
+    toml_type(val::Integer) = "integer"
+    toml_type(val::Bool) = "bool"
+    toml_type(val::String) = "string"
+    toml_type(val::Symbol) = "string"
+    toml_type(val::Nothing) = "string"
+    toml_value(val::Nothing) = ""
+    toml_value(val::Symbol) = String(val)
+    toml_value(val) = val
+
+    for (key, value) in parsed_args
+        if haskey(default_args, key)
+            if parsed_args[key] != default_args[key] ||
+               !haskey(toml_dict.data, key)
+                toml_dict.data[key] = Dict(
+                    "type" => toml_type(value),
+                    "value" => toml_value(value),
+                    "alias" => key,
+                )
+            end
+            parsed_args[key] = if toml_dict.data[key]["value"] == ""
+                nothing
+            elseif parsed_args[key] isa Symbol
+                Symbol(toml_dict.data[key]["value"])
+            else
+                toml_dict.data[key]["value"]
+            end
+        end
+    end
+    return toml_dict, parsed_args
+end

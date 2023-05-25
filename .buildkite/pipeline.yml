@@ -79,6 +79,11 @@ steps:
         agents:
           slurm_gres: "gpu:1"
 
+      - label: "Performance benchmark step!"
+        command:
+          - julia --color=yes --project=examples perf/benchmark_step.jl --h_elem 6
+        artifact_paths: "perf_benchmark_step/*"
+
   - group: "Gravity wave"
     steps:
 
