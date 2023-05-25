@@ -90,10 +90,8 @@ function default_cache(
         apply_limiter ? Limiters.QuasiMonotoneLimiter(similar(Y.c, FT)) :
         nothing
 
-    net_energy_flux_toa = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
-    net_energy_flux_toa[] = Geometry.WVector(FT(0))
-    net_energy_flux_sfc = [sum(similar(Y.f, Geometry.WVector{FT})) * 0]
-    net_energy_flux_sfc[] = Geometry.WVector(FT(0))
+    net_energy_flux_toa = [Geometry.WVector(FT(0))]
+    net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
     default_cache = (;
         simulation,
