@@ -24,26 +24,6 @@ import ClimaCore.Fields: ColumnField
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-
-# Fields used to store variables that only need to be used in a single function
-# but cannot be computed on the fly. Unlike the precomputed quantities, these
-# can be modified at any point, so they should never be assumed to be unchanged
-# between function calls.
-function temporary_quantities(atmos, center_space, face_space)
-    FT = Spaces.undertype(center_space)
-    n = n_mass_flux_subdomains(atmos.turbconv_model)
-    return (;
-        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
-        ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
-        ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³
-        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
-        ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
-        ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
-        # TODO: Remove this hack
-        sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
-    )
-end
-
 function default_cache(
     Y,
     parsed_args,
@@ -193,47 +173,4 @@ function additional_cache(
             initial_condition,
         ),
     )
-end
-
-
-function dss!(Y, p, t)
-    if p.do_dss
-        Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_start2!(Y.f, p.ghost_buffer.f)
-        Spaces.weighted_dss_internal2!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_internal2!(Y.f, p.ghost_buffer.f)
-        Spaces.weighted_dss_ghost2!(Y.c, p.ghost_buffer.c)
-        Spaces.weighted_dss_ghost2!(Y.f, p.ghost_buffer.f)
-    end
-end
-
-function limited_tendency!(Yₜ, Y, p, t)
-    Yₜ .= zero(eltype(Yₜ))
-    set_precomputed_quantities!(Y, p, t)
-    horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
-    NVTX.@range "tracer hyperdiffusion tendency" color = colorant"yellow" begin
-        tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    end
-end
-
-function limiters_func!(Y, p, t, ref_Y)
-    (; limiter) = p
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    if !isnothing(limiter)
-        for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-            Limiters.compute_bounds!(limiter, ref_Y.c.:($ρχ_name), ref_Y.c.ρ)
-            Limiters.apply_limiter!(Y.c.:($ρχ_name), Y.c.ρ, limiter)
-        end
-        for j in 1:n
-            for ρaχ_name in
-                filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
-                ᶜρaχ_ref = ref_Y.c.sgsʲs.:($j).:($ρaχ_name)
-                ᶜρa_ref = ref_Y.c.sgsʲs.:($j).ρa
-                ᶜρaχ = Y.c.sgsʲs.:($j).:($ρaχ_name)
-                ᶜρa = Y.c.sgsʲs.:($j).ρa
-                Limiters.compute_bounds!(limiter, ᶜρaχ_ref, ᶜρa_ref)
-                Limiters.apply_limiter!(ᶜρaχ, ᶜρa, limiter)
-            end
-        end
-    end
 end

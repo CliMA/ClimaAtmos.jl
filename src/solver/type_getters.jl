@@ -297,7 +297,7 @@ function get_initial_condition(parsed_args)
 end
 
 function get_surface_setup(parsed_args)
-    return getproperty(SurfaceStates, Symbol(parsed_args["surface_setup"]))()
+    return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
 is_explicit_CTS_algo_type(alg_or_tableau) =
