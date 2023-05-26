@@ -47,7 +47,7 @@ module load julia/1.8.5 openmpi/4.1.1 hdf5/1.12.1-ompi411
 
 export JULIA_MPI_BINARY=system
 export JULIA_NUM_THREADS=${SLURM_CPUS_PER_TASK:=1}
-export CLIMACORE_DISTRIBUTED="MPI"
+export CLIMACOMMS_CONTEXT="MPI"
 export JULIA_HDF5_PATH=""
 
 #export RESTART_FILE=$YOUR_HDF5_RESTART_FILE
