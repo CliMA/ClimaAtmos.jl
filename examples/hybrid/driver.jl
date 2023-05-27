@@ -1,29 +1,7 @@
+import ClimaAtmos.Parameters as CAP
 import ClimaAtmos as CA
+import Thermodynamics as TD
 import ClimaComms
-
-s = CA.argparse_settings()
-if !(@isdefined parsed_args)
-    parsed_args = CA.parse_commandline(s)
-end
-
-if !(@isdefined comms_ctx) # Coupler compatibility
-    const comms_ctx = CA.get_comms_context(parsed_args)
-end
-
-const FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-
-include("parameter_set.jl")
-params, parsed_args = create_parameter_set(FT, parsed_args, CA.cli_defaults(s))
-
-import ClimaAtmos.InitialConditions as ICs
-
-atmos = CA.get_atmos(FT, parsed_args, params.turbconv_params)
-numerics = CA.get_numerics(parsed_args)
-simulation = CA.get_simulation(FT, parsed_args, comms_ctx)
-initial_condition = CA.get_initial_condition(parsed_args)
-surface_setup = CA.get_surface_setup(parsed_args)
-
-# TODO: use import instead of using
 using OrdinaryDiffEq
 using PrettyTables
 using DiffEqCallbacks
@@ -34,73 +12,15 @@ using ClimaTimeSteppers
 import Random
 import ClimaCore
 using Statistics: mean
+import ClimaAtmos.InitialConditions as ICs
 Random.seed!(1234)
 
-
-if parsed_args["trunc_stack_traces"]
-    ClimaCore.Fields.truncate_printing_field_types() = true
-end
-
-
-import ClimaCore: enable_threading
-const enable_clima_core_threading = parsed_args["enable_threading"]
-enable_threading() = enable_clima_core_threading
-
-@time "Allocating Y" if simulation.restart
-    (Y, t_start) = CA.get_state_restart(comms_ctx)
-    spaces = CA.get_spaces_restart(Y)
-else
-    spaces = CA.get_spaces(parsed_args, params, comms_ctx)
-    Y = ICs.atmos_state(
-        initial_condition(params),
-        atmos,
-        spaces.center_space,
-        spaces.face_space,
-    )
-    t_start = FT(0)
-end
-
-@time "Allocating cache (p)" begin
-    p = CA.get_cache(
-        Y,
-        parsed_args,
-        params,
-        spaces,
-        atmos,
-        numerics,
-        simulation,
-        initial_condition,
-        surface_setup,
-    )
-end
-
-if parsed_args["discrete_hydrostatic_balance"]
-    CA.set_discrete_hydrostatic_balanced_state!(Y, p)
-end
-
-@time "ode_configuration" ode_algo = CA.ode_configuration(Y, parsed_args, atmos)
-
-@time "get_callbacks" callback =
-    CA.get_callbacks(parsed_args, simulation, atmos, params)
-tspan = (t_start, simulation.t_end)
-@time "args_integrator" integrator_args, integrator_kwargs =
-    CA.args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-
-if haskey(ENV, "CI_PERF_SKIP_INIT") # for performance analysis
-    throw(:exit_profile_init)
-end
-
-@time "get_integrator" integrator =
-    CA.get_integrator(integrator_args, integrator_kwargs)
-
-if haskey(ENV, "CI_PERF_SKIP_RUN") # for performance analysis
-    throw(:exit_profile)
-end
-
-@info "Running" job_id = simulation.job_id output_dir = simulation.output_dir tspan
-
+config = CA.AtmosConfig()
+integrator = CA.get_integrator(config)
 sol_res = CA.solve_atmos!(integrator)
 
+(; simulation, atmos, params) = integrator.p
+(; p) = integrator
 import JSON
 using Test
 import OrderedCollections
@@ -113,16 +33,16 @@ include(
     joinpath(pkgdir(CA), "post_processing", "define_tc_quicklook_profiles.jl"),
 )
 
-ref_job_id = parsed_args["reference_job_id"]
+ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
 
 is_edmfx = atmos.turbconv_model isa CA.EDMFX
-if is_edmfx && parsed_args["post_process"]
+if is_edmfx && config.parsed_args["post_process"]
     contours_and_profiles(simulation.output_dir, reference_job_id)
     zip_and_cleanup_output(simulation.output_dir, "hdf5files.zip")
 end
 
-if parsed_args["debugging_tc"] && !is_edmfx
+if config.parsed_args["debugging_tc"] && !is_edmfx
     include(
         joinpath(
             @__DIR__,
@@ -177,27 +97,31 @@ end
 @assert last(sol.t) == simulation.t_end
 CA.verify_callbacks(sol.t)
 
-if CA.is_distributed(comms_ctx)
+if CA.is_distributed(config.comms_ctx)
     CA.export_scaling_file(
         sol,
         simulation.output_dir,
         walltime,
-        comms_ctx,
-        ClimaComms.nprocs(comms_ctx),
+        config.comms_ctx,
+        ClimaComms.nprocs(config.comms_ctx),
     )
 end
 
-if !CA.is_distributed(comms_ctx) &&
-   parsed_args["post_process"] &&
+if !CA.is_distributed(config.comms_ctx) &&
+   config.parsed_args["post_process"] &&
    !is_edmfx &&
    !(atmos.model_config isa CA.SphericalModel)
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if CA.is_column_without_edmf(parsed_args)
+    if CA.is_column_without_edmf(config.parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
-    elseif CA.is_column_edmf(parsed_args)
-        postprocessing_edmf(sol, simulation.output_dir, parsed_args["fps"])
-    elseif CA.is_solid_body(parsed_args)
-        postprocessing(sol, simulation.output_dir, parsed_args["fps"])
+    elseif CA.is_column_edmf(config.parsed_args)
+        postprocessing_edmf(
+            sol,
+            simulation.output_dir,
+            config.parsed_args["fps"],
+        )
+    elseif CA.is_solid_body(config.parsed_args)
+        postprocessing(sol, simulation.output_dir, config.parsed_args["fps"])
     elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)
     elseif atmos.model_config isa CA.PlaneModel
@@ -208,7 +132,7 @@ if !CA.is_distributed(comms_ctx) &&
 end
 
 include(joinpath(@__DIR__, "..", "..", "regression_tests", "mse_tables.jl"))
-if parsed_args["regression_test"]
+if config.parsed_args["regression_test"]
     # Test results against main branch
     include(
         joinpath(
@@ -236,7 +160,8 @@ end
 
 
 
-if parsed_args["check_conservation"]
+if config.parsed_args["check_conservation"]
+    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
     @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 25 * eps(FT)
     @test sum(sol.u[1].c.ρe_tot) +
           (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈

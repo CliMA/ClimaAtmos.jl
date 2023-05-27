@@ -1,20 +1,11 @@
-# Customizing specific jobs / specs in config_parsed_args.jl:
-ca_dir = joinpath(dirname(@__DIR__));
-include(joinpath(ca_dir, "perf", "config_parsed_args.jl")) # defines parsed_args
-
-ENV["CI_PERF_SKIP_RUN"] = true # we only need haskey(ENV, "CI_PERF_SKIP_RUN") == true
-
-filename = joinpath(ca_dir, "examples", "hybrid", "driver.jl")
-
-try # capture integrator
-    include(filename)
-catch err
-    if err.error !== :exit_profile
-        rethrow(err.error)
-    end
-end
-
+import Random
+Random.seed!(1234)
 import ClimaAtmos as CA
+config = CA.AtmosPerfConfig()
+integrator = CA.get_integrator(config)
+
+(; parsed_args) = config
+
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 ODE.step!(integrator) # compile first
@@ -63,7 +54,7 @@ if get(ENV, "BUILDKITE", "") == "true"
     # Export table_summary
     import JSON
     job_id = parsed_args["job_id"]
-    path = ca_dir
+    path = pkgdir(CA)
     open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
         JSON.print(io, table_summary)
     end

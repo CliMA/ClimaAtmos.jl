@@ -123,21 +123,16 @@ function postprocessing_box(sol, output_dir)
     end
 
     Y = sol.u[end]
+    FT = Spaces.undertype(axes(Y.c))
+    y_max = maximum(Fields.coordinate_field(axes(Y.f)).y)
     ᶠw = Geometry.WVector.(Y.f.u₃).components.data.:1
-    p = Plots.plot(
-        ᶠw,
-        slice = (:, FT(parsed_args["y_max"] / 2), :),
-        clim = (-0.1, 0.1),
-    )
+    p = Plots.plot(ᶠw, slice = (:, FT(y_max / 2), :), clim = (-0.1, 0.1))
     Plots.png(p, joinpath(output_dir, "w.png"))
 
     if :ρq_tot in propertynames(Y.c)
         qt = Y.c.ρq_tot ./ Y.c.ρ
-        pq = Plots.plot(
-            qt,
-            slice = (:, FT(parsed_args["y_max"] / 2), :),
-            clim = (-0.02, 0.020),
-        )
+        pq =
+            Plots.plot(qt, slice = (:, FT(y_max / 2), :), clim = (-0.02, 0.020))
         Plots.png(pq, joinpath(output_dir, "qt.png"))
     end
 end
@@ -187,6 +182,7 @@ function postprocessing(sol, output_dir, fps)
     Plots.mp4(anim, joinpath(output_dir, "w.mp4"), fps = fps)
 
     prop_chains = Fields.property_chains(sol.u[1])
+    FT = Spaces.undertype(axes(Y.c))
     if any(pc -> pc == (:c, :ρq_tot), prop_chains)
         anim = Plots.@animate for Y in sol.u
             ᶜq_tot = Y.c.ρq_tot ./ Y.c.ρ
