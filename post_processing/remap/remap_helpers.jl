@@ -1,6 +1,6 @@
 import ClimaCoreTempestRemap
 import ClimaCore: Spaces, Fields
-import ClimaAtmos: SurfaceStates, CT3
+import ClimaAtmos: SurfaceConditions, CT3
 import ClimaCore.Utilities: half
 """
     create_weightfile(
@@ -219,7 +219,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         sfc_flux_momentum = diag.sfc_flux_momentum
         sfc_local_geometry = Fields.local_geometry_field(sfc_flux_momentum)
         w_unit = @. CT3(
-            SurfaceStates.unit_basis_vector_data(CT3, sfc_local_geometry),
+            SurfaceConditions.unit_basis_vector_data(CT3, sfc_local_geometry),
         )
         sfc_flux_momentum_phy =
             Geometry.UVVector.(adjoint.(sfc_flux_momentum) .* w_unit)

@@ -1,4 +1,4 @@
-module SurfaceStates
+module SurfaceConditions
 
 import ..InitialConditions as ICs
 import ..Parameters as CAP

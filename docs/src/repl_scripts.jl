@@ -1,6 +1,6 @@
 const ca_dir = joinpath(@__DIR__, "..", "..")
-include(joinpath(ca_dir, "src", "utils", "cli_options.jl"))
-include(joinpath(ca_dir, "src", "utils", "yaml_helper.jl"))
+include(joinpath(ca_dir, "src", "solver", "cli_options.jl"))
+include(joinpath(ca_dir, "src", "solver", "yaml_helper.jl"))
 using PrettyTables
 s = argparse_settings();
 parsed_args = parse_commandline(s);

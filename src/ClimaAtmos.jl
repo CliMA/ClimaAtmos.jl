@@ -2,18 +2,18 @@ module ClimaAtmos
 
 using NVTX, Colors
 
-include("Parameters.jl")
+include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "common_spaces.jl"))
-include(joinpath("utils", "types.jl"))
+include(joinpath("solver", "types.jl"))
 include(joinpath("utils", "nvtx.jl"))
-include(joinpath("utils", "cli_options.jl"))
+include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "classify_case.jl"))
-include(joinpath("utils", "topography_helper.jl"))
+include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 
 include(
@@ -23,20 +23,20 @@ include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
 import .RRTMGPInterface as RRTMGPI
 include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 
-include("TurbulenceConvection/TurbulenceConvection.jl")
+include(joinpath("TurbulenceConvection_deprecated", "TurbulenceConvection.jl"))
 import .TurbulenceConvection as TC
 
-include("precomputed_quantities.jl")
+include(joinpath("cache", "precomputed_quantities.jl"))
 
-include(joinpath("InitialConditions", "InitialConditions.jl"))
+include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(
     joinpath(
         "parameterized_tendencies",
-        "TurbulenceConvection",
+        "turbulence_convection",
         "tc_functions.jl",
     ),
 )
-include(joinpath("SurfaceStates", "SurfaceStates.jl"))
+include(joinpath("surface_conditions", "SurfaceConditions.jl"))
 include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
@@ -49,7 +49,8 @@ include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
-include(joinpath("parameterized_tendencies", "held_suarez", "held_suarez.jl"))
+
+include(joinpath("parameterized_tendencies", "radiation", "held_suarez.jl"))
 
 include(
     joinpath(
@@ -84,17 +85,20 @@ include(
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(joinpath("prognostic_equations", "advection.jl"))
-include(joinpath("dycore_equations", "sgs_flux_tendencies.jl"))
+include(joinpath("dycore_equations_deprecated", "sgs_flux_tendencies.jl"))
 
-include("staggered_nonhydrostatic_model.jl")
+include(joinpath("cache", "temporary_quantities.jl"))
+include(joinpath("cache", "cache.jl"))
+include(joinpath("prognostic_equations", "dss.jl"))
+include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
 
-include(joinpath("utils", "model_getters.jl")) # high-level (using parsed_args) model getters
-include(joinpath("utils", "type_getters.jl"))
-include(joinpath("utils", "yaml_helper.jl"))
-include(joinpath("solve.jl"))
+include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
+include(joinpath("solver", "type_getters.jl"))
+include(joinpath("solver", "yaml_helper.jl"))
+include(joinpath("solver", "solve.jl"))
 
-include("create_parameters.jl")
+include(joinpath("parameters", "create_parameters.jl"))
 
 end # module

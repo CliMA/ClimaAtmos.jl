@@ -37,7 +37,7 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
     TST = thermo_state_type(atmos.moisture_model, FT)
-    SCT = SurfaceStates.surface_conditions_type(atmos, FT)
+    SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜspecific = specific_gs.(Y.c),
@@ -273,7 +273,7 @@ function set_precomputed_quantities!(Y, p, t)
             TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
     end
 
-    SurfaceStates.update_surface_conditions!(Y, p, t)
+    SurfaceConditions.update_surface_conditions!(Y, p, t)
 
     if n > 0
         (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
