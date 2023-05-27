@@ -442,6 +442,7 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
         nc = NCDataset(ifile, "r")
         if i == 1
             global lat = nc["lat"][:]
+            global lon = nc["lon"][:]
             global z = nc["z"][:]
             global u = nc["u"][:]
             global T = nc["temperature"][:]
@@ -535,6 +536,17 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
         ),
     )
 
+    push!(
+        fig,
+        Plots.contourf(
+            lon,
+            lat,
+            T[:, :, 1, end]',
+            color = :rainbow,
+            title = "temperature day $(days[end]) z $(round(z[1])) m",
+        ),
+    )
+
     if moist
         push!(
             fig,
@@ -551,16 +563,27 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
                 ylabel = "z (m)",
             ),
         )
+
+        push!(
+            fig,
+            Plots.contourf(
+                lon,
+                lat,
+                qt[:, :, 1, end]' * 1000,
+                color = :rainbow,
+                title = "qt day $(days[end]) z $(round(z[1])) m",
+            ),
+        )
     end
 
     if !moist
         png(
-            Plots.plot(fig..., layout = (2, 2), size = (800, 800)),
+            Plots.plot(fig..., layout = (2, 3), size = (1200, 800)),
             fig_dir * "/diagnostics.png",
         )
     else
         png(
-            Plots.plot(fig..., layout = (2, 3), size = (1200, 800)),
+            Plots.plot(fig..., layout = (2, 4), size = (1600, 800)),
             fig_dir * "/diagnostics.png",
         )
     end
