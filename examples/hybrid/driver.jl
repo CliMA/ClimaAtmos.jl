@@ -1,3 +1,5 @@
+import Random
+Random.seed!(1234)
 import ClimaAtmos as CA
 import ClimaComms
 
@@ -31,10 +33,8 @@ using JLD2
 using NCDatasets
 using ClimaCore
 using ClimaTimeSteppers
-import Random
 import ClimaCore
 using Statistics: mean
-Random.seed!(1234)
 
 
 if parsed_args["trunc_stack_traces"]
