@@ -320,7 +320,7 @@ function save_to_disk_func(integrator)
 
     if p.atmos.turbconv_model isa EDMFX
         (; ᶜspecific⁰, ᶜu⁰, ᶜts⁰) = p
-        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = diagnostic_sgs_quantities(Y, p, t)
+        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             common_diagnostics(ᶜu⁰, ᶜts⁰)...,
             area = ᶜa⁰,
@@ -337,6 +337,17 @@ function save_to_disk_func(integrator)
             add_prefix(draft_diagnostics, :draft_)...,
             cloud_fraction = ᶜa⁰ .* cloud_fraction.(ᶜts⁰, ᶜa⁰) .+
                              ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
+        )
+    elseif p.atmos.turbconv_model isa DiagnosticEDMFX
+        (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
+        draft_diagnostics = (;
+            common_diagnostics(ᶜu⁺, ᶜts⁺)...,
+            area = ᶜa⁺,
+            cloud_fraction = cloud_fraction.(ᶜts⁺, ᶜa⁺),
+        )
+        turbulence_convection_diagnostic = (;
+            add_prefix(draft_diagnostics, :draft_)...,
+            cloud_fraction = ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa TC.EDMFModel
         tc_cent(p) = p.edmf_cache.aux.cent.turbconv

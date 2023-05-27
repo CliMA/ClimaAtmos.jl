@@ -500,6 +500,19 @@ steps:
         artifact_paths: "edmfx_adv_test_sphere/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Diagnostic EDMFX test in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_test_box
+          --moist equil --turbconv diagnostic_edmfx --edmfx_entr_detr false
+          --config box --hyperdiff true --kappa_4 1e8
+          --x_max 1e4 --y_max 1e4 --x_elem 2 --y_elem 2 --z_elem 45 --z_max 30e3 --dz_bottom 30
+          --dt 1secs --t_end 100secs
+          --dt_save_to_disk 10secs
+
+        artifact_paths: "diagnostic_edmfx_test_box/*"
+        agents:
+          slurm_mem: 20GB
 
 
   - group: "TurbulenceConvection"

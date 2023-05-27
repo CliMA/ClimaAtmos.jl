@@ -63,6 +63,9 @@ function contour_plot!(
     # Redrawing plots on top of themselves fixes this problem.
     n_redraws = 2 # Increase this if any aliasing artifacts are observed.
 
+    if isnothing(var_col_time_series)
+        return
+    end
     ts = getindex.(var_col_time_series, 1)
     zs = var_col_time_series[1][2]
     values = hcat(getindex.(var_col_time_series, 3)...)'
@@ -164,6 +167,7 @@ function profile_plot!(
     )
     any_refs_available = any(!isnothing, getindex.(ref_final_var_cols, 2))
     for (category, (zs, values)) in zip(categories, final_var_cols)
+        isnothing(values) && continue
         color = (colors[color_indices[category]], alpha)
         label = (any_refs_available ? "PR " : "") * "$category"
         Makie.lines!(axis, values, zs; color, label)

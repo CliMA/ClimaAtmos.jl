@@ -36,6 +36,10 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
+    @assert (
+        !(atmos.moisture_model isa DryModel) &&
+        atmos.energy_form isa TotalEnergy
+    ) || !(atmos.turbconv_model isa DiagnosticEDMFX)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -53,7 +57,7 @@ function precomputed_quantities(Y, atmos)
         sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
     sgs_quantities =
-        n == 0 ? (;) :
+        atmos.turbconv_model isa EDMFX ?
         (;
             ᶜspecific⁰ = specific_full_sgs⁰.(Y.c, atmos.turbconv_model),
             ᶜρa⁰ = similar(Y.c, FT),
@@ -73,8 +77,20 @@ function precomputed_quantities(Y, atmos)
                 atmos.energy_form isa TotalEnergy ?
                 (; ᶜh_totʲs = similar(Y.c, NTuple{n, FT})) : (;)
             )...,
-        )
-    return (; gs_quantities..., sgs_quantities...)
+        ) : (;)
+    diagnostic_sgs_quantities =
+        atmos.turbconv_model isa DiagnosticEDMFX ?
+        (;
+            ᶜρaʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
+            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
+            ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜh_totʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
+        ) : (;)
+    return (; gs_quantities..., sgs_quantities..., diagnostic_sgs_quantities...)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
@@ -99,9 +115,11 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
     sfc_g³³ = g³³_field(sfc_u₃)
     @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
-        sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
-        @. sfc_u₃ʲ = sfc_u₃
+    if turbconv_model isa EDMFX
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
+            @. sfc_u₃ʲ = sfc_u₃
+        end
     end
 end
 
@@ -113,6 +131,39 @@ function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ�
         @. ᶠu³[colidx] = ᶠuₕ³[colidx] + CT3(ᶠu₃[colidx])
         compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠu₃[colidx])
     end
+end
+
+function set_diagnostic_edmfx_quantities_level!(
+    thermo_params,
+    K,
+    ts,
+    ρ,
+    uₕ,
+    local_geometry_level,
+    u³,
+    local_geometry_halflevel,
+    h_tot,
+    q_tot,
+    p,
+    Φ,
+)
+    @. K =
+        (
+            dot(
+                C123(uₕ, local_geometry_level),
+                CT123(uₕ, local_geometry_level),
+            ) +
+            dot(
+                C123(u³, local_geometry_halflevel),
+                CT123(u³, local_geometry_halflevel),
+            ) +
+            2 * dot(
+                CT123(uₕ, local_geometry_level),
+                C123(u³, local_geometry_halflevel),
+            )
+        ) / 2
+    @. ts = TD.PhaseEquil_phq(thermo_params, p, h_tot - K - Φ, q_tot)
+    @. ρ = TD.air_density(thermo_params, ts)
 end
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
@@ -275,7 +326,7 @@ function set_precomputed_quantities!(Y, p, t)
 
     SurfaceConditions.update_surface_conditions!(Y, p, t)
 
-    if n > 0
+    if turbconv_model isa EDMFX
         (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
         (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
         @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
@@ -319,18 +370,238 @@ function set_precomputed_quantities!(Y, p, t)
         end
     end
 
+    if turbconv_model isa DiagnosticEDMFX
+        FT = eltype(Y)
+        (; ᶜp_ref, ᶜρ_ref, ᶠu³) = p
+        (; q_tot) = p.ᶜspecific
+        (; ᶜρaʲs, ᶠu³ʲs, ᶜuʲs, ᶜKʲs, ᶜh_totʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p
+        ᶜ∇p_perturb³ = p.ᶜtemp_CT3
+        ᶜ∇Φ³ = p.ᶜtemp_CT3_2
+
+        @. ᶜ∇p_perturb³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜp - ᶜp_ref)))
+        @. ᶜ∇p_perturb³ += CT3(gradₕ(ᶜp - ᶜp_ref))
+        @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
+        @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
+
+        ρaʲu³ʲ_data = p.temp_data_level
+        ρaʲu³ʲ_datau³ʲ_data = p.temp_data_level_2
+        ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.temp_data_level_3
+
+        for j in 1:n
+            ᶜρaʲ = ᶜρaʲs.:($j)
+            ᶠu³ʲ = ᶠu³ʲs.:($j)
+            ᶜKʲ = ᶜKʲs.:($j)
+            ᶜh_totʲ = ᶜh_totʲs.:($j)
+            ᶜtsʲ = ᶜtsʲs.:($j)
+            ᶜρʲ = ᶜρʲs.:($j)
+            ᶜq_totʲ = ᶜq_totʲs.:($j)
+
+            # boundary condition
+            ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, 1))
+            u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, half))
+            Kʲ_level = Fields.field_values(Fields.level(ᶜKʲ, 1))
+            h_totʲ_level = Fields.field_values(Fields.level(ᶜh_totʲ, 1))
+            q_totʲ_level = Fields.field_values(Fields.level(ᶜq_totʲ, 1))
+            tsʲ_level = Fields.field_values(Fields.level(ᶜtsʲ, 1))
+            ρʲ_level = Fields.field_values(Fields.level(ᶜρʲ, 1))
+            ρ_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
+            uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
+            h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
+            q_tot_level = Fields.field_values(Fields.level(q_tot, 1))
+
+            p_level = Fields.field_values(Fields.level(ᶜp, 1))
+            Φ_level = Fields.field_values(Fields.level(ᶜΦ, 1))
+
+            local_geometry_level = Fields.field_values(
+                Fields.level(Fields.local_geometry_field(Y.c), 1),
+            )
+            local_geometry_halflevel = Fields.field_values(
+                Fields.level(Fields.local_geometry_field(Y.f), half),
+            )
+
+            @. u³ʲ_halflevel = CT3(FT(0))
+            @. ρaʲ_level = ρ_level * turbconv_model.a_int
+            @. h_totʲ_level = h_tot_level
+            @. q_totʲ_level = q_tot_level
+
+            set_diagnostic_edmfx_quantities_level!(
+                thermo_params,
+                Kʲ_level,
+                tsʲ_level,
+                ρʲ_level,
+                uₕ_level,
+                local_geometry_level,
+                u³ʲ_halflevel,
+                local_geometry_halflevel,
+                h_totʲ_level,
+                q_totʲ_level,
+                p_level,
+                Φ_level,
+            )
+
+            # integral
+            for i in 2:Spaces.nlevels(axes(Y.c))
+                ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
+                u³ʲ_halflevel =
+                    Fields.field_values(Fields.level(ᶠu³ʲ, i - half))
+                Kʲ_level = Fields.field_values(Fields.level(ᶜKʲ, i))
+                h_totʲ_level = Fields.field_values(Fields.level(ᶜh_totʲ, i))
+                q_totʲ_level = Fields.field_values(Fields.level(ᶜq_totʲ, i))
+                tsʲ_level = Fields.field_values(Fields.level(ᶜtsʲ, i))
+                ρʲ_level = Fields.field_values(Fields.level(ᶜρʲ, i))
+                ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
+                uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
+                h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
+                q_tot_level = Fields.field_values(Fields.level(q_tot, i))
+                p_level = Fields.field_values(Fields.level(ᶜp, i))
+                Φ_level = Fields.field_values(Fields.level(ᶜΦ, i))
+
+                local_geometry_level = Fields.field_values(
+                    Fields.level(Fields.local_geometry_field(Y.c), i),
+                )
+                local_geometry_halflevel = Fields.field_values(
+                    Fields.level(Fields.local_geometry_field(Y.f), i - half),
+                )
+                ∂x∂ξ_level = local_geometry_level.∂x∂ξ.components.data
+                end_index = fieldcount(eltype(∂x∂ξ_level)) # This will be 4 in 2D and 9 in 3D.
+                ∂x³∂ξ³_level = ∂x∂ξ_level.:($end_index)
+
+                ρaʲ_prev_level = Fields.field_values(Fields.level(ᶜρaʲ, i - 1))
+                u³ʲ_prev_halflevel =
+                    Fields.field_values(Fields.level(ᶠu³ʲ, i - 1 - half))
+                u³ʲ_data_prev_halflevel = u³ʲ_prev_halflevel.components.data.:1
+                h_totʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜh_totʲ, i - 1))
+                q_totʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜq_totʲ, i - 1))
+                ρʲ_prev_level = Fields.field_values(Fields.level(ᶜρʲ, i - 1))
+                ρ_ref_prev_level =
+                    Fields.field_values(Fields.level(ᶜρ_ref, i - 1))
+                ∇p_perturb³_prev_level =
+                    Fields.field_values(Fields.level(ᶜ∇p_perturb³, i - 1))
+                ∇p_perturb³_prev_level_data =
+                    ∇p_perturb³_prev_level.components.data.:1
+                ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
+                ∇Φ³_prev_level_data = ∇Φ³_prev_level.components.data.:1
+
+                local_geometry_prev_level = Fields.field_values(
+                    Fields.level(Fields.local_geometry_field(Y.c), i - 1),
+                )
+                local_geometry_prev_halflevel = Fields.field_values(
+                    Fields.level(
+                        Fields.local_geometry_field(Y.f),
+                        i - 1 - half,
+                    ),
+                )
+
+                @. ρaʲu³ʲ_data =
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_halflevel.J *
+                        ρaʲ_prev_level *
+                        u³ʲ_data_prev_halflevel
+                    )
+
+                @. ρaʲu³ʲ_datau³ʲ_data =
+                    (1 / local_geometry_halflevel.J^2) * (
+                        local_geometry_prev_halflevel.J^2 *
+                        ρaʲ_prev_level *
+                        u³ʲ_data_prev_halflevel *
+                        u³ʲ_data_prev_halflevel
+                    )
+
+                @. ρaʲu³ʲ_datau³ʲ_data -=
+                    (1 / local_geometry_halflevel.J^2) * (
+                        local_geometry_prev_level.J^2 * (
+                            ∇p_perturb³_prev_level_data / ρʲ_prev_level +
+                            ∇Φ³_prev_level_data *
+                            (ρʲ_prev_level - ρ_ref_prev_level) / ρʲ_prev_level
+                        )
+                    )
+
+                @. ρaʲ_level = ifelse(
+                    (
+                        ρaʲu³ʲ_datau³ʲ_data < (FT(1e-8) / ∂x³∂ξ³_level^2) ||
+                        abs(ρaʲu³ʲ_data) < (FT(1e-8) / ∂x³∂ξ³_level)
+                    ),
+                    FT(0),
+                    ρaʲu³ʲ_data^2 / ρaʲu³ʲ_datau³ʲ_data,
+                )
+                @. u³ʲ_halflevel = ifelse(
+                    (
+                        ρaʲu³ʲ_datau³ʲ_data < (FT(1e-8) / ∂x³∂ξ³_level^2) ||
+                        abs(ρaʲu³ʲ_data) < (FT(1e-8) / ∂x³∂ξ³_level)
+                    ),
+                    CT3(FT(0)),
+                    CT3(ρaʲu³ʲ_data / ρaʲ_level),
+                )
+
+                @. ρaʲu³ʲ_datah_tot =
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_halflevel.J *
+                        ρaʲ_prev_level *
+                        u³ʲ_data_prev_halflevel *
+                        h_totʲ_prev_level
+                    )
+                @. h_totʲ_level = ifelse(
+                    (
+                        ρaʲu³ʲ_datau³ʲ_data < (FT(1e-8) / ∂x³∂ξ³_level^2) ||
+                        abs(ρaʲu³ʲ_data) < (FT(1e-8) / ∂x³∂ξ³_level)
+                    ),
+                    h_tot_level,
+                    ρaʲu³ʲ_datah_tot / ρaʲu³ʲ_data,
+                )
+
+                @. ρaʲu³ʲ_dataq_tot =
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_halflevel.J *
+                        ρaʲ_prev_level *
+                        u³ʲ_data_prev_halflevel *
+                        q_totʲ_prev_level
+                    )
+                @. q_totʲ_level = ifelse(
+                    (
+                        ρaʲu³ʲ_datau³ʲ_data < (FT(1e-8) / ∂x³∂ξ³_level^2) ||
+                        abs(ρaʲu³ʲ_data) < (FT(1e-8) / ∂x³∂ξ³_level^2)
+                    ),
+                    q_tot_level,
+                    ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
+                )
+
+                set_diagnostic_edmfx_quantities_level!(
+                    thermo_params,
+                    Kʲ_level,
+                    tsʲ_level,
+                    ρʲ_level,
+                    uₕ_level,
+                    local_geometry_level,
+                    u³ʲ_halflevel,
+                    local_geometry_halflevel,
+                    h_totʲ_level,
+                    q_totʲ_level,
+                    p_level,
+                    Φ_level,
+                )
+            end
+
+            u³ʲ_halflevel = Fields.field_values(
+                Fields.level(ᶠu³ʲ, Spaces.nlevels(axes(Y.c)) + half),
+            )
+            @. u³ʲ_halflevel = CT3(FT(0))
+        end
+    end
+
     return nothing
 end
 
 """
-    diagnostic_sgs_quantities(Y, p, t)
+    output_sgs_quantities(Y, p, t)
 
 Allocates, sets, and returns `ᶜspecific⁺`, `ᶠu₃⁺`, `ᶜu⁺`, `ᶠu³⁺`, `ᶜK⁺`, `ᶜts⁺`,
 `ᶜa⁺`, and `ᶜa⁰` in a way that is consistent with `set_precomputed_quantities!`.
 This function assumes that `set_precomputed_quantities!` has already been
 called.
 """
-function diagnostic_sgs_quantities(Y, p, t)
+function output_sgs_quantities(Y, p, t)
     (; energy_form, moisture_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     thermo_args = (thermo_params, energy_form, moisture_model)
@@ -345,4 +616,20 @@ function diagnostic_sgs_quantities(Y, p, t)
     ᶜa⁺ = @. ρa⁺(Y.c) / TD.air_density(thermo_params, ᶜts⁺)
     ᶜa⁰ = @. ᶜρa⁰ / ᶜρ⁰
     return (; ᶜspecific⁺, ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
+end
+
+"""
+    output_diagnostic_sgs_quantities(Y, p, t)
+
+Sets `ᶜu⁺`, `ᶠu³⁺`, `ᶜts⁺` and `ᶜa⁺` to be the same as the
+values of the first updraft.
+"""
+function output_diagnostic_sgs_quantities(Y, p, t)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜρaʲs, ᶜtsʲs) = p
+    ᶠu³⁺ = p.ᶠu³ʲs[1]
+    ᶜu⁺ = @. (C123(Y.c.uₕ) + C123(ᶜinterp(ᶠu³⁺)))
+    ᶜts⁺ = @. ᶜtsʲs[1]
+    ᶜa⁺ = @. ᶜρaʲs[1] / TD.air_density(thermo_params, ᶜts⁺)
+    return (; ᶜu⁺, ᶠu³⁺, ᶜts⁺, ᶜa⁺)
 end
