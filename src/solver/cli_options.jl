@@ -63,9 +63,9 @@ function argparse_settings()
         arg_type = Bool
         default = false
         "--edmfx_entr_detr"
-        help = "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true` (default), `false`]"
+        help = "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true`, `false` (default)]"
         arg_type = Bool
-        default = true
+        default = false
         "--edmfx_sgs_flux"
         help = "If set to true, it switches on EDMFX SGS flux.  [`true`, `false` (default)]"
         arg_type = Bool
