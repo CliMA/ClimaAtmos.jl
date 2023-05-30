@@ -1,0 +1,34 @@
+[R_d]
+alias = "R_d"
+type = "float"
+value = 287.0
+
+[mean_sea_level_pressure]
+alias = "MSLP"
+type = "float"
+value = 1.0e5
+
+[gravitational_acceleration]
+alias = "grav"
+type = "float"
+value = 9.80616
+
+[angular_velocity_planet_rotation]
+alias = "Omega"
+type = "float"
+value = 7.29212e-5
+
+[planet_radius]
+alias = "planet_radius"
+type = "float"
+value = 6.371229e6
+
+[density_liquid_water]
+alias = "ρ_cloud_liq"
+type = "float"
+value = 1e3
+
+[specific_humidity_precipitation_threshold]
+alias = "qc_0"
+type = "float"
+value = 5e-6

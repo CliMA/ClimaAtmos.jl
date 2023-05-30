@@ -670,7 +670,11 @@ function get_comms_context(parsed_args)
 end
 
 function get_integrator(config::AtmosConfig)
-    params = create_parameter_set(config)
+    (; toml_dict, parsed_args) = config
+    FT = eltype(config)
+    dt = FT(time_to_seconds(parsed_args["dt"]))
+    overrides = (; τ_precip = dt, MSLP = FT(1.0e5))
+    params = create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
 
     atmos = get_atmos(config, params.turbconv_params)
     numerics = get_numerics(config.parsed_args)
