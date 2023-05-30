@@ -15,7 +15,9 @@ using Statistics: mean
 import ClimaAtmos.InitialConditions as ICs
 Random.seed!(1234)
 
-config = CA.AtmosConfig()
+if !(@isdefined config)
+    config = CA.AtmosConfig()
+end
 integrator = CA.get_integrator(config)
 sol_res = CA.solve_atmos!(integrator)
 
