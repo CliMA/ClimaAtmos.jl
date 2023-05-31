@@ -10,16 +10,24 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     isnothing(atmos.hyperdiff) && return (;)
     FT = eltype(Y)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
+
+    # Grid scale quantities
+    ᶜ∇²u = similar(Y.c, C123{FT})
     gs_quantities = (;
         ᶜ∇²uₕ = similar(Y.c, C12{FT}),
+        ᶜ∇²uᵥ = similar(Y.c, C3{FT}),
         ᶜ∇²specific_energy = similar(Y.c, FT),
         ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
     )
+
+    # Sub-grid scale quantities
+    ᶜ∇²uʲs = n == 0 ? (;) : similar(Y.c, NTuple{n, C123{FT}})
     sgs_quantities =
         atmos.turbconv_model isa EDMFX ?
         (;
             ᶜ∇²tke⁰ = similar(Y.c, FT),
-            ᶠ∇²wʲs = similar(Y.f, NTuple{n, FT}),
+            ᶜ∇²uₕʲs = similar(Y.c, NTuple{n, C12{FT}}),
+            ᶜ∇²uᵥʲs = similar(Y.c, NTuple{n, C3{FT}}),
             ᶜ∇²specific_energyʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²specific_tracersʲs = remove_energy_var.(
                 specific_sgsʲs.(Y.c, atmos.turbconv_model)
@@ -35,7 +43,7 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
             ),
         )
     end
-    return quantities
+    return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs)
 end
 
 function hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -44,8 +52,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; κ₄, divergence_damping_factor) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²specific_energy) = p
+    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²uᵥ, ᶜ∇²u, ᶜ∇²specific_energy) = p
     if turbconv_model isa EDMFX
         (;
             ᶜρa⁰,
@@ -53,7 +62,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
             ᶜρʲs,
             ᶜspecificʲs,
             ᶜ∇²tke⁰,
-            ᶠ∇²wʲs,
+            ᶜ∇²uₕʲs,
+            ᶜ∇²uᵥʲs,
+            ᶜ∇²uʲs,
             ᶜ∇²specific_energyʲs,
         ) = p
     end
@@ -61,13 +72,14 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         buffer = p.hyperdiffusion_ghost_buffer
     end
 
-    @. ᶜ∇²uₕ = C12(wgradₕ(divₕ(Y.c.uₕ)))
-    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    # Grid scale hyperdiffusion
+    @. ᶜ∇²u = C123(wgradₕ(divₕ(p.ᶜu)))
+    # Without the C123(), the right-hand side would be a C1 or C2 in 2D space.
     if point_type <: Geometry.Abstract3DPoint
-        # TODO: Are these vector conversions correct when there is topography?
-        @. ᶜ∇²uₕ -= C12(wcurlₕ(C3(curlₕ(Y.c.uₕ))))
+        @. p.ᶜtemp_C123 = C123(curlₕ(C12(p.ᶜu))) + C123(curlₕ(C3(p.ᶜu)))
+        @. ᶜ∇²u -=
+            C123(wcurlₕ(C12(p.ᶜtemp_C123))) + C123(wcurlₕ(C3(p.ᶜtemp_C123)))
     end
-
     if :θ in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
     elseif :e_tot in propertynames(ᶜspecific)
@@ -76,10 +88,21 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if turbconv_model isa EDMFX
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
     end
+
+    # Sub-grid scale hyperdiffusion
     if turbconv_model isa EDMFX
         for j in 1:n
-            @. ᶠ∇²wʲs.:($$j) =
-                wdivₕ(gradₕ(Y.f.sgsʲs.:($$j).u₃.components.data.:1))
+            @. ᶜ∇²uʲs.:($$j) = C123(wgradₕ(divₕ(p.ᶜuʲs.:($$j))))
+            # Without the C123(), the right-hand side would be a C1 or C2 in 2D space.
+            if point_type <: Geometry.Abstract3DPoint
+                @. p.ᶜtemp_C123 =
+                    C123(curlₕ(C12(p.ᶜuʲs.:($$j)))) +
+                    C123(curlₕ(C3(p.ᶜuʲs.:($$j))))
+                @. ᶜ∇²uʲs.:($$j) -=
+                    C123(wcurlₕ(C12(p.ᶜtemp_C123))) +
+                    C123(wcurlₕ(C3(p.ᶜtemp_C123)))
+            end
+
             if :θ in propertynames(ᶜspecificʲs.:($j))
                 @. ᶜ∇²specific_energyʲs.:($$j) =
                     wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
@@ -97,33 +120,66 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 Spaces.weighted_dss_internal!,
                 Spaces.weighted_dss_ghost!,
             )
+                # DSS on Grid scale quantities
+                # Need to split the DSS computation here, because our DSS 
+                # operations do not accept Covariant123Vector types
+                @. ᶜ∇²uₕ = C12(ᶜ∇²u)
+                @. ᶜ∇²uᵥ = C3(ᶜ∇²u)
                 dss_op!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
+                dss_op!(ᶜ∇²uᵥ, buffer.ᶜ∇²uᵥ)
+                @. ᶜ∇²u = C123(ᶜ∇²uₕ) + C123(ᶜ∇²uᵥ)
                 dss_op!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
                 if turbconv_model isa EDMFX
                     dss_op!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
-                    dss_op!(ᶠ∇²wʲs, buffer.ᶠ∇²wʲs)
+                    # Need to split the DSS computation here, because our DSS 
+                    # operations do not accept Covariant123Vector types     
+                    for j in 1:n
+                        @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
+                        @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
+                    end
+                    dss_op!(ᶜ∇²uₕʲs, buffer.ᶜ∇²uₕʲs)
+                    dss_op!(ᶜ∇²uᵥʲs, buffer.ᶜ∇²uᵥʲs)
+                    for j in 1:n
+                        @. ᶜ∇²uʲs.:($$j) =
+                            C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
+                    end
                     dss_op!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
                 end
             end
         end
     end
 
-    @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜ∇²uₕ)))
-    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    # Grid scale hyperdiffusion continued
+    @. Yₜ.c.uₕ -= κ₄ * divergence_damping_factor * C12(wgradₕ(divₕ(ᶜ∇²u)))
+    # Without the C123(), the right-hand side would be a C1 or C2 in 2D space.
     if point_type <: Geometry.Abstract3DPoint
-        # TODO: Are these vector conversions correct when there is topography?
-        @. Yₜ.c.uₕ += κ₄ * C12(wcurlₕ(C3(curlₕ(ᶜ∇²uₕ))))
+        @. p.ᶜtemp_C123 = C123(curlₕ(C12(ᶜ∇²u))) + C123(curlₕ(C3(ᶜ∇²u)))
+        @. Yₜ.c.uₕ +=
+            κ₄ *
+            (C12(wcurlₕ(C12(p.ᶜtemp_C123))) + C12(wcurlₕ(C3(p.ᶜtemp_C123))))
+        # Reuse the buffer variable here so we don't need an extra one
+        @. ᶜ∇²uᵥ = C3(wcurlₕ(C12(p.ᶜtemp_C123))) + C3(wcurlₕ(C3(p.ᶜtemp_C123)))
+        @. Yₜ.f.u₃ += κ₄ * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥ)
     end
-
     ᶜρ_energyₜ = :θ in propertynames(ᶜspecific) ? Yₜ.c.ρθ : Yₜ.c.ρe_tot
     @. ᶜρ_energyₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
+
+    # Sub-grid scale hyperdiffusion continued
     if turbconv_model isa EDMFX
         @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
     if turbconv_model isa EDMFX
         for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 -=
-                κ₄ * wdivₕ(gradₕ(ᶠ∇²wʲs.:($$j)))
+            if point_type <: Geometry.Abstract3DPoint
+                @. p.ᶜtemp_C123 =
+                    C123(curlₕ(C12(ᶜ∇²uʲs.:($$j)))) +
+                    C123(curlₕ(C3(ᶜ∇²uʲs.:($$j))))
+                # Reuse the buffer variable here so we don't need an extra one
+                @. ᶜ∇²uᵥʲs.:($$j) =
+                    C3(wcurlₕ(C12(p.ᶜtemp_C123))) + C3(wcurlₕ(C3(p.ᶜtemp_C123)))
+                @. Yₜ.f.sgsʲs.:($$j).u₃ +=
+                    κ₄ * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥʲs.:($$j))
+            end
             ᶜρa_energyʲₜ =
                 :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :
                 Yₜ.c.sgsʲs.:($j).ρae_tot
@@ -140,6 +196,7 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; κ₄) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
+
     (; do_dss, ᶜspecific, ᶜ∇²specific_tracers) = p
     if turbconv_model isa EDMFX
         (; ᶜspecificʲs, ᶜ∇²specific_tracersʲs, ᶜp) = p

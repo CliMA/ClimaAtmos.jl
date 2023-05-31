@@ -49,26 +49,30 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
 
-    sfc_setup_broadcast = if sfc_setup isa Function
-        Base.Broadcast.broadcasted(
-            sfc_setup,
-            sfc_local_geometry_values.coordinates,
+    if sfc_setup isa Function
+        @. sfc_conditions_values = surface_state_to_conditions(
+            sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t),
+            sfc_local_geometry_values,
+            int_ts_values,
+            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
+            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
             int_z_values,
-            t,
+            params,
+            atmos,
         )
-    elseif sfc_setup isa SurfaceState
-        (sfc_setup,)
+    else
+        tup_sfc_setup = tuple(sfc_setup)
+        @. sfc_conditions_values = surface_state_to_conditions(
+            tup_sfc_setup,
+            sfc_local_geometry_values,
+            int_ts_values,
+            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
+            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
+            int_z_values,
+            params,
+            atmos,
+        )
     end
-    @. sfc_conditions_values = surface_state_to_conditions(
-        sfc_setup_broadcast,
-        sfc_local_geometry_values,
-        int_ts_values,
-        projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-        projected_vector_data(CT2, int_u_values, int_local_geometry_values),
-        int_z_values,
-        params,
-        atmos,
-    )
     return nothing
 end
 

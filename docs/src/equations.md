@@ -136,13 +136,13 @@ By breaking the curl and cross product terms into horizontal and vertical contri
 ```
 where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors. The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
 
-This is stabilized with the addition of 4th-order hyperviscosity
+This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
--\nu_u \, \nabla^2 (\nabla^2(\boldsymbol{u}_h)),
+-\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
 ```
-where ``\nabla^2(\boldsymbol{v})`` is the vector Laplacian
+projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overbar{u}}``, the cell-center valued velocity vector. 
 ```math
-\nabla^2(\boldsymbol{v}) = \nabla(\nabla \cdot \boldsymbol{v}) - \nabla \times (\nabla \times \boldsymbol{v}).
+\nabla_h^2(\boldsymbol{v}) = \nabla_h(\nabla_{h} \cdot \boldsymbol{v}) - \nabla_{h} \times (\nabla_{h} \times \boldsymbol{v}).
 ```
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as:
@@ -190,6 +190,12 @@ and the ``\frac{1}{\rho} \nabla_v (p - p_{\text{ref}}) - \frac{\rho - \rho_{\tex
 \frac{1}{I^f(\rho)} \mathcal{G}^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho - \rho_{\text{ref}})}{I^f(\rho)} \mathcal{G}^f_v[\Phi] - \mathcal{G}^f_v[K] ,
 ```
 with the latter treated implicitly.
+
+This is stabilized with the addition of 4th-order vector hyperviscosity
+```math
+-\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
+```
+projected onto the third contravariant direction.
 
 ### Total energy
 
