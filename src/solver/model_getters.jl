@@ -314,7 +314,10 @@ function get_turbconv_model(
     elseif turbconv == "edmfx"
         EDMFX{turbconv_params.updraft_number}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
-        DiagnosticEDMFX{turbconv_params.updraft_number}(FT(0.1))
+        DiagnosticEDMFX{turbconv_params.updraft_number}(
+            FT(0.1),
+            turbconv_params.min_area,
+        )
     else
         nothing
     end

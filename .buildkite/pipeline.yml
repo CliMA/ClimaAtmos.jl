@@ -478,11 +478,11 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_bomex_box
           --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
-          --turbconv diagnostic_edmfx
+          --turbconv diagnostic_edmfx --edmfx_entr_detr true
           --moist equil
           --config box --hyperdiff true --kappa_4 1e8
           --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
-          --dt 10secs --t_end 1hours --dt_save_to_disk 5mins
+          --dt 10secs --t_end 6hours --dt_save_to_disk 10mins
         artifact_paths: "diagnostic_edmfx_bomex_box/*"
         soft_fail: true
         agents:

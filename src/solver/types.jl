@@ -104,8 +104,10 @@ EDMFX{N}(a_half::FT) where {N, FT} = EDMFX{N, FT}(a_half)
 
 struct DiagnosticEDMFX{N, FT}
     a_int::FT # area fraction of the first interior cell above the surface
+    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-DiagnosticEDMFX{N}(a_int::FT) where {N, FT} = DiagnosticEDMFX{N, FT}(a_int)
+DiagnosticEDMFX{N}(a_int::FT, a_half::FT) where {N, FT} =
+    DiagnosticEDMFX{N, FT}(a_int, a_half)
 
 n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
