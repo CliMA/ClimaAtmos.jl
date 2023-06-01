@@ -66,6 +66,10 @@ function argparse_settings()
         help = "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true` (default), `false`]"
         arg_type = Bool
         default = true
+        "--edmfx_sgs_flux"
+        help = "If set to true, it switches on EDMFX SGS flux.  [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
         "--vert_diff"
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String

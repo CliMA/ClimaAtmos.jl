@@ -463,7 +463,7 @@ steps:
 
       - label: ":genie: explicit baroclinic wave (ρe) equilmoist with EDMFX"
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --ode_algo SSP33ShuOsher --apply_limiter false --moist equil --precip_model 0M --turbconv edmfx --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --ode_algo SSP33ShuOsher --apply_limiter false --moist equil --precip_model 0M --turbconv edmfx --edmfx_sgs_flux true --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
         agents:
           slurm_mem: 20GB
