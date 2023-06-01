@@ -349,21 +349,21 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      
+
       - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200 --regression_test false --dt 450secs --t_end 450secs --dt_save_to_disk 1days --ode_algo SSP333 --rayleigh_sponge true --alpha_rayleigh_uh 1e-4 --alpha_rayleigh_w 1.0 --topography DCMIP200
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200 --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200 
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200 --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200 --fig_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200 --case_name elevation_spectrum
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200/*"
-      
+
       - label: ":computer: Diagnostic Earth surface elevation spectra"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --initial_condition MoistBaroclinicWave --moist equil --precip_model 0M --job_id sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth --regression_test false --dt 450secs --t_end 450secs --dt_save_to_disk 1days --ode_algo SSP333 --rayleigh_sponge true --alpha_rayleigh_uh 1e-4 --alpha_rayleigh_w 1.0 --topography Earth
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth --out_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth --fig_dir sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth --case_name elevation_spectrum
         artifact_paths: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth/*"
-      
+
   - group: "MPI Examples"
     steps:
 
@@ -461,17 +461,29 @@ steps:
   - group: "EDMFX"
     steps:
 
-      - label: ":genie: explicit baroclinic wave (ρe) equilmoist with EDMFX"
-        command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx --initial_condition MoistBaroclinicWaveWithEDMF --ode_algo SSP33ShuOsher --apply_limiter false --moist equil --precip_model 0M --turbconv edmfx --edmfx_sgs_flux true --dt 1secs --t_end 6mins --dt_save_to_disk 30secs --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
+      - label: ":genie: Diagnostic EDMFX test in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_test_box
+          --turbconv diagnostic_edmfx
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e8
+          --x_max 1e4 --y_max 1e4 --x_elem 2 --y_elem 2 --z_elem 45 --z_max 30e3 --dz_bottom 30
+          --dt 1secs --t_end 100secs
+          --dt_save_to_disk 10secs
+        artifact_paths: "diagnostic_edmfx_test_box/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX Bomex on a sphere"
-        command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_sphere --ode_algo SSP33ShuOsher --apply_limiter false --initial_condition Bomex --moist equil --turbconv edmfx --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex --z_elem 60 --z_stretch false --z_max 3e3 --dt 0.001secs --t_end 0.1secs --dt_save_to_disk 0.01secs --reference_job_id edmf_bomex
-        artifact_paths: "edmfx_bomex_sphere/*"
+      - label: ":genie: Diagnostic EDMFX Bomex in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_bomex_box
+          --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
+          --turbconv diagnostic_edmfx
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e8
+          --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
+          --dt 10secs --t_end 1hours --dt_save_to_disk 5mins
+        artifact_paths: "diagnostic_edmfx_bomex_box/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
@@ -479,41 +491,56 @@ steps:
       - label: ":genie: EDMFX advection test in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_adv_test_box
-          --initial_condition MoistAdiabaticProfileEDMFX --edmfx_adv_test true --turbconv edmfx --edmfx_entr_detr false
+          --initial_condition MoistAdiabaticProfileEDMFX
+          --turbconv edmfx --edmfx_adv_test true
+          --moist equil
           --config box --hyperdiff true --kappa_4 1e8
           --x_max 1e4 --y_max 1e4 --x_elem 2 --y_elem 2 --z_elem 45 --z_max 30e3 --dz_bottom 30
-          --moist equil --ode_algo SSP33ShuOsher --apply_limiter false --dt 10secs --t_end 1000secs
+          --ode_algo SSP33ShuOsher --apply_limiter false --dt 10secs --t_end 1000secs
           --dt_save_to_disk 100secs
-
         artifact_paths: "edmfx_adv_test_box/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX Bomex in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_box
+          --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
+          --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e8
+          --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
+          --dt 1secs --t_end 10mins --dt_save_to_disk 10secs
+        artifact_paths: "edmfx_bomex_box/*"
+        soft_fail: true
         agents:
           slurm_mem: 20GB
 
       - label: ":genie: EDMFX advection test in a sphere"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_adv_test_sphere
-          --initial_condition MoistAdiabaticProfileEDMFX --edmfx_adv_test true --turbconv edmfx --edmfx_entr_detr false
+          --initial_condition MoistAdiabaticProfileEDMFX
+          --turbconv edmfx --edmfx_adv_test true
           --config sphere --z_elem 45 --z_max 30e3 --dz_bottom 30
-          --moist equil --ode_algo SSP33ShuOsher --apply_limiter false --dt 10secs --t_end 1000secs
+          --moist equil
+          --ode_algo SSP33ShuOsher --apply_limiter false --dt 10secs --t_end 1000secs
           --dt_save_to_disk 100secs
-
         artifact_paths: "edmfx_adv_test_sphere/*"
         agents:
           slurm_mem: 20GB
-      
-      - label: ":genie: Diagnostic EDMFX test in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_test_box
-          --moist equil --turbconv diagnostic_edmfx --edmfx_entr_detr false
-          --config box --hyperdiff true --kappa_4 1e8
-          --x_max 1e4 --y_max 1e4 --x_elem 2 --y_elem 2 --z_elem 45 --z_max 30e3 --dz_bottom 30
-          --dt 1secs --t_end 100secs
-          --dt_save_to_disk 10secs
 
-        artifact_paths: "diagnostic_edmfx_test_box/*"
+      - label: ":genie: explicit baroclinic wave (ρe) equilmoist with EDMFX"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe_equilmoist_edmfx
+          --initial_condition MoistBaroclinicWaveWithEDMF
+          --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
+          --moist equil --precip_model 0M
+          --ode_algo SSP33ShuOsher --apply_limiter false --dt 1secs --t_end 6mins
+          --dt_save_to_disk 30secs
+          --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
         agents:
           slurm_mem: 20GB
-
 
   - group: "TurbulenceConvection"
     steps:
