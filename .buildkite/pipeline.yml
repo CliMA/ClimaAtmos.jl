@@ -156,7 +156,7 @@ steps:
           --dt 0.5secs --t_end 600secs
           --job_id bomex_box_rhoe
         artifact_paths: "bomex_box_rhoe/*"
-      
+
       - label: ":computer: 3D density current"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --x_max 51200.0 --y_max 6400.0 --z_max 6400.0 --x_elem 45 --y_elem 15 --z_elem 45 --dt 0.1secs --t_end 10.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 10secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id box_density_current_test --ode_algo SSP33ShuOsher"
         artifact_paths: box_density_current_test/*"
@@ -182,7 +182,7 @@ steps:
       - label: ":computer: Density current experiment"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 51200.0 --z_max 6400.0 --x_elem 80 --z_elem 90 --dt 0.3secs --t_end 900.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 3600secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id plane_density_current_test"
         artifact_paths: "plane_density_current_test/*"
-      
+
 
   - group: "Sphere Examples (Dycore)"
     steps:
@@ -461,7 +461,7 @@ steps:
         artifact_paths: "diagnostic_edmfx_bomex_box/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Diagnostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_aquaplanet
@@ -487,17 +487,36 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX Bomex in a box"
+      - label: ":genie: EDMFX Bomex in a box entr 1 detr 0.001 dt 1 t_end 3hrs"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_box
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_box_v1
           --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
-          --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux true --edmfx_nh_pressure true
-          --moist equil --vert_diff true --C_E 0.044
-          --config box --hyperdiff true --kappa_4 1e8
+          --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux false --edmfx_nh_pressure false
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e12 --perturb_initstate false
+          --vert_diff true --C_E 0.044
+          --apply_limiter false --edmfx_upwinding first_order
           --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
-          --ode_algo SSP33ShuOsher --apply_limiter false
-          --dt 0.1secs --t_end 20secs --dt_save_to_disk 0.1secs
-        artifact_paths: "edmfx_bomex_box/*"
+          --dt 1secs --t_end 10800secs --dt_save_to_disk 60secs
+          --entr_coeff 1.0 --detr_coeff 0.001
+        artifact_paths: "edmfx_bomex_box_v1/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX Bomex in a box entr 1 detr 0.01 dt 1 t_end 3hrs"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_box_v2
+          --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
+          --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux false --edmfx_nh_pressure false
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e12 --perturb_initstate false
+          --vert_diff true --C_E 0.044
+          --apply_limiter false --edmfx_upwinding first_order
+          --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
+          --dt 1secs --t_end 10800secs --dt_save_to_disk 60secs
+          --entr_coeff 1.0 --detr_coeff 0.01
+        artifact_paths: "edmfx_bomex_box_v2/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
@@ -522,6 +541,7 @@ steps:
           --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
           --moist equil --precip_model 0M
           --ode_algo SSP33ShuOsher --apply_limiter false --dt 1secs --t_end 6mins
+          --vert_diff true --C_E 0.044
           --dt_save_to_disk 30secs
           --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"

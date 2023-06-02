@@ -119,6 +119,8 @@ function create_climaatmos_parameter_set(
         rrtmgp_params = rrtmgp_params,
         surfacefluxes_params = surf_flux_params,
         turbconv_params = tc_params,
+        entr_coeff = FTD(parsed_args["entr_coeff"]),
+        detr_coeff = FTD(parsed_args["detr_coeff"]),
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)

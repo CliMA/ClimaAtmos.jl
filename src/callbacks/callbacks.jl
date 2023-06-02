@@ -259,6 +259,7 @@ function save_to_disk_func(integrator)
             w_velocity = Geometry.WVector.(ᶜu),
             temperature = TD.air_temperature.(thermo_params, ᶜts),
             potential_temperature = TD.dry_pottemp.(thermo_params, ᶜts),
+            specific_enthalpy = TD.specific_enthalpy.(thermo_params, ᶜts),
             buoyancy = CAP.grav(params) .* (p.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
         )
         if !(p.atmos.moisture_model isa DryModel)
@@ -267,6 +268,7 @@ function save_to_disk_func(integrator)
                 q_vap = TD.vapor_specific_humidity.(thermo_params, ᶜts),
                 q_liq = TD.liquid_specific_humidity.(thermo_params, ᶜts),
                 q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
+                q_tot = TD.total_specific_humidity.(thermo_params, ᶜts),
                 relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
             )
         end
