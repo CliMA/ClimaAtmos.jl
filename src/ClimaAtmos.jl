@@ -77,6 +77,7 @@ include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
 include(joinpath("prognostic_equations", "edmfx_closures.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
+include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
 include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
 )
