@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "8298b09abe23e4f243cc4794c0e23ae4580692dd"
+project_hash = "bddc0fa724c5affd3239a49f46ee99f4297e52b8"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "dcfdf328328f2645531c4ddebf841228aef74130"
@@ -2156,7 +2156,7 @@ uuid = "6aa5eb33-94cf-58f4-a9d0-e4b2c4fc25ea"
 version = "0.12.2"
 
 [[deps.TempestRemap_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "NetCDF_jll", "OpenBLAS32_jll", "Pkg"]
+deps = ["Artifacts", "HDF5_jll", "JLLWrappers", "Libdl", "NetCDF_jll", "OpenBLAS32_jll", "Pkg"]
 git-tree-sha1 = "88c3818a492ad1a94b1aa440b01eab5d133209ff"
 uuid = "8573a8c5-1df0-515e-a024-abad257ee284"
 version = "2.1.6+1"
