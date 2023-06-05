@@ -854,7 +854,7 @@ steps:
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"
-        command: "julia --color=yes --project=perf perf/jet_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
+        command: "julia --color=yes --project=perf perf/jet_test_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
         agents:
           slurm_mem: 20GB
 
