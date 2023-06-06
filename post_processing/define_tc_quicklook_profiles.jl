@@ -2,6 +2,7 @@ import ClimaCore: Fields, InputOutput, Geometry
 ENV["GKSwstype"] = "nul";
 import Plots
 import ClimaAtmos as CA
+import ClimaComms
 
 function getfun(D, sym::Symbol)
     if !hasproperty(D, sym)
@@ -55,7 +56,10 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
             return
         end
 
-        reader = InputOutput.HDF5Reader(input_filename)
+        reader = InputOutput.HDF5Reader(
+            input_filename,
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+        )
         Y = InputOutput.read_field(reader, "Y")
         D = InputOutput.read_field(reader, "diagnostics")
 
@@ -135,7 +139,10 @@ function get_contours(vars, input_filenames; data_source, have_main)
     end
 
     data = map(input_filenames) do input_filename
-        reader = InputOutput.HDF5Reader(input_filename)
+        reader = InputOutput.HDF5Reader(
+            input_filename,
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+        )
         Y = InputOutput.read_field(reader, "Y")
         D = InputOutput.read_field(reader, "diagnostics")
         (Y, D)

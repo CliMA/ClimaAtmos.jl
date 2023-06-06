@@ -1,5 +1,6 @@
 import ClimaAtmos: time_from_filename
 import ClimaCore: Geometry, Spaces, Fields, InputOutput
+import ClimaComms
 import CairoMakie: Makie
 import Statistics: mean
 
@@ -193,7 +194,10 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
     end
 
     function read_hdf5_file(file_path)
-        reader = InputOutput.HDF5Reader(file_path)
+        reader = InputOutput.HDF5Reader(
+            file_path,
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+        )
         diagnostics = InputOutput.read_field(reader, "diagnostics")
         close(reader)
         return time_from_filename(file_path), diagnostics

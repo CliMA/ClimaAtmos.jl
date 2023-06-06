@@ -1,5 +1,6 @@
 import ClimaCoreTempestRemap
 import ClimaCore: Spaces, Fields
+import ClimaComms
 import ClimaAtmos: SurfaceConditions, CT3
 import ClimaCore.Utilities: half
 """
@@ -61,7 +62,10 @@ end
 
 function create_weightfile(filein, remap_tmpdir, nlat, nlon)
     @assert endswith(filein, "hdf5")
-    reader = InputOutput.HDF5Reader(filein)
+    reader = InputOutput.HDF5Reader(
+        filein,
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+    )
     Y = InputOutput.read_field(reader, "Y")
     weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
     create_weightfile(weightfile, axes(Y.c), axes(Y.f), nlat, nlon)
@@ -70,7 +74,10 @@ end
 
 function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     @assert endswith(filein, "hdf5")
-    reader = InputOutput.HDF5Reader(filein)
+    reader = InputOutput.HDF5Reader(
+        filein,
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+    )
     Y = InputOutput.read_field(reader, "Y")
     diag = InputOutput.read_field(reader, "diagnostics")
     t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
