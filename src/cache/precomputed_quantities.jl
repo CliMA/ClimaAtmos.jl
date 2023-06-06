@@ -327,8 +327,14 @@ function set_precomputed_quantities!(Y, p, t)
     SurfaceConditions.update_surface_conditions!(Y, p, t)
 
     if turbconv_model isa EDMFX
+
+        #EDMFX BCs only support total energy as state variable
+        @assert energy_form isa TotalEnergy
+        @assert !(moisture_model isa DryModel)
+
         (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
-        (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
+        (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs) = p
+
         @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
         @. ᶜρa⁰ = ρa⁰(Y.c)
         set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
@@ -345,6 +351,8 @@ function set_precomputed_quantities!(Y, p, t)
             ᶜspecificʲ = ᶜspecificʲs.:($j)
             ᶜtsʲ = ᶜtsʲs.:($j)
             ᶜρʲ = ᶜρʲs.:($j)
+            ᶜh_totʲ = ᶜh_totʲs.:($j)
+
             set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
             @. ᶜtsʲ = ts_sgs(thermo_args..., ᶜspecificʲ, ᶜKʲ, ᶜΦ, ᶜp)
             @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
@@ -358,15 +366,99 @@ function set_precomputed_quantities!(Y, p, t)
             # that this will no longer be necessary after we add diffusion.
             @. ᶜρʲ = ifelse(abs(ᶜρʲ - Y.c.ρ) <= 2 * eps(Y.c.ρ), Y.c.ρ, ᶜρʲ)
 
-            if energy_form isa TotalEnergy
-                (; ᶜh_totʲs) = p
-                ᶜh_totʲ = ᶜh_totʲs.:($j)
-                @. ᶜh_totʲ = TD.total_specific_enthalpy(
+            # EDMFX boundary condition:
+
+            # We need field_values everywhere because we are mixing
+            # information from surface and first interior inside the
+            # sgs_h/q_tot_first_interior_bc call.
+            ᶜz_int_val = Fields.field_values(
+                Fields.level(Fields.coordinate_field(Y.c).z, 1),
+            )
+            z_sfc_val = Fields.field_values(
+                Fields.level(Fields.coordinate_field(Y.f).z, Fields.half),
+            )
+            ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
+            ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
+            (;
+                buoyancy_flux,
+                ρ_flux_h_tot,
+                ρ_flux_q_tot,
+                ustar,
+                obukhov_length,
+            ) = p.sfc_conditions
+            buoyancy_flux_val = Fields.field_values(buoyancy_flux)
+            ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
+            ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
+            ustar_val = Fields.field_values(ustar)
+            obukhov_length_val = Fields.field_values(obukhov_length)
+            sfc_local_geometry_val = Fields.field_values(
+                Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),
+            )
+
+            # Based on boundary conditions for updrafts we overwrite
+            # the first interior point for EDMFX ᶜh_totʲ...
+            @. ᶜh_totʲ = TD.total_specific_enthalpy(
+                thermo_params,
+                ᶜtsʲ,
+                ᶜspecificʲ.e_tot,
+            )
+            ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
+            ᶜh_totʲ_int_val = Fields.field_values(Fields.level(ᶜh_totʲ, 1))
+            @. ᶜh_totʲ_int_val = sgs_h_tot_first_interior_bc(
+                ᶜz_int_val - z_sfc_val,
+                ᶜρ_int_val,
+                ᶜh_tot_int_val,
+                buoyancy_flux_val,
+                ρ_flux_h_tot_val,
+                ustar_val,
+                obukhov_length_val,
+                sfc_local_geometry_val,
+            )
+
+            # ... and the first interior point for EDMFX ᶜq_totʲ.
+            ᶜq_tot_int_val =
+                Fields.field_values(Fields.level(ᶜspecific.q_tot, 1))
+            ᶜq_totʲ_int_val =
+                Fields.field_values(Fields.level(ᶜspecificʲ.q_tot, 1))
+            @. ᶜq_totʲ_int_val = sgs_q_tot_first_interior_bc(
+                ᶜz_int_val - z_sfc_val,
+                ᶜρ_int_val,
+                ᶜq_tot_int_val,
+                buoyancy_flux_val,
+                ρ_flux_q_tot_val,
+                ustar_val,
+                obukhov_length_val,
+                sfc_local_geometry_val,
+            )
+
+            # Then overwrite the prognostic variables at first inetrior point.
+            ᶜKʲ_int_val = Fields.field_values(Fields.level(ᶜKʲ, 1))
+            ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
+            ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
+            @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
+                thermo_params,
+                ᶜp_int_val,
+                ᶜh_totʲ_int_val - ᶜKʲ_int_val - ᶜΦ_int_val,
+                ᶜq_totʲ_int_val,
+            )
+            sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
+            sgsʲs_ρa_int_val =
+                Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
+            sgsʲs_ρae_tot_int_val =
+                Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρae_tot, 1))
+            sgsʲs_ρaq_tot_int_val =
+                Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρaq_tot, 1))
+            @. sgsʲs_ρa_int_val =
+                sgsʲs_ρa_int_val / sgsʲs_ρ_int_val *
+                TD.air_density(thermo_params, ᶜtsʲ_int_val)
+            @. sgsʲs_ρae_tot_int_val =
+                sgsʲs_ρa_int_val * TD.total_energy(
                     thermo_params,
-                    ᶜtsʲ,
-                    ᶜspecificʲ.e_tot,
+                    ᶜtsʲ_int_val,
+                    ᶜKʲ_int_val,
+                    ᶜΦ_int_val,
                 )
-            end
+            @. sgsʲs_ρaq_tot_int_val = sgsʲs_ρa_int_val * ᶜq_totʲ_int_val
         end
     end
 
