@@ -238,6 +238,32 @@ end
 
 import ClimaCore
 
+function AtmosTargetConfig(
+    s = argparse_settings();
+    target_job,
+    dict = parsed_args_per_job_id(; filter_name = "driver.jl"),
+)
+    parsed_args_defaults = cli_defaults(s)
+
+    # Start with performance target, and override anything provided in ARGS
+    parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
+
+    _target_job = get(parsed_args_prescribed, "target_job", nothing)
+    if _target_job ≠ nothing && target_job ≠ nothing
+        error("Target job specified multiple times")
+    end
+    _target_job ≠ nothing && (target_job = _target_job)
+    parsed_args_perf_target = isnothing(target_job) ? Dict() : dict[target_job]
+
+    parsed_args = merge(
+        parsed_args_defaults,
+        parsed_args_perf_target,
+        parsed_args_prescribed,
+    )
+    return parsed_args
+end
+
+
 """
     AtmosPerfConfig()
 
