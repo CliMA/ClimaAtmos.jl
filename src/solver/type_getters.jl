@@ -440,11 +440,6 @@ function ode_configuration(Y, parsed_args, atmos)
     end
 end
 
-function get_integrator(args, kwargs)
-    @time "Define integrator" integrator = ODE.init(args...; kwargs...)
-    return integrator
-end
-
 thermo_state_type(::DryModel, ::Type{FT}) where {FT} = TD.PhaseDry{FT}
 thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
 thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
@@ -603,27 +598,30 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; dt) = simulation
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
-    @time "Define ode function" func = if parsed_args["split_ode"]
-        implicit_func = ODE.ODEFunction(
-            implicit_tendency!;
-            jac_kwargs(ode_algo, Y, atmos.energy_form)...,
-            tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
-        )
-        if is_cts_algo(ode_algo)
-            CTS.ClimaODEFunction(;
-                T_lim! = limited_tendency!,
-                T_exp! = remaining_tendency!,
-                T_imp! = implicit_func,
-                # Can we just pass implicit_tendency! and jac_prototype etc.?
-                lim! = limiters_func!,
-                dss!,
+    s = @timed_str begin
+        func = if parsed_args["split_ode"]
+            implicit_func = ODE.ODEFunction(
+                implicit_tendency!;
+                jac_kwargs(ode_algo, Y, atmos.energy_form)...,
+                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             )
+            if is_cts_algo(ode_algo)
+                CTS.ClimaODEFunction(;
+                    T_lim! = limited_tendency!,
+                    T_exp! = remaining_tendency!,
+                    T_imp! = implicit_func,
+                    # Can we just pass implicit_tendency! and jac_prototype etc.?
+                    lim! = limiters_func!,
+                    dss!,
+                )
+            else
+                ODE.SplitFunction(implicit_func, remaining_tendency!)
+            end
         else
-            ODE.SplitFunction(implicit_func, remaining_tendency!)
+            remaining_tendency! # should be total_tendency!
         end
-    else
-        remaining_tendency! # should be total_tendency!
     end
+    @info "Define ode function: $s"
     problem = ODE.ODEProblem(func, Y, tspan, p)
     saveat = if dt_save_to_sol == Inf
         tspan[2]
@@ -678,21 +676,24 @@ function get_integrator(config::AtmosConfig)
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
-    @time "Allocating Y" if simulation.restart
-        (Y, t_start) = get_state_restart(config.comms_ctx)
-        spaces = get_spaces_restart(Y)
-    else
-        spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
-        Y = ICs.atmos_state(
-            initial_condition(params),
-            atmos,
-            spaces.center_space,
-            spaces.face_space,
-        )
-        t_start = Spaces.undertype(axes(Y.c))(0)
+    s = @timed_str begin
+        if simulation.restart
+            (Y, t_start) = get_state_restart(config.comms_ctx)
+            spaces = get_spaces_restart(Y)
+        else
+            spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+            Y = ICs.atmos_state(
+                initial_condition(params),
+                atmos,
+                spaces.center_space,
+                spaces.face_space,
+            )
+            t_start = Spaces.undertype(axes(Y.c))(0)
+        end
     end
+    @info "Allocating Y: $s"
 
-    @time "Allocating cache (p)" begin
+    s = @timed_str begin
         p = get_cache(
             Y,
             config.parsed_args,
@@ -705,21 +706,36 @@ function get_integrator(config::AtmosConfig)
             surface_setup,
         )
     end
+    @info "Allocating cache (p): $s"
 
     if config.parsed_args["discrete_hydrostatic_balance"]
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
 
-    @time "ode_configuration" ode_algo =
-        ode_configuration(Y, config.parsed_args, atmos)
+    s = @timed_str begin
+        ode_algo = ode_configuration(Y, config.parsed_args, atmos)
+    end
+    @info "ode_configuration: $s"
 
-    @time "get_callbacks" callback =
-        get_callbacks(config.parsed_args, simulation, atmos, params)
+    s = @timed_str begin
+        callback = get_callbacks(config.parsed_args, simulation, atmos, params)
+    end
+    @info "get_callbacks: $s"
     tspan = (t_start, simulation.t_end)
-    @time "args_integrator" integrator_args, integrator_kwargs =
-        args_integrator(config.parsed_args, Y, p, tspan, ode_algo, callback)
+    s = @timed_str begin
+        integrator_args, integrator_kwargs = args_integrator(
+            config.parsed_args,
+            Y,
+            p,
+            tspan,
+            ode_algo,
+            callback,
+        )
+    end
 
-    @time "get_integrator" integrator =
-        get_integrator(integrator_args, integrator_kwargs)
+    s = @timed_str begin
+        integrator = ODE.init(integrator_args...; integrator_kwargs...)
+    end
+    @info "init integrator: $s"
     return integrator
 end
