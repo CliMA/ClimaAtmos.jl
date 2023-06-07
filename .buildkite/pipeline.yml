@@ -242,7 +242,7 @@ steps:
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist --out_dir sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem: 32GB
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --moist equil --initial_condition MoistBaroclinicWave --rad clearsky --job_id sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64 --check_conservation true --FLOAT_TYPE Float64 --dt 450secs --t_end 8days --dt_save_to_disk 8days --apply_limiter false"
