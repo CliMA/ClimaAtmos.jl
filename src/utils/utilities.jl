@@ -158,3 +158,45 @@ import ClimaCore
 import Krylov
 Krylov.ktypeof(x::ClimaCore.Fields.FieldVector) =
     ClimaComms.array_type(x){eltype(parent(x)), 1}
+
+
+using Printf
+# From BenchmarkTools
+function prettytime(t)
+    if t < 1e3
+        value, units = t, "ns"
+    elseif t < 1e6
+        value, units = t / 1e3, "μs"
+    elseif t < 1e9
+        value, units = t / 1e6, "ms"
+    else
+        value, units = t / 1e9, "s"
+    end
+    return @sprintf("%.3f %s", value, units)
+end
+
+function prettymemory(b)
+    if b < 1024
+        return string(b, " bytes")
+    elseif b < 1024^2
+        value, units = b / 1024, "KiB"
+    elseif b < 1024^3
+        value, units = b / 1024^2, "MiB"
+    else
+        value, units = b / 1024^3, "GiB"
+    end
+    return @sprintf("%.2f %s", value, units)
+end
+
+"""
+    @timed_str expr
+    @timed_str "description" expr
+
+Returns a string containing `@timed` information.
+"""
+macro timed_str(ex)
+    quote
+        local stats = @timed $(esc(ex))
+        "$(prettytime(stats.time*1e9)) ($(Base.gc_alloc_count(stats.gcstats)) allocations: $(prettymemory(stats.gcstats.allocd)))"
+    end
+end
