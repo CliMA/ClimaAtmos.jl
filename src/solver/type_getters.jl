@@ -119,7 +119,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             lon = data["longitude"][:]
             lat = data["latitude"][:]
             # Apply Smoothing
-            smooth_degree = 15
+            smooth_degree = Int(parsed_args["smoothing_order"])
             esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
             linear_interpolation(
                 (lon, lat),
@@ -155,6 +155,7 @@ function get_spaces(parsed_args, params, comms_ctx)
                 z_elem,
                 z_stretch;
                 surface_warp = warp_function,
+                topo_smoothing = parsed_args["topo_smoothing"],
             )
         end
     elseif parsed_args["config"] == "column" # single column
