@@ -79,6 +79,7 @@ function make_hybrid_spaces(
     z_elem,
     z_stretch;
     surface_warp = nothing,
+    topo_smoothing = false,
 )
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
@@ -96,6 +97,8 @@ function make_hybrid_spaces(
         face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
     else
         z_surface = surface_warp(Fields.coordinate_field(h_space))
+        topo_smoothing ? Hypsography.diffuse_surface_elevation!(z_surface) :
+        nothing
         z_face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
         face_space = Spaces.ExtrudedFiniteDifferenceSpace(
             h_space,

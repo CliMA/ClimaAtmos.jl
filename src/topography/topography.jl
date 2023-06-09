@@ -14,7 +14,7 @@ function topography_dcmip200(coords)
     rₘ = @. FT(acos(sind(ϕₘ) * sind(ϕ) + cosd(ϕₘ) * cosd(ϕ) * cosd(λ - λₘ))) # Great circle distance (rads)
     Rₘ = FT(3π / 4) # Moutain radius
     ζₘ = FT(π / 16) # Mountain oscillation half-width
-    h₀ = FT(200)
+    h₀ = FT(2000)
     zₛ = @. ifelse(
         rₘ < Rₘ,
         FT(h₀ / 2) * (1 + cospi(rₘ / Rₘ)) * (cospi(rₘ / ζₘ))^2,
