@@ -80,15 +80,16 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
         ᶜρa⁰,
         ᶠu³⁰,
     ) = p
-    ᶜ∇p_perturb³ = p.ᶜtemp_CT3
+    ᶜ∇p_perturb³ = ᶜ∇p_perturb_grad³ = p.ᶜtemp_CT3
     ᶜ∇Φ³ = p.ᶜtemp_CT3_2
 
     thermo_params = CAP.thermodynamics_params(params)
 
-    @. ᶜ∇p_perturb³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜp - ᶜp_ref)))
-    @. ᶜ∇p_perturb³ += CT3(gradₕ(ᶜp - ᶜp_ref))
+    @. ᶜ∇p_perturb³ = CT3(ᶜinterp(ᶠgradᵥ(ᶜp - ᶜp_ref)))
+    #@. ᶜ∇p_perturb³ += CT3(gradₕ(ᶜp - ᶜp_ref))
+    @. ᶜ∇p_perturb_grad³ = CT3(ᶜinterp(ᶠgradᵥ(ᶜp - ᶜp_ref) / ᶠinterp(Y.c.ρ)))
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
-    @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
+    #@. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
 
     ρaʲu³ʲ_data = p.temp_data_level
     ρaʲu³ʲ_datau³ʲ_data = p.temp_data_level_2
@@ -220,6 +221,9 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
         ∇p_perturb³_prev_level =
             Fields.field_values(Fields.level(ᶜ∇p_perturb³, i - 1))
         ∇p_perturb³_prev_level_data = ∇p_perturb³_prev_level.components.data.:1
+        ∇p_perturb_grad³_prev_level =
+            Fields.field_values(Fields.level(ᶜ∇p_perturb_grad³, i - 1))
+        ∇p_perturb_grad³_prev_level_data = ∇p_perturb_grad³_prev_level.components.data.:1
         ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
         ∇Φ³_prev_level_data = ∇Φ³_prev_level.components.data.:1
         ρ_prev_level = Fields.field_values(Fields.level(Y.c.ρ, i - 1))
@@ -315,14 +319,47 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                     u³ʲ_data_prev_halflevel
                 )
 
+            # @. ρaʲu³ʲ_datau³ʲ_data -=
+            #     (1 / local_geometry_halflevel.J^2) * (
+            #         local_geometry_prev_level.J^2 *
+            #         ρaʲ_prev_level *
+            #         ((
+            #             ∇p_perturb³_prev_level_data / ρʲ_prev_level +
+            #             ∇Φ³_prev_level_data *
+            #             (ρʲ_prev_level - ρ_ref_prev_level) / ρʲ_prev_level
+            #         ))
+            #     )
+
+            # @. ρaʲu³ʲ_datau³ʲ_data +=
+            #     (1 / local_geometry_halflevel.J^2) * (
+            #         local_geometry_prev_level.J^2 *
+            #         ρaʲ_prev_level *
+            #         ((
+            #             ∇p_perturb³_prev_level_data / ρ_prev_level +
+            #             ∇Φ³_prev_level_data *
+            #             (ρ_prev_level - ρ_ref_prev_level) / ρ_prev_level
+            #         ))
+            #     )
+            
             @. ρaʲu³ʲ_datau³ʲ_data -=
                 (1 / local_geometry_halflevel.J^2) * (
                     local_geometry_prev_level.J^2 *
                     ρaʲ_prev_level *
                     ((
-                        ∇p_perturb³_prev_level_data / ρʲ_prev_level +
+                        ∇p_perturb_grad³_prev_level_data +
                         ∇Φ³_prev_level_data *
                         (ρʲ_prev_level - ρ_ref_prev_level) / ρʲ_prev_level
+                    ))
+                )
+            
+            @. ρaʲu³ʲ_datau³ʲ_data +=
+                (1 / local_geometry_halflevel.J^2) * (
+                    local_geometry_prev_level.J^2 *
+                    ρaʲ_prev_level *
+                    ((
+                        ∇p_perturb_grad³_prev_level_data +
+                        ∇Φ³_prev_level_data *
+                        (ρ_prev_level - ρ_ref_prev_level) / ρ_prev_level
                     ))
                 )
 

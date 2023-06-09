@@ -381,7 +381,7 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
         (:gm, :u_velocity),
         (:gm, :v_velocity),
         (:gm, :w_velocity),
-        (draft_or_gm, :buoyancy),
+        #(draft_or_gm, :buoyancy),
     )
     if has_moisture
         contour_variables = (
@@ -411,7 +411,7 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
         ((:gm,), :u_velocity),
         ((:gm,), :v_velocity),
         (all_categories, :w_velocity),
-        (all_categories, :buoyancy),
+        #(all_categories, :buoyancy),
     )
     if has_moisture
         profile_variables = (
