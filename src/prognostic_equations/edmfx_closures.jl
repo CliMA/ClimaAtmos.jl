@@ -184,7 +184,7 @@ function pi_groups_entr_detr(
         # TODO - Temporary: Switch to Π groups after simple tests are done
         # (kinematic, bubble, Bomex)
         # and/or we can calibrate things in ClimaAtmos
-        entr = max(0, 1e-1 * ᶜwʲ / ᶜz)
+        entr = max(0, 1 * ᶜwʲ / ᶜz)
         detr = max(0, 1e-3 * ᶜwʲ)
 
         return (; entr, detr)
