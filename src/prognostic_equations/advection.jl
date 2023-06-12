@@ -86,9 +86,7 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶜω³ = zero(ᶜω³)
     end
 
-    Fields.bycolumn(axes(Y.c)) do colidx
-        @. ᶠω¹²[colidx] = ᶠcurlᵥ(Y.c.uₕ[colidx])
-    end
+    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
     if p.atmos.turbconv_model isa EDMFX
         for j in 1:n
             @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
@@ -102,26 +100,15 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
-    Fields.bycolumn(axes(Y.c)) do colidx
-        @. Yₜ.c.uₕ[colidx] -=
-            ᶜinterp(
-                ᶠω¹²[colidx] ×
-                (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
-            ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
-            (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
-        @. Yₜ.f.u₃[colidx] -=
-            ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
-        if p.atmos.turbconv_model isa EDMFX
-            for j in 1:n
-                # TODO: Figure out why putting these extractions outside of the
-                # bycolumn triggers a lot of allocations.
-                (; ᶜuʲs, ᶜKʲs) = p
-                local ᶠω¹²ʲs = p.ᶠtemp_CT12ʲs # Adding `local` reduces allocations.
-
-                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-                    ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
-                    ᶠgradᵥ(ᶜKʲs.:($$j)[colidx])
-            end
+    @. Yₜ.c.uₕ -=
+        ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
+        (ᶜf + ᶜω³) × CT12(ᶜu)
+    @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+    if p.atmos.turbconv_model isa EDMFX
+        (; ᶜuʲs, ᶜKʲs) = p
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) + ᶠgradᵥ(ᶜKʲs.:($$j))
         end
     end
 
