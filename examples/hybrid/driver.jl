@@ -1,18 +1,5 @@
-import ClimaAtmos.Parameters as CAP
 import ClimaAtmos as CA
-import Thermodynamics as TD
-import ClimaComms
-using OrdinaryDiffEq
-using PrettyTables
-using DiffEqCallbacks
-using JLD2
-using NCDatasets
-using ClimaCore
-using ClimaTimeSteppers
 import Random
-import ClimaCore
-using Statistics: mean
-import ClimaAtmos.InitialConditions as ICs
 Random.seed!(1234)
 
 if !(@isdefined config)
@@ -23,6 +10,19 @@ sol_res = CA.solve_atmos!(integrator)
 
 (; simulation, atmos, params) = integrator.p
 (; p) = integrator
+
+import ClimaCore
+import ClimaAtmos.InitialConditions as ICs
+using Statistics: mean
+import ClimaAtmos.Parameters as CAP
+import Thermodynamics as TD
+import ClimaComms
+using OrdinaryDiffEq
+using PrettyTables
+using DiffEqCallbacks
+using JLD2
+using NCDatasets
+using ClimaTimeSteppers
 import JSON
 using Test
 import OrderedCollections
