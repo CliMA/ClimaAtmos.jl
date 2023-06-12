@@ -153,13 +153,6 @@ using ClimaComms
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.MPICommsContext) = true
 
-# Move to weak dependency in ClimaCore
-import ClimaCore
-import Krylov
-Krylov.ktypeof(x::ClimaCore.Fields.FieldVector) =
-    ClimaComms.array_type(x){eltype(parent(x)), 1}
-
-
 using Printf
 # From BenchmarkTools
 function prettytime(t)
