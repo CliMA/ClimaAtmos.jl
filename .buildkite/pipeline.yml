@@ -14,7 +14,7 @@ agents:
   config: cpu
   queue: central
   slurm_mem: 8G
-  modules: julia/1.8.5 ucx/1.13.1_cuda-11.2 cuda/11.2 openmpi/4.1.5_cuda-11.2 hdf5/1.12.2-ompi415
+  modules: julia/1.8.5 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415
 
 steps:
   - label: "init :computer:"
@@ -77,7 +77,7 @@ steps:
         artifact_paths: "gpu_example/*"
         soft_fail: true
         agents:
-          slurm_gres: "gpu:1"
+          slurm_gpus: 1
 
       - label: "Performance benchmark step!"
         command:
