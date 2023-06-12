@@ -643,6 +643,7 @@ function get_comms_context(parsed_args)
     else
         ClimaComms.CPUDevice()
     end
+    @info "Running on $(nameof(typeof(device)))."
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
     if ClimaComms.iamroot(comms_ctx)
