@@ -330,8 +330,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                 (1 / local_geometry_halflevel.J^2) * (
                     local_geometry_prev_level.J^2 *
                     ρaʲ_prev_level *
-                    entr_detrʲ_prev_level.entr *
-                    (u³⁰_data_prev_halflevel - u³ʲ_data_prev_halflevel)
+                    (
+                        entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
+                        entr_detrʲ_prev_level.detr * u³ʲ_data_prev_halflevel
+                    )
                 )
 
             @. ρaʲ_level = ifelse(
