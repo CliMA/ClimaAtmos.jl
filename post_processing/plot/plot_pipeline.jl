@@ -1,4 +1,4 @@
-using Plots
+using CairoMakie
 
 include(joinpath(@__DIR__, "plot_helpers.jl"))
 
