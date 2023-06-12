@@ -1,20 +1,15 @@
-env:
-  JULIA_VERSION: "1.8.5"
-  MPI_IMPL: "openmpi"
-  OPENMPI_VERSION: "4.1.1"
-  CUDA_VERSION: "11.2"
-  OPENBLAS_NUM_THREADS: 1
-  CLIMATEMACHINE_SETTINGS_FIX_RNG_SEED: "true"
-  BUILDKITE_COMMIT: "${BUILDKITE_COMMIT}"
-  BUILDKITE_BRANCH: "${BUILDKITE_BRANCH}"
-  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
-
 agents:
-  config: cpu
   queue: central
   slurm_mem: 8G
   modules: julia/1.8.5 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415
+
+env:
+  JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
+  OPENBLAS_NUM_THREADS: 1
+  JULIA_NVTX_CALLBACKS: gc
+  OMPI_MCA_opal_warn_on_missing_libcuda: 0
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
 
 steps:
   - label: "init :computer:"
