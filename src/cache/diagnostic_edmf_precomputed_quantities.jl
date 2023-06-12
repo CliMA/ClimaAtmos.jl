@@ -154,7 +154,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
             obukhov_length_sfc_halflevel,
             local_geometry_int_halflevel,
         )
-        @. q_totʲ_int_level = sgs_h_tot_first_interior_bc(
+        @. q_totʲ_int_level = sgs_q_tot_first_interior_bc(
             z_int_level - z_sfc_halflevel,
             ρ_int_level,
             q_tot_int_level,
