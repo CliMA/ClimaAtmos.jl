@@ -446,7 +446,7 @@ Example:
 function print_repl_script(str)
     ib = """"""
     ib *= """\n"""
-    ib *= """using Revise; include("src/utils/cli_options.jl");\n"""
+    ib *= """using Revise; include(joinpath("src", "solver", "cli_options.jl"));\n"""
     ib *= """\n"""
     ib *= """parsed_args = parse_commandline(argparse_settings());\n"""
     parsed_args = parsed_args_from_command_line_flags(str)
@@ -510,8 +510,8 @@ To run the `sphere_aquaplanet_rhoe_equilmoist_allsky`
 buildkite job from the standard buildkite pipeline, use:
 ```
 using Revise;
-include("src/utils/cli_options.jl");
-include("src/utils/yaml_helper.jl");
+include("src/solver/cli_options.jl");
+include("src/solver/yaml_helper.jl");
 dict = parsed_args_per_job_id();
 parsed_args = dict["sphere_aquaplanet_rhoe_equilmoist_allsky"];
 include("examples/hybrid/driver.jl")
