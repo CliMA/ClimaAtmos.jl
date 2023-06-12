@@ -29,7 +29,9 @@ import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 using ClimaCoreMakie, CairoMakie
-include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
+if config.comms_ctx isa ClimaComms.SingletonCommsContext
+    include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
+end
 include(joinpath(pkgdir(CA), "post_processing", "contours_and_profiles.jl"))
 include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
 include(
