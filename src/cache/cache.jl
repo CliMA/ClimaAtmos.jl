@@ -72,6 +72,11 @@ function default_cache(
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
+    test = if parsed_args["test_dycore_consistency"]
+        TestDycoreConsistency()
+    else
+        nothing
+    end
 
     default_cache = (;
         simulation,
@@ -79,7 +84,7 @@ function default_cache(
         atmos,
         comms_ctx = ClimaComms.context(axes(Y.c)),
         sfc_setup = surface_setup(params),
-        test_dycore_consistency = parsed_args["test_dycore_consistency"],
+        test,
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
         Yₜ = similar(Y), # only needed when using increment formulation

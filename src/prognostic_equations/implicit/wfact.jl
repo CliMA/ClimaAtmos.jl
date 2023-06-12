@@ -60,7 +60,7 @@ end
 
 function Wfact!(W, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
-        p.test_dycore_consistency && fill_with_nans!(p)
+        p.test isa TestDycoreConsistency && fill_with_nans!(p)
         set_precomputed_quantities!(Y, p, t)
         Fields.bycolumn(axes(Y.c)) do colidx
             Wfact!(W, Y, p, dtγ, t, colidx)

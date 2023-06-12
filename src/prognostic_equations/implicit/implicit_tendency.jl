@@ -5,7 +5,7 @@
 import ClimaCore: Fields, Geometry
 
 function implicit_tendency!(Yₜ, Y, p, t)
-    p.test_dycore_consistency && fill_with_nans!(p)
+    p.test isa TestDycoreConsistency && fill_with_nans!(p)
     @nvtx "implicit tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin

@@ -149,6 +149,8 @@ end
 abstract type AbstractPerformanceMode end
 struct PerfExperimental <: AbstractPerformanceMode end
 struct PerfStandard <: AbstractPerformanceMode end
+struct TestDycoreConsistency end
+
 Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
 Base.@kwdef struct AtmosModel{
