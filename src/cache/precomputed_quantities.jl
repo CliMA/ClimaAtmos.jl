@@ -377,7 +377,7 @@ function set_precomputed_quantities!(Y, p, t)
             )
             ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
             ᶜh_totʲ_int_val = Fields.field_values(Fields.level(ᶜh_totʲ, 1))
-            @. ᶜh_totʲ_int_val = sgs_h_tot_first_interior_bc(
+            @. ᶜh_totʲ_int_val = sgs_scalar_first_interior_bc(
                 ᶜz_int_val - z_sfc_val,
                 ᶜρ_int_val,
                 ᶜh_tot_int_val,
@@ -393,7 +393,7 @@ function set_precomputed_quantities!(Y, p, t)
                 Fields.field_values(Fields.level(ᶜspecific.q_tot, 1))
             ᶜq_totʲ_int_val =
                 Fields.field_values(Fields.level(ᶜspecificʲ.q_tot, 1))
-            @. ᶜq_totʲ_int_val = sgs_q_tot_first_interior_bc(
+            @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
                 ᶜz_int_val - z_sfc_val,
                 ᶜρ_int_val,
                 ᶜq_tot_int_val,
