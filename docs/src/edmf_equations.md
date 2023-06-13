@@ -123,11 +123,11 @@ the vertical momentum equation. The horizontal momentum equation is only solved 
   - \frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j + RHS .
 ```
 
-This is stabilized with the addition of 4th-order hyperviscosity
+This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
--\nu_u \nabla^2(\nabla^2(w^j)),
+-\nu_u \nabla_h^2(\nabla_h^2(\boldsymbol{u}^j)),
 ```
-where ``w^j`` is the magnitude of ``\boldsymbol{u}_v^j``.
+projected onto the third contravariant direction.
 
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^h`` term is discretized as
 ```math
