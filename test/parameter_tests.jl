@@ -1,13 +1,10 @@
 using Test
 import CLIMAParameters as CP
-
-include("../src/utils/cli_options.jl")
-include("../parameters/create_parameters.jl")
+import ClimaAtmos as CA
 
 FT = Float64
 
-s = argparse_settings()
-default_args = cli_defaults(s)
+default_args = CA.cli_defaults(CA.argparse_settings())
 
 @testset "Test types" begin
 
@@ -20,7 +17,7 @@ default_args = cli_defaults(s)
         "bubble" => true,
     )
     toml_dict = CP.create_toml_dict(FT)
-    toml_dict, _ = merge_parsed_args_with_toml(toml_dict, dict, default_args)
+    toml_dict, _ = CA.merge_parsed_args_with_toml(toml_dict, dict, default_args)
     values = (; CP.get_parameter_values!(toml_dict, collect(keys(dict)))...)
 
     @test values.krylov_rtol isa FT
@@ -43,11 +40,14 @@ default_args = cli_defaults(s)
 end
 
 @testset "Test override and alias" begin
-    toml_dict = CP.create_toml_dict(FT; override_file = "parameter_tests.toml")
+    toml_dict = CP.create_toml_dict(
+        FT;
+        override_file = joinpath(@__DIR__, "parameter_tests.toml"),
+    )
     @test CP.get_parameter_values!(toml_dict, "y_elem").second == 0
 
     dict = Dict("y_elem" => 1)
-    toml_dict, _ = merge_parsed_args_with_toml(toml_dict, dict, default_args)
+    toml_dict, _ = CA.merge_parsed_args_with_toml(toml_dict, dict, default_args)
     println(CP.get_parameter_values!(toml_dict, "y_elem"))
     println(typeof(CP.get_parameter_values!(toml_dict, "y_elem")))
     @test CP.get_parameter_values!(toml_dict, "y_elem").second == 1
@@ -57,14 +57,17 @@ end
 end
 
 @testset "Test priorities" begin
-    toml_dict = CP.create_toml_dict(FT; override_file = "parameter_tests.toml")
+    toml_dict = CP.create_toml_dict(
+        FT;
+        override_file = joinpath(@__DIR__, "parameter_tests.toml"),
+    )
     parsed_args = Dict(
         "toml" => "test/parameter_tests.toml",
         "dt" => "35secs",
         "t_end" => "3hours",
     )
     toml_dict, _ =
-        merge_parsed_args_with_toml(toml_dict, parsed_args, default_args)
+        CA.merge_parsed_args_with_toml(toml_dict, parsed_args, default_args)
     param_names = ["dt", "dt_save_to_disk", "z_elem"]
     params = CP.get_parameter_values!(toml_dict, param_names)
     params = (; params...)
