@@ -1,6 +1,8 @@
 #####
 ##### Precomputed quantities
 #####
+
+import RootSolvers as RS
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
@@ -182,32 +184,146 @@ function thermo_state(
     e_int = nothing,
     q_tot = nothing,
     q_pt = nothing,
+    T_previous = nothing,
 )
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
-        TD.PhaseDry_ρθ(thermo_params, ρ, θ)
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
-    get_ts(ρ::Real, ::Nothing, θ::Real, ::Nothing, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
-    get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
-        TD.PhaseDry_ρe(thermo_params, ρ, e_int)
-    get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_ρeq(thermo_params, ρ, e_int, q_tot)
-    get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_ρeq(thermo_params, ρ, e_int, q_pt)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
-        TD.PhaseDry_pθ(thermo_params, p, θ)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
-    get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
-    get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
-        TD.PhaseDry_pe(thermo_params, p, e_int)
-    get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot)
-    get_ts(::Nothing, p::Real, ::Nothing, e_int::Real, ::Nothing, q_pt) =
-        TD.PhaseNonEquil_peq(thermo_params, p, e_int, q_pt)
-    return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        θ::Real,
+        ::Nothing,
+        ::Nothing,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseDry_ρθ(thermo_params, ρ, θ)
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        θ::Real,
+        ::Nothing,
+        q_tot::Real,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseEquil_ρθq(thermo_params, ρ, θ, q_tot)
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        θ::Real,
+        ::Nothing,
+        ::Nothing,
+        q_pt,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseNonEquil_ρθq(thermo_params, ρ, θ, q_pt)
+
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        ::Nothing,
+        e_int::Real,
+        ::Nothing,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseDry_ρe(thermo_params, ρ, e_int)
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        ::Nothing,
+        e_int::Real,
+        q_tot::Real,
+        ::Nothing,
+        ::Nothing,
+    ) = TD.PhaseEquil_ρeq(
+        thermo_params,
+        ρ,
+        e_int,
+        q_tot,
+        3,
+        eltype(thermo_params)(0.003),
+    )
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        ::Nothing,
+        e_int::Real,
+        q_tot::Real,
+        ::Nothing,
+        T_previous::Real,
+    ) = TD.PhaseEquil_ρeq(
+        thermo_params,
+        ρ,
+        e_int,
+        q_tot,
+        3,
+        eltype(thermo_params)(0.003),
+        RS.NewtonsMethod,
+        T_previous,
+    )
+    get_ts(
+        ρ::Real,
+        ::Nothing,
+        ::Nothing,
+        e_int::Real,
+        ::Nothing,
+        q_pt,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseNonEquil_ρeq(thermo_params, ρ, e_int, q_pt)
+
+    get_ts(
+        ::Nothing,
+        p::Real,
+        θ::Real,
+        ::Nothing,
+        ::Nothing,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseDry_pθ(thermo_params, p, θ)
+    get_ts(
+        ::Nothing,
+        p::Real,
+        θ::Real,
+        ::Nothing,
+        q_tot::Real,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseEquil_pθq(thermo_params, p, θ, q_tot)
+    get_ts(
+        ::Nothing,
+        p::Real,
+        θ::Real,
+        ::Nothing,
+        ::Nothing,
+        q_pt,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseNonEquil_pθq(thermo_params, p, θ, q_pt)
+
+    get_ts(
+        ::Nothing,
+        p::Real,
+        ::Nothing,
+        e_int::Real,
+        ::Nothing,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseDry_pe(thermo_params, p, e_int)
+    get_ts(
+        ::Nothing,
+        p::Real,
+        ::Nothing,
+        e_int::Real,
+        q_tot::Real,
+        ::Nothing,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseEquil_peq(thermo_params, p, e_int, q_tot)
+    get_ts(
+        ::Nothing,
+        p::Real,
+        ::Nothing,
+        e_int::Real,
+        ::Nothing,
+        q_pt,
+        ::Union{Nothing, Real},
+    ) = TD.PhaseNonEquil_peq(thermo_params, p, e_int, q_pt)
+
+    return get_ts(ρ, p, θ, e_int, q_tot, q_pt, T_previous)
 end
 
 function thermo_vars(energy_form, moisture_model, specific, K, Φ)
@@ -227,12 +343,21 @@ function thermo_vars(energy_form, moisture_model, specific, K, Φ)
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, energy_form, moisture_model, specific, K, Φ, ρ) =
-    thermo_state(
-        thermo_params;
-        thermo_vars(energy_form, moisture_model, specific, K, Φ)...,
-        ρ,
-    )
+ts_gs(
+    thermo_params,
+    energy_form,
+    moisture_model,
+    specific,
+    K,
+    Φ,
+    ρ,
+    T_previous = nothing,
+) = thermo_state(
+    thermo_params;
+    thermo_vars(energy_form, moisture_model, specific, K, Φ)...,
+    ρ,
+    T_previous,
+)
 
 ts_sgs(thermo_params, energy_form, moisture_model, specific, K, Φ, p) =
     thermo_state(
@@ -288,7 +413,16 @@ function set_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    @. ᶜts =
+        t > 0 ?
+        ts_gs(
+            thermo_args...,
+            ᶜspecific,
+            ᶜK,
+            ᶜΦ,
+            Y.c.ρ,
+            nothing,
+        ) : ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
     if energy_form isa TotalEnergy
