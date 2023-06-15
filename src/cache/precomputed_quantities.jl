@@ -101,11 +101,8 @@ end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
 function set_ᶠuₕ³!(ᶠuₕ³, Y)
-    Fields.bycolumn(axes(Y.c)) do colidx
-        ᶜJ = Fields.local_geometry_field(Y.c).J
-        @. ᶠuₕ³[colidx] =
-            ᶠwinterp(Y.c.ρ[colidx] * ᶜJ[colidx], CT3(Y.c.uₕ[colidx]))
-    end
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    @. ᶠuₕ³ = ᶠwinterp(Y.c.ρ * ᶜJ, CT3(Y.c.uₕ))
 end
 
 """
@@ -132,45 +129,29 @@ end
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
-    Fields.bycolumn(axes(ᶜu)) do colidx
-        @. ᶜu[colidx] = C123(ᶜuₕ[colidx]) + ᶜinterp(C123(ᶠu₃[colidx]))
-        @. ᶠu³[colidx] = ᶠuₕ³[colidx] + CT3(ᶠu₃[colidx])
-        compute_kinetic!(ᶜK[colidx], ᶜuₕ[colidx], ᶠu₃[colidx])
-    end
+    @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
+    @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
+    compute_kinetic!(ᶜK, ᶜuₕ, ᶠu₃)
 end
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
     u₃ʲs(sgsʲs) = map(sgsʲ -> sgsʲ.u₃, sgsʲs)
-    Fields.bycolumn(axes(Y.c)) do colidx
-        @. ᶠu₃[colidx] = w_function(
-            ᶠinterp(ρaʲs(Y.c.sgsʲs[colidx])),
-            u₃ʲs(Y.f.sgsʲs[colidx]),
-            ᶠinterp(Y.c.ρ[colidx]),
-            Y.f.u₃[colidx],
-            turbconv_model,
-        )
-    end
+    @. ᶠu₃ = w_function(
+        ᶠinterp(ρaʲs(Y.c.sgsʲs)),
+        u₃ʲs(Y.f.sgsʲs),
+        ᶠinterp(Y.c.ρ),
+        Y.f.u₃,
+        turbconv_model,
+    )
 end
 
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-    function do_col!(ᶜK, Yc, Yf, ᶜρa⁰, ᶠu₃⁰)
-        @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
-        for j in 1:n_mass_flux_subdomains(turbconv_model)
-            ᶜρaʲ = Yc.sgsʲs.:($j).ρa
-            ᶠu₃ʲ = Yf.sgsʲs.:($j).u₃
-            @. ᶜK +=
-                ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
-        end
-    end
-    Fields.bycolumn(axes(Y.c)) do colidx
-        do_col!(
-            ᶜK[colidx],
-            Y.c[colidx],
-            Y.f[colidx],
-            ᶜρa⁰[colidx],
-            ᶠu₃⁰[colidx],
-        )
+    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
+        @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
     end
 end
 
