@@ -53,16 +53,25 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-  
-  - group: "Low resolution long runs"
-
-    steps:
       
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation diagnostic edmf"
+      - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation h_elem12 z_elem25 Float64"
         command:
-          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --vert_diff true --turbconv diagnostic_edmfx --surface_setup DefaultMoninObukhov --moist equil --rad gray --precip_model 0M --dt 400secs --t_end 30days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray_diagedmf --dt_save_to_sol 10days --dt_save_to_disk 1days
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray_diagedmf --out_dir longrun_aquaplanet_rhoe_equil_gray_diagedmf
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray_diagedmf --fig_dir longrun_aquaplanet_rhoe_equil_gray_diagedmf --case_name aquaplanet
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_diagedmf/*"
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultMoninObukhov --moist equil --rad clearsky --precip_model 0M --turbconv diagnostic_edmfx --z_elem 25 --dz_bottom 100 --h_elem 12 --kappa_4 2e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 200secs --t_end 60days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_highres_clearsky_he12ze25_ft64 --dt_save_to_sol 10days --dt_save_to_disk 1days --FLOAT_TYPE Float64 --apply_limiter false
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_he12ze25_ft64 --out_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_he12ze25_ft64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_he12ze25_ft64 --fig_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_he12ze25_ft64 --case_name aquaplanet
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_he12ze25_ft64/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
         agents:
-          slurm_cpus_per_task: 8
+          slurm_ntasks: 32
+      
+      - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution gray radiation h_elem12 z_elem25 Float64"
+        command:
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultMoninObukhov --moist equil --rad gray --precip_model 0M --turbconv diagnostic_edmfx --z_elem 25 --dz_bottom 100 --h_elem 12 --kappa_4 2e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 200secs --t_end 60days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_highres_gray_he12ze25_ft64 --dt_save_to_sol 10days --dt_save_to_disk 1days --FLOAT_TYPE Float64 --apply_limiter false
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_gray_he12ze25_ft64 --out_dir longrun_aquaplanet_rhoe_equil_highres_gray_he12ze25_ft64
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_highres_gray_he12ze25_ft64 --fig_dir longrun_aquaplanet_rhoe_equil_highres_gray_he12ze25_ft64 --case_name aquaplanet
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_gray_he12ze25_ft64/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
