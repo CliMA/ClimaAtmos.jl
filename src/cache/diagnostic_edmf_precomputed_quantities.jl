@@ -318,26 +318,36 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                     u³ʲ_data_prev_halflevel
                 )
             
+            # @. u³ʲ_datau³ʲ_data -=
+            #     (1 / local_geometry_halflevel.J^2) * (
+            #         local_geometry_prev_level.J^2 *
+            #         FT(2) *
+            #         ((
+            #             ∇p_perturb_grad³_prev_level_data +
+            #             ∇Φ³_prev_level_data *
+            #             (ρʲ_prev_level - ρ_ref_prev_level) / ρʲ_prev_level
+            #         ))
+            #     )
+            
+            # @. u³ʲ_datau³ʲ_data +=
+            #     (1 / local_geometry_halflevel.J^2) * (
+            #         local_geometry_prev_level.J^2 *
+            #         FT(2) *
+            #         ((
+            #             ∇p_perturb_grad³_prev_level_data +
+            #             ∇Φ³_prev_level_data *
+            #             (ρ_prev_level - ρ_ref_prev_level) / ρ_prev_level
+            #         ))
+            #     )
+
             @. u³ʲ_datau³ʲ_data -=
                 (1 / local_geometry_halflevel.J^2) * (
                     local_geometry_prev_level.J^2 *
                     FT(2) *
-                    ((
-                        ∇p_perturb_grad³_prev_level_data +
+                    (
                         ∇Φ³_prev_level_data *
-                        (ρʲ_prev_level - ρ_ref_prev_level) / ρʲ_prev_level
-                    ))
-                )
-            
-            @. u³ʲ_datau³ʲ_data +=
-                (1 / local_geometry_halflevel.J^2) * (
-                    local_geometry_prev_level.J^2 *
-                    FT(2) *
-                    ((
-                        ∇p_perturb_grad³_prev_level_data +
-                        ∇Φ³_prev_level_data *
-                        (ρ_prev_level - ρ_ref_prev_level) / ρ_prev_level
-                    ))
+                        (ρʲ_prev_level - ρ_prev_level) / ρ_prev_level
+                    )
                 )
 
             @. u³ʲ_datau³ʲ_data +=
@@ -346,7 +356,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                     FT(2) *
                     (
                         entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
-                        entr_detrʲ_prev_level.detr * u³ʲ_data_prev_halflevel
+                        entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
                     )
                 )
             
