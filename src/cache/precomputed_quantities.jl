@@ -173,7 +173,14 @@ function thermo_state(
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, ::Nothing) =
         TD.PhaseDry_ρe(thermo_params, ρ, e_int)
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, q_tot::Real, ::Nothing) =
-        TD.PhaseEquil_ρeq(thermo_params, ρ, e_int, q_tot)
+        TD.PhaseEquil_ρeq(
+            thermo_params,
+            ρ,
+            e_int,
+            q_tot,
+            3,
+            eltype(thermo_params)(0.003),
+        )
     get_ts(ρ::Real, ::Nothing, ::Nothing, e_int::Real, ::Nothing, q_pt) =
         TD.PhaseNonEquil_ρeq(thermo_params, ρ, e_int, q_pt)
     get_ts(::Nothing, p::Real, θ::Real, ::Nothing, ::Nothing, ::Nothing) =
