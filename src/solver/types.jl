@@ -325,6 +325,7 @@ end
 function AtmosConfig(
     s = argparse_settings();
     parsed_args = parse_commandline(s),
+    comms_ctx = nothing,
 )
     FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
@@ -334,7 +335,10 @@ function AtmosConfig(
     )
     toml_dict, parsed_args =
         merge_parsed_args_with_toml(toml_dict, parsed_args, CA.cli_defaults(s))
-    comms_ctx = CA.get_comms_context(parsed_args)
+
+    if isnothing(comms_ctx)
+        comms_ctx = CA.get_comms_context(parsed_args)
+    end
 
     # TODO: is there a better way? We need a better
     #       mechanism on the ClimaCore side.
