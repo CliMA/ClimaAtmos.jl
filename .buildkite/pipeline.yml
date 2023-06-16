@@ -64,13 +64,12 @@ steps:
 
   - group: "GPU"
     steps:
-      - label: "Simple GPU test"
-        key: "gpu_example"
+      - label: "GPU explicit baroclinic wave"
+        key: "gpu_explicit_barowave"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --ode_algo SSP33ShuOsher --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_example --device CUDADevice"
-        artifact_paths: "gpu_example/*"
-        soft_fail: true
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_explicit_barowave --device CUDADevice"
+        artifact_paths: "gpu_explicit_barowave/*"
         agents:
           slurm_gpus: 1
 
