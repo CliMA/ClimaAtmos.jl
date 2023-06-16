@@ -51,7 +51,7 @@ function radiation_model_cache(
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        latitude = RRTMGPI.field2array(bottom_coords.lat)
+        latitude = RRTMGPI.field2array(@. deg2rad(bottom_coords.lat))
     else
         latitude = RRTMGPI.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
@@ -63,7 +63,7 @@ function radiation_model_cache(
                 lapse_rate = 3.5,
                 optical_thickness_parameter = (@. 7.2 +
                                                   (1.8 - 7.2) *
-                                                  sind(latitude)^2),
+                                                  sin(latitude)^2),
                 latitude,
             )
         else
@@ -175,7 +175,7 @@ function radiation_model_cache(
         if idealized_insolation # perpetual equinox with no diurnal cycle
             solar_zenith_angle = FT(π) / 3
             weighted_irradiance =
-                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
+                @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sin(latitude)^2)) /
                    (4 * cos(solar_zenith_angle))
         else
             solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
