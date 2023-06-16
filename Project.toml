@@ -1,7 +1,7 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.14.1"
+version = "0.15.0"
 
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
