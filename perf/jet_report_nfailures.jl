@@ -39,4 +39,6 @@ n["fill_with_nans!"]                             = @n_failures CA.fill_with_nans
 #! format: on
 
 n = filter(x -> x.second ≠ 0, n)
-@info "n-jet failures (excluding n=0)" nfailures = n
+@info "n-jet failures (excluding n=0):"
+show(IOContext(stdout, :limit => false), MIME"text/plain"(), n)
+println()
