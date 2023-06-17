@@ -29,7 +29,7 @@ end
     Aqua.test_deps_compat(ClimaAtmos)
     Aqua.test_project_extras(ClimaAtmos)
     Aqua.test_project_toml_formatting(ClimaAtmos)
-    # Aqua.test_piracy(ClimaAtmos) # failing
+    Aqua.test_piracy(ClimaAtmos)
 end
 
 nothing
