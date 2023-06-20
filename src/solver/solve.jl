@@ -117,8 +117,10 @@ method defining the flags, and
 for the flags outlined in a table.
 
 """
-function benchmark_step!(integrator, Y₀)
-    ODE.step!(integrator)
-    integrator.u .= Y₀ # temporary hack to simplify performance benchmark.
+function benchmark_step!(integrator, Y₀, n_steps = 10)
+    for i in 1:n_steps
+        ODE.step!(integrator)
+        integrator.u .= Y₀ # temporary hack to simplify performance benchmark.
+    end
     return nothing
 end

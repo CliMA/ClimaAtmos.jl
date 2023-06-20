@@ -78,6 +78,8 @@ steps:
         command:
           - julia --color=yes --project=examples perf/benchmark_step.jl --h_elem 6
         artifact_paths: "perf_benchmark_step/*"
+        agents:
+          slurm_gpus: 1
 
   - group: "Gravity wave"
     steps:
