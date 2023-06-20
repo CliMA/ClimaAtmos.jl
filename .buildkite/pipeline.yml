@@ -155,6 +155,10 @@ steps:
           --dt 0.5secs --t_end 600secs
           --job_id bomex_box_hydrostatic_balance_rhoe
         artifact_paths: "bomex_box_hydrostatic_balance_rhoe/*"
+      
+      - label: ":computer: 3D density current"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --x_max 51200.0 --y_max 6400.0 --z_max 6400.0 --x_elem 45 --y_elem 15 --z_elem 45 --dt 0.1secs --t_end 10.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 10secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id box_density_current_test --ode_algo SSP33ShuOsher"
+        artifact_paths: box_density_current_test/*"
 
   - group: "Plane Examples"
     steps:
@@ -177,6 +181,7 @@ steps:
       - label: ":computer: Density current experiment"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config plane --x_max 51200.0 --z_max 6400.0 --x_elem 80 --z_elem 90 --dt 0.3secs --t_end 900.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 3600secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id plane_density_current_test"
         artifact_paths: "plane_density_current_test/*"
+      
 
   - group: "Sphere Examples (Dycore)"
     steps:
