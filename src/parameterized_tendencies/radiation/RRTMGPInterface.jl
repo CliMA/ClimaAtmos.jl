@@ -86,12 +86,6 @@ array2data(
 ) where {T, Nij} =
     DataLayouts.VIJFH{T, Nij}(reshape(array, size(array, 1), Nij, Nij, 1, :))
 
-# This code allows array2field to work correctly.
-# TODO: Move this to ClimaCore if we decide to keep array2field.
-import ClimaCore.DataLayouts: parent_array_type
-parent_array_type(::Type{<:Base.ReshapedArray{T, N, P}}) where {T, N, P} =
-    parent_array_type(P)
-
 abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
