@@ -40,16 +40,14 @@ end
 function set_diagnostic_edmfx_env_quantities_level!(
     ρ_level,
     ρaʲs_level,
-    ρa⁰_level,
     u³_halflevel,
     u³ʲs_halflevel,
     u³⁰_halflevel,
     turbconv_model,
 )
-    @. ρa⁰_level = ρ_level - sum(ρaʲs_level)
     @. u³⁰_halflevel = divide_by_ρa(
         ρ_level * u³_halflevel - mapreduce(*, +, ρaʲs_level, u³ʲs_halflevel),
-        ρa⁰_level,
+        ρ_level,
         ρ_level * u³_halflevel,
         ρ_level,
         turbconv_model,
@@ -66,7 +64,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
     (; sfc_conditions, params) = p
-    (; ᶜp, ᶜΦ, ᶜp_ref, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot) = p
+    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
     (;
         ᶜρaʲs,
@@ -77,21 +75,17 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
         ᶜtsʲs,
         ᶜρʲs,
         ᶜentr_detrʲs,
-        ᶜρa⁰,
         ᶠu³⁰,
     ) = p
-    ᶜ∇p_perturb³ = p.ᶜtemp_CT3
-    ᶜ∇Φ³ = p.ᶜtemp_CT3_2
+    ᶜ∇Φ³ = p.ᶜtemp_CT3
 
     thermo_params = CAP.thermodynamics_params(params)
 
-    @. ᶜ∇p_perturb³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜp - ᶜp_ref)))
-    @. ᶜ∇p_perturb³ += CT3(gradₕ(ᶜp - ᶜp_ref))
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
     @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
 
     ρaʲu³ʲ_data = p.temp_data_level
-    ρaʲu³ʲ_datau³ʲ_data = p.temp_data_level_2
+    u³ʲ_datau³ʲ_data = p.temp_data_level_2
     ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.temp_data_level_3
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
@@ -184,13 +178,11 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
     end
 
     ρaʲs_int_level = Fields.field_values(Fields.level(ᶜρaʲs, 1))
-    ρa⁰_int_level = Fields.field_values(Fields.level(ᶜρa⁰, 1))
     u³ʲs_int_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, half))
     u³⁰_int_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, half))
     set_diagnostic_edmfx_env_quantities_level!(
         ρ_int_level,
         ρaʲs_int_level,
-        ρa⁰_int_level,
         u³_int_halflevel,
         u³ʲs_int_halflevel,
         u³⁰_int_halflevel,
@@ -217,9 +209,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
         ∂x³∂ξ³_level = ∂x∂ξ_level.:($end_index)
 
         ρ_ref_prev_level = Fields.field_values(Fields.level(ᶜρ_ref, i - 1))
-        ∇p_perturb³_prev_level =
-            Fields.field_values(Fields.level(ᶜ∇p_perturb³, i - 1))
-        ∇p_perturb³_prev_level_data = ∇p_perturb³_prev_level.components.data.:1
         ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
         ∇Φ³_prev_level_data = ∇Φ³_prev_level.components.data.:1
         ρ_prev_level = Fields.field_values(Fields.level(Y.c.ρ, i - 1))
@@ -307,50 +296,49 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                     (entr_detrʲ_prev_level.entr - entr_detrʲ_prev_level.detr)
                 )
 
-            @. ρaʲu³ʲ_datau³ʲ_data =
+            @. u³ʲ_datau³ʲ_data =
                 (1 / local_geometry_halflevel.J^2) * (
                     local_geometry_prev_halflevel.J^2 *
-                    ρaʲ_prev_level *
                     u³ʲ_data_prev_halflevel *
                     u³ʲ_data_prev_halflevel
                 )
 
-            @. ρaʲu³ʲ_datau³ʲ_data -=
+            @. u³ʲ_datau³ʲ_data -=
                 (1 / local_geometry_halflevel.J^2) * (
                     local_geometry_prev_level.J^2 *
-                    ρaʲ_prev_level *
-                    ((
-                        ∇p_perturb³_prev_level_data / ρʲ_prev_level +
-                        ∇Φ³_prev_level_data *
-                        (ρʲ_prev_level - ρ_ref_prev_level) / ρʲ_prev_level
-                    ))
-                )
-
-            @. ρaʲu³ʲ_datau³ʲ_data +=
-                (1 / local_geometry_halflevel.J^2) * (
-                    local_geometry_prev_level.J^2 *
-                    ρaʲ_prev_level *
+                    FT(2) *
                     (
-                        entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
-                        entr_detrʲ_prev_level.detr * u³ʲ_data_prev_halflevel
+                        ∇Φ³_prev_level_data * (ρʲ_prev_level - ρ_prev_level) /
+                        ρ_prev_level
                     )
                 )
 
-            @. ρaʲ_level = ifelse(
-                (
-                    ρaʲu³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
-                    ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
-                ),
-                FT(0),
-                ρaʲu³ʲ_data^2 / ρaʲu³ʲ_datau³ʲ_data,
-            )
+            @. u³ʲ_datau³ʲ_data +=
+                (1 / local_geometry_halflevel.J^2) * (
+                    local_geometry_prev_level.J^2 *
+                    FT(2) *
+                    (
+                        entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
+                        entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
+                    )
+                )
+
             @. u³ʲ_halflevel = ifelse(
                 (
-                    ρaʲu³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
+                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
                     ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
                 ),
                 CT3(FT(0)),
-                CT3(ρaʲu³ʲ_data / ρaʲ_level),
+                CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
+            )
+
+            @. ρaʲ_level = ifelse(
+                (
+                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
+                    ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
+                ),
+                FT(0),
+                ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
             )
 
             @. ρaʲu³ʲ_datah_tot =
@@ -371,7 +359,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                 )
             @. h_totʲ_level = ifelse(
                 (
-                    ρaʲu³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
+                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
                     ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
                 ),
                 h_tot_level,
@@ -396,7 +384,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                 )
             @. q_totʲ_level = ifelse(
                 (
-                    ρaʲu³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
+                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
                     ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
                 ),
                 q_tot_level,
@@ -420,13 +408,11 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
         end
 
         ρaʲs_level = Fields.field_values(Fields.level(ᶜρaʲs, i))
-        ρa⁰_level = Fields.field_values(Fields.level(ᶜρa⁰, i))
         u³ʲs_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, i - half))
         u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i - half))
         set_diagnostic_edmfx_env_quantities_level!(
             ρ_level,
             ρaʲs_level,
-            ρa⁰_level,
             u³_halflevel,
             u³ʲs_halflevel,
             u³⁰_halflevel,

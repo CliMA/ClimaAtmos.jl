@@ -458,7 +458,6 @@ steps:
           --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
           --dt 10secs --t_end 6hours --dt_save_to_disk 10mins
         artifact_paths: "diagnostic_edmfx_bomex_box/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 
