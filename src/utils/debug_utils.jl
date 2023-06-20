@@ -195,4 +195,6 @@ end
 
 Fill a data structure's `Field`s / `FieldVector`s with NaNs.
 """
-fill_with_nans!(p) = fill_with_nans_generic!(p)
+fill_with_nans!(p) = fill_with_nans!(p, p.test)
+fill_with_nans!(p, ::Nothing) = nothing
+fill_with_nans!(p, ::TestDycoreConsistency) = fill_with_nans_generic!(p)
