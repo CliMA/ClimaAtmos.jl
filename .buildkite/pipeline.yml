@@ -462,6 +462,17 @@ steps:
         artifact_paths: "diagnostic_edmfx_bomex_box/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Diagnostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_aquaplanet
+          --vert_diff true --surface_setup DefaultExchangeCoefficients --rad gray
+          --turbconv diagnostic_edmfx --edmfx_entr_detr true
+          --moist equil --precip_model 0M
+          --dt 400secs --t_end 1days --dt_save_to_disk 12hours
+        artifact_paths: "diagnostic_edmfx_aquaplanet/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":genie: EDMFX advection test in a box"
         command: >
