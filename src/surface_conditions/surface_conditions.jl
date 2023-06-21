@@ -61,7 +61,7 @@ function update_surface_conditions!(Y, p, t)
             atmos,
         )
     elseif sfc_setup isa Fields.Field # This case is needed for the Coupler
-        @assert eltype(sfc_setup) isa SurfaceState
+        @assert eltype(sfc_setup) <: SurfaceState
         sfc_setup_values = Fields.field_values(sfc_setup)
         @. sfc_conditions_values = surface_state_to_conditions(
             sfc_setup_values,
