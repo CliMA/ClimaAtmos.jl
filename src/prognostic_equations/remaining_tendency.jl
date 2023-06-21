@@ -1,6 +1,6 @@
 
 function remaining_tendency!(Yₜ, Y, p, t)
-    p.test isa TestDycoreConsistency && fill_with_nans!(p)
+    fill_with_nans!(p)
     @nvtx "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
         @nvtx "precomputed quantities" color = colorant"orange" begin
