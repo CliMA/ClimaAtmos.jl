@@ -445,6 +445,16 @@ end
 AtmosCoveragePerfConfig(s = argparse_settings()) =
     AtmosConfig(s; parsed_args = AtmosCoveragePerfParsedArgs(s))
 
+function AtmosConfigArgs(
+    s = argparse_settings();
+    args = String[],
+    parsed_args = parse_commandline(args, s),
+    comms_ctx = get_comms_context(parsed_args),
+)
+    @info "Running ClimaAtmos with default argparse settings + $args"
+    return AtmosConfig(s; parsed_args, comms_ctx)
+end
+
 function AtmosConfig(
     s = argparse_settings();
     parsed_args = parse_commandline(s),
