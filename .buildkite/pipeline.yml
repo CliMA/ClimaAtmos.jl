@@ -145,7 +145,7 @@ steps:
           --job_id box_hydrostatic_balance_rhoe
         artifact_paths: "box_hydrostatic_balance_rhoe/*"
 
-      - label: ":computer: Bomex box hydrostatic balance (ρe_tot)"
+      - label: ":computer: Bomex box (ρe_tot)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config box --perturb_initstate false --hyperdiff false
@@ -153,10 +153,10 @@ steps:
           --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
           --x_max 1e4 --y_max 1e4 --x_elem 6 --y_elem 6
           --z_elem 60 --z_stretch false --z_max 3e3
-          --moist equil
+          --moist equil --vert_diff true --C_E 0.044
           --dt 0.5secs --t_end 600secs
-          --job_id bomex_box_hydrostatic_balance_rhoe
-        artifact_paths: "bomex_box_hydrostatic_balance_rhoe/*"
+          --job_id bomex_box_rhoe
+        artifact_paths: "bomex_box_rhoe/*"
       
       - label: ":computer: 3D density current"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config box --x_max 51200.0 --y_max 6400.0 --z_max 6400.0 --x_elem 45 --y_elem 15 --z_elem 45 --dt 0.1secs --t_end 10.0secs --z_stretch false --vert_diff false --kappa_4 1e7 --dt_save_to_disk 10secs --initial_condition DryDensityCurrentProfile --discrete_hydrostatic_balance true --job_id box_density_current_test --ode_algo SSP33ShuOsher"
@@ -455,8 +455,8 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_bomex_box
           --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
           --turbconv diagnostic_edmfx --edmfx_entr_detr true
-          --moist equil
-          --config box --hyperdiff true --kappa_4 1e8
+          --moist equil --vert_diff true --C_E 0.044
+          --config box --hyperdiff true --kappa_4 1e12
           --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
           --dt 10secs --t_end 6hours --dt_save_to_disk 10mins
         artifact_paths: "diagnostic_edmfx_bomex_box/*"
@@ -482,7 +482,7 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id edmfx_bomex_box
           --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
           --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux true --edmfx_nh_pressure true
-          --moist equil
+          --moist equil --vert_diff true --C_E 0.044
           --config box --hyperdiff true --kappa_4 1e8
           --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
           --ode_algo SSP33ShuOsher --apply_limiter false
