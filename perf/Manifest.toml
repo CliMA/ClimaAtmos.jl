@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "125d379e51bf4a753e0436f0584c9f0115933ea4"
+project_hash = "11e989337d3799ee1ceced18e6d1fbacb5bb180d"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "dcfdf328328f2645531c4ddebf841228aef74130"
@@ -254,15 +254,15 @@ version = "0.15.1"
 
 [[deps.ClimaComms]]
 deps = ["CUDA", "MPI"]
-git-tree-sha1 = "7f3f28296a39cf99cb1372a6f1fc47b0baa1c66d"
+git-tree-sha1 = "9ae9344e332a025912a94e840ea2c7beeb7ae5e9"
 uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
-version = "0.4.2"
+version = "0.5.1"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "fe69ca07e8f9db7034d8cd6fa816332da3463576"
+git-tree-sha1 = "a3a96b569e4e1df58bc531b710b595830d6b4df4"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.41"
+version = "0.10.42"
 
 [[deps.ClimaCoreMakie]]
 deps = ["ClimaCore", "Makie"]
@@ -283,10 +283,10 @@ uuid = "c2caaa1d-32ae-4754-ba0d-80e7561362e9"
 version = "0.1.0"
 
 [[deps.ClimaCoreTempestRemap]]
-deps = ["ClimaComms", "ClimaCore", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll", "Test"]
-git-tree-sha1 = "40eec8cff925a004281f47dd5b32809db9e8d5e0"
+deps = ["ClimaCore", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll", "Test"]
+git-tree-sha1 = "12713936cdc28a3442f61d92d782d5bd329ded7e"
 uuid = "d934ef94-cdd4-4710-83d6-720549644b70"
-version = "0.3.9"
+version = "0.3.5"
 
 [[deps.ClimaCoreVTK]]
 deps = ["ClimaCore", "WriteVTK"]
@@ -353,12 +353,6 @@ deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
 git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
-
-[[deps.CommonDataModel]]
-deps = ["CFTime", "DataStructures", "Dates", "Preferences", "Printf"]
-git-tree-sha1 = "2678b3fc170d582655a14d22867b031b6e43c2d4"
-uuid = "1fbeeb36-5f17-413c-809b-666fb144f157"
-version = "0.2.4"
 
 [[deps.CommonSolve]]
 git-tree-sha1 = "0eee5eb66b1cf62cd6ad1b460238e60e4b09400c"
@@ -1289,9 +1283,9 @@ version = "1.0.0"
 
 [[deps.LoopVectorization]]
 deps = ["ArrayInterface", "ArrayInterfaceCore", "CPUSummary", "ChainRulesCore", "CloseOpenIntervals", "DocStringExtensions", "ForwardDiff", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "PrecompileTools", "SIMDTypes", "SLEEFPirates", "SpecialFunctions", "Static", "StaticArrayInterface", "ThreadingUtilities", "UnPack", "VectorizationBase"]
-git-tree-sha1 = "cdd207c26d86952949f1ac65b21baf078cc1937a"
+git-tree-sha1 = "e4eed22d70ac91d7a4bf9e0f6902383061d17105"
 uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
-version = "0.12.161"
+version = "0.12.162"
 
 [[deps.LoweredCodeUtils]]
 deps = ["JuliaInterpreter"]
@@ -1425,10 +1419,10 @@ uuid = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
 version = "0.2.4"
 
 [[deps.NCDatasets]]
-deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "NetCDF_jll", "NetworkOptions", "Printf"]
-git-tree-sha1 = "4263c4220f22e20729329838bf7e94a49d1ac32f"
+deps = ["CFTime", "DataStructures", "Dates", "NetCDF_jll", "Printf"]
+git-tree-sha1 = "17e39eb5bbe564f48bdbefbd103bd3f49fcfcb9b"
 uuid = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
-version = "0.12.17"
+version = "0.11.9"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -1461,10 +1455,10 @@ uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "1.0.2"
 
 [[deps.NetCDF_jll]]
-deps = ["Artifacts", "HDF5_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "Pkg", "XML2_jll", "Zlib_jll"]
-git-tree-sha1 = "072f8371f74c3b9e1b26679de7fbf059d45ea221"
+deps = ["Artifacts", "HDF5_jll", "JLLWrappers", "LibCURL_jll", "Libdl", "XML2_jll", "Zlib_jll"]
+git-tree-sha1 = "7f5a03e6712f5447c9c344430b8d1927a4777483"
 uuid = "7243133f-43d8-5620-bbf4-c2c921802cf3"
-version = "400.902.5+1"
+version = "400.902.206+0"
 
 [[deps.Netpbm]]
 deps = ["FileIO", "ImageCore", "ImageMetadata"]
@@ -1793,10 +1787,10 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
-deps = ["Adapt", "CUDA", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "13e066c65ac3b0b4f7913856677fd4fcaeb24ccb"
+deps = ["Adapt", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
+git-tree-sha1 = "5fea3508b223c171fadaf5e836565912a061e8d7"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.8.3"
+version = "0.9.0"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]

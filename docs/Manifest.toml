@@ -226,15 +226,15 @@ version = "0.15.1"
 
 [[deps.ClimaComms]]
 deps = ["CUDA", "MPI"]
-git-tree-sha1 = "7f3f28296a39cf99cb1372a6f1fc47b0baa1c66d"
+git-tree-sha1 = "9ae9344e332a025912a94e840ea2c7beeb7ae5e9"
 uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
-version = "0.4.2"
+version = "0.5.1"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DiffEqBase", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "fe69ca07e8f9db7034d8cd6fa816332da3463576"
+git-tree-sha1 = "a3a96b569e4e1df58bc531b710b595830d6b4df4"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.41"
+version = "0.10.42"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["CUDA", "ClimaComms", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "SciMLBase", "StaticArrays"]
@@ -904,9 +904,9 @@ version = "1.0.0"
 
 [[deps.LoopVectorization]]
 deps = ["ArrayInterface", "ArrayInterfaceCore", "CPUSummary", "ChainRulesCore", "CloseOpenIntervals", "DocStringExtensions", "ForwardDiff", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "PrecompileTools", "SIMDTypes", "SLEEFPirates", "SpecialFunctions", "Static", "StaticArrayInterface", "ThreadingUtilities", "UnPack", "VectorizationBase"]
-git-tree-sha1 = "cdd207c26d86952949f1ac65b21baf078cc1937a"
+git-tree-sha1 = "e4eed22d70ac91d7a4bf9e0f6902383061d17105"
 uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
-version = "0.12.161"
+version = "0.12.162"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg"]
@@ -1200,10 +1200,10 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
-deps = ["Adapt", "CUDA", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "13e066c65ac3b0b4f7913856677fd4fcaeb24ccb"
+deps = ["Adapt", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
+git-tree-sha1 = "5fea3508b223c171fadaf5e836565912a061e8d7"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.8.3"
+version = "0.9.0"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
