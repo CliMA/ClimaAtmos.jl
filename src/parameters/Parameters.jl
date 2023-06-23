@@ -26,6 +26,8 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     microphysics_params::MPP
     surfacefluxes_params::SFP
     turbconv_params::TCP
+    entr_coeff::FT = 1
+    detr_coeff::FT = 0.001
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -58,6 +60,8 @@ astro_unit(ps::ACAP) = ps.astro_unit
 f(ps::ACAP) = ps.f
 Cd(ps::ACAP) = ps.Cd
 uh_g(ps::ACAP) = CC.Geometry.UVVector(ps.ug, ps.vg)
+entr_coeff(ps::ACAP) = ps.entr_coeff
+detr_coeff(ps::ACAP) = ps.detr_coeff
 
 # Forwarding CloudMicrophysics parameters
 ρ_cloud_liq(ps::ACAP) = CM.Parameters.ρ_cloud_liq(microphysics_params(ps))

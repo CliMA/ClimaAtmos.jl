@@ -104,12 +104,64 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
         (ᶜf + ᶜω³) × CT12(ᶜu)
     @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+
     if p.atmos.turbconv_model isa EDMFX
-        (; ᶜuʲs, ᶜKʲs) = p
+        (; ᶜp, ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = p
+        (; ᶠu³ʲs, ᶜuʲs, ᶜKʲs, ᶜρʲs, ᶜspecificʲs, edmfx_upwinding) = p
+        (; dt) = p.simulation
+        ᶜ1 = p.ᶜtemp_scalar
+        ᶜh_totʲs = p.atmos.energy_form isa TotalEnergy ? p.ᶜh_totʲs : nothing
+
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) + ᶠgradᵥ(ᶜKʲs.:($$j))
+            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+                (
+                    ᶠgradᵥ(ᶜp - ᶜp_ref) +
+                    ᶠinterp(ᶜρʲs.:($$j) - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ
+                ) / ᶠinterp(ᶜρʲs.:($$j))
+        end
+
+        Fields.bycolumn(axes(Y.c.ρ)) do colidx
+            for j in 1:n
+
+                @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
+                vertical_transport!(
+                    Yₜ.c.sgsʲs.:($j).ρa[colidx],
+                    ᶜJ[colidx],
+                    Y.c.sgsʲs.:($j).ρa[colidx],
+                    ᶠu³ʲs.:($j)[colidx],
+                    ᶜ1[colidx],
+                    dt,
+                    edmfx_upwinding,
+                )
+
+                if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
+                    vertical_transport!(
+                        Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
+                        ᶜJ[colidx],
+                        Y.c.sgsʲs.:($j).ρa[colidx],
+                        ᶠu³ʲs.:($j)[colidx],
+                        ᶜh_totʲs.:($j)[colidx],
+                        dt,
+                        edmfx_upwinding,
+                    )
+                end
+
+                for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
+                    matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
+                    χ_name == :e_tot && continue
+                    vertical_transport!(
+                        ᶜρaχʲₜ[colidx],
+                        ᶜJ[colidx],
+                        Y.c.sgsʲs.:($j).ρa[colidx],
+                        ᶠu³ʲs.:($j)[colidx],
+                        ᶜχʲ[colidx],
+                        dt,
+                        edmfx_upwinding,
+                    )
+                end
+            end
         end
     end
-
 end

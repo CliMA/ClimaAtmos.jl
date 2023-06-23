@@ -71,9 +71,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜspecific, ᶠu³, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, ᶜtemp_scalar) = p
-    if turbconv_model isa EDMFX
-        (; ᶜspecific⁰, ᶜρa⁰, ᶠu³⁰, ᶜspecificʲs, ᶠu³ʲs, ᶜρʲs) = p
-    end
 
     ᶜ1 = ᶜtemp_scalar
     @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
@@ -86,19 +83,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         dt,
         density_upwinding,
     )
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            vertical_transport!(
-                Yₜ.c.sgsʲs.:($j).ρa[colidx],
-                ᶜJ[colidx],
-                Y.c.sgsʲs.:($j).ρa[colidx],
-                ᶠu³ʲs.:($j)[colidx],
-                ᶜ1[colidx],
-                dt,
-                edmfx_upwinding,
-            )
-        end
-    end
 
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p
@@ -124,48 +108,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             χ_name == :θ ? energy_upwinding : tracer_upwinding,
         )
     end
-    if turbconv_model isa EDMFX
-        for (ᶜρaχ⁰ₜ, ᶜχ⁰, _) in matching_subfields(Yₜ.c.sgs⁰, ᶜspecific⁰)
-            vertical_transport!(
-                ᶜρaχ⁰ₜ[colidx],
-                ᶜJ[colidx],
-                ᶜρa⁰[colidx],
-                ᶠu³⁰[colidx],
-                ᶜχ⁰[colidx],
-                dt,
-                edmfx_upwinding,
-            )
-        end
-    end
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
-                (; ᶜh_totʲs) = p
-                vertical_transport!(
-                    Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
-                    ᶜJ[colidx],
-                    Y.c.sgsʲs.:($j).ρa[colidx],
-                    ᶠu³ʲs.:($j)[colidx],
-                    ᶜh_totʲs.:($j)[colidx],
-                    dt,
-                    edmfx_upwinding,
-                )
-            end
-            for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
-                matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
-                χ_name == :e_tot && continue
-                vertical_transport!(
-                    ᶜρaχʲₜ[colidx],
-                    ᶜJ[colidx],
-                    Y.c.sgsʲs.:($j).ρa[colidx],
-                    ᶠu³ʲs.:($j)[colidx],
-                    ᶜχʲ[colidx],
-                    dt,
-                    edmfx_upwinding,
-                )
-            end
-        end
-    end
 
     @. Yₜ.c.uₕ[colidx] = zero(Yₜ.c.uₕ[colidx])
 
@@ -174,16 +116,6 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
             ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
         ) / ᶠinterp(Y.c.ρ[colidx])
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] =
-                -(
-                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
-                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
-                    ᶠgradᵥ_ᶜΦ[colidx]
-                ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
-        end
-    end
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p

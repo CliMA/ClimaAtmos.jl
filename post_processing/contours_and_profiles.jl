@@ -69,15 +69,25 @@ function contour_plot!(
     end
     ts = getindex.(var_col_time_series, 1)
     zs = var_col_time_series[1][2]
+
+    #values_adjoint = hcat(getindex.(var_col_time_series, 3)...)
+    #values = permutedims(values_adjoint, (2, 1))
     values = hcat(getindex.(var_col_time_series, 3)...)'
+
     if isnothing(ref_var_col_time_series)
         limits = extrema(values)
     else
         ref_ts = getindex.(ref_var_col_time_series, 1)
         ref_zs = ref_var_col_time_series[1][2]
+
+        #ref_values_adjoint = hcat(getindex.(ref_var_col_time_series, 3)...)
+        #ref_values = permutedims(ref_values_adjoint, (2, 1))
         ref_values = hcat(getindex.(ref_var_col_time_series, 3)...)'
+
         limits = extrema((extrema(values)..., extrema(ref_values)...))
     end
+
+
     limits = limits .+ (-1, 1) .* (padding_fraction * (limits[2] - limits[1]))
     if negative_values_allowed
         extendlow = nothing
@@ -382,11 +392,13 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
         (:gm, :v_velocity),
         (:gm, :w_velocity),
         (draft_or_gm, :buoyancy),
+        (draft_or_gm, :specific_enthalpy),
     )
     if has_moisture
         contour_variables = (
             contour_variables...,
             (env_or_gm, :relative_humidity),
+            (draft_or_gm, :q_tot),
             (draft_or_gm, :q_vap),
             (draft_or_gm, :q_liq),
             (draft_or_gm, :q_ice),
@@ -412,11 +424,13 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
         ((:gm,), :v_velocity),
         (all_categories, :w_velocity),
         (all_categories, :buoyancy),
+        (all_categories, :specific_enthalpy),
     )
     if has_moisture
         profile_variables = (
             profile_variables...,
             (all_categories, :relative_humidity),
+            (all_categories, :q_tot),
             (all_categories, :q_vap),
             (all_categories, :q_liq),
             (all_categories, :q_ice),
