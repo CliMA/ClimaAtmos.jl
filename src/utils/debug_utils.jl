@@ -102,7 +102,7 @@ end
 Helper function for debugging `NaN`s and `Inf`s.
 
 To avoid jumbled printed messages, it's recommended to use this
-feature with `ClimaCore.enable_threading() = false`.
+feature with threading disabled.
 
 ## Example
 ```julia

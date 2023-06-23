@@ -305,7 +305,6 @@ function AtmosPerfConfig(s = argparse_settings())
     parsed_args_perf_target["vert_diff"] = true
     parsed_args_perf_target["surface_setup"] = "DefaultExchangeCoefficients"
     parsed_args_perf_target["moist"] = "equil"
-    parsed_args_perf_target["enable_threading"] = false
     parsed_args_perf_target["rad"] = "allskywithclear"
     parsed_args_perf_target["precip_model"] = "0M"
     parsed_args_perf_target["dt"] = "1secs"
@@ -338,19 +337,14 @@ function AtmosConfig(
 
     # TODO: is there a better way? We need a better
     #       mechanism on the ClimaCore side.
-    if parsed_args["enable_threading"]
-        @eval Main begin
-            import ClimaCore
-            ClimaCore.enable_threading() = true
-        end
-    end
     if parsed_args["trunc_stack_traces"]
         @eval Main begin
             import ClimaCore
             ClimaCore.Fields.truncate_printing_field_types() = true
         end
     end
-    if ClimaCore.enable_threading()
+    device = ClimaComms.device(comms_ctx)
+    if device isa ClimaComms.CPUMultiThreaded
         @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads."
     else
         @info "Running ClimaCore in unthreaded mode."

@@ -648,8 +648,10 @@ import ClimaComms, Logging, NVTX
 function get_comms_context(parsed_args)
     device = if parsed_args["device"] == "CUDADevice"
         ClimaComms.CUDADevice()
+    elseif parsed_args["device"] == "CPUMultiThreaded" || Threads.nthreads() > 1
+        ClimaComms.CPUMultiThreaded()
     else
-        ClimaComms.CPUDevice()
+        ClimaComms.CPUSingleThreaded()
     end
     @info "Running on $(nameof(typeof(device)))."
     comms_ctx = ClimaComms.context(device)

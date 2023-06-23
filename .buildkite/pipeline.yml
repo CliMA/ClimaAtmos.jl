@@ -68,7 +68,7 @@ steps:
         key: "gpu_explicit_barowave"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --enable_threading false --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_explicit_barowave --device CUDADevice"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_explicit_barowave --device CUDADevice"
         artifact_paths: "gpu_explicit_barowave/*"
         agents:
           slurm_gpus: 1
@@ -405,7 +405,7 @@ steps:
         artifact_paths: "test_io/*"
 
       - label: ":computer: Use test env with latest deps"
-        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --enable_threading false --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
+        command: "julia --color=yes --project=test examples/hybrid/driver.jl --job_id test_env --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad allskywithclear --precip_model 0M --dt 1secs --t_end 10secs --dt_save_to_sol Inf --z_elem 25 --h_elem 12 --dt_rad 5secs"
         artifact_paths: "test_env/*"
         soft_fail: true
         agents:
@@ -814,7 +814,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":computer: Benchmark: perf target (Threaded)"
-        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target_threaded --enable_threading true"
+        command: "julia --color=yes --threads 8 --project=perf perf/benchmark.jl --perf_summary true --job_id bm_perf_target_threaded"
         agents:
           slurm_mem: 20GB
           slurm_cpus_per_task: 8
@@ -845,7 +845,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":fire: Flame graph: perf target (Threaded)"
-        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_threaded --enable_threading true"
+        command: "julia --threads 8 --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_threaded"
         artifact_paths: "flame_perf_target_threaded/*"
         agents:
           slurm_cpus_per_task: 8
