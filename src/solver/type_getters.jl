@@ -232,6 +232,13 @@ function get_spaces(parsed_args, params, comms_ctx)
             surface_warp = warp_function,
         )
     end
+    ncols = Fields.ncolumns(center_space)
+    ndofs_total = ncols * z_elem
+    hspace = Spaces.horizontal_space(center_space)
+    quad_style = Spaces.quadrature_style(hspace)
+    Nq = Spaces.Quadratures.degrees_of_freedom(quad_style)
+
+    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
     return (;
         center_space,
         face_space,
