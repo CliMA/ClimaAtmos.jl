@@ -7,7 +7,7 @@ Or, interactively,
 ```
 julia --project=examples
 push!(ARGS, "--h_elem", "6")
-# push!(ARGS, "--device", "CPUDevice") # uncomment to run on CPU
+# push!(ARGS, "--device", "CPUSingleThreaded") # uncomment to run on CPU
 include(joinpath("perf", "benchmark_step.jl"));
 ```
 =#
@@ -18,7 +18,7 @@ import ClimaAtmos as CA
 parsed_args = CA.AtmosTargetConfig(; target_job = "gpu_explicit_barowave");
 parsed_args["z_elem"] = 25
 parsed_args["h_elem"] = 12
-# parsed_args["device"] = "CPUDevice"; # uncomment to run on cpu
+# parsed_args["device"] = "CPUSingleThreaded"; # uncomment to run on cpu
 config = CA.AtmosConfig(; parsed_args)
 
 integrator = CA.get_integrator(config);

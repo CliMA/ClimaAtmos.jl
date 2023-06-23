@@ -2,6 +2,7 @@ module RRTMGPInterface
 
 using RRTMGP
 using ClimaCore: DataLayouts, Spaces, Fields
+import ClimaComms
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
@@ -473,7 +474,7 @@ function RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
     data_loader::Function,
     ::Type{FT},
-    ::Type{DA};
+    context;
     ncol::Int,
     domain_nlay::Int,
     extension_nlay::Int = 0,
@@ -488,7 +489,9 @@ function RRTMGPModel(
     add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
-) where {FT <: AbstractFloat, DA <: AbstractArray}
+) where {FT <: AbstractFloat}
+    device = ClimaComms.device(context)
+    DA = ClimaComms.array_type(device)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
@@ -571,8 +574,7 @@ function RRTMGPModel(
         else
             local lookup_lw, idx_gases
             data_loader(joinpath("lookup_tables", "clearsky_lw.nc")) do ds
-                lookup_lw, idx_gases =
-                    RRTMGP.LookUpTables.LookUpLW(ds, Int, FT, DA)
+                lookup_lw, idx_gases = RRTMGP.LookUpTables.LookUpLW(ds, FT, DA)
             end
             lookups = (; lookups..., lookup_lw, idx_gases)
 
@@ -585,7 +587,6 @@ function RRTMGPModel(
                 data_loader(joinpath("lookup_tables", "cloudysky_lw.nc")) do ds
                     lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(
                         ds,
-                        Int,
                         FT,
                         DA,
                         !use_pade_cloud_optics_mode,
@@ -637,8 +638,7 @@ function RRTMGPModel(
         else
             local lookup_sw, idx_gases
             data_loader(joinpath("lookup_tables", "clearsky_sw.nc")) do ds
-                lookup_sw, idx_gases =
-                    RRTMGP.LookUpTables.LookUpSW(ds, Int, FT, DA)
+                lookup_sw, idx_gases = RRTMGP.LookUpTables.LookUpSW(ds, FT, DA)
             end
             lookups = (; lookups..., lookup_sw, idx_gases)
 
@@ -651,7 +651,6 @@ function RRTMGPModel(
                 data_loader(joinpath("lookup_tables", "cloudysky_sw.nc")) do ds
                     lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(
                         ds,
-                        Int,
                         FT,
                         DA,
                         !use_pade_cloud_optics_mode,
@@ -878,6 +877,7 @@ function RRTMGPModel(
     op_type =
         use_one_scalar_mode ? RRTMGP.Optics.OneScalar : RRTMGP.Optics.TwoStream
     solver = RRTMGP.RTE.Solver(
+        context,
         as,
         op_type(FT, ncol, nlay, DA),
         src_lw,
@@ -1128,6 +1128,7 @@ function clip_values!(model)
 end
 update_concentrations!(::GrayRadiation, model) = nothing
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
+    model.solver.context,
     model.solver.as.p_lev,
     model.solver.as.col_dry,
     model.params,

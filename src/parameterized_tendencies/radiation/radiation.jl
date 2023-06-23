@@ -2,6 +2,7 @@
 ##### Radiation
 #####
 
+import ClimaComms
 import ClimaCore: Device, DataLayouts, Geometry, Spaces, Fields, Operators
 import OrdinaryDiffEq as ODE
 import Insolation
@@ -36,6 +37,7 @@ function radiation_model_cache(
     idealized_clouds = false,
     data_loader,
 )
+    context = ClimaComms.context(axes(Y.c))
     (; idealized_h2o) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
     rrtmgp_params = CAP.rrtmgp_params(params)
@@ -186,7 +188,7 @@ function radiation_model_cache(
             data_loader,
             # TODO: pass FT through so that it can be controlled at the top-level
             Float64,
-            RRTMGP.Device.array_type();
+            context;
             ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
             domain_nlay = Spaces.nlevels(axes(Y.c)),
             radiation_mode,

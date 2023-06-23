@@ -58,7 +58,7 @@ function plot_tc_profiles(folder; hdf5_filename, main_branch_data_path)
 
         reader = InputOutput.HDF5Reader(
             input_filename,
-            ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
         )
         Y = InputOutput.read_field(reader, "Y")
         D = InputOutput.read_field(reader, "diagnostics")
@@ -141,7 +141,7 @@ function get_contours(vars, input_filenames; data_source, have_main)
     data = map(input_filenames) do input_filename
         reader = InputOutput.HDF5Reader(
             input_filename,
-            ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
         )
         Y = InputOutput.read_field(reader, "Y")
         D = InputOutput.read_field(reader, "diagnostics")

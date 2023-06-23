@@ -64,7 +64,7 @@ function create_weightfile(filein, remap_tmpdir, nlat, nlon)
     @assert endswith(filein, "hdf5")
     reader = InputOutput.HDF5Reader(
         filein,
-        ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
     )
     Y = InputOutput.read_field(reader, "Y")
     weightfile = joinpath(remap_tmpdir, "remap_weights.nc")
@@ -76,7 +76,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     @assert endswith(filein, "hdf5")
     reader = InputOutput.HDF5Reader(
         filein,
-        ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
     )
     Y = InputOutput.read_field(reader, "Y")
     diag = InputOutput.read_field(reader, "diagnostics")

@@ -206,7 +206,7 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
     function read_hdf5_file(file_path)
         reader = InputOutput.HDF5Reader(
             file_path,
-            ClimaComms.SingletonCommsContext(ClimaComms.CPUDevice()),
+            ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
         )
         diagnostics = InputOutput.read_field(reader, "diagnostics")
         close(reader)

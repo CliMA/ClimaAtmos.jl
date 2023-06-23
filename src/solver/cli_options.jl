@@ -199,10 +199,6 @@ function argparse_settings()
         help = "(Bool) perform regression test"
         arg_type = Bool
         default = false
-        "--enable_threading"
-        help = "Enable multi-threading. Note: Julia must be launched with (e.g.,) `--threads=8`"
-        arg_type = Bool
-        default = true
         "--output_dir"
         help = "Output directory"
         arg_type = String
@@ -364,9 +360,9 @@ function argparse_settings()
         help = "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
         arg_type = String
         "--device"
-        help = "Device type to use [`CPUDevice` (default), `CUDADevice`]"
+        help = "Device type to use [`CPUSingleThreaded` (default), `CPUMultiThreaded`, `CUDADevice`]"
         arg_type = String
-        default = "CPUDevice"
+        default = "CPUSingleThreaded"
         "--perf_summary"
         help = "Flag for collecting performance summary information"
         arg_type = Bool
