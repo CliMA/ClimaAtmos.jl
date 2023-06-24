@@ -2,6 +2,7 @@
 ##### EDMF entrainment detrainment
 #####
 
+import StaticArrays as SA
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
@@ -228,4 +229,108 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             Y.f.sgsʲs.:($$j).u₃[colidx]
     end
     return nothing
+end
+
+# lambert_2_over_e(::Type{FT}) where {FT} = FT(LambertW.lambertw(FT(2) / FT(MathConstants.e)))
+lambert_2_over_e(::Type{FT}) where {FT} = FT(0.46305551336554884) # since we can evaluate
+
+function lamb_smooth_minimum(
+    l::SA.SVector,
+    lower_bound::FT,
+    upper_bound::FT,
+) where {FT}
+    x_min = minimum(l)
+    λ_0 = max(x_min * lower_bound / lambert_2_over_e(FT), upper_bound)
+
+    num = sum(l_i -> l_i * exp(-(l_i - x_min) / λ_0), l)
+    den = sum(l_i -> exp(-(l_i - x_min) / λ_0), l)
+    smin = num / den
+    return smin
+end
+
+"""
+    mixing_length(param_set, ustar, ᶜz, sfc_tke, ᶜ∂b∂z, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
+
+where:
+- `param_set`: set with model parameters
+- `ustar`: friction velocity
+- `ᶜz`: height
+- `tke_sfc`: env kinetic energy at first cell center
+- `ᶜ∂b∂z`: buoyancy gradient
+- `ᶜtke`: env turbulent kinetic energy
+- `obukhov_length`: surface Monin Obukhov length
+- `ᶜshear²`: shear term
+- `ᶜPr`: Prandtl number
+- `ᶜtke_exch`: subdomain exchange term
+
+Returns mixing length as a smooth minimum between
+wall-constrained length scale,
+production-dissipation balanced length scale and
+effective static stability length scale.
+"""
+function mixing_length(
+    params,
+    ustar::FT,
+    ᶜz::FT,
+    sfc_tke::FT,
+    ᶜ∂b∂z::FT,
+    ᶜtke::FT,
+    obukhov_length::FT,
+    ᶜshear²::FT,
+    ᶜPr::FT,
+    ᶜtke_exch::FT,
+) where {FT}
+
+    turbconv_params = CAP.turbconv_params(params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    c_d = TCP.tke_diss_coeff(turbconv_params)
+    smin_ub = TCP.smin_ub(turbconv_params)
+    smin_rm = TCP.smin_rm(turbconv_params)
+    l_max = TCP.l_max(turbconv_params)
+    c_b = TCP.static_stab_coeff(turbconv_params)
+    vkc = TCP.von_karman_const(turbconv_params)
+
+    # compute the l_W - the wall constraint mixing length
+    # which imposes an upper limit on the size of eddies near the surface
+    # kz scale (surface layer)
+    if obukhov_length < 0.0 #unstable
+        l_W =
+            vkc * ᶜz / (sqrt(sfc_tke / ustar / ustar) * c_m) *
+            min((1 - 100 * ᶜz / obukhov_length)^FT(0.2), 1 / vkc)
+    else # neutral or stable
+        l_W = vkc * ᶜz / (sqrt(sfc_tke / ustar / ustar) * c_m)
+    end
+
+    # compute l_TKE - the production-dissipation balanced length scale
+    a_pd = c_m * (ᶜshear² - ᶜ∂b∂z / ᶜPr) * sqrt(ᶜtke)
+    # Dissipation term
+    c_neg = c_d * ᶜtke * sqrt(ᶜtke)
+    if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
+        l_TKE = max(
+            -(ᶜtke_exch / 2 / a_pd) +
+            sqrt(ᶜtke_exch * ᶜtke_exch + 4 * a_pd * c_neg) / 2 / a_pd,
+            0,
+        )
+    elseif abs(a_pd) < eps(FT) && abs(ᶜtke_exch) > eps(FT)
+        l_TKE = c_neg / ᶜtke_exch
+    else
+        l_TKE = FT(0)
+    end
+
+    # compute l_N - the effective static stability length scale.
+    N_eff = sqrt(max(ᶜ∂b∂z, 0))
+    if N_eff > 0.0
+        l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_max)
+    else
+        l_N = l_max
+    end
+
+    # add limiters
+    l = SA.SVector(
+        (l_N < eps(FT) || l_N > l_max) ? l_max : l_N,
+        (l_TKE < eps(FT) || l_TKE > l_max) ? l_max : l_TKE,
+        (l_W < eps(FT) || l_W > l_max) ? l_max : l_W,
+    )
+    # get soft minimum
+    return lamb_smooth_minimum(l, smin_ub, smin_rm)
 end

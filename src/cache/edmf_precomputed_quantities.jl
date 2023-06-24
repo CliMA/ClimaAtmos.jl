@@ -15,6 +15,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     @assert energy_form isa TotalEnergy
     @assert !(moisture_model isa DryModel)
 
+    FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -22,8 +23,9 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
     (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
+    (; ᶜmixing_length, ᶜ∂b∂z, ᶜshear²) = p
     (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
-    (; buoyancy_flux) = p.sfc_conditions
+    (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
     @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
     @. ᶜρa⁰ = ρa⁰(Y.c)
@@ -129,7 +131,6 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         sgsʲs_ρaq_tot_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρaq_tot, 1))
 
-        FT = Spaces.undertype(axes(Y.c))
         @. sgsʲs_ρa_int_val =
             FT(0.1) * TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρae_tot_int_val =
@@ -162,6 +163,36 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             ᶜbuoyancy(params, ᶜρ_ref, ᶜρ⁰),
         )
     end
+
+    @. ᶜ∂b∂z = FT(1e-4)
+    @. ᶜshear² = FT(1e-4)
+    ᶜprandtl_nvec = p.ᶜtemp_scalar
+    @. ᶜprandtl_nvec = 1
+    ᶜtke_exch = p.ᶜtemp_scalar_2
+    @. ᶜtke_exch = 0
+    for j in 1:n
+        @. ᶜtke_exch +=
+            Y.c.sgsʲs.:($$j).ρa * ᶜentr_detrʲs.:($$j).detr / ᶜρa⁰ * (
+                1 / 2 *
+                (
+                    get_physical_w(ᶜuʲs.:($$j), ᶜlg) - get_physical_w(ᶜu⁰, ᶜlg)
+                )^2 - ᶜspecific⁰.tke
+            )
+    end
+
+    sfc_tke = Fields.level(ᶜspecific⁰.tke, 1)
+    @. ᶜmixing_length = mixing_length(
+        p.params,
+        ustar,
+        ᶜz,
+        sfc_tke,
+        ᶜ∂b∂z,
+        ᶜspecific⁰.tke,
+        obukhov_length,
+        ᶜshear²,
+        ᶜprandtl_nvec,
+        ᶜtke_exch,
+    )
 
     return nothing
 end

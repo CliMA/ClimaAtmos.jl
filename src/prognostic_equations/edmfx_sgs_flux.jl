@@ -21,13 +21,22 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     (; params, edmfx_upwinding, sfc_conditions) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs, ᶜh_totʲs, ᶜspecificʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜspecific⁰, ᶜts⁰) = p
+    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜspecific⁰, ᶜmixing_length) = p
     (; ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_flux
+
+        # diffusivity
+        turbconv_params = CAP.turbconv_params(params)
+        c_m = TCP.tke_ed_coeff(turbconv_params)
+        @. ᶜK_u[colidx] =
+            c_m * ᶜmixing_length[colidx] * sqrt(max(ᶜspecific⁰.tke[colidx], 0))
+        # TODO: add Prantdl number
+        @. ᶜK_h[colidx] = ᶜK_u[colidx]
+
         # mass flux
         ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
