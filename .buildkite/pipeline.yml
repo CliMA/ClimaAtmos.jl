@@ -68,10 +68,15 @@ steps:
         key: "gpu_explicit_barowave"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --job_id gpu_explicit_barowave --device CUDADevice"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_explicit_barowave --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
         artifact_paths: "gpu_explicit_barowave/*"
         agents:
           slurm_gpus: 1
+
+      - label: "CPU explicit baroclinic wave (gpu reference)"
+        key: "cpu_explicit_barowave"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cpu_explicit_barowave --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CPUSingleThreaded"
+        artifact_paths: "cpu_explicit_barowave/*"
 
       - label: "Performance benchmark step!"
         command:
