@@ -105,7 +105,7 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
                 Z = vort[lonidx, latidx, 1, 1] .* FT(1e5),
                 title = "Vorticity(× 10⁵): Day $day; z $(round(z[1])) m",
             )
-            CairoMakie.save(fig_dir * "/mbw_day$day.png", fig)
+            CairoMakie.save(fig_dir * "/dbw_day$day.png", fig)
         else
             @warn "day$day.0.nc DOES NOT EXIST!!!"
         end
