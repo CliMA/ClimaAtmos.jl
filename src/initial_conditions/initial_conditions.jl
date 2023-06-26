@@ -117,6 +117,7 @@ end
 
 """
     ScharProfile(; perturb = false)
+
 An `InitialCondition` with a prescribed Brunt-Vaisala Frequency
 """
 Base.@kwdef struct ScharProfile <: InitialCondition end
@@ -449,9 +450,9 @@ end
 ## EDMFX Test
 ##
 """
-    DryAdiabaticProfileEDMFX(; perturb = true)
+    MoistAdiabaticProfileEDMFX(; perturb = true)
 
-An `InitialCondition` with a dry adiabatic temperature profile, and with an optional
+An `InitialCondition` with a moist adiabatic temperature profile, and with an optional
 perturbation to the temperature.
 """
 Base.@kwdef struct MoistAdiabaticProfileEDMFX <: InitialCondition
@@ -497,6 +498,7 @@ end
 ##
 # TODO: Get rid of this
 const FunctionOrSpline = Union{Dierckx.Spline1D, Function}
+
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
 
@@ -546,7 +548,7 @@ struct Nieuwstadt <: InitialCondition end
 """
     GABLS
 
-The `InitialCondition` described in [???](@cite), but with a hydrostatically
+The `InitialCondition` described in [Kosovic2000](cite), but with a hydrostatically
 balanced pressure profile.
 """
 struct GABLS <: InitialCondition end
@@ -623,7 +625,7 @@ struct Soares <: InitialCondition end
 """
     Bomex
 
-The `InitialCondition` described in [???](@cite), but with a hydrostatically
+The `InitialCondition` described in [Holland1973](@cite), but with a hydrostatically
 balanced pressure profile.
 """
 struct Bomex <: InitialCondition end
@@ -738,7 +740,7 @@ end
 """
     Rico
 
-The `InitialCondition` described in [???](@cite), but with a hydrostatically
+The `InitialCondition` described in [Rauber2007](cite), but with a hydrostatically
 balanced pressure profile.
 """
 struct Rico <: InitialCondition end
