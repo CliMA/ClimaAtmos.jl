@@ -653,7 +653,6 @@ function get_comms_context(parsed_args)
     else
         ClimaComms.CPUSingleThreaded()
     end
-    @info "Running on $(nameof(typeof(device)))."
     comms_ctx = ClimaComms.context(device)
     ClimaComms.init(comms_ctx)
     if ClimaComms.iamroot(comms_ctx)
@@ -661,6 +660,7 @@ function get_comms_context(parsed_args)
     else
         Logging.global_logger(Logging.NullLogger())
     end
+    @info "Running on $(nameof(typeof(device)))."
     if comms_ctx isa ClimaComms.SingletonCommsContext
         @info "Setting up single-process ClimaAtmos run"
     else
