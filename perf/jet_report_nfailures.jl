@@ -10,6 +10,14 @@ macro n_failures(ex)
     )
 end
 
+macro jet_and_allocs(ex)
+    return quote
+        local n = @n_failures $(ex)
+        local _allocs = @allocated $(ex)
+        (; nfailures = n, allocs = _allocs)
+    end
+end
+
 import OrdinaryDiffEq
 import ClimaAtmos as CA
 n = Dict()
@@ -20,25 +28,30 @@ t = integrator.t;
 Yₜ = similar(Y);
 ref_Y = similar(Y);
 #! format: off
-n["step!"]                                       = @n_failures OrdinaryDiffEq.step!(integrator);
-n["limited_tendency!"]                           = @n_failures CA.limited_tendency!(Yₜ, Y, p, t);
-n["horizontal_advection_tendency!"]              = @n_failures CA.horizontal_advection_tendency!(Yₜ, Y, p, t);
-n["horizontal_tracer_advection_tendency!"]       = @n_failures CA.horizontal_tracer_advection_tendency!(Yₜ, Y, p, t);
-n["explicit_vertical_advection_tendency!"]       = @n_failures CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t);
-n["hyperdiffusion_tendency!"]                    = @n_failures CA.hyperdiffusion_tendency!(Yₜ, Y, p, t);
-n["tracer_hyperdiffusion_tendency!"]             = @n_failures CA.tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t);
-n["remaining_tendency!"]                         = @n_failures CA.remaining_tendency!(Yₜ, Y, p, t);
-n["additional_tendency!"]                        = @n_failures CA.additional_tendency!(Yₜ, Y, p, t);
-n["vertical_diffusion_boundary_layer_tendency!"] = @n_failures CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t);
-n["implicit_tendency!"]                          = @n_failures CA.implicit_tendency!(Yₜ, Y, p, t);
-n["set_precomputed_quantities!"]                 = @n_failures CA.set_precomputed_quantities!(Y, p, t);
-n["limiters_func!"]                              = @n_failures CA.limiters_func!(Y, p, t, ref_Y);
-n["update_surface_conditions!"]                  = @n_failures CA.SurfaceConditions.update_surface_conditions!(Y, p, t);
-n["dss!"]                                        = @n_failures CA.dss!(Y, p, t);
-n["fill_with_nans!"]                             = @n_failures CA.fill_with_nans!(p);
+n["dss_callback!"]                               = @jet_and_allocs CA.dss_callback!(integrator);
+# n["flux_accumulation!"]                          = @jet_and_allocs CA.flux_accumulation!(integrator);
+n["rrtmgp_model_callback!"]                      = @jet_and_allocs CA.rrtmgp_model_callback!(integrator);
+n["save_to_disk_func"]                           = @jet_and_allocs CA.save_to_disk_func(integrator);
+n["save_restart_func"]                           = @jet_and_allocs CA.save_restart_func(integrator);
+n["step!"]                                       = @jet_and_allocs OrdinaryDiffEq.step!(integrator);
+n["limited_tendency!"]                           = @jet_and_allocs CA.limited_tendency!(Yₜ, Y, p, t);
+n["horizontal_advection_tendency!"]              = @jet_and_allocs CA.horizontal_advection_tendency!(Yₜ, Y, p, t);
+n["horizontal_tracer_advection_tendency!"]       = @jet_and_allocs CA.horizontal_tracer_advection_tendency!(Yₜ, Y, p, t);
+n["explicit_vertical_advection_tendency!"]       = @jet_and_allocs CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t);
+n["hyperdiffusion_tendency!"]                    = @jet_and_allocs CA.hyperdiffusion_tendency!(Yₜ, Y, p, t);
+n["tracer_hyperdiffusion_tendency!"]             = @jet_and_allocs CA.tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t);
+n["remaining_tendency!"]                         = @jet_and_allocs CA.remaining_tendency!(Yₜ, Y, p, t);
+n["additional_tendency!"]                        = @jet_and_allocs CA.additional_tendency!(Yₜ, Y, p, t);
+n["vertical_diffusion_boundary_layer_tendency!"] = @jet_and_allocs CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t);
+n["implicit_tendency!"]                          = @jet_and_allocs CA.implicit_tendency!(Yₜ, Y, p, t);
+n["set_precomputed_quantities!"]                 = @jet_and_allocs CA.set_precomputed_quantities!(Y, p, t);
+n["limiters_func!"]                              = @jet_and_allocs CA.limiters_func!(Y, p, t, ref_Y);
+n["update_surface_conditions!"]                  = @jet_and_allocs CA.SurfaceConditions.update_surface_conditions!(Y, p, t);
+n["dss!"]                                        = @jet_and_allocs CA.dss!(Y, p, t);
+n["fill_with_nans!"]                             = @jet_and_allocs CA.fill_with_nans!(p);
 #! format: on
 
-n = filter(x -> x.second ≠ 0, n)
-@info "n-jet failures (excluding n=0):"
+n = filter(x -> x.second.nfailures ≠ 0 || x.second.allocs ≠ 0, n)
+@info "n-jet failures (excluding n=0), @allocated:"
 show(IOContext(stdout, :limit => false), MIME"text/plain"(), n)
 println()

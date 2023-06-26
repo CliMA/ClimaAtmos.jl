@@ -51,7 +51,7 @@ function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     )
 end
 
-function dss_callback(integrator)
+function dss_callback!(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
     if integrator.p.do_dss
@@ -64,6 +64,7 @@ function dss_callback(integrator)
             Spaces.weighted_dss_ghost2!(Y.f, ghost_buffer.f)
         end
     end
+    return nothing
     # ODE.u_modified!(integrator, false) # TODO: try this
 end
 
@@ -72,6 +73,7 @@ horizontal_integral_at_boundary(f, lev) = sum(
 )
 
 function flux_accumulation!(integrator)
+    integrator.p.radiation_model isa RRTMGPI.RRTMGPModel || return nothing
     Y = integrator.u
     p = integrator.p
     if !isnothing(p.radiation_model)
@@ -83,6 +85,7 @@ function flux_accumulation!(integrator)
         net_energy_flux_sfc[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
     end
+    return nothing
 end
 
 function turb_conv_affect_filter!(integrator)
@@ -108,6 +111,7 @@ function turb_conv_affect_filter!(integrator)
 end
 
 function rrtmgp_model_callback!(integrator)
+    integrator.p.radiation_model isa RRTMGPI.RRTMGPModel || return nothing
     Y = integrator.u
     p = integrator.p
     t = integrator.t
@@ -241,6 +245,7 @@ function rrtmgp_model_callback!(integrator)
 
     RRTMGPI.update_fluxes!(radiation_model)
     RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
+    return nothing
 end
 
 function save_to_disk_func(integrator)
