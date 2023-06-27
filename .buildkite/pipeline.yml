@@ -857,7 +857,7 @@ steps:
           slurm_mem: 20GB
 
       - label: ":fire: Flame graph: perf target (Callbacks)"
-        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_callbacks --dt_save_to_sol 1secs --dt_save_restart 1secs --dt_rad 1secs"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_target_callbacks --dt_save_to_sol 1secs --dt_save_to_disk 1secs --dt_save_restart 1secs --dt_rad 1secs"
         artifact_paths: "flame_perf_target_callbacks/*"
         agents:
           slurm_mem: 20GB

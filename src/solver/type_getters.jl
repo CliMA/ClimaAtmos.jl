@@ -493,7 +493,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
 
     dss_cb = if startswith(parsed_args["ode_algo"], "ODE.")
-        call_every_n_steps(dss_callback)
+        call_every_n_steps(dss_callback!)
     else
         nothing
     end
