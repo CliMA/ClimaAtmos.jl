@@ -31,6 +31,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
             zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
         end
     end
+    return nothing
 end
 
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
@@ -127,4 +128,5 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             end
         end
     end
+    return nothing
 end

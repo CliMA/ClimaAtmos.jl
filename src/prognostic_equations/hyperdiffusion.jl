@@ -253,4 +253,5 @@ function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             end
         end
     end
+    return nothing
 end

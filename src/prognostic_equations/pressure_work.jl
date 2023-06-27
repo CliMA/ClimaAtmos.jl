@@ -11,6 +11,7 @@ function pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::EDMFX)
                 ᶜp[colidx] / Y.c.ρ[colidx] * Yₜ.c.sgsʲs.:($$j).ρa[colidx]
         end
     end
+    return nothing
 end
 
 pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::Any) = nothing
