@@ -2,7 +2,7 @@ import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 config = CA.AtmosConfig(;
-    parsed_args = CA.AtmosTargetConfig(; target_job = "edmfx_adv_test_box"),
+    parsed_args = CA.AtmosTargetParsedArgs(; target_job = "edmfx_adv_test_box"),
 )
 integrator = CA.get_integrator(config)
 

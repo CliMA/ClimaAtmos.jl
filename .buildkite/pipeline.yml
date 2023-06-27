@@ -62,29 +62,6 @@ steps:
       - label: ":computer: Ensure mse tables are reset when necessary"
         command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
 
-  - group: "GPU"
-    steps:
-      - label: "GPU explicit baroclinic wave"
-        key: "gpu_explicit_barowave"
-        command:
-          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_explicit_barowave --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
-        artifact_paths: "gpu_explicit_barowave/*"
-        agents:
-          slurm_gpus: 1
-
-      - label: "CPU explicit baroclinic wave (gpu reference)"
-        key: "cpu_explicit_barowave"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cpu_explicit_barowave --ode_algo SSP33ShuOsher --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CPUSingleThreaded"
-        artifact_paths: "cpu_explicit_barowave/*"
-
-      - label: "Performance benchmark step!"
-        command:
-          - julia --color=yes --project=examples perf/benchmark_step.jl --h_elem 6
-        artifact_paths: "perf_benchmark_step/*"
-        agents:
-          slurm_gpus: 1
-
   - group: "Gravity wave"
     steps:
 
@@ -808,6 +785,36 @@ steps:
         artifact_paths: "edmf_bomex_consistency/*"
         agents:
           slurm_mem: 20GB
+
+  - group: "GPU Performance"
+    steps:
+
+      - label: "Perf: GPU explicit baro wave"
+        key: "gpu_explicit_barowave"
+        command:
+          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_explicit_barowave --ode_algo SSP33ShuOsher --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
+        artifact_paths: "gpu_explicit_barowave/*"
+        agents:
+          slurm_gpus: 1
+
+      - label: "Perf: CPU explicit baro wave"
+        key: "cpu_explicit_barowave"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cpu_explicit_barowave --ode_algo SSP33ShuOsher --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CPUSingleThreaded"
+        artifact_paths: "cpu_explicit_barowave/*"
+
+      - label: "Perf: GPU benchmark step!"
+        command:
+          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
+          - "julia --color=yes --project=examples perf/benchmark_step.jl"
+        artifact_paths: "gpu_benchmark_step/*"
+        agents:
+          slurm_gpus: 1
+
+      - label: "Perf: CPU benchmark step!"
+        command: "julia --color=yes --project=examples perf/benchmark_step.jl --device CPUSingleThreaded"
+        artifact_paths: "cpu_benchmark_step/*"
+
 
   - group: "Performance"
     steps:

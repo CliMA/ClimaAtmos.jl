@@ -242,7 +242,7 @@ end
 
 import ClimaCore
 
-function AtmosTargetConfig(
+function AtmosTargetParsedArgs(
     s = argparse_settings();
     target_job,
     dict = parsed_args_per_job_id(; filter_name = "driver.jl"),
@@ -269,7 +269,7 @@ end
 
 
 """
-    AtmosPerfConfig()
+    AtmosPerfParsedArgs()
 
 Define an atmos config for performance runs, and allows
 options to be overridden in several ways. In short the
@@ -287,10 +287,11 @@ Launch with `julia --project=perf/`
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
-config = CA.AtmosPerfConfig(;moist="dry")
+parsed_args = CA.AtmosPerfParsedArgs(;moist="dry")
+config = CA.AtmosConfig(;parsed_args)
 ```
 """
-function AtmosPerfConfig(s = argparse_settings())
+function AtmosPerfParsedArgs(s = argparse_settings())
     @info "Using base performance parameters + provided CL arguments."
     parsed_args_defaults = cli_defaults(s)
     dict = parsed_args_per_job_id(; filter_name = "driver.jl")
@@ -318,8 +319,11 @@ function AtmosPerfConfig(s = argparse_settings())
         parsed_args_perf_target,
         parsed_args_prescribed,
     )
-    return AtmosConfig(s; parsed_args)
+    return parsed_args
 end
+
+AtmosPerfConfig(s = argparse_settings()) =
+    AtmosConfig(s; parsed_args = AtmosPerfParsedArgs(s))
 
 function AtmosConfig(
     s = argparse_settings();
