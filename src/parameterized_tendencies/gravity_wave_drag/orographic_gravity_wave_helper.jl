@@ -13,7 +13,7 @@ using Statistics: mean
     - earth_radius: radius of the Earth
 """
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
-    println("comute T tensor")
+    @info "Comuting T tensor..."
     FT = eltype(elev)
     bfscale = FT(1e-2)
 
@@ -184,7 +184,7 @@ end
     - earth_radius: radius of the Earth
 """
 function calc_hpoz_latlon(elev, lon, lat, earth_radius)
-    println("compute hmax")
+    @info "computing hmax..."
     FT = eltype(elev)
 
     # remove ocean topography

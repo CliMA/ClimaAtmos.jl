@@ -869,6 +869,12 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":fire: Flame graph: gravity wave"
+        command: "julia --color=yes --project=perf perf/flame.jl --job_id flame_perf_gw --z_max 45e3 --z_elem 25 --dz_bottom 300 --idealized_insolation false --vert_diff true --surface_setup DefaultMoninObukhov --moist equil --rad allskywithclear --non_orographic_gravity_wave true --orographic_gravity_wave raw_topo --precip_model 0M --rayleigh_sponge true --alpha_rayleigh_uh 0 --zd_rayleigh 30e3 --dt 1secs --t_end 1mins --dt_save_to_disk Inf"
+        artifact_paths: "flame_perf_gw/*"
+        agents:
+          slurm_mem: 20GB
+
       # Inference
       - label: ":rocket: JET n-failures (inference)"
         command: "julia --color=yes --project=perf perf/jet_test_nfailures.jl --job_id jet_n_failures --target_job sphere_baroclinic_wave_rhoe_equilmoist_edmf --moist dry --precip_model nothing --rad nothing"
