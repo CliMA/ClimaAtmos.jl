@@ -35,6 +35,7 @@ function set_diagnostic_edmfx_draft_quantities_level!(
         ) / 2
     @. ts = TD.PhaseEquil_phq(thermo_params, p, h_tot - K - Φ, q_tot)
     @. ρ = TD.air_density(thermo_params, ts)
+    return nothing
 end
 
 function set_diagnostic_edmfx_env_quantities_level!(
@@ -52,6 +53,7 @@ function set_diagnostic_edmfx_env_quantities_level!(
         ρ_level,
         turbconv_model,
     )
+    return nothing
 end
 
 """

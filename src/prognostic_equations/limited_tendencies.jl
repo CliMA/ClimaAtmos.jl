@@ -19,6 +19,7 @@ function limited_tendency!(Yₜ, Y, p, t)
     NVTX.@range "tracer hyperdiffusion tendency" color = colorant"yellow" begin
         tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
+    return nothing
 end
 
 function limiters_func!(Y, p, t, ref_Y)
@@ -43,4 +44,5 @@ function limiters_func!(Y, p, t, ref_Y)
             end
         end
     end
+    return nothing
 end

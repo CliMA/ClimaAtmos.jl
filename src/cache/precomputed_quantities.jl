@@ -103,6 +103,7 @@ end
 function set_ᶠuₕ³!(ᶠuₕ³, Y)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     @. ᶠuₕ³ = ᶠwinterp(Y.c.ρ * ᶜJ, CT3(Y.c.uₕ))
+    return nothing
 end
 
 """
@@ -124,6 +125,7 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
             @. sfc_u₃ʲ = sfc_u₃
         end
     end
+    return nothing
 end
 
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
@@ -132,6 +134,7 @@ function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ�
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
     compute_kinetic!(ᶜK, ᶜuₕ, ᶠu₃)
+    return nothing
 end
 
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
@@ -144,6 +147,7 @@ function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
         Y.f.u₃,
         turbconv_model,
     )
+    return nothing
 end
 
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
@@ -153,6 +157,7 @@ function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
     end
+    return nothing
 end
 
 function thermo_state(

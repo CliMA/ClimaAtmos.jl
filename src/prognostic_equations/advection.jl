@@ -45,6 +45,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp - ᶜp_ref) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    return nothing
 end
 
 function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
@@ -67,6 +68,7 @@ function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             end
         end
     end
+    return nothing
 end
 
 function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
@@ -164,4 +166,5 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             end
         end
     end
+    return nothing
 end
