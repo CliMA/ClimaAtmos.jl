@@ -319,7 +319,7 @@ function AtmosPerfParsedArgs(s = argparse_settings())
         parsed_args_perf_target,
         parsed_args_prescribed,
     )
-    return AtmosConfig(s; parsed_args)
+    return parsed_args
 end
 
 AtmosPerfConfig(s = argparse_settings()) =

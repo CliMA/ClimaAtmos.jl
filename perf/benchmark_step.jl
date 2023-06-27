@@ -16,8 +16,6 @@ Random.seed!(1234)
 import ClimaAtmos as CA
 
 parsed_args = CA.AtmosTargetParsedArgs(; target_job = "gpu_explicit_barowave");
-parsed_args["z_elem"] = 25
-parsed_args["h_elem"] = 12
 # parsed_args["device"] = "CPUSingleThreaded"; # uncomment to run on cpu
 config = CA.AtmosConfig(; parsed_args)
 
