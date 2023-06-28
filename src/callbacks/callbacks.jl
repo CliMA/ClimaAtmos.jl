@@ -245,11 +245,10 @@ function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
-function save_to_disk_func(integrator)
+function compute_diagnostics(integrator)
     (; t, u, p) = integrator
     Y = u
     (; params) = p
-    (; output_dir) = p.simulation
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -487,12 +486,20 @@ function save_to_disk_func(integrator)
         rad_clear_diagnostic,
         turbulence_convection_diagnostic,
     )
+    return diagnostic
+end
 
+function save_to_disk_func(integrator)
+    (; t, u, p) = integrator
+    Y = u
+    diagnostic = compute_diagnostics(integrator)
+
+    (; output_dir) = p.simulation
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving diagnostics to HDF5 file on day $day second $sec"
     output_file = joinpath(output_dir, "day$day.$sec.hdf5")
-    hdfwriter = InputOutput.HDF5Writer(output_file, integrator.p.comms_ctx)
+    hdfwriter = InputOutput.HDF5Writer(output_file, p.comms_ctx)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     InputOutput.write!(
