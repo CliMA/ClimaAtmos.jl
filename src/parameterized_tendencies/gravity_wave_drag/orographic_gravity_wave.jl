@@ -35,8 +35,19 @@ function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
         elevation_rll = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
         topo_info = compute_OGW_info(Y, elevation_rll, radius, γ, h_frac)
     end
+    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
+    uforcing = zeros(axes(Y.c))
+    vforcing = zeros(axes(Y.c))
+    ᶜN = similar(Y.c.ρ)
+    ᶠN = ᶠinterp.(ᶜN)
 
     return (;
+        u_phy,
+        v_phy,
+        uforcing,
+        vforcing,
         Fr_crit = Fr_crit,
         topo_γ = γ,
         topo_β = β,
@@ -60,13 +71,20 @@ function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
         topo_base_Vτ = similar(Fields.level(Y.c.ρ, 1)),
         topo_k_pbl = similar(Fields.level(Y.c.ρ, 1)),
         topo_info = topo_info,
-        ᶜN = similar(Fields.level(Y.c.ρ, 1)),
+        ᶜN,
+        ᶠN,
         ᶜdTdz = similar(Y.c.ρ),
     )
 
 end
 
-function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
+function orographic_gravity_wave_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::OrographicGravityWave{FT},
+) where {FT}
     (; params, ᶜts, ᶜT, ᶜdTdz, ᶜp) = p
     (;
         topo_k_pbl,
@@ -80,12 +98,12 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     ) = p
     (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) = p
     (; hmax, hmin, t11, t12, t21, t22) = p.topo_info
-    FT = Spaces.undertype(axes(Y.c))
+    (; ᶠN, ᶜN) = p
 
     # parameters
     thermo_params = CAP.thermodynamics_params(params)
-    grav = FT(CAP.grav(params))
-    cp_d = FT(CAP.cp_d(params))
+    grav = CAP.grav(params)
+    cp_d = CAP.cp_d(params)
 
     # z 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -104,8 +122,9 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     ᶜN = @. ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
 
     # prepare physical uv input variables for gravity_wave_forcing()
-    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+    (; uforcing, vforcing, u_phy, v_phy) = p
+    @. u_phy = Geometry.UVVector(Y.c.uₕ).components.data.:1
+    @. v_phy = Geometry.UVVector(Y.c.uₕ).components.data.:2
 
     # compute base flux at k_pbl
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
@@ -162,8 +181,8 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     end
 
     # a place holder to store physical forcing on uv
-    uforcing = zeros(axes(u_phy))
-    vforcing = zeros(axes(v_phy))
+    @. uforcing = 0
+    @. vforcing = 0
 
     # compute drag tendencies due to propagating part
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
@@ -205,6 +224,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     # convert to covariant vector and add to tendency
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
+    return nothing
 end
 
 function calc_nonpropagating_forcing!(
@@ -252,7 +272,7 @@ function calc_nonpropagating_forcing!(
     # compute drag
     @. ᶜuforcing += grav * τ_x * τ_np / τ_l / wtsum * weights
     @. ᶜvforcing += grav * τ_y * τ_np / τ_l / wtsum * weights
-
+    return nothing
 end
 
 function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_sat, ᶜρ)

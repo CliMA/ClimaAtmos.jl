@@ -87,8 +87,20 @@ function non_orographic_gravity_wave_cache(
             ),
         ),
     )
+    # prepare physical uv input variables for gravity_wave_forcing()
+    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
+    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+
+    # a place holder to store physical forcing on uv
+    uforcing = ones(axes(u_phy))
+    vforcing = ones(axes(u_phy))
 
     return (;
+        uforcing,
+        vforcing,
+        u_phy,
+        v_phy,
+        source_level = similar(Fields.level(Y.c.ρ, 1)),
         gw_source_pressure = source_pressure,
         gw_damp_pressure = damp_pressure,
         gw_source_ampl = source_ampl,
@@ -153,7 +165,7 @@ function non_orographic_gravity_wave_tendency!(
 
     if model_config isa SingleColumnModel
         # source level: the index of the level that is closest to the source height
-        source_level = similar(Fields.level(Y.c.ρ, 1))
+        (; source_level) = p
         Fields.bycolumn(axes(ᶜρ)) do colidx
             parent(source_level[colidx]) .=
                 argmin(abs.(parent(ᶜz[colidx]) .- gw_source_height))[1]
@@ -166,7 +178,7 @@ function non_orographic_gravity_wave_tendency!(
     elseif model_config isa SphericalModel
         (; ᶜp) = p
         # source level: the index of the highest level whose pressure is higher than source pressure
-        source_level = similar(Fields.level(Y.c.ρ, 1))
+        (; source_level) = p
         Fields.bycolumn(axes(ᶜρ)) do colidx
             parent(source_level[colidx]) .=
                 findlast(parent(ᶜp[colidx]) .> gw_source_pressure)[1]
@@ -184,12 +196,14 @@ function non_orographic_gravity_wave_tendency!(
     end
 
     # prepare physical uv input variables for gravity_wave_forcing()
-    u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+    (; uforcing, vforcing, u_phy, v_phy) = p
+    @. u_phy = Geometry.UVVector(Y.c.uₕ).components.data.:1
+    @. v_phy = Geometry.UVVector(Y.c.uₕ).components.data.:2
 
     # a place holder to store physical forcing on uv
-    uforcing = ones(axes(u_phy))
-    vforcing = ones(axes(u_phy))
+    @. uforcing = 0
+    @. vforcing = 0
+
 
     # GW parameterization applied bycolume
     Fields.bycolumn(axes(ᶜρ)) do colidx
