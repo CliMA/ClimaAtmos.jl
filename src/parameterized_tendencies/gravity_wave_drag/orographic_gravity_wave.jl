@@ -170,7 +170,6 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
         calc_propagate_forcing!(
             uforcing[colidx],
             vforcing[colidx],
-            p,
             topo_τ_x[colidx],
             topo_τ_y[colidx],
             topo_τ_l[colidx],
@@ -256,19 +255,11 @@ function calc_nonpropagating_forcing!(
 
 end
 
-function calc_propagate_forcing!(
-    ᶜuforcing,
-    ᶜvforcing,
-    p,
-    τ_x,
-    τ_y,
-    τ_l,
-    τ_sat,
-    ᶜρ,
-)
-    dτdz = ᶜddz(τ_sat, p)
+function calc_propagate_forcing!(ᶜuforcing, ᶜvforcing, τ_x, τ_y, τ_l, τ_sat, ᶜρ)
+    dτdz = ᶜddz(τ_sat)
     @. ᶜuforcing -= τ_x / τ_l / ᶜρ * dτdz
     @. ᶜvforcing -= τ_y / τ_l / ᶜρ * dτdz
+    return nothing
 end
 
 function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
@@ -365,7 +356,7 @@ function calc_base_flux!(
         )
 
     @. τ_np = τ_np / max(Fr_crit, Fr_max) # use_mg_scaling = .true. in GFDL code
-
+    return nothing
 end
 
 function calc_saturation_profile!(
@@ -450,12 +441,13 @@ function calc_saturation_profile!(
             parent(τ_sat)[end] .* (parent(ᶠp)[1] .- ᶠp) ./
             (parent(ᶠp)[1] .- parent(ᶠp)[end])
     end
+    return nothing
 
 end
 
 ᶜd2dz2(ᶜscalar, p) =
     Geometry.WVector.(ᶜgradᵥ.(ᶠddz(ᶜscalar, p))).components.data.:1
 
-ᶜddz(ᶠscalar, p) = Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
+ᶜddz(ᶠscalar) = Geometry.WVector.(ᶜgradᵥ.(ᶠscalar)).components.data.:1
 
 ᶠddz(ᶜscalar, p) = Geometry.WVector.(ᶠgradᵥ.(ᶜscalar)).components.data.:1
