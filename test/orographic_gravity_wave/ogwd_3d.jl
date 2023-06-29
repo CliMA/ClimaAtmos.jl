@@ -309,7 +309,6 @@ Fields.bycolumn(axes(Y.c.ρ)) do colidx
     CA.calc_propagate_forcing!(
         uforcing[colidx],
         vforcing[colidx],
-        p,
         topo_τ_x[colidx],
         topo_τ_y[colidx],
         topo_τ_l[colidx],

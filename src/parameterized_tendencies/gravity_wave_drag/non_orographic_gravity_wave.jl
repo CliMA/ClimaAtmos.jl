@@ -234,7 +234,7 @@ function non_orographic_gravity_wave_tendency!(
     # physical uv forcing converted to Covariant12Vector and added up to uₕ tendencies
     @. Yₜ.c.uₕ +=
         Geometry.Covariant12Vector.(Geometry.UVVector.(uforcing, vforcing))
-
+    return nothing
 end
 
 function non_orographic_gravity_wave_forcing(
