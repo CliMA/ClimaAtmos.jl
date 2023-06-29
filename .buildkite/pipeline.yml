@@ -438,7 +438,7 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_bomex_box
           --initial_condition Bomex --subsidence Bomex --edmf_coriolis Bomex --ls_adv Bomex --surface_setup Bomex
           --turbconv diagnostic_edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
-          --moist equil --vert_diff true --C_E 0.044
+          --moist equil
           --config box --hyperdiff true --kappa_4 1e12
           --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 60 --z_max 3e3 --z_stretch false
           --dt 10secs --t_end 6hours --dt_save_to_disk 10mins
@@ -525,7 +525,6 @@ steps:
           --turbconv edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
           --moist equil --precip_model 0M
           --ode_algo SSP33ShuOsher --apply_limiter false --dt 1secs --t_end 6mins
-          --vert_diff true --C_E 0.044
           --dt_save_to_disk 30secs
           --reference_job_id sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
