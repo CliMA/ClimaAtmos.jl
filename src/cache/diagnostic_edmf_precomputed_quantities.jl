@@ -298,16 +298,27 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                     (entr_detrʲ_prev_level.entr - entr_detrʲ_prev_level.detr)
                 )
 
+            # Using constant exponents in broadcasts allocate, so we use
+            # local_geometry_halflevel.J * local_geometry_halflevel.J instead.
+            # See ClimaCore.jl issue #1126.
             @. u³ʲ_datau³ʲ_data =
-                (1 / local_geometry_halflevel.J^2) * (
-                    local_geometry_prev_halflevel.J^2 *
+                (
+                    1 /
+                    (local_geometry_halflevel.J * local_geometry_halflevel.J)
+                ) * (
+                    local_geometry_prev_halflevel.J *
+                    local_geometry_prev_halflevel.J *
                     u³ʲ_data_prev_halflevel *
                     u³ʲ_data_prev_halflevel
                 )
 
             @. u³ʲ_datau³ʲ_data -=
-                (1 / local_geometry_halflevel.J^2) * (
-                    local_geometry_prev_level.J^2 *
+                (
+                    1 /
+                    (local_geometry_halflevel.J * local_geometry_halflevel.J)
+                ) * (
+                    local_geometry_prev_level.J *
+                    local_geometry_prev_level.J *
                     FT(2) *
                     (
                         ∇Φ³_prev_level_data * (ρʲ_prev_level - ρ_prev_level) /
@@ -316,28 +327,33 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                 )
 
             @. u³ʲ_datau³ʲ_data +=
-                (1 / local_geometry_halflevel.J^2) * (
-                    local_geometry_prev_level.J^2 *
+                (
+                    1 /
+                    (local_geometry_halflevel.J * local_geometry_halflevel.J)
+                ) * (
+                    local_geometry_prev_level.J *
+                    local_geometry_prev_level.J *
                     FT(2) *
                     (
                         entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
                         entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
                     )
                 )
-
+            scale_factor = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
-                    ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
+                    u³ʲ_datau³ʲ_data <
+                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
+                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
                 ),
                 CT3(FT(0)),
                 CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
             )
-
             @. ρaʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
-                    ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
+                    u³ʲ_datau³ʲ_data <
+                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
+                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
                 ),
                 FT(0),
                 ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
@@ -361,8 +377,9 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                 )
             @. h_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
-                    ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
+                    u³ʲ_datau³ʲ_data <
+                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
+                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
                 ),
                 h_tot_level,
                 ρaʲu³ʲ_datah_tot / ρaʲu³ʲ_data,
@@ -386,8 +403,9 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
                 )
             @. q_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level^2) ||
-                    ρaʲu³ʲ_data < (FT(1e-6) / ∂x³∂ξ³_level)
+                    u³ʲ_datau³ʲ_data <
+                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
+                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
                 ),
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
