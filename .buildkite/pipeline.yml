@@ -1,7 +1,7 @@
 agents:
   queue: central
   slurm_mem: 8G
-  modules: julia/1.8.5 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415
+  modules: julia/1.8.5 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2022.2.1
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -793,26 +793,26 @@ steps:
         key: "gpu_explicit_barowave"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_explicit_barowave --ode_algo SSP33ShuOsher --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_explicit_barowave/report julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_explicit_barowave --ode_algo SSP33ShuOsher --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
         artifact_paths: "gpu_explicit_barowave/*"
         agents:
           slurm_gpus: 1
 
       - label: "Perf: CPU explicit baro wave"
         key: "cpu_explicit_barowave"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cpu_explicit_barowave --ode_algo SSP33ShuOsher --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CPUSingleThreaded"
+        command: "nsys profile --trace=nvtx,cuda --output=cpu_explicit_barowave/report julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cpu_explicit_barowave --ode_algo SSP33ShuOsher --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CPUSingleThreaded"
         artifact_paths: "cpu_explicit_barowave/*"
 
       - label: "Perf: GPU benchmark step!"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples perf/benchmark_step.jl"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl"
         artifact_paths: "gpu_benchmark_step/*"
         agents:
           slurm_gpus: 1
 
       - label: "Perf: CPU benchmark step!"
-        command: "julia --color=yes --project=examples perf/benchmark_step.jl --device CPUSingleThreaded"
+        command: "nsys profile --trace=nvtx,cuda --output=cpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl --device CPUSingleThreaded"
         artifact_paths: "cpu_benchmark_step/*"
 
 
