@@ -27,8 +27,11 @@ function non_orographic_gravity_wave_cache(
 
     nc = Int(floor(FT(2 * cmax / dc + 1)))
     c = [FT((n - 1) * dc - cmax) for n in 1:nc]
+    cspace = axes(Y.c)
+    ᶜdTdz = zeros(Geometry.WVector{FT}, cspace)
 
     return (;
+        ᶜdTdz,
         gw_source_height = source_height,
         gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_Bw = Bw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
@@ -40,7 +43,6 @@ function non_orographic_gravity_wave_cache(
         gw_flag = ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
-        ᶜdTdz = similar(Y.c.ρ),
     )
 end
 
@@ -87,7 +89,8 @@ function non_orographic_gravity_wave_cache(
             ),
         ),
     )
-
+    cspace = axes(Y.c)
+    ᶜdTdz = zeros(Geometry.WVector{FT}, cspace)
     return (;
         gw_source_pressure = source_pressure,
         gw_damp_pressure = damp_pressure,
@@ -101,7 +104,6 @@ function non_orographic_gravity_wave_cache(
         gw_flag = gw_flag,
         gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
-        ᶜdTdz = similar(Y.c.ρ),
     )
 end
 
@@ -141,10 +143,11 @@ function non_orographic_gravity_wave_tendency!(
     # compute buoyancy frequency
     @. ᶜT = TD.air_temperature(thermo_params, ᶜts)
 
-    parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
+    @. ᶜdTdz = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))
 
-    ᶜbuoyancy_frequency =
-        @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts))
+    wcomponent(x::Geometry.WVector) = x.w
+    ᶜbuoyancy_frequency = @. (grav / ᶜT) *
+       (wcomponent(ᶜdTdz) + grav / TD.cp_m(thermo_params, ᶜts))
     ᶜbuoyancy_frequency = @. ifelse(
         ᶜbuoyancy_frequency < FT(2.5e-5),
         FT(sqrt(2.5e-5)),

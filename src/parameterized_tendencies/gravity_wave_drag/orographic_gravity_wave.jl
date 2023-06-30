@@ -99,8 +99,10 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     end
 
     # buoyancy frequency at cell centers
-    parent(ᶜdTdz) .= parent(Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))))
-    ᶜN = @. (grav / ᶜT) * (ᶜdTdz + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
+    @. ᶜdTdz = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))
+    wcomponent(x::Geometry.WVector) = x.w
+    ᶜN = @. (grav / ᶜT) *
+       (wcomponent(ᶜdTdz) + grav / TD.cp_m(thermo_params, ᶜts)) # this is actually ᶜN^2
     ᶜN = @. ifelse(ᶜN < eps(FT), sqrt(eps(FT)), sqrt(abs(ᶜN))) # to avoid small numbers
 
     # prepare physical uv input variables for gravity_wave_forcing()
