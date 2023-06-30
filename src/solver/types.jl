@@ -53,7 +53,7 @@ Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     dc::FT = 0.6
     cmax::FT = 99.6
     c0::FT = 0
-    nk::FT = 1
+    nk::Int = 1
     cw::FT = 40.0
     cw_tropics::FT = 40.0
     cn::FT = 40.0
@@ -66,6 +66,19 @@ Base.@kwdef struct NonOrographyGravityWave{FT} <: AbstractGravityWave
     dϕ_n::FT = 5
     dϕ_s::FT = -5
 end
+nk(gw::NonOrographyGravityWave) = gw.nk
+
+function c_coeff(gw::NonOrographyGravityWave{FT}) where {FT}
+    (; dc, cmax) = gw
+    nc = Int(floor(FT(2 * cmax / dc + 1)))
+    return [FT((n - 1) * dc - cmax) for n in 1:nc]
+end
+
+function horizontal_wavelength(gw::NonOrographyGravityWave{FT}) where {FT}
+    # TODO: promote to FT
+    return [2.0 * π / ((30.0 * (10.0^n)) * 1.e3) for n in 1:nk(gw)]
+end
+
 
 Base.@kwdef struct OrographicGravityWave{FT, S} <: AbstractGravityWave
     γ::FT = 0.4

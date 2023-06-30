@@ -23,22 +23,15 @@ function non_orographic_gravity_wave_cache(
     Y,
 )
     FT = Spaces.undertype(axes(Y.c))
-    (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
-
-    nc = Int(floor(FT(2 * cmax / dc + 1)))
-    c = [FT((n - 1) * dc - cmax) for n in 1:nc]
+    (; Bw, Bn, Bt_0, cw, cn) = gw
 
     return (;
-        gw_source_height = source_height,
         gw_source_ampl = Bt_0 .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_Bw = Bw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_Bn = Bn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_c = c,
         gw_cw = cw .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
         gw_cn = cn .* ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_c0 = c0,
         gw_flag = ones(FT, axes(Fields.level(Y.c.ρ, 1))),
-        gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
     )
@@ -51,11 +44,8 @@ function non_orographic_gravity_wave_cache(
 )
 
     FT = Spaces.undertype(axes(Y.c))
-    (; source_pressure, damp_pressure, Bw, Bn, Bt_0, Bt_n, Bt_s, Bt_eq) = gw
-    (; ϕ0_s, ϕ0_n, dϕ_n, dϕ_s, dc, cmax, c0, nk, cw, cw_tropics, cn) = gw
-
-    nc = Int(floor(FT(2 * cmax / dc + 1)))
-    c = [FT((n - 1) * dc - cmax) for n in 1:nc]
+    (; Bw, Bn, Bt_0, Bt_n, Bt_s, Bt_eq) = gw
+    (; ϕ0_s, ϕ0_n, dϕ_n, dϕ_s, cw, cw_tropics, cn) = gw
 
     ᶜlocal_geometry = Fields.local_geometry_field(Fields.level(Y.c, 1))
     lat = ᶜlocal_geometry.coordinates.lat
@@ -89,17 +79,13 @@ function non_orographic_gravity_wave_cache(
     )
 
     return (;
-        gw_source_pressure = source_pressure,
-        gw_damp_pressure = damp_pressure,
+        gw,
         gw_source_ampl = source_ampl,
         gw_Bw = gw_Bw,
         gw_Bn = gw_Bn,
-        gw_c = c,
         gw_cw = gw_cw,
         gw_cn = gw_cn,
-        gw_c0 = c0,
         gw_flag = gw_flag,
-        gw_nk = Int(nk),
         ᶜbuoyancy_frequency = similar(Y.c.ρ),
         ᶜdTdz = similar(Y.c.ρ),
     )
@@ -114,23 +100,8 @@ function non_orographic_gravity_wave_tendency!(
 )
     #unpack
     (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params, model_config) = p
-    (;
-        gw_source_ampl,
-        gw_Bw,
-        gw_Bn,
-        gw_c,
-        gw_cw,
-        gw_cn,
-        gw_flag,
-        gw_c0,
-        gw_nk,
-    ) = p
+    (; gw_source_ampl, gw_Bw, gw_Bn, gw_cw, gw_cn, gw_flag) = p
 
-    if model_config isa SingleColumnModel
-        (; gw_source_height) = p
-    elseif model_config isa SphericalModel
-        (; gw_source_pressure, gw_damp_pressure) = p
-    end
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
     FT = Spaces.undertype(axes(Y.c))
@@ -156,7 +127,7 @@ function non_orographic_gravity_wave_tendency!(
         source_level = similar(Fields.level(Y.c.ρ, 1))
         Fields.bycolumn(axes(ᶜρ)) do colidx
             parent(source_level[colidx]) .=
-                argmin(abs.(parent(ᶜz[colidx]) .- gw_source_height))[1]
+                argmin(abs.(parent(ᶜz[colidx]) .- gw.source_height))[1]
         end
         # damp level: for now we only deposit to top level for column setup
         damp_level = similar(Fields.level(Y.c.ρ, 1))
@@ -169,16 +140,16 @@ function non_orographic_gravity_wave_tendency!(
         source_level = similar(Fields.level(Y.c.ρ, 1))
         Fields.bycolumn(axes(ᶜρ)) do colidx
             parent(source_level[colidx]) .=
-                findlast(parent(ᶜp[colidx]) .> gw_source_pressure)[1]
+                findlast(parent(ᶜp[colidx]) .> gw.source_pressure)[1]
         end
         # damp level: the index of the lowest level whose pressure is lower than the damp pressure
         damp_level = similar(Fields.level(Y.c.ρ, 1))
         Fields.bycolumn(axes(ᶜρ)) do colidx
-            if sum(parent(ᶜp[colidx]) .< gw_damp_pressure) == 0
+            if sum(parent(ᶜp[colidx]) .< gw.damp_pressure) == 0
                 parent(damp_level[colidx]) .= length(parent(ᶜz[colidx]))
             else
                 parent(damp_level[colidx]) .=
-                    findfirst(parent(ᶜp[colidx]) .< gw_damp_pressure)[1]
+                    findfirst(parent(ᶜp[colidx]) .< gw.damp_pressure)[1]
             end
         end
     end
@@ -206,9 +177,7 @@ function non_orographic_gravity_wave_tendency!(
             parent(gw_cw[colidx])[1],
             parent(gw_cn[colidx])[1],
             parent(gw_flag[colidx])[1],
-            gw_c,
-            gw_c0,
-            gw_nk,
+            gw,
         )
 
         parent(vforcing[colidx]) .= non_orographic_gravity_wave_forcing(
@@ -224,9 +193,7 @@ function non_orographic_gravity_wave_tendency!(
             parent(gw_cw)[1],
             parent(gw_cn)[1],
             parent(gw_flag)[1],
-            gw_c,
-            gw_c0,
-            gw_nk,
+            gw,
         )
 
     end
@@ -250,10 +217,9 @@ function non_orographic_gravity_wave_forcing(
     cw,
     cn,
     flag,
-    c,
-    c0,
-    nk,
+    gw,
 )
+    c = c_coeff(gw)
     FT = eltype(ᶜz)
     # add an extra layer above model top so that forcing between the very top 
     # model layer and the upper boundary can be calculated 
@@ -265,8 +231,10 @@ function non_orographic_gravity_wave_forcing(
     # wave spectra and the source amplitude
     nc = length(c)
     c_hat0 = c .- ᶜu[source_level] # c0mu0
-    Bw_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cw)^2)
-    Bn_exp = @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - c0) / cn)^2)
+    Bw_exp =
+        @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - gw.c0) / cw)^2)
+    Bn_exp =
+        @. exp(-log(2.0) * ((c * flag + c_hat0 * (1 - flag) - gw.c0) / cn)^2)
     B0 = @. sign(c_hat0) * (Bw * Bw_exp + Bn * Bn_exp)
 
     Bsum = sum(abs.(B0))
@@ -274,16 +242,16 @@ function non_orographic_gravity_wave_forcing(
         error("zero flux input at source level")
     end
     # intermittency
-    eps = calc_intermitency(ᶜρ[source_level], source_ampl, nk, Bsum)
+    eps = calc_intermitency(ᶜρ[source_level], source_ampl, nk(gw), Bsum)
 
     # horizontal wave length
-    kwv = [2.0 * π / ((30.0 * (10.0^n)) * 1.e3) for n in 1:nk]
+    kwv = horizontal_wavelength(gw)
     k2 = kwv .* kwv
 
     # forcing
     wave_forcing = zeros(length(ᶜu))
     gwf = zeros(length(ᶜu) - 1)
-    for ink in 1:nk # loop over all wave lengths
+    for ink in 1:nk(gw) # loop over all wave lengths
 
         mask = ones(nc)  # mask to determine which waves propagate upward
         for k in source_level:length(ᶜu) # here ᶜu has one additional level above model top
