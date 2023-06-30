@@ -7,6 +7,15 @@ returns a function of the form `local_state(local_geometry)::LocalState`.
 """
 abstract type InitialCondition end
 
+# Perturbation coefficient for the initial conditions
+# It would be better to be able to specify the wavenumbers
+# but we don't have access to the domain size here
+
+perturb_coeff(p::Geometry.AbstractPoint{FT}) where {FT} = FT(0)
+perturb_coeff(p::Geometry.LatLongZPoint{FT}) where {FT} = sind(p.long)
+perturb_coeff(p::Geometry.XZPoint{FT}) where {FT} = sin(p.x)
+perturb_coeff(p::Geometry.XYZPoint{FT}) where {FT} = sin(p.x)
+
 ##
 ## Simple Profiles
 ##
@@ -66,9 +75,10 @@ function (initial_condition::DecayingProfile)(params)
         )
 
         (; z) = local_geometry.coordinates
+        coeff = perturb_coeff(local_geometry.coordinates)
         T, p = temp_profile(thermo_params, z)
         if perturb
-            T += rand(FT) * FT(0.1) * (z < 5000)
+            T += coeff * FT(0.1) * (z < 5000)
         end
 
         return LocalState(;
@@ -470,12 +480,13 @@ function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
     function local_state(local_geometry)
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
-
         temp_profile = DryAdiabaticProfile{FT}(thermo_params, FT(330), FT(200))
+
         (; z) = local_geometry.coordinates
+        coeff = perturb_coeff(local_geometry.coordinates)
         T, p = temp_profile(thermo_params, z)
         if perturb
-            T += rand(FT) * FT(0.1) * (z < 5000)
+            T += coeff * FT(0.1) * (z < 5000)
         end
         q_tot = edmfx_q_tot(FT)(z)
 
