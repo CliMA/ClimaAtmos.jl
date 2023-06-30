@@ -124,3 +124,22 @@ function benchmark_step!(integrator, Y₀, n_steps = 10)
     end
     return nothing
 end
+
+"""
+    cycle!(integrator; n_cycles = 1)
+
+Run `step!` the least common multiple times
+for all callbacks. i.e., all callbacks will
+have been called at least `n_cycles` times.
+
+`cycle!` is the true atomic unit for performance,
+because, unlike `step!`, it takes all callbacks
+into account.
+"""
+function cycle!(integrator; n_cycles = 1)
+    n_steps = n_steps_per_cycle(integrator) * n_cycles
+    for i in 1:n_steps
+        ODE.step!(integrator)
+    end
+    return nothing
+end

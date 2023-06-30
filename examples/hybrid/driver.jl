@@ -165,7 +165,8 @@ if config.parsed_args["regression_test"]
     )
 end
 
-
+@info "Callback verification, n_expected_calls: $(CA.n_expected_calls(integrator))"
+@info "Callback verification, n_measured_calls: $(CA.n_measured_calls(integrator))"
 
 if config.parsed_args["check_conservation"]
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
