@@ -633,6 +633,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     else
         [tspan[1]:dt_save_to_sol:tspan[2]..., tspan[2]]
     end # ensure that tspan[2] is always saved
+    @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
     args = (problem, ode_algo)
     kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
     return (args, kwargs)
