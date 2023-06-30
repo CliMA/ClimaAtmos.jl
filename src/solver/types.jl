@@ -375,123 +375,70 @@ struct AtmosConfig{FT, TD, PA, C}
     comms_ctx::C
 end
 
-import ClimaCore
-
-function AtmosTargetParsedArgs(
-    s = argparse_settings();
-    target_job,
-    dict = parsed_args_per_job_id(; filter_name = "driver.jl"),
+"""
+    AtmosCoveragePerfConfig()
+    AtmosCoveragePerfConfig(; s, config_dict)
+Creates a model configuration for many performance tests.
+Creates a config from the following in order of top priority to last:
+1. Configuration from the given config file/dict
+2. Default perf configuration
+3. Target job configuration
+4. Default configuration
+"""
+function AtmosCoveragePerfConfig(;
+    s = argparse_settings(),
+    config_dict = nothing,
 )
-    parsed_args_defaults = cli_defaults(s)
-
-    # Start with performance target, and override anything provided in ARGS
-    parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
-
-    _target_job = get(parsed_args_prescribed, "target_job", nothing)
-    if _target_job ≠ nothing && target_job ≠ nothing
-        error("Target job specified multiple times")
+    parsed_args = parse_commandline(s)
+    if isnothing(config_dict)
+        config_dict = YAML.load_file(parsed_args["config_file"])
     end
-    _target_job ≠ nothing && (target_job = _target_job)
-    parsed_args_perf_target = isnothing(target_job) ? Dict() : dict[target_job]
-
-    parsed_args = merge(
-        parsed_args_defaults,
-        parsed_args_perf_target,
-        parsed_args_prescribed,
+    target_job_config = if haskey(config_dict, "target_job")
+        config_from_target_job(config_dict["target_job"])
+    else
+        Dict()
+    end
+    perf_defaults = joinpath(
+        dirname(@__FILE__),
+        "..",
+        "..",
+        "config",
+        "default_configs",
+        "default_perf.yml",
     )
-    return parsed_args
+    perf_default_config = YAML.load_file(perf_defaults)
+    config_dict = merge(target_job_config, perf_default_config, config_dict)
+    return AtmosConfig(; s, config_dict)
 end
 
-
-"""
-    AtmosCoveragePerfParsedArgs()
-
-Define an atmos config for performance runs, and allows
-options to be overridden in several ways. In short the
-precedence for defining `parsed_args` is
-
-    - Highest precedence: args defined in `ARGS`
-    - Mid     precedence: args defined in `parsed_args_perf_target` (below)
-    - Lowest  precedence: args defined in `cli_defaults(s)`
-
-# Example usage:
-
-Launch with `julia --project=perf/`
-
-```julia
-import ClimaAtmos as CA
-import Random
-Random.seed!(1234)
-parsed_args = CA.AtmosCoveragePerfParsedArgs(;moist="dry")
-config = CA.AtmosConfig(;parsed_args)
-```
-"""
-function AtmosCoveragePerfParsedArgs(s = argparse_settings())
-    @info "Using coverage performance parameters + provided CL arguments."
-    parsed_args_defaults = cli_defaults(s)
-    dict = parsed_args_per_job_id(; filter_name = "driver.jl")
-
-    # Start with performance target, and override anything provided in ARGS
-    parsed_args_prescribed = parsed_args_from_ARGS(ARGS)
-
-    target_job = get(parsed_args_prescribed, "target_job", nothing)
-    parsed_args_perf_target = isnothing(target_job) ? Dict() : dict[target_job]
-
-    parsed_args_perf_target["forcing"] = "held_suarez"
-    parsed_args_perf_target["vert_diff"] = true
-    parsed_args_perf_target["surface_setup"] = "DefaultExchangeCoefficients"
-    parsed_args_perf_target["moist"] = "equil"
-    parsed_args_perf_target["rad"] = "allskywithclear"
-    parsed_args_perf_target["precip_model"] = "0M"
-    parsed_args_perf_target["dt"] = "1secs"
-    parsed_args_perf_target["t_end"] = "10secs"
-    parsed_args_perf_target["dt_save_to_sol"] = Inf
-    parsed_args_perf_target["z_elem"] = 25
-    parsed_args_perf_target["h_elem"] = 12
-
-    parsed_args = merge(
-        parsed_args_defaults,
-        parsed_args_perf_target,
-        parsed_args_prescribed,
-    )
-    return parsed_args
-end
-
-AtmosCoveragePerfConfig(s = argparse_settings()) =
-    AtmosConfig(s; parsed_args = AtmosCoveragePerfParsedArgs(s))
-
-function AtmosConfigArgs(
-    s = argparse_settings();
-    args = String[],
-    parsed_args = parse_commandline(args, s),
-    comms_ctx = get_comms_context(parsed_args),
-)
-    @info "Running ClimaAtmos with default argparse settings + $args"
-    return AtmosConfig(s; parsed_args, comms_ctx)
-end
-
-function AtmosConfig(
-    s = argparse_settings();
+function AtmosConfig(;
+    s = argparse_settings(),
     parsed_args = parse_commandline(s),
-    comms_ctx = get_comms_context(parsed_args),
+    config_dict = nothing,
+    comms_ctx = nothing,
 )
-    FT = parsed_args["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
+    config = if !isnothing(config_dict)
+        override_default_config(config_dict)
+    elseif !isnothing(parsed_args["config_file"])
+        override_default_config(parsed_args["config_file"])
+    else
+        @info "Using default configuration"
+        default_config_dict()
+    end
+    FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
-        override_file = parsed_args["toml"],
-        dict_type = "alias",
+        override_file = CP.merge_toml_files(config["toml"]),
     )
-    toml_dict, parsed_args =
-        merge_parsed_args_with_toml(toml_dict, parsed_args, cli_defaults(s))
-
     # TODO: is there a better way? We need a better
     #       mechanism on the ClimaCore side.
-    if parsed_args["trunc_stack_traces"]
+    if config["trunc_stack_traces"]
         @eval Main begin
             import ClimaCore
             ClimaCore.Fields.truncate_printing_field_types() = true
         end
     end
+    comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CPUMultiThreaded
         @info "Running ClimaCore in threaded mode, with $(Threads.nthreads()) threads."
@@ -501,46 +448,7 @@ function AtmosConfig(
 
     C = typeof(comms_ctx)
     TD = typeof(toml_dict)
-    PA = typeof(parsed_args)
-    return AtmosConfig{FT, TD, PA, C}(toml_dict, parsed_args, comms_ctx)
+    PA = typeof(config)
+    return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
 end
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
-
-"""
-Merges parsed_args with the toml_dict generated from CLIMAParameters.
-Priority for clashes: parsed_args > toml_dict > default_args
-Converts `nothing` to empty string, since CLIMAParameters does not support type Nothing.
-The dictionary overrides existing toml_dict values if there are clashes.
-"""
-function merge_parsed_args_with_toml(toml_dict, parsed_args, default_args)
-    toml_type(val::AbstractFloat) = "float"
-    toml_type(val::Integer) = "integer"
-    toml_type(val::Bool) = "bool"
-    toml_type(val::String) = "string"
-    toml_type(val::Symbol) = "string"
-    toml_type(val::Nothing) = "string"
-    toml_value(val::Nothing) = ""
-    toml_value(val::Symbol) = String(val)
-    toml_value(val) = val
-
-    for (key, value) in parsed_args
-        if haskey(default_args, key)
-            if parsed_args[key] != default_args[key] ||
-               !haskey(toml_dict.data, key)
-                toml_dict.data[key] = Dict(
-                    "type" => toml_type(value),
-                    "value" => toml_value(value),
-                    "alias" => key,
-                )
-            end
-            parsed_args[key] = if toml_dict.data[key]["value"] == ""
-                nothing
-            elseif parsed_args[key] isa Symbol
-                Symbol(toml_dict.data[key]["value"])
-            else
-                toml_dict.data[key]["value"]
-            end
-        end
-    end
-    return toml_dict, parsed_args
-end

@@ -1,0 +1,15 @@
+dt_save_to_disk: "10secs"
+x_max: 10000.0
+hyperdiff: "true"
+z_elem: 45
+dt: "1secs"
+t_end: "100secs"
+y_max: 10000.0
+y_elem: 2
+turbconv: "diagnostic_edmfx"
+x_elem: 2
+dz_bottom: 30.0
+config: "box"
+kappa_4: 1.0e8
+job_id: "diagnostic_edmfx_test_box"
+moist: "equil"

@@ -1,0 +1,9 @@
+dt_save_to_disk: "8days"
+use_reference_state: false
+t_end: "8days"
+discrete_hydrostatic_balance: true
+hyperdiff: "false"
+perturb_initstate: false
+FLOAT_TYPE: "Float64"
+job_id: "sphere_hydrostatic_balance_rhoe_ft64"
+dt_save_to_sol: "600secs"

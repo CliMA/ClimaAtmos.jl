@@ -1,0 +1,12 @@
+job_id: "test_env"
+vert_diff: "true"
+surface_setup: "DefaultExchangeCoefficients"
+moist: "equil"
+rad: "allskywithclear"
+precip_model: "0M"
+dt: "1secs"
+t_end: "10secs"
+dt_save_to_sol: "Inf"
+z_elem: 25
+h_elem: 12
+dt_rad: "5secs"

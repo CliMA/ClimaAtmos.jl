@@ -1,0 +1,10 @@
+precip_model: "0M"
+dt_save_to_disk: "5days"
+regression_test: true
+ode_algo: "SSP333"
+initial_condition: "MoistBaroclinicWave"
+dt: "450secs"
+tracer_upwinding: first_order
+energy_upwinding: first_order
+job_id: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
+moist: "equil"

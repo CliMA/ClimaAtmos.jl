@@ -1,0 +1,6 @@
+dt_save_to_disk: "2days"
+h_elem: 8
+initial_condition: "DryBaroclinicWave"
+kappa_4: 5.0e16
+dt: "500secs"
+job_id: "sphere_baroclinic_wave_rhoe_he8"

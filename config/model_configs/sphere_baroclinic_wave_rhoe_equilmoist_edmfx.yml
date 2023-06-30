@@ -1,0 +1,13 @@
+dt_save_to_disk: "30secs"
+initial_condition: "MoistBaroclinicWaveWithEDMF"
+dt: "1secs"
+edmfx_entr_detr: true
+t_end: "6mins"
+turbconv: "edmfx"
+ode_algo: "SSP33ShuOsher"
+apply_limiter: false
+precip_model: "0M"
+reference_job_id: "sphere_baroclinic_wave_rhoe_equilmoist"
+edmfx_sgs_flux: true
+job_id: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx"
+moist: "equil"

@@ -1,0 +1,10 @@
+vert_diff: "true"
+surface_setup: "DefaultExchangeCoefficients"
+moist: "equil"
+precip_model: "0M"
+rad: "clearsky"
+t_end: "2hours"
+job_id: "test_io"
+dt_save_to_sol: "1hours"
+dt_save_to_disk: "1hours"
+post_process: false

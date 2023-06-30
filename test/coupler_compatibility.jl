@@ -33,10 +33,10 @@ const T2 = 290
 # the pattern demonstrated in the second test is preferable.
 
 @testset "Coupler Compatibility (Hacky Version)" begin
-    # Initialize a model. The value of --surface_setup is irrelevant, since it
+    # Initialize a model. The value of surface_setup is irrelevant, since it
     # will get overwritten.
-    config = CA.AtmosConfigArgs(;
-        args = ["--initial_condition", "DryBaroclinicWave"],
+    config = CA.AtmosConfig(;
+        config_dict = Dict("initial_condition" => "DryBaroclinicWave"),
     )
     integrator = CA.get_integrator(config)
     (; p, t) = integrator
@@ -72,15 +72,13 @@ const T2 = 290
 end
 
 @testset "Coupler Compatibility (Proper Version)" begin
-    # Initialize a model. Set --surface_setup to PrescribedSurface to prevent
+    # Initialize a model. Set surface_setup to PrescribedSurface to prevent
     # ClimaAtmos from modifying the surface conditions.
-    config = CA.AtmosConfigArgs(;
-        args = [
-            "--initial_condition",
-            "DryBaroclinicWave",
-            "--surface_setup",
-            "PrescribedSurface",
-        ],
+    config = CA.AtmosConfig(;
+        config_dict = Dict(
+            "initial_condition" => "DryBaroclinicWave",
+            "surface_setup" => "PrescribedSurface",
+        ),
     )
     integrator = CA.get_integrator(config)
     (; p, t) = integrator
@@ -174,17 +172,13 @@ end
     # Verify that using PrescribedSurface does not break the initialization of
     # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
     # use diagnostic EDMF.
-    config = CA.AtmosConfigArgs(;
-        args = [
-            "--surface_setup",
-            "PrescribedSurface",
-            "--moist",
-            "equil",
-            "--rad",
-            "clearsky",
-            "--turbconv",
-            "diagnostic_edmfx",
-        ],
+    config = CA.AtmosConfig(;
+        config_dict = Dict(
+            "surface_setup" => "PrescribedSurface",
+            "moist" => "equil",
+            "rad" => "clearsky",
+            "turbconv" => "diagnostic_edmfx",
+        ),
     )
     integrator = CA.get_integrator(config)
 end

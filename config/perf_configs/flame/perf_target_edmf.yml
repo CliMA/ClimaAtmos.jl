@@ -1,0 +1,4 @@
+job_id: "flame_perf_target_edmf"
+precip_model: "nothing"
+target_job: "sphere_baroclinic_wave_rhoe_equilmoist_edmf"
+rad: "nothing"

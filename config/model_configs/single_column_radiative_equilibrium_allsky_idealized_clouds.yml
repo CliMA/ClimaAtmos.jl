@@ -1,0 +1,16 @@
+dt_save_to_disk: "100days"
+initial_condition: "IsothermalProfile"
+hyperdiff: "false"
+z_elem: 70
+dt: "3hours"
+idealized_h2o: true
+t_end: "654days"
+dz_top: 10000.0
+idealized_clouds: true
+dz_bottom: 100.0
+config: "column"
+idealized_insolation: false
+z_max: 70000.0
+dt_save_to_sol: "30hours"
+job_id: "single_column_radiative_equilibrium_allsky_idealized_clouds"
+rad: "allskywithclear"

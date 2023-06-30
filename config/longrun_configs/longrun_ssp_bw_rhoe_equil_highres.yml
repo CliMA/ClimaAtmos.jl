@@ -1,0 +1,13 @@
+dt_save_to_disk: "10days"
+initial_condition: "MoistBaroclinicWave"
+max_newton_iters: 3
+z_elem: 45
+dt: "150secs"
+t_end: "100days"
+dz_bottom: 30.0
+h_elem: 16
+ode_algo: "SSP333"
+kappa_4: 1.0e16
+precip_model: "0M"
+job_id: "longrun_ssp_bw_rhoe_equil_highres"
+moist: "equil"

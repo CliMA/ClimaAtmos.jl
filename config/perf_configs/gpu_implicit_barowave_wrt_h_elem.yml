@@ -1,0 +1,8 @@
+job_id: gpu_implicit_barowave_wrt_h_elem 
+z_elem: 25 
+h_elem: 12 
+initial_condition: DryBaroclinicWave 
+t_end: 1mins 
+dt: 1secs 
+dt_save_to_sol: Inf 
+dt_save_to_disk: Inf

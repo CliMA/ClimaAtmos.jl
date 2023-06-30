@@ -1,0 +1,14 @@
+dt_save_to_disk: "10days"
+z_elem: 45
+dt: "150secs"
+tracer_upwinding: zalesak
+t_end: "400days"
+dz_bottom: 30.0
+vert_diff: "true"
+h_elem: 16
+kappa_4: 1.0e16
+forcing: "held_suarez"
+energy_upwinding: zalesak
+precip_model: "0M"
+job_id: "longrun_zalesak_tracer_energy_hs_rhoe_equil_highres"
+moist: "equil"

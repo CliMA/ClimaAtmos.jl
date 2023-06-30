@@ -1,0 +1,18 @@
+
+config: "column" 
+FLOAT_TYPE: "Float64" 
+hyperdiff: "false" 
+moist: "equil" 
+rad: "TRMM_LBA" 
+turbconv: "edmf" 
+turbconv_case: "TRMM_LBA" 
+precip_model: "1M" 
+dt_save_to_sol: "5mins" 
+z_elem: 90 
+z_stretch: false 
+z_max: 17000 
+rayleigh_sponge: true 
+zd_rayleigh: 15000 
+job_id: "longrun_compressible_edmf_trmm" 
+dt: "0.2secs" 
+t_end: "3.8hours"

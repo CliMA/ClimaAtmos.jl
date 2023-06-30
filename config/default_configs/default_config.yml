@@ -1,0 +1,264 @@
+# Default Configuration for ClimaAtmos.jl
+# Resolution
+dz_bottom:
+  help: "Model bottom grid depth. Default: 500m"
+  value: 500.0
+dz_top:
+  help: "Model top grid depth. Default: 5000m"
+  value: 5000.0
+z_stretch:
+  help: "Stretch grid in z-direction. [`true` (default), `false`]"
+  value: true
+h_elem:
+  help: "number of elements per edge on a cubed sphere"
+  value: 6
+x_elem:
+  help: "number of horizontal elements in the x-direction"
+  value: 6
+x_max:
+  help: "Model domain size, x direction. Default: 300km"
+  value: 300000.0
+y_elem:
+  help: "number of horizontal elements in the y-direction"
+  value: 6
+y_max:
+  help: "Model domain size, y direction. Default: 300km"
+  value: 300000.0
+z_elem:
+  help: "number of vertical elements"
+  value: 10
+z_max:
+  help: "Model top height. Default: 30km"
+  value: 30000.0
+kappa_4:
+  help: "Hyperdiffusion parameter"
+  value: 2.0e17
+# Topography
+topography:
+  help: "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
+  value: "NoWarp"
+topo_smoothing:
+  help: "Choose whether to order-2 smoothing on the LGL mesh"
+  value: false
+smoothing_order:
+  help: "Define the surface smoothing kernel factor (integer) [`3 (default)`]"
+  value: 3
+# ODE
+use_newton_rtol:
+  help: "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"
+  value: false
+newton_rtol:
+  help: "Relative tolerance of Newton's method (only for ClimaTimeSteppers.jl; only used when `use_newton_rtol` is `true`)"
+  value: 1.0e-5
+surface_thermo_state_type:
+  help: "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
+  value: "GCMSurfaceThermoState"
+split_ode:
+  help: "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
+  value: true
+use_krylov_method:
+  help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
+  value: false
+use_dynamic_krylov_rtol:
+  help: "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
+  value: false
+max_newton_iters:
+  help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
+  value: 1
+ode_algo:
+  help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, `ODE.Euler`, `ODE.IMEXEuler`, `ODE.Rosenbrock23`, etc.]"
+  value: "ARS343"
+krylov_rtol:
+  help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
+  value: 0.1
+eisenstat_walker_forcing_alpha:
+  help: "Value of alpha to use for Eisenstat-Walker forcing (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` and `use_dynamic_krylov_rtol` are `true`)"
+  value: 2.0
+jvp_step_adjustment:
+  help: "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
+  value: 1.0
+# Radiation
+rad:
+  help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
+  value: ~
+idealized_h2o:
+  help: "Use idealized H2O in radiation model [`false` (default), `true`]"
+  value: false
+dt_rad:
+  help: "Time between calling radiation callback for sphere configurations"
+  value: "6hours"
+idealized_clouds:
+  help: "Use idealized clouds in radiation model [`false` (default), `true`]"
+  value: false
+idealized_insolation:
+  help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
+  value: true
+
+
+config:
+  help: "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
+  value: "sphere"
+FLOAT_TYPE:
+  help: "Float type"
+  value: "Float32"
+dt:
+  help: "Simulation time step. Examples: [`10secs`, `1hours`]"
+  value: "600secs"
+t_end:
+  help: "Simulation end time. Examples: [`1200days`, `40secs`]"
+  value: "10days"
+output_dir:
+  help: "Output directory"
+  value: ~
+device:
+  help: "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
+  value: "auto"
+target_job:
+  help: "An (optional) job to target for analyzing performance"
+  value: ~
+reference_job_id:
+  help: |-
+    Identifier of job to use as the "reference" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch (only used if `debugging_tc` is `true`)
+  value: ~
+post_process:
+  help: "Post process [`true` (default), `false`]"
+  value: true
+vert_diff:
+  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
+  value: "false"
+hyperdiff:
+  help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
+  value: "ClimaHyperdiffusion"
+bubble:
+  help: "Enable bubble correction for more accurate surface areas"
+  value: true
+start_date:
+  help: "Start date of the simulation"
+  value: "19790101"
+forcing:
+  help: "Forcing [`nothing` (default), `held_suarez`]"
+  value: ~
+test_dycore_consistency:
+  help: "Test dycore consistency [`false` (default), `true`]"
+  value: false
+energy_name:
+  help: "Energy variable name [`rhoe` (default), `rhotheta`]"
+  value: "rhoe"
+dt_save_to_disk:
+  help: "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+  value: "Inf"
+dt_save_restart:
+  help: "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+  value: "Inf"
+dt_save_to_sol:
+  help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
+  value: "1days"
+moist:
+  help: "Moisture model [`dry` (default), `equil`, `non_equil`]"
+  value: "dry"
+divergence_damping_factor:
+  help: "Divergence damping factor"
+  value: 1.0
+rayleigh_sponge:
+  help: "Rayleigh sponge [`true`, `false` (default)]"
+  value: false
+surface_setup:
+  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+  value: "DefaultExchangeCoefficients"
+surface_temperature:
+  help: "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric']"
+  value: "ZonallySymmetric"
+initial_condition:
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `DecayingProfile`, `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `AgnesiHProfile`, `ScharProfile`, `RisingThermalBubbleProfile`]"
+  value: "DecayingProfile"
+perturb_initstate:
+  help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
+  value: true
+discrete_hydrostatic_balance:
+  help: "Set the initial state to discrete hydrostatic balance"
+  value: false
+trunc_stack_traces:
+  help: "Set to `true` to truncate printing of ClimaCore `Field`s"
+  value: true
+apply_limiter:
+  help: "Apply a horizontal limiter to every tracer [`true` (default), `false`]"
+  value: true
+precip_model:
+  help: "Precipitation model [`nothing` (default), `0M`]"
+  value: ~
+perf_mode:
+  help: "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
+  value: "PerfStandard"
+perf_summary:
+  help: "Flag for collecting performance summary information"
+  value: false
+viscous_sponge:
+  help: "Viscous sponge [`true`, `false` (default)]"
+  value: false
+job_id:
+  help: "Uniquely identifying string for a particular job"
+  value: ~
+density_upwinding:
+  help: "Denisity upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  value: none
+tracer_upwinding:
+  help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  value: none
+energy_upwinding:
+  help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  value: none
+orographic_gravity_wave:
+  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
+  value: ~
+non_orographic_gravity_wave:
+  help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
+  value: false
+nh_poly:
+  help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
+  value: 3
+use_reference_state:
+  help: "Subtract a reference state from the dycore equations [`false`, `true` (default)]"
+  value: true
+regression_test:
+  help: "(Bool) perform regression test"
+  value: false
+check_conservation:
+  help: "Check conservation of mass and energy [`false` (default), `true`]"
+  value: false
+ls_adv:
+  help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
+  value: ~
+fps:
+  help: "Frames per second for animations"
+  value: 5
+subsidence:
+  help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
+  value: ~
+toml:
+  help: "TOML file(s) used to override model parameters"
+  value: []
+prognostic_tke:
+  help: "A flag for prognostic TKE [`false` (default), `true`]"
+  value: false
+prognostic_surface:
+  help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
+  value: "false"
+# Will be moved to ClimaParameters.jl
+C_E:
+  help: "Bulk transfer coefficient"
+  value: 0.0044
+alpha_rayleigh_w:
+  help: "Rayleigh sponge coefficient for vertical velocity"
+  value: 1.0
+alpha_rayleigh_uh:
+  help: "Rayleigh sponge coefficient for horizontal velocity"
+  value: 0.0001
+zd_viscous:
+  help: "Viscous sponge height"
+  value: 15000.0
+zd_rayleigh:
+  help: "Rayleigh sponge height"
+  value: 15000.0
+kappa_2_sponge:
+  help: "Viscous sponge coefficient"
+  value: 1.0e6

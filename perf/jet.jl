@@ -1,8 +1,8 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosConfig(;
-    parsed_args = CA.AtmosTargetParsedArgs(; target_job = "edmfx_adv_test_box"),
+config = CA.AtmosCoveragePerfConfig(;
+    config_dict = CA.config_from_target_job("edmfx_adv_test_box"),
 )
 integrator = CA.get_integrator(config)
 

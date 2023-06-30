@@ -1,0 +1,16 @@
+dt_save_to_disk: "10secs"
+initial_condition: "DryDensityCurrentProfile"
+x_max: 51200.0
+z_elem: 45
+dt: "0.1secs"
+t_end: "10.0secs"
+discrete_hydrostatic_balance: true
+y_max: 6400.0
+y_elem: 15
+z_stretch: false
+x_elem: 45
+ode_algo: "SSP33ShuOsher"
+config: "box"
+kappa_4: 1.0e7
+z_max: 6400.0
+job_id: "box_density_current_test"

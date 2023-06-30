@@ -1,0 +1,10 @@
+moist: "equil"
+apply_limiter: false
+dt_save_to_disk: "5days"
+check_conservation: true
+initial_condition: "MoistBaroclinicWave"
+t_end: "5days"
+dt: "450secs"
+FLOAT_TYPE: "Float64"
+job_id: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64"
+rad: "clearsky"

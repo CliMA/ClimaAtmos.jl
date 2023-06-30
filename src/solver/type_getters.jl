@@ -575,8 +575,7 @@ function get_simulation(config::AtmosConfig, comms_ctx)
     FT = eltype(config)
 
     job_id = if isnothing(parsed_args["job_id"])
-        s = argparse_settings()
-        job_id_from_parsed_args(s, parsed_args)
+        job_id_from_config(parsed_args)
     else
         parsed_args["job_id"]
     end
