@@ -806,13 +806,13 @@ steps:
       - label: "Perf: GPU benchmark step!"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "nsys profile --trace=nvtx,cuda --output=gpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id gpu_benchmark_step"
         artifact_paths: "gpu_benchmark_step/*"
         agents:
           slurm_gpus: 1
 
       - label: "Perf: CPU benchmark step!"
-        command: "nsys profile --trace=nvtx,cuda --output=cpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl --device CPUSingleThreaded"
+        command: "nsys profile --trace=nvtx,cuda --output=cpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id cpu_benchmark_step --device CPUSingleThreaded"
         artifact_paths: "cpu_benchmark_step/*"
 
 
