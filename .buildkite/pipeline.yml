@@ -274,6 +274,8 @@ steps:
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw --fig_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw --case_name aquaplanet
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist with EDMF"
         command:
