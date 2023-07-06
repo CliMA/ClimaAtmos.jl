@@ -44,7 +44,15 @@ ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We striv
 
 Recommended Julia: Stable release v1.8.5
 
-Download the `ClimaAtmos`
+ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
+
+```julia
+julia> using Pkg
+
+julia> Pkg.add("ClimaAtmos")
+```
+
+Alternatively, download the `ClimaAtmos`
 [source](https://github.com/CliMA/ClimaAtmos.jl) with:
 
 ```
@@ -61,8 +69,8 @@ To use ClimaAtmos, you need to instantiate all dependencies with:
 
 ```
 $ julia --project
-julia>]
-(v1.8) pkg> instantiate
+julia> ]
+(ClimaAtmos) pkg> instantiate
 ```
 
 ## Running instructions
