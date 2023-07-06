@@ -245,6 +245,7 @@ function compute_diagnostics(integrator)
     set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
 
     (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p
+    @assert TD.air_temperature.(thermo_params, sfc_conditions.ts) == p.sfc_setup.T
     dycore_diagnostic = (;
         common_diagnostics(ᶜu, ᶜts)...,
         pressure = ᶜp,
@@ -523,4 +524,17 @@ function gc_func(integrator)
         "# full_sweep" = num_post.full_sweep,
     )
     return nothing
+end
+
+
+function update_surface_temp!(integrator)
+    d = 20
+    ρₒ = 997
+    cₚₒ = 4184 
+
+    (; ᶠradiation_flux, Δt, sfc_setup, net_energy_flux_sfc) = integrator.p
+    sfc_rad_flux = Spaces.level(ᶠradiation_flux, half).components.data.:1
+
+    # Merlis et al., 2013 eq(9)
+    @. sfc_setup.T -= sfc_rad_flux * Δt  / (ρₒ * cₚₒ * d)
 end

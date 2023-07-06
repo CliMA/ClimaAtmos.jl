@@ -83,7 +83,7 @@ function default_cache(
         spaces,
         atmos,
         comms_ctx = ClimaComms.context(axes(Y.c)),
-        sfc_setup = surface_setup(params),
+        sfc_setup = map( _ -> surface_setup(params), Spaces.level(Y.f, half)), # make sfc_setup into field
         test,
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,

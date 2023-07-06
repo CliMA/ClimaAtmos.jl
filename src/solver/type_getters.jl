@@ -520,8 +520,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             call_every_n_steps(turb_conv_affect_filter!; skip_first = true),
         )
     end
-
-    return ODE.CallbackSet(callbacks...)
+    return ODE.CallbackSet(callbacks..., call_every_n_steps(update_surface_temp!; skip_first = true))
 end
 
 

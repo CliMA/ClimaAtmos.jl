@@ -24,6 +24,19 @@ function (::DefaultMoninObukhov)(params)
 end
 
 """
+    DefaultMoninObukhov()
+
+Monin-Obukhov surface, see the link below for more information
+https://clima.github.io/SurfaceFluxes.jl/dev/SurfaceFluxes/#Monin-Obukhov-Similarity-Theory-(MOST)
+"""
+struct MoninObukhovInitTemperature<: SurfaceSetup end
+function (::MoninObukhovInitTemperature)(params)
+    FT = eltype(params)
+    z0 = FT(1e-5)
+    return SurfaceState(; parameterization = MoninObukhov(; z0), T = FT(300))
+end
+
+"""
     DefaultExchangeCoefficients()
 
 Bulk surface, parameterized only by a default exchange coefficient.

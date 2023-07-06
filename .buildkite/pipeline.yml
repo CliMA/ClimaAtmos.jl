@@ -108,6 +108,10 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad allskywithclear --idealized_insolation false --idealized_h2o true --idealized_clouds true --hyperdiff false --config column --initial_condition IsothermalProfile --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --job_id single_column_radiative_equilibrium_allsky_idealized_clouds"
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/*"
 
+      - label: ":computer: single column radiative equilibrium clearsky surface temperature"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --rad clearsky --idealized_h2o true --hyperdiff false --config column --initial_condition IsothermalProfile --z_max 70e3 --z_elem 70 --dz_bottom 100 --dz_top 10000 --t_end 654days --dt 3hours --dt_save_to_sol 30hours --dt_save_to_disk 100days --surface_setup MoninObukhovInitTemperature --job_id single_column_radiative_equilibrium_clearsky_surface_temp"
+        artifact_paths: "single_column_radiative_equilibrium_clearsky_surface_temp/*"
+        
       - label: ":computer: single column non-orographic gravity wave parameterization"
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --hyperdiff false --config column --initial_condition IsothermalProfile --non_orographic_gravity_wave true --t_end 1500secs --dt 500secs --dt_save_to_disk 500secs --job_id single_column_nonorographic_gravity_wave --regression_test true
