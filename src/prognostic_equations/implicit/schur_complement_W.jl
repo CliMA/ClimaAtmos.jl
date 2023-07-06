@@ -9,7 +9,7 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 using ClimaCore.Utilities: half
 
-struct SchurComplementW{ET, F, FT, J1, J2, J3, J4, J5, J6, J7, S, A, T}
+struct SchurComplementW{ET, F, FT, J1, J2, J3, J4, J5, J6, J7, S, T}
     # whether this struct is used to compute Wfact_t or Wfact
     transform::Bool
 
@@ -33,7 +33,6 @@ struct SchurComplementW{ET, F, FT, J1, J2, J3, J4, J5, J6, J7, S, A, T}
 
     # cache for the Schur complement linear solve
     S::S
-    S_column_arrays::A
 
     # whether to test the Jacobian and linear solver
     test::Bool
@@ -119,13 +118,6 @@ function SchurComplementW(Y, transform, flags, test = false)
 
     S = Fields.Field(tridiag_type, axes(Y.f))
     N = Spaces.nlevels(axes(Y.f))
-    S_column_arrays = [
-        LinearAlgebra.Tridiagonal(
-            Array{FT}(undef, N - 1),
-            Array{FT}(undef, N),
-            Array{FT}(undef, N - 1),
-        ) for _ in 1:Threads.nthreads()
-    ]
 
     ᶜ𝕋_names = filter(is_tracer_var, propertynames(Y.c))
     ET = if isempty(ᶜ𝕋_names)
@@ -146,7 +138,6 @@ function SchurComplementW(Y, transform, flags, test = false)
         typeof(∂ᶜTCₜ∂ᶜTC),
         typeof(∂ᶠTCₜ∂ᶠTC),
         typeof(S),
-        typeof(S_column_arrays),
         typeof(Y),
     }(
         transform,
@@ -161,7 +152,6 @@ function SchurComplementW(Y, transform, flags, test = false)
         ∂ᶜTCₜ∂ᶜTC,
         ∂ᶠTCₜ∂ᶠTC,
         S,
-        S_column_arrays,
         test,
         similar(Y),
         similar(Y),
@@ -257,7 +247,7 @@ function LinearAlgebra.ldiv!(
     A::SchurComplementW,
     b::Fields.FieldVector,
 )
-    (; dtγ_ref, S, S_column_arrays, transform) = A
+    (; dtγ_ref, S, transform) = A
     (; ∂ᶜρₜ∂ᶠ𝕄, ∂ᶜ𝔼ₜ∂ᶠ𝕄, ∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶠ𝕄ₜ∂ᶠ𝕄, ∂ᶜ𝕋ₜ∂ᶠ𝕄_field) = A
     (; ∂ᶜTCₜ∂ᶜTC, ∂ᶠTCₜ∂ᶠTC) = A
     dtγ = dtγ_ref[]
@@ -296,7 +286,6 @@ function LinearAlgebra.ldiv!(
                 isnothing(∂ᶜTCₜ∂ᶜTC) ? nothing : ∂ᶜTCₜ∂ᶜTC[colidx],
                 isnothing(∂ᶠTCₜ∂ᶠTC) ? nothing : ∂ᶠTCₜ∂ᶠTC[colidx],
                 S[colidx],
-                S_column_arrays[Threads.threadid()], # can / should this be colidx?
             )
         end
     end
@@ -319,20 +308,20 @@ function _ldiv_serial!(
     ∂ᶜ𝕋ₜ∂ᶠ𝕄_field,
     ∂ᶜTCₜ∂ᶜTC,
     ∂ᶠTCₜ∂ᶠTC,
-    S_column,
-    S_column_array,
+    S,
 )
     dtγ² = dtγ^2
     # TODO: Extend LinearAlgebra.I to work with stencil fields. Allow more
     # than 2 diagonals per Jacobian block.
-    FT = eltype(eltype(S_column))
+    FT = eltype(eltype(S))
+    tridiag_type = Operators.StencilCoefs{-1, 1, NTuple{3, FT}}
     I = tuple(Operators.StencilCoefs{-1, 1}((zero(FT), one(FT), zero(FT))))
     compose = Operators.ComposeStencils()
     apply = Operators.ApplyStencil()
     if cond
-        @. S_column = dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
+        @. S = dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) + dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
     else
-        @. S_column =
+        @. S =
             dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜρ, ∂ᶜρₜ∂ᶠ𝕄) +
             dtγ² * compose(∂ᶠ𝕄ₜ∂ᶜ𝔼, ∂ᶜ𝔼ₜ∂ᶠ𝕄) +
             dtγ * ∂ᶠ𝕄ₜ∂ᶠ𝕄 - I
@@ -349,11 +338,7 @@ function _ldiv_serial!(
 
     # Compute xᶠ𝕄.
     @. xᶠ𝕄 = bᶠ𝕄 + dtγ * (apply(∂ᶠ𝕄ₜ∂ᶜρ, bᶜρ) + apply(∂ᶠ𝕄ₜ∂ᶜ𝔼, bᶜ𝔼))
-    xᶠ𝕄_column_view = parent(xᶠ𝕄)
-    @views S_column_array.dl .= parent(S_column.coefs.:1)[2:end]
-    S_column_array.d .= parent(S_column.coefs.:2)
-    @views S_column_array.du .= parent(S_column.coefs.:3)[1:(end - 1)]
-    thomas_algorithm!(S_column_array, xᶠ𝕄_column_view)
+    Operators.column_thomas_solve!(S, xᶠ𝕄)
 
     # Compute the remaining components of x that correspond to variables with
     # implicit tendencies.
@@ -375,35 +360,21 @@ function _ldiv_serial!(
             xᶜvar = Fields.single_field(xᶜTC, var_prop_chain, identity)
             bᶜvar = Fields.single_field(bᶜTC, var_prop_chain, identity)
             xᶜvar .= bᶜvar
-            xᶜvar_view = parent(xᶜvar)
+            teye = tuple(tridiag_type((0, 1, 0)))
             ∂ᶜvarₜ∂ᶜvar =
                 Fields.single_field(∂ᶜTCₜ∂ᶜTC, var_prop_chain, identity)
-            @views ∂ᶜvarₜ∂ᶜvar_array = LinearAlgebra.Tridiagonal(
-                S_column_array.dl[1:(end - 1)],
-                S_column_array.d[1:(end - 1)],
-                S_column_array.du[1:(end - 1)],
-            )
-            @views ∂ᶜvarₜ∂ᶜvar_array.dl .=
-                dtγ .* parent(∂ᶜvarₜ∂ᶜvar.coefs.:1)[2:end]
-            ∂ᶜvarₜ∂ᶜvar_array.d .= dtγ .* parent(∂ᶜvarₜ∂ᶜvar.coefs.:2) .- 1
-            @views ∂ᶜvarₜ∂ᶜvar_array.du .=
-                dtγ .* parent(∂ᶜvarₜ∂ᶜvar.coefs.:3)[1:(end - 1)]
-            thomas_algorithm!(∂ᶜvarₜ∂ᶜvar_array, xᶜvar_view)
+            @. ∂ᶜvarₜ∂ᶜvar = ∂ᶜvarₜ∂ᶜvar * dtγ - teye
+            Operators.column_thomas_solve!(∂ᶜvarₜ∂ᶜvar, xᶜvar)
         end
         for var_prop_chain in Fields.property_chains(xᶠTC)
             xᶠvar = Fields.single_field(xᶠTC, var_prop_chain, identity)
             bᶠvar = Fields.single_field(bᶠTC, var_prop_chain, identity)
             xᶠvar .= bᶠvar
-            xᶠvar_view = parent(xᶠvar)
+            teye = tuple(tridiag_type((0, 1, 0)))
             ∂ᶠvarₜ∂ᶠvar =
                 Fields.single_field(∂ᶠTCₜ∂ᶠTC, var_prop_chain, identity)
-            ∂ᶠvarₜ∂ᶠvar_array = S_column_array
-            @views ∂ᶠvarₜ∂ᶠvar_array.dl .=
-                dtγ .* parent(∂ᶠvarₜ∂ᶠvar.coefs.:1)[2:end]
-            ∂ᶠvarₜ∂ᶠvar_array.d .= dtγ .* parent(∂ᶠvarₜ∂ᶠvar.coefs.:2) .- 1
-            @views ∂ᶠvarₜ∂ᶠvar_array.du .=
-                dtγ .* parent(∂ᶠvarₜ∂ᶠvar.coefs.:3)[1:(end - 1)]
-            thomas_algorithm!(∂ᶠvarₜ∂ᶠvar_array, xᶠvar_view)
+            @. ∂ᶠvarₜ∂ᶠvar = ∂ᶠvarₜ∂ᶠvar * dtγ - teye
+            Operators.column_thomas_solve!(∂ᶠvarₜ∂ᶠvar, xᶠvar)
         end
     end
 
@@ -411,35 +382,6 @@ function _ldiv_serial!(
     if transform
         xc .*= dtγ
         xf .*= dtγ
-    end
-    return nothing
-end
-
-"""
-    thomas_algorithm!(A, b)
-
-Thomas algorithm for solving a linear system A x = b,
-where A is a tri-diagonal matrix.
-A and b are overwritten.
-Solution is written to b
-"""
-function thomas_algorithm!(A, b)
-    nrows = size(A, 1)
-    # first row
-    @inbounds A[1, 2] /= A[1, 1]
-    @inbounds b[1] /= A[1, 1]
-    # interior rows
-    for row in 2:(nrows - 1)
-        @inbounds fac = A[row, row] - (A[row, row - 1] * A[row - 1, row])
-        @inbounds A[row, row + 1] /= fac
-        @inbounds b[row] = (b[row] - A[row, row - 1] * b[row - 1]) / fac
-    end
-    # last row
-    @inbounds fac = A[nrows, nrows] - A[nrows - 1, nrows] * A[nrows, nrows - 1]
-    @inbounds b[nrows] = (b[nrows] - A[nrows, nrows - 1] * b[nrows - 1]) / fac
-    # back substitution
-    for row in (nrows - 1):-1:1
-        @inbounds b[row] -= b[row + 1] * A[row, row + 1]
     end
     return nothing
 end
