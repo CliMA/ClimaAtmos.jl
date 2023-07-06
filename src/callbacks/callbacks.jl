@@ -14,42 +14,7 @@ import Dates
 using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
 
-function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
-    previous_step = Ref(0)
-    return ODE.DiscreteCallback(
-        (u, t, integrator) ->
-            (previous_step[] += 1) % n == 0 ||
-                (call_at_end && t == integrator.sol.prob.tspan[2]),
-        f!;
-        initialize = (cb, u, t, integrator) -> skip_first || f!(integrator),
-        save_positions = (false, false),
-    )
-end
-
-function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
-    next_t = Ref{typeof(dt)}()
-    affect! = function (integrator)
-        f!(integrator)
-
-        t = integrator.t
-        t_end = integrator.sol.prob.tspan[2]
-        next_t[] = max(t, next_t[] + dt)
-        if call_at_end
-            next_t[] = min(next_t[], t_end)
-        end
-    end
-    return ODE.DiscreteCallback(
-        (u, t, integrator) -> t >= next_t[],
-        affect!;
-        initialize = (cb, u, t, integrator) -> begin
-            skip_first || f!(integrator)
-            t_end = integrator.sol.prob.tspan[2]
-            next_t[] =
-                (call_at_end && t < t_end) ? min(t_end, t + dt) : t + dt
-        end,
-        save_positions = (false, false),
-    )
-end
+include("callback_helpers.jl")
 
 function dss_callback!(integrator)
     Y = integrator.u

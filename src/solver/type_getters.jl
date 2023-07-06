@@ -728,6 +728,8 @@ function get_integrator(config::AtmosConfig)
         callback = get_callbacks(config.parsed_args, simulation, atmos, params)
     end
     @info "get_callbacks: $s"
+    @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(callback, simulation.dt))"
+    @info "n_steps_per_cycle: $(n_steps_per_cycle(callback, simulation.dt))"
     tspan = (t_start, simulation.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
