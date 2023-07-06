@@ -9,6 +9,7 @@ integrator = CA.get_integrator(config)
 
 import OrdinaryDiffEq
 OrdinaryDiffEq.step!(integrator) # compile first
+CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
 (; output_dir, job_id) = integrator.p.simulation
 output_dir = job_id
