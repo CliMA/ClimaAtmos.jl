@@ -61,7 +61,8 @@ end
 
 Updates the precomputed quantities stored in `p` for diagnostic edmfx.
 """
-function set_diagnostic_edmf_precomputed_quantities!(Y, p, turbconv_model)
+function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
+    (; turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
