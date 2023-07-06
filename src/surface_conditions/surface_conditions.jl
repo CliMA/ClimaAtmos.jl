@@ -156,7 +156,7 @@ function surface_state_to_conditions(
         # Assume an idealized latitude-dependent surface temperature.
         if coordinates isa Geometry.LatLongZPoint ||
            coordinates isa Geometry.LatLongPoint
-            T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
+            T = FT(371) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
         else
             # Assume that the latitude is 0.
             T = FT(300)
