@@ -1,5 +1,6 @@
 import ClimaCore.DataLayouts as DL
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import ClimaAtmos.SurfaceConditions: unit_basis_vector_data
 import Thermodynamics as TD
 import LinearAlgebra
 import ClimaCore.Fields
@@ -376,16 +377,26 @@ function compute_diagnostics(integrator)
     end
 
     if !isnothing(p.atmos.vert_diff)
+        sfc_local_geometry =
+            Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
+        surface_ct3_unit =
+            CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
         (; ρ_flux_uₕ, ρ_flux_h_tot) = p.sfc_conditions
+        sfc_flux_momentum =
+            Geometry.UVVector.(
+                adjoint.(ρ_flux_uₕ ./ Spaces.level(ᶠinterp.(Y.c.ρ), half)) .*
+                surface_ct3_unit
+            )
         vert_diff_diagnostic = (;
-            sfc_flux_momentum = ρ_flux_uₕ ./
-                                Spaces.level(ᶠinterp.(Y.c.ρ), half),
-            sfc_flux_energy = ρ_flux_h_tot,
+            sfc_flux_u = sfc_flux_momentum.components.data.:1,
+            sfc_flux_v = sfc_flux_momentum.components.data.:2,
+            sfc_flux_energy = dot.(ρ_flux_h_tot, surface_ct3_unit),
         )
         if :ρq_tot in propertynames(Y.c)
+            (; ρ_flux_q_tot) = p.sfc_conditions
             vert_diff_diagnostic = (;
                 vert_diff_diagnostic...,
-                sfc_evaporation = p.sfc_conditions.ρ_flux_q_tot,
+                sfc_evaporation = dot.(ρ_flux_q_tot, surface_ct3_unit),
             )
         end
     else
