@@ -213,8 +213,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     (; params, ᶜp, ᶜρ_ref, sfc_conditions) = p
-    (; ᶜρʲs, ᶜtsʲs, ᶜuʲs, ᶜspecificʲs, ᶜentr_detrʲs) = p
-    (; ᶜρ⁰, ᶜts⁰, ᶜu⁰, ᶜspecific⁰) = p
+    (; ᶜρʲs, ᶜtsʲs, ᶜuʲs, ᶜspecificʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
+    (; ᶜρ⁰, ᶜts⁰, ᶜu⁰, ᶜspecific⁰, ᶜh_tot⁰) = p
 
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -245,16 +245,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
 
         @. Yₜ.c.sgsʲs.:($$j).ρae_tot[colidx] +=
             Y.c.sgsʲs.:($$j).ρa[colidx] * (
-                ᶜentr_detrʲs.:($$j).entr[colidx] * TD.total_specific_enthalpy(
-                    thermo_params,
-                    ᶜts⁰[colidx],
-                    ᶜspecific⁰.e_tot[colidx],
-                ) -
-                ᶜentr_detrʲs.:($$j).detr[colidx] * TD.total_specific_enthalpy(
-                    thermo_params,
-                    ᶜtsʲs.:($$j)[colidx],
-                    ᶜspecificʲs.:($$j).e_tot[colidx],
-                )
+                ᶜentr_detrʲs.:($$j).entr[colidx] * ᶜh_tot⁰[colidx] -
+                ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜh_totʲs.:($$j)[colidx]
             )
 
         @. Yₜ.c.sgsʲs.:($$j).ρaq_tot[colidx] +=

@@ -21,13 +21,12 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     (; params, edmfx_upwinding, sfc_conditions) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs, ᶜh_totʲs, ᶜspecificʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜspecific⁰, ᶜts⁰) = p
+    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜspecific⁰, ᶜts⁰) = p
     (; ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
-    thermo_params = CAP.thermodynamics_params(params)
     if p.atmos.edmfx_sgs_flux
         # mass flux
         ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
@@ -46,12 +45,7 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             )
         end
         @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
-        @. ᶜh_tot_diff_colidx =
-            TD.total_specific_enthalpy(
-                thermo_params,
-                ᶜts⁰[colidx],
-                ᶜspecific⁰.e_tot[colidx],
-            ) - ᶜh_tot[colidx]
+        @. ᶜh_tot_diff_colidx = ᶜh_tot⁰[colidx] - ᶜh_tot[colidx]
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
             ᶜJ[colidx],
@@ -70,17 +64,8 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]),
         )
-        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ_ρe_tot(
-            -(
-                ᶠρaK_h[colidx] * ᶠgradᵥ(
-                    TD.total_specific_enthalpy(
-                        thermo_params,
-                        ᶜts⁰[colidx],
-                        ᶜspecific⁰.e_tot[colidx],
-                    ),
-                )
-            ),
-        )
+        @. Yₜ.c.ρe_tot[colidx] -=
+            ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot⁰[colidx])))
 
         if !(p.atmos.moisture_model isa DryModel)
             # mass flux

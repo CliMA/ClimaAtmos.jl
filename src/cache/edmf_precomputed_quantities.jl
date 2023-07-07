@@ -20,7 +20,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     thermo_args = (thermo_params, energy_form, moisture_model)
 
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot) = p
-    (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
+    (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
     (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs) = p
 
     @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
@@ -30,6 +30,8 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     @. ᶜK⁰ += ᶜspecific⁰.tke
     @. ᶜts⁰ = ts_sgs(thermo_args..., ᶜspecific⁰, ᶜK⁰, ᶜΦ, ᶜp)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    @. ᶜh_tot⁰ =
+        TD.total_specific_enthalpy(thermo_params, ᶜts⁰, ᶜspecific⁰.e_tot)
     @. ᶜspecificʲs = specific_sgsʲs(Y.c, turbconv_model)
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
