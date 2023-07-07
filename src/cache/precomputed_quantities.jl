@@ -75,7 +75,10 @@ function precomputed_quantities(Y, atmos)
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             (
                 atmos.energy_form isa TotalEnergy ?
-                (; ᶜh_totʲs = similar(Y.c, NTuple{n, FT})) : (;)
+                (;
+                    ᶜh_totʲs = similar(Y.c, NTuple{n, FT}),
+                    ᶜh_tot⁰ = similar(Y.c, FT),
+                ) : (;)
             )...,
         ) : (;)
     diagnostic_sgs_quantities =
