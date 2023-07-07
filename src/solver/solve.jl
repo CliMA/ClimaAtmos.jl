@@ -14,21 +14,13 @@ simulated_years(es::EfficiencyStats) =
 walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
 
 function timed_solve!(integrator)
-    # `step!(integrator)` may have been called
-    # prior to this function in order to remove
-    # compile time effects. So, the `solve!`
-    # above may have solved from (Δt, tspan[2]).
-    # Compute efficiency taking this into account:
-    (; tspan) = integrator.sol.prob
-    _tspan = (integrator.t, tspan[2])
     walltime = @elapsed begin
         s = @timed_str begin
             sol = ODE.solve!(integrator)
         end
     end
     @info "solve!: $s"
-    @assert 0 ≤ _tspan[1] ≤ _tspan[2]
-    es = EfficiencyStats(_tspan, walltime)
+    es = EfficiencyStats(integrator.sol.prob.tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"
     return (sol, walltime)
 end
@@ -60,12 +52,12 @@ function solve_atmos!(integrator)
     @info "Running" job_id = p.simulation.job_id output_dir =
         p.simulation.output_dir tspan
     comms_ctx = ClimaComms.context(axes(integrator.u.c))
+    ODE.step!(integrator)
+    precompile_callbacks(integrator)
+    GC.gc()
     try
         if CA.is_distributed(comms_ctx)
-            # TODO: should we also trigger callbacks?
-            ODE.step!(integrator)
             # GC.enable(false) # disabling GC causes a memory leak
-            GC.gc()
             ClimaComms.barrier(comms_ctx)
             (sol, walltime) = timed_solve!(integrator)
             ClimaComms.barrier(comms_ctx)
@@ -141,5 +133,31 @@ function cycle!(integrator; n_cycles = 1)
     for i in 1:n_steps
         ODE.step!(integrator)
     end
+    return nothing
+end
+
+function call_all_callbacks!(integrator)
+    for cb! in atmos_callbacks(integrator.callback)
+        cb!(integrator)
+    end
+    return nothing
+end
+
+"""
+    precompile_atmos(integrator)
+
+Precompiles `step!` and all callbacks
+in the `integrator`.
+"""
+function precompile_atmos(integrator)
+    B = Base.precompile(ODE.step!, (typeof(integrator),))
+    @assert B
+    precompile_callbacks(integrator)
+    return nothing
+end
+
+function precompile_callbacks(integrator)
+    B = Base.precompile(call_all_callbacks!, (typeof(integrator),))
+    @assert B
     return nothing
 end
