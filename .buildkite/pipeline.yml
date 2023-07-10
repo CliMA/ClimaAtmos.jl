@@ -790,15 +790,6 @@ steps:
   - group: "GPU Performance"
     steps:
 
-      - label: "Perf: GPU implicit baro wave"
-        key: "gpu_implicit_barowave"
-        command:
-          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "nsys profile --trace=nvtx,cuda --output=gpu_implicit_barowave/report julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_implicit_barowave --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
-        artifact_paths: "gpu_implicit_barowave/*"
-        agents:
-          slurm_gpus: 1
-
       - label: "Perf: GPU implicit baro wave wrt h_elem"
         key: "gpu_implicit_barowave_wrt_h_elem"
         command:
@@ -808,17 +799,26 @@ steps:
         agents:
           slurm_gpus: 1
 
-      - label: "Perf: GPU benchmark step!"
+      - label: "Perf: GPU implicit baro wave"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "nsys profile --trace=nvtx,cuda --output=gpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id gpu_benchmark_step"
-        artifact_paths: "gpu_benchmark_step/*"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_implicit_barowave/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id gpu_implicit_barowave --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CUDADevice"
+        artifact_paths: "gpu_implicit_barowave/*"
         agents:
           slurm_gpus: 1
 
-      - label: "Perf: CPU benchmark step!"
-        command: "nsys profile --trace=nvtx,cuda --output=cpu_benchmark_step/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id cpu_benchmark_step --device CPUSingleThreaded"
-        artifact_paths: "cpu_benchmark_step/*"
+      - label: "Perf: GPU implicit baro wave moist"
+        command:
+          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_implicit_barowave_moist/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id gpu_implicit_barowave_moist --z_elem 25 --h_elem 12 --initial_condition MoistBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --moist equil --precip 0M --device CUDADevice"
+        artifact_paths: "gpu_implicit_barowave_moist/*"
+        soft_fail: true
+        agents:
+          slurm_gpus: 1
+
+      - label: "Perf: CPU implicit baro wave"
+        command: "nsys profile --trace=nvtx,cuda --output=cpu_implicit_barowave/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id cpu_implicit_barowave --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --device CPUSingleThreaded"
+        artifact_paths: "cpu_implicit_barowave/*"
 
 
   - group: "Performance"

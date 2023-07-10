@@ -17,9 +17,7 @@ import ClimaAtmos as CA
 using CUDA
 import ClimaComms
 
-parsed_args = CA.AtmosTargetParsedArgs(; target_job = "gpu_implicit_barowave");
-# parsed_args["device"] = "CPUSingleThreaded"; # uncomment to run on cpu
-config = CA.AtmosConfig(; parsed_args)
+config = CA.AtmosConfig()
 
 integrator = CA.get_integrator(config);
 Y₀ = deepcopy(integrator.u);
