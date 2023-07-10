@@ -249,14 +249,14 @@ function lamb_smooth_minimum(
 end
 
 """
-    mixing_length(param_set, ustar, ᶜz, sfc_tke, ᶜ∂b∂z, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
+    mixing_length(param_set, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
 
 where:
 - `param_set`: set with model parameters
 - `ustar`: friction velocity
 - `ᶜz`: height
 - `tke_sfc`: env kinetic energy at first cell center
-- `ᶜ∂b∂z`: buoyancy gradient
+- `ᶜlinear_buoygrad`: buoyancy gradient
 - `ᶜtke`: env turbulent kinetic energy
 - `obukhov_length`: surface Monin Obukhov length
 - `ᶜshear²`: shear term
@@ -273,7 +273,7 @@ function mixing_length(
     ustar::FT,
     ᶜz::FT,
     sfc_tke::FT,
-    ᶜ∂b∂z::FT,
+    ᶜlinear_buoygrad::FT,
     ᶜtke::FT,
     obukhov_length::FT,
     ᶜshear²::FT,
@@ -302,7 +302,7 @@ function mixing_length(
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
-    a_pd = c_m * (ᶜshear² - ᶜ∂b∂z / ᶜPr) * sqrt(ᶜtke)
+    a_pd = c_m * (ᶜshear² - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
     # Dissipation term
     c_neg = c_d * ᶜtke * sqrt(ᶜtke)
     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
@@ -318,7 +318,7 @@ function mixing_length(
     end
 
     # compute l_N - the effective static stability length scale.
-    N_eff = sqrt(max(ᶜ∂b∂z, 0))
+    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
     if N_eff > 0.0
         l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_max)
     else

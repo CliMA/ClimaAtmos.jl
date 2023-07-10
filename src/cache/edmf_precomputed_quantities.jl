@@ -23,7 +23,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
     (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
-    (; ᶜmixing_length, ᶜ∂b∂z, ᶜshear²) = p
+    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜshear²) = p
     (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
     (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
@@ -164,7 +164,38 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         )
     end
 
-    @. ᶜ∂b∂z = FT(1e-4)
+    # First order approximation: Use environmental mean fields.
+    @. ᶜlinear_buoygrad = buoyancy_gradients(
+        params,
+        moisture_model,
+        EnvBuoyGrad(
+            BuoyGradMean(),
+            TD.air_temperature(thermo_params, ᶜts⁰),                           # t_sat
+            TD.vapor_specific_humidity(thermo_params, ᶜts⁰),                   # qv_sat
+            ᶜspecific⁰.q_tot,                                                  # qt_sat
+            TD.dry_pottemp(thermo_params, ᶜts⁰),                               # θ_sat
+            TD.liquid_ice_pottemp(thermo_params, ᶜts⁰),                        # θ_liq_ice_sat
+            SurfaceConditions.projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),
+                ᶜlg,
+            ),                                                                 # ∂θv∂z_unsat
+            SurfaceConditions.projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(ᶜspecific⁰.q_tot)),
+                ᶜlg,
+            ),                                                                 # ∂qt∂z_sat
+            SurfaceConditions.projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))),
+                ᶜlg,
+            ),                                                                 # ∂θl∂z_sat
+            ᶜp,                                                                # p
+            ifelse(TD.has_condensate(thermo_params, ᶜts⁰), 1, 0),              # en_cld_frac
+            ᶜρ⁰,                                                               # ρ
+        ),
+    )
+
     @. ᶜshear² = FT(1e-4)
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     @. ᶜprandtl_nvec = 1
@@ -186,7 +217,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         ustar,
         ᶜz,
         sfc_tke,
-        ᶜ∂b∂z,
+        ᶜlinear_buoygrad,
         ᶜspecific⁰.tke,
         obukhov_length,
         ᶜshear²,
