@@ -385,12 +385,11 @@ function jac_kwargs(ode_algo, Y, energy_form)
 end
 
 #=
-    ode_configuration(Y, parsed_args, atmos)
+    ode_configuration(Y, parsed_args)
 
 Returns the ode algorithm
 =#
-function ode_configuration(Y, parsed_args, atmos)
-    FT = Spaces.undertype(axes(Y.c))
+function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
     alg_or_tableau = if startswith(ode_name, "ODE.")
         @warn "apply_limiter flag is ignored for OrdinaryDiffEq algorithms"
@@ -719,8 +718,9 @@ function get_integrator(config::AtmosConfig)
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
 
+    FT = Spaces.undertype(axes(Y.c))
     s = @timed_str begin
-        ode_algo = ode_configuration(Y, config.parsed_args, atmos)
+        ode_algo = ode_configuration(FT, config.parsed_args)
     end
     @info "ode_configuration: $s"
 
