@@ -156,10 +156,23 @@ function surface_state_to_conditions(
         # Assume an idealized latitude-dependent surface temperature.
         if coordinates isa Geometry.LatLongZPoint ||
            coordinates isa Geometry.LatLongPoint
-            T = FT(371) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
-        else
+    
+            T = ((-60 < coordinates.lat < 60) ? (FT(27) * (FT(1) - sinpi((FT(3) * coordinates.lat)/(FT(2) * FT(180)))^2) + FT(273.16)) : FT(273.16)) + ((-180 < coordinates.long < 180 && -30 < coordinates.lat < 30) ? (FT(3) * cospi((coordinates.long + FT(90))/(FT(180))) * cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(0)) : FT(0))
+
+            #Zonal SST = (-60 < coordinates.lat < 60) ? FT(27) * (FT(1) - sinpi((FT(3) * coordinates.lat)/(FT(2) * FT(180)))^2) + FT(273.16) : FT(273.16)
+            #Perturbation = (-180 < coordinates.long < 180 && -30 < coordinates.lat < 30) ? FT(3) * cospi((coordinates.long - FT(90))/(FT(180))) * cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(273) : FT(273)
+
+            #Original
+            #T = FT(320) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
+
+            #T + ΔT, following TC approach of Zhang et al. 2020
+            #T = FT(273.16) + 28 * (1 - sind(FT(0.85) * (coordinates.lat - 10))^2)
+            #ΔT = 2 * cosd(coordinates.long) * cospi((coordinates.lat - 10)/(2 * 30))^2
+            #T = FT(273.16) + 28 * (1 - sind(FT(0.85) * (coordinates.lat - 10))^2) + 2 * cosd(coordinates.long) * cospi((coordinates.lat - 10)/(2 * 30))^2
+
+        #else
             # Assume that the latitude is 0.
-            T = FT(300)
+            #T = FT(301.16)
         end
     end
     if isnothing(u)
