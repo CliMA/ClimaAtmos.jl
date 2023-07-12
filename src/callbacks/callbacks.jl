@@ -245,7 +245,8 @@ function compute_diagnostics(integrator)
     set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
 
     (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p
-    @assert TD.air_temperature.(thermo_params, sfc_conditions.ts) == p.sfc_setup.T
+    @assert TD.air_temperature.(thermo_params, sfc_conditions.ts) == 
+        p.sfc_setup.T
     dycore_diagnostic = (;
         common_diagnostics(ᶜu, ᶜts)...,
         pressure = ᶜp,
@@ -528,9 +529,9 @@ end
 
 
 function update_surface_temp!(integrator)
-    d = 20
-    ρₒ = 997
-    cₚₒ = 4184 
+    d = 10 # ocean mixed layer depth [m]
+    ρₒ = 1020 # ocean density [kg / m³]
+    cₚₒ = 4184 # ocean heat capacity [J/(kg * C°)]
 
     (; ᶠradiation_flux, Δt, sfc_setup, net_energy_flux_sfc) = integrator.p
     sfc_rad_flux = Spaces.level(ᶠradiation_flux, half).components.data.:1
