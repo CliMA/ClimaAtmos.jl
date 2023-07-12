@@ -169,20 +169,20 @@ steps:
       #     slurm_ntasks: 64
       #     slurm_mem_per_cpu: 16GB
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
-        command:
-          - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez-report-multi-%q{PMI_RANK} --trace=mpi --mpi-impl=openmpi julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_setup DefaultExchangeCoefficients --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 0.25days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 0.25days
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
-        artifact_paths: 
-          - "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
-          - "nsys-longruns/held_suarez-report*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
+      # - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
+      #   command:
+      #     - module load nsight-systems/2023.1.1
+      #     - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez-report-multi-%q{PMI_RANK} --trace=mpi --mpi-impl=openmpi julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_setup DefaultExchangeCoefficients --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 0.25days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 0.25days
+      #     - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
+      #     - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
+      #   artifact_paths: 
+      #     - "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
+      #     - "nsys-longruns/held_suarez-report*"
+      #   env:
+      #     CLIMACORE_DISTRIBUTED: "MPI"
+      #   agents:
+      #     slurm_ntasks: 64
+      #     slurm_mem_per_cpu: 16GB
 
       # - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
       #   command:
@@ -245,7 +245,7 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command:
           - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/aquaplanet-report-multi-%q{PMI_RANK} --trace=mpi --mpi-impl=openmpi julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
+          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/aquaplanet-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
         artifact_paths: 
@@ -257,7 +257,7 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command:
           - module load nsight-systems/2023.1.1
-          - nsys profile --output=nsys-longruns/aquaplanet-report-single --trace=mpi --mpi-impl=openmpi srun julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
+          - nsys profile --output=nsys-longruns/aquaplanet-report-single --trace=nvtx,mpi --mpi-impl=openmpi srun julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
         artifact_paths: 
