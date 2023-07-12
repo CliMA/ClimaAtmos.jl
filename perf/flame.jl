@@ -1,7 +1,7 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosPerfConfig()
+config = CA.AtmosCoveragePerfConfig()
 integrator = CA.get_integrator(config)
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
