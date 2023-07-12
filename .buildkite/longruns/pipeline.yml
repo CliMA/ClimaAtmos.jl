@@ -41,20 +41,23 @@ steps:
 
   - wait
 
-  # - group: "Targeted resolution AMIP long runs"
+  - group: "Targeted resolution AMIP long runs"
 
-  #   steps:
+    steps:
 
-      # - label: ":computer: baroclinic wave (ρe_tot) high resolution"
-      #   command:
-      #     - mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres
-      #     - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
-      #     - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_highres --fig_dir longrun_bw_rhoe_highres --case_name dry_baroclinic_wave
-      #   artifact_paths: "longrun_bw_rhoe_highres/*"
-      #   env:
-      #     CLIMACORE_DISTRIBUTED: "MPI"
-      #   agents:
-      #     slurm_ntasks: 32
+      - label: ":computer: baroclinic wave (ρe_tot) high resolution"
+        command:
+          - module load nsight-systems/2023.1.1
+          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/baroclinic_wave-report-multi-%q{PMI_RANK} --trace=ntvx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_highres --fig_dir longrun_bw_rhoe_highres --case_name dry_baroclinic_wave
+        artifact_paths: 
+          - "longrun_bw_rhoe_highres/*"
+          - "nsys-longruns/baroclinic_wave*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 32
 
       # - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
       #   command:
@@ -172,7 +175,7 @@ steps:
       # - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
       #   command:
       #     - module load nsight-systems/2023.1.1
-      #     - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez-report-multi-%q{PMI_RANK} --trace=mpi --mpi-impl=openmpi julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_setup DefaultExchangeCoefficients --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 0.25days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 0.25days
+      #     - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez-report-multi-%q{PMI_RANK} --trace=ntvx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_setup DefaultExchangeCoefficients --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 0.25days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 0.25days
       #     - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
       #     - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
       #   artifact_paths: 
@@ -182,7 +185,6 @@ steps:
       #     CLIMACORE_DISTRIBUTED: "MPI"
       #   agents:
       #     slurm_ntasks: 64
-      #     slurm_mem_per_cpu: 16GB
 
       # - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
       #   command:
