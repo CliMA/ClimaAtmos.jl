@@ -15,7 +15,8 @@ using CUDA
 import ClimaComms
 using PrettyTables
 
-parsed_args = CA.AtmosTargetParsedArgs(; target_job = "gpu_implicit_barowave");
+s = CA.argparse_settings()
+parsed_args = CA.parse_commandline(s);
 steptimes = []
 
 for h_elem in 6:2:12
