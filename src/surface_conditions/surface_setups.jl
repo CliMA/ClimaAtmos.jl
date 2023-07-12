@@ -24,7 +24,7 @@ function (::DefaultMoninObukhov)(params)
 end
 
 """
-    MoninObukhovInitTemperature()
+    MoninObukhovInitTemperature(params)
 
 Monin-Obukhov surface with an initial condition for surface temperature. The surface
 temperature will be updated in the callback. See the link below for more information
