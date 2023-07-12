@@ -157,7 +157,10 @@ function surface_state_to_conditions(
         if coordinates isa Geometry.LatLongZPoint ||
            coordinates isa Geometry.LatLongPoint
     
-            T = ((-60 < coordinates.lat < 60) ? (FT(27) * (FT(1) - sinpi((FT(3) * coordinates.lat)/(FT(2) * FT(180)))^2) + FT(273.16)) : FT(273.16)) + ((-180 < coordinates.long < 180 && -30 < coordinates.lat < 30) ? (FT(3) * cospi((coordinates.long + FT(90))/(FT(180))) * cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(0)) : FT(0))
+            T = ((-60 < coordinates.lat < 60) ? 
+            (FT(27) * (FT(1) - sinpi((FT(3) * coordinates.lat)/(FT(2) * FT(180)))^2) + FT(273.16)) : FT(273.16)) + 
+            ((-180 < coordinates.long < 180 && -30 < coordinates.lat < 30) ? 
+            (FT(3) * cospi((coordinates.long + FT(90))/(FT(180))) * cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(0)) : FT(0))
 
             #Zonal SST = (-60 < coordinates.lat < 60) ? FT(27) * (FT(1) - sinpi((FT(3) * coordinates.lat)/(FT(2) * FT(180)))^2) + FT(273.16) : FT(273.16)
             #Perturbation = (-180 < coordinates.long < 180 && -30 < coordinates.lat < 30) ? FT(3) * cospi((coordinates.long - FT(90))/(FT(180))) * cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(273) : FT(273)
@@ -170,9 +173,9 @@ function surface_state_to_conditions(
             #ΔT = 2 * cosd(coordinates.long) * cospi((coordinates.lat - 10)/(2 * 30))^2
             #T = FT(273.16) + 28 * (1 - sind(FT(0.85) * (coordinates.lat - 10))^2) + 2 * cosd(coordinates.long) * cospi((coordinates.lat - 10)/(2 * 30))^2
 
-        #else
+        else
             # Assume that the latitude is 0.
-            #T = FT(301.16)
+            T = FT(273.16)
         end
     end
     if isnothing(u)
