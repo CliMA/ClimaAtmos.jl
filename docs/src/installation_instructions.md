@@ -1,7 +1,15 @@
 # Installation instructions
 
-Download the `ClimaAtmos`
-[source](https://github.com/CliMA/ClimaAtmos.jl) with:
+ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
+
+```julia
+julia> using Pkg
+
+julia> Pkg.add("ClimaAtmos")
+```
+
+Alternatively, you can clone the `ClimaAtmos`
+[repository](https://github.com/CliMA/ClimaAtmos.jl) with:
 
 ```
 $ git clone https://github.com/CliMA/ClimaAtmos.jl.git
@@ -17,6 +25,6 @@ To use ClimaAtmos, you need to instantiate all dependencies with:
 
 ```
 $ julia --project
-julia>]
-(v1.8) pkg> instantiate
+julia> ]
+(ClimaAtmos) pkg> instantiate
 ```

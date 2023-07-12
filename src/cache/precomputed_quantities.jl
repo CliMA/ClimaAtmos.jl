@@ -73,9 +73,16 @@ function precomputed_quantities(Y, atmos)
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜentr_detrʲs = similar(
+                Y.c,
+                NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}},
+            ),
             (
                 atmos.energy_form isa TotalEnergy ?
-                (; ᶜh_totʲs = similar(Y.c, NTuple{n, FT})) : (;)
+                (;
+                    ᶜh_totʲs = similar(Y.c, NTuple{n, FT}),
+                    ᶜh_tot⁰ = similar(Y.c, FT),
+                ) : (;)
             )...,
         ) : (;)
     diagnostic_sgs_quantities =

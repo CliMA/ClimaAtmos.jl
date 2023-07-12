@@ -15,13 +15,15 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     @assert energy_form isa TotalEnergy
     @assert !(moisture_model isa DryModel)
 
-    thermo_params = CAP.thermodynamics_params(p.params)
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, energy_form, moisture_model)
 
-    (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot) = p
-    (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰) = p
-    (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs) = p
+    (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
+    (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
+    (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
+    (; buoyancy_flux) = p.sfc_conditions
 
     @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
     @. ᶜρa⁰ = ρa⁰(Y.c)
@@ -30,6 +32,8 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     @. ᶜK⁰ += ᶜspecific⁰.tke
     @. ᶜts⁰ = ts_sgs(thermo_args..., ᶜspecific⁰, ᶜK⁰, ᶜΦ, ᶜp)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    @. ᶜh_tot⁰ =
+        TD.total_specific_enthalpy(thermo_params, ᶜts⁰, ᶜspecific⁰.e_tot)
     @. ᶜspecificʲs = specific_sgsʲs(Y.c, turbconv_model)
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
@@ -66,8 +70,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         )
         ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
         ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
-        (; buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) =
-            p.sfc_conditions
+        (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) = p.sfc_conditions
         buoyancy_flux_val = Fields.field_values(buoyancy_flux)
         ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
         ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
@@ -137,6 +140,27 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
                 ᶜΦ_int_val,
             )
         @. sgsʲs_ρaq_tot_int_val = sgsʲs_ρa_int_val * ᶜq_totʲ_int_val
+    end
+
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜlg = Fields.local_geometry_field(Y.c)
+
+    for j in 1:n
+        @. ᶜentr_detrʲs.:($$j) = pi_groups_entr_detr(
+            params,
+            p.atmos.edmfx_entr_detr,
+            ᶜz,
+            ᶜp,
+            Y.c.ρ,
+            buoyancy_flux,
+            Y.c.sgsʲs.:($$j).ρa / ᶜρʲs.:($$j),
+            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
+            ᶜbuoyancy(params, ᶜρ_ref, ᶜρʲs.:($$j)),
+            get_physical_w(ᶜu⁰, ᶜlg),
+            TD.relative_humidity(thermo_params, ᶜts⁰),
+            ᶜbuoyancy(params, ᶜρ_ref, ᶜρ⁰),
+        )
     end
 
     return nothing

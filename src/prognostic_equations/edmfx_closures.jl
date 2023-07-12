@@ -194,48 +194,14 @@ function pi_groups_entr_detr(
     end
 end
 
-edmfx_entr_detr_cache(Y, turbconv_model) = (;)
-function edmfx_entr_detr_cache(Y, turbconv_model::EDMFX)
-    n = n_mass_flux_subdomains(turbconv_model)
-    FT = eltype(Y)
-    return (;
-        ᶜentr_detrʲs = similar(
-            Y.c,
-            NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}},
-        )
-    )
-end
-
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜlg = Fields.local_geometry_field(Y.c)
-
-    (; params, ᶜp, ᶜρ_ref, sfc_conditions) = p
-    (; ᶜρʲs, ᶜtsʲs, ᶜuʲs, ᶜspecificʲs, ᶜentr_detrʲs) = p
-    (; ᶜρ⁰, ᶜts⁰, ᶜu⁰, ᶜspecific⁰) = p
-
-    thermo_params = CAP.thermodynamics_params(params)
-
-    ᶜz = Fields.coordinate_field(Y.c).z
+    (; ᶜspecificʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
+    (; ᶜu⁰, ᶜspecific⁰, ᶜh_tot⁰) = p
 
     for j in 1:n
-        @. ᶜentr_detrʲs.:($$j)[colidx] = pi_groups_entr_detr(
-            params,
-            p.atmos.edmfx_entr_detr,
-            ᶜz[colidx],
-            ᶜp[colidx],
-            Y.c.ρ[colidx],
-            sfc_conditions[colidx].buoyancy_flux,
-            Y.c.sgsʲs.:($$j).ρa[colidx] / ᶜρʲs.:($$j)[colidx],
-            get_physical_w(ᶜuʲs.:($$j)[colidx], ᶜlg[colidx]),
-            TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)[colidx]),
-            ᶜbuoyancy(params, ᶜρ_ref[colidx], ᶜρʲs.:($$j)[colidx]),
-            get_physical_w(ᶜu⁰[colidx], ᶜlg[colidx]),
-            TD.relative_humidity(thermo_params, ᶜts⁰[colidx]),
-            ᶜbuoyancy(params, ᶜρ_ref[colidx], ᶜρ⁰[colidx]),
-        )
 
         @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
             Y.c.sgsʲs.:($$j).ρa[colidx] * (
@@ -245,16 +211,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
 
         @. Yₜ.c.sgsʲs.:($$j).ρae_tot[colidx] +=
             Y.c.sgsʲs.:($$j).ρa[colidx] * (
-                ᶜentr_detrʲs.:($$j).entr[colidx] * TD.total_specific_enthalpy(
-                    thermo_params,
-                    ᶜts⁰[colidx],
-                    ᶜspecific⁰.e_tot[colidx],
-                ) -
-                ᶜentr_detrʲs.:($$j).detr[colidx] * TD.total_specific_enthalpy(
-                    thermo_params,
-                    ᶜtsʲs.:($$j)[colidx],
-                    ᶜspecificʲs.:($$j).e_tot[colidx],
-                )
+                ᶜentr_detrʲs.:($$j).entr[colidx] * ᶜh_tot⁰[colidx] -
+                ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜh_totʲs.:($$j)[colidx]
             )
 
         @. Yₜ.c.sgsʲs.:($$j).ρaq_tot[colidx] +=

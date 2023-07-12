@@ -234,6 +234,40 @@ function Base.summary(io::IO, atmos::AtmosModel)
     end
 end
 
+abstract type AbstractCallbackFrequency end
+struct EveryNSteps <: AbstractCallbackFrequency
+    n::Int
+end
+struct EveryΔt{FT} <: AbstractCallbackFrequency
+    Δt::FT
+end
+struct AtmosCallback{F, CBF <: AbstractCallbackFrequency, VI <: Vector{Int}}
+    f!::F
+    cbf::CBF
+    n_measured_calls::VI
+end
+callback_frequency(cb::AtmosCallback) = cb.cbf
+prescribed_every_n_steps(x::EveryNSteps) = x.n
+prescribed_every_n_steps(cb::AtmosCallback) = prescribed_every_n_steps(cb.cbf)
+
+prescribed_every_Δt_steps(x::EveryΔt) = x.Δt
+prescribed_every_Δt_steps(cb::AtmosCallback) = prescribed_every_Δt_steps(cb.cbf)
+
+# TODO: improve accuracy
+n_expected_calls(cbf::EveryΔt, dt, tspan) = (tspan[2] - tspan[1]) / cbf.Δt
+n_expected_calls(cbf::EveryNSteps, dt, tspan) =
+    ((tspan[2] - tspan[1]) / dt) / cbf.n
+n_expected_calls(cb::AtmosCallback, dt, tspan) =
+    n_expected_calls(cb.cbf, dt, tspan)
+
+AtmosCallback(f!, cbf) = AtmosCallback(f!, cbf, Int[0])
+function (cb::AtmosCallback)(integrator)
+    cb.f!(integrator)
+    cb.n_measured_calls[] += 1
+    return nothing
+end
+n_measured_calls(cb::AtmosCallback) = cb.n_measured_calls[]
+
 struct AtmosConfig{FT, TD, PA, C}
     toml_dict::TD
     parsed_args::PA
