@@ -529,13 +529,13 @@ end
 
 
 function update_surface_temp!(integrator)
-    d = 10 # ocean mixed layer depth [m]
-    ρₒ = 1020 # ocean density [kg / m³]
-    cₚₒ = 4184 # ocean heat capacity [J/(kg * C°)]
+    depth = 10 # ocean mixed layer depth [m]
+    ρ_ocean = 1020 # ocean density [kg / m³]
+    cp_ocean = 4184 # ocean heat capacity [J/(kg * K)]
 
-    (; ᶠradiation_flux, Δt, sfc_setup, net_energy_flux_sfc) = integrator.p
+    (; ᶠradiation_flux, Δt, sfc_setup) = integrator.p
     sfc_rad_flux = Spaces.level(ᶠradiation_flux, half).components.data.:1
 
     # Merlis et al., 2013 eq(9)
-    @. sfc_setup.T -= sfc_rad_flux * Δt  / (ρₒ * cₚₒ * d)
+    @. sfc_setup.T -= sfc_rad_flux * Δt  / (ρ_ocean * cp_ocean * depth)
 end

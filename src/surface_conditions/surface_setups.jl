@@ -24,9 +24,10 @@ function (::DefaultMoninObukhov)(params)
 end
 
 """
-    DefaultMoninObukhov()
+    MoninObukhovInitTemperature()
 
-Monin-Obukhov surface, see the link below for more information
+Monin-Obukhov surface with an initial condition for surface temperature. The surface
+temperature will be updated in the callback. See the link below for more information
 https://clima.github.io/SurfaceFluxes.jl/dev/SurfaceFluxes/#Monin-Obukhov-Similarity-Theory-(MOST)
 """
 struct MoninObukhovInitTemperature<: SurfaceSetup end
