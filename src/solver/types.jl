@@ -303,7 +303,7 @@ end
 
 
 """
-    AtmosPerfParsedArgs()
+    AtmosCoveragePerfParsedArgs()
 
 Define an atmos config for performance runs, and allows
 options to be overridden in several ways. In short the
@@ -321,12 +321,12 @@ Launch with `julia --project=perf/`
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
-parsed_args = CA.AtmosPerfParsedArgs(;moist="dry")
+parsed_args = CA.AtmosCoveragePerfParsedArgs(;moist="dry")
 config = CA.AtmosConfig(;parsed_args)
 ```
 """
-function AtmosPerfParsedArgs(s = argparse_settings())
-    @info "Using base performance parameters + provided CL arguments."
+function AtmosCoveragePerfParsedArgs(s = argparse_settings())
+    @info "Using coverage performance parameters + provided CL arguments."
     parsed_args_defaults = cli_defaults(s)
     dict = parsed_args_per_job_id(; filter_name = "driver.jl")
 
@@ -356,8 +356,8 @@ function AtmosPerfParsedArgs(s = argparse_settings())
     return parsed_args
 end
 
-AtmosPerfConfig(s = argparse_settings()) =
-    AtmosConfig(s; parsed_args = AtmosPerfParsedArgs(s))
+AtmosCoveragePerfConfig(s = argparse_settings()) =
+    AtmosConfig(s; parsed_args = AtmosCoveragePerfParsedArgs(s))
 
 function AtmosConfig(
     s = argparse_settings();
