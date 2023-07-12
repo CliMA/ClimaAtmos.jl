@@ -41,9 +41,9 @@ steps:
 
   - wait
 
-  - group: "Targeted resolution AMIP long runs"
+  # - group: "Targeted resolution AMIP long runs"
 
-    steps:
+  #   steps:
 
       # - label: ":computer: baroclinic wave (ρe_tot) high resolution"
       #   command:
@@ -245,7 +245,7 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command:
           - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/aquaplanet-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
+          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/aquaplanet-report-multi-%q{PMI_RANK} --trace=nvtx --mpi-impl=openmpi julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
         artifact_paths: 
@@ -257,7 +257,7 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command:
           - module load nsight-systems/2023.1.1
-          - nsys profile --output=nsys-longruns/aquaplanet-report-single --trace=nvtx,mpi --mpi-impl=openmpi srun julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
+          - nsys profile --output=nsys-longruns/aquaplanet-report-single --trace=nvtx --mpi-impl=openmpi srun julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
         artifact_paths: 
