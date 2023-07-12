@@ -48,7 +48,7 @@ steps:
       - label: ":computer: baroclinic wave (ρe_tot) high resolution"
         command:
           - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/baroclinic_wave-report-multi-%q{PMI_RANK} --trace=ntvx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 100days --dt_save_to_disk 10days --job_id longrun_bw_rhoe_highres
+          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/baroclinic_wave-report-multi-%q{PMI_RANK} --trace=ntvx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 1days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_highres --fig_dir longrun_bw_rhoe_highres --case_name dry_baroclinic_wave
         artifact_paths: 
