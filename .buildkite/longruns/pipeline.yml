@@ -120,7 +120,9 @@ steps:
           - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 800days --job_id longrun_hs_rhoe_highres_hightop --dt_save_to_disk 10days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_highres_hightop --out_dir longrun_hs_rhoe_highres_hightop
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_highres_hightop --fig_dir longrun_hs_rhoe_highres_hightop --case_name dry_held_suarez
-        artifact_paths: "longrun_hs_rhoe_highres_hightop/*"
+        artifact_paths: 
+          - "longrun_hs_rhoe_highres_hightop/*"
+          - "nsys-longruns/held_suarez*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
