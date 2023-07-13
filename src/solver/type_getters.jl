@@ -640,7 +640,9 @@ end
 
 import ClimaComms, Logging, NVTX
 function get_comms_context(parsed_args)
-    device = if parsed_args["device"] == "CUDADevice"
+    device = if parsed_args["device"] == "auto"
+        ClimaComms.device()
+    elseif parsed_args["device"] == "CUDADevice"
         ClimaComms.CUDADevice()
     elseif parsed_args["device"] == "CPUMultiThreaded" || Threads.nthreads() > 1
         ClimaComms.CPUMultiThreaded()

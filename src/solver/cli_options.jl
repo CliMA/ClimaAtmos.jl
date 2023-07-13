@@ -360,9 +360,9 @@ function argparse_settings()
         help = "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
         arg_type = String
         "--device"
-        help = "Device type to use [`CPUSingleThreaded` (default), `CPUMultiThreaded`, `CUDADevice`]"
+        help = "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
         arg_type = String
-        default = "CPUSingleThreaded"
+        default = "auto"
         "--perf_summary"
         help = "Flag for collecting performance summary information"
         arg_type = Bool
