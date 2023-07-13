@@ -268,14 +268,22 @@ function set_precomputed_quantities!(Y, p, t)
     (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜΦ) = p
     ᶠuₕ³ = p.ᶠtemp_CT3
 
-    @. ᶜspecific = specific_gs(Y.c)
-    set_ᶠuₕ³!(ᶠuₕ³, Y)
+    @nvtx "specific_gs" color = colorant"khaki" begin
+        @. ᶜspecific = specific_gs(Y.c)
+    end
+    @nvtx "set_ᶠuₕ³!" color = colorant"wheat1" begin
+        set_ᶠuₕ³!(ᶠuₕ³, Y)
+    end
 
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
-    set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    @nvtx "set_velocity_at_surface!" color = colorant"blue" begin
+        set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    end
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    @nvtx "set_velocity_quantities!" color = colorant"darkolivegreen" begin
+        set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
+    end
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
@@ -291,23 +299,36 @@ function set_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.sgs⁰.ρatke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
-    @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    @nvtx "ts_gs" color = colorant"aquamarine" begin
+        @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
+    end
+    @nvtx "TD.air_pressure" color = colorant"cyan" begin
+        @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+    end
 
     if energy_form isa TotalEnergy
         (; ᶜh_tot) = p
-        @. ᶜh_tot =
-            TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+        @nvtx "total_specific_enthalpy" color = colorant"indigo" begin
+            @. ᶜh_tot =
+                TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
+        end
     end
 
-    SurfaceConditions.update_surface_conditions!(Y, p, t)
+    @nvtx "update_suface_conditions!" color = colorant"magenta" begin
+        SurfaceConditions.update_surface_conditions!(Y, p, t)
+    end
 
     if turbconv_model isa EDMFX
-        set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
+        @nvtx "set_edmf_precomputed_quantities!" color = colorant"tan" begin
+            set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
+        end
     end
 
     if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
+        @nvtx "set_diagnostic_edmf_precomputed_quantities!" color =
+            colorant"skyblue" begin
+            set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
+        end
     end
 
     return nothing

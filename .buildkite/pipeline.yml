@@ -798,6 +798,7 @@ steps:
         artifact_paths: "gpu_implicit_barowave_wrt_h_elem/*"
         agents:
           slurm_gpus: 1
+        timeout_in_minutes: 60
 
       - label: "Perf: GPU implicit baro wave"
         command:
@@ -806,6 +807,7 @@ steps:
         artifact_paths: "gpu_implicit_barowave/*"
         agents:
           slurm_gpus: 1
+        timeout_in_minutes: 60
 
       - label: "Perf: GPU implicit baro wave moist"
         command:
@@ -815,6 +817,7 @@ steps:
         soft_fail: true
         agents:
           slurm_gpus: 1
+        timeout_in_minutes: 60
 
       - label: "Perf: CPU implicit baro wave"
         command: "nsys profile --trace=nvtx,cuda --output=cpu_implicit_barowave/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id cpu_implicit_barowave --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf"
