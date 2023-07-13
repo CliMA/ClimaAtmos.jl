@@ -35,6 +35,7 @@ function temporary_quantities(atmos, center_space, face_space)
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
+        ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         temp_data_level = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_data
