@@ -12,6 +12,9 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if p.atmos.turbconv_model isa EDMFX
         (; ᶜu⁰, ᶜuʲs) = p
     end
+    if p.atmos.turbconv_model isa DiagnosticEDMFX
+        (; ᶜu⁰) = p
+    end
 
     @. Yₜ.c.ρ -= divₕ(Y.c.ρ * ᶜu)
     if p.atmos.turbconv_model isa EDMFX
@@ -40,6 +43,10 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     end
 
     if p.atmos.turbconv_model isa EDMFX
+        @. Yₜ.c.sgs⁰.ρatke -= divₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
+    end
+
+    if p.atmos.turbconv_model isa DiagnosticEDMFX
         @. Yₜ.c.sgs⁰.ρatke -= divₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 

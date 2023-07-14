@@ -308,13 +308,16 @@ function compute_diagnostics(integrator)
                              ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
+        (; ᶜtke⁰) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
+        env_diagnostics = (; tke = ᶜtke⁰)
         draft_diagnostics = (;
             common_diagnostics(ᶜu⁺, ᶜts⁺)...,
             area = ᶜa⁺,
             cloud_fraction = cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
         turbulence_convection_diagnostic = (;
+            add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
             cloud_fraction = ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )

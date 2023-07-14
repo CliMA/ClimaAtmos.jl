@@ -105,6 +105,8 @@ function precomputed_quantities(Y, atmos)
             ),
             ᶜρa⁰ = similar(Y.c, FT),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
+            ᶜu⁰ = similar(Y.c, C123{FT}),
+            ᶜtke⁰ = similar(Y.c, FT),
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., diagnostic_sgs_quantities...)
 end

@@ -21,7 +21,8 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     )
 
     # Sub-grid scale quantities
-    ᶜ∇²uʲs = n == 0 ? (;) : similar(Y.c, NTuple{n, C123{FT}})
+    ᶜ∇²uʲs =
+        atmos.turbconv_model isa EDMFX ? similar(Y.c, NTuple{n, C123{FT}}) : (;)
     sgs_quantities =
         atmos.turbconv_model isa EDMFX ?
         (;
@@ -32,7 +33,9 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
             ᶜ∇²specific_tracersʲs = remove_energy_var.(
                 specific_sgsʲs.(Y.c, atmos.turbconv_model)
             ),
-        ) : (;)
+        ) :
+        atmos.turbconv_model isa DiagnosticEDMFX ?
+        (; ᶜ∇²tke⁰ = similar(Y.c, FT)) : (;)
     quantities = (; gs_quantities..., sgs_quantities...)
     if do_dss
         quantities = (;
@@ -68,6 +71,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
             ᶜ∇²specific_energyʲs,
         ) = p
     end
+    if turbconv_model isa DiagnosticEDMFX
+        (; ᶜtke⁰, ᶜ∇²tke⁰) = p
+    end
     if do_dss
         buffer = p.hyperdiffusion_ghost_buffer
     end
@@ -87,6 +93,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     if turbconv_model isa EDMFX
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
+    end
+    if turbconv_model isa DiagnosticEDMFX
+        @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
 
     # Sub-grid scale hyperdiffusion
@@ -145,6 +154,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     end
                     dss_op!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
                 end
+                if turbconv_model isa DiagnosticEDMFX
+                    dss_op!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
+                end
             end
         end
     end
@@ -187,6 +199,9 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 κ₄ *
                 wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²specific_energyʲs.:($$j)))
         end
+    end
+    if turbconv_model isa DiagnosticEDMFX
+        @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
     end
 end
 
