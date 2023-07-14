@@ -379,13 +379,12 @@ function compute_diagnostics(integrator)
     if !isnothing(p.atmos.vert_diff)
         sfc_local_geometry =
             Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
-        surface_c3_unit =
-            C3.(unit_basis_vector_data.(C3, sfc_local_geometry))
+        surface_c3_unit = C3.(unit_basis_vector_data.(C3, sfc_local_geometry))
         (; ρ_flux_uₕ, ρ_flux_h_tot) = p.sfc_conditions
         sfc_flux_momentum =
             Geometry.UVVector.(
                 adjoint.(ρ_flux_uₕ ./ Spaces.level(ᶠinterp.(Y.c.ρ), half)) .*
-                surface_c3_unit
+                Geometry.project.(Geometry.Covariant3Axis.(), surface_c3_unit)
             )
         vert_diff_diagnostic = (;
             sfc_flux_u = sfc_flux_momentum.components.data.:1,
