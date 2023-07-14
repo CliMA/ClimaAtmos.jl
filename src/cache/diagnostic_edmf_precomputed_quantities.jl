@@ -343,18 +343,20 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             scale_factor = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 CT3(FT(0)),
                 CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
             )
             @. ρaʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 FT(0),
                 ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
@@ -378,9 +380,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 )
             @. h_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 h_tot_level,
                 ρaʲu³ʲ_datah_tot / ρaʲu³ʲ_data,
@@ -404,9 +407,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 )
             @. q_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,

@@ -94,10 +94,9 @@ function precipitation_tendency!(
     # update precip in cache for coupler's use
     # 3d rain and snow
     @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
-    @. ᶜ3d_rain[colidx] =
-        ifelse(ᶜT[colidx] >= FT(273.15), ᶜS_ρq_tot[colidx], FT(0))
-    @. ᶜ3d_snow[colidx] =
-        ifelse(ᶜT[colidx] < FT(273.15), ᶜS_ρq_tot[colidx], FT(0))
+    T_fr = TD.Parameters.T_freeze(thermo_params)
+    @. ᶜ3d_rain[colidx] = ifelse(ᶜT[colidx] >= T_fr, ᶜS_ρq_tot[colidx], 0)
+    @. ᶜ3d_snow[colidx] = ifelse(ᶜT[colidx] < T_fr, ᶜS_ρq_tot[colidx], 0)
     Operators.column_integral_definite!(
         col_integrated_rain[colidx],
         ᶜ3d_rain[colidx],
