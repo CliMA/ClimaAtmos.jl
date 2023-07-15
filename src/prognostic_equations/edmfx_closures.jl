@@ -7,12 +7,6 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
 """
-    Return physical vertical velocity - a projection of full velocity vector
-    onto the vertical axis.
-"""
-get_physical_w(u, local_geometry) = Geometry.WVector(u, local_geometry)[1]
-
-"""
     Return buoyancy on cell centers.
 """
 function ᶜbuoyancy(params, ᶜρ_ref::FT, ᶜρ::FT) where {FT}

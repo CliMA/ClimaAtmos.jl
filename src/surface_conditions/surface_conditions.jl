@@ -5,26 +5,6 @@ Base.Broadcast.BroadcastStyle(
 ) = ds
 
 """
-    unit_basis_vector_data(type, local_geometry)
-
-The component of the vector of the specified type with length 1 in physical units.
-The type should correspond to a vector with only one component, i.e., a basis vector.
-"""
-function unit_basis_vector_data(::Type{V}, local_geometry) where {V}
-    FT = Geometry.undertype(typeof(local_geometry))
-    return FT(1) / Geometry._norm(V(FT(1)), local_geometry)
-end
-
-"""
-    projected_vector_data(::Type{V}, vector, local_geometry)
-
-Projects the given vector onto the axis of V, then extracts the component data and rescales it to physical units.
-The type should correspond to a vector with only one component, i.e., a basis vector.
-"""
-projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
-    V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
-
-"""
     update_surface_conditions!(Y, p, t)
 
 Updates the value of `p.sfc_conditions` based on the current state `Y` and time

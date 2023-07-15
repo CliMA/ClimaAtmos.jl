@@ -175,17 +175,13 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             ᶜspecific⁰.q_tot,                                                  # qt_sat
             TD.dry_pottemp(thermo_params, ᶜts⁰),                               # θ_sat
             TD.liquid_ice_pottemp(thermo_params, ᶜts⁰),                        # θ_liq_ice_sat
-            SurfaceConditions.projected_vector_data(
+            projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),
                 ᶜlg,
             ),                                                                 # ∂θv∂z_unsat
-            SurfaceConditions.projected_vector_data(
-                C3,
-                ᶜgradᵥ(ᶠinterp(ᶜspecific⁰.q_tot)),
-                ᶜlg,
-            ),                                                                 # ∂qt∂z_sat
-            SurfaceConditions.projected_vector_data(
+            projected_vector_data(C3, ᶜgradᵥ(ᶠinterp(ᶜspecific⁰.q_tot)), ᶜlg), # ∂qt∂z_sat
+            projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))),
                 ᶜlg,
