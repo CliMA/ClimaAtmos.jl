@@ -8,6 +8,7 @@ import ..DryModel
 import ..TurbulenceConvection as TC
 
 import ..CT1, ..CT2, ..C12, ..CT12, ..C3
+import ..unit_basis_vector_data, ..projected_vector_data
 import ..get_wstar
 
 import ClimaCore: DataLayouts, Geometry, Fields

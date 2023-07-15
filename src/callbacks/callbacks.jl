@@ -1,6 +1,5 @@
 import ClimaCore.DataLayouts as DL
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
-import ClimaAtmos.SurfaceConditions: unit_basis_vector_data
 import Thermodynamics as TD
 import LinearAlgebra
 import ClimaCore.Fields
