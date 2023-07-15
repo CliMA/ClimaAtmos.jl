@@ -102,6 +102,48 @@ struct EDMFX{N, FT}
 end
 EDMFX{N}(a_half::FT) where {N, FT} = EDMFX{N, FT}(a_half)
 
+abstract type AbstractEnvBuoyGradClosure end
+struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
+
+Base.broadcastable(x::BuoyGradMean) = tuple(x)
+
+"""
+    EnvBuoyGrad
+
+Variables used in the environmental buoyancy gradient computation.
+"""
+Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
+    "temperature in the saturated part"
+    t_sat::FT
+    "vapor specific humidity  in the saturated part"
+    qv_sat::FT
+    "total specific humidity in the saturated part"
+    qt_sat::FT
+    "potential temperature in the saturated part"
+    θ_sat::FT
+    "liquid ice potential temperature in the saturated part"
+    θ_liq_ice_sat::FT
+    "virtual potential temperature gradient in the non saturated part"
+    ∂θv∂z_unsat::FT
+    "total specific humidity gradient in the saturated part"
+    ∂qt∂z_sat::FT
+    "liquid ice potential temperature gradient in the saturated part"
+    ∂θl∂z_sat::FT
+    "reference pressure"
+    p::FT
+    "cloud fraction"
+    en_cld_frac::FT
+    "density"
+    ρ::FT
+end
+function EnvBuoyGrad(
+    ::EBG,
+    t_sat::FT,
+    args...,
+) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
+end
+
 struct DiagnosticEDMFX{N, FT}
     a_int::FT # area fraction of the first interior cell above the surface
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
