@@ -252,8 +252,7 @@ function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
     topo_ll = (; hmax, hmin, t11, t12, t21, t22)
 
     # create ClimaCore.Fields
-    topo_cg = FieldFromNamedTuple(
-        axes(Fields.level(Y.c.ρ, 1)),
+    topo_cg = fill(
         (;
             t11 = FT(0),
             t12 = FT(0),
@@ -262,6 +261,7 @@ function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
             hmin = FT(0),
             hmax = FT(0),
         ),
+        axes(Fields.level(Y.c.ρ, 1)),
     )
 
     cg_lat = Fields.level(Fields.coordinate_field(Y.c).lat, 1)
@@ -287,8 +287,7 @@ function regrid_OGW_info(Y, orographic_info_rll)
 
     lon, lat, topo_ll = get_topo_ll(orographic_info_rll)
 
-    topo_cg = FieldFromNamedTuple(
-        axes(Fields.level(Y.c.ρ, 1)),
+    topo_cg = fill(
         (;
             t11 = FT(0),
             t12 = FT(0),
@@ -297,6 +296,7 @@ function regrid_OGW_info(Y, orographic_info_rll)
             hmin = FT(0),
             hmax = FT(0),
         ),
+        axes(Fields.level(Y.c.ρ, 1)),
     )
 
     cg_lat = Fields.level(Fields.coordinate_field(Y.c).lat, 1)
@@ -331,9 +331,4 @@ function get_topo_ll(orographic_info_rll)
     (; lon, lat, hmax, hmin, t11, t12, t21, t22) = nt
 
     return (lon, lat, (; hmax, hmin, t11, t12, t21, t22))
-end
-
-function FieldFromNamedTuple(space, nt::NamedTuple)
-    cmv(z) = nt
-    return cmv.(Fields.coordinate_field(space))
 end
