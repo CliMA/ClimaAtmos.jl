@@ -64,22 +64,6 @@ Base.@propagate_inbounds Base.setindex!(
     "Attempting to setindex with a face index (PlusHalf) into a Center field",
 )
 
-# Constant field
-function FieldFromNamedTuple(space, nt::NamedTuple)
-    cmv(z) = nt
-    return cmv.(CC.Fields.coordinate_field(space))
-end
-# Non-constant field
-function FieldFromNamedTuple(
-    space,
-    initial_conditions::Function,
-    ::Type{FT},
-    params...,
-) where {FT}
-    local_geometry = CC.Fields.local_geometry_field(space)
-    return initial_conditions.(FT, local_geometry, params...)
-end
-
 function Base.cumsum(field::CC.Fields.FiniteDifferenceField)
     Base.cumsum(
         parent(CC.Fields.weighted_jacobian(field)) .* vec(field),
