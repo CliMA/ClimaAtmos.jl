@@ -63,6 +63,19 @@ function get_vertical_diffusion_model(
     end
 end
 
+function get_surface_model(parsed_args)
+    prognostic_surface_name = parsed_args["prognostic_surface"]
+    return if prognostic_surface_name in
+              ("false", false, "PrescribedSurfaceTemperature")
+        PrescribedSurfaceTemperature()
+    elseif prognostic_surface_name in
+           ("true", true, "PrognosticSurfaceTemperature")
+        PrognosticSurfaceTemperature()
+    else
+        error("Uncaught surface model `$prognostic_surface_name`.")
+    end
+end
+
 function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")

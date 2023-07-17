@@ -86,6 +86,10 @@ function argparse_settings()
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String
         default = "false"
+        "--prognostic_surface"
+        help = "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
+        arg_type = String
+        default = "false"
         "--surface_setup"
         help = "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
         arg_type = String

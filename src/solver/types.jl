@@ -25,6 +25,10 @@ abstract type AbstractSST end
 struct ZonallySymmetricSST <: AbstractSST end
 struct ZonallyAsymmetricSST <: AbstractSST end
 
+abstract type AbstractSurfaceTemperature end
+struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
+struct PrognosticSurfaceTemperature <: AbstractSurfaceTemperature end
+
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     κ₄::FT
@@ -270,6 +274,7 @@ Base.@kwdef struct AtmosModel{
     VS,
     RS,
     ST,
+    SM,
 }
     model_config::MC = nothing
     perf_mode::PEM = nothing
@@ -294,6 +299,7 @@ Base.@kwdef struct AtmosModel{
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
+    surface_model::SM = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)

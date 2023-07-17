@@ -18,7 +18,6 @@ function update_surface_conditions!(Y, p, t)
     )
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-
     (; ᶜts, ᶜu, sfc_conditions, sfc_setup, params, atmos) = p
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
@@ -26,17 +25,59 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
 
+    is_prognostic_sfc = atmos.surface_model isa PrognosticSurfaceTemperature
+    sfc_prognostic_temp =
+        is_prognostic_sfc ? Fields.field_values(Y.sfc.T) : nothing
+
     if sfc_setup isa Function
-        @. sfc_conditions_values = surface_state_to_conditions(
-            sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t),
-            sfc_local_geometry_values,
-            int_ts_values,
-            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
-            int_z_values,
-            params,
-            atmos,
-        )
+        if (is_prognostic_sfc)
+            @. sfc_conditions_values = surface_state_to_conditions(
+                sfc_setup(
+                    sfc_local_geometry_values.coordinates,
+                    int_z_values,
+                    t,
+                ),
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+                sfc_prognostic_temp,
+            )
+        else
+            @. sfc_conditions_values = surface_state_to_conditions(
+                sfc_setup(
+                    sfc_local_geometry_values.coordinates,
+                    int_z_values,
+                    t,
+                ),
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+            )
+        end
     elseif sfc_setup isa Fields.Field # This case is needed for the Coupler
         @assert eltype(sfc_setup) <: SurfaceState
         sfc_setup_values = Fields.field_values(sfc_setup)
@@ -52,16 +93,46 @@ function update_surface_conditions!(Y, p, t)
         )
     else # SurfaceSetup is a SurfaceState
         tup_sfc_setup = tuple(sfc_setup)
-        @. sfc_conditions_values = surface_state_to_conditions(
-            tup_sfc_setup,
-            sfc_local_geometry_values,
-            int_ts_values,
-            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
-            int_z_values,
-            params,
-            atmos,
-        )
+        if (is_prognostic_sfc)
+            @. sfc_conditions_values = surface_state_to_conditions(
+                tup_sfc_setup,
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+                sfc_prognostic_temp,
+            )
+        else
+            @. sfc_conditions_values = surface_state_to_conditions(
+                tup_sfc_setup,
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+            )
+        end
     end
     return nothing
 end
@@ -134,6 +205,7 @@ end
         interior_z,
         params,
         atmos,
+        sfc_prognostic_temp, (default = nothing)
     )
 
 Computes the surface conditions, given information about the surface and the
@@ -148,6 +220,7 @@ function surface_state_to_conditions(
     interior_z,
     params,
     atmos,
+    sfc_prognostic_temp = nothing,
 )
     (; parameterization, T, p, q_vap, u, v, gustiness, beta) = surface_state
     (; coordinates) = surface_local_geometry
@@ -157,10 +230,11 @@ function surface_state_to_conditions(
 
     (!isnothing(q_vap) && atmos.moisture_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
-
-    if isnothing(T)
-        if coordinates isa Geometry.LatLongZPoint ||
-           coordinates isa Geometry.LatLongPoint
+    if isnothing(sfc_prognostic_temp)
+        if isnothing(T) && (
+            coordinates isa Geometry.LatLongZPoint ||
+            coordinates isa Geometry.LatLongPoint
+        )
             if atmos.sfc_temperature isa ZonallyAsymmetricSST
                 #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021  
                 T =
@@ -187,10 +261,12 @@ function surface_state_to_conditions(
                 #Assume an idealized latitude-dependent surface temperature
                 T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
             end
-        else
+        elseif isnothing(T)
             # Assume that the latitude is 0.
             T = FT(300)
         end
+    else
+        T = sfc_prognostic_temp
     end
     if isnothing(u)
         u = FT(0)
