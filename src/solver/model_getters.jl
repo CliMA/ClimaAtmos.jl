@@ -76,6 +76,19 @@ function get_surface_model(parsed_args)
     end
 end
 
+function get_surface_setup_model(surface_setup)
+    # seem to be having a problem with this function not properly processing surface_setup's type
+    return if surface_setup isa Function
+        SurfaceSetupFunction()
+    elseif surface_setup isa Fields.Field # This case is needed for the Coupler
+        # might need to import Field here
+        @assert eltype(surface_setup) <: SurfaceState
+        SurfaceSetupField()
+    else # SurfaceSetup is a SurfaceState
+        SurfaceSetupDefaultStruct()
+    end
+end
+
 function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")

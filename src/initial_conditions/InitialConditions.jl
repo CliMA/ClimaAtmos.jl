@@ -13,6 +13,9 @@ import ..PerfStandard
 import ..PerfExperimental
 import ..PrescribedSurfaceTemperature
 import ..PrognosticSurfaceTemperature
+import ..SurfaceSetupFunction
+import ..SurfaceSetupField
+import ..SurfaceSetupDefaultStruct
 import ..C3
 import ..C12
 import ..EDMFX

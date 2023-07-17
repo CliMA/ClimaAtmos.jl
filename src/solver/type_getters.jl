@@ -13,7 +13,7 @@ import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DEQ
 
-function get_atmos(config::AtmosConfig, turbconv_params)
+function get_atmos(config::AtmosConfig, turbconv_params, surface_setup)
     (; parsed_args) = config
     FT = eltype(config)
     moisture_model = get_moisture_model(parsed_args)
@@ -74,6 +74,7 @@ function get_atmos(config::AtmosConfig, turbconv_params)
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
+        surface_setup_model = get_surface_setup_model(surface_setup),
     )
 
     @info "AtmosModel: \n$(summary(atmos))"
@@ -684,11 +685,11 @@ end
 function get_integrator(config::AtmosConfig)
     params = create_parameter_set(config)
 
-    atmos = get_atmos(config, params.turbconv_params)
+    surface_setup = get_surface_setup(config.parsed_args)
+    atmos = get_atmos(config, params.turbconv_params, surface_setup(params)) #something with params could be missing this up
     numerics = get_numerics(config.parsed_args)
     simulation = get_simulation(config, config.comms_ctx)
     initial_condition = get_initial_condition(config.parsed_args)
-    surface_setup = get_surface_setup(config.parsed_args)
 
     s = @timed_str begin
         if simulation.restart
