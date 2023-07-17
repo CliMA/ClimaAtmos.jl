@@ -123,7 +123,10 @@ function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
     return (; sgs⁰, sgsʲs)
 end
 
-turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars) = (;)
+function turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars)
+    sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)
+    return (; sgs⁰)
+end
 
 turbconv_face_variables(ls, ::Nothing) = (;)
 turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;

@@ -79,11 +79,14 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜρʲs,
         ᶜentr_detrʲs,
         ᶠu³⁰,
+        ᶜu⁰,
+        ᶜtke⁰,
     ) = p
-    ᶜ∇Φ³ = p.ᶜtemp_CT3
-
     thermo_params = CAP.thermodynamics_params(params)
 
+    @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
+
+    ᶜ∇Φ³ = p.ᶜtemp_CT3
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
     @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
 
@@ -447,11 +450,13 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             Fields.level(ᶠu³ʲ, Spaces.nlevels(axes(Y.c)) + half),
         )
         @. u³ʲ_halflevel = CT3(FT(0))
-        u³⁰_halflevel = Fields.field_values(
-            Fields.level(ᶠu³⁰, Spaces.nlevels(axes(Y.c)) + half),
-        )
-        @. u³⁰_halflevel = CT3(FT(0))
     end
+    u³⁰_halflevel = Fields.field_values(
+        Fields.level(ᶠu³⁰, Spaces.nlevels(axes(Y.c)) + half),
+    )
+    @. u³⁰_halflevel = CT3(FT(0))
+
+    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
 
     return nothing
 end
