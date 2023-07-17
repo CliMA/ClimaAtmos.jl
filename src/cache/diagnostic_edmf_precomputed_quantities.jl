@@ -71,6 +71,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     (; q_tot) = p.ᶜspecific
     (;
         ᶜρaʲs,
+        ᶜuʲs,
         ᶠu³ʲs,
         ᶜKʲs,
         ᶜh_totʲs,
@@ -83,6 +84,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜtke⁰,
     ) = p
     thermo_params = CAP.thermodynamics_params(params)
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
 
@@ -103,8 +105,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
     Φ_int_level = Fields.field_values(Fields.level(ᶜΦ, 1))
 
-    local_geometry_int_level =
-        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
+    local_geometry_int_level = Fields.field_values(Fields.level(ᶜlg, 1))
     local_geometry_int_halflevel = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), half),
     )
@@ -224,9 +225,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
         q_tot_prev_level = Fields.field_values(Fields.level(q_tot, i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
-        p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
-        z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
-        buoyancy_flux_level = Fields.field_values(sfc_conditions.buoyancy_flux)
 
         local_geometry_prev_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i - 1),
@@ -265,28 +263,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
             entr_detrʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜentr_detrʲ, i - 1))
-
-            @. entr_detrʲ_prev_level = pi_groups_entr_detr(
-                params,
-                p.atmos.edmfx_entr_detr,
-                z_prev_level,
-                p_prev_level,
-                ρ_prev_level,
-                buoyancy_flux_level,
-                ρaʲ_prev_level / ρʲ_prev_level,
-                get_physical_w(
-                    u³ʲ_prev_halflevel,
-                    local_geometry_prev_halflevel,
-                ),
-                TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜbuoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
-                get_physical_w(
-                    u³⁰_prev_halflevel,
-                    local_geometry_prev_halflevel,
-                ),
-                TD.relative_humidity(thermo_params, ts_prev_level),
-                ᶜbuoyancy(params, ρ_ref_prev_level, ρ_prev_level),
-            )
 
             @. ρaʲu³ʲ_data =
                 (1 / local_geometry_halflevel.J) * (
@@ -457,6 +433,27 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. u³⁰_halflevel = CT3(FT(0))
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+
+    for j in 1:n
+        ᶜuʲ = ᶜuʲs.:($j)
+        ᶠu³ʲ = ᶠu³ʲs.:($j)
+        @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
+        @. ᶜentr_detrʲs.:($$j) = pi_groups_entr_detr(
+            params,
+            p.atmos.edmfx_entr_detr,
+            ᶜz,
+            ᶜp,
+            Y.c.ρ,
+            sfc_conditions.buoyancy_flux,
+            ᶜρaʲs.:($$j) / ᶜρʲs.:($$j),
+            get_physical_w(ᶜuʲ, ᶜlg),
+            TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
+            ᶜbuoyancy(params, ᶜρ_ref, ᶜρʲs.:($$j)),
+            get_physical_w(ᶜu⁰, ᶜlg),
+            TD.relative_humidity(thermo_params, ᶜts),
+            ᶜbuoyancy(params, ᶜρ_ref, Y.c.ρ),
+        )
+    end
 
     return nothing
 end

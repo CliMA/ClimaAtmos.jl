@@ -2,7 +2,7 @@
 ##### Precomputed quantities
 #####
 import Thermodynamics as TD
-import ClimaCore: Spaces, Fields
+import ClimaCore: Spaces, Fields, RecursiveApply
 
 """
     precomputed_quantities(Y, atmos)
@@ -102,7 +102,7 @@ function precomputed_quantities(Y, atmos)
             ᶜentr_detrʲs = similar(
                 Y.c,
                 NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}},
-            ),
+            ) .= (RecursiveApply.rzero(NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}}),),
             ᶜρa⁰ = similar(Y.c, FT),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
