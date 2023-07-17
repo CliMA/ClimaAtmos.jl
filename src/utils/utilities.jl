@@ -63,12 +63,12 @@ function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Fie
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
     #NVTX.@range "compute_kinetic! kernel" color = colorant"brown" begin
-        @. κ =
-            1 / 2 * (
-                dot(C123(uₕ), CT123(uₕ)) +
-                ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
-                2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
-            )
+    @. κ =
+        1 / 2 * (
+            dot(C123(uₕ), CT123(uₕ)) +
+            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
+            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
+        )
     #end
 end
 
