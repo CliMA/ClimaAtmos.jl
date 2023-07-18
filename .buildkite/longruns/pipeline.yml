@@ -32,7 +32,7 @@ steps:
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
-      - "mkdir nsys-longruns"
+      - "mkdir nsys"
 
     agents:
       slurm_cpus_per_task: 8
@@ -48,14 +48,18 @@ steps:
       - label: ":computer: baroclinic wave (ρe_tot) high resolution"
         command:
           - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/baroclinic_wave-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 1days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_highres
+          - >
+            srun --cpu-bind=cores
+            nsys profile --output=nsys/baroclinic_wave-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi
+            julia --project=examples examples/hybrid/driver.jl --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --initial_condition DryBaroclinicWave --dt 400secs --t_end 1days --dt_save_to_disk 1days --job_id longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_highres --fig_dir longrun_bw_rhoe_highres --case_name dry_baroclinic_wave
         artifact_paths: 
           - "longrun_bw_rhoe_highres/*"
-          - "nsys-longruns/baroclinic_wave*"
+          - "nsys/baroclinic_wave*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
+          JULIA_NVTX_CALLBACKS: gc
         agents:
           slurm_ntasks: 32
 
@@ -118,14 +122,18 @@ steps:
       - label: ":computer: held suarez (ρe_tot) high resolution hightop"
         command:
           - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 800days --job_id longrun_hs_rhoe_highres_hightop --dt_save_to_disk 10days
+          - >
+            srun --cpu-bind=cores
+            nsys profile --output=nsys/held_suarez-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi
+            julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --z_max 45e3 --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16 --dt 400secs --t_end 1days --job_id longrun_hs_rhoe_highres_hightop --dt_save_to_disk 1days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_highres_hightop --out_dir longrun_hs_rhoe_highres_hightop
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_highres_hightop --fig_dir longrun_hs_rhoe_highres_hightop --case_name dry_held_suarez
         artifact_paths: 
           - "longrun_hs_rhoe_highres_hightop/*"
-          - "nsys-longruns/held_suarez*"
+          - "nsys/held_suarez-multi*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
+          JULIA_NVTX_CALLBACKS: gc
         agents:
           slurm_ntasks: 32
 
@@ -178,14 +186,18 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
         command:
           - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/held_suarez_equilmoist-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi mpiexec julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_setup DefaultExchangeCoefficients --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 0.25days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 0.25days
+          - >
+            srun --cpu-bind=cores
+            nsys profile --output=nsys/held_suarez_equilmoist-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi
+            julia --project=examples examples/hybrid/driver.jl --forcing held_suarez --moist equil --vert_diff true --surface_setup DefaultExchangeCoefficients --precip_model 0M --z_max 45e3 --z_elem 50 --dz_bottom 30 --dz_top 3000 --h_elem 16 --kappa_4 1e16 --rayleigh_sponge true --zd_rayleigh 30e3 --alpha_rayleigh_uh 0 --alpha_rayleigh_w 10 --dt 150secs --t_end 1days --job_id longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --dt_save_to_disk 0.25days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
         artifact_paths: 
           - "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
-          - "nsys-longruns/held_suarez_equilmoist-report*"
+          - "nsys/held_suarez_equilmoist*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
+          JULIA_NVTX_CALLBACKS: gc
         agents:
           slurm_ntasks: 64
 
@@ -234,9 +246,9 @@ steps:
       #     slurm_ntasks: 64
       #     slurm_mem: 256GB
 
-  - group: "Low resolution long runs"
+  # - group: "Low resolution long runs"
 
-    steps:
+  #   steps:
 
       # - label: ":computer: hydrostatic balance (ρe_tot)"
       #   command:
@@ -247,29 +259,29 @@ steps:
       #   agents:
       #     slurm_cpus_per_task: 8
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
-        command:
-          - module load nsight-systems/2023.1.1
-          - srun --cpu-bind=cores nsys profile --output=nsys-longruns/aquaplanet-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
-        artifact_paths: 
-          - "longrun_aquaplanet_rhoe_equil_gray/*"
-          - "nsys-longruns/aquaplanet-report*"
-        agents:
-          slurm_cpus_per_task: 8
+      # - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
+      #   command:
+      #     - module load nsight-systems/2023.1.1
+      #     - srun --cpu-bind=cores nsys profile --output=nsys/aquaplanet-report-multi-%q{PMI_RANK} --trace=nvtx,mpi --mpi-impl=openmpi julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
+      #     - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
+      #     - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
+      #   artifact_paths: 
+      #     - "longrun_aquaplanet_rhoe_equil_gray/*"
+      #     - "nsys/aquaplanet-report*"
+      #   agents:
+      #     slurm_cpus_per_task: 8
 
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
-        command:
-          - module load nsight-systems/2023.1.1
-          - nsys profile --output=nsys-longruns/aquaplanet-report-single --trace=nvtx,mpi --mpi-impl=openmpi srun julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
-        artifact_paths: 
-          - "longrun_aquaplanet_rhoe_equil_gray/*"
-          - "nsys-longruns/aquaplanet-report*"
-        agents:
-          slurm_cpus_per_task: 1
+      # - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
+      #   command:
+      #     - module load nsight-systems/2023.1.1
+      #     - nsys profile --output=nsys/aquaplanet-report-single --trace=nvtx,mpi --mpi-impl=openmpi srun julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultExchangeCoefficients --moist equil --rad gray --precip_model 0M --dt 450secs --t_end 1days --fps 30 --job_id longrun_aquaplanet_rhoe_equil_gray --dt_save_to_sol 1days --dt_save_to_disk 0.25days
+      #     - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
+      #     - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
+      #   artifact_paths: 
+      #     - "longrun_aquaplanet_rhoe_equil_gray/*"
+      #     - "nsys/aquaplanet-report*"
+      #   agents:
+      #     slurm_cpus_per_task: 1
 
   # - group: "Experimental Long runs"
 
