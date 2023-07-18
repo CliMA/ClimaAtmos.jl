@@ -18,7 +18,7 @@ using PrettyTables
 
 s = CA.argparse_settings()
 parsed_args = CA.parse_commandline(s);
-output_dir = "gpu_implicit_barowave_wrt_h_elem/report"
+output_dir = joinpath(parsed_args["job_id"])
 
 # Set non-varying arguments
 parsed_args["z_elem"] = 50
