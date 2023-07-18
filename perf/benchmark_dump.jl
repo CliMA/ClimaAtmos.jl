@@ -27,7 +27,7 @@ parsed_args["dt"] = "50secs"
 steptimes = []
 
 # Iterate through varying number of horizontal elements
-for h_elem in 8:8:64
+for h_elem in 8:8:40
     parsed_args["h_elem"] = h_elem
     config = CA.AtmosConfig(; parsed_args)
     integrator = CA.get_integrator(config)
