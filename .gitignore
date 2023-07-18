@@ -45,3 +45,8 @@ test/Manifest.toml
 
 # misc
 .DS_Store
+
+*.out
+*.pdf
+*.png
+*.ipynb

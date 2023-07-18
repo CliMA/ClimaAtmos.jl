@@ -288,6 +288,14 @@ function argparse_settings()
         help = "Rayleigh sponge [`true`, `false` (default)]"
         arg_type = Bool
         default = false
+        "--smagorinsky_lily"
+        help = "Smagorinsmagsky lily [`true`, `false` (default)]"
+        arg_type = Bool
+        default = false
+        "--c_smag"
+        help = "Smagorinsky coeff [0.12, 0.2, 0.21]"
+        arg_type = Float64
+        default = Float64(0.2)
         "--viscous_sponge"
         help = "Viscous sponge [`true`, `false` (default)]"
         arg_type = Bool

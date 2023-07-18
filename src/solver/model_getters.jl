@@ -10,6 +10,18 @@ function get_moisture_model(parsed_args)
     end
 end
 
+function get_smagorinsky_lily_model(parsed_args, ::Type{FT}) where {FT}
+    is_model_on = parsed_args["smagorinsky_lily"]
+    Cs = parsed_args["c_smag"]
+    @assert is_model_on in (true, false)
+    return if is_model_on == true
+        SmagorinskyLily{FT}(; Cs)
+    else
+        nothing
+    end
+end
+
+
 function get_model_config(parsed_args)
     config = parsed_args["config"]
     @assert config in ("sphere", "column", "box", "plane")
