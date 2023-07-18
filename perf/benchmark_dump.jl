@@ -1,11 +1,10 @@
 #=
 ```
-julia --project=examples perf/benchmark_dump.jl --output=report
+julia --project=examples perf/benchmark_dump.jl
 ```
 Or, interactively,
 ```
 julia --project=examples
-push!(ARGS, "--output", "report")
 include(joinpath("perf", "benchmark_dump.jl"));
 ```
 =#
@@ -69,5 +68,13 @@ pretty_table(
 )
 
 # Output a plot of step time scaling
-p = Plots.plot(first.(steptimes), last.(steptimes); title="Step Times v/s Horizontal Elements", xlabel="h_elem", ylabel="time (ms)", label="step time", linewidth=3)
+p = Plots.plot(
+    first.(steptimes),
+    last.(steptimes);
+    title = "Step Times v/s Horizontal Elements",
+    xlabel = "h_elem",
+    ylabel = "time (ms)",
+    label = "step time",
+    linewidth = 3,
+)
 Plots.png(p, joinpath(output_dir, "scaling.png"))
