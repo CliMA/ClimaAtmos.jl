@@ -62,27 +62,29 @@ end
 Updates the precomputed quantities stored in `p` for diagnostic edmfx.
 """
 function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
-    (; turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
-    (; sfc_conditions, params) = p
+    (; params) = p
     (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
+    (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
+        p.sfc_conditions
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
+        ᶜuʲs,
         ᶜKʲs,
         ᶜh_totʲs,
         ᶜq_totʲs,
         ᶜtsʲs,
         ᶜρʲs,
         ᶜentr_detrʲs,
-        ᶠu³⁰,
-        ᶜu⁰,
-        ᶜtke⁰,
     ) = p
+    (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
     thermo_params = CAP.thermodynamics_params(params)
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
 
@@ -112,15 +114,11 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
-    buoyancy_flux_sfc_halflevel =
-        Fields.field_values(sfc_conditions.buoyancy_flux)
-    ρ_flux_h_tot_sfc_halflevel =
-        Fields.field_values(sfc_conditions.ρ_flux_h_tot)
-    ρ_flux_q_tot_sfc_halflevel =
-        Fields.field_values(sfc_conditions.ρ_flux_q_tot)
-    ustar_sfc_halflevel = Fields.field_values(sfc_conditions.ustar)
-    obukhov_length_sfc_halflevel =
-        Fields.field_values(sfc_conditions.obukhov_length)
+    buoyancy_flux_sfc_halflevel = Fields.field_values(buoyancy_flux)
+    ρ_flux_h_tot_sfc_halflevel = Fields.field_values(ρ_flux_h_tot)
+    ρ_flux_q_tot_sfc_halflevel = Fields.field_values(ρ_flux_q_tot)
+    ustar_sfc_halflevel = Fields.field_values(ustar)
+    obukhov_length_sfc_halflevel = Fields.field_values(obukhov_length)
 
     # boundary condition
     for j in 1:n
@@ -226,7 +224,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
-        buoyancy_flux_level = Fields.field_values(sfc_conditions.buoyancy_flux)
+        buoyancy_flux_level = Fields.field_values(buoyancy_flux)
 
         local_geometry_prev_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i - 1),
@@ -446,10 +444,12 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
 
     for j in 1:n
         ᶠu³ʲ = ᶠu³ʲs.:($j)
+        ᶜuʲ = ᶜuʲs.:($j)
         u³ʲ_halflevel = Fields.field_values(
             Fields.level(ᶠu³ʲ, Spaces.nlevels(axes(Y.c)) + half),
         )
         @. u³ʲ_halflevel = CT3(FT(0))
+        @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
     end
     u³⁰_halflevel = Fields.field_values(
         Fields.level(ᶠu³⁰, Spaces.nlevels(axes(Y.c)) + half),
@@ -457,6 +457,61 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. u³⁰_halflevel = CT3(FT(0))
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+
+    @. ᶜlinear_buoygrad = buoyancy_gradients(
+        params,
+        moisture_model,
+        EnvBuoyGrad(
+            BuoyGradMean(),
+            TD.air_temperature(thermo_params, ᶜts),                           # t_sat
+            TD.vapor_specific_humidity(thermo_params, ᶜts),                   # qv_sat
+            q_tot,                                                            # qt_sat
+            TD.dry_pottemp(thermo_params, ᶜts),                               # θ_sat
+            TD.liquid_ice_pottemp(thermo_params, ᶜts),                        # θ_liq_ice_sat
+            projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),
+                ᶜlg,
+            ),                                                                 # ∂θv∂z_unsat
+            projected_vector_data(C3, ᶜgradᵥ(ᶠinterp(q_tot)), ᶜlg),            # ∂qt∂z_sat
+            projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),
+                ᶜlg,
+            ),                                                                 # ∂θl∂z_sat
+            ᶜp,                                                                # p
+            ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),               # en_cld_frac
+            Y.c.ρ,                                                             # ρ
+        ),
+    )
+    @. ᶜshear² = FT(1e-4)
+    ᶜprandtl_nvec = p.ᶜtemp_scalar
+    @. ᶜprandtl_nvec = 1
+    ᶜtke_exch = p.ᶜtemp_scalar_2
+    @. ᶜtke_exch = 0
+    for j in 1:n
+        @. ᶜtke_exch +=
+            ᶜρaʲs.:($$j) * ᶜentr_detrʲs.:($$j).detr / Y.c.ρ * (
+                1 / 2 *
+                (
+                    get_physical_w(ᶜuʲs.:($$j), ᶜlg) - get_physical_w(ᶜu⁰, ᶜlg)
+                )^2 - ᶜtke⁰
+            )
+    end
+
+    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    @. ᶜmixing_length = mixing_length(
+        params,
+        ustar,
+        ᶜz,
+        sfc_tke,
+        ᶜlinear_buoygrad,
+        ᶜtke⁰,
+        obukhov_length,
+        ᶜshear²,
+        ᶜprandtl_nvec,
+        ᶜtke_exch,
+    )
 
     return nothing
 end
