@@ -102,10 +102,6 @@ function argparse_settings()
         help = "Bulk transfer coefficient"
         arg_type = Float64
         default = Float64(0.0044)
-        "--coupled"
-        help = "Coupled simulation [`false` (default), `true`]"
-        arg_type = Bool
-        default = false
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
