@@ -133,10 +133,34 @@ function surface_state_to_conditions(
         error("surface q_vap cannot be specified when using a DryModel")
 
     if isnothing(T)
-        # Assume an idealized latitude-dependent surface temperature.
         if coordinates isa Geometry.LatLongZPoint ||
            coordinates isa Geometry.LatLongPoint
-            T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
+            if atmos.sfc_temperature isa ZonallyAsymmetricSST
+                #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021  
+                T =
+                    (
+                        (-60 < coordinates.lat < 60) ?
+                        (
+                            FT(27) * (
+                                FT(1) -
+                                sind((FT(3) * coordinates.lat) / FT(2))^2
+                            ) + FT(273.16)
+                        ) : FT(273.16)
+                    ) + (
+                        (
+                            -180 < coordinates.long < 180 &&
+                            -30 < coordinates.lat < 30
+                        ) ?
+                        (
+                            FT(3) *
+                            cosd(coordinates.long + FT(90)) *
+                            cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(0)
+                        ) : FT(0)
+                    )
+            elseif atmos.sfc_temperature isa ZonallySymmetricSST
+                #Assume an idealized latitude-dependent surface temperature
+                T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
+            end
         else
             # Assume that the latitude is 0.
             T = FT(300)

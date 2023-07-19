@@ -72,6 +72,7 @@ function get_atmos(config::AtmosConfig, turbconv_params)
         vert_diff,
         viscous_sponge = get_viscous_sponge_model(parsed_args, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
+        sfc_temperature = get_sfc_temperature_form(parsed_args),
     )
 
     @info "AtmosModel: \n$(summary(atmos))"

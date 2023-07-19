@@ -94,6 +94,10 @@ function argparse_settings()
         help = "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
         arg_type = String
         default = "GCMSurfaceThermoState"
+        "--surface_temperature"
+        help = "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric']"
+        arg_type = String
+        default = "ZonallySymmetric"
         "--C_E"
         help = "Bulk transfer coefficient"
         arg_type = Float64

@@ -24,6 +24,16 @@ function get_model_config(parsed_args)
     end
 end
 
+function get_sfc_temperature_form(parsed_args)
+    surface_temperature = parsed_args["surface_temperature"]
+    @assert surface_temperature in ("ZonallyAsymmetric", "ZonallySymmetric")
+    return if surface_temperature == "ZonallyAsymmetric"
+        ZonallyAsymmetricSST()
+    elseif surface_temperature == "ZonallySymmetric"
+        ZonallySymmetricSST()
+    end
+end
+
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
     κ₄ = FT(parsed_args["kappa_4"])
