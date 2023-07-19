@@ -87,7 +87,7 @@ function n_steps_per_cycle_per_cb(cbs::ODE.CallbackSet, dt)
     return map(atmos_callbacks(cbs)) do cb
         cbf = callback_frequency(cb)
         if cbf isa EveryΔt
-            Int(cbf.Δt / dt)
+            Int(ceil(cbf.Δt / dt))
         elseif cbf isa EveryNSteps
             cbf.n
         else

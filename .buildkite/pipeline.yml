@@ -179,8 +179,9 @@ steps:
           slurm_mem: 20GB
 
       - label: ":computer: baroclinic wave (ρe)"
+        key: sphere_baroclinic_wave_rhoe
         command:
-          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --dt_save_to_disk 2days --initial_condition DryBaroclinicWave --regression_test true
+          - julia --color=yes --project=examples examples/hybrid/driver.jl --job_id sphere_baroclinic_wave_rhoe --dt 580secs --t_end 10days --dt_save_to_disk 2days --initial_condition DryBaroclinicWave --regression_test true
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir sphere_baroclinic_wave_rhoe --fig_dir sphere_baroclinic_wave_rhoe --case_name dry_baroclinic_wave
           - julia --color=yes --project=examples regression_tests/test_mse.jl --job_id sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
@@ -786,6 +787,24 @@ steps:
         artifact_paths: "edmf_bomex_consistency/*"
         agents:
           slurm_mem: 20GB
+
+  - group: "CUDA"
+    steps:
+
+      - label: "CUDA: CUDA implicit baro wave"
+        key: "cuda_implicit_barowave_ref"
+        command:
+          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cuda_implicit_barowave_ref --dt 580secs --t_end 10days --dt_save_to_disk 2days --initial_condition DryBaroclinicWave --dt_save_to_sol Inf"
+        artifact_paths: "cuda_implicit_barowave_ref/*"
+        agents:
+          slurm_gpus: 1
+
+      - label: "CUDA: compare with CPU"
+        command: "julia --color=yes --project=examples post_processing/compare_outputs.jl --output_folder_1 sphere_baroclinic_wave_rhoe/ --output_folder_2 cuda_implicit_barowave_ref --t_end 10days --compare_state false --compare_diagnostics false"
+        depends_on:
+          - "sphere_baroclinic_wave_rhoe"
+          - "cuda_implicit_barowave_ref"
 
   - group: "GPU Performance"
     steps:
