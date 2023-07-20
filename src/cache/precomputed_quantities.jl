@@ -107,6 +107,9 @@ function precomputed_quantities(Y, atmos)
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜtke⁰ = similar(Y.c, FT),
+            ᶜlinear_buoygrad = similar(Y.c, FT),
+            ᶜshear² = similar(Y.c, FT),
+            ᶜmixing_length = similar(Y.c, FT),
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., diagnostic_sgs_quantities...)
 end
