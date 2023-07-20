@@ -54,7 +54,7 @@ function edmfx_tke_tendency!(
         # dissipation
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) /
-            ᶜmixing_length[colidx]
+            max(ᶜmixing_length[colidx], FT(1))
     end
 
     return nothing

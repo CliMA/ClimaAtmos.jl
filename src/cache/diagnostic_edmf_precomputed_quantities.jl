@@ -717,6 +717,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+    #@. ᶜmixing_length = FT(0)
 
     turbconv_params = CAP.turbconv_params(params)
     c_m = TCP.tke_ed_coeff(turbconv_params)

@@ -149,9 +149,16 @@ function entrainment(
     dt::FT,
     ::ConstantTimescaleEntrainment,
 ) where {FT}
-    entr_tau = CAP.entr_tau(params)
-    entr = min(1 / entr_tau, 1 / dt)
-    return entr
+    if ᶜaʲ >= FT(1)
+        return FT(0)
+    else
+        entr_tau = CAP.entr_tau(params)
+        entr = min(1 / entr_tau, 1 / dt)
+        # n = 8
+        # damp_coeff = 2^(1 / n + 1) / ((1 / ᶜaʲ)^(1 / n) + (1 / (1 - ᶜaʲ))^(1 / n))
+        # entr = entr * damp_coeff
+        return entr
+    end
 end
 
 """

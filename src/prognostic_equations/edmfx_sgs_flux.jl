@@ -142,21 +142,21 @@ function edmfx_sgs_flux_tendency!(
     if p.atmos.edmfx_sgs_flux
         # energy mass flux
         # TODO: check if there is contribution from the environment
-        ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
-        ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
-        for j in 1:n
-            @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-            @. ᶜh_tot_diff_colidx = ᶜh_totʲs.:($$j)[colidx] - ᶜh_tot[colidx]
-            vertical_transport!(
-                Yₜ.c.ρe_tot[colidx],
-                ᶜJ[colidx],
-                ᶜρaʲs.:($j)[colidx],
-                ᶠu³_diff_colidx,
-                ᶜh_tot_diff_colidx,
-                dt,
-                edmfx_upwinding,
-            )
-        end
+        # ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
+        # ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
+        # for j in 1:n
+        #     @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+        #     @. ᶜh_tot_diff_colidx = ᶜh_totʲs.:($$j)[colidx] - ᶜh_tot[colidx]
+        #     vertical_transport!(
+        #         Yₜ.c.ρe_tot[colidx],
+        #         ᶜJ[colidx],
+        #         ᶜρaʲs.:($j)[colidx],
+        #         ᶠu³_diff_colidx,
+        #         ᶜh_tot_diff_colidx,
+        #         dt,
+        #         edmfx_upwinding,
+        #     )
+        # end
 
         # energy diffusive flux
         ᶠρaK_h = p.ᶠtemp_scalar
@@ -171,20 +171,20 @@ function edmfx_sgs_flux_tendency!(
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity mass flux
-            for j in 1:n
-                @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-                @. ᶜq_tot_diff_colidx =
-                    ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]
-                vertical_transport!(
-                    Yₜ.c.ρq_tot[colidx],
-                    ᶜJ[colidx],
-                    ᶜρaʲs.:($j)[colidx],
-                    ᶠu³_diff_colidx,
-                    ᶜq_tot_diff_colidx,
-                    dt,
-                    edmfx_upwinding,
-                )
-            end
+            # for j in 1:n
+            #     @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+            #     @. ᶜq_tot_diff_colidx =
+            #         ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]
+            #     vertical_transport!(
+            #         Yₜ.c.ρq_tot[colidx],
+            #         ᶜJ[colidx],
+            #         ᶜρaʲs.:($j)[colidx],
+            #         ᶠu³_diff_colidx,
+            #         ᶜq_tot_diff_colidx,
+            #         dt,
+            #         edmfx_upwinding,
+            #     )
+            # end
 
             # specific humidity diffusive flux
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(

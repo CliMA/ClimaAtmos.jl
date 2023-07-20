@@ -372,8 +372,20 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
         map(categories) do category
             var_col_time_series =
                 variable_column_time_series(col_time_series, category, name)
-            return isnothing(var_col_time_series) ? (nothing, nothing) :
-                   var_col_time_series[end][2:3]
+            if isnothing(var_col_time_series)
+                return (nothing, nothing)
+            else
+                var_col_mean = map(
+                    (args...) -> mean(args),
+                    map(
+                        i -> var_col_time_series[i][3],
+                        (length(var_col_time_series) - 12):length(
+                            var_col_time_series,
+                        ),
+                    )...,
+                )
+            end
+            return (var_col_time_series[end][2], var_col_mean)
         end
 
     has_moisture = hasproperty(time_series[1][2], :q_vap)
