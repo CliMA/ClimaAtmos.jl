@@ -94,10 +94,12 @@ function precipitation_tendency!(
     # update precip in cache for coupler's use
     # 3d rain and snow
     @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
+    # $(FT(const)) is to workaround https://github.com/JuliaGPU/CUDA.jl/issues/1761
+    # can remove once we upgrade CUDA
     @. ᶜ3d_rain[colidx] =
-        ifelse(ᶜT[colidx] >= FT(273.15), ᶜS_ρq_tot[colidx], FT(0))
+        ifelse(ᶜT[colidx] >= $(FT(273.15)), ᶜS_ρq_tot[colidx], $(FT(0)))
     @. ᶜ3d_snow[colidx] =
-        ifelse(ᶜT[colidx] < FT(273.15), ᶜS_ρq_tot[colidx], FT(0))
+        ifelse(ᶜT[colidx] < $(FT(273.15)), ᶜS_ρq_tot[colidx], $(FT(0)))
     Operators.column_integral_definite!(
         col_integrated_rain[colidx],
         ᶜ3d_rain[colidx],
@@ -188,8 +190,8 @@ function compute_precipitation_cache!(
     rain_type = CM.CommonTypes.RainType()
     snow_type = CM.CommonTypes.SnowType()
     @. ᶜT[colidx] = TD.air_temperature(thermo_params, ᶜts[colidx])
-    @. ᶜq_rai[colidx] = max(FT(0), Y.c.ρq_rai[colidx] / Y.c.ρ[colidx])
-    @. ᶜq_sno[colidx] = max(FT(0), Y.c.ρq_sno[colidx] / Y.c.ρ[colidx])
+    @. ᶜq_rai[colidx] = max($(FT(0)), Y.c.ρq_rai[colidx] / Y.c.ρ[colidx])
+    @. ᶜq_sno[colidx] = max($(FT(0)), Y.c.ρq_sno[colidx] / Y.c.ρ[colidx])
 
     # Sinks of precipitation (evaporation, melting, deposition/sublimation)
     # Limiting the tendency by tracer/dt should be handeled in a better way
@@ -219,7 +221,7 @@ function compute_precipitation_cache!(
         ᶜT[colidx],
     )
     @. ᶜS_q_sno_sub_dep[colidx] = ifelse(
-        ᶜS_q_sno_sub_dep[colidx] > FT(0),
+        ᶜS_q_sno_sub_dep[colidx] > $(FT(0)),
         min(
             TD.vapor_specific_humidity(thermo_params, ᶜts[colidx]) / dt,
             ᶜS_q_sno_sub_dep[colidx],
