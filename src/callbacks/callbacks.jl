@@ -213,7 +213,7 @@ end
 function compute_diagnostics(integrator)
     (; t, u, p) = integrator
     Y = u
-    (; params) = p
+    (; params, env_thermo_quad) = p
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -236,6 +236,12 @@ function compute_diagnostics(integrator)
                 q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
                 q_tot = TD.total_specific_humidity.(thermo_params, ᶜts),
                 relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
+                cloud_fraction_gm = get_cloud_fraction(
+                    thermo_params,
+                    env_thermo_quad,
+                    ᶜp,
+                    ᶜts,
+                ),
             )
         end
         return diagnostics
@@ -292,7 +298,12 @@ function compute_diagnostics(integrator)
         env_diagnostics = (;
             common_diagnostics(ᶜu⁰, ᶜts⁰)...,
             area = ᶜa⁰,
-            cloud_fraction = cloud_fraction.(ᶜts⁰, ᶜa⁰),
+            cloud_fraction = get_cloud_fraction(
+                thermo_params,
+                env_thermo_quad,
+                ᶜp,
+                ᶜts⁰,
+            ),
             tke = ᶜspecific⁰.tke,
         )
         draft_diagnostics = (;
@@ -303,13 +314,25 @@ function compute_diagnostics(integrator)
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = ᶜa⁰ .* cloud_fraction.(ᶜts⁰, ᶜa⁰) .+
-                             ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
+            cloud_fraction = ᶜa⁰ .* get_cloud_fraction(
+                thermo_params,
+                env_thermo_quad,
+                ᶜp,
+                ᶜts⁰,
+            ) .+ ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜtke⁰) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
-        env_diagnostics = (; tke = ᶜtke⁰)
+        env_diagnostics = (;
+            cloud_fraction = get_cloud_fraction(
+                thermo_params,
+                env_thermo_quad,
+                ᶜp,
+                ᶜts,
+            ),
+            tke = ᶜtke⁰,
+        )
         draft_diagnostics = (;
             common_diagnostics(ᶜu⁺, ᶜts⁺)...,
             area = ᶜa⁺,
@@ -318,7 +341,12 @@ function compute_diagnostics(integrator)
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
+            cloud_fraction = get_cloud_fraction(
+                thermo_params,
+                env_thermo_quad,
+                ᶜp,
+                ᶜts,
+            ) .+ ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa TC.EDMFModel
         tc_cent(p) = p.edmf_cache.aux.cent.turbconv

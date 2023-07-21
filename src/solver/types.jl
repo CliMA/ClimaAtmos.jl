@@ -1,3 +1,6 @@
+import FastGaussQuadrature
+import StaticArrays as SA
+
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
@@ -159,6 +162,40 @@ n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::Any) = 0
 
+abstract type AbstractQuadratureType end
+struct LogNormalQuad <: AbstractQuadratureType end
+struct GaussianQuad <: AbstractQuadratureType end
+
+abstract type AbstractEnvThermo end
+struct SGSMean <: AbstractEnvThermo end
+struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
+    quadrature_type::QT
+    a::A
+    w::W
+    function SGSQuadrature(
+        ::Type{FT};
+        quadrature_name = "gaussian",
+        quadrature_order = 3,
+    ) where {FT}
+        quadrature_type = if quadrature_name == "log-normal"
+            LogNormalQuad()
+        elseif quadrature_name == "gaussian"
+            GaussianQuad()
+        else
+            error("Invalid thermodynamics quadrature $(quadrature_name)")
+        end
+        N = quadrature_order
+        # TODO: double check this python-> julia translation
+        # a, w = np.polynomial.hermite.hermgauss(N)
+        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+        QT = typeof(quadrature_type)
+        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
+    end
+end
+quadrature_order(::SGSQuadrature{N}) where {N} = N
+quad_type(::SGSQuadrature{N}) where {N} = N
+
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 
@@ -170,6 +207,7 @@ Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::EDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
+Base.broadcastable(x::AbstractEnvThermo) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
