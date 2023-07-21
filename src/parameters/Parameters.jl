@@ -28,6 +28,9 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     turbconv_params::TCP
     entr_coeff::FT = 1
     detr_coeff::FT = 0.001
+    # TODO: Figure out a better place for these held-suarez parameters
+    ΔT_y_dry::FT
+    ΔT_y_wet::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
@@ -62,6 +65,8 @@ Cd(ps::ACAP) = ps.Cd
 uh_g(ps::ACAP) = CC.Geometry.UVVector(ps.ug, ps.vg)
 entr_coeff(ps::ACAP) = ps.entr_coeff
 detr_coeff(ps::ACAP) = ps.detr_coeff
+ΔT_y_dry(ps::ACAP) = ps.ΔT_y_dry
+ΔT_y_wet(ps::ACAP) = ps.ΔT_y_wet
 
 # Forwarding CloudMicrophysics parameters
 ρ_cloud_liq(ps::ACAP) = CM.Parameters.ρ_cloud_liq(microphysics_params(ps))

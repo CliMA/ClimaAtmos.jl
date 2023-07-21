@@ -30,6 +30,7 @@ end
 function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     (; sfc_conditions, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p
 
+    # TODO: Don't need to enforce FT here, it should be done at param creation.
     FT = Spaces.undertype(axes(Y.c))
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
@@ -37,6 +38,8 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
     grav = FT(CAP.grav(params))
+    ΔT_y_dry = FT(CAP.ΔT_y_dry(params))
+    ΔT_y_wet = FT(CAP.ΔT_y_wet(params))
     thermo_params = CAP.thermodynamics_params(params)
 
     z_surface =
@@ -47,10 +50,10 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     k_s = 1 / (4 * day)
     k_f = 1 / day
     if :ρq_tot in propertynames(Y.c)
-        ΔT_y = FT(65)
+        ΔT_y = ΔT_y_wet
         T_equator = FT(294)
     else
-        ΔT_y = FT(60)
+        ΔT_y = ΔT_y_dry
         T_equator = FT(315)
     end
     Δθ_z = FT(10)
