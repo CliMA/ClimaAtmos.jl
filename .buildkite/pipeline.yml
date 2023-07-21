@@ -810,9 +810,8 @@ steps:
       - label: "Perf: GPU implicit baro wave moist"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples perf/benchmark_step.jl --job_id gpu_implicit_barowave_moist --z_elem 25 --h_elem 12 --initial_condition MoistBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --moist equil --precip 0M --apply_limiter false"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_implicit_barowave_moist/report julia --color=yes --project=examples perf/benchmark_step.jl --job_id gpu_implicit_barowave_moist --z_elem 25 --h_elem 12 --initial_condition MoistBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf --moist equil --precip 0M --apply_limiter false"
         artifact_paths: "gpu_implicit_barowave_moist/*"
-        soft_fail: true
         agents:
           slurm_gpus: 1
 
