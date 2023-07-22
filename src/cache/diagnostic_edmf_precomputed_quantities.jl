@@ -66,6 +66,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
@@ -485,6 +486,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ),
     )
     @. ᶜshear² = FT(1e-4)
+
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     @. ᶜprandtl_nvec = 1
     ᶜtke_exch = p.ᶜtemp_scalar_2
@@ -504,6 +506,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         params,
         ustar,
         ᶜz,
+        ᶜdz,
         sfc_tke,
         ᶜlinear_buoygrad,
         ᶜtke⁰,

@@ -144,6 +144,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     end
 
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     for j in 1:n
@@ -212,6 +213,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         p.params,
         ustar,
         ᶜz,
+        ᶜdz,
         sfc_tke,
         ᶜlinear_buoygrad,
         ᶜspecific⁰.tke,
