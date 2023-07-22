@@ -81,6 +81,7 @@ include(joinpath("prognostic_equations", "buoyancy_gradients.jl"))
 include(joinpath("prognostic_equations", "edmfx_closures.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
 include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
+include(joinpath("prognostic_equations", "cloud_fraction.jl"))
 include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
 )
