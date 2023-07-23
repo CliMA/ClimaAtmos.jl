@@ -295,6 +295,7 @@ function get_initial_condition(parsed_args)
         elseif parsed_args["initial_condition"] in [
             "IsothermalProfile",
             "Bomex",
+            "Rico",
             "AgnesiHProfile",
             "DryDensityCurrentProfile",
             "RisingThermalBubbleProfile",

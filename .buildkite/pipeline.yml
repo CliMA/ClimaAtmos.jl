@@ -446,6 +446,19 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Diagnostic EDMFX Rico in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_rico_box
+          --initial_condition Rico --subsidence Rico --ls_adv Rico --surface_setup Rico
+          --turbconv diagnostic_edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e12
+          --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 100 --z_max 4e3 --z_stretch false
+          --dt 10secs --t_end 6hours --dt_save_to_disk 10mins
+        artifact_paths: "diagnostic_edmfx_rico_box/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Diagnostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_aquaplanet
