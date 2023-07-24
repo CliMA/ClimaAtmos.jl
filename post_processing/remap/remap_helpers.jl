@@ -137,6 +137,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_cloudliq = defVar(nc, "cloud_liquid", FT, cspace, ("time",))
         nc_cloudice = defVar(nc, "cloud_ice", FT, cspace, ("time",))
         nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
+        nc_cloudfrac_gm = defVar(nc, "cloud_fraction_gm", FT, cspace, ("time",))
     end
     # define precip variables
     if :precipitation_removal in propertynames(diag)
@@ -175,6 +176,19 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_clear_sw_flux_up =
             defVar(nc, "clear_sw_flux_up", FT, fspace, ("time",))
     end
+    if :draft_q_tot in propertynames(diag)
+        nc_draft_qt = defVar(nc, "draft_qt", FT, cspace, ("time",))
+        nc_draft_RH = defVar(nc, "draft_RH", FT, cspace, ("time",))
+        nc_draft_cloudliq =
+            defVar(nc, "draft_cloud_liquid", FT, cspace, ("time",))
+        nc_draft_cloudice = defVar(nc, "draft_cloud_ice", FT, cspace, ("time",))
+        nc_draft_watervapor =
+            defVar(nc, "draft_water_vapor", FT, cspace, ("time",))
+        nc_draft_cloudfrac =
+            defVar(nc, "draft_cloud_fraction", FT, cspace, ("time",))
+        nc_draft_area = defVar(nc, "draft_area_fraction", FT, cspace, ("time",))
+        nc_cloudfrac = defVar(nc, "cloud_fraction", FT, cspace, ("time",))
+    end
 
     # time
     nc_time[1] = t_now
@@ -212,6 +226,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_cloudliq[:, 1] = diag.q_liq
         nc_cloudice[:, 1] = diag.q_ice
         nc_watervapor[:, 1] = diag.q_vap
+        nc_cloudfrac_gm[:, 1] = diag.cloud_fraction_gm
     end
 
     if :precipitation_removal in propertynames(diag)
@@ -242,6 +257,17 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_clear_sw_flux_down[:, 1] = diag.clear_sw_flux_down
         nc_clear_sw_flux_up[:, 1] = diag.clear_sw_flux_up
     end
+
+    if :draft_q_tot in propertynames(diag)
+        nc_draft_qt[:, 1] = diag.draft_q_tot
+        nc_draft_RH[:, 1] = diag.draft_relative_humidity
+        nc_draft_cloudliq[:, 1] = diag.draft_q_liq
+        nc_draft_cloudice[:, 1] = diag.draft_q_ice
+        nc_draft_watervapor[:, 1] = diag.draft_q_vap
+        nc_draft_cloudfrac[:, 1] = diag.draft_cloud_fraction
+        nc_draft_area[:, 1] = diag.draft_area
+        nc_cloudfrac[:, 1] = diag.cloud_fraction
+    end
     close(nc)
 
 
@@ -263,8 +289,14 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         "sfc_qt",
     ]
     if :ρq_tot in propertynames(Y.c)
-        moist_variables =
-            ["qt", "RH", "cloud_ice", "cloud_liquid", "water_vapor"]
+        moist_variables = [
+            "qt",
+            "RH",
+            "cloud_ice",
+            "cloud_liquid",
+            "water_vapor",
+            "cloud_fraction_gm",
+        ]
     else
         moist_variables = String[]
     end
@@ -301,6 +333,20 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     else
         rad_flux_clear_variables = String[]
     end
+    if :draft_q_tot in propertynames(diag)
+        draft_variables = [
+            "draft_qt",
+            "draft_RH",
+            "draft_cloud_ice",
+            "draft_cloud_liquid",
+            "draft_water_vapor",
+            "draft_cloud_fraction",
+            "draft_area_fraction",
+            "cloud_fraction",
+        ]
+    else
+        draft_variables = String[]
+    end
 
     netcdf_variables = vcat(
         dry_variables,
@@ -309,6 +355,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         sfc_flux_variables,
         rad_flux_variables,
         rad_flux_clear_variables,
+        draft_variables,
     )
     apply_remap(datafile_latlon, datafile_cc, weightfile, netcdf_variables)
     rm(datafile_cc)
