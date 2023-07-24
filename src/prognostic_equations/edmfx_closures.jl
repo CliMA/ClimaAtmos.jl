@@ -323,7 +323,7 @@ function mixing_length(
 
     # compute l_smag - the Smagorinsky length scale.
     # TODO: This should be added to ClimaParameters
-    c_smag = FT(2)
+    c_smag = FT(0.2)
     N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
     if N_eff > 0.0
         l_smag = c_smag * ᶜdz * max(0, 1 - N_eff^2 / ᶜPr / ᶜshear²)^(1 / 4)

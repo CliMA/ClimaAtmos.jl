@@ -113,6 +113,7 @@ function precomputed_quantities(Y, atmos)
             ᶜmixing_length = similar(Y.c, FT),
             ᶜK_u = similar(Y.c, FT),
             ᶜK_h = similar(Y.c, FT),
+            ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., diagnostic_sgs_quantities...)
 end
