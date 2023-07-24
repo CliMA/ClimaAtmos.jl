@@ -135,7 +135,7 @@ function quad_loop(env_thermo_quad::SGSQuadrature, vars, thermo_params)
             inner_env[i_T] += T * weights[m_h] * sqpi_inv
             # cloudy/dry categories for buoyancy in TKE
             if TD.has_condensate(q_liq_en + q_ice_en)
-                inner_env[i_cf] += weights[m_h] * sqpi_inv
+                inner_env[i_cf] += 1 * weights[m_h] * sqpi_inv
                 inner_env[i_qt_sat] += qt_hat * weights[m_h] * sqpi_inv
                 inner_env[i_T_sat] += T * weights[m_h] * sqpi_inv
             else

@@ -140,7 +140,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ρʲ_int_level = Fields.field_values(Fields.level(ᶜρʲ, 1))
 
         @. u³ʲ_int_halflevel = CT3(
-            Geometry.WVector(FT(0.01), local_geometry_int_halflevel),
+            Geometry.WVector($(FT(0.01)), local_geometry_int_halflevel),
             local_geometry_int_halflevel,
         )
         @. h_totʲ_int_level = sgs_scalar_first_interior_bc(
@@ -322,7 +322,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ) * (
                     local_geometry_prev_level.J *
                     local_geometry_prev_level.J *
-                    FT(2) *
+                    2 *
                     (
                         ∇Φ³_prev_level_data * (ρʲ_prev_level - ρ_prev_level) /
                         ρ_prev_level
@@ -336,7 +336,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ) * (
                     local_geometry_prev_level.J *
                     local_geometry_prev_level.J *
-                    FT(2) *
+                    2 *
                     (
                         entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
                         entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
@@ -345,21 +345,23 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             scale_factor = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
-                CT3(FT(0)),
-                CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
+                CT3(0),
+                CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
             )
             @. ρaʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
-                FT(0),
-                ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
+                0,
+                ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
             )
 
             @. ρaʲu³ʲ_datah_tot =
@@ -380,9 +382,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 )
             @. h_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 h_tot_level,
                 ρaʲu³ʲ_datah_tot / ρaʲu³ʲ_data,
@@ -406,9 +409,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 )
             @. q_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
@@ -449,13 +453,13 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         u³ʲ_halflevel = Fields.field_values(
             Fields.level(ᶠu³ʲ, Spaces.nlevels(axes(Y.c)) + half),
         )
-        @. u³ʲ_halflevel = CT3(FT(0))
+        @. u³ʲ_halflevel = CT3(0)
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
     end
     u³⁰_halflevel = Fields.field_values(
         Fields.level(ᶠu³⁰, Spaces.nlevels(axes(Y.c)) + half),
     )
-    @. u³⁰_halflevel = CT3(FT(0))
+    @. u³⁰_halflevel = CT3(0)
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
 
@@ -485,7 +489,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             Y.c.ρ,                                                             # ρ
         ),
     )
-    @. ᶜshear² = FT(1e-4)
+    @. ᶜshear² = $(FT(1e-4))
 
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     @. ᶜprandtl_nvec = 1
