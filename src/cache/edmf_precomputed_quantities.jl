@@ -132,7 +132,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρaq_tot, 1))
 
         @. sgsʲs_ρa_int_val =
-            FT(0.1) * TD.air_density(thermo_params, ᶜtsʲ_int_val)
+            $(FT(0.1)) * TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρae_tot_int_val =
             sgsʲs_ρa_int_val * TD.total_energy(
                 thermo_params,
@@ -193,7 +193,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         ),
     )
 
-    @. ᶜshear² = FT(1e-4)
+    @. ᶜshear² = $(FT(1e-4))
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     @. ᶜprandtl_nvec = 1
     ᶜtke_exch = p.ᶜtemp_scalar_2

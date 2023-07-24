@@ -148,9 +148,9 @@ function radiation_model_cache(
                         ),
                         center_cloud_fraction = RRTMGPI.field2array(
                             @. ifelse(
-                                ᶜis_bottom_cloud || ᶜis_top_cloud,
+                                ᶜis_bottom_cloud | ᶜis_top_cloud,
                                 FT(1),
-                                FT(0) * ᶜΔz,
+                                0 * ᶜΔz,
                             )
                         ),
                     )
