@@ -259,13 +259,15 @@ where:
 
 Returns mixing length as a smooth minimum between
 wall-constrained length scale,
-production-dissipation balanced length scale and
-effective static stability length scale.
+production-dissipation balanced length scale,
+effective static stability length scale, and
+Smagorinsky length scale.
 """
 function mixing_length(
     params,
     ustar::FT,
     ᶜz::FT,
+    ᶜdz::FT,
     sfc_tke::FT,
     ᶜlinear_buoygrad::FT,
     ᶜtke::FT,
@@ -319,11 +321,22 @@ function mixing_length(
         l_N = l_max
     end
 
+    # compute l_smag - the Smagorinsky length scale.
+    # TODO: This should be added to ClimaParameters
+    c_smag = FT(2)
+    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
+    if N_eff > 0.0
+        l_smag = c_smag * ᶜdz * max(0, 1 - N_eff^2 / ᶜPr / ᶜshear²)^(1 / 4)
+    else
+        l_smag = c_smag * ᶜdz
+    end
+
     # add limiters
     l = SA.SVector(
         (l_N < eps(FT) || l_N > l_max) ? l_max : l_N,
         (l_TKE < eps(FT) || l_TKE > l_max) ? l_max : l_TKE,
         (l_W < eps(FT) || l_W > l_max) ? l_max : l_W,
+        (l_smag < eps(FT) || l_smag > l_max) ? l_max : l_smag,
     )
     # get soft minimum
     return lamb_smooth_minimum(l, smin_ub, smin_rm)
