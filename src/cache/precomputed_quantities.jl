@@ -70,6 +70,8 @@ function precomputed_quantities(Y, atmos)
             ᶜlinear_buoygrad = similar(Y.c, FT),
             ᶜshear² = similar(Y.c, FT),
             ᶜmixing_length = similar(Y.c, FT),
+            ᶜK_u = similar(Y.c, FT),
+            ᶜK_h = similar(Y.c, FT),
             ᶜspecificʲs = specific_sgsʲs.(Y.c, atmos.turbconv_model),
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
@@ -110,6 +112,8 @@ function precomputed_quantities(Y, atmos)
             ᶜlinear_buoygrad = similar(Y.c, FT),
             ᶜshear² = similar(Y.c, FT),
             ᶜmixing_length = similar(Y.c, FT),
+            ᶜK_u = similar(Y.c, FT),
+            ᶜK_h = similar(Y.c, FT),
         ) : (;)
     return (; gs_quantities..., sgs_quantities..., diagnostic_sgs_quantities...)
 end
