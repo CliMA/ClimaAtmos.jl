@@ -788,23 +788,23 @@ steps:
         agents:
           slurm_mem: 20GB
 
-  - group: "CUDA"
+  - group: "GPU"
     steps:
 
-      - label: "CUDA: CUDA implicit baro wave"
-        key: "cuda_implicit_barowave_ref"
+      - label: "GPU: GPU implicit baro wave"
+        key: "gpu_implicit_barowave_ref"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id cuda_implicit_barowave_ref --dt 580secs --t_end 10days --dt_save_to_disk 2days --initial_condition DryBaroclinicWave --dt_save_to_sol Inf"
-        artifact_paths: "cuda_implicit_barowave_ref/*"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_implicit_barowave_ref --dt 580secs --t_end 10days --dt_save_to_disk 2days --initial_condition DryBaroclinicWave --dt_save_to_sol Inf"
+        artifact_paths: "gpu_implicit_barowave_ref/*"
         agents:
           slurm_gpus: 1
 
-      - label: "CUDA: compare with CPU"
-        command: "julia --color=yes --project=examples post_processing/compare_outputs.jl --output_folder_1 sphere_baroclinic_wave_rhoe/ --output_folder_2 cuda_implicit_barowave_ref --t_end 10days --compare_state false --compare_diagnostics false"
+      - label: "GPU: compare with CPU"
+        command: "julia --color=yes --project=examples post_processing/compare_outputs.jl --output_folder_1 sphere_baroclinic_wave_rhoe/ --output_folder_2 gpu_implicit_barowave_ref --t_end 10days --compare_state false --compare_diagnostics false"
         depends_on:
           - "sphere_baroclinic_wave_rhoe"
-          - "cuda_implicit_barowave_ref"
+          - "gpu_implicit_barowave_ref"
 
   - group: "GPU Performance"
     steps:
