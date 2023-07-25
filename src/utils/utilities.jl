@@ -221,3 +221,7 @@ macro timed_str(ex)
         "$(prettytime(stats.time*1e9)) ($(Base.gc_alloc_count(stats.gcstats)) allocations: $(prettymemory(stats.gcstats.allocd)))"
     end
 end
+
+struct AllNothing end
+const all_nothing = AllNothing()
+Base.getproperty(::AllNothing, ::Symbol) = nothing

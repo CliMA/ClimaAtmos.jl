@@ -103,7 +103,6 @@ function precomputed_quantities(Y, atmos)
                 Y.c,
                 NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}},
             ),
-            ᶜρa⁰ = similar(Y.c, FT),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜtke⁰ = similar(Y.c, FT),
