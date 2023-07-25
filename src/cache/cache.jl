@@ -170,7 +170,6 @@ function additional_cache(
         ),
         edmfx_nh_pressure_cache(Y, atmos.turbconv_model),
         (; Δt = dt),
-        edmfx_sgs_flux_cache(Y, atmos.turbconv_model),
         turbconv_cache(
             Y,
             turbconv_model,

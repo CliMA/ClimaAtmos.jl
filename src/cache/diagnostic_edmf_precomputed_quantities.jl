@@ -84,6 +84,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜentr_detrʲs,
     ) = p
     (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
+    (; ᶜK_h, ᶜK_u) = p
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -492,7 +493,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. ᶜshear² = $(FT(1e-4))
 
     ᶜprandtl_nvec = p.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = 1
+    # TODO: add Prandtl number calculation
+    @. ᶜprandtl_nvec = FT(1) / 3
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
@@ -519,6 +521,11 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+
+    turbconv_params = CAP.turbconv_params(params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     return nothing
 end

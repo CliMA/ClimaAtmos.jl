@@ -23,7 +23,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
     (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
-    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜshear²) = p
+    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜshear², ᶜK_u, ᶜK_h) = p
     (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
     (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
@@ -195,7 +195,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     @. ᶜshear² = $(FT(1e-4))
     ᶜprandtl_nvec = p.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = 1
+    @. ᶜprandtl_nvec = FT(1) / 3
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
@@ -222,6 +222,12 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+
+    turbconv_params = CAP.turbconv_params(params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜspecific⁰.tke, 0))
+    # TODO: add Prantdl number
+    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     return nothing
 end
