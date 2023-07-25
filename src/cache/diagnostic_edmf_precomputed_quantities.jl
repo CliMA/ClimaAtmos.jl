@@ -490,8 +490,13 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             Y.c.ρ,                                                             # ρ
         ),
     )
-    @. ᶜshear² = $(FT(1e-4))
 
+    # TODO: This is not correct with topography or with grid stretching
+    ᶠu⁰ = p.ᶠtemp_C123
+    @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
+    ct3_unit = p.ᶜtemp_CT3
+    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
+    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu⁰)) * ct3_unit)
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     # TODO: add Prandtl number calculation
     @. ᶜprandtl_nvec = FT(1) / 3
