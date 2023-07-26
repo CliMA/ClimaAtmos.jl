@@ -2,7 +2,7 @@
 ##### Precomputed quantities
 #####
 import Thermodynamics as TD
-import ClimaCore: Spaces, Fields
+import ClimaCore: Spaces, Fields, RecursiveApply
 
 function set_diagnostic_edmfx_draft_quantities_level!(
     thermo_params,
@@ -226,7 +226,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
-        buoyancy_flux_level = Fields.field_values(buoyancy_flux)
 
         local_geometry_prev_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i - 1),
@@ -272,7 +271,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 z_prev_level,
                 p_prev_level,
                 ρ_prev_level,
-                buoyancy_flux_level,
+                buoyancy_flux_sfc_halflevel,
                 ρaʲ_prev_level / ρʲ_prev_level,
                 get_physical_w(
                     u³ʲ_prev_halflevel,
@@ -448,19 +447,21 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         )
     end
 
+    # set values for the top level
+    i_top = Spaces.nlevels(axes(Y.c))
+    u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i_top + half))
+    @. u³⁰_halflevel = CT3(0)
     for j in 1:n
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         ᶜuʲ = ᶜuʲs.:($j)
-        u³ʲ_halflevel = Fields.field_values(
-            Fields.level(ᶠu³ʲ, Spaces.nlevels(axes(Y.c)) + half),
-        )
+        ᶠu³ʲ = ᶠu³ʲs.:($j)
+        ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
+        u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
+        entr_detrʲ_level = Fields.field_values(Fields.level(ᶜentr_detrʲ, i_top))
+        fill!(entr_detrʲ_level, RecursiveApply.rzero(eltype(entr_detrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
     end
-    u³⁰_halflevel = Fields.field_values(
-        Fields.level(ᶠu³⁰, Spaces.nlevels(axes(Y.c)) + half),
-    )
-    @. u³⁰_halflevel = CT3(0)
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
 
@@ -530,6 +531,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     turbconv_params = CAP.turbconv_params(params)
     c_m = TCP.tke_ed_coeff(turbconv_params)
     @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+    # TODO: add Prantdl number
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     return nothing
