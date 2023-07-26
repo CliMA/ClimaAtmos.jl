@@ -288,8 +288,17 @@ function get_initial_condition(parsed_args)
             )
         elseif parsed_args["initial_condition"] in [
             "IsothermalProfile",
+            "Nieuwstadt",
+            "GABLS",
+            "GATE_III",
+            "Soares",
             "Bomex",
+            "LifeCycleTan2018",
+            "ARM_SGP",
+            "DYCOMS_RF01",
+            "DYCOMS_RF02",
             "Rico",
+            "TRMM_LBA",
             "AgnesiHProfile",
             "DryDensityCurrentProfile",
             "RisingThermalBubbleProfile",

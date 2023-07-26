@@ -230,115 +230,90 @@ end
 ##### DYCOMS_RF01 radiation
 #####
 
+include("indefinite_integral_and_mapreduce.jl")
+
 function radiation_model_cache(Y, params, radiation_mode::RadiationDYCOMS_RF01;)
     FT = Spaces.undertype(axes(Y.c))
-    # TODO: should we distinguish between radiation mode vs model?
+    NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
     return (;
-        ᶠρ = similar(Y.f, FT),
-        ᶠf_rad = similar(Y.f, FT),
-        ᶠq_tot = similar(Y.f, FT),
-        ᶜq_tot = similar(Y.c, FT),
-        ᶜq_liq = similar(Y.c, FT),
-        ᶜdTdt_rad = similar(Y.c, FT),
         radiation_model = radiation_mode,
+        ᶜκρq = similar(Y.c, FT),
+        ∫_0_∞_κρq = similar(Spaces.level(Y.c, 1), FT),
+        ᶠ∫_0_z_κρq = similar(Y.f, FT),
+        isoline_z_ρ_q = similar(Spaces.level(Y.c, 1), NT),
+        ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
     )
 end
+function radiation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    radiation_mode::RadiationDYCOMS_RF01,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
+    @assert p.atmos.energy_form isa TotalEnergy
 
-"""
-    radiation_tendency!(Yₜ, Y, p, t, colidx, self::RadiationDYCOMS_RF01)
-
-see eq. 3 in Stevens et. al. 2005 DYCOMS paper
-"""
-function radiation_tendency!(Yₜ, Y, p, t, colidx, self::RadiationDYCOMS_RF01)
-    (; params) = p
-    FT = Spaces.undertype(axes(Y.c))
+    (; params, ᶜspecific, ᶜts) = p
+    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
-    # Unpack
-    ᶜρ = Y.c.ρ[colidx]
-    ᶜdTdt_rad = p.ᶜdTdt_rad[colidx]
-    ᶜts_gm = p.ᶜts[colidx]
-    ᶠf_rad = p.ᶠf_rad[colidx]
-    ᶠq_tot = p.ᶠq_tot[colidx]
-    ᶠρ = p.edmf_cache.aux.face.ρ[colidx]
-    ᶜq_tot = p.edmf_cache.aux.cent.q_tot[colidx]
-    ᶜq_liq = p.edmf_cache.aux.cent.q_liq[colidx]
-    # TODO: unify (ᶜq_tot, ᶜq_liq) with grid-mean
-    @. ᶜq_tot = TD.total_specific_humidity(thermo_params, ᶜts_gm)
-    @. ᶜq_liq = TD.liquid_specific_humidity(thermo_params, ᶜts_gm)
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶠz = Fields.coordinate_field(Y.f).z
 
-    ᶜq_tot_surf = Spaces.level(ᶜq_tot, 1)
+    # TODO: According to the paper, we should replace liquid_specific_humidity
+    # with TD.mixing_ratios(thermo_params, ᶜts[colidx]).liq, but this wouldn't
+    # match the original code from TurbulenceConvection.
+    @. ᶜκρq[colidx] =
+        radiation_mode.kappa *
+        Y.c.ρ[colidx] *
+        TD.liquid_specific_humidity(thermo_params, ᶜts[colidx])
 
-    zc = Fields.coordinate_field(axes(ᶜρ)).z
-    zf = Fields.coordinate_field(axes(ᶠρ)).z
-    # find zi (level of 8.0 g/kg isoline of qt)
-    # TODO: report bug: zi and ρ_i are not initialized
-    zi = FT(0)
-    ρ_i = FT(0)
-    Ifq = Operators.InterpolateC2F(;
-        bottom = Operators.SetValue(ᶜq_tot_surf),
-        top = Operators.Extrapolate(),
+    Operators.column_integral_definite!(∫_0_∞_κρq[colidx], ᶜκρq[colidx])
+
+    column_indefinite_integral!(ᶠ∫_0_z_κρq[colidx], ᶜκρq[colidx])
+
+    # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
+    # the level whose value of q_tot is closest to 0.008.
+    column_mapreduce!(
+        (z, ρ, q_tot) -> (; z, ρ, q_tot),
+        (nt1, nt2) ->
+            abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
+        isoline_z_ρ_q[colidx],
+        ᶜz[colidx],
+        Y.c.ρ[colidx],
+        ᶜspecific.q_tot[colidx],
     )
-    @. ᶠq_tot .= Ifq(ᶜq_tot)
-    n = length(parent(ᶠρ))
-    for k in Operators.PlusHalf(1):Operators.PlusHalf(n)
-        ᶠq_tot_lev = Spaces.level(ᶠq_tot, k)
-        ᶠq_tot_lev = parent(ᶠq_tot_lev)[1]
-        if (ᶠq_tot_lev < 8.0 / 1000)
-            # will be used at cell faces
-            zi = Spaces.level(zf, k)
-            zi = parent(zi)[1]
-            ρ_i = Spaces.level(ᶠρ, k)
-            ρ_i = parent(ρ_i)[1]
-            break
-        end
-    end
 
-    ρ_z = Spline1D(vec(zc), vec(ᶜρ); k = 1)
-    q_liq_z = Spline1D(vec(zc), vec(ᶜq_liq); k = 1)
+    zi = isoline_z_ρ_q.z
+    ρi = isoline_z_ρ_q.ρ
 
-    integrand(ρq_l, params, z) = params.κ * ρ_z(z) * q_liq_z(z)
-    rintegrand(ρq_l, params, z) = -integrand(ρq_l, params, z)
+    # TODO: According to the paper, we should remove the ifelse condition that
+    # clips the third term to 0 below zi, and we should also replace cp_d with
+    # cp_m, but this wouldn't match the original code from TurbulenceConvection.
+    # Note: ∫_0_z_κρq - ∫_0_∞_κρq = -∫_z_∞_κρq
+    @. ᶠradiation_flux[colidx] = Geometry.WVector(
+        radiation_mode.F0 * exp(ᶠ∫_0_z_κρq[colidx] - ∫_0_∞_κρq[colidx]) +
+        radiation_mode.F1 * exp(-(ᶠ∫_0_z_κρq[colidx])) +
+        ifelse(
+            ᶠz[colidx] > zi[colidx],
+            ρi[colidx] *
+            cp_d *
+            radiation_mode.divergence *
+            radiation_mode.alpha_z *
+            (
+                cbrt(ᶠz[colidx] - zi[colidx])^4 / 4 +
+                zi[colidx] * cbrt(ᶠz[colidx] - zi[colidx])
+            ),
+            FT(0),
+        ),
+    )
 
-    z_span = (minimum(zf), maximum(zf))
-    rz_span = (z_span[2], z_span[1])
-    params = (; κ = self.kappa)
+    @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
 
-    # TODO: replace this with ClimaCore indefinite integral
-    Δz = parent(Fields.dz_field(axes(ᶜρ)))[1]
-    rprob = ODE.ODEProblem(rintegrand, 0.0, rz_span, params; dt = Δz)
-    rsol = ODE.solve(rprob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
-    q_0 = rsol.(vec(zf))
-
-    prob = ODE.ODEProblem(integrand, 0.0, z_span, params; dt = Δz)
-    sol = ODE.solve(prob, ODE.Tsit5(), reltol = 1e-12, abstol = 1e-12)
-    q_1 = sol.(vec(zf))
-    parent(ᶠf_rad) .= self.F0 .* exp.(-q_0)
-    parent(ᶠf_rad) .+= self.F1 .* exp.(-q_1)
-
-    # cooling in free troposphere
-    for k in Operators.PlusHalf(1):Operators.PlusHalf(n)
-        zf_lev = Spaces.level(zf, k)
-        zf_lev = parent(zf_lev)[1]
-        ᶠf_rad_lev = Spaces.level(ᶠf_rad, k)
-        if zf_lev > zi
-            cbrt_z = cbrt(zf_lev - zi)
-            @. ᶠf_rad_lev +=
-                ρ_i *
-                cp_d *
-                self.divergence *
-                self.alpha_z *
-                (cbrt_z^4 / 4 + zi * cbrt_z)
-        end
-    end
-
-    ∇c = Operators.DivergenceF2C()
-    wvec = Geometry.WVector
-    @. ᶜdTdt_rad = -∇c(wvec(ᶠf_rad)) / ᶜρ / cp_d
-
-    @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
-
-    return
+    return nothing
 end
 
 #####
