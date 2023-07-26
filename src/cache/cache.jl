@@ -79,6 +79,7 @@ function default_cache(
     end
 
     default_cache = (;
+        is_init = Ref(true),
         simulation,
         spaces,
         atmos,
@@ -114,6 +115,7 @@ function default_cache(
         hyperdiffusion_cache(Y, atmos, do_dss)...,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
+    default_cache.is_init[] = false
     return default_cache
 end
 

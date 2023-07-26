@@ -6,7 +6,10 @@ Updates the value of `p.sfc_conditions` based on the current state `Y` and time
 is not a PrescribedSurface.
 """
 function update_surface_conditions!(Y, p, t)
-    isnothing(p.sfc_setup) && return
+    if isnothing(p.sfc_setup)
+        p.is_init[] && set_dummy_surface_conditions!(p)
+        return
+    end
     # Need to extract the field values so that we can do
     # a DataLayout broadcast rather than a Field broadcast
     # because we are mixing surface and interior fields
@@ -61,6 +64,35 @@ function update_surface_conditions!(Y, p, t)
         )
     end
     return nothing
+end
+
+# This is a hack for meeting the August 7th deadline. It is to ensure that the
+# coupler will be able to construct an integrator before overwriting its surface
+# conditions, but without throwing an error during the computation of
+# precomputed quantities for diagnostic EDMF due to uninitialized surface
+# conditions.
+# TODO: Refactor the surface conditions API to avoid needing to do this. 
+function set_dummy_surface_conditions!(p)
+    (; sfc_conditions, params, atmos) = p
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    @. sfc_conditions.ustar = FT(0.2)
+    @. sfc_conditions.obukhov_length = FT(1e-4)
+    @. sfc_conditions.buoyancy_flux = FT(0)
+    if atmos.moisture_model isa DryModel
+        @. sfc_conditions.ts = TD.PhaseDry_ρT(thermo_params, FT(1), FT(300))
+    else
+        @. sfc_conditions.ts = TD.PhaseNonEquil_ρTq(
+            thermo_params,
+            FT(1),
+            FT(300),
+            TD.PhasePartition(FT(0)),
+        )
+        @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
+    end
+    if atmos.energy_form isa TotalEnergy
+        @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
+    end
 end
 
 """
