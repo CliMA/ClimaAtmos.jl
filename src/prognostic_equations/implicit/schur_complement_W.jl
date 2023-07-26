@@ -116,8 +116,13 @@ function SchurComplementW(Y, transform, flags, test = false)
     ET = if isempty(ᶜ𝕋_names)
         Nothing
     else
+        hspace = Spaces.horizontal_space(axes(∂ᶜ𝕋ₜ∂ᶠ𝕄_field))
+        device = ClimaComms.device(hspace)
         cid = Fields.ColumnIndex((1, 1), 1)
-        typeof(getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field[cid], ᶜ𝕋_names[1]))
+        _∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
+            device isa ClimaComms.CUDADevice ? ∂ᶜ𝕋ₜ∂ᶠ𝕄_field :
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[cid]
+        typeof(getproperty(_∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_names[1]))
     end
     SchurComplementW{
         ET,
