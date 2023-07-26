@@ -1,8 +1,3 @@
-# TODO: Remove this type piracy.
-Base.Broadcast.BroadcastStyle(
-    ::Base.Broadcast.Style{Tuple},
-    ds::DataLayouts.DataStyle,
-) = ds
 
 """
     update_surface_conditions!(Y, p, t)
