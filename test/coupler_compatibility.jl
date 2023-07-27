@@ -169,3 +169,22 @@ end
     sfc_T = @. TD.air_temperature(thermo_params, p.sfc_conditions.ts)
     @test all(isequal(T2), parent(sfc_T))
 end
+
+@testset "Coupler Initialization" begin
+    # Verify that using PrescribedSurface does not break the initialization of
+    # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
+    # use diagnostic EDMF.
+    config = CA.AtmosConfigArgs(;
+        args = [
+            "--surface_setup",
+            "PrescribedSurface",
+            "--moist",
+            "equil",
+            "--rad",
+            "clearsky",
+            "--turbconv",
+            "diagnostic_edmfx",
+        ],
+    )
+    integrator = CA.get_integrator(config)
+end
