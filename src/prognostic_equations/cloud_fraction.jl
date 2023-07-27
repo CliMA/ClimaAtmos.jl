@@ -22,13 +22,13 @@ end
 function compute_cloud_fraction(
     env_thermo_quad,
     thermo_params,
-    ᶜp,
+    ᶜp::FT,
     q_tot,
     θ_liq_ice,
     qt′qt′,
     θl′θl′,
     θl′qt′,
-)
+) where {FT}
     vars = (;
         p_c = ᶜp,
         qt_mean = q_tot,
@@ -37,18 +37,20 @@ function compute_cloud_fraction(
         θl′θl′,
         θl′qt′,
     )
-    return quad_loop(env_thermo_quad, vars, thermo_params).cf
+    return quad_loop(
+        env_thermo_quad,
+        env_thermo_quad.quadrature_type,
+        vars,
+        thermo_params,
+    )::FT
 end
 
-function quad_loop(env_thermo_quad::SGSQuadrature, vars, thermo_params)
-
-    env_len = 8
-    i_ql, i_qi, i_T, i_cf, i_qt_sat, i_qt_unsat, i_T_sat, i_T_unsat = 1:env_len
-
-    quadrature_type = env_thermo_quad.quadrature_type
-    quad_order = quadrature_order(env_thermo_quad)
-    χ = env_thermo_quad.a
-    weights = env_thermo_quad.w
+function quad_loop(
+    env_thermo_quad::SGSQuadrature,
+    quadrature_type::GaussianQuad,
+    vars,
+    thermo_params,
+)
 
     # qt - total water specific humidity
     # θl - liquid ice potential temperature
@@ -57,106 +59,65 @@ function quad_loop(env_thermo_quad::SGSQuadrature, vars, thermo_params)
 
     FT = eltype(qt_mean)
 
-    inner_env = SA.MVector{env_len, FT}(undef)
-    outer_env = SA.MVector{env_len, FT}(undef)
-
-    sqpi_inv = FT(1 / sqrt(π))
     sqrt2 = FT(sqrt(2))
 
     # Epsilon defined per typical variable fluctuation
-    eps_q = eps(FT) * max(eps(FT), qt_mean)
-    eps_θ = eps(FT)
+    eps_q = FT(eps(FT)) * max(FT(eps(FT)), qt_mean)
+    eps_θ = FT(eps(FT))
 
-    if quadrature_type isa LogNormalQuad
-        # Lognormal parameters (ν, s) from mean and variance
-        ν_q = log(qt_mean^2 / max(sqrt(qt_mean^2 + qt′qt′), eps_q))
-        ν_θ = log(θl_mean^2 / sqrt(θl_mean^2 + θl′θl′))
-        s_q = sqrt(log(qt′qt′ / max(qt_mean, eps_q)^2 + 1))
-        s_θ = sqrt(log(θl′θl′ / θl_mean^2 + 1))
+    # limit σ_q to prevent negative q_tot_hat
+    σ_q_lim = -qt_mean / (sqrt2 * env_thermo_quad.a[1]) # TODO: is this correct?
+    σ_q::FT = min(sqrt(qt′qt′), σ_q_lim)
+    σ_θ::FT = sqrt(θl′θl′)
 
-        # Enforce Cauchy-Schwarz inequality, numerically stable compute
-        corr = θl′qt′ / max(sqrt(qt′qt′), eps_q)
-        corr = max(min(corr / max(sqrt(θl′θl′), eps_θ), 1), -1)
+    # Enforce Cauchy-Schwarz inequality, numerically stable compute
+    _corr::FT = (θl′qt′ / max(σ_q, eps_q))
+    corr::FT = max(min(_corr / max(σ_θ, eps_θ), 1), -1)
 
-        # Conditionals
-        s2_θq = log(
-            corr * sqrt(θl′θl′ * qt′qt′) / θl_mean / max(qt_mean, eps_q) + 1,
-        )
-        s_c = sqrt(max(s_θ^2 - s2_θq^2 / max(s_q, eps_q)^2, 0))
+    # Conditionals
+    σ_c = sqrt(max(1 - corr * corr, 0)) * σ_θ
 
-    elseif quadrature_type isa GaussianQuad
-        # limit σ_q to prevent negative qt_hat
-        σ_q_lim = -qt_mean / (sqrt2 * χ[1])
-        σ_q = min(sqrt(qt′qt′), σ_q_lim)
-        σ_θ = sqrt(θl′θl′)
-
-        # Enforce Cauchy-Schwarz inequality, numerically stable compute
-        corr = θl′qt′ / max(σ_q, eps_q)
-        corr = max(min(corr / max(σ_θ, eps_θ), 1), -1)
-
-        # Conditionals
-        σ_c = sqrt(max(1 - corr * corr, 0)) * σ_θ
+    function get_x_hat(χ::Tuple{<:Real, <:Real})
+        μ_c = θl_mean + sqrt2 * corr * σ_θ * χ[1]
+        θ_hat = μ_c + sqrt2 * σ_c * χ[2]
+        q_tot_hat = qt_mean + sqrt2 * σ_q * χ[1]
+        return (θ_hat, q_tot_hat)
     end
 
+    # cloudy/dry categories for buoyancy in TKE
+    f_q_tot_sat(x_hat::Tuple{<:Real, <:Real}, ts) =
+        TD.has_condensate(thermo_params, ts) ? x_hat[2] : eltype(x_hat)(0)
+
+    get_ts(x_hat::Tuple{<:Real, <:Real}) =
+        thermo_state(thermo_params; p = p_c, θ = x_hat[1], q_tot = x_hat[2])
+    f_cf(x_hat::Tuple{<:Real, <:Real}, ts) =
+        TD.has_condensate(thermo_params, ts) ? eltype(x_hat)(1) :
+        eltype(x_hat)(0)
+    function f(x_hat::Tuple{<:Real, <:Real})
+        ts = get_ts(x_hat)
+        return (; cf = f_cf(x_hat, ts), q_tot_sat = f_q_tot_sat(x_hat, ts))
+    end
+
+    return quad(f, get_x_hat, env_thermo_quad).cf
+end
+
+import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
+function quad(f, get_x_hat::F, quad_type) where {F <: Function}
+    χ = quad_type.a
+    weights = quad_type.w
+    quad_order = quadrature_order(quad_type)
+    FT = eltype(χ)
     # zero outer quadrature points
-    @inbounds for idx in 1:env_len
-        outer_env[idx] = 0
-    end
-
+    T = typeof(f(get_x_hat((χ[1], χ[1]))))
+    outer_env = rzero(T)
     @inbounds for m_q in 1:quad_order
-        if quadrature_type isa LogNormalQuad
-            qt_hat = exp(ν_q + sqrt2 * s_q * χ[m_q])
-            ν_c = ν_θ + s2_θq / max(s_q, eps_q)^2 * (log(qt_hat) - ν_q)
-        elseif quadrature_type isa GaussianQuad
-            qt_hat = qt_mean + sqrt2 * σ_q * χ[m_q]
-            μ_c = θl_mean + sqrt2 * corr * σ_θ * χ[m_q]
-        end
-
         # zero inner quadrature points
-        inner_env .= 0
-
+        inner_env = rzero(T)
         for m_h in 1:quad_order
-            if quadrature_type isa LogNormalQuad
-                h_hat = exp(ν_c + sqrt2 * s_c * χ[m_h])
-            elseif quadrature_type isa GaussianQuad
-                h_hat = (μ_c) + sqrt2 * σ_c * χ[m_h]
-            end
-
-            # condensation
-            ts = thermo_state(thermo_params; p = p_c, θ = h_hat, q_tot = qt_hat)
-            q_liq_en = TD.liquid_specific_humidity(thermo_params, ts)
-            q_ice_en = TD.ice_specific_humidity(thermo_params, ts)
-            T = TD.air_temperature(thermo_params, ts)
-            # autoconversion and accretion
-
-            # environmental variables
-            inner_env[i_ql] += q_liq_en * weights[m_h] * sqpi_inv
-            inner_env[i_qi] += q_ice_en * weights[m_h] * sqpi_inv
-            inner_env[i_T] += T * weights[m_h] * sqpi_inv
-            # cloudy/dry categories for buoyancy in TKE
-            if TD.has_condensate(q_liq_en + q_ice_en)
-                inner_env[i_cf] += 1 * weights[m_h] * sqpi_inv
-                inner_env[i_qt_sat] += qt_hat * weights[m_h] * sqpi_inv
-                inner_env[i_T_sat] += T * weights[m_h] * sqpi_inv
-            else
-                inner_env[i_qt_unsat] += qt_hat * weights[m_h] * sqpi_inv
-                inner_env[i_T_unsat] += T * weights[m_h] * sqpi_inv
-            end
+            x_hat = get_x_hat((χ[m_q], χ[m_h]))
+            inner_env = inner_env ⊞ f(x_hat) ⊠ weights[m_h] ⊠ FT(1 / sqrt(π))
         end
-
-        for idx in 1:env_len
-            outer_env[idx] += inner_env[idx] * weights[m_q] * sqpi_inv
-        end
+        outer_env = outer_env ⊞ inner_env ⊠ weights[m_q] ⊠ FT(1 / sqrt(π))
     end
-    outer_env_nt = (;
-        ql = outer_env[i_ql],
-        qi = outer_env[i_qi],
-        T = outer_env[i_T],
-        cf = outer_env[i_cf],
-        qt_sat = outer_env[i_qt_sat],
-        qt_unsat = outer_env[i_qt_unsat],
-        T_sat = outer_env[i_T_sat],
-        T_unsat = outer_env[i_T_unsat],
-    )
-    return outer_env_nt
+    return outer_env
 end
