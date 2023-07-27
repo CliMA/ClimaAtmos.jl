@@ -462,8 +462,8 @@ steps:
       - label: ":genie: Diagnostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_aquaplanet
-          --vert_diff true --surface_setup DefaultExchangeCoefficients --rad gray
-          --turbconv diagnostic_edmfx --prognostic_tke true --edmfx_entr_detr true
+          --vert_diff true --surface_setup DefaultMoninObukhov --rad clearsky
+          --turbconv diagnostic_edmfx --prognostic_tke true --edmfx_entr_detr true --edmfx_sgs_flux true
           --moist equil --precip_model 0M
           --dt 400secs --t_end 1days --dt_save_to_disk 12hours
         artifact_paths: "diagnostic_edmfx_aquaplanet/*"
@@ -827,6 +827,19 @@ steps:
         artifact_paths: "gpu_implicit_barowave_moist/*"
         agents:
           slurm_gpus: 1
+      
+      - label: ":genie: GPU Diagnostic EDMFX aquaplanet"
+        command:
+          julia --project -e 'using CUDA; CUDA.versioninfo()'
+
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id gpu_diagnostic_edmfx_aquaplanet
+          --vert_diff true --surface_setup DefaultMoninObukhov --rad clearsky
+          --turbconv diagnostic_edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
+          --moist equil --precip_model 0M
+          --dt 400secs --t_end 1hours --dt_save_to_disk 400secs
+        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: "Perf: CPU implicit baro wave"
         command: "julia --color=yes --project=examples perf/benchmark_step.jl --job_id cpu_implicit_barowave --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf"
