@@ -382,6 +382,7 @@ function argparse_settings()
 end
 
 parse_commandline(s) = ArgParse.parse_args(ARGS, s)
+parse_commandline(args, s) = ArgParse.parse_args(args, s)
 
 function cli_defaults(s::ArgParse.ArgParseSettings)
     defaults = Dict()
