@@ -108,6 +108,10 @@ function argparse_settings()
         "--turbconv_case"
         help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
         arg_type = String
+        "--prognostic_tke"
+        help = "Whether the turbulence convection scheme uses prognostic or prescribed TKE [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--hyperdiff"
         help = "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
         arg_type = String

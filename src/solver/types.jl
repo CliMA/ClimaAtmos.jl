@@ -104,11 +104,6 @@ struct EDMFCoriolis{U, V, FT}
     coriolis_param::FT
 end
 
-struct EDMFX{N, FT}
-    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
-end
-EDMFX{N}(a_half::FT) where {N, FT} = EDMFX{N, FT}(a_half)
-
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 
@@ -151,16 +146,30 @@ function EnvBuoyGrad(
     return EnvBuoyGrad{FT, EBG}(t_sat, args...)
 end
 
-struct DiagnosticEDMFX{N, FT}
+abstract type AbstractEDMF end
+
+struct EDMFX{N, TKE, FT} <: AbstractEDMF
+    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
+end
+EDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} = EDMFX{N, TKE, FT}(a_half)
+
+struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_int::FT # area fraction of the first interior cell above the surface
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-DiagnosticEDMFX{N}(a_int::FT, a_half::FT) where {N, FT} =
-    DiagnosticEDMFX{N, FT}(a_int, a_half)
+DiagnosticEDMFX{N, TKE}(a_int::FT, a_half::FT) where {N, TKE, FT} =
+    DiagnosticEDMFX{N, TKE, FT}(a_int, a_half)
 
 n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::Any) = 0
+
+n_prognostic_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+n_prognostic_mass_flux_subdomains(::Any) = 0
+
+use_prognostic_tke(::EDMFX{N, TKE}) where {N, TKE} = TKE
+use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
+use_prognostic_tke(::Any) = false
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
