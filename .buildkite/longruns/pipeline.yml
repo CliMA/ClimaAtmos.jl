@@ -51,8 +51,10 @@ steps:
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
-          slurm_ntasks: 64
-          slurm_mem: 384GB
+          slurm_exclusive: true
+          slurm_partition: expansion
+          slurm_mem: 0GB
+          slurm_ntasks: 128
       
       - label: ":computer: topography+edmf test" 
         command:
@@ -62,5 +64,7 @@ steps:
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
-          slurm_ntasks: 128
-          slurm_mem: 384GB
+          slurm_partition: expansion
+          slurm_exclusive: true
+          slurm_ntasks: 256
+          slurm_mem: 0GB
