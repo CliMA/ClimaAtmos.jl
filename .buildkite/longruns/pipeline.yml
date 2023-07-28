@@ -11,7 +11,7 @@ agents:
   config: cpu
   queue: central
   slurm_ntasks: 1
-  slurm_time: 48:00:00
+  slurm_time: 24:00:00
 
 timeout_in_minutes: 1440
 
@@ -43,32 +43,6 @@ steps:
 
     steps:
 
-      - label: ":computer: topography+edmf test" 
-        command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultMoninObukhov --moist equil --rad clearsky --precip_model 0M --turbconv diagnostic_edmfx --edmfx_entr_detr true --z_elem 35 --dz_bottom 50 --h_elem 12 --kappa_4 4e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 100secs --t_end 365days --job_id aquaplanet_equil_clearsky_diagedmf_ft64_earth --dt_save_to_sol Inf --dt_save_to_disk 10days --FLOAT_TYPE Float64 --apply_limiter false --topography Earth --topo_smoothing true --use_reference_state false
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_target_diag-edmfx_topography --out_dir longrun_aquaplanet_rhoe_equil_target_diag-edmfx_topography
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_target_diag-edmfx_topography/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_exclusive: true
-          slurm_partition: expansion
-          slurm_mem: 0GB
-          slurm_ntasks: 128
-      
-      - label: ":computer: topography+edmf test" 
-        command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultMoninObukhov --moist equil --rad clearsky --precip_model 0M --turbconv diagnostic_edmfx --edmfx_entr_detr true --z_elem 35 --dz_bottom 50 --h_elem 12 --kappa_4 4e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 100secs --t_end 365days --job_id aquaplanet_equil_clearsky_diagedmf_ft64_earth --dt_save_to_sol Inf --dt_save_to_disk 10days --FLOAT_TYPE Float64 --apply_limiter false --topography Earth --topo_smoothing true --use_reference_state false
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_target_diag-edmfx_topography --out_dir longrun_aquaplanet_rhoe_equil_target_diag-edmfx_topography
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_target_diag-edmfx_topography/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_partition: expansion
-          slurm_exclusive: true
-          slurm_ntasks: 256
-          slurm_mem: 0GB
-      
       - label: ":computer: topography+edmf+up-params test" 
         command:
           - mpiexec julia --project=examples examples/hybrid/driver.jl --vert_diff true --surface_setup DefaultMoninObukhov --moist equil --rad clearsky --precip_model 0M --turbconv diagnostic_edmfx --edmfx_entr_detr true --z_elem 35 --dz_bottom 50 --h_elem 12 --kappa_4 8e16 --rayleigh_sponge true --alpha_rayleigh_uh 0 --dt 200secs --t_end 365days --job_id aquaplanet_equil_clearsky_diagedmf_ft64_earth --dt_save_to_sol Inf --dt_save_to_disk 10days --FLOAT_TYPE Float64 --apply_limiter false --topography Earth --topo_smoothing true --use_reference_state false
@@ -78,6 +52,5 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_partition: expansion
-          slurm_exclusive: true
           slurm_ntasks: 128
           slurm_mem: 384GB
