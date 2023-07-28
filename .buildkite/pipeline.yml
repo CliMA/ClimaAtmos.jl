@@ -233,6 +233,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) hightop"
+        key: sphere_held_suarez_rhoe_hightop
         command:
           - julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --forcing held_suarez --job_id sphere_held_suarez_rhoe_hightop --regression_test true --dt 500secs --t_end 8days --dt_save_to_disk 4days
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir sphere_held_suarez_rhoe_hightop --out_dir sphere_held_suarez_rhoe_hightop
@@ -819,6 +820,21 @@ steps:
         depends_on:
           - "sphere_baroclinic_wave_rhoe"
           - "gpu_implicit_barowave_ref"
+
+      - label: "GPU: implicit HS"
+        key: "gpu_implicit_dry_hs_ref"
+        command:
+          - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
+          - "julia --color=yes --project=examples examples/hybrid/driver.jl --z_max 45e3 --z_elem 25 --dz_bottom 300 --forcing held_suarez --job_id gpu_implicit_dry_hs_ref --dt 500secs --t_end 8days --dt_save_to_disk 4days"
+        artifact_paths: "gpu_implicit_dry_hs_ref/*"
+        agents:
+          slurm_gpus: 1
+
+      - label: "GPU: compare dry with CPU"
+        command: "julia --color=yes --project=examples post_processing/compare_outputs.jl --output_folder_1 sphere_held_suarez_rhoe_hightop/ --output_folder_2 gpu_implicit_dry_hs_ref --t_end 8days --compare_state false --compare_diagnostics false"
+        depends_on:
+          - "sphere_held_suarez_rhoe_hightop"
+          - "gpu_implicit_dry_hs_ref"
 
   - group: "GPU Performance"
     steps:
