@@ -316,7 +316,21 @@ function get_initial_condition(parsed_args)
 end
 
 function get_surface_setup(parsed_args)
-    return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
+    s = parsed_args["surface_setup"]
+    options = [
+        "Bomex",
+        "DefaultExchangeCoefficients",
+        "DefaultMoninObukhov",
+        "Rico",
+        "GABLS",
+        "Nieuwstadt",
+        "Soares",
+        "DYCOMS_RF01",
+        "LifeCycleTan2018",
+        "TRMM_LBA",
+    ]
+    @assert s in options
+    return getproperty(SurfaceConditions, Symbol(s))()
 end
 
 is_explicit_CTS_algo_type(alg_or_tableau) =

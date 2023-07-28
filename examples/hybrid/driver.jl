@@ -119,15 +119,15 @@ if !CA.is_distributed(config.comms_ctx) &&
    !is_edmfx &&
    !(atmos.model_config isa CA.SphericalModel)
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if CA.is_column_without_edmf(config.parsed_args)
+    if CA.is_column_without_edmf(atmos)
         custom_postprocessing(sol, simulation.output_dir, p)
-    elseif CA.is_column_edmf(config.parsed_args)
+    elseif CA.is_column_edmf(atmos)
         postprocessing_edmf(
             sol,
             simulation.output_dir,
             config.parsed_args["fps"],
         )
-    elseif CA.is_solid_body(config.parsed_args)
+    elseif CA.is_solid_body(atmos, config.parsed_args["perturb_initstate"])
         postprocessing(sol, simulation.output_dir, config.parsed_args["fps"])
     elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)
