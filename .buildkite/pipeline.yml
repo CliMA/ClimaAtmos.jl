@@ -358,6 +358,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
+          slurm_mem: 20GB
 
       - label: ":computer: Prep for calling remap pipeline"
         key: "prep_remap"
