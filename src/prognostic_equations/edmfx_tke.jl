@@ -40,15 +40,15 @@ function edmfx_tke_tendency!(
         # buoyancy production
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * ᶜK_h[colidx] * ᶜlinear_buoygrad[colidx]
-        # entrainment and detraiment
-        for j in 1:n
-            @. Yₜ.c.sgs⁰.ρatke[colidx] +=
-                Y.c.ρ[colidx] * (
-                    ᶜentr_detrʲs.:($$j).entr[colidx] *
-                    ᶜinterp(norm_sqr(ᶠu³⁰[colidx] - ᶠu³ʲs.:($$j)[colidx])) / 2 -
-                    ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
-                )
-        end
+        # # entrainment and detraiment
+        # for j in 1:n
+        #     @. Yₜ.c.sgs⁰.ρatke[colidx] +=
+        #         Y.c.ρ[colidx] * (
+        #             ᶜentr_detrʲs.:($$j).entr[colidx] *
+        #             ᶜinterp(norm_sqr(ᶠu³⁰[colidx] - ᶠu³ʲs.:($$j)[colidx])) / 2 -
+        #             ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
+        #         )
+        # end
         # pressure work
         # dissipation
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
