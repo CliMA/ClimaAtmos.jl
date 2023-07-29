@@ -56,6 +56,25 @@ function set_diagnostic_edmfx_env_quantities_level!(
     return nothing
 end
 
+function surface_flux_tke(
+    turbconv_params,
+    ρ_int,
+    u_int,
+    ustar,
+    interior_local_geometry,
+    surface_local_geometry,
+)
+    c_d = TCP.tke_diss_coeff(turbconv_params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    vkc = TCP.von_karman_const(turbconv_params)
+    speed = Geometry._norm(
+        CA.CT12(u_int, interior_local_geometry),
+        interior_local_geometry,
+    )
+    c3_unit = C3(unit_basis_vector_data(C3, surface_local_geometry))
+    return ρ_int * (1 - c_d * c_m * vkc^4) * ustar^2 * speed * c3_unit
+end
+
 """
     set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
 
@@ -68,7 +87,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
-    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot) = p
+    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.sfc_conditions
@@ -84,7 +103,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜentr_detrʲs,
     ) = p
     (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
-    (; ᶜK_h, ᶜK_u) = p
+    (; ᶜK_h, ᶜK_u, ρatke_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -519,9 +538,9 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ustar,
         ᶜz,
         ᶜdz,
-        sfc_tke,
+        max(sfc_tke, 0),
         ᶜlinear_buoygrad,
-        ᶜtke⁰,
+        max(ᶜtke⁰, 0),
         obukhov_length,
         ᶜshear²,
         ᶜprandtl_nvec,
@@ -533,6 +552,24 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
     # TODO: add Prantdl number
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+
+    ρatke_flux_values = Fields.field_values(ρatke_flux)
+    ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
+    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
+    ustar_values = Fields.field_values(ustar)
+    int_local_geometry_values =
+        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
+    sfc_local_geometry_values = Fields.field_values(
+        Fields.level(Fields.local_geometry_field(Y.f), half),
+    )
+    @. ρatke_flux_values = surface_flux_tke(
+        turbconv_params,
+        ρ_int_values,
+        u_int_values,
+        ustar_values,
+        int_local_geometry_values,
+        sfc_local_geometry_values,
+    )
 
     return nothing
 end
