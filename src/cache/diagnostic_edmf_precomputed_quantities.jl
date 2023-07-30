@@ -87,6 +87,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
+    (; dt) = p.simulation
     (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
@@ -304,6 +305,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 ᶜbuoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                dt,
             )
 
             @. ρaʲu³ʲ_data =

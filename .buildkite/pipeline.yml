@@ -111,20 +111,20 @@ steps:
           --vert_diff true --surface_setup DefaultExchangeCoefficients --rad gray
           --turbconv diagnostic_edmfx --prognostic_tke true --edmfx_upwinding first_order --edmfx_entr_detr true
           --moist equil --precip_model 0M
-          --dt 400secs --t_end 6hours --dt_save_to_disk 1hours
+          --dt 100secs --t_end 6hours --dt_save_to_disk 1hours
         artifact_paths: "diagnostic_edmfx_aquaplanet_tke/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
       
-      - label: ":genie: Diagnostic EDMFX aquaplanet with TKE dt 100secs"
+      - label: ":genie: Diagnostic EDMFX aquaplanet with TKE t_end 1days"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_aquaplanet_tke_dt100
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_aquaplanet_tke_tend1d
           --vert_diff true --surface_setup DefaultExchangeCoefficients --rad gray
           --turbconv diagnostic_edmfx --prognostic_tke true --edmfx_upwinding first_order --edmfx_entr_detr true
           --moist equil --precip_model 0M
-          --dt 100secs --t_end 6hours --dt_save_to_disk 1hours
-        artifact_paths: "diagnostic_edmfx_aquaplanet_tke_dt100/*"
+          --dt 100secs --t_end 1days --dt_save_to_disk 1hours
+        artifact_paths: "diagnostic_edmfx_aquaplanet_tke_tend1d/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB

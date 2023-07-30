@@ -139,6 +139,7 @@ function pi_groups_entr_detr(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    dt::FT,
 ) where {FT}
 
     if ᶜaʲ <= FT(0) || !entr_detr_flag
@@ -182,7 +183,7 @@ function pi_groups_entr_detr(
         # TODO - Temporary: Switch to Π groups after simple tests are done
         # (kinematic, bubble, Bomex)
         # and/or we can calibrate things in ClimaAtmos
-        entr = max(0, entr_coeff * ᶜwʲ / ᶜz)
+        entr = max(0, min(entr_coeff * ᶜwʲ / ᶜz, 1 / dt))
         detr = max(0, detr_coeff * ᶜwʲ)
 
         return (; entr, detr)

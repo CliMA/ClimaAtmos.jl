@@ -22,6 +22,7 @@ function edmfx_tke_tendency!(
     (; ᶠu³⁰, ᶜshear², ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) = p
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p
     ᶠgradᵥ = Operators.GradientC2F()
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     ᶠρaK_u = p.ᶠtemp_scalar
     if use_prognostic_tke(turbconv_model)
@@ -41,14 +42,14 @@ function edmfx_tke_tendency!(
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * ᶜK_h[colidx] * ᶜlinear_buoygrad[colidx]
         # # entrainment and detraiment
-        # for j in 1:n
-        #     @. Yₜ.c.sgs⁰.ρatke[colidx] +=
-        #         Y.c.ρ[colidx] * (
-        #             ᶜentr_detrʲs.:($$j).entr[colidx] *
-        #             ᶜinterp(norm_sqr(ᶠu³⁰[colidx] - ᶠu³ʲs.:($$j)[colidx])) / 2 -
-        #             ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
-        #         )
-        # end
+        for j in 1:n
+            @. Yₜ.c.sgs⁰.ρatke[colidx] +=
+                Y.c.ρ[colidx] * (
+                    ᶜentr_detrʲs.:($$j).entr[colidx] * 1 / 2 * norm_sqr(
+                        ᶜinterp(ᶠu³⁰[colidx]) - ᶜinterp(ᶠu³ʲs.:($$j)[colidx]),
+                    ) - ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
+                )
+        end
         # pressure work
         # dissipation
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
