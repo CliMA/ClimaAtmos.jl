@@ -87,6 +87,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
+    (; dt) = p.simulation
     (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
@@ -304,6 +305,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 ᶜbuoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                dt,
             )
 
             @. ρaʲu³ʲ_data =
@@ -522,14 +524,12 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. ᶜprandtl_nvec = FT(1) / 3
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
+    # using ᶜu⁰ would be more correct, but this is more consistent with the
+    # TKE equation, where using ᶜu⁰ results in allocation
     for j in 1:n
         @. ᶜtke_exch +=
-            ᶜρaʲs.:($$j) * ᶜentr_detrʲs.:($$j).detr / Y.c.ρ * (
-                1 / 2 *
-                (
-                    get_physical_w(ᶜuʲs.:($$j), ᶜlg) - get_physical_w(ᶜu⁰, ᶜlg)
-                )^2 - ᶜtke⁰
-            )
+            ᶜρaʲs.:($$j) * ᶜentr_detrʲs.:($$j).detr / Y.c.ρ *
+            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)

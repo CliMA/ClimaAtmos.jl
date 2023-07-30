@@ -41,12 +41,13 @@ function edmfx_tke_tendency!(
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * ᶜK_h[colidx] * ᶜlinear_buoygrad[colidx]
         # entrainment and detraiment
+        # using ᶜu⁰ and local geometry results in allocation
         for j in 1:n
             @. Yₜ.c.sgs⁰.ρatke[colidx] +=
                 Y.c.ρ[colidx] * (
-                    ᶜentr_detrʲs.:($$j).entr[colidx] *
-                    ᶜinterp(norm_sqr(ᶠu³⁰[colidx] - ᶠu³ʲs.:($$j)[colidx])) / 2 -
-                    ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
+                    ᶜentr_detrʲs.:($$j).entr[colidx] * 1 / 2 * norm_sqr(
+                        ᶜinterp(ᶠu³⁰[colidx]) - ᶜinterp(ᶠu³ʲs.:($$j)[colidx]),
+                    ) - ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
                 )
         end
         # pressure work
