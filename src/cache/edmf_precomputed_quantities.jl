@@ -17,6 +17,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
+    (; dt) = p.simulation
     thermo_params = CAP.thermodynamics_params(params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, energy_form, moisture_model)
@@ -162,6 +163,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             get_physical_w(ᶜu⁰, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             ᶜbuoyancy(params, ᶜρ_ref, ᶜρ⁰),
+            dt,
         )
     end
 
