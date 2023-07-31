@@ -505,8 +505,10 @@ function get_callbacks(parsed_args, simulation, atmos, params)
         else
             FT(time_to_seconds(parsed_args["dt_rad"]))
         end
-        callbacks =
-            (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
+        callbacks = (
+            callbacks...,
+            call_every_dt(rrtmgp_model_callback!, dt_rad, skip_first = true),
+        )
     end
 
     if atmos.turbconv_model isa TC.EDMFModel
