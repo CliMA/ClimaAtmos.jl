@@ -8,7 +8,7 @@ import ClimaCore.Geometry as Geometry
 
 function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu, ᶜK, ᶜp, ᶜΦ, ᶜp_ref) = p
+    (; ᶜu, ᶜK, ᶜp, ᶜΦ, ᶜp_ref, atmos) = p
     if p.atmos.turbconv_model isa AbstractEDMF
         (; ᶜu⁰) = p
     end
@@ -42,7 +42,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if use_prognostic_tke(p.atmos.turbconv_model)
+    if use_prognostic_tke(atmos)
         @. Yₜ.c.sgs⁰.ρatke -= divₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
@@ -75,9 +75,10 @@ function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 end
 
 function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; turbconv_model) = p.atmos
+    (; atmos) = p
+    (; turbconv_model) = atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
-    advect_tke = use_prognostic_tke(turbconv_model)
+    advect_tke = use_prognostic_tke(atmos)
     is_total_energy = p.atmos.energy_form isa TotalEnergy
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p.simulation
@@ -178,7 +179,8 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
 
         # TODO: Move this to implicit_vertical_advection_tendency!.
-        if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
+        # 12688
+        if use_prognostic_tke(atmos) # advect_tke triggers allocations
             vertical_transport!(
                 Yₜ.c.sgs⁰.ρatke[colidx],
                 ᶜJ[colidx],

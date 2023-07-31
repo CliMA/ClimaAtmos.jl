@@ -50,12 +50,13 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
 end
 
 function hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff, turbconv_model) = p.atmos
+    (; atmos) = p
+    (; hyperdiff, turbconv_model) = atmos
     isnothing(hyperdiff) && return nothing
 
     (; κ₄, divergence_damping_factor) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
-    diffuse_tke = use_prognostic_tke(turbconv_model)
+    diffuse_tke = use_prognostic_tke(atmos)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²uᵥ, ᶜ∇²u, ᶜ∇²specific_energy) = p

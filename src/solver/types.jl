@@ -261,6 +261,7 @@ Base.@kwdef struct AtmosModel{
     EED,
     ESF,
     ENP,
+    TKE,
     TCM,
     SS,
     NOGW,
@@ -328,6 +329,61 @@ function Base.summary(io::IO, atmos::AtmosModel)
         print(io, s)
     end
 end
+
+# Very ugly hack to dispatch use_prognostic_tke off AtmosModel 
+use_prognostic_tke(
+    ::AtmosModel{
+        MC,
+        PEM,
+        MM,
+        EF,
+        PM,
+        F,
+        S,
+        RM,
+        LA,
+        EC,
+        EAT,
+        EED,
+        ESF,
+        ENP,
+        TKE,
+        TCM,
+        SS,
+        NOGW,
+        OGW,
+        HD,
+        VD,
+        VS,
+        RS,
+        ST,
+    },
+) where {
+    MC,
+    PEM,
+    MM,
+    EF,
+    PM,
+    F,
+    S,
+    RM,
+    LA,
+    EC,
+    EAT,
+    EED,
+    ESF,
+    ENP,
+    TKE,
+    TCM,
+    SS,
+    NOGW,
+    OGW,
+    HD,
+    VD,
+    VS,
+    RS,
+    ST,
+} = TKE
 
 abstract type AbstractCallbackFrequency end
 struct EveryNSteps <: AbstractCallbackFrequency

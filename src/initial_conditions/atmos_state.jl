@@ -99,7 +99,11 @@ precip_variables(ls, _, ::PerfExperimental) =
 # We can use paper-based cases for LES type configurations (no TKE)
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.
-turbconv_center_variables(ls, ::Nothing, gs_vars) = (;)
+function turbconv_center_variables(ls, _, gs_vars)
+    sgs⁰ = (; ρatke = eltype(ls)(0))
+    return (; sgs⁰)
+end
+
 function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel, gs_vars)
     n = TC.n_updrafts(turbconv_model)
     a_draft = max(ls.turbconv_state.draft_area, n * turbconv_model.minimum_area)

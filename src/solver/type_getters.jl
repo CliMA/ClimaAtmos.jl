@@ -35,44 +35,101 @@ function get_atmos(config::AtmosConfig, turbconv_params)
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
 
-    model_config = get_model_config(parsed_args)
     vert_diff = get_vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
-    atmos = AtmosModel(;
+
+    model_config = get_model_config(parsed_args)
+    MC = typeof(model_config)
+    perf_mode = get_perf_mode(parsed_args)
+    PEM = typeof(perf_mode)
+    MM = typeof(moisture_model)
+    energy_form = get_energy_form(parsed_args, vert_diff)
+    EF = typeof(energy_form)
+    PM = typeof(precip_model)
+    F = typeof(forcing_type)
+    subsidence = get_subsidence_model(parsed_args, radiation_mode, FT)
+    S = typeof(subsidence)
+    RM = typeof(radiation_mode)
+    ls_adv = get_large_scale_advection_model(parsed_args, FT)
+    LA = typeof(ls_adv)
+    edmf_coriolis = get_edmf_coriolis(parsed_args, FT)
+    EC = typeof(edmf_coriolis)
+    EAT = typeof(edmfx_adv_test)
+    EED = typeof(edmfx_entr_detr)
+    ESF = typeof(edmfx_sgs_flux)
+    ENP = typeof(edmfx_nh_pressure)
+    TKE = parsed_args["prognostic_tke"]
+    turbconv_model = get_turbconv_model(
+        FT,
+        moisture_model,
+        precip_model,
+        parsed_args,
+        turbconv_params,
+    )
+    TCM = typeof(turbconv_model)
+    SS = Nothing
+    non_orographic_gravity_wave =
+        get_non_orographic_gravity_wave_model(parsed_args, model_config, FT)
+    NOGW = typeof(non_orographic_gravity_wave)
+    orographic_gravity_wave = get_orographic_gravity_wave_model(parsed_args, FT)
+    OGW = typeof(orographic_gravity_wave)
+    hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
+    HD = typeof(hyperdiff)
+    VD = typeof(vert_diff)
+    viscous_sponge = get_viscous_sponge_model(parsed_args, FT)
+    VS = typeof(viscous_sponge)
+    rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT)
+    RS = typeof(rayleigh_sponge)
+    sfc_temperature = get_sfc_temperature_form(parsed_args)
+    ST = typeof(sfc_temperature)
+
+    atmos = AtmosModel{
+        MC,
+        PEM,
+        MM,
+        EF,
+        PM,
+        F,
+        S,
+        RM,
+        LA,
+        EC,
+        EAT,
+        EED,
+        ESF,
+        ENP,
+        TKE,
+        TCM,
+        SS,
+        NOGW,
+        OGW,
+        HD,
+        VD,
+        VS,
+        RS,
+        ST,
+    }(;
         moisture_model,
         model_config,
-        perf_mode = get_perf_mode(parsed_args),
-        energy_form = get_energy_form(parsed_args, vert_diff),
+        perf_mode,
+        energy_form,
         radiation_mode,
-        subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
-        ls_adv = get_large_scale_advection_model(parsed_args, FT),
-        edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
+        subsidence,
+        ls_adv,
+        edmf_coriolis,
         edmfx_adv_test,
         edmfx_entr_detr,
         edmfx_sgs_flux,
         edmfx_nh_pressure,
         precip_model,
         forcing_type,
-        turbconv_model = get_turbconv_model(
-            FT,
-            moisture_model,
-            precip_model,
-            parsed_args,
-            turbconv_params,
-        ),
-        non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
-            parsed_args,
-            model_config,
-            FT,
-        ),
-        orographic_gravity_wave = get_orographic_gravity_wave_model(
-            parsed_args,
-            FT,
-        ),
-        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
+        turbconv_model,
+        non_orographic_gravity_wave,
+        orographic_gravity_wave,
+        hyperdiff,
         vert_diff,
-        viscous_sponge = get_viscous_sponge_model(parsed_args, FT),
-        rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
-        sfc_temperature = get_sfc_temperature_form(parsed_args),
+        viscous_sponge,
+        rayleigh_sponge,
+        sfc_temperature,
     )
 
     @info "AtmosModel: \n$(summary(atmos))"

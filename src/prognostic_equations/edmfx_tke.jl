@@ -15,7 +15,7 @@ function edmfx_tke_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params) = p
+    (; params, atmos) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = TCP.tke_diss_coeff(turbconv_params)
     (; ᶜentr_detrʲs, ᶠu³ʲs) = p
@@ -24,7 +24,7 @@ function edmfx_tke_tendency!(
     ᶠgradᵥ = Operators.GradientC2F()
 
     ᶠρaK_u = p.ᶠtemp_scalar
-    if use_prognostic_tke(turbconv_model)
+    if use_prognostic_tke(atmos)
         # turbulent transport (diffusive flux)
         @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
         # boundary condition for the diffusive flux
