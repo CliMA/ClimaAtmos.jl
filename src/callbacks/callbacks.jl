@@ -80,7 +80,7 @@ function rrtmgp_model_callback!(integrator)
 
     set_precomputed_quantities!(Y, p, t) # sets ᶜts and sfc_conditions
 
-    (; ᶜts, sfc_conditions, params) = p
+    (; ᶜts, sfc_conditions, params, env_thermo_quad) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
     (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
 
@@ -201,7 +201,8 @@ function rrtmgp_model_callback!(integrator)
             1000 * Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts) * ᶜΔz
         @. ᶜiwp =
             1000 * Y.c.ρ * TD.ice_specific_humidity(thermo_params, ᶜts) * ᶜΔz
-        @. ᶜfrac = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0 * ᶜΔz)
+        @. ᶜfrac =
+            get_cloud_fraction(thermo_params, env_thermo_quad, FT(ᶜp), ᶜts)
     end
 
     RRTMGPI.update_fluxes!(radiation_model)
@@ -235,7 +236,7 @@ function compute_diagnostics(integrator)
                 q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
                 q_tot = TD.total_specific_humidity.(thermo_params, ᶜts),
                 relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
-                cloud_fraction_gm = get_cloud_fraction(
+                cloud_fraction_gm = get_cloud_fraction.(
                     thermo_params,
                     env_thermo_quad,
                     ᶜp,
@@ -297,7 +298,7 @@ function compute_diagnostics(integrator)
         env_diagnostics = (;
             common_diagnostics(ᶜu⁰, ᶜts⁰)...,
             area = ᶜa⁰,
-            cloud_fraction = get_cloud_fraction(
+            cloud_fraction = get_cloud_fraction.(
                 thermo_params,
                 env_thermo_quad,
                 ᶜp,
@@ -313,7 +314,8 @@ function compute_diagnostics(integrator)
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = ᶜa⁰ .* get_cloud_fraction(
+            cloud_fraction = ᶜa⁰ .*
+                             get_cloud_fraction.(
                 thermo_params,
                 env_thermo_quad,
                 ᶜp,
@@ -324,7 +326,7 @@ function compute_diagnostics(integrator)
         (; ᶜtke⁰) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
-            cloud_fraction = get_cloud_fraction(
+            cloud_fraction = get_cloud_fraction.(
                 thermo_params,
                 env_thermo_quad,
                 ᶜp,
@@ -340,7 +342,7 @@ function compute_diagnostics(integrator)
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = get_cloud_fraction(
+            cloud_fraction = get_cloud_fraction.(
                 thermo_params,
                 env_thermo_quad,
                 ᶜp,
