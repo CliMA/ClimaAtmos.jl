@@ -448,6 +448,19 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Diagnostic EDMFX DYCOMS_RF01 in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_dycoms_rf01_box
+          --initial_condition DYCOMS_RF01 --subsidence DYCOMS --edmf_coriolis DYCOMS_RF01 --rad DYCOMS_RF01 --surface_setup DYCOMS_RF01
+          --turbconv diagnostic_edmfx --edmfx_entr_detr true --edmfx_sgs_flux true
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e12
+          --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 30 --z_max 1500 --z_stretch false
+          --dt 6secs --t_end 4hours --dt_save_to_disk 2mins
+        artifact_paths: "diagnostic_edmfx_dycoms_rf01_box/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Diagnostic EDMFX Rico in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_rico_box
