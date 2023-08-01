@@ -98,7 +98,7 @@ column_mapreduce!(
     op::O,
     reduced_field::Fields.Field,
     fields::Fields.Field...,
-) where {F, O} = column_mapreduce!(
+) where {F, O} = column_mapreduce_device!(
     ClimaComms.device(reduced_field),
     fn,
     op,
@@ -106,7 +106,7 @@ column_mapreduce!(
     fields...,
 )
 
-function column_mapreduce!(
+function column_mapreduce_device!(
     ::ClimaComms.CUDADevice,
     fn::F,
     op::O,
@@ -147,7 +147,7 @@ column_mapreduce_kernel!(
     fields::Fields.FiniteDifferenceField...,
 ) where {F, O} = _column_mapreduce!(fn, op, reduced_field, fields...)
 
-function column_mapreduce!(
+function column_mapreduce_device!(
     ::ClimaComms.AbstractCPUDevice,
     fn::F,
     op::O,
@@ -162,7 +162,7 @@ function column_mapreduce!(
     return nothing
 end
 
-column_mapreduce!(
+column_mapreduce_device!(
     ::ClimaComms.AbstractCPUDevice,
     fn::F,
     op::O,
