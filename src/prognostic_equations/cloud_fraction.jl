@@ -1,13 +1,13 @@
 import StaticArrays as SA
 
 function get_cloud_fraction(thermo_params, env_thermo_quad, ᶜp, ᶜts)
-    q_tot = @. TD.total_specific_humidity(thermo_params, ᶜts)
+    q_tot = TD.total_specific_humidity(thermo_params, ᶜts)
     FT = eltype(thermo_params)
-    θ_liq_ice = @. TD.liquid_ice_pottemp(thermo_params, ᶜts)
-    qt′qt′ = @. (FT(0.05) * q_tot)^2
-    θl′θl′ = @. FT(5)
-    θl′qt′ = @. FT(0)
-    return @. compute_cloud_fraction(
+    θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ᶜts)
+    qt′qt′ = (FT(0.05) * q_tot)^2
+    θl′θl′ = FT(5)
+    θl′qt′ = FT(0)
+    return compute_cloud_fraction(
         env_thermo_quad,
         thermo_params,
         ᶜp,
