@@ -2,7 +2,7 @@
 ##### Utility functions
 #####
 import ClimaComms
-import ClimaCore: Spaces, Topologies, Fields
+import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
 import DiffEqBase
 import JLD2
@@ -91,6 +91,34 @@ function g³³_field(field)
     end_index = fieldcount(eltype(g_field)) # This will be 4 in 2D and 9 in 3D.
     return g_field.:($end_index) # For both 2D and 3D spaces, g³³ = g[end].
 end
+
+"""
+    unit_basis_vector_data(type, local_geometry)
+
+The component of the vector of the specified type with length 1 in physical units.
+The type should correspond to a vector with only one component, i.e., a basis vector.
+"""
+function unit_basis_vector_data(::Type{V}, local_geometry) where {V}
+    FT = Geometry.undertype(typeof(local_geometry))
+    return FT(1) / Geometry._norm(V(FT(1)), local_geometry)
+end
+
+"""
+    projected_vector_data(::Type{V}, vector, local_geometry)
+
+Projects the given vector onto the axis of V, then extracts the component data and rescales it to physical units.
+The type should correspond to a vector with only one component, i.e., a basis vector.
+"""
+projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
+    V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
+
+"""
+    get_physical_w(u, local_geometry)
+    
+Return physical vertical velocity - a projection of full velocity vector
+onto the vertical axis.
+"""
+get_physical_w(u, local_geometry) = Geometry.WVector(u, local_geometry)[1]
 
 time_to_seconds(t::Number) =
     t == Inf ? t : error("Uncaught case in computing time from given string.")
@@ -195,3 +223,7 @@ macro timed_str(ex)
         "$(prettytime(stats.time*1e9)) ($(Base.gc_alloc_count(stats.gcstats)) allocations: $(prettymemory(stats.gcstats.allocd)))"
     end
 end
+
+struct AllNothing end
+const all_nothing = AllNothing()
+Base.getproperty(::AllNothing, ::Symbol) = nothing

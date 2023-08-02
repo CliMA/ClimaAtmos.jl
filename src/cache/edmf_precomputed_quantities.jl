@@ -17,13 +17,14 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
+    (; dt) = p.simulation
     thermo_params = CAP.thermodynamics_params(params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, energy_form, moisture_model)
 
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
     (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
-    (; ᶜmixing_length, ᶜ∂b∂z, ᶜshear²) = p
+    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜshear², ᶜK_u, ᶜK_h) = p
     (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
     (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
@@ -132,7 +133,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρaq_tot, 1))
 
         @. sgsʲs_ρa_int_val =
-            FT(0.1) * TD.air_density(thermo_params, ᶜtsʲ_int_val)
+            $(FT(0.1)) * TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρae_tot_int_val =
             sgsʲs_ρa_int_val * TD.total_energy(
                 thermo_params,
@@ -144,6 +145,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     end
 
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     for j in 1:n
@@ -161,13 +163,41 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             get_physical_w(ᶜu⁰, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             ᶜbuoyancy(params, ᶜρ_ref, ᶜρ⁰),
+            dt,
         )
     end
 
-    @. ᶜ∂b∂z = FT(1e-4)
-    @. ᶜshear² = FT(1e-4)
+    # First order approximation: Use environmental mean fields.
+    @. ᶜlinear_buoygrad = buoyancy_gradients(
+        params,
+        moisture_model,
+        EnvBuoyGrad(
+            BuoyGradMean(),
+            TD.air_temperature(thermo_params, ᶜts⁰),                           # t_sat
+            TD.vapor_specific_humidity(thermo_params, ᶜts⁰),                   # qv_sat
+            ᶜspecific⁰.q_tot,                                                  # qt_sat
+            TD.dry_pottemp(thermo_params, ᶜts⁰),                               # θ_sat
+            TD.liquid_ice_pottemp(thermo_params, ᶜts⁰),                        # θ_liq_ice_sat
+            projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),
+                ᶜlg,
+            ),                                                                 # ∂θv∂z_unsat
+            projected_vector_data(C3, ᶜgradᵥ(ᶠinterp(ᶜspecific⁰.q_tot)), ᶜlg), # ∂qt∂z_sat
+            projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))),
+                ᶜlg,
+            ),                                                                 # ∂θl∂z_sat
+            ᶜp,                                                                # p
+            ifelse(TD.has_condensate(thermo_params, ᶜts⁰), 1, 0),              # en_cld_frac
+            ᶜρ⁰,                                                               # ρ
+        ),
+    )
+
+    @. ᶜshear² = $(FT(1e-4))
     ᶜprandtl_nvec = p.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = 1
+    @. ᶜprandtl_nvec = FT(1) / 3
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
@@ -185,14 +215,21 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         p.params,
         ustar,
         ᶜz,
+        ᶜdz,
         sfc_tke,
-        ᶜ∂b∂z,
+        ᶜlinear_buoygrad,
         ᶜspecific⁰.tke,
         obukhov_length,
         ᶜshear²,
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+
+    turbconv_params = CAP.turbconv_params(params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜspecific⁰.tke, 0))
+    # TODO: add Prantdl number
+    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     return nothing
 end

@@ -52,6 +52,8 @@ include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
 
+include(joinpath("prognostic_equations", "surface_temp.jl"))
+
 include(joinpath("parameterized_tendencies", "radiation", "held_suarez.jl"))
 
 include(
@@ -77,9 +79,12 @@ include(
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
+include(joinpath("prognostic_equations", "buoyancy_gradients.jl"))
 include(joinpath("prognostic_equations", "edmfx_closures.jl"))
+include(joinpath("prognostic_equations", "edmfx_tke.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
 include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
+include(joinpath("prognostic_equations", "cloud_fraction.jl"))
 include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
 )

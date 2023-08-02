@@ -2,7 +2,7 @@
 ##### Precomputed quantities
 #####
 import Thermodynamics as TD
-import ClimaCore: Spaces, Fields
+import ClimaCore: Spaces, Fields, RecursiveApply
 
 function set_diagnostic_edmfx_draft_quantities_level!(
     thermo_params,
@@ -56,34 +56,61 @@ function set_diagnostic_edmfx_env_quantities_level!(
     return nothing
 end
 
+function surface_flux_tke(
+    turbconv_params,
+    ρ_int,
+    u_int,
+    ustar,
+    interior_local_geometry,
+    surface_local_geometry,
+)
+    c_d = TCP.tke_diss_coeff(turbconv_params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    vkc = TCP.von_karman_const(turbconv_params)
+    speed = Geometry._norm(
+        CA.CT12(u_int, interior_local_geometry),
+        interior_local_geometry,
+    )
+    c3_unit = C3(unit_basis_vector_data(C3, surface_local_geometry))
+    return ρ_int * (1 - c_d * c_m * vkc^4) * ustar^2 * speed * c3_unit
+end
+
 """
     set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
 
 Updates the precomputed quantities stored in `p` for diagnostic edmfx.
 """
 function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
-    (; turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
-    (; sfc_conditions, params) = p
-    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot) = p
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    (; params) = p
+    (; dt) = p.simulation
+    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot) = p
     (; q_tot) = p.ᶜspecific
+    (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
+        p.sfc_conditions
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
+        ᶜuʲs,
         ᶜKʲs,
         ᶜh_totʲs,
         ᶜq_totʲs,
         ᶜtsʲs,
         ᶜρʲs,
         ᶜentr_detrʲs,
-        ᶠu³⁰,
     ) = p
-    ᶜ∇Φ³ = p.ᶜtemp_CT3
-
+    (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
+    (; ᶜK_h, ᶜK_u, ρatke_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
+    @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
+
+    ᶜ∇Φ³ = p.ᶜtemp_CT3
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
     @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
 
@@ -109,15 +136,11 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
-    buoyancy_flux_sfc_halflevel =
-        Fields.field_values(sfc_conditions.buoyancy_flux)
-    ρ_flux_h_tot_sfc_halflevel =
-        Fields.field_values(sfc_conditions.ρ_flux_h_tot)
-    ρ_flux_q_tot_sfc_halflevel =
-        Fields.field_values(sfc_conditions.ρ_flux_q_tot)
-    ustar_sfc_halflevel = Fields.field_values(sfc_conditions.ustar)
-    obukhov_length_sfc_halflevel =
-        Fields.field_values(sfc_conditions.obukhov_length)
+    buoyancy_flux_sfc_halflevel = Fields.field_values(buoyancy_flux)
+    ρ_flux_h_tot_sfc_halflevel = Fields.field_values(ρ_flux_h_tot)
+    ρ_flux_q_tot_sfc_halflevel = Fields.field_values(ρ_flux_q_tot)
+    ustar_sfc_halflevel = Fields.field_values(ustar)
+    obukhov_length_sfc_halflevel = Fields.field_values(obukhov_length)
 
     # boundary condition
     for j in 1:n
@@ -138,7 +161,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ρʲ_int_level = Fields.field_values(Fields.level(ᶜρʲ, 1))
 
         @. u³ʲ_int_halflevel = CT3(
-            Geometry.WVector(FT(0.01), local_geometry_int_halflevel),
+            Geometry.WVector($(FT(0.01)), local_geometry_int_halflevel),
             local_geometry_int_halflevel,
         )
         @. h_totʲ_int_level = sgs_scalar_first_interior_bc(
@@ -223,7 +246,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
-        buoyancy_flux_level = Fields.field_values(sfc_conditions.buoyancy_flux)
 
         local_geometry_prev_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i - 1),
@@ -269,7 +291,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 z_prev_level,
                 p_prev_level,
                 ρ_prev_level,
-                buoyancy_flux_level,
+                buoyancy_flux_sfc_halflevel,
                 ρaʲ_prev_level / ρʲ_prev_level,
                 get_physical_w(
                     u³ʲ_prev_halflevel,
@@ -283,6 +305,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 ᶜbuoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                dt,
             )
 
             @. ρaʲu³ʲ_data =
@@ -320,7 +343,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ) * (
                     local_geometry_prev_level.J *
                     local_geometry_prev_level.J *
-                    FT(2) *
+                    2 *
                     (
                         ∇Φ³_prev_level_data * (ρʲ_prev_level - ρ_prev_level) /
                         ρ_prev_level
@@ -334,7 +357,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ) * (
                     local_geometry_prev_level.J *
                     local_geometry_prev_level.J *
-                    FT(2) *
+                    2 *
                     (
                         entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
                         entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
@@ -343,21 +366,23 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             scale_factor = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
-                CT3(FT(0)),
-                CT3(sqrt(max(FT(0), u³ʲ_datau³ʲ_data))),
+                CT3(0),
+                CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
             )
             @. ρaʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
-                FT(0),
-                ρaʲu³ʲ_data / sqrt(max(FT(0), u³ʲ_datau³ʲ_data)),
+                0,
+                ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
             )
 
             @. ρaʲu³ʲ_datah_tot =
@@ -378,9 +403,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 )
             @. h_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 h_tot_level,
                 ρaʲu³ʲ_datah_tot / ρaʲu³ʲ_data,
@@ -404,9 +430,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 )
             @. q_totʲ_level = ifelse(
                 (
-                    u³ʲ_datau³ʲ_data <
-                    (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level)) ||
-                    ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level)
+                    (
+                        u³ʲ_datau³ʲ_data <
+                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
                 ),
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
@@ -441,17 +468,108 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         )
     end
 
+    # set values for the top level
+    i_top = Spaces.nlevels(axes(Y.c))
+    u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i_top + half))
+    @. u³⁰_halflevel = CT3(0)
     for j in 1:n
         ᶠu³ʲ = ᶠu³ʲs.:($j)
-        u³ʲ_halflevel = Fields.field_values(
-            Fields.level(ᶠu³ʲ, Spaces.nlevels(axes(Y.c)) + half),
-        )
-        @. u³ʲ_halflevel = CT3(FT(0))
-        u³⁰_halflevel = Fields.field_values(
-            Fields.level(ᶠu³⁰, Spaces.nlevels(axes(Y.c)) + half),
-        )
-        @. u³⁰_halflevel = CT3(FT(0))
+        ᶜuʲ = ᶜuʲs.:($j)
+        ᶠu³ʲ = ᶠu³ʲs.:($j)
+        ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
+        u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
+        @. u³ʲ_halflevel = CT3(0)
+        entr_detrʲ_level = Fields.field_values(Fields.level(ᶜentr_detrʲ, i_top))
+        fill!(entr_detrʲ_level, RecursiveApply.rzero(eltype(entr_detrʲ_level)))
+        @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
     end
+
+    @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
+
+    @. ᶜlinear_buoygrad = buoyancy_gradients(
+        params,
+        moisture_model,
+        EnvBuoyGrad(
+            BuoyGradMean(),
+            TD.air_temperature(thermo_params, ᶜts),                           # t_sat
+            TD.vapor_specific_humidity(thermo_params, ᶜts),                   # qv_sat
+            q_tot,                                                            # qt_sat
+            TD.dry_pottemp(thermo_params, ᶜts),                               # θ_sat
+            TD.liquid_ice_pottemp(thermo_params, ᶜts),                        # θ_liq_ice_sat
+            projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),
+                ᶜlg,
+            ),                                                                 # ∂θv∂z_unsat
+            projected_vector_data(C3, ᶜgradᵥ(ᶠinterp(q_tot)), ᶜlg),            # ∂qt∂z_sat
+            projected_vector_data(
+                C3,
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),
+                ᶜlg,
+            ),                                                                 # ∂θl∂z_sat
+            ᶜp,                                                                # p
+            ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),               # en_cld_frac
+            Y.c.ρ,                                                             # ρ
+        ),
+    )
+
+    # TODO: This is not correct with topography or with grid stretching
+    ᶠu⁰ = p.ᶠtemp_C123
+    @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
+    ct3_unit = p.ᶜtemp_CT3
+    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
+    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu⁰)) * ct3_unit)
+    ᶜprandtl_nvec = p.ᶜtemp_scalar
+    # TODO: add Prandtl number calculation
+    @. ᶜprandtl_nvec = FT(1) / 3
+    ᶜtke_exch = p.ᶜtemp_scalar_2
+    @. ᶜtke_exch = 0
+    # using ᶜu⁰ would be more correct, but this is more consistent with the
+    # TKE equation, where using ᶜu⁰ results in allocation
+    for j in 1:n
+        @. ᶜtke_exch +=
+            ᶜρaʲs.:($$j) * ᶜentr_detrʲs.:($$j).detr / Y.c.ρ *
+            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
+    end
+
+    sfc_tke = Fields.level(ᶜtke⁰, 1)
+    @. ᶜmixing_length = mixing_length(
+        params,
+        ustar,
+        ᶜz,
+        ᶜdz,
+        max(sfc_tke, 0),
+        ᶜlinear_buoygrad,
+        max(ᶜtke⁰, 0),
+        obukhov_length,
+        ᶜshear²,
+        ᶜprandtl_nvec,
+        ᶜtke_exch,
+    )
+
+    turbconv_params = CAP.turbconv_params(params)
+    c_m = TCP.tke_ed_coeff(turbconv_params)
+    @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+    # TODO: add Prantdl number
+    @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+
+    ρatke_flux_values = Fields.field_values(ρatke_flux)
+    ρ_int_values = Fields.field_values(Fields.level(Y.c.ρ, 1))
+    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
+    ustar_values = Fields.field_values(ustar)
+    int_local_geometry_values =
+        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
+    sfc_local_geometry_values = Fields.field_values(
+        Fields.level(Fields.local_geometry_field(Y.f), half),
+    )
+    @. ρatke_flux_values = surface_flux_tke(
+        turbconv_params,
+        ρ_int_values,
+        u_int_values,
+        ustar_values,
+        int_local_geometry_values,
+        sfc_local_geometry_values,
+    )
 
     return nothing
 end

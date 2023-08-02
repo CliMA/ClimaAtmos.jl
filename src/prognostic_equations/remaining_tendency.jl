@@ -27,6 +27,7 @@ end
 
 function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
+    surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
@@ -50,6 +51,7 @@ function additional_tendency!(Yₜ, Y, p, t)
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
         # NOTE: All ρa tendencies should be applied before calling this function

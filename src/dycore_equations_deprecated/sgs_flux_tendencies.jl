@@ -119,10 +119,11 @@ function turbconv_aux(atmos, edmf, Y, ::Type{FT}) where {FT}
     )
     fspace = axes(Y.f)
     cspace = axes(Y.c)
-    aux_cent_fields =
-        TC.FieldFromNamedTuple(cspace, cent_aux_vars, FT, atmos, edmf)
-    aux_face_fields =
-        TC.FieldFromNamedTuple(fspace, face_aux_vars, FT, atmos, edmf)
+    ᶜlocal_geometry = Fields.local_geometry_field(cspace)
+    ᶠlocal_geometry = Fields.local_geometry_field(fspace)
+
+    aux_cent_fields = cent_aux_vars.(FT, ᶜlocal_geometry, atmos, edmf)
+    aux_face_fields = face_aux_vars.(FT, ᶠlocal_geometry, atmos, edmf)
     aux = Fields.FieldVector(cent = aux_cent_fields, face = aux_face_fields)
     return aux
 end

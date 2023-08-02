@@ -24,6 +24,16 @@ function get_model_config(parsed_args)
     end
 end
 
+function get_sfc_temperature_form(parsed_args)
+    surface_temperature = parsed_args["surface_temperature"]
+    @assert surface_temperature in ("ZonallyAsymmetric", "ZonallySymmetric")
+    return if surface_temperature == "ZonallyAsymmetric"
+        ZonallyAsymmetricSST()
+    elseif surface_temperature == "ZonallySymmetric"
+        ZonallySymmetricSST()
+    end
+end
+
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
     κ₄ = FT(parsed_args["kappa_4"])
@@ -50,6 +60,19 @@ function get_vertical_diffusion_model(
         VerticalDiffusion{diffuse_momentum, FT}(; C_E)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
+    end
+end
+
+function get_surface_model(parsed_args)
+    prognostic_surface_name = parsed_args["prognostic_surface"]
+    return if prognostic_surface_name in
+              ("false", false, "PrescribedSurfaceTemperature")
+        PrescribedSurfaceTemperature()
+    elseif prognostic_surface_name in
+           ("true", true, "PrognosticSurfaceTemperature")
+        PrognosticSurfaceTemperature()
+    else
+        error("Uncaught surface model `$prognostic_surface_name`.")
     end
 end
 
@@ -312,12 +335,13 @@ function get_turbconv_model(
             turbconv_params,
         )
     elseif turbconv == "edmfx"
-        EDMFX{turbconv_params.updraft_number}(turbconv_params.min_area)
+        N = turbconv_params.updraft_number
+        TKE = parsed_args["prognostic_tke"]
+        EDMFX{N, TKE}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
-        DiagnosticEDMFX{turbconv_params.updraft_number}(
-            FT(0.1),
-            turbconv_params.min_area,
-        )
+        N = turbconv_params.updraft_number
+        TKE = parsed_args["prognostic_tke"]
+        DiagnosticEDMFX{N, TKE}(FT(0.1), turbconv_params.min_area)
     else
         nothing
     end

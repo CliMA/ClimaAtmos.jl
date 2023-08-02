@@ -45,11 +45,12 @@ function non_orographic_gravity_wave_cache(
     gw_flag = zeros(axes(lat))
 
     # source amplitude following MiMA: radical change between subtropics and the tropic
+    one_half = FT(0.5)
     source_ampl = @. ifelse(
-        lat > ϕ0_n || lat < ϕ0_s,
+        (lat > ϕ0_n) | (lat < ϕ0_s),
         Bt_0 +
-        Bt_n * FT(0.5) * (FT(1) + tanh((lat - ϕ0_n) / dϕ_n)) +
-        Bt_s * FT(0.5) * (FT(1) + tanh((lat - ϕ0_s) / dϕ_s)),
+        Bt_n * one_half * (1 + tanh((lat - ϕ0_n) / dϕ_n)) +
+        Bt_s * one_half * (1 + tanh((lat - ϕ0_s) / dϕ_s)),
         ifelse(
             dϕ_s <= lat <= dϕ_n,
             Bt_eq,

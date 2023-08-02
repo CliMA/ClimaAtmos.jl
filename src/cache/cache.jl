@@ -79,6 +79,7 @@ function default_cache(
     end
 
     default_cache = (;
+        is_init = Ref(true),
         simulation,
         spaces,
         atmos,
@@ -108,11 +109,13 @@ function default_cache(
         ghost_buffer,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        env_thermo_quad = SGSQuadrature(FT),
         precomputed_quantities(Y, atmos)...,
         temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
         hyperdiffusion_cache(Y, atmos, do_dss)...,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
+    default_cache.is_init[] = false
     return default_cache
 end
 
@@ -169,7 +172,6 @@ function additional_cache(
         ),
         edmfx_nh_pressure_cache(Y, atmos.turbconv_model),
         (; Δt = dt),
-        edmfx_sgs_flux_cache(Y, atmos.turbconv_model),
         turbconv_cache(
             Y,
             turbconv_model,

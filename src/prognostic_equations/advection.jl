@@ -9,8 +9,11 @@ import ClimaCore.Geometry as Geometry
 function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu, ᶜK, ᶜp, ᶜΦ, ᶜp_ref) = p
+    if p.atmos.turbconv_model isa AbstractEDMF
+        (; ᶜu⁰) = p
+    end
     if p.atmos.turbconv_model isa EDMFX
-        (; ᶜu⁰, ᶜuʲs) = p
+        (; ᶜuʲs) = p
     end
 
     @. Yₜ.c.ρ -= divₕ(Y.c.ρ * ᶜu)
@@ -39,7 +42,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if p.atmos.turbconv_model isa EDMFX
+    if use_prognostic_tke(p.atmos.turbconv_model)
         @. Yₜ.c.sgs⁰.ρatke -= divₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
@@ -72,15 +75,25 @@ function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 end
 
 function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; turbconv_model) = p.atmos
+    n = n_prognostic_mass_flux_subdomains(turbconv_model)
+    advect_tke = use_prognostic_tke(turbconv_model)
+    is_total_energy = p.atmos.energy_form isa TotalEnergy
     point_type = eltype(Fields.coordinate_field(Y.c))
+    (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜu, ᶠu³, ᶜK, ᶜf) = p
+    (; edmfx_upwinding) = n > 0 || advect_tke ? p : all_nothing
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs, ᶜspecificʲs) = n > 0 ? p : all_nothing
+    (; ᶜp, ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p : all_nothing
+    (; ᶜh_totʲs) = n > 0 && is_total_energy ? p : all_nothing
+    (; ᶠu³⁰) = advect_tke ? p : all_nothing
+    ᶜρa⁰ = advect_tke ? (n > 0 ? p.ᶜρa⁰ : Y.c.ρ) : nothing
+    ᶜtke⁰ = advect_tke ? (n > 0 ? p.ᶜspecific⁰.tke : p.ᶜtke⁰) : nothing
+    ᶜ1 = p.ᶜtemp_scalar
     ᶜω³ = p.ᶜtemp_CT3
     ᶠω¹² = p.ᶠtemp_CT12
-    if p.atmos.turbconv_model isa EDMFX
-        ᶠω¹²ʲs = p.ᶠtemp_CT12ʲs
-    end
+    ᶠω¹²ʲs = p.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -88,83 +101,93 @@ function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶜω³ = zero(ᶜω³)
     end
 
-    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
-    if p.atmos.turbconv_model isa EDMFX
-        for j in 1:n
-            @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
-        end
+    Fields.bycolumn(axes(Y.c)) do colidx
+        @. ᶠω¹²[colidx] = ᶠcurlᵥ(Y.c.uₕ[colidx])
+    end
+    for j in 1:n
+        @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
     end
     @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
-    if p.atmos.turbconv_model isa EDMFX
-        for j in 1:n
-            @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
-        end
+    for j in 1:n
+        @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
-    @. Yₜ.c.uₕ -=
-        ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-        (ᶜf + ᶜω³) × CT12(ᶜu)
-    @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-
-    if p.atmos.turbconv_model isa EDMFX
-        (; ᶜp, ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = p
-        (; ᶠu³ʲs, ᶜuʲs, ᶜKʲs, ᶜρʲs, ᶜspecificʲs, edmfx_upwinding) = p
-        (; dt) = p.simulation
-        ᶜ1 = p.ᶜtemp_scalar
-        ᶜh_totʲs = p.atmos.energy_form isa TotalEnergy ? p.ᶜh_totʲs : nothing
+    Fields.bycolumn(axes(Y.c)) do colidx
+        @. Yₜ.c.uₕ[colidx] -=
+            ᶜinterp(
+                ᶠω¹²[colidx] ×
+                (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+            ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+            (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+        @. Yₜ.f.u₃[colidx] -=
+            ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
 
         for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) + ᶠgradᵥ(ᶜKʲs.:($$j))
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
+                ᶠgradᵥ(ᶜKʲs.:($$j)[colidx])
+
+            # TODO: Move this to implicit_vertical_advection_tendency!.
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 (
-                    ᶠgradᵥ(ᶜp - ᶜp_ref) +
-                    ᶠinterp(ᶜρʲs.:($$j) - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ
-                ) / ᶠinterp(ᶜρʲs.:($$j))
+                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
+                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
+                    ᶠgradᵥ_ᶜΦ[colidx]
+                ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
         end
 
-        Fields.bycolumn(axes(Y.c.ρ)) do colidx
-            for j in 1:n
+        # TODO: Move this to implicit_vertical_advection_tendency!.
+        for j in 1:n
+            @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
+            vertical_transport!(
+                Yₜ.c.sgsʲs.:($j).ρa[colidx],
+                ᶜJ[colidx],
+                Y.c.sgsʲs.:($j).ρa[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                ᶜ1[colidx],
+                dt,
+                edmfx_upwinding,
+            )
 
-                @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
+            if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
                 vertical_transport!(
-                    Yₜ.c.sgsʲs.:($j).ρa[colidx],
+                    Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
                     ᶜJ[colidx],
                     Y.c.sgsʲs.:($j).ρa[colidx],
                     ᶠu³ʲs.:($j)[colidx],
-                    ᶜ1[colidx],
+                    ᶜh_totʲs.:($j)[colidx],
                     dt,
                     edmfx_upwinding,
                 )
+            end
 
-                if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
-                    vertical_transport!(
-                        Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
-                        ᶜJ[colidx],
-                        Y.c.sgsʲs.:($j).ρa[colidx],
-                        ᶠu³ʲs.:($j)[colidx],
-                        ᶜh_totʲs.:($j)[colidx],
-                        dt,
-                        edmfx_upwinding,
-                    )
-                end
-
-                for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
-                    matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
-                    χ_name == :e_tot && continue
-                    vertical_transport!(
-                        ᶜρaχʲₜ[colidx],
-                        ᶜJ[colidx],
-                        Y.c.sgsʲs.:($j).ρa[colidx],
-                        ᶠu³ʲs.:($j)[colidx],
-                        ᶜχʲ[colidx],
-                        dt,
-                        edmfx_upwinding,
-                    )
-                end
+            for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
+                matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
+                χ_name == :e_tot && continue
+                vertical_transport!(
+                    ᶜρaχʲₜ[colidx],
+                    ᶜJ[colidx],
+                    Y.c.sgsʲs.:($j).ρa[colidx],
+                    ᶠu³ʲs.:($j)[colidx],
+                    ᶜχʲ[colidx],
+                    dt,
+                    edmfx_upwinding,
+                )
             end
         end
+
+        # TODO: Move this to implicit_vertical_advection_tendency!.
+        if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
+            vertical_transport!(
+                Yₜ.c.sgs⁰.ρatke[colidx],
+                ᶜJ[colidx],
+                ᶜρa⁰[colidx],
+                ᶠu³⁰[colidx],
+                ᶜtke⁰[colidx],
+                dt,
+                edmfx_upwinding,
+            )
+        end
     end
-    return nothing
 end

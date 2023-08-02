@@ -1,3 +1,6 @@
+import FastGaussQuadrature
+import StaticArrays as SA
+
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
@@ -17,6 +20,14 @@ struct SingleColumnModel <: AbstractModelConfig end
 struct SphericalModel <: AbstractModelConfig end
 struct BoxModel <: AbstractModelConfig end
 struct PlaneModel <: AbstractModelConfig end
+
+abstract type AbstractSST end
+struct ZonallySymmetricSST <: AbstractSST end
+struct ZonallyAsymmetricSST <: AbstractSST end
+
+abstract type AbstractSurfaceTemperature end
+struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
+struct PrognosticSurfaceTemperature <: AbstractSurfaceTemperature end
 
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
@@ -97,21 +108,106 @@ struct EDMFCoriolis{U, V, FT}
     coriolis_param::FT
 end
 
-struct EDMFX{N, FT}
+abstract type AbstractEnvBuoyGradClosure end
+struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
+
+Base.broadcastable(x::BuoyGradMean) = tuple(x)
+
+"""
+    EnvBuoyGrad
+
+Variables used in the environmental buoyancy gradient computation.
+"""
+Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
+    "temperature in the saturated part"
+    t_sat::FT
+    "vapor specific humidity  in the saturated part"
+    qv_sat::FT
+    "total specific humidity in the saturated part"
+    qt_sat::FT
+    "potential temperature in the saturated part"
+    θ_sat::FT
+    "liquid ice potential temperature in the saturated part"
+    θ_liq_ice_sat::FT
+    "virtual potential temperature gradient in the non saturated part"
+    ∂θv∂z_unsat::FT
+    "total specific humidity gradient in the saturated part"
+    ∂qt∂z_sat::FT
+    "liquid ice potential temperature gradient in the saturated part"
+    ∂θl∂z_sat::FT
+    "reference pressure"
+    p::FT
+    "cloud fraction"
+    en_cld_frac::FT
+    "density"
+    ρ::FT
+end
+function EnvBuoyGrad(
+    ::EBG,
+    t_sat::FT,
+    args...,
+) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
+end
+
+abstract type AbstractEDMF end
+
+struct EDMFX{N, TKE, FT} <: AbstractEDMF
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-EDMFX{N}(a_half::FT) where {N, FT} = EDMFX{N, FT}(a_half)
+EDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} = EDMFX{N, TKE, FT}(a_half)
 
-struct DiagnosticEDMFX{N, FT}
+struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_int::FT # area fraction of the first interior cell above the surface
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
 end
-DiagnosticEDMFX{N}(a_int::FT, a_half::FT) where {N, FT} =
-    DiagnosticEDMFX{N, FT}(a_int, a_half)
+DiagnosticEDMFX{N, TKE}(a_int::FT, a_half::FT) where {N, TKE, FT} =
+    DiagnosticEDMFX{N, TKE, FT}(a_int, a_half)
 
 n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::Any) = 0
+
+n_prognostic_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+n_prognostic_mass_flux_subdomains(::Any) = 0
+
+use_prognostic_tke(::EDMFX{N, TKE}) where {N, TKE} = TKE
+use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
+use_prognostic_tke(::Any) = false
+
+abstract type AbstractQuadratureType end
+struct LogNormalQuad <: AbstractQuadratureType end
+struct GaussianQuad <: AbstractQuadratureType end
+
+abstract type AbstractEnvThermo end
+struct SGSMean <: AbstractEnvThermo end
+struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
+    quadrature_type::QT
+    a::A
+    w::W
+    function SGSQuadrature(
+        ::Type{FT};
+        quadrature_name = "gaussian",
+        quadrature_order = 3,
+    ) where {FT}
+        quadrature_type = if quadrature_name == "log-normal"
+            LogNormalQuad()
+        elseif quadrature_name == "gaussian"
+            GaussianQuad()
+        else
+            error("Invalid thermodynamics quadrature $(quadrature_name)")
+        end
+        N = quadrature_order
+        # TODO: double check this python-> julia translation
+        # a, w = np.polynomial.hermite.hermgauss(N)
+        a, w = FastGaussQuadrature.gausshermite(N)
+        a, w = SA.SVector{N, FT}(a), SA.SVector{N, FT}(w)
+        QT = typeof(quadrature_type)
+        return new{N, QT, typeof(a), typeof(w)}(quadrature_type, a, w)
+    end
+end
+quadrature_order(::SGSQuadrature{N}) where {N} = N
+quad_type(::SGSQuadrature{N}) where {N} = N
 
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
@@ -124,6 +220,7 @@ Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::EDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
+Base.broadcastable(x::AbstractEnvThermo) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -176,6 +273,8 @@ Base.@kwdef struct AtmosModel{
     VD,
     VS,
     RS,
+    ST,
+    SM,
 }
     model_config::MC = nothing
     perf_mode::PEM = nothing
@@ -199,6 +298,8 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
+    sfc_temperature::ST = nothing
+    surface_model::SM = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
@@ -358,6 +459,16 @@ end
 
 AtmosCoveragePerfConfig(s = argparse_settings()) =
     AtmosConfig(s; parsed_args = AtmosCoveragePerfParsedArgs(s))
+
+function AtmosConfigArgs(
+    s = argparse_settings();
+    args = String[],
+    parsed_args = parse_commandline(args, s),
+    comms_ctx = get_comms_context(parsed_args),
+)
+    @info "Running ClimaAtmos with default argparse settings + $args"
+    return AtmosConfig(s; parsed_args, comms_ctx)
+end
 
 function AtmosConfig(
     s = argparse_settings();

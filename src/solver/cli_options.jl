@@ -86,6 +86,10 @@ function argparse_settings()
         help = "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
         arg_type = String
         default = "false"
+        "--prognostic_surface"
+        help = "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
+        arg_type = String
+        default = "false"
         "--surface_setup"
         help = "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
         arg_type = String
@@ -94,20 +98,24 @@ function argparse_settings()
         help = "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
         arg_type = String
         default = "GCMSurfaceThermoState"
+        "--surface_temperature"
+        help = "Prescribed surface temperature functional form ['ZonallySymmetric' (default), 'ZonallyAsymmetric']"
+        arg_type = String
+        default = "ZonallySymmetric"
         "--C_E"
         help = "Bulk transfer coefficient"
         arg_type = Float64
         default = Float64(0.0044)
-        "--coupled"
-        help = "Coupled simulation [`false` (default), `true`]"
-        arg_type = Bool
-        default = false
         "--turbconv"
         help = "Turbulence convection scheme [`nothing` (default), `edmf`]"
         arg_type = String
         "--turbconv_case"
         help = "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
         arg_type = String
+        "--prognostic_tke"
+        help = "Whether the turbulence convection scheme uses prognostic or prescribed TKE [`false` (default), `true`]"
+        arg_type = Bool
+        default = false
         "--hyperdiff"
         help = "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
         arg_type = String
@@ -382,6 +390,7 @@ function argparse_settings()
 end
 
 parse_commandline(s) = ArgParse.parse_args(ARGS, s)
+parse_commandline(args, s) = ArgParse.parse_args(args, s)
 
 function cli_defaults(s::ArgParse.ArgParseSettings)
     defaults = Dict()

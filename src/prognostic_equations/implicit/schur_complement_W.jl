@@ -53,12 +53,6 @@ function bidiag_ntuple(::Type{FT}, ::Val{N}) where {FT, N}
     )
 end
 
-# TODO: remove this
-function _FieldFromNamedTuple(space, nt::NamedTuple)
-    cmv(z) = nt
-    return cmv.(Fields.coordinate_field(space))
-end
-
 function SchurComplementW(Y, transform, flags, test = false)
     @assert length(filter(isequal(:ρ), propertynames(Y.c))) == 1
     @assert length(filter(is_energy_var, propertynames(Y.c))) == 1
@@ -86,8 +80,7 @@ function SchurComplementW(Y, transform, flags, test = false)
     # cf = Fields.coordinate_field(axes(Y.c))
     # named_tuple_field(z) = tracer_variables(FT, ᶜ𝕋_names)
     # ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = named_tuple_field.(cf)
-    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
-        _FieldFromNamedTuple(axes(Y.c), tracer_variables(FT, ᶜ𝕋_names))
+    ∂ᶜ𝕋ₜ∂ᶠ𝕄_field = fill(tracer_variables(FT, ᶜ𝕋_names), axes(Y.c))
 
     if :turbconv in propertynames(Y.c)
         ᶜTC = Y.c.turbconv
@@ -123,8 +116,13 @@ function SchurComplementW(Y, transform, flags, test = false)
     ET = if isempty(ᶜ𝕋_names)
         Nothing
     else
+        hspace = Spaces.horizontal_space(axes(∂ᶜ𝕋ₜ∂ᶠ𝕄_field))
+        device = ClimaComms.device(hspace)
         cid = Fields.ColumnIndex((1, 1), 1)
-        typeof(getproperty(∂ᶜ𝕋ₜ∂ᶠ𝕄_field[cid], ᶜ𝕋_names[1]))
+        _∂ᶜ𝕋ₜ∂ᶠ𝕄_field =
+            device isa ClimaComms.CUDADevice ? ∂ᶜ𝕋ₜ∂ᶠ𝕄_field :
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[cid]
+        typeof(getproperty(_∂ᶜ𝕋ₜ∂ᶠ𝕄_field, ᶜ𝕋_names[1]))
     end
     SchurComplementW{
         ET,

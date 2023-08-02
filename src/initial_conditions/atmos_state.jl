@@ -19,6 +19,10 @@ atmos_state(local_state, atmos_model, center_space, face_space) =
             local_state.(Fields.local_geometry_field(face_space)),
             atmos_model,
         ),
+        atmos_surface_field(
+            Fields.level(face_space, Fields.half),
+            atmos_model.surface_model,
+        )...,
     )
 
 """
@@ -68,6 +72,16 @@ energy_variables(ls, ::TotalEnergy) = (;
         CAP.grav(ls.params) * ls.geometry.coordinates.z
     )
 )
+
+atmos_surface_field(surface_space, ::PrescribedSurfaceTemperature) = (;)
+function atmos_surface_field(surface_space, ::PrognosticSurfaceTemperature)
+    return (;
+        sfc = map(
+            coord -> (; T = Geometry.float_type(coord)(300)),
+            Fields.coordinate_field(surface_space),
+        )
+    )
+end
 
 function moisture_variables(ls, ::DryModel)
     @assert ls.thermo_state isa TD.AbstractPhaseDry
@@ -123,7 +137,10 @@ function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
     return (; sgs⁰, sgsʲs)
 end
 
-turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars) = (;)
+function turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars)
+    sgs⁰ = (; ρatke = ls.ρ * ls.turbconv_state.tke)
+    return (; sgs⁰)
+end
 
 turbconv_face_variables(ls, ::Nothing) = (;)
 turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;

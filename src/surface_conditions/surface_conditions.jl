@@ -1,29 +1,3 @@
-# TODO: Remove this type piracy.
-Base.Broadcast.BroadcastStyle(
-    ::Base.Broadcast.Style{Tuple},
-    ds::DataLayouts.DataStyle,
-) = ds
-
-"""
-    unit_basis_vector_data(type, local_geometry)
-
-The component of the vector of the specified type with length 1 in physical units.
-The type should correspond to a vector with only one component, i.e., a basis vector.
-"""
-function unit_basis_vector_data(::Type{V}, local_geometry) where {V}
-    FT = Geometry.undertype(typeof(local_geometry))
-    return FT(1) / Geometry._norm(V(FT(1)), local_geometry)
-end
-
-"""
-    projected_vector_data(::Type{V}, vector, local_geometry)
-
-Projects the given vector onto the axis of V, then extracts the component data and rescales it to physical units.
-The type should correspond to a vector with only one component, i.e., a basis vector.
-"""
-projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
-    V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
-
 """
     update_surface_conditions!(Y, p, t)
 
@@ -32,7 +6,10 @@ Updates the value of `p.sfc_conditions` based on the current state `Y` and time
 is not a PrescribedSurface.
 """
 function update_surface_conditions!(Y, p, t)
-    isnothing(p.sfc_setup) && return
+    if isnothing(p.sfc_setup)
+        p.is_init[] && set_dummy_surface_conditions!(p)
+        return
+    end
     # Need to extract the field values so that we can do
     # a DataLayout broadcast rather than a Field broadcast
     # because we are mixing surface and interior fields
@@ -41,7 +18,6 @@ function update_surface_conditions!(Y, p, t)
     )
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-
     (; ᶜts, ᶜu, sfc_conditions, sfc_setup, params, atmos) = p
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
@@ -49,17 +25,59 @@ function update_surface_conditions!(Y, p, t)
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
 
+    is_prognostic_sfc = atmos.surface_model isa PrognosticSurfaceTemperature
+    sfc_prognostic_temp =
+        is_prognostic_sfc ? Fields.field_values(Y.sfc.T) : nothing
+
     if sfc_setup isa Function
-        @. sfc_conditions_values = surface_state_to_conditions(
-            sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t),
-            sfc_local_geometry_values,
-            int_ts_values,
-            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
-            int_z_values,
-            params,
-            atmos,
-        )
+        if (is_prognostic_sfc)
+            @. sfc_conditions_values = surface_state_to_conditions(
+                sfc_setup(
+                    sfc_local_geometry_values.coordinates,
+                    int_z_values,
+                    t,
+                ),
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+                sfc_prognostic_temp,
+            )
+        else
+            @. sfc_conditions_values = surface_state_to_conditions(
+                sfc_setup(
+                    sfc_local_geometry_values.coordinates,
+                    int_z_values,
+                    t,
+                ),
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+            )
+        end
     elseif sfc_setup isa Fields.Field # This case is needed for the Coupler
         @assert eltype(sfc_setup) <: SurfaceState
         sfc_setup_values = Fields.field_values(sfc_setup)
@@ -75,18 +93,77 @@ function update_surface_conditions!(Y, p, t)
         )
     else # SurfaceSetup is a SurfaceState
         tup_sfc_setup = tuple(sfc_setup)
-        @. sfc_conditions_values = surface_state_to_conditions(
-            tup_sfc_setup,
-            sfc_local_geometry_values,
-            int_ts_values,
-            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
-            int_z_values,
-            params,
-            atmos,
-        )
+        if (is_prognostic_sfc)
+            @. sfc_conditions_values = surface_state_to_conditions(
+                tup_sfc_setup,
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+                sfc_prognostic_temp,
+            )
+        else
+            @. sfc_conditions_values = surface_state_to_conditions(
+                tup_sfc_setup,
+                sfc_local_geometry_values,
+                int_ts_values,
+                projected_vector_data(
+                    CT1,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                projected_vector_data(
+                    CT2,
+                    int_u_values,
+                    int_local_geometry_values,
+                ),
+                int_z_values,
+                params,
+                atmos,
+            )
+        end
     end
     return nothing
+end
+
+# This is a hack for meeting the August 7th deadline. It is to ensure that the
+# coupler will be able to construct an integrator before overwriting its surface
+# conditions, but without throwing an error during the computation of
+# precomputed quantities for diagnostic EDMF due to uninitialized surface
+# conditions.
+# TODO: Refactor the surface conditions API to avoid needing to do this. 
+function set_dummy_surface_conditions!(p)
+    (; sfc_conditions, params, atmos) = p
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    @. sfc_conditions.ustar = FT(0.2)
+    @. sfc_conditions.obukhov_length = FT(1e-4)
+    @. sfc_conditions.buoyancy_flux = FT(0)
+    if atmos.moisture_model isa DryModel
+        @. sfc_conditions.ts = TD.PhaseDry_ρT(thermo_params, FT(1), FT(300))
+    else
+        @. sfc_conditions.ts = TD.PhaseNonEquil_ρTq(
+            thermo_params,
+            FT(1),
+            FT(300),
+            TD.PhasePartition(FT(0)),
+        )
+        @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
+    end
+    if atmos.energy_form isa TotalEnergy
+        @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
+    end
 end
 
 """
@@ -128,6 +205,7 @@ end
         interior_z,
         params,
         atmos,
+        sfc_prognostic_temp, (default = nothing)
     )
 
 Computes the surface conditions, given information about the surface and the
@@ -142,6 +220,7 @@ function surface_state_to_conditions(
     interior_z,
     params,
     atmos,
+    sfc_prognostic_temp = nothing,
 )
     (; parameterization, T, p, q_vap, u, v, gustiness, beta) = surface_state
     (; coordinates) = surface_local_geometry
@@ -151,16 +230,43 @@ function surface_state_to_conditions(
 
     (!isnothing(q_vap) && atmos.moisture_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
-
-    if isnothing(T)
-        # Assume an idealized latitude-dependent surface temperature.
-        if coordinates isa Geometry.LatLongZPoint ||
-           coordinates isa Geometry.LatLongPoint
-            T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
-        else
+    if isnothing(sfc_prognostic_temp)
+        if isnothing(T) && (
+            coordinates isa Geometry.LatLongZPoint ||
+            coordinates isa Geometry.LatLongPoint
+        )
+            if atmos.sfc_temperature isa ZonallyAsymmetricSST
+                #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021  
+                T =
+                    (
+                        (-60 < coordinates.lat < 60) ?
+                        (
+                            FT(27) * (
+                                FT(1) -
+                                sind((FT(3) * coordinates.lat) / FT(2))^2
+                            ) + FT(273.16)
+                        ) : FT(273.16)
+                    ) + (
+                        (
+                            -180 < coordinates.long < 180 &&
+                            -30 < coordinates.lat < 30
+                        ) ?
+                        (
+                            FT(3) *
+                            cosd(coordinates.long + FT(90)) *
+                            cospi(FT(0.5) * coordinates.lat / FT(30))^2 + FT(0)
+                        ) : FT(0)
+                    )
+            elseif atmos.sfc_temperature isa ZonallySymmetricSST
+                #Assume an idealized latitude-dependent surface temperature
+                T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
+            end
+        elseif isnothing(T)
             # Assume that the latitude is 0.
             T = FT(300)
         end
+    else
+        T = sfc_prognostic_temp
     end
     if isnothing(u)
         u = FT(0)

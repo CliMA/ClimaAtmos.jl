@@ -2,41 +2,22 @@
 ##### EDMF SGS flux
 #####
 
-edmfx_sgs_flux_cache(Y, turbconv_model) = (;)
-function edmfx_sgs_flux_cache(Y, turbconv_model::Union{EDMFX, DiagnosticEDMFX})
-    FT = Spaces.undertype(axes(Y.c))
-    ᶜK_u = similar(Y.c, FT)
-    ᶜK_h = similar(Y.c, FT)
-    @. ᶜK_u = FT(1)
-    @. ᶜK_h = FT(1)
-    return (; ᶜK_u, ᶜK_h)
-end
-
 edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 
 function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params, edmfx_upwinding, sfc_conditions) = p
+    (; edmfx_upwinding, sfc_conditions) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs, ᶜh_totʲs, ᶜspecificʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜspecific⁰, ᶜmixing_length) = p
+    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜspecific⁰) = p
     (; ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_flux
-
-        # diffusivity
-        turbconv_params = CAP.turbconv_params(params)
-        c_m = TCP.tke_ed_coeff(turbconv_params)
-        @. ᶜK_u[colidx] =
-            c_m * ᶜmixing_length[colidx] * sqrt(max(ᶜspecific⁰.tke[colidx], 0))
-        # TODO: add Prantdl number
-        @. ᶜK_h[colidx] = ᶜK_u[colidx]
-
         # mass flux
         ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]

@@ -13,13 +13,21 @@ Random.seed!(1234)
 import ClimaAtmos as CA
 using CUDA
 import ClimaComms
+using Plots
 using PrettyTables
 
 s = CA.argparse_settings()
 parsed_args = CA.parse_commandline(s);
+output_dir = joinpath(parsed_args["job_id"])
+
+# Set non-varying arguments
+parsed_args["z_elem"] = 50
+parsed_args["dt"] = "50secs"
+
 steptimes = []
 
-for h_elem in 6:2:12
+# Iterate through varying number of horizontal elements
+for h_elem in 8:8:40
     parsed_args["h_elem"] = h_elem
     config = CA.AtmosConfig(; parsed_args)
     integrator = CA.get_integrator(config)
@@ -49,12 +57,24 @@ for h_elem in 6:2:12
     push!(steptimes, (h_elem, steptime))
 end
 
+# Output a table with step times
 data = hcat(first.(steptimes), last.(steptimes))
-
 pretty_table(
     data;
-    title = "Step times",
+    title = "Step times v/s horizontal elements",
     header = ["h_elem", "step time"],
     alignment = :l,
     crop = :none,
 )
+
+# Output a plot of step time scaling
+p = Plots.plot(
+    first.(steptimes),
+    last.(steptimes);
+    title = "Step Times v/s Horizontal Elements",
+    xlabel = "h_elem",
+    ylabel = "time (ms)",
+    label = "step time",
+    linewidth = 3,
+)
+Plots.png(p, joinpath(output_dir, "scaling.png"))

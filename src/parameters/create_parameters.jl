@@ -98,7 +98,7 @@ function create_climaatmos_parameter_set(
 
     pairs = CP.get_parameter_values!(
         toml_dict,
-        ["Omega", "planet_radius", "astro_unit"],
+        ["Omega", "planet_radius", "astro_unit", "ΔT_y_dry", "ΔT_y_wet"],
         "ClimaAtmos",
     )
     pairs = (; pairs...) # convert to NamedTuple
@@ -121,6 +121,8 @@ function create_climaatmos_parameter_set(
         turbconv_params = tc_params,
         entr_coeff = FTD(parsed_args["entr_coeff"]),
         detr_coeff = FTD(parsed_args["detr_coeff"]),
+        ΔT_y_dry = FTD(pairs.ΔT_y_dry),
+        ΔT_y_wet = FTD(pairs.ΔT_y_wet),
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)

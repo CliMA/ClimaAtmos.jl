@@ -7,12 +7,6 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
 """
-    Return physical vertical velocity - a projection of full velocity vector
-    onto the vertical axis.
-"""
-get_physical_w(u, local_geometry) = Geometry.WVector(u, local_geometry)[1]
-
-"""
     Return buoyancy on cell centers.
 """
 function ᶜbuoyancy(params, ᶜρ_ref::FT, ᶜρ::FT) where {FT}
@@ -145,6 +139,7 @@ function pi_groups_entr_detr(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    dt::FT,
 ) where {FT}
 
     if ᶜaʲ <= FT(0) || !entr_detr_flag
@@ -188,8 +183,8 @@ function pi_groups_entr_detr(
         # TODO - Temporary: Switch to Π groups after simple tests are done
         # (kinematic, bubble, Bomex)
         # and/or we can calibrate things in ClimaAtmos
-        entr = max(0, entr_coeff * ᶜwʲ / ᶜz)
-        detr = max(0, detr_coeff * ᶜwʲ)
+        entr = max(0, min(entr_coeff * ᶜwʲ / ᶜz, 1 / dt))
+        detr = max(0, min(detr_coeff * ᶜwʲ, 1 / dt))
 
         return (; entr, detr)
     end
@@ -249,14 +244,14 @@ function lamb_smooth_minimum(
 end
 
 """
-    mixing_length(param_set, ustar, ᶜz, sfc_tke, ᶜ∂b∂z, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
+    mixing_length(param_set, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
 
 where:
 - `param_set`: set with model parameters
 - `ustar`: friction velocity
 - `ᶜz`: height
 - `tke_sfc`: env kinetic energy at first cell center
-- `ᶜ∂b∂z`: buoyancy gradient
+- `ᶜlinear_buoygrad`: buoyancy gradient
 - `ᶜtke`: env turbulent kinetic energy
 - `obukhov_length`: surface Monin Obukhov length
 - `ᶜshear²`: shear term
@@ -265,15 +260,17 @@ where:
 
 Returns mixing length as a smooth minimum between
 wall-constrained length scale,
-production-dissipation balanced length scale and
-effective static stability length scale.
+production-dissipation balanced length scale,
+effective static stability length scale, and
+Smagorinsky length scale.
 """
 function mixing_length(
     params,
     ustar::FT,
     ᶜz::FT,
+    ᶜdz::FT,
     sfc_tke::FT,
-    ᶜ∂b∂z::FT,
+    ᶜlinear_buoygrad::FT,
     ᶜtke::FT,
     obukhov_length::FT,
     ᶜshear²::FT,
@@ -302,7 +299,7 @@ function mixing_length(
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
-    a_pd = c_m * (ᶜshear² - ᶜ∂b∂z / ᶜPr) * sqrt(ᶜtke)
+    a_pd = c_m * (ᶜshear² - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
     # Dissipation term
     c_neg = c_d * ᶜtke * sqrt(ᶜtke)
     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
@@ -318,11 +315,21 @@ function mixing_length(
     end
 
     # compute l_N - the effective static stability length scale.
-    N_eff = sqrt(max(ᶜ∂b∂z, 0))
+    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
     if N_eff > 0.0
         l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_max)
     else
         l_N = l_max
+    end
+
+    # compute l_smag - the Smagorinsky length scale.
+    # TODO: This should be added to ClimaParameters
+    c_smag = FT(0.2)
+    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
+    if N_eff > 0.0
+        l_smag = c_smag * ᶜdz * max(0, 1 - N_eff^2 / ᶜPr / ᶜshear²)^(1 / 4)
+    else
+        l_smag = c_smag * ᶜdz
     end
 
     # add limiters
@@ -330,6 +337,7 @@ function mixing_length(
         (l_N < eps(FT) || l_N > l_max) ? l_max : l_N,
         (l_TKE < eps(FT) || l_TKE > l_max) ? l_max : l_TKE,
         (l_W < eps(FT) || l_W > l_max) ? l_max : l_W,
+        (l_smag < eps(FT) || l_smag > l_max) ? l_max : l_smag,
     )
     # get soft minimum
     return lamb_smooth_minimum(l, smin_ub, smin_rm)

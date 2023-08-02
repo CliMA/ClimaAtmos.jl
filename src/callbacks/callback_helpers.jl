@@ -5,6 +5,7 @@ import DiffEqCallbacks
 
 function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
     previous_step = Ref(0)
+    @assert n ≠ Inf "Adding callback that never gets called!"
     cb! = AtmosCallback(f!, EveryNSteps(n))
     return ODE.DiscreteCallback(
         (u, t, integrator) ->
@@ -18,6 +19,7 @@ end
 
 function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
     cb! = AtmosCallback(f!, EveryΔt(dt))
+    @assert dt ≠ Inf "Adding callback that never gets called!"
     next_t = Ref{typeof(dt)}()
     affect! = function (integrator)
         cb!(integrator)
@@ -87,7 +89,7 @@ function n_steps_per_cycle_per_cb(cbs::ODE.CallbackSet, dt)
     return map(atmos_callbacks(cbs)) do cb
         cbf = callback_frequency(cb)
         if cbf isa EveryΔt
-            Int(cbf.Δt / dt)
+            Int(ceil(cbf.Δt / dt))
         elseif cbf isa EveryNSteps
             cbf.n
         else
