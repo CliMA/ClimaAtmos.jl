@@ -407,7 +407,7 @@ function compute_diagnostics(integrator)
         turbulence_convection_diagnostic = NamedTuple()
     end
 
-    if !isnothing(p.atmos.vert_diff)
+    if p.atmos.energy_form isa TotalEnergy
         sfc_local_geometry =
             Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
         surface_ct3_unit =
