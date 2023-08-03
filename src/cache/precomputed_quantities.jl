@@ -309,7 +309,7 @@ function set_precomputed_quantities!(Y, p, t)
             TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
     end
 
-    SurfaceConditions.update_surface_conditions!(Y, p, t)
+    SurfaceConditions.update_surface_conditions!(Y, p, t, p.sfc_setup)
 
     if turbconv_model isa EDMFX
         set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)

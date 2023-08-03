@@ -33,7 +33,7 @@ n["vertical_diffusion_boundary_layer_tendency!"] = @n_failures CA.vertical_diffu
 n["implicit_tendency!"]                          = @n_failures CA.implicit_tendency!(Yₜ, Y, p, t);
 n["set_precomputed_quantities!"]                 = @n_failures CA.set_precomputed_quantities!(Y, p, t);
 n["limiters_func!"]                              = @n_failures CA.limiters_func!(Y, p, t, ref_Y);
-n["update_surface_conditions!"]                  = @n_failures CA.SurfaceConditions.update_surface_conditions!(Y, p, t);
+n["update_surface_conditions!"]                  = @n_failures CA.SurfaceConditions.update_surface_conditions!(Y, p, t, p.sfc_setup);
 n["dss!"]                                        = @n_failures CA.dss!(Y, p, t);
 n["fill_with_nans!"]                             = @n_failures CA.fill_with_nans!(p);
 #! format: on
