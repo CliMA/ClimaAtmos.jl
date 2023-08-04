@@ -873,7 +873,7 @@ steps:
         key: "gpu_implicit_barowave_wrt_h_elem"
         command:
           - "julia --project -e 'using CUDA; CUDA.versioninfo()'"
-          - "julia --color=yes --project=examples perf/benchmark_dump.jl --job_id gpu_implicit_barowave_wrt_h_elem --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf"
+          - "nsys profile --trace=nvtx,cuda --output=gpu_implicit_barowave_wrt_h_elem/report julia --color=yes --project=examples perf/benchmark_dump.jl --job_id gpu_implicit_barowave_wrt_h_elem --z_elem 25 --h_elem 12 --initial_condition DryBaroclinicWave --t_end 1mins --dt 1secs --dt_save_to_sol Inf --dt_save_to_disk Inf"
         artifact_paths: "gpu_implicit_barowave_wrt_h_elem/*"
         agents:
           slurm_gpus: 1
