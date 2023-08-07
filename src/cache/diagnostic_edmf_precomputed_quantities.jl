@@ -520,8 +520,11 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
     @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu⁰)) * ct3_unit)
     ᶜprandtl_nvec = p.ᶜtemp_scalar
-    # TODO: add Prandtl number calculation
-    @. ᶜprandtl_nvec = FT(1) / 3
+    @. ᶜprandtl_nvec = turbulent_prandtl_number(
+        params,
+        obukhov_length,
+        gradient_richardson_number(params, ᶜlinear_buoygrad, ᶜshear²),
+    )
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     # using ᶜu⁰ would be more correct, but this is more consistent with the
