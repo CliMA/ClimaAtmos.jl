@@ -16,6 +16,7 @@ function edmfx_tke_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
     (; params) = p
+    (; dt) = p.simulation
     turbconv_params = CAP.turbconv_params(params)
     c_d = TCP.tke_diss_coeff(turbconv_params)
     (; ᶜentr_detrʲs, ᶠu³ʲs) = p
@@ -52,9 +53,11 @@ function edmfx_tke_tendency!(
         end
         # pressure work
         # dissipation
+        #min_mixing_length = c_d * dt * max(ᶜtke⁰[colidx], eps(FT))^(FT(1) / 2)
+        min_mixing_length = FT(0)
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) /
-            ᶜmixing_length[colidx]
+            max(ᶜmixing_length[colidx], min_mixing_length)
     end
 
     return nothing
