@@ -288,7 +288,6 @@ function get_initial_condition(parsed_args)
                 parsed_args["perturb_initstate"],
             )
         elseif parsed_args["initial_condition"] in [
-            "IsothermalProfile",
             "Nieuwstadt",
             "GABLS",
             "GATE_III",
@@ -300,6 +299,12 @@ function get_initial_condition(parsed_args)
             "DYCOMS_RF02",
             "Rico",
             "TRMM_LBA",
+        ]
+            return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+                parsed_args["prognostic_tke"],
+            )
+        elseif parsed_args["initial_condition"] in [
+            "IsothermalProfile",
             "AgnesiHProfile",
             "DryDensityCurrentProfile",
             "RisingThermalBubbleProfile",

@@ -631,7 +631,9 @@ end
 The `InitialCondition` described in [Soares2004](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct Soares <: InitialCondition end
+Base.@kwdef struct Soares <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 """
     Bomex
@@ -639,7 +641,9 @@ struct Soares <: InitialCondition end
 The `InitialCondition` described in [Holland1973](@cite), but with a hydrostatically
 balanced pressure profile.
 """
-struct Bomex <: InitialCondition end
+Base.@kwdef struct Bomex <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 """
     LifeCycleTan2018
@@ -647,7 +651,9 @@ struct Bomex <: InitialCondition end
 The `InitialCondition` described in [Tan2018](@cite), but with a hydrostatically
 balanced pressure profile.
 """
-struct LifeCycleTan2018 <: InitialCondition end
+Base.@kwdef struct LifeCycleTan2018 <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 """
     ARM_SGP
@@ -655,7 +661,9 @@ struct LifeCycleTan2018 <: InitialCondition end
 The `InitialCondition` described in [Brown2002](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct ARM_SGP <: InitialCondition end
+Base.@kwdef struct ARM_SGP <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
@@ -663,6 +671,7 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
     u_func_name = Symbol(IC, :_u)
     tke_func_name = Symbol(IC, :_tke_prescribed)
     @eval function (initial_condition::$IC)(params)
+        (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
         p_0 = FT(
@@ -688,7 +697,9 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
                     q_tot(z),
                 ),
                 velocity = Geometry.UVector(u(z)),
-                turbconv_state = EDMFState(; tke = tke(z)),
+                turbconv_state = EDMFState(;
+                    tke = prognostic_tke ? FT(0) : tke(z),
+                ),
             )
         end
         return local_state
@@ -701,7 +712,9 @@ end
 The `InitialCondition` described in [Stevens2005](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct DYCOMS_RF01 <: InitialCondition end
+Base.@kwdef struct DYCOMS_RF01 <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 """
     DYCOMS_RF02
@@ -719,6 +732,7 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     v_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_v0 : :_v)
     tke_func_name = Symbol(IC, :_tke_prescribed)
     @eval function (initial_condition::$IC_Type)(params)
+        (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
         p_0 = FT(101780.0)
@@ -741,7 +755,9 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
                     q_tot(z),
                 ),
                 velocity = Geometry.UVVector(u(z), v(z)),
-                turbconv_state = EDMFState(; tke = tke(z)),
+                turbconv_state = EDMFState(;
+                    tke = prognostic_tke ? FT(0) : tke(z),
+                ),
             )
         end
         return local_state
@@ -754,9 +770,12 @@ end
 The `InitialCondition` described in [Rauber2007](cite), but with a hydrostatically
 balanced pressure profile.
 """
-struct Rico <: InitialCondition end
+Base.@kwdef struct Rico <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 function (initial_condition::Rico)(params)
+    (; prognostic_tke) = initial_condition
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101540.0)
@@ -779,7 +798,7 @@ function (initial_condition::Rico)(params)
                 q_tot(z),
             ),
             velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = tke(z)),
+            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
     end
     return local_state
@@ -791,9 +810,12 @@ end
 The `InitialCondition` described in [Grabowski2006](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct TRMM_LBA <: InitialCondition end
+Base.@kwdef struct TRMM_LBA <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 function (initial_condition::TRMM_LBA)(params)
+    (; prognostic_tke) = initial_condition
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(99130.0)
@@ -834,7 +856,7 @@ function (initial_condition::TRMM_LBA)(params)
                 q_tot(z),
             ),
             velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = tke(z)),
+            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
     end
     return local_state
