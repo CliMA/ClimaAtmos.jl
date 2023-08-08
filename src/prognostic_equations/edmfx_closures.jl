@@ -244,10 +244,10 @@ function lamb_smooth_minimum(
 end
 
 """
-    mixing_length(param_set, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
+    mixing_length(params, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
 
 where:
-- `param_set`: set with model parameters
+- `params`: set with model parameters
 - `ustar`: friction velocity
 - `ᶜz`: height
 - `tke_sfc`: env kinetic energy at first cell center
@@ -341,4 +341,42 @@ function mixing_length(
     )
     # get soft minimum
     return lamb_smooth_minimum(l, smin_ub, smin_rm)
+end
+
+"""
+    turbulent_prandtl_number(params, obukhov_length, ᶜRi_grad)
+
+where:
+- `params`: set with model parameters
+- `obukhov_length`: surface Monin Obukhov length
+- `ᶜRi_grad`: gradient Richardson number
+
+Returns the turbulent Prandtl number give the obukhov length sign and
+the gradient Richardson number, which is calculated from the linearized
+buoyancy gradient and shear production.
+"""
+function turbulent_prandtl_number(
+    params,
+    obukhov_length::FT,
+    ᶜlinear_buoygrad::FT,
+    ᶜshear²::FT,
+) where {FT}
+    turbconv_params = CAP.turbconv_params(params)
+    Ri_c = TCP.Ri_crit(turbconv_params)
+    ω_pr = TCP.Prandtl_number_scale(turbconv_params)
+    Pr_n = TCP.Prandtl_number_0(turbconv_params)
+    ᶜRi_grad = min(ᶜlinear_buoygrad / max(ᶜshear², eps(FT)), Ri_c)
+    if obukhov_length > 0 && ᶜRi_grad > 0 #stable
+        # CSB (Dan Li, 2019, eq. 75), where ω_pr = ω_1 + 1 = 53.0 / 13.0
+        prandtl_nvec =
+            Pr_n * (
+                2 * ᶜRi_grad / (
+                    1 + ω_pr * ᶜRi_grad -
+                    sqrt((1 + ω_pr * ᶜRi_grad)^2 - 4 * ᶜRi_grad)
+                )
+            )
+    else
+        prandtl_nvec = Pr_n
+    end
+    return prandtl_nvec
 end
