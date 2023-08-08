@@ -554,7 +554,9 @@ end
 The `InitialCondition` described in [Nieuwstadt1993](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct Nieuwstadt <: InitialCondition end
+Base.@kwdef struct Nieuwstadt <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 """
     GABLS
@@ -562,13 +564,16 @@ struct Nieuwstadt <: InitialCondition end
 The `InitialCondition` described in [Kosovic2000](cite), but with a hydrostatically
 balanced pressure profile.
 """
-struct GABLS <: InitialCondition end
+Base.@kwdef struct GABLS <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 for IC in (:Nieuwstadt, :GABLS)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     u_func_name = Symbol(IC, :_u)
     tke_func_name = Symbol(IC, :_tke_prescribed)
     @eval function (initial_condition::$IC)(params)
+        (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
         p_0 = FT(100000.0)
@@ -583,7 +588,9 @@ for IC in (:Nieuwstadt, :GABLS)
                 geometry = local_geometry,
                 thermo_state = TD.PhaseDry_pθ(thermo_params, p(z), θ(z)),
                 velocity = Geometry.UVector(u(z)),
-                turbconv_state = EDMFState(; tke = tke(z)),
+                turbconv_state = EDMFState(;
+                    tke = prognostic_tke ? FT(0) : tke(z),
+                ),
             )
         end
         return local_state
@@ -596,9 +603,12 @@ end
 The `InitialCondition` described in [Khairoutdinov2009](@cite), but with a
 hydrostatically balanced pressure profile.
 """
-struct GATE_III <: InitialCondition end
+Base.@kwdef struct GATE_III <: InitialCondition
+    prognostic_tke::Bool = false
+end
 
 function (initial_condition::GATE_III)(params)
+    (; prognostic_tke) = initial_condition
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101500.0)
@@ -619,7 +629,7 @@ function (initial_condition::GATE_III)(params)
                 q_tot(z),
             ),
             velocity = Geometry.UVector(u(z)),
-            turbconv_state = EDMFState(; tke = tke(z)),
+            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
         )
     end
     return local_state
