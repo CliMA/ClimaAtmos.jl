@@ -439,6 +439,19 @@ steps:
         artifact_paths: "diagnostic_edmfx_test_box/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Diagnostic EDMFX GABLS in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --job_id diagnostic_edmfx_gabls_box
+          --initial_condition GABLS --edmf_coriolis GABLS --surface_setup GABLS
+          --turbconv diagnostic_edmfx --prognostic_tke true --edmfx_upwinding first_order --edmfx_entr_detr true --edmfx_sgs_flux true
+          --moist equil
+          --config box --hyperdiff true --kappa_4 1e12
+          --x_max 1e5 --y_max 1e5 --x_elem 2 --y_elem 2 --z_elem 8 --z_max 400 --z_stretch false
+          --dt 10secs --t_end 9hours --dt_save_to_disk 10mins
+        artifact_paths: "diagnostic_edmfx_gabls_box/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":genie: Diagnostic EDMFX Bomex in a box"
         command: >
@@ -588,7 +601,7 @@ steps:
           --turbconv_case GABLS --edmf_coriolis GABLS --surface_setup GABLS
           --z_elem 8 --z_stretch false --z_max 400
           --t_end 9hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist dry
+          --moist equil
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
@@ -608,7 +621,7 @@ steps:
           --turbconv_case Nieuwstadt --surface_setup Nieuwstadt
           --z_elem 200 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist dry
+          --moist equil
           --job_id edmf_nieuwstadt
           --dt 0.5secs
 
@@ -625,7 +638,7 @@ steps:
           --turbconv_case Nieuwstadt --surface_setup Nieuwstadt
           --z_elem 200 --z_stretch false --z_max 3750
           --t_end 8hours --dt_save_to_sol 5mins --dt_save_to_disk 5mins
-          --moist dry
+          --moist equil
           --imex_edmf_turbconv true
           --imex_edmf_gm true
           --use_krylov_method true
