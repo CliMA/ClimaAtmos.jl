@@ -523,7 +523,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     @. ᶜprandtl_nvec = turbulent_prandtl_number(
         params,
         obukhov_length,
-        gradient_richardson_number(params, ᶜlinear_buoygrad, ᶜshear²),
+        ᶜlinear_buoygrad,
+        ᶜshear²,
     )
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
