@@ -6,13 +6,14 @@ the domain. Given some `initial_condition`, calling `initial_condition(params)`
 returns a function of the form `local_state(local_geometry)::LocalState`.
 """
 abstract type InitialCondition end
+using Random
 
 # Perturbation coefficient for the initial conditions
 # It would be better to be able to specify the wavenumbers
 # but we don't have access to the domain size here
 
 perturb_coeff(p::Geometry.AbstractPoint{FT}) where {FT} = FT(0)
-perturb_coeff(p::Geometry.LatLongZPoint{FT}) where {FT} = sind(p.long)
+perturb_coeff(p::Geometry.LatLongZPoint{FT}) where {FT} = rand(MersenneTwister())
 perturb_coeff(p::Geometry.XZPoint{FT}) where {FT} = sin(p.x)
 perturb_coeff(p::Geometry.XYZPoint{FT}) where {FT} = sin(p.x)
 
