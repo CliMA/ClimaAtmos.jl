@@ -41,20 +41,26 @@ function (::Nieuwstadt)(params)
     FT = eltype(params)
     T = FT(300)
     p = FT(1e5)
+    q_vap = FT(0)
     z0 = FT(0.16)
     θ_flux = FT(0.06)
     parameterization = MoninObukhov(; z0, fluxes = θAndQFluxes(; θ_flux))
-    return SurfaceState(; parameterization, T, p)
+    return SurfaceState(; parameterization, T, p, q_vap)
 end
 
 struct GABLS end
 function (::GABLS)(params)
     FT = eltype(params)
     p = FT(1e5)
+    q_vap = FT(0)
     z0 = FT(0.1)
     parameterization = MoninObukhov(; z0)
-    surface_state(surface_coordinates, interior_z, t) =
-        SurfaceState(; parameterization, T = 265 - FT(0.25) * t / 3600, p)
+    surface_state(surface_coordinates, interior_z, t) = SurfaceState(;
+        parameterization,
+        T = 265 - FT(0.25) * FT(t) / 3600,
+        p,
+        q_vap,
+    )
     return surface_state
 end
 
@@ -209,7 +215,7 @@ function (::TRMM_LBA)(params)
     q_vap = FT(0.02245)
     ustar = FT(0.28) # 0.28 is taken from Bomex. TODO: Approximate from LES TKE.
     function surface_state(surface_coordinates, interior_z, t)
-        value = cos(FT(π) / 2 * (1 - t / (FT(5.25) * 3600)))
+        value = cos(FT(π) / 2 * (1 - FT(t) / (FT(5.25) * 3600)))
         shf = 270 * max(0, value)^FT(1.5)
         lhf = 554 * max(0, value)^FT(1.3)
         fluxes = HeatFluxes(; shf, lhf)
