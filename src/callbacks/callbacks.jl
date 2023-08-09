@@ -293,7 +293,7 @@ function compute_diagnostics(integrator)
         TD.has_condensate(thermo_params, ts) && area > 1e-3 ? FT(1) : FT(0)
 
     if p.atmos.turbconv_model isa EDMFX
-        (; ᶜspecific⁰, ᶜu⁰, ᶜts⁰) = p
+        (; ᶜspecific⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             common_diagnostics(ᶜu⁰, ᶜts⁰)...,
@@ -305,6 +305,7 @@ function compute_diagnostics(integrator)
                 ᶜts⁰,
             ),
             tke = ᶜspecific⁰.tke,
+            mixing_length = ᶜmixing_length,
         )
         draft_diagnostics = (;
             common_diagnostics(ᶜu⁺, ᶜts⁺)...,
@@ -323,7 +324,7 @@ function compute_diagnostics(integrator)
             ) .+ ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜtke⁰) = p
+        (; ᶜtke⁰, ᶜmixing_length) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             cloud_fraction = get_cloud_fraction.(
@@ -333,6 +334,7 @@ function compute_diagnostics(integrator)
                 ᶜts,
             ),
             tke = ᶜtke⁰,
+            mixing_length = ᶜmixing_length,
         )
         draft_diagnostics = (;
             common_diagnostics(ᶜu⁺, ᶜts⁺)...,
