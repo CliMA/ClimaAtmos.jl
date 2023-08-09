@@ -61,7 +61,7 @@ allocs_limit["flame_perf_target_diagnostic_edmfx"] = 631408
 allocs_limit["flame_perf_target_edmf"] = 7469388624
 allocs_limit["flame_perf_target_threaded"] = 6175664
 allocs_limit["flame_perf_target_callbacks"] = 49850536
-allocs_limit["flame_perf_gw"] = 4937135840
+allocs_limit["flame_perf_gw"] = 4937136096
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
