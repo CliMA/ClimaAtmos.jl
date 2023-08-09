@@ -7,7 +7,7 @@ high_res_process_counts=(1 2 4 8 16 32 64 128)
 FT="Float32"
 resolutions=("low" "mid" "high")
 max_procs_per_node=16 # limit this artificially for profiling
-profiling=enable
+profiling=disable
 exclusive=true
 mpi_impl="openmpi"
 
@@ -94,22 +94,22 @@ else
 fi
 
 if [[ "$res" == "low" ]]; then
-    time="00:59:00"
+    time="04:00:00"
 elif [[ "$res" == "mid" ]]; then
     if [[ $nprocs -gt 2 ]]; then
-        time="00:59:00"
+        time="04:00:00"
     else
-        time="02:59:00"
+        time="16:00:00"
     fi
 else
     if [[ $nprocs -gt 8 ]]; then
-        time="00:59:00"
-    elif [[ $nprocs -ge 4 ]]; then
-        time="02:30:00"
-    elif [[ $nprocs -ge 2 ]]; then
         time="04:00:00"
+    elif [[ $nprocs -ge 4 ]]; then
+        time="10:00:00"
+    elif [[ $nprocs -ge 2 ]]; then
+        time="16:00:00"
     else
-        time="08:00:00"
+        time="24:00:00"
     fi
 fi
 
