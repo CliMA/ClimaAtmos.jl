@@ -337,9 +337,9 @@ function mixing_length(
         (l_N < eps(FT) || l_N > l_max) ? l_max : l_N,
         (l_TKE < eps(FT) || l_TKE > l_max) ? l_max : l_TKE,
         (l_W < eps(FT) || l_W > l_max) ? l_max : l_W,
-        (l_smag < eps(FT) || l_smag > l_max) ? l_max : l_smag,
     )
     # get soft minimum
+    # TODO: limit it with l_smag
     return lamb_smooth_minimum(l, smin_ub, smin_rm)
 end
 
