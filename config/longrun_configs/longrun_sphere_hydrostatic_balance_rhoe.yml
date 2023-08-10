@@ -1,0 +1,7 @@
+perturb_initstate: false 
+discrete_hydrostatic_balance: true 
+t_end: "2000days" 
+dt_save_to_sol: "10days" 
+dt_save_to_disk: "10days" 
+fps: 30 
+job_id: "longrun_sphere_hydrostatic_balance_rhoe"

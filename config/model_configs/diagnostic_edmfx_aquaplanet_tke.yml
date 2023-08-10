@@ -1,0 +1,14 @@
+job_id: diagnostic_edmfx_aquaplanet_tke
+vert_diff: "true" 
+surface_setup: DefaultExchangeCoefficients 
+rad: gray
+turbconv: diagnostic_edmfx 
+prognostic_tke: true
+edmfx_upwinding: first_order 
+edmfx_entr_detr: true 
+edmfx_sgs_flux: true
+moist: equil 
+precip_model: 0M
+dt: 100secs 
+t_end: 3hours 
+dt_save_to_disk: 600secs

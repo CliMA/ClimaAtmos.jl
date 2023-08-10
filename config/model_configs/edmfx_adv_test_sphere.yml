@@ -1,0 +1,12 @@
+dt_save_to_disk: "100secs"
+initial_condition: "MoistAdiabaticProfileEDMFX"
+z_elem: 45
+dt: "10secs"
+t_end: "1000secs"
+turbconv: "edmfx"
+dz_bottom: 30.0
+ode_algo: "SSP33ShuOsher"
+edmfx_adv_test: true
+apply_limiter: false
+job_id: "edmfx_adv_test_sphere"
+moist: "equil"

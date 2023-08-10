@@ -13,7 +13,7 @@ using Statistics: mean
     - earth_radius: radius of the Earth
 """
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
-    @info "Comuting T tensor..."
+    @info "Computing T tensor..."
     FT = eltype(elev)
     bfscale = FT(1e-2)
 

@@ -1,0 +1,25 @@
+
+job_id: diagnostic_edmfx_rico_box
+initial_condition: Rico 
+subsidence: Rico 
+ls_adv: Rico 
+surface_setup: Rico
+turbconv: diagnostic_edmfx 
+prognostic_tke: true
+edmfx_upwinding: first_order 
+edmfx_entr_detr: true 
+edmfx_sgs_flux: true
+moist: equil
+config: box 
+hyperdiff: "true"
+kappa_4: 1e12
+x_max: 1e5 
+y_max: 1e5 
+x_elem: 2 
+y_elem: 2 
+z_elem: 100 
+z_max: 4e3 
+z_stretch: false
+dt: 10secs 
+t_end: 6hours 
+dt_save_to_disk: 10mins

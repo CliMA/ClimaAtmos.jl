@@ -1,0 +1,43 @@
+# EDMF configuration
+turbconv:
+  help: "Turbulence convection scheme [`nothing` (default), `edmf`]"
+  value: ~
+test_edmf_consistency:
+  help: "Test edmf equation consistency [`false` (default), `true`]"
+  value: false
+imex_edmf_gm:
+  help: "Whether to split EDMF's `compute_gm_tendencies!` into implicit and explicit components"
+  value: false
+imex_edmf_turbconv:
+  help: "Whether to split EDMF's `compute_turbconv_tendencies!` into implicit and explicit components"
+  value: false
+edmfx_adv_test:
+  help: "EDMFX advection test switches off all velocity tendencies in GM and turbconc [`false` (default), `true`]"
+  value: false
+edmf_coriolis:
+  help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
+  value: ~
+edmfx_nh_pressure:
+  help: "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
+  value: false
+turbconv_case:
+  help: "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
+  value: ~
+edmfx_entr_detr:
+  help: "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true`, `false` (default)]"
+  value: false
+edmfx_upwinding:
+  help: "EDMFX upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  value: none
+debugging_tc:
+  help: "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
+  value: false
+entr_coeff:
+  help: "Entrainment coefficient"
+  value: 1.0
+detr_coeff:
+  help: "Detrainment coefficient"
+  value: 0.001
+edmfx_sgs_flux:
+  help: "If set to true, it switches on EDMFX SGS flux.  [`true`, `false` (default)]"
+  value: false

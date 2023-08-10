@@ -1,0 +1,10 @@
+dz_bottom: 30.0
+dt_save_to_disk: "10days"
+h_elem: 16
+t_end: "800days"
+kappa_4: 1.0e16
+forcing: "held_suarez"
+dt: "400secs"
+z_elem: 45
+job_id: "longrun_hs_rhoe_highres_hightop"
+z_max: 45000.0
