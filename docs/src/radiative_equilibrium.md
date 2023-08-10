@@ -76,5 +76,9 @@ time, diagnostics = read_hdf5_file("sample/file/path")
 
 `diagnostics` will contain the values from the state of the simulation on a given day. propertynames(diagnostics) can be useful for finding the variables names. Example: `diagnostics.sfc_temperature` will result in the surface temperature at that day in the simulation.
 
+--could explain more code
+add comment called hide (look in documenter.jl)
+lines!(x,y) # hide
+display(fig)  # hide
 
 Note: the data structures used to store the data can be quite tricky to use 
