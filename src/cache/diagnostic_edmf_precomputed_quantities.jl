@@ -66,13 +66,13 @@ function surface_flux_tke(
 )
     c_d = TCP.tke_diss_coeff(turbconv_params)
     c_m = TCP.tke_ed_coeff(turbconv_params)
-    vkc = TCP.von_karman_const(turbconv_params)
+    k_star² = TCP.tke_surf_scale(turbconv_params)
     speed = Geometry._norm(
         CA.CT12(u_int, interior_local_geometry),
         interior_local_geometry,
     )
     c3_unit = C3(unit_basis_vector_data(C3, surface_local_geometry))
-    return ρ_int * (1 - c_d * c_m * vkc^4) * ustar^2 * speed * c3_unit
+    return ρ_int * (1 - c_d * c_m * k_star²^2) * ustar^2 * speed * c3_unit
 end
 
 """
