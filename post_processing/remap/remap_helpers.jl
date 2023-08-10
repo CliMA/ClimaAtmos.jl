@@ -188,6 +188,8 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
             defVar(nc, "draft_cloud_fraction", FT, cspace, ("time",))
         nc_draft_area = defVar(nc, "draft_area_fraction", FT, cspace, ("time",))
         nc_cloudfrac = defVar(nc, "cloud_fraction", FT, cspace, ("time",))
+        nc_tke = defVar(nc, "tke", FT, cspace, ("time",))
+        nc_mixing_length = defVar(nc, "mixing_length", FT, cspace, ("time",))
     end
 
     # time
@@ -267,6 +269,8 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         nc_draft_cloudfrac[:, 1] = diag.draft_cloud_fraction
         nc_draft_area[:, 1] = diag.draft_area
         nc_cloudfrac[:, 1] = diag.cloud_fraction
+        nc_tke[:, 1] = diag.env_tke
+        nc_mixing_length[:, 1] = diag.env_mixing_length
     end
     close(nc)
 
@@ -334,7 +338,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         rad_flux_clear_variables = String[]
     end
     if :draft_q_tot in propertynames(diag)
-        draft_variables = [
+        edmf_variables = [
             "draft_qt",
             "draft_RH",
             "draft_cloud_ice",
@@ -343,9 +347,11 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
             "draft_cloud_fraction",
             "draft_area_fraction",
             "cloud_fraction",
+            "tke",
+            "mixing_length",
         ]
     else
-        draft_variables = String[]
+        edmf_variables = String[]
     end
 
     netcdf_variables = vcat(
@@ -355,7 +361,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         sfc_flux_variables,
         rad_flux_variables,
         rad_flux_clear_variables,
-        draft_variables,
+        edmf_variables,
     )
     apply_remap(datafile_latlon, datafile_cc, weightfile, netcdf_variables)
     rm(datafile_cc)
