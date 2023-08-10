@@ -11,8 +11,8 @@ imex_edmf_gm:
 imex_edmf_turbconv:
   help: "Whether to split EDMF's `compute_turbconv_tendencies!` into implicit and explicit components"
   value: false
-edmfx_adv_test:
-  help: "EDMFX advection test switches off all velocity tendencies in GM and turbconc [`false` (default), `true`]"
+advection_test:
+  help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
 edmf_coriolis:
   help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"

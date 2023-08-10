@@ -23,8 +23,8 @@ function get_atmos(config::AtmosConfig, turbconv_params)
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
-    edmfx_adv_test = parsed_args["edmfx_adv_test"]
-    @assert edmfx_adv_test in (false, true)
+    advection_test = parsed_args["advection_test"]
+    @assert advection_test in (false, true)
 
     edmfx_entr_detr = parsed_args["edmfx_entr_detr"]
     @assert edmfx_entr_detr in (false, true)
@@ -46,7 +46,7 @@ function get_atmos(config::AtmosConfig, turbconv_params)
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
-        edmfx_adv_test,
+        advection_test,
         edmfx_entr_detr,
         edmfx_sgs_flux,
         edmfx_nh_pressure,
@@ -415,18 +415,18 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
     elseif !is_implicit_type(alg_or_tableau)
         return alg_or_tableau()
     elseif is_ordinary_diffeq_newton(alg_or_tableau)
-        if parsed_args["max_newton_iters"] == 1
+        if parsed_args["max_newton_iters_ode"] == 1
             error("OridinaryDiffEq requires at least 2 Newton iterations")
         end
         # κ like a relative tolerance; its default value in ODE is 0.01
         nlsolve = ODE.NLNewton(;
-            κ = parsed_args["max_newton_iters"] == 2 ? Inf : 0.01,
-            max_iter = parsed_args["max_newton_iters"],
+            κ = parsed_args["max_newton_iters_ode"] == 2 ? Inf : 0.01,
+            max_iter = parsed_args["max_newton_iters_ode"],
         )
         return alg_or_tableau(; linsolve = linsolve!, nlsolve)
     elseif is_imex_CTS_algo_type(alg_or_tableau)
         newtons_method = CTS.NewtonsMethod(;
-            max_iters = parsed_args["max_newton_iters"],
+            max_iters = parsed_args["max_newton_iters_ode"],
             krylov_method = if parsed_args["use_krylov_method"]
                 CTS.KrylovMethod(;
                     jacobian_free_jvp = CTS.ForwardDiffJVP(;

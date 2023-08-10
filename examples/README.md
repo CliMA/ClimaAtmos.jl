@@ -28,7 +28,7 @@ julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.instantiate()'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.build("HDF5")'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
 
-julia --project=$CA_EXAMPLE --threads=8 $DRIVER --forcing held_suarez --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
+julia --project=$CA_EXAMPLE --threads=8 $DRIVER --config_file $YOUR_CONFIG_FILE
 
 ```
 
@@ -60,15 +60,15 @@ julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.build("MPI")'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.build("HDF5")'
 julia --project=$CA_EXAMPLE -e 'using Pkg; Pkg.API.precompile()'
 
-mpiexec julia --project=$CA_EXAMPLE $DRIVER --forcing held_suarez --output_dir=$YOUR_SIMULATION_OUTPUT_DIR
+mpiexec julia --project=$CA_EXAMPLE $DRIVER --config_file $YOUR_CONFIG_FILE
 
 ```
 
+To configure the model, you must pass in a YAML configuration file into YOUR_CONFIG_FILE.
+For more information on setting the configuration, see documentation [here](https://clima.github.io/ClimaAtmos.jl/dev/config/).
+
 In the runscript, one needs to specify the following environmant variable:
 * `RESTART_FILE`: if run from a pre-existing hdf5 data saved from a previous simulation.
-
-Commonly used command line arguments for experiment setups are [here](https://clima.github.io/ClimaAtmos.jl/dev/cl_args/).
-
 
 
 ## Remapping the CG nodal outputs in `jld2` or `hdf5` onto the regular lat/lon grids and save into `nc` files
