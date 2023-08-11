@@ -24,10 +24,22 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
     # volume is the average length of the sides of the cell.
 
     (; Cs) = sl
+
+    FT = eltype(Y)
+    (; ᶠu³, ᶜu, ᶜD) = p
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜshear² = p.ᶜtemp_scalar
+    ᶠu = p.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ct3_unit = p.ᶜtemp_CT3
+    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
+    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
+
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶜD = p.ᶜtemp_scalar
+    # ᶜD = p.ᶜtemp_scalar
+    
     Pr = 1/3
-    @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2)*(10^-2)
+    @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
 
     (; ᶜspecific) = p
 
@@ -60,14 +72,35 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
     # volume is the average length of the sides of the cell.
 
     (; Cs) = sl
+
+    FT = eltype(Y)
+    (; ᶠu³, ᶜu, ᶜD) = p
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜshear² = p.ᶜtemp_scalar
+    ᶠu = p.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ct3_unit = p.ᶜtemp_CT3
+    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
+    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
+
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶜD = p.ᶜtemp_scalar
+    # ᶜD = p.ᶜtemp_scalar
     Pr = 1/3
-    @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2)*(10^-2)
+    @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+
 
     (; ᶜspecific, sfc_conditions) = p
-    FT = eltype(Y)
+    
     ρ_flux_χ = p.sfc_temp_C3
+
+    
+    ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+        bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
+    )
+    @. Yₜ.c.uₕ[colidx] -=
+        ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+    
 
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p
@@ -77,7 +110,7 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]), 
         )
 
-        @. Yₜ.c.ρe_tot[colidx] += ᶜdivᵥ_ρe_tot(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜh_tot[colidx]))
+        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜh_tot[colidx])))
     end
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
@@ -96,7 +129,7 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
         # The code below adjusts the tendency by -div(\rho * d_qtot), where
         # d_qtot = -(D * grad(qtot)). The two negatives cancel out, so we have a +=
 
-        @. ᶜρχₜ[colidx] += ᶜdivᵥ_ρχ(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜχ[colidx]))
+        @. ᶜρχₜ[colidx] -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜχ[colidx])))
     end
 
     
