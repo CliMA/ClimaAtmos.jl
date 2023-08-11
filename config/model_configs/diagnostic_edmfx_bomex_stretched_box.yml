@@ -1,5 +1,5 @@
 
-job_id: "diagnostic_edmfx_bomex_box"
+job_id: "diagnostic_edmfx_bomex_stretched_box"
 initial_condition: "Bomex" 
 subsidence: "Bomex" 
 edmf_coriolis: "Bomex" 
@@ -19,9 +19,10 @@ x_max: 1e5
 y_max: 1e5 
 x_elem: 2 
 y_elem: 2 
-z_elem: 60 
+z_elem: 30 
 z_max: 3e3 
-z_stretch: false
+dz_bottom: 50.0
+dz_top: 200.0
 dt: "10secs" 
 t_end: "6hours" 
 dt_save_to_disk: "10mins"
