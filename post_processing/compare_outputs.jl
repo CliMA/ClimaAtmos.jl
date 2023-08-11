@@ -4,6 +4,8 @@ import ClimaAtmos as CA
 import ClimaComms
 import ClimaCore.InputOutput as InputOutput
 import ClimaCore.Fields as Fields
+using LinearAlgebra: norm
+
 function parse_commandline()
     s = ArgParse.ArgParseSettings()
     ArgParse.@add_arg_table s begin
@@ -63,12 +65,12 @@ compare(a::F, b::F, pn0 = "") where {F <: Fields.Field} =
     compare(true, a, b, pn0)
 function compare(zero_error, a::F, b::F, pn0 = "") where {F <: Fields.Field}
     isempty(propertynames(a)) || return _compare(zero_error, a, b, pn0)
-    err = abs.(Array(parent(a)) .- Array(parent(b)))
-    if !(maximum(err) == 0.0)
-        @warn "--- Failed field comparison $pn0"
-        @show a
-        @show b
-        @show maximum(err)
+    abs_err = abs.(Array(parent(a)) .- Array(parent(b)))
+    rel_err =
+        norm(Array(parent(a)) .- Array(parent(b))) ./ norm(Array(parent(a)))
+    if !(maximum(abs_err) == 0.0) || !(maximum(rel_err) == 0.0)
+        @warn "--- Failed field comparison $pn0" a b max_abs_err =
+            maximum(abs_err) rel_err
         zero_error = false
     end
     return zero_error
