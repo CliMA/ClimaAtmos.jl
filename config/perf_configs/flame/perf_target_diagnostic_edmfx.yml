@@ -1,2 +1,3 @@
 target_job: "diagnostic_edmfx_aquaplanet_tke"
 job_id: "flame_perf_target_diagnostic_edmfx"
+apply_limiter: false

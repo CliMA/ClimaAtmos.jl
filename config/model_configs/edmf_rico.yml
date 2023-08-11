@@ -12,7 +12,6 @@ config: "column"
 subsidence: "Rico"
 FLOAT_TYPE: "Float64"
 z_max: 4000.0
-apply_limiter: false
 precip_model: "1M"
 regression_test: true
 ls_adv: "Rico"

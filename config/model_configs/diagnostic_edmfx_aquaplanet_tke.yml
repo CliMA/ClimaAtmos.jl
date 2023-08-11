@@ -8,7 +8,6 @@ edmfx_upwinding: first_order
 edmfx_entr_detr: true 
 edmfx_sgs_flux: true
 moist: equil 
-apply_limiter: false
 precip_model: 0M
 dt: 100secs 
 t_end: 3hours 

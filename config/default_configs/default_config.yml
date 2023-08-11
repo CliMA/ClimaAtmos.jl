@@ -181,8 +181,8 @@ trunc_stack_traces:
   help: "Set to `true` to truncate printing of ClimaCore `Field`s"
   value: true
 apply_limiter:
-  help: "Apply a horizontal limiter to every tracer [`true` (default), `false`]"
-  value: true
+  help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
+  value: false
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~

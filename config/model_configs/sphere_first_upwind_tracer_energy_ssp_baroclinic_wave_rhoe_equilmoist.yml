@@ -8,3 +8,4 @@ tracer_upwinding: first_order
 energy_upwinding: first_order
 job_id: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
 moist: "equil"
+apply_limiter: true

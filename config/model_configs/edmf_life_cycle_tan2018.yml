@@ -13,7 +13,6 @@ config: "column"
 subsidence: "LifeCycleTan2018"
 FLOAT_TYPE: "Float64"
 z_max: 3000.0
-apply_limiter: false
 regression_test: true
 ls_adv: "LifeCycleTan2018"
 dt_save_to_sol: "5mins"

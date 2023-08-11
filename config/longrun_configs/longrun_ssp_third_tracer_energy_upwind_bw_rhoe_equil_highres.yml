@@ -13,3 +13,4 @@ energy_upwinding: third_order
 precip_model: "0M"
 job_id: "longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres"
 moist: "equil"
+apply_limiter: true

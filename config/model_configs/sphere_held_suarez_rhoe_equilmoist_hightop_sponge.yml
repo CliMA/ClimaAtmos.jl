@@ -9,7 +9,6 @@ dz_bottom: 300.0
 vert_diff: "true"
 forcing: "held_suarez"
 z_max: 45000.0
-apply_limiter: false
 precip_model: "0M"
 regression_test: true
 alpha_rayleigh_uh: 0.0

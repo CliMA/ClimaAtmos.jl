@@ -3,7 +3,6 @@ turbconv: edmf
 debugging_tc: true
 FLOAT_TYPE: Float64 
 hyperdiff: "false" 
-apply_limiter: false
 turbconv_case: Nieuwstadt 
 surface_setup: Nieuwstadt
 z_elem: 200 
