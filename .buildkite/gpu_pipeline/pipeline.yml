@@ -1,0 +1,60 @@
+agents:
+  queue: central
+  slurm_mem: 8G
+  modules: julia/1.8.5 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
+
+env:
+  JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
+  OPENBLAS_NUM_THREADS: 1
+  JULIA_NVTX_CALLBACKS: gc
+  OMPI_MCA_opal_warn_on_missing_libcuda: 0
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
+  GPU_CONFIG_PATH: "config/gpu_configs/"
+
+steps:
+  - label: "init :GPU:"
+    key: "init_gpu_env"
+    command:
+      - "echo $$JULIA_DEPOT_PATH"
+
+      - echo "--- Configure MPI"
+      - julia -e 'using Pkg; Pkg.add("MPIPreferences"); using MPIPreferences; use_system_binary()'
+
+      - echo "--- Instantiate project"
+      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project -e 'using Pkg; Pkg.status()'"
+
+      - echo "--- Configure CUDA"
+      # force the initialization of the CUDA runtime as it is lazily loaded by default
+      - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
+
+      - echo "--- Instantiate examples"
+      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
+
+      - echo "--- Download artifacts"
+      - "julia --project=examples artifacts/download_artifacts.jl"
+    agents:
+      slurm_gpus: 1
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
+
+  - wait
+
+  - group: "GPU target simulations"
+    steps:
+
+      - label: "target_gpu_implicit_baroclinic_wave"
+        command: >
+          julia --project -e 'using CUDA; CUDA.versioninfo()'
+          
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
+        artifact_paths: "target_gpu_implicit_baroclinic_wave/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 23:00:00
