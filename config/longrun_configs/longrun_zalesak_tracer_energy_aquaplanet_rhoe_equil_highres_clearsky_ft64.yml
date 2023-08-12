@@ -18,3 +18,4 @@ alpha_rayleigh_uh: 0.0
 dt_save_to_sol: "10days"
 job_id: "longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64"
 moist: "equil"
+apply_limiter: true

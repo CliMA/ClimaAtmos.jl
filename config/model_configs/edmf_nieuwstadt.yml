@@ -4,7 +4,6 @@ debugging_tc: true
 regression_test: true
 FLOAT_TYPE: Float64 
 hyperdiff: "false" 
-apply_limiter: false
 turbconv_case: Nieuwstadt 
 surface_setup: Nieuwstadt
 z_elem: 200 

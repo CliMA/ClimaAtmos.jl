@@ -11,7 +11,6 @@ edmfx_upwinding: "first_order"
 edmfx_entr_detr: true 
 edmfx_sgs_flux: true
 moist: "equil"
-apply_limiter: false
 config: "box" 
 hyperdiff: "true" 
 kappa_4: 1e12

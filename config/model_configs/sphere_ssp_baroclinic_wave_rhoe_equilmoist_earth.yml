@@ -10,3 +10,4 @@ precip_model: "0M"
 topography: "Earth"
 job_id: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth"
 moist: "equil"
+apply_limiter: true

@@ -14,6 +14,5 @@ ode_algo: "SSP33ShuOsher"
 config: "box"
 edmfx_adv_test: true
 kappa_4: 1.0e8
-apply_limiter: false
 job_id: "edmfx_adv_test_box"
 moist: "equil"

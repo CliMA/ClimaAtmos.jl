@@ -11,7 +11,6 @@ vert_diff: "true"
 h_elem: 16
 kappa_4: 1.0e16
 FLOAT_TYPE: "Float64"
-apply_limiter: false
 precip_model: "0M"
 alpha_rayleigh_uh: 0.0
 dt_save_to_sol: "10days"

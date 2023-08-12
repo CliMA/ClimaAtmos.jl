@@ -1,4 +1,3 @@
-apply_limiter: false
 precip_model: "0M"
 dt_save_to_disk: "2days"
 regression_test: true

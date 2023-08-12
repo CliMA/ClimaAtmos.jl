@@ -10,3 +10,4 @@ precip_model: "0M"
 topography: "DCMIP200"
 job_id: "sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200"
 moist: "equil"
+apply_limiter: true

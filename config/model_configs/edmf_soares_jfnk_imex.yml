@@ -14,7 +14,6 @@ config: "column"
 use_krylov_method: true
 FLOAT_TYPE: "Float64"
 z_max: 3750.0
-apply_limiter: false
 reference_job_id: "edmf_soares"
 dt_save_to_sol: "5mins"
 job_id: "edmf_soares_jfnk_imex"

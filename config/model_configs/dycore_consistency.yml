@@ -14,7 +14,6 @@ subsidence: "Bomex"
 use_krylov_method: true
 FLOAT_TYPE: "Float64"
 z_max: 3000.0
-apply_limiter: false
 reference_job_id: "edmf_bomex"
 test_dycore_consistency: true
 ls_adv: "Bomex"

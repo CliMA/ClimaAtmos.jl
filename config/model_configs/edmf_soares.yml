@@ -11,7 +11,6 @@ z_stretch: false
 config: "column"
 FLOAT_TYPE: "Float64"
 z_max: 3750.0
-apply_limiter: false
 regression_test: true
 dt_save_to_sol: "5mins"
 job_id: "edmf_soares"

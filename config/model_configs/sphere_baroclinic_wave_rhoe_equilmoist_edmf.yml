@@ -9,6 +9,5 @@ turbconv: "edmf"
 config: "sphere" 
 z_stretch: false 
 post_process: false 
-apply_limiter: false 
 dt_save_to_sol: "10secs" 
 dt_save_to_disk: "10secs"

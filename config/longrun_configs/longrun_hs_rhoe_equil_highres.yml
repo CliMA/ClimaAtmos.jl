@@ -7,7 +7,6 @@ vert_diff: "true"
 h_elem: 16
 kappa_4: 1.0e16
 forcing: "held_suarez"
-apply_limiter: false
 precip_model: "0M"
 job_id: "longrun_hs_rhoe_equil_highres"
 moist: "equil"

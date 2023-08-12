@@ -1,4 +1,5 @@
 moist: "equil"
+apply_limiter: true
 z_elem: 25
 dt: "1secs"
 surface_setup: "DefaultExchangeCoefficients"

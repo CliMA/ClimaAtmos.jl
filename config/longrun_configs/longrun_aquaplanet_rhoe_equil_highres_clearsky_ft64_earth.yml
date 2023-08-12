@@ -13,7 +13,6 @@ h_elem: 16
 use_reference_state: false
 kappa_4: 3.0e16
 FLOAT_TYPE: "Float64"
-apply_limiter: false
 precip_model: "0M"
 topography: "Earth"
 alpha_rayleigh_uh: 0.0

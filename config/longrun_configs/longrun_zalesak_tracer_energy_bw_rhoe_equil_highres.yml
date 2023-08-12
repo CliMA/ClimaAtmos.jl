@@ -11,3 +11,4 @@ energy_upwinding: zalesak
 precip_model: "0M"
 job_id: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
 moist: "equil"
+apply_limiter: true

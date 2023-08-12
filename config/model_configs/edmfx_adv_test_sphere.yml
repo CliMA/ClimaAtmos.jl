@@ -7,6 +7,5 @@ turbconv: "edmfx"
 dz_bottom: 30.0
 ode_algo: "SSP33ShuOsher"
 edmfx_adv_test: true
-apply_limiter: false
 job_id: "edmfx_adv_test_sphere"
 moist: "equil"
