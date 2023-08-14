@@ -6,7 +6,7 @@ env:
   OPENBLAS_NUM_THREADS: 1
   BUILDKITE_COMMIT: "${BUILDKITE_COMMIT}"
   BUILDKITE_BRANCH: "${BUILDKITE_BRANCH}"
-  CONFIG_PATH: "config/longrun_configs/"
+  CONFIG_PATH: "config/longrun_configs"
 
 agents:
   config: cpu
@@ -46,7 +46,7 @@ steps:
 
       - label: ":computer: baroclinic wave (ρe_tot) high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_bw_rhoe_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_bw_rhoe_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_highres --out_dir longrun_bw_rhoe_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_highres --fig_dir longrun_bw_rhoe_highres --case_name dry_baroclinic_wave
         artifact_paths: "longrun_bw_rhoe_highres/*"
@@ -57,7 +57,7 @@ steps:
 
       - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_bw_rhoe_equil_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_bw_rhoe_equil_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres --out_dir longrun_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_bw_rhoe_equil_highres --fig_dir longrun_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_bw_rhoe_equil_highres/*"
@@ -68,7 +68,7 @@ steps:
 
       - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_zalesak_tracer_energy_bw_rhoe_equil_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_zalesak_tracer_energy_bw_rhoe_equil_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_zalesak_tracer_energy_bw_rhoe_equil_highres --out_dir longrun_zalesak_tracer_energy_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_zalesak_tracer_energy_bw_rhoe_equil_highres --fig_dir longrun_zalesak_tracer_energy_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres/*"
@@ -80,7 +80,7 @@ steps:
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
         command:
-          - "mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_ssp_bw_rhoe_equil_highres.yml"
+          - "mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_bw_rhoe_equil_highres.yml"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_bw_rhoe_equil_highres --out_dir longrun_ssp_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_bw_rhoe_equil_highres --fig_dir longrun_ssp_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_ssp_bw_rhoe_equil_highres/*"
@@ -91,7 +91,7 @@ steps:
 
       - label: ":computer: SSP 1st-order tracer & energy upwind equilmoist baroclinic wave (ρe_tot) high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres --out_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres --fig_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres/*"
@@ -102,7 +102,7 @@ steps:
 
       - label: ":computer: SSP 3rd-order tracer & energy upwind equilmoist baroclinic wave (ρe_tot) high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres --out_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres --fig_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
         artifact_paths: "longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres/*"
@@ -113,7 +113,7 @@ steps:
 
       - label: ":computer: held suarez (ρe_tot) high resolution hightop"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_hs_rhoe_highres_hightop.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_highres_hightop.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_highres_hightop --out_dir longrun_hs_rhoe_highres_hightop
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_highres_hightop --fig_dir longrun_hs_rhoe_highres_hightop --case_name dry_held_suarez
         artifact_paths: "longrun_hs_rhoe_highres_hightop/*"
@@ -124,7 +124,7 @@ steps:
 
       - label: ":computer: no lim ARS held suarez (ρe_tot) equilmoist high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_hs_rhoe_equil_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equil_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres --out_dir longrun_hs_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equil_highres --fig_dir longrun_hs_rhoe_equil_highres --case_name moist_held_suarez
         artifact_paths: "longrun_hs_rhoe_equil_highres/*"
@@ -135,7 +135,7 @@ steps:
 
       - label: ":computer: lim ARS zalesak held suarez (ρe_tot) equilmoist high resolution"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_zalesak_tracer_energy_hs_rhoe_equil_highres.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_zalesak_tracer_energy_hs_rhoe_equil_highres.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres --out_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres --fig_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres --case_name moist_held_suarez
         artifact_paths: "longrun_zalesak_tracer_energy_hs_rhoe_equil_highres/*"
@@ -147,7 +147,7 @@ steps:
 
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --fig_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
@@ -158,7 +158,7 @@ steps:
 
       - label: ":computer: lim ARS zalesak aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64 --fig_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64 --case_name aquaplanet
         artifact_paths: "longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
@@ -170,7 +170,7 @@ steps:
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
         artifact_paths: "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
@@ -181,7 +181,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_aquaplanet_rhoe_equilmoist_clearsky_highres_hightop_rayleigh35e3_ft64.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equilmoist_clearsky_highres_hightop_rayleigh35e3_ft64.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --out_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --fig_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/*"
@@ -192,7 +192,7 @@ steps:
       
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_bw_rhoe_equil_highres_topography_earth.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_bw_rhoe_equil_highres_topography_earth.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_bw_rhoe_equil_highres_topography_earth --out_dir longrun_bw_rhoe_equil_highres_topography_earth
         artifact_paths: "longrun_bw_rhoe_equil_highres_topography (earth)/*"
         env:
@@ -203,7 +203,7 @@ steps:
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_hs_rhoe_equil_highres_topography_earth.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equil_highres_topography_earth.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres_topography_earth --out_dir longrun_hs_rhoe_equil_highres_topography_earth
         artifact_paths: "longrun_hs_rhoe_equil_highres_topography_earth/*"
         env:
@@ -214,7 +214,7 @@ steps:
 
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64 (earth)"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth --out_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth --fig_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth/*"
@@ -230,7 +230,7 @@ steps:
 
       - label: ":computer: hydrostatic balance (ρe_tot)"
         command:
-          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_sphere_hydrostatic_balance_rhoe.yml
+          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_sphere_hydrostatic_balance_rhoe.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_sphere_hydrostatic_balance_rhoe --out_dir longrun_sphere_hydrostatic_balance_rhoe
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_sphere_hydrostatic_balance_rhoe --fig_dir longrun_sphere_hydrostatic_balance_rhoe --case_name dry_held_suarez
         artifact_paths: "longrun_sphere_hydrostatic_balance_rhoe/*"
@@ -239,7 +239,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
         command:
-          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_aquaplanet_rhoe_equil_gray.yml
+          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_gray.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_gray/*"
@@ -253,7 +253,7 @@ steps:
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution monin obukhov"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_hs_rhoe_equil_highres_monin_obukhov.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equil_highres_monin_obukhov.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres_monin_obukhov --out_dir longrun_hs_rhoe_equil_highres_monin_obukhov
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equil_highres_monin_obukhov --fig_dir longrun_hs_rhoe_equil_highres_monin_obukhov --case_name moist_held_suarez
         artifact_paths: "longrun_hs_rhoe_equil_highres_monin_obukhov/*"
@@ -264,7 +264,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist high resolution allsky radiation float64"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_aquaplanet_rhoe_equil_highres_allsky_ft64.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_highres_allsky_ft64.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_allsky_ft64 --out_dir longrun_aquaplanet_rhoe_equil_highres_allsky_ft64
         artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_allsky_ft64/*"
         env:
@@ -276,7 +276,7 @@ steps:
     steps:
 
       - label: ":balloon: Compressible single column EDMF TRMM_LBA"
-        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config_file ${CONFIG_PATH}longrun_compressible_edmf_trmm.yml"
+        command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_compressible_edmf_trmm.yml"
         artifact_paths: "longrun_compressible_edmf_trmm/*"
         agents:
           slurm_mem: 20GB

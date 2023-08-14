@@ -1,6 +1,6 @@
 dt_save_to_disk: "10days"
 initial_condition: "MoistBaroclinicWave"
-max_newton_iters: 3
+max_newton_iters_ode: 3
 z_elem: 45
 dt: "150secs"
 tracer_upwinding: third_order

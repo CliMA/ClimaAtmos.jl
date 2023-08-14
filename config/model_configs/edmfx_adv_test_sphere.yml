@@ -6,6 +6,6 @@ t_end: "1000secs"
 turbconv: "edmfx"
 dz_bottom: 30.0
 ode_algo: "SSP33ShuOsher"
-edmfx_adv_test: true
+advection_test: true
 job_id: "edmfx_adv_test_sphere"
 moist: "equil"

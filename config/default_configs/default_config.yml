@@ -62,7 +62,7 @@ use_krylov_method:
 use_dynamic_krylov_rtol:
   help: "Whether to use Eisenstat-Walker forcing instead of a constant relative tolerance in the Krylov method (only for ClimaTimeSteppers.jl)"
   value: false
-max_newton_iters:
+max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)"
   value: 1
 ode_algo:

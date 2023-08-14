@@ -12,7 +12,7 @@ x_elem: 2
 dz_bottom: 30.0
 ode_algo: "SSP33ShuOsher"
 config: "box"
-edmfx_adv_test: true
+advection_test: true
 kappa_4: 1.0e8
 job_id: "edmfx_adv_test_box"
 moist: "equil"

@@ -12,27 +12,27 @@ To start the model with a custom configuration, run:
 ### Example
 Below is the default Bomex configuration:
 ```
-edmf_coriolis: "Bomex"
-dt_save_to_disk: "5mins"
+edmf_coriolis: Bomex
+dt_save_to_disk: 5mins
 hyperdiff: "false"
 z_elem: 60
-dt: "20secs"
+dt: 20secs
 debugging_tc: true
-surface_setup: "Bomex"
-turbconv_case: "Bomex"
-t_end: "6hours"
+surface_setup: Bomex
+turbconv_case: Bomex
+t_end: 6hours
 turbconv: "edmf"
 z_stretch: false
-config: "column"
-subsidence: "Bomex"
-FLOAT_TYPE: "Float64"
+config: column
+subsidence: Bomex
+FLOAT_TYPE: Float64
 z_max: 3000.0
 apply_limiter: false
 regression_test: true
-ls_adv: "Bomex"
-dt_save_to_sol: "5mins"
-job_id: "edmf_bomex"
-moist: "equil"
+ls_adv: Bomex
+dt_save_to_sol: 5mins
+job_id: edmf_bomex
+moist: equil
 ```
 
 To add a new configuration argument/key, open `.buildkite/default_config.yml`.

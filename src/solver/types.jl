@@ -261,7 +261,7 @@ Base.@kwdef struct AtmosModel{
     RM,
     LA,
     EC,
-    EAT,
+    AT,
     EED,
     ESF,
     ENP,
@@ -286,7 +286,7 @@ Base.@kwdef struct AtmosModel{
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
-    edmfx_adv_test::EAT = nothing
+    advection_test::AT = nothing
     edmfx_entr_detr::EED = nothing
     edmfx_sgs_flux::ESF = nothing
     edmfx_nh_pressure::ENP = nothing

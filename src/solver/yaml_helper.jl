@@ -35,8 +35,6 @@ end
 
 Given a job id string, returns the configuration for that job.
 Does not include the default configuration dictionary.
-If not calling from the top level of the repo,
-ensure that you are passing in the correct path.
 """
 function config_from_target_job(target_job)
     for (job_id, config) in configs_per_job_id()
@@ -52,7 +50,6 @@ end
 
 Takes in a Dict, vector of Dicts or filepaths and returns a Dict with the
 default configuration overridden by the given dicts or parsed YAML files.
-This currently needs to be call from the top level of the repo.
 """
 override_default_config(config_files::AbstractString) =
     override_default_config(YAML.load_file(config_files))
@@ -72,8 +69,6 @@ function override_default_config(config_dict::AbstractDict;)
     default_config = default_config_dict()
     config = deepcopy(default_config)
     for (k, v) in config_dict
-        !haskey(default_config, k) &&
-            error("Key `$k` is not in the default configuration.")
         default_type = typeof(default_config[k])
         config[k] = isnothing(default_config[k]) ? v : default_type(v)
     end
@@ -88,7 +83,7 @@ Given a configuration Dict, returns a Dict of the non-default values.
 """
 function non_default_config_entries(config, defaults = default_config_dict())
     non_defaults = Dict()
-    for k in keys(parsed_args)
+    for k in keys(config)
         defaults[k] == config[k] && continue
         non_defaults[k] = config[k]
     end
