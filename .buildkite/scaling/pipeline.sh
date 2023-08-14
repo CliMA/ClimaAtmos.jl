@@ -67,14 +67,8 @@ fi
 for nprocs in ${process_counts[@]}; do
 
     job_id="sphere_held_suarez_${res}_res_rhoe_$nprocs"
-
-if [[ "$res" == "low" ]]; then
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 6 --kappa_4 2e17"
-elif [[ "$res" == "mid" ]]; then
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 4days --dt 150secs --z_elem 45 --dz_bottom 30 --h_elem 16 --kappa_4 1e16"
-else
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 30 --kappa_4 5e14"
-fi
+    config_file="config/scaling_configs/${res}_res_$FT/${res}_res_${FT}_${nprocs}.yml"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $config_file"
 
 if [[ "$mpi_impl" == "mpich" ]]; then
     rank_env_var="PMI_RANK"
