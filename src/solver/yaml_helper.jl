@@ -68,8 +68,10 @@ end
 function override_default_config(config_dict::AbstractDict;)
     default_config = default_config_dict()
     config = deepcopy(default_config)
-    for (k, v) in config_dict
+    # Allow unused keys in config_dict for coupler
+    for k in intersect(keys(config_dict), keys(default_config))
         default_type = typeof(default_config[k])
+        v = config_dict[k]
         config[k] = isnothing(default_config[k]) ? v : default_type(v)
     end
     return config
