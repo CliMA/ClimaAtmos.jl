@@ -28,6 +28,7 @@ makedocs(
         "EDMF Equations" => "edmf_equations.md",
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
+        "Radiative Equilibrium" => "radiative_equilibrium.md",
         "REPL scripts" => "repl_scripts.md",
         "Configuration" => "config.md",
         "Parameters" => "parameters.md",
