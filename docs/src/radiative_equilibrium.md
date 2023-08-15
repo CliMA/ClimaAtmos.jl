@@ -20,7 +20,7 @@ julia -i --color=yes --proj...
 This will bring you into a julia environment, where you can run propertynames(Y) and propertynames(p) to see accesible values, examples:
 
 
-** screenshot of sample -i outputs
+![](assets/CO2_sample_code.png)
 
 
 
@@ -28,7 +28,8 @@ Here is a typical vertical temperature profile on the final day of a simulation 
 ** add some sort of png here
 
 Note: The surface temperature must also converge before the simulation reaches radiative equilibrium, here is a typical convergence of surface temperature plot:
-** Add surface temperature convergence plot
+
+![](assets/example_temp_profile.png)
 
 
 
@@ -36,17 +37,22 @@ Note: The surface temperature must also converge before the simulation reaches r
 In `radiation.jl` one can change the concentrations of greenhouse gases in order to test the affects on the atmospheric temperature profile.
 
 To change the ozone concentration multiply the following variable the desired coefficent:
-** screenshot of Ozone sample code
+
+![](assets/Ozone_sample_code.png)
 
 Then comparing the results between ozone simulations could look something like this:
 
-** Add ozone simulations results
+![](assets/O%E2%82%83_exp_temp_profile.png)
+![](assets/O%E2%82%83_exp_temp_difference.png)
 
 To change the CO2 concentration also multiply the volume mixing ratio by the desired coefficient.
-** ss of sample CO2 code 
+
+![](assets/CO2_sample_code.png)
 
 Results from increasing CO2 concentration could look something like this:
-**
+
+![](assets/CO%E2%82%82_exp_temp_profile.png)
+![](assets/CO%E2%82%82_exp_temp_difference.png)
 
 
 A similar process to the ones above can work for increasing the concentration of any other gases in the atmosphere
