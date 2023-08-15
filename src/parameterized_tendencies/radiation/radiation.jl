@@ -333,6 +333,7 @@ function radiation_tendency!(
     colidx,
     radiation_mode::RadiationTRMM_LBA,
 )
+    FT = Spaces.undertype(axes(Y.c))
     (; params) = p
     # TODO: get working (need to add cache / function)
     rad = radiation_mode.rad_profile
@@ -341,7 +342,7 @@ function radiation_tendency!(
     ᶜρ = Y.c.ρ[colidx]
     ᶜts_gm = p.ᶜts[colidx]
     zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(t, zc)
+    @. ᶜdTdt_rad = rad(FT(t), zc)
     @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad
     return nothing
 end

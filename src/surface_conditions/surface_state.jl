@@ -69,7 +69,7 @@ SurfaceState(;
 
 Container for heat fluxes
  - shf: Sensible heat flux
- - lh: Latent heat flux
+ - lhf: Latent heat flux
 """
 Base.@kwdef struct HeatFluxes{FT, FTN <: Union{FT, Nothing}} <:
                    PrescribedFluxes{FT}
@@ -108,30 +108,28 @@ ExchangeCoefficients(C) = ExchangeCoefficients(Cd = C, Ch = C)
 Container for storing values used to calculate surface conditions using
 Monin-Obukhov Similarity Theory. See SurfaceFluxes docs for more information.
 
+- z0: Roughness
+- z0m: Roughness for momentum
+- z0b: Roughness for scalars
+- fluxes: Sensible and latent heat fluxes
+- ustar: Friction velocity
+
 Valid combinations:
  - roughness
  - roughness and fluxes
  - roughness and ustar
- - fluxes and ustar
+ - roughness and fluxes and ustar
 Roughnesses can be specified by either z0 or both z0m and z0b.
 """
 struct MoninObukhov{
     FT,
-    FTN1 <: Union{FT, Nothing},
     PFN <: Union{PrescribedFluxes{FT}, Nothing},
-    FTN2 <: Union{FT, Nothing},
+    FTN <: Union{FT, Nothing},
 } <: SurfaceParameterization{FT}
-    z0m::FTN1
-    z0b::FTN1
+    z0m::FT
+    z0b::FT
     fluxes::PFN
-    ustar::FTN2
-
-    # These are required to be inner constructors to avoid 
-    # method ambiguity with the default constructor
-    MoninObukhov(z0m::FT, z0b::FT, fluxes, ustar) where {FT <: Number} =
-        new{FT, FT, typeof(fluxes), typeof(ustar)}(z0m, z0b, fluxes, ustar)
-    MoninObukhov(::Nothing, ::Nothing, fluxes, ustar::FT) where {FT <: Number} =
-        new{FT, Nothing, typeof(fluxes), FT}(nothing, nothing, fluxes, ustar)
+    ustar::FTN
 end
 
 function MoninObukhov(;
@@ -152,7 +150,7 @@ function MoninObukhov(;
         MoninObukhov(z0m, z0b, fluxes, nothing)
     m_o(z0m::Number, z0b::Number, ::Nothing, ustar::Number) =
         MoninObukhov(z0m, z0b, nothing, ustar)
-    m_o(::Nothing, ::Nothing, fluxes::PrescribedFluxes, ustar::Number) =
-        MoninObukhov(nothing, nothing, fluxes, ustar)
+    m_o(z0m::Number, z0b::Number, fluxes::PrescribedFluxes, ustar::Number) =
+        MoninObukhov(z0m, z0b, fluxes, ustar)
     return m_o(z0m, z0b, fluxes, ustar)
 end

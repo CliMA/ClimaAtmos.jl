@@ -101,9 +101,10 @@ function (::Bomex)(params)
     q_vap = FT(0.02245)
     θ_flux = FT(8e-3)
     q_flux = FT(5.2e-5)
+    z0 = FT(1e-4)
     ustar = FT(0.28)
     fluxes = θAndQFluxes(; θ_flux, q_flux)
-    parameterization = MoninObukhov(; fluxes, ustar)
+    parameterization = MoninObukhov(; z0, fluxes, ustar)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
@@ -115,12 +116,13 @@ function (::LifeCycleTan2018)(params)
     q_vap = FT(0.02245)
     θ_flux0 = FT(8e-3)
     q_flux0 = FT(5.2e-5)
+    z0 = FT(1e-4)
     ustar = FT(0.28)
     function surface_state(surface_coordinates, interior_z, t)
         weight = FT(0.01) + FT(0.99) * (cos(2 * FT(π) * t / 3600) + 1) / 2
         fluxes =
             θAndQFluxes(; θ_flux = θ_flux0 * weight, q_flux = q_flux0 * weight)
-        parameterization = MoninObukhov(; fluxes, ustar)
+        parameterization = MoninObukhov(; z0, fluxes, ustar)
         return SurfaceState(; parameterization, T, p, q_vap)
     end
     return surface_state
@@ -135,6 +137,7 @@ function (::ARM_SGP)(params)
     t_data = FT[0, 4, 6.5, 7.5, 10, 12.5, 14.5] .* 3600
     shf_data = FT[-30, 90, 140, 140, 100, -10, -10]
     lhf_data = FT[5, 250, 450, 500, 420, 180, 0]
+    z0 = FT(1e-4)
     ustar = FT(0.28) # 0.28 is taken from Bomex. TODO: Approximate from LES TKE.
     thermo_params = CAP.thermodynamics_params(params)
     ts = TD.PhaseNonEquil_pθq(thermo_params, p, θ, TD.PhasePartition(q_vap))
@@ -144,7 +147,7 @@ function (::ARM_SGP)(params)
     # TODO: Replace Dierckx with a type-stable interpolation and remove the FT.
     function surface_state(surface_coordinates, interior_z, t)
         fluxes = HeatFluxes(; shf = shf(t), lhf = lhf(t))
-        parameterization = MoninObukhov(; fluxes, ustar)
+        parameterization = MoninObukhov(; z0, fluxes, ustar)
         return SurfaceState(; parameterization, T, p, q_vap)
     end
     return surface_state
@@ -171,8 +174,10 @@ function (::DYCOMS_RF02)(params)
     q_vap = FT(0.01384) # 0.01384 is taken from Pycles. TODO: Compute qstar(T).
     shf = FT(16)
     lhf = FT(93)
+    z0 = FT(1e-4)
     ustar = FT(0.25)
-    parameterization = MoninObukhov(; fluxes = HeatFluxes(; shf, lhf), ustar)
+    parameterization =
+        MoninObukhov(; z0, fluxes = HeatFluxes(; shf, lhf), ustar)
     return SurfaceState(; parameterization, T, p, q_vap)
 end
 
@@ -213,13 +218,14 @@ function (::TRMM_LBA)(params)
     T = FT(296.85)  # 0C + 23.7
     p = FT(99130)
     q_vap = FT(0.02245)
+    z0 = FT(1e-4)
     ustar = FT(0.28) # 0.28 is taken from Bomex. TODO: Approximate from LES TKE.
     function surface_state(surface_coordinates, interior_z, t)
         value = cos(FT(π) / 2 * (1 - FT(t) / (FT(5.25) * 3600)))
         shf = 270 * max(0, value)^FT(1.5)
         lhf = 554 * max(0, value)^FT(1.3)
         fluxes = HeatFluxes(; shf, lhf)
-        parameterization = MoninObukhov(; fluxes, ustar)
+        parameterization = MoninObukhov(; z0, fluxes, ustar)
         return SurfaceState(; parameterization, T, p, q_vap)
     end
     return surface_state

@@ -411,8 +411,8 @@ function surface_state_to_conditions(
                     shf,
                     lhf,
                     parameterization.ustar,
-                    FT(NaN),
-                    FT(NaN),
+                    parameterization.z0m,
+                    parameterization.z0m,
                     gustiness,
                 )
             end
