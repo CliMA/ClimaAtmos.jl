@@ -88,7 +88,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 32GB
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
         command:
@@ -179,7 +179,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 32GB
 
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
         command:
@@ -210,7 +210,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 32GB
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
         command:
