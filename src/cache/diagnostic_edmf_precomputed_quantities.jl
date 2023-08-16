@@ -18,6 +18,7 @@ function set_diagnostic_edmfx_draft_quantities_level!(
     p,
     Φ,
 )
+    FT = eltype(thermo_params)
     @. K =
         (
             dot(
@@ -33,7 +34,8 @@ function set_diagnostic_edmfx_draft_quantities_level!(
                 C123(u³, local_geometry_halflevel),
             )
         ) / 2
-    @. ts = TD.PhaseEquil_phq(thermo_params, p, h_tot - K - Φ, q_tot)
+    @. ts =
+        TD.PhaseEquil_phq(thermo_params, p, h_tot - K - Φ, q_tot, 8, FT(0.0003))
     @. ρ = TD.air_density(thermo_params, ts)
     return nothing
 end
