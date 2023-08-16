@@ -5,137 +5,69 @@ Updates the value of `p.sfc_conditions` based on the current state `Y` and time
 `t`. This function will only update the surface conditions if the surface_setup
 is not a PrescribedSurface.
 """
+
 function update_surface_conditions!(Y, p, t)
+    # Need to extract the field values so that we can do
+    # a DataLayout broadcast rather than a Field broadcast
+    # because we are mixing surface and interior fields
     if isnothing(p.sfc_setup)
         p.is_init[] && set_dummy_surface_conditions!(p)
         return
     end
-    # Need to extract the field values so that we can do
-    # a DataLayout broadcast rather than a Field broadcast
-    # because we are mixing surface and interior fields
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half),
     )
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-    (; ᶜts, ᶜu, sfc_conditions, sfc_setup, params, atmos) = p
+    (; ᶜts, ᶜu, sfc_conditions, params, sfc_setup, atmos) = p
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
     int_z_values =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
     sfc_conditions_values = Fields.field_values(sfc_conditions)
-
-    is_prognostic_sfc = atmos.surface_model isa PrognosticSurfaceTemperature
-    sfc_prognostic_temp =
-        is_prognostic_sfc ? Fields.field_values(Y.sfc.T) : nothing
-
-    if sfc_setup isa Function
-        if (is_prognostic_sfc)
-            @. sfc_conditions_values = surface_state_to_conditions(
-                sfc_setup(
-                    sfc_local_geometry_values.coordinates,
-                    int_z_values,
-                    t,
-                ),
-                sfc_local_geometry_values,
-                int_ts_values,
-                projected_vector_data(
-                    CT1,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                projected_vector_data(
-                    CT2,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                int_z_values,
-                params,
-                atmos,
-                sfc_prognostic_temp,
-            )
-        else
-            @. sfc_conditions_values = surface_state_to_conditions(
-                sfc_setup(
-                    sfc_local_geometry_values.coordinates,
-                    int_z_values,
-                    t,
-                ),
-                sfc_local_geometry_values,
-                int_ts_values,
-                projected_vector_data(
-                    CT1,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                projected_vector_data(
-                    CT2,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                int_z_values,
-                params,
-                atmos,
-            )
-        end
-    elseif sfc_setup isa Fields.Field # This case is needed for the Coupler
-        @assert eltype(sfc_setup) <: SurfaceState
-        sfc_setup_values = Fields.field_values(sfc_setup)
-        @. sfc_conditions_values = surface_state_to_conditions(
-            sfc_setup_values,
+    wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
+    sfc_temp_var =
+        p.atmos.surface_model isa PrognosticSurfaceTemperature ?
+        (; sfc_prognostic_temp = Fields.field_values(Y.sfc.T)) : (;)
+    @. sfc_conditions_values = surface_state_to_conditions(
+        surface_state(
+            wrapped_sfc_setup,
             sfc_local_geometry_values,
-            int_ts_values,
-            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
             int_z_values,
-            params,
-            atmos,
-        )
-    else # SurfaceSetup is a SurfaceState
-        tup_sfc_setup = tuple(sfc_setup)
-        if (is_prognostic_sfc)
-            @. sfc_conditions_values = surface_state_to_conditions(
-                tup_sfc_setup,
-                sfc_local_geometry_values,
-                int_ts_values,
-                projected_vector_data(
-                    CT1,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                projected_vector_data(
-                    CT2,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                int_z_values,
-                params,
-                atmos,
-                sfc_prognostic_temp,
-            )
-        else
-            @. sfc_conditions_values = surface_state_to_conditions(
-                tup_sfc_setup,
-                sfc_local_geometry_values,
-                int_ts_values,
-                projected_vector_data(
-                    CT1,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                projected_vector_data(
-                    CT2,
-                    int_u_values,
-                    int_local_geometry_values,
-                ),
-                int_z_values,
-                params,
-                atmos,
-            )
-        end
-    end
+            t,
+        ),
+        sfc_local_geometry_values,
+        int_ts_values,
+        projected_vector_data(CT1, int_u_values, int_local_geometry_values),
+        projected_vector_data(CT2, int_u_values, int_local_geometry_values),
+        int_z_values,
+        params,
+        atmos,
+        sfc_temp_var...,
+    )
     return nothing
 end
+
+# default case
+sfc_setup_wrapper(sfc_setup::SurfaceState) = (sfc_setup,)
+
+# case when surface setup is func
+sfc_setup_wrapper(sfc_setup::Function) = (sfc_setup,)
+
+#this is the case for the coupler
+function sfc_setup_wrapper(sfc_setup::Fields.Field)
+    @assert eltype(sfc_setup) <: SurfaceState
+    return Fields.field_values(sfc_setup)
+end
+
+surface_state(sfc_setup_wrapper::SurfaceState, _, _, _) = sfc_setup_wrapper
+
+surface_state(
+    sfc_setup_wrapper::Function,
+    sfc_local_geometry_values,
+    int_z_values,
+    t,
+) = sfc_setup_wrapper(sfc_local_geometry_values.coordinates, int_z_values, t)
 
 # This is a hack for meeting the August 7th deadline. It is to ensure that the
 # coupler will be able to construct an integrator before overwriting its surface
