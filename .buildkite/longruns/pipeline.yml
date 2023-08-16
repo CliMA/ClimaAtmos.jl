@@ -13,6 +13,7 @@ agents:
   queue: central
   slurm_ntasks: 1
   slurm_time: 24:00:00
+  slurm_mem_per_cpu: 32GB
 
 timeout_in_minutes: 1440
 
@@ -88,14 +89,13 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 32
-          slurm_mem_per_cpu: 32GB
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
         command:
           - mkdir longrun_ssp_bw_rhoe_equil_highres
           - ": > longrun_ssp_bw_rhoe_equil_highres/print-out-0.log" 
           - tail -F longrun_ssp_bw_rhoe_equil_highres/print-out-0.log & # print log in background
-          - srun --output=longrun_ssp_bw_rhoe_equil_highres/print-out-%t.log mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_bw_rhoe_equil_highres.yml"
+          - srun --output=longrun_ssp_bw_rhoe_equil_highres/print-out-%t.log mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_bw_rhoe_equil_highres.yml
           - sleep 1
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_bw_rhoe_equil_highres --out_dir longrun_ssp_bw_rhoe_equil_highres
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_bw_rhoe_equil_highres --fig_dir longrun_ssp_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
@@ -179,7 +179,6 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_mem_per_cpu: 32GB
 
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
         command:
@@ -210,7 +209,6 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_mem_per_cpu: 32GB
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
         command:
@@ -232,7 +230,7 @@ steps:
           - mkdir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64
           - ": > longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/print-out-0.log" 
           - tail -F longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/print-out-0.log & # print log in background
-          - srun --output=longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/print-out-%t.log julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equilmoist_clearsky_highres_hightop_rayleigh35e3_ft64.yml
+          - srun --output=longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/print-out-%t.log julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64.yml
           - sleep 1
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --out_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --fig_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --case_name aquaplanet
