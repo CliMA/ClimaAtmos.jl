@@ -63,11 +63,11 @@ end
 surface_state(sfc_setup_wrapper::SurfaceState, _, _, _) = sfc_setup_wrapper
 
 surface_state(
-    sfc_setup_wrapper::Function,
+    wrapped_sfc_setup::Function,
     sfc_local_geometry_values,
     int_z_values,
     t,
-) = sfc_setup_wrapper(sfc_local_geometry_values.coordinates, int_z_values, t)
+) = wrapped_sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t)
 
 # This is a hack for meeting the August 7th deadline. It is to ensure that the
 # coupler will be able to construct an integrator before overwriting its surface
