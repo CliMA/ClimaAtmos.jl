@@ -53,8 +53,7 @@ function edmfx_tke_tendency!(
         end
         # pressure work
         # dissipation
-        #min_mixing_length = @. c_d * dt * max(ᶜtke⁰[colidx], eps(FT))^(FT(1) / 2)
-        min_mixing_length = FT(100)
+        min_mixing_length = @. FT(10) * c_d * dt * max(ᶜtke⁰[colidx], eps(FT))^(FT(1) / 2)
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) /
             max(ᶜmixing_length[colidx], min_mixing_length)
