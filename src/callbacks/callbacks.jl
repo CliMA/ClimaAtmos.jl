@@ -28,38 +28,40 @@ Adapted from ClimaTimeSteppers.jl #89.
 function display_status_callback!(::Type{tType}) where {tType}
     start_time = Ref{Float64}()
     prev_time = Ref{Float64}()
-    current_time = Ref{Float64}()
+    time = Ref{Float64}()
     prev_t = Ref{tType}()
+    t = Ref{tType}()
+    t_end = Ref{tType}()
     # milliseconds
     speed = Ref{Float64}()
     eta = Ref{Float64}()
     is_first_step = Ref{Bool}()
 
-    function initialize(_, _, _, _)
+    function initialize(_, _, _, integrator)
         is_first_step[] = true
         prev_time[] = time_ns() / 1e9
+        t_end[] = integrator.p.simulation.t_end
     end
 
     function affect!(integrator)
         # speed = wallclock time / simulation time
         # Print ETA = speed * remaining simulation time
-        t = integrator.t
-        t_end = integrator.p.simulation.t_end
-        current_time[] = round(time_ns()) / 1e9
-        speed[] = (current_time[] - prev_time[]) / (t - prev_t[])
-        eta[] = speed[] * (t_end - t)
+        t[] = integrator.t
+        time[] = time_ns() / 1e9
+        speed[] = (time[] - prev_time[]) / (t[] - prev_t[])
+        eta[] = speed[] * (t_end[] - t[])
         if is_first_step[]
             println("Time Remaining: ...")
             is_first_step[] = false
-            start_time[] = current_time[]
+            start_time[] = time[]
         else
             println(
-                "$(round(t / t_end * 100, digits=2))% complete in $(round(current_time[] - start_time[], digits=2)) seconds",
+                "$(round(t[] / t_end[] * 100, digits=2))% complete in $(round(time[] - start_time[], digits=2)) seconds",
             )
             println("Time Remaining: $(round(eta[], digits=2)) seconds")
         end
-        prev_t[] = t
-        prev_time[] = current_time[]
+        prev_t[] = t[]
+        prev_time[] = time[]
     end
 
     return initialize, affect!
