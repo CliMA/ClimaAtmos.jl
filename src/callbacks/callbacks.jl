@@ -33,9 +33,14 @@ function display_status_callback!(::Type{tType}) where {tType}
     # milliseconds
     speed = Ref{Float64}()
     eta = Ref{Float64}()
-    is_first_step = Ref{Bool}(true)
+    is_first_step = Ref{Bool}()
 
-    return function (integrator)
+    function initialize(_, _, _, _)
+        is_first_step[] = true
+        prev_time[] = time_ns() / 1e9
+    end
+
+    function affect!(integrator)
         # speed = wallclock time / simulation time
         # Print ETA = speed * remaining simulation time
         t = integrator.t
@@ -48,13 +53,16 @@ function display_status_callback!(::Type{tType}) where {tType}
             is_first_step[] = false
             start_time[] = current_time[]
         else
-            println(Dates.now())
-            println("$(round(t / t_end * 100, digits=2))% complete in $(round(current_time[] - start_time[], digits=2)) seconds")
+            println(
+                "$(round(t / t_end * 100, digits=2))% complete in $(round(current_time[] - start_time[], digits=2)) seconds",
+            )
             println("Time Remaining: $(round(eta[], digits=2)) seconds")
         end
         prev_t[] = t
         prev_time[] = current_time[]
     end
+
+    return initialize, affect!
 end
 
 function dss_callback!(integrator)

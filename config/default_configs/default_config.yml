@@ -154,7 +154,7 @@ dt_save_to_sol:
   help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
   value: "1days"
 dt_show_progress:
-  help: "Time between displaying progress update"
+  help: "Simulation time between displaying progress update. Examples: [`600secs`, `1mins`, `Inf` (do not display)]"
   value: "600secs"
 moist:
   help: "Moisture model [`dry` (default), `equil`, `non_equil`]"
