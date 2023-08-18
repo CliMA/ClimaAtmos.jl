@@ -130,13 +130,14 @@ function edmfx_sgs_flux_tendency!(
     (; edmfx_upwinding, sfc_conditions) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
-    (; ᶜK_u, ᶜK_h) = p
+    (; ᶜh_tot⁰, ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_flux
         # mass flux
+        # TODO: check if there is contribution from the environment
         ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
         for j in 1:n
@@ -162,7 +163,7 @@ function edmfx_sgs_flux_tendency!(
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]),
         )
         @. Yₜ.c.ρe_tot[colidx] -=
-            ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot[colidx])))
+            ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot⁰[colidx])))
 
         if !(p.atmos.moisture_model isa DryModel)
             # mass flux

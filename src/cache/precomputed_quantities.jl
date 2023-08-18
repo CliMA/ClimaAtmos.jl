@@ -108,6 +108,8 @@ function precomputed_quantities(Y, atmos)
             ᶜnh_pressureʲs = similar(Y.c, NTuple{n, CT3{FT}}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
+            ᶜK⁰ = similar(Y.c, FT),
+            ᶜh_tot⁰ = similar(Y.c, FT),
             ᶜtke⁰ = similar(Y.c, FT),
             ᶜlinear_buoygrad = similar(Y.c, FT),
             ᶜshear² = similar(Y.c, FT),
