@@ -503,7 +503,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
 
     dt_show_progress = time_to_seconds(parsed_args["dt_show_progress"])
     if !(dt_show_progress == Inf)
-        initialize, affect! = display_status_callback!(typeof(dt))
+        initialize, affect! = display_status_callback!()
         callbacks = (
             callbacks...,
             call_every_dt(

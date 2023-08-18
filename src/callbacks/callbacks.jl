@@ -25,13 +25,13 @@ Given typeof(dt), returns a callback to display:
  - estimated wallclock time remaining.
 Adapted from ClimaTimeSteppers.jl #89.
 """
-function display_status_callback!(::Type{tType}) where {tType}
+function display_status_callback!()
     start_time = Ref{Float64}()
     prev_time = Ref{Float64}()
     time = Ref{Float64}()
-    prev_t = Ref{tType}()
-    t = Ref{tType}()
-    t_end = Ref{tType}()
+    prev_t = Ref{Float64}()
+    t = Ref{Float64}()
+    t_end = Ref{Float64}()
     # milliseconds
     speed = Ref{Float64}()
     eta = Ref{Float64}()
@@ -51,14 +51,12 @@ function display_status_callback!(::Type{tType}) where {tType}
         speed[] = (time[] - prev_time[]) / (t[] - prev_t[])
         eta[] = speed[] * (t_end[] - t[])
         if is_first_step[]
-            println("Time Remaining: ...")
+            @info "Time Remaining: ..."
             is_first_step[] = false
             start_time[] = time[]
         else
-            println(
-                "$(round(t[] / t_end[] * 100, digits=2))% complete in $(round(time[] - start_time[], digits=2)) seconds",
-            )
-            println("Time Remaining: $(round(eta[], digits=2)) seconds")
+            @info "$(round(t[] / t_end[] * 100, digits=2))% complete in $(round(time[] - start_time[], digits=2)) seconds"
+            @info "Time Remaining: $(round(eta[], digits=2)) seconds"
         end
         prev_t[] = t[]
         prev_time[] = time[]
