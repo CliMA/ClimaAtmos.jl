@@ -5,6 +5,7 @@
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 import LinearAlgebra as la
+import ClimaCore: Geometry
 
 
 horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -43,9 +44,36 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
     @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
 
 
-    @. Yₜ.c.uₕ[colidx] -=
-    divₕ(-(Y.c.ρ[colidx] * two_v_t[colidx] * gradₕ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+    # @. Yₜ.c.uₕ.components.data.:1 -=
+    # divₕ(-(Y.c.ρ * two_v_t * gradₕ(Y.c.uₕ.components.data.:1))) / Y.c.ρ
 
+    # @. Yₜ.c.uₕ.components.data.:2 -=
+    # divₕ(-(Y.c.ρ * two_v_t * gradₕ(Y.c.uₕ.components.data.:2))) / Y.c.ρ
+
+    @. Yₜ.c.uₕ -=
+    (gradₕ(divₕ(-(Y.c.ρ * two_v_t * Y.c.uₕ))) -
+    Geometry.project(Geometry.Covariant12Axis(),
+     curlₕ(Geometry.project(Geometry.Covariant3Axis(),
+      curlₕ(-(Y.c.ρ * two_v_t * Y.c.uₕ)))))) / Y.c.ρ 
+
+    # @. Yₜ.f.u₃.components.data.:1 -= 
+    # ᶠinterp(divₕ(-(Y.c.ρ * two_v_t * ᶜinterp(gradₕ(Y.f.u₃.components.data.:1)))) / Y.c.ρ) 
+ 
+    ᶜtemp_C3 = p.ᶜtemp_C3
+    @. ᶜtemp_C3 = -(Y.c.ρ * two_v_t * ᶜinterp(Y.f.u₃))
+
+    ᶜtemp_C3_2 = p.ᶜtemp_C3_2
+    @. ᶜtemp_C3_2 = -(Y.c.ρ * two_v_t * ᶜinterp(Y.f.u₃))
+
+    ᶜtemp_C12 = p.ᶜtemp_C12
+    @. ᶜtemp_C12 = gradₕ(divₕ(ᶜtemp_C3_2)) - 
+    Geometry.project(Geometry.Covariant12Axis(),
+     curlₕ(Geometry.project(Geometry.Covariant3Axis(),
+     curlₕ(ᶜtemp_C3))))
+
+    @. Yₜ.f.u₃ -=
+    Geometry.project(Geometry.Covariant3Axis(), ᶠinterp((ᶜtemp_C12) / Y.c.ρ))
+    
     (; ᶜspecific) = p
 
     if :ρe_tot in propertynames(Yₜ.c)
@@ -107,6 +135,14 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
     )
     @. Yₜ.c.uₕ[colidx] -=
         ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(two_v_t[colidx]) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+
+    divᵥ_u3 = Operators.DivergenceC2F(
+        top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
+        bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))), 
+    )
+
+    @. Yₜ.f.u₃[colidx] -= 
+        divᵥ_u3(-(Y.c.ρ[colidx] * two_v_t[colidx] * ᶜgradᵥ(Y.f.u₃[colidx]))) / ᶠinterp(Y.c.ρ[colidx])
     
 
     if :ρe_tot in propertynames(Yₜ.c)

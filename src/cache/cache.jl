@@ -95,6 +95,7 @@ function default_cache(
         ᶜρ_ref,
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
+        ᶜD = similar(Y.c, FT),
         ᶜf,
         ∂ᶜK∂ᶠu₃_data = similar(
             Y.c,
