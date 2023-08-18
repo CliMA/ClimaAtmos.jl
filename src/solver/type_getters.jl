@@ -501,6 +501,18 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             (callbacks..., call_every_dt(save_restart_func, dt_save_restart))
     end
 
+    dt_show_progress = time_to_seconds(parsed_args["dt_show_progress"])
+    if !(dt_show_progress == Inf)
+        callbacks = (
+            callbacks...,
+            call_every_dt(
+                display_status_callback!(typeof(dt)),
+                dt_show_progress;
+                skip_first = true,
+            ),
+        )
+    end
+
     if is_distributed(simulation.comms_ctx)
         callbacks = (
             callbacks...,
