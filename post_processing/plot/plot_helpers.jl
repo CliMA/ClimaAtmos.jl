@@ -400,6 +400,9 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
     println("files to generate the plots:")
     println.(nc_file)
 
+    # Fluxes
+    sfc_flux_energy = sfc_evaporation = lw_flux_net = sw_flux_net = nothing
+
     # collect data from all nc files and combine data from different time step into one array
     for (i, ifile) in enumerate(nc_file)
         nc = NCDataset(ifile, "r")
@@ -415,6 +418,17 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
             if moist
                 global qt = nc["qt"][:]
             end
+            if haskey(nc, "sfc_flux_energy")
+                sfc_flux_energy = nc["sfc_flux_energy"][:]
+            end
+            if haskey(nc, "sfc_evaporation")
+                sfc_evaporation = nc["sfc_evaporation"][:]
+            end
+            if haskey(nc, "lw_flux_up")
+                # NOTE: We define net as up - down
+                lw_flux_net = nc["lw_flux_up"][:] - nc["lw_flux_down"][:]
+                sw_flux_net = nc["sw_flux_up"][:] - nc["sw_flux_down"][:]
+            end
         else
             u = cat(u, nc["u"][:], dims = 4)
             v = cat(v, nc["v"][:], dims = 4)
@@ -423,6 +437,26 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
             θ = cat(θ, nc["potential_temperature"][:], dims = 4)
             if moist
                 qt = cat(qt, nc["qt"][:], dims = 4)
+            end
+            if haskey(nc, "sfc_flux_energy")
+                sfc_flux_energy =
+                    cat(sfc_flux_energy, nc["sfc_flux_energy"][:], dims = 3)
+            end
+            if haskey(nc, "sfc_evaporation")
+                sfc_evaporation =
+                    cat(sfc_evaporation, nc["sfc_evaporation"][:], dims = 3)
+            end
+            if haskey(nc, "lw_flux_up")
+                lw_flux_net = cat(
+                    lw_flux_net,
+                    nc["lw_flux_up"][:] - nc["lw_flux_down"][:],
+                    dims = 4,
+                )
+                sw_flux_net = cat(
+                    sw_flux_net,
+                    nc["sw_flux_up"][:] - nc["sw_flux_down"][:],
+                    dims = 4,
+                )
             end
         end
     end
@@ -582,4 +616,92 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
     end
 
     CairoMakie.save(fig_dir * "/diagnostics.png", fig)
+
+    # sfc_flux_energy, sfc_evaporation, lw_flux_net, sw_flux_net are set to
+    # nothing if there's no flux information
+    has_flux = any(
+        map(
+            !isnothing,
+            [sfc_flux_energy, sfc_evaporation, lw_flux_net, sw_flux_net],
+        ),
+    )
+
+    if has_flux
+        fig_flux = generate_empty_figure(; resolution = (2048, 2048))
+    end
+
+    if !isnothing(sfc_flux_energy)
+        create_plot!(
+            fig_flux;
+            p_loc = (1, 1),
+            X = lon,
+            Y = lat,
+            Z = sfc_flux_energy[:, :, end],
+            title = "Surface flux of energy: Day $(days[end]);",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+        )
+    end
+    if !isnothing(sfc_evaporation)
+        create_plot!(
+            fig_flux;
+            p_loc = (1, 2),
+            X = lon,
+            Y = lat,
+            Z = sfc_evaporation[:, :, end],
+            title = "Surface evaporation: Day $(days[end]);",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+        )
+    end
+    if !isnothing(lw_flux_net)
+        create_plot!(
+            fig_flux;
+            p_loc = (2, 1),
+            X = lon,
+            Y = lat,
+            # There's a minus because we define net = upward - downward
+            Z = -lw_flux_net[:, :, end, end],
+            title = "Net (down - up) longwave flux at TOA: Day $(days[end]);",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+        )
+        create_plot!(
+            fig_flux;
+            p_loc = (2, 2),
+            X = lon,
+            Y = lat,
+            Z = lw_flux_net[:, :, 1, end],
+            title = "Net (up - down) longwave flux at surface: Day $(days[end]);",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+        )
+    end
+    if !isnothing(sw_flux_net)
+        create_plot!(
+            fig_flux;
+            p_loc = (3, 1),
+            X = lon,
+            Y = lat,
+            # There's a minus because we define net = upward - downward
+            Z = -sw_flux_net[:, :, end, end],
+            title = "Net (down - up) shortwave flux at TOA: Day $(days[end]);",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+        )
+        create_plot!(
+            fig_flux;
+            p_loc = (3, 2),
+            X = lon,
+            Y = lat,
+            Z = sw_flux_net[:, :, 1, end],
+            title = "Net (up - down) shortwave flux at surface: Day $(days[end]);",
+            xlabel = "Longitude",
+            ylabel = "Latitude",
+        )
+    end
+
+    if has_flux
+        CairoMakie.save(fig_dir * "/diagnostics_flux.png", fig_flux)
+    end
 end
