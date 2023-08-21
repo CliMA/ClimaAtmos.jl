@@ -15,6 +15,7 @@ FLOAT_TYPE: "Float64"
 z_max: 16400.0
 precip_model: "1M"
 regression_test: true
+alpha_rayleigh_uh: 0.0001
 dt_save_to_sol: "5mins"
 job_id: "edmf_trmm"
 rad: "TRMM_LBA"

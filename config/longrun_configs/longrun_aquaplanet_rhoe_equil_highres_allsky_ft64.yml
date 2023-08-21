@@ -13,6 +13,5 @@ kappa_4: 1.0e16
 idealized_insolation: false
 FLOAT_TYPE: "Float64"
 precip_model: "0M"
-alpha_rayleigh_uh: 0.0
 job_id: "longrun_aquaplanet_rhoe_equil_highres_allsky_ft64"
 moist: "equil"

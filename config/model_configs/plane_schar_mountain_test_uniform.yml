@@ -14,5 +14,4 @@ kappa_4: 5.0e7
 alpha_rayleigh_w: 0.1
 z_max: 25000.0
 topography: "Schar"
-alpha_rayleigh_uh: 0.0
 job_id: "plane_schar_mountain_test_uniform"

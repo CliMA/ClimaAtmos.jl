@@ -12,7 +12,6 @@ h_elem: 16
 kappa_4: 1.0e16
 FLOAT_TYPE: "Float64"
 precip_model: "0M"
-alpha_rayleigh_uh: 0.0
 dt_save_to_sol: "10days"
 job_id: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64"
 moist: "equil"

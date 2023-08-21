@@ -14,7 +14,6 @@ idealized_insolation: false
 z_max: 45000.0
 precip_model: "0M"
 regression_test: true
-alpha_rayleigh_uh: 0.0
 surface_temperature: "ZonallyAsymmetric"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"
 moist: "equil"
