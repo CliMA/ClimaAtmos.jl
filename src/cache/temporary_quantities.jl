@@ -49,7 +49,6 @@ function temporary_quantities(atmos, center_space, face_space)
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
         ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
-        ᶜtemp_C123 = Fields.Field(C123{FT}, center_space), # χ₁₂₃
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
         ᶜtemp_UVWxUVW = Fields.Field(
             typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
