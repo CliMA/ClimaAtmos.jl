@@ -272,6 +272,18 @@ steps:
         agents:
           slurm_ntasks: 32
 
+  - group: "Milestone 1.5.2a"
+    steps:
+
+      - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge(35km), helem_16 np_3"
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km --out_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
+        artifact_paths: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
+        agents:
+          slurm_ntasks: 64
+
   - group: "TurbulenceConvection"
     steps:
 
