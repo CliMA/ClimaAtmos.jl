@@ -15,6 +15,5 @@ alpha_rayleigh_w: 10.0
 FLOAT_TYPE: "Float64"
 z_max: 45000.0
 precip_model: "0M"
-alpha_rayleigh_uh: 0.0
 job_id: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64"
 moist: "equil"

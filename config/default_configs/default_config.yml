@@ -199,7 +199,7 @@ job_id:
   help: "Uniquely identifying string for a particular job"
   value: ~
 density_upwinding:
-  help: "Denisity upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
+  help: "Density upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
@@ -252,7 +252,7 @@ alpha_rayleigh_w:
   value: 1.0
 alpha_rayleigh_uh:
   help: "Rayleigh sponge coefficient for horizontal velocity"
-  value: 0.0001
+  value: 0.0
 zd_viscous:
   help: "Viscous sponge height"
   value: 15000.0

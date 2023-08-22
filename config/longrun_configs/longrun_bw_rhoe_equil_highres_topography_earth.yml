@@ -11,6 +11,5 @@ use_reference_state: false
 kappa_4: 2.0e16
 precip_model: "0M"
 topography: "Earth"
-alpha_rayleigh_uh: 0.0
 job_id: "longrun_bw_rhoe_equil_highres_topography_earth"
 moist: "equil"

@@ -13,7 +13,6 @@ forcing: "held_suarez"
 energy_upwinding: first_order
 z_max: 45000.0
 precip_model: "0M"
-alpha_rayleigh_uh: 0.0
 viscous_sponge: true
 job_id: "sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge"
 moist: "equil"
