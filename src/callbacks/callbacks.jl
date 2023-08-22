@@ -26,15 +26,15 @@ Given typeof(dt), returns a callback to display:
 Adapted from ClimaTimeSteppers.jl #89.
 """
 function display_status_callback!()
-    start_time = Ref{Float64}()
-    prev_time = Ref{Float64}()
-    time = Ref{Float64}()
     prev_t = Ref{Float64}()
     t = Ref{Float64}()
     t_end = Ref{Float64}()
-    # milliseconds
-    speed = Ref{Float64}()
+
+    start_time = Ref{Float64}()
+    prev_time = Ref{Float64}()
+    time = Ref{Float64}()
     eta = Ref{Float64}()
+    speed = Ref{Float64}()
     is_first_step = Ref{Bool}()
 
     function initialize(_, _, _, integrator)
@@ -51,17 +51,18 @@ function display_status_callback!()
         speed[] = (time[] - prev_time[]) / (t[] - prev_t[])
         eta[] = speed[] * (t_end[] - t[])
         if is_first_step[]
-            @info "Time Remaining: ..."
+            # @info "Time Remaining: ..."
             is_first_step[] = false
             start_time[] = time[]
         else
-            @info "$(round(t[] / t_end[] * 100, digits=2))% complete in $(round(time[] - start_time[], digits=2)) seconds"
-            @info "Time Remaining: $(round(eta[], digits=2)) seconds"
+            @info "Time Remaining: $(round(eta[], digits=2)) seconds\n\
+            $(round(t[] / t_end[] * 100, digits=2))% \
+            complete in $(round(time[] - start_time[], digits=2)) \
+            seconds"
         end
         prev_t[] = t[]
         prev_time[] = time[]
     end
-
     return initialize, affect!
 end
 
