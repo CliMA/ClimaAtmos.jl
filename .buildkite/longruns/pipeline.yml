@@ -181,7 +181,7 @@ steps:
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
         command:
-          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equilmoist_clearsky_highres_hightop_rayleigh35e3_ft64.yml
+          - mpiexec julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --out_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --fig_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/*"
