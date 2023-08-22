@@ -110,4 +110,8 @@ include(joinpath("solver", "solve.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 
+
+include("spaces/column.jl")
+include("spaces/sphere.jl")
+
 end # module
