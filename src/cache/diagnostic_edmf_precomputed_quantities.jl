@@ -366,13 +366,14 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
+                -CAP.grav(params) * (ρʲ_prev_level - ρ_prev_level) /
+                ρʲ_prev_level,
                 get_physical_w(
                     u³⁰_prev_halflevel,
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
-                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                FT(0),
                 dt,
             )
 
