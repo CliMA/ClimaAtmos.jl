@@ -1,5 +1,4 @@
-using Plots
-using Plots.PlotMeasures
+using CairoMakie
 using JLD2
 
 job_id = ARGS[1]
@@ -66,97 +65,91 @@ scaling_efficiency_clima_atmos =
         walltime_clima_atmos,
         digits = 1,
     )
-ENV["GKSwstype"] = "100"
-Plots.GRBackend()
-plt1 = Plots.plot(
-    nprocs_clima_atmos,
-    sypd_clima_atmos,
-    markershape = :circle,
-    markercolor = :blue,
-    xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
-    xaxis = :log,
-    yaxis = :log,
-    minorgrid = true,
+
+num_ticks = 4
+
+min_tick, max_tick = extrema(sypd_clima_atmos)
+tick_size = (max_tick - min_tick) / num_ticks
+
+fig = Figure(resolution = (1200, 900))
+Makie.Label(
+    fig[begin - 1, 1:2],
+    "$resolution scaling";
+    font = :bold,
+    fontsize = 20,
+)
+ax1 = Axis(
+    fig[1, 1],
     xlabel = "# of MPI processes",
     ylabel = "SYPD",
     title = "Simulated years per day",
-    label = "ClimaAtmos (Float32)",
-    legend = :topleft,
-    grid = :true,
-    left_margin = 10mm,
-    right_margin = 10mm,
-    bottom_margin = 10mm,
-    top_margin = 10mm,
-)
-Plots.png(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
-Plots.pdf(plt1, joinpath(output_dir, resolution * "_" * "sypd"))
-
-Plots.GRBackend()
-plt2 = Plots.plot(
-    nprocs_clima_atmos,
-    cpu_hours_clima_atmos,
-    markershape = :circle,
-    markercolor = :blue,
     xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
-    xaxis = :log,
+    xscale = log10,
+    yscale = log10,
+    xgridvisible = true,
+    ygridvisible = false,
+)
+scatterlines!(ax1, nprocs_clima_atmos, sypd_clima_atmos)
+ax1 = Axis(
+    fig[1, 1],
+    yaxisposition = :right,
+    yticklabelalign = (:left, :center),
+    xticklabelsvisible = false,
+    yticklabelsvisible = true,
+    xlabelvisible = false,
+    xgridvisible = false,
+    xticksvisible = true,
+    xscale = log10,
+    yscale = log10,
+    ytickformat = "{:.2f}",
+)
+hlines!(
+    ax1,
+    sypd_clima_atmos,
+    xscale = log10,
+    yscale = log10,
+    color = :gray,
+    alpha = 0.5,
+    linestyle = :dash,
+)
+
+ax2 = Axis(
+    fig[2, 1],
     xlabel = "# of MPI processes",
     ylabel = "CPU hours",
     title = "Scaling data (T_int = $t_int)",
-    label = "ClimaAtmos (Float32)",
-    legend = :topleft,
-    grid = :true,
-    left_margin = 10mm,
-    bottom_margin = 10mm,
-    top_margin = 10mm,
-)
-Plots.png(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
-Plots.pdf(plt2, joinpath(output_dir, resolution * "_" * "Scaling"))
-
-
-Plots.GRBackend()
-plt3 = Plots.plot(
-    nprocs_clima_atmos,
-    scaling_efficiency_clima_atmos,
-    markershape = :circle,
-    markercolor = :blue,
     xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
-    xaxis = :log,
+    xscale = log,
+    xgridvisible = true,
+    ygridvisible = true,
+)
+scatterlines!(ax2, nprocs_clima_atmos, cpu_hours_clima_atmos)
+
+ax3 = Axis(
+    fig[1, 2],
     xlabel = "# of MPI processes",
     ylabel = "Efficiency (T1/N)/TN",
     title = "Scaling efficiency (T_int = $t_int)",
-    label = "ClimaAtmos (Float32)",
-    legend = :topright,
-    grid = :true,
-    left_margin = 10mm,
-    bottom_margin = 10mm,
-    top_margin = 10mm,
+    xticks = (nprocs_clima_atmos, [string(i) for i in nprocs_clima_atmos]),
+    xscale = log,
+    xgridvisible = true,
+    ygridvisible = true,
 )
-Plots.png(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
-Plots.pdf(plt3, joinpath(output_dir, resolution * "_" * "Scaling_efficiency"))
+scatterlines!(ax3, nprocs_clima_atmos, scaling_efficiency_clima_atmos)
 
-Plots.GRBackend()
-plt4 = Plots.plot(
-    ncols_per_process,
-    scaling_efficiency_clima_atmos,
-    markershape = :circle,
-    markercolor = :blue,
-    xaxis = :log,
-    minorticks = true,
+min_tick, max_tick = extrema(ncols_per_process)
+tick_size = (max_tick - min_tick) / num_ticks
+
+ax4 = Axis(
+    fig[2, 2],
     xlabel = "# of columns per process (with 45 levels)",
     ylabel = "Efficiency (T1/N)/TN",
     title = "Scaling efficiency (T_int = $t_int)",
-    label = "ClimaAtmos (Float32)",
-    legend = :topleft,
-    grid = :true,
-    left_margin = 10mm,
-    bottom_margin = 10mm,
-    top_margin = 10mm,
+    xscale = log10,
+    xgridvisible = true,
+    ygridvisible = true,
 )
-Plots.png(
-    plt4,
-    joinpath(output_dir, resolution * "_" * "Scaling_efficiency_vs_ncols"),
-)
-Plots.pdf(
-    plt4,
-    joinpath(output_dir, resolution * "_" * "Scaling_efficiency_vs_ncols"),
-)
+scatterlines!(ax4, ncols_per_process, scaling_efficiency_clima_atmos)
+
+save("$resolution.png", fig)
+save("$resolution.pdf", fig)

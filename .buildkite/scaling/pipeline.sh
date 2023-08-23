@@ -1,15 +1,68 @@
 #! /bin/bash
 set -euo pipefail
 
-low_res_process_counts=(1 2 4 8 16 32)
-mid_res_process_counts=(1 2 4 8 16 32 64)
-high_res_process_counts=(1 2 4 8 16 32 64 128)
 FT="Float32"
 resolutions=("low" "mid" "high")
+process_counts=("1 2 4 8 16 32" "1 2 4 8 16 32 64" "1 2 4 8 16 32 64 128")
 max_procs_per_node=16 # limit this artificially for profiling
 profiling=disable
 exclusive=true
 mpi_impl="openmpi"
+
+parent_folder=scaling_configs
+mkdir -p "$parent_folder"
+
+low_resolution_lines=\
+"t_end: 10days
+dt: 400secs
+z_elem: 10
+h_elem: 6
+kappa_4: 2e17"
+
+medium_resolution_lines=\
+"t_end: 4days
+dt: 150secs
+z_elem: 45
+dz_bottom: 30
+h_elem: 16
+kappa_4: 1e16"
+
+high_resolution_lines=\
+"t_end: 1days
+dt: 50secs
+z_elem: 45
+h_elem: 30
+kappa_4: 5e14"
+
+# Create configuration files for each resolution
+for i in "${!resolutions[@]}"; do
+    resolution="${resolutions[$i]}"
+    proc_counts="${process_counts[$i]}"
+
+    for nprocs in $proc_counts; do
+        filename="${resolution}_res_${FT}_${nprocs}.yml"
+        folder_name="${resolution}_res_Float32"
+        mkdir -p "$parent_folder/$folder_name"
+        filepath="$parent_folder/$folder_name/$filename"
+            
+        echo "job_id: sphere_held_suarez_${resolution}_res_rhoe_${nprocs}" > "$filepath"
+        echo "forcing: held_suarez" >> "$filepath"
+        echo "FLOAT_TYPE: $FT" >> "$filepath"
+        echo "tracer_upwinding: none" >> "$filepath"
+            
+        case "$resolution" in
+            "low")
+                echo -e "$low_resolution_lines" >> "$filepath"
+                ;;
+            "mid")
+                echo -e "$medium_resolution_lines" >> "$filepath"
+                ;;
+            "high")
+                echo -e "$high_resolution_lines" >> "$filepath"
+                ;;
+        esac
+    done
+done
 
 # set up environment and agents
 cat << EOM
@@ -47,7 +100,10 @@ steps:
 
 EOM
 
-for res in ${resolutions[@]}; do
+for i in "${!resolutions[@]}"; do
+
+res="${resolutions[$i]}"
+proc_counts="${process_counts[$i]}"
 
 cat << EOM
   - group: "ClimaAtmos $res-resolution scaling tests"
@@ -55,19 +111,11 @@ cat << EOM
 
 EOM
 
-
-if [[ "$res" == "low" ]]; then
-    process_counts=${low_res_process_counts[@]}
-elif [[ "$res" == "mid" ]]; then
-    process_counts=${mid_res_process_counts[@]}
-else
-    process_counts=${high_res_process_counts[@]}
-fi
-
-for nprocs in ${process_counts[@]}; do
+for nprocs in ${proc_counts[@]}; do
 
     job_id="sphere_held_suarez_${res}_res_rhoe_$nprocs"
-    config_file="config/scaling_configs/${res}_res_$FT/${res}_res_${FT}_${nprocs}.yml"
+    folder_name="${res}_res_${FT}"
+    config_file="$parent_folder/$folder_name/${res}_res_${FT}_${nprocs}.yml"
     command="julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $config_file"
 
 if [[ "$mpi_impl" == "mpich" ]]; then
@@ -157,8 +205,8 @@ cat << EOM
       command:
         - "julia --color=yes --project=examples post_processing/plot_scaling_results.jl sphere_held_suarez_${res}_res_rhoe"
       artifact_paths:
-        - "${res}-resolution_*.png"
-        - "${res}-resolution_*.pdf"
+        - "${res}-*.png"
+        - "${res}-*.pdf"
       agents:
         config: cpu
         queue: central
@@ -166,4 +214,13 @@ cat << EOM
         slurm_tasks_per_node: 1
 
 EOM
+
 done
+
+cat << EOM
+  - wait
+
+  - label: ":broom: clean up config files" 
+    command: "rm -rf $parent_folder"
+
+EOM

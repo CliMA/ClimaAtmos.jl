@@ -1,9 +1,0 @@
-job_id: sphere_held_suarez_low_res_rhoe_64
-forcing: held_suarez
-FLOAT_TYPE: Float32
-tracer_upwinding: none
-t_end: 10days
-dt: 400secs
-z_elem: 10
-h_elem: 6 
-kappa_4: 2e17
