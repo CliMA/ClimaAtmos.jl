@@ -37,9 +37,15 @@ function display_status_callback!()
     speed = Ref{Float64}()
     is_first_step = Ref{Bool}()
 
+    nsteps = Ref{Int64}()
+    step = Ref{Int64}()
+
+
     function initialize(_, _, _, integrator)
         is_first_step[] = true
         t_end[] = integrator.p.simulation.t_end
+        step[] = 0
+        nsteps[] = ceil(Int, t_end[] / integrator.dt)
     end
 
     function affect!(integrator)
@@ -49,15 +55,16 @@ function display_status_callback!()
         time[] = time_ns() / 1e9
         speed[] = (time[] - prev_time[]) / (t[] - prev_t[])
         eta[] = speed[] * (t_end[] - t[])
+        step[] += 1
         if is_first_step[]
             # @info "Time Remaining: ..."
             is_first_step[] = false
             start_time[] = time[]
         else
-            @info "Time Remaining: $(round(eta[], digits=2)) seconds\n\
-            $(round(t[] / t_end[] * 100, digits=2))% \
-            complete in $(round(time[] - start_time[], digits=2)) \
-            seconds"
+            @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u-d")) \n\
+            Timestep: $(step[]) / $(nsteps[]); Simulation Time: $(t[]); \n\
+            Walltime: $(round(time[] - start_time[], digits=2)) seconds; Time/Step: $(round(time[] - prev_time[], digits=2)) \n\
+            Time Remaining: $(round(eta[])) seconds"
         end
         prev_t[] = t[]
         prev_time[] = time[]
