@@ -12,6 +12,35 @@ using ClimaCore.Utilities: half
 
 import ClimaCore.Fields: ColumnField
 
+"""
+    CacheState
+
+A state for the cache, to indicate when we
+need to re-call `set_precomputed_quantities!`:
+
+```julia
+fn!(args..., t₀) -> is_stale!() -> true
+fn!(args..., t₁) -> is_stale!() -> true
+fn!(args..., t₁) -> is_stale!() -> false
+fn!(args..., t₂) -> is_stale!() -> true
+```
+"""
+mutable struct CacheState{FT <: Real}
+    t_last_evaluated::FT
+    t_start::FT
+    stale::Bool
+end
+CacheState(t::Real, t_start::Real) = CacheState(t, t_start, true)
+
+function is_stale!(cs::CacheState, t::Real)
+    cs.stale = t ≠ cs.t_last_evaluated || t == cs.t_start
+    if cs.stale
+        cs.t_last_evaluated = t
+    end
+    return cs.stale
+end
+
+
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
@@ -33,6 +62,7 @@ function default_cache(
     numerics,
     simulation,
     surface_setup,
+    t_start,
 )
     FT = eltype(params)
     (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
@@ -81,6 +111,7 @@ function default_cache(
     default_cache = (;
         is_init = Ref(true),
         simulation,
+        cache_state = CacheState(t_start, t_start),
         spaces,
         atmos,
         comms_ctx = ClimaComms.context(axes(Y.c)),

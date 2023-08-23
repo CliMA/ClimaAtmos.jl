@@ -545,6 +545,7 @@ function get_cache(
     simulation,
     initial_condition,
     surface_setup,
+    t_start,
 )
     _default_cache = default_cache(
         Y,
@@ -555,6 +556,7 @@ function get_cache(
         numerics,
         simulation,
         surface_setup,
+        t_start,
     )
     merge(
         _default_cache,
@@ -722,6 +724,7 @@ function get_integrator(config::AtmosConfig)
             simulation,
             initial_condition,
             surface_setup,
+            t_start,
         )
     end
     @info "Allocating cache (p): $s"
