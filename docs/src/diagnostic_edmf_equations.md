@@ -42,13 +42,13 @@ This is descritized using the following
 ### Momentum
 ```math
 \frac{1}{J^2} \frac{\partial}{\partial \xi^3}  \bigl(\frac{1}{2} J^2 (u^{j, 3})^2 \bigr)
-= - g^{3l} \left( \frac{\rho^j-\rho}{\rho} \frac{\partial}{\partial \xi^l}  \Phi\right) + E^{j0}(u^{0,3} - u^{j,3})
+= - g^{3l} \left( \frac{\rho^j-\rho}{\rho^j} \frac{\partial}{\partial \xi^l}  \Phi\right) + E^{j0}(u^{0,3} - u^{j,3}) - d^{j, 3}
 ```
 
 This is descritized using the following
 ```math
 \frac{1}{2} \frac{1}{J[i-1]^2} \left( J[i-\frac{1}{2}]^2 u^{j, 3}[i-\frac{1}{2}]^2 -J[i-\frac{3}{2}] u^{j, 3}[i-\frac{3}{2}]^2 \right)
-= - \frac{\rho^{j}[i-1]-\rho[i-1]}{\rho[i-1]} \nabla^3 \Phi + E^{j0}[i-1](u^{0, 3}[i-\frac{3}{2}] - u^{j, 3}[i-\frac{3}{2}])
+= - \frac{\rho^{j}[i-1]-\rho[i-1]}{\rho^{j}[i-1]} \nabla^3 \Phi + E^{j0}[i-1](u^{0, 3}[i-\frac{3}{2}] - u^{j, 3}[i-\frac{3}{2}]) - d^{j, 3}[i-1]
 ```
     
 ### Total energy

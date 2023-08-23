@@ -29,8 +29,10 @@ end
    - nh_presssure_flag - bool flag for if we want/don't want to compute
                          pressure drag
    - ᶠlg - local geometry (needed to compute the norm inside a local function)
-   - ᶠbuoyʲ - updraft buoyancy
-   - ᶠu₃ʲ, ᶠu₃⁰ - Covariant3Vector velocity for updraft and environment
+   - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
+   - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
+                  covariant3 velocity is used in prognostic edmf, and contravariant3
+                  velocity is used in diagnostic edmf.
    - updraft top height
 """
 function ᶠupdraft_nh_pressure(
@@ -38,14 +40,13 @@ function ᶠupdraft_nh_pressure(
     nh_pressure_flag,
     ᶠlg,
     ᶠbuoyʲ,
-    ᶠu₃ʲ,
-    ᶠu₃⁰,
+    ᶠu3ʲ,
+    ᶠu3⁰,
     updraft_top,
 )
-    FT = eltype(updraft_top)
 
     if !nh_pressure_flag
-        return C3(FT(0))
+        return zero(ᶠu3ʲ)
     else
         turbconv_params = CAP.turbconv_params(params)
         # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
@@ -59,8 +60,8 @@ function ᶠupdraft_nh_pressure(
         plume_scale_height = max(updraft_top, H_up_min)
 
         # We also used to have advection term here: α_a * w_up * div_w_up
-        return α_b * ᶠbuoyʲ -
-               α_d * (ᶠu₃ʲ - ᶠu₃⁰) * CC.Geometry._norm(ᶠu₃ʲ - ᶠu₃⁰, ᶠlg) /
+        return α_b * ᶠbuoyʲ +
+               α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
                plume_scale_height
     end
 end

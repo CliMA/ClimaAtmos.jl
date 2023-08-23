@@ -104,6 +104,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜtsʲs,
         ᶜρʲs,
         ᶜentr_detrʲs,
+        ᶜnh_pressureʲs,
     ) = p
     (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p
@@ -238,7 +239,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
 
         ρ_ref_prev_level = Fields.field_values(Fields.level(ᶜρ_ref, i - 1))
         ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
-        ∇Φ³_prev_level_data = ∇Φ³_prev_level.components.data.:1
+        ∇Φ³_data_prev_level = ∇Φ³_prev_level.components.data.:1
         ρ_prev_level = Fields.field_values(Fields.level(Y.c.ρ, i - 1))
         u³⁰_prev_halflevel =
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
@@ -265,6 +266,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜq_totʲ = ᶜq_totʲs.:($j)
             ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
+            ᶜnh_pressureʲ = ᶜnh_pressureʲs.:($j)
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
             u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i - half))
@@ -286,6 +288,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
             entr_detrʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜentr_detrʲ, i - 1))
+            nh_pressureʲ_prev_level =
+                Fields.field_values(Fields.level(ᶜnh_pressureʲ, i - 1))
+            scale_height =
+                CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
             @. entr_detrʲ_prev_level = pi_groups_entr_detr(
                 params,
@@ -309,6 +315,20 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ᶜbuoyancy(params, ρ_ref_prev_level, ρ_prev_level),
                 dt,
             )
+
+            @. nh_pressureʲ_prev_level = ᶠupdraft_nh_pressure(
+                params,
+                p.atmos.edmfx_nh_pressure,
+                local_geometry_prev_halflevel,
+                -∇Φ³_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                ρʲ_prev_level,
+                u³ʲ_prev_halflevel,
+                u³⁰_prev_halflevel,
+                scale_height,
+            )
+
+            nh_pressureʲ_data_prev_level =
+                nh_pressureʲ_prev_level.components.data.:1
 
             @. ρaʲu³ʲ_data =
                 (1 / local_geometry_halflevel.J) * (
@@ -347,8 +367,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_level.J *
                     2 *
                     (
-                        ∇Φ³_prev_level_data * (ρʲ_prev_level - ρ_prev_level) /
-                        ρ_prev_level
+                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) /
+                        ρʲ_prev_level
                     )
                 )
 
@@ -365,13 +385,25 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                         entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
                     )
                 )
-            scale_factor = FT(1e-6)
+
+            @. u³ʲ_datau³ʲ_data -=
+                (
+                    1 /
+                    (local_geometry_halflevel.J * local_geometry_halflevel.J)
+                ) * (
+                    local_geometry_prev_level.J *
+                    local_geometry_prev_level.J *
+                    2 *
+                    nh_pressureʲ_data_prev_level
+                )
+
+            minimum_value = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
                 (
                     (
                         u³ʲ_datau³ʲ_data <
-                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
+                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 CT3(0),
                 CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
@@ -380,8 +412,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 (
                     (
                         u³ʲ_datau³ʲ_data <
-                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
+                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 0,
                 ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
@@ -407,8 +439,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 (
                     (
                         u³ʲ_datau³ʲ_data <
-                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
+                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 h_tot_level,
                 ρaʲu³ʲ_datah_tot / ρaʲu³ʲ_data,
@@ -434,8 +466,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 (
                     (
                         u³ʲ_datau³ʲ_data <
-                        (scale_factor / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (scale_factor / ∂x³∂ξ³_level))
+                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
