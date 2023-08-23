@@ -39,7 +39,6 @@ function display_status_callback!()
 
     function initialize(_, _, _, integrator)
         is_first_step[] = true
-        prev_time[] = time_ns() / 1e9
         t_end[] = integrator.p.simulation.t_end
     end
 
