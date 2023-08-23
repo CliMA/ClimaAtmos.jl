@@ -275,6 +275,8 @@ Base.@kwdef struct AtmosModel{
     RS,
     ST,
     SM,
+    STATE,
+    CACHE,
 }
     model_config::MC = nothing
     perf_mode::PEM = nothing
@@ -291,7 +293,7 @@ Base.@kwdef struct AtmosModel{
     edmfx_sgs_flux::ESF = nothing
     edmfx_nh_pressure::ENP = nothing
     turbconv_model::TCM = nothing
-    surface_scheme::SS = nothing
+    surface_setup::SS = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
     hyperdiff::HD = nothing
@@ -300,6 +302,20 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing
+    initial_state::STATE = nothing
+    cache::CACHE = nothing
+end
+
+function Base.getproperty(model::AtmosModel, v::Symbol)
+  if v == :comms_ctx
+      return ClimaComms.context(model.cache.spaces.center_space)
+  elseif v == :center_space
+      return model.cache.spaces.center_space
+  elseif v == :float_type
+      return Spaces.undertype(model.center_space)
+  else
+      return getfield(model, v)
+  end
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)

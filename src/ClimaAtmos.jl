@@ -116,4 +116,9 @@ include(joinpath("solver", "solve.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 
+include(joinpath("simulation", "AtmosDomains.jl"))
+include(joinpath("simulation", "AtmosTimeSteppers.jl"))
+include(joinpath("simulation", "Callbacks.jl"))
+include(joinpath("simulation", "AtmosSimulations.jl"))
+
 end # module
