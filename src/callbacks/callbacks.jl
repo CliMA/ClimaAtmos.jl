@@ -17,12 +17,9 @@ import ClimaCore.Fields: ColumnField
 include("callback_helpers.jl")
 
 """
-    display_status_callback!(::Type{tType})
+    display_status_callback!()
 
-Given typeof(dt), returns a callback to display:
- - percentage of work completed, 
- - total wallclock time elapsed,
- - estimated wallclock time remaining.
+Returns a callback to display simulation information.
 Adapted from ClimaTimeSteppers.jl #89.
 """
 function display_status_callback!()
@@ -63,7 +60,8 @@ function display_status_callback!()
         else
             @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u-d")) \n\
             Timestep: $(step[]) / $(nsteps[]); Simulation Time: $(t[]) seconds \n\
-            Walltime: $(round(time[] - start_time[], digits=2)) seconds; Time/Step: $(round(time[] - prev_time[], digits=2)) \n\
+            Walltime: $(round(time[] - start_time[], digits=2)) seconds; \
+            Time/Step: $(round(speed[] * integrator.dt, digits=2)) seconds \n\
             Time Remaining: $(Int64(round(eta[]))) seconds"
         end
         prev_t[] = t[]
