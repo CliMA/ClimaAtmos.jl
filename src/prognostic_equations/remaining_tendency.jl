@@ -1,24 +1,24 @@
 
 function remaining_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
-    @nvtx "remaining tendency" color = colorant"yellow" begin
+    NVTX.@range "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        @nvtx "precomputed quantities" color = colorant"orange" begin
+        NVTX.@range "precomputed quantities" color = colorant"orange" begin
             set_precomputed_quantities!(Y, p, t)
         end
-        @nvtx "horizontal" color = colorant"orange" begin
+        NVTX.@range "horizontal" color = colorant"orange" begin
             horizontal_advection_tendency!(Yₜ, Y, p, t)
-            @nvtx "hyperdiffusion tendency" color = colorant"yellow" begin
+            NVTX.@range "hyperdiffusion tendency" color = colorant"yellow" begin
                 hyperdiffusion_tendency!(Yₜ, Y, p, t)
             end
         end
-        @nvtx "vertical" color = colorant"orange" begin
+        NVTX.@range "vertical" color = colorant"orange" begin
             explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
-        @nvtx "additional_tendency!" color = colorant"orange" begin
+        NVTX.@range "additional_tendency!" color = colorant"orange" begin
             additional_tendency!(Yₜ, Y, p, t)
         end
-        @nvtx "dss_remaining_tendency" color = colorant"blue" begin
+        NVTX.@range "dss_remaining_tendency" color = colorant"blue" begin
             dss!(Yₜ, p, t)
         end
     end
