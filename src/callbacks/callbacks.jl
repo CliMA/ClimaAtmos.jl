@@ -62,9 +62,9 @@ function display_status_callback!()
             start_time[] = time[]
         else
             @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u-d")) \n\
-            Timestep: $(step[]) / $(nsteps[]); Simulation Time: $(t[]); \n\
+            Timestep: $(step[]) / $(nsteps[]); Simulation Time: $(t[]) seconds \n\
             Walltime: $(round(time[] - start_time[], digits=2)) seconds; Time/Step: $(round(time[] - prev_time[], digits=2)) \n\
-            Time Remaining: $(round(eta[])) seconds"
+            Time Remaining: $(Int64(round(eta[]))) seconds"
         end
         prev_t[] = t[]
         prev_time[] = time[]
