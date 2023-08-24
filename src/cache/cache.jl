@@ -18,22 +18,28 @@ import ClimaCore.Fields: ColumnField
 A state for the cache, to indicate when we
 need to re-call `set_precomputed_quantities!`:
 """
-mutable struct CacheState{FV}
+mutable struct CacheState{FV, FT}
     Y::FV
     stale::Bool
+    called_in_IC::Bool
+    t_last_called::FT
 end
-function CacheState(Y)
+
+function CacheState(Y, t_start)
     fv = similar(Y)
     @. fv = Y
-    return CacheState(fv, false)
+    return CacheState(fv, true, false, t_start)
 end
 
 alleqeq(a::Fields.FieldVector, b::Fields.FieldVector) =
     all(x -> x[1] == x[2], zip(Fields._values(a), Fields._values(b)))
 
-function is_stale!(cs::CacheState, Y::Fields.FieldVector)
-    cs.stale = !alleqeq(cs.Y, Y)
-    @. cs.Y = Y # set_precomputed_quantities! mutates Y
+function is_stale!(cs::CacheState, Y::Fields.FieldVector, t)
+    cs.stale = any((!alleqeq(cs.Y, Y), cs.t_last_called ≠ t, !cs.called_in_IC))
+    cs.called_in_IC = true
+    if cs.stale
+        cs.t_last_called = t
+    end
     return cs.stale
 end
 
@@ -108,7 +114,7 @@ function default_cache(
     default_cache = (;
         is_init = Ref(true),
         simulation,
-        cache_state = CacheState(Y),
+        cache_state = CacheState(Y, t_start),
         spaces,
         atmos,
         comms_ctx = ClimaComms.context(axes(Y.c)),

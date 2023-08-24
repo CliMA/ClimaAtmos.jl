@@ -271,7 +271,7 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 function set_precomputed_quantities!(Y, p, t)
-    is_stale!(p.cache_state, Y) || return nothing
+    is_stale!(p.cache_state, Y, t) || return nothing
     (; energy_form, moisture_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -320,6 +320,7 @@ function set_precomputed_quantities!(Y, p, t)
     if turbconv_model isa DiagnosticEDMFX
         set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     end
+    @. p.cache_state.Y = Y
 
     return nothing
 end
