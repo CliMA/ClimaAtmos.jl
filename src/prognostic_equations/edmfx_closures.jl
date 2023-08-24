@@ -9,7 +9,7 @@ import ClimaCore.Fields as Fields
 """
     Return buoyancy on cell centers.
 """
-function ᶜbuoyancy(params, ᶜρ_ref::FT, ᶜρ::FT) where {FT}
+function ᶜphysical_buoyancy(params, ᶜρ_ref::FT, ᶜρ::FT) where {FT}
     # TODO - replace by ᶜgradᵥᶠΦ when we move to deep atmosphere
     g = CAP.grav(params)
     return (ᶜρ_ref - ᶜρ) / ᶜρ * g
