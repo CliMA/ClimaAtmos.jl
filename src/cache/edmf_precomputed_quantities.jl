@@ -159,10 +159,10 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             Y.c.sgsʲs.:($$j).ρa / ᶜρʲs.:($$j),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜbuoyancy(params, ᶜρ_ref, ᶜρʲs.:($$j)),
+            ᶜphysical_buoyancy(params, ᶜρ_ref, ᶜρʲs.:($$j)),
             get_physical_w(ᶜu⁰, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
-            ᶜbuoyancy(params, ᶜρ_ref, ᶜρ⁰),
+            ᶜphysical_buoyancy(params, ᶜρ_ref, ᶜρ⁰),
             dt,
         )
     end

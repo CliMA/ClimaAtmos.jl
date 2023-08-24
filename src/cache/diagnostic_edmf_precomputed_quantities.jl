@@ -306,16 +306,17 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜbuoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
                 get_physical_w(
                     u³⁰_prev_halflevel,
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
-                ᶜbuoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρ_prev_level),
                 dt,
             )
 
+            # TODO: use updraft top instead of scale height
             @. nh_pressureʲ_prev_level = ᶠupdraft_nh_pressure(
                 params,
                 p.atmos.edmfx_nh_pressure,
@@ -588,7 +589,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     turbconv_params = CAP.turbconv_params(params)
     c_m = TCP.tke_ed_coeff(turbconv_params)
     @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    # TODO: add Prantdl number
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
