@@ -23,49 +23,46 @@ Returns a callback to display simulation information.
 Adapted from ClimaTimeSteppers.jl #89.
 """
 function display_status_callback!()
-    prev_t = Ref{Float64}()
-    t = Ref{Float64}()
-    t_end = Ref{Float64}()
+    prev_t = 0.0
+    t = 0.0
+    t_end = 0.0
 
-    start_time = Ref{Float64}()
-    prev_time = Ref{Float64}()
-    time = Ref{Float64}()
-    eta = Ref{Float64}()
-    speed = Ref{Float64}()
-    is_first_step = Ref{Bool}()
+    start_time = 0.0
+    prev_time = 0.0
+    time = 0.0
+    eta = 0.0
+    speed = 0.0
+    is_first_step = true
 
-    nsteps = Ref{Int64}()
-    step = Ref{Int64}()
+    step = 0
 
 
     function initialize(_, _, _, integrator)
-        is_first_step[] = true
-        t_end[] = integrator.p.simulation.t_end
-        step[] = 0
-        nsteps[] = ceil(Int, t_end[] / integrator.dt)
     end
 
     function affect!(integrator)
+        t_end = integrator.p.simulation.t_end
+        nsteps = ceil(Int, t_end / integrator.dt)
         # speed = wallclock time / simulation time
         # Print ETA = speed * remaining simulation time
-        t[] = integrator.t
-        time[] = time_ns() / 1e9
-        speed[] = (time[] - prev_time[]) / (t[] - prev_t[])
-        eta[] = speed[] * (t_end[] - t[])
-        step[] += 1
-        if is_first_step[]
+        t = integrator.t
+        time = time_ns() / 1e9
+        speed = (time - prev_time) / (t - prev_t)
+        eta = speed * (t_end - t)
+        step += 1
+        if is_first_step
             # @info "Time Remaining: ..."
-            is_first_step[] = false
-            start_time[] = time[]
+            is_first_step = false
+            start_time = time
         else
             @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u-d")) \n\
-            Timestep: $(step[]) / $(nsteps[]); Simulation Time: $(t[]) seconds \n\
-            Walltime: $(round(time[] - start_time[], digits=2)) seconds; \
-            Time/Step: $(round(speed[] * integrator.dt, digits=2)) seconds \n\
-            Time Remaining: $(Int64(round(eta[]))) seconds"
+            Timestep: $(step) / $(nsteps); Simulation Time: $(t) seconds \n\
+            Walltime: $(round(time - start_time, digits=2)) seconds; \
+            Time/Step: $(round(speed * integrator.dt, digits=2)) seconds \n\
+            Time Remaining: $(Int64(round(eta))) seconds"
         end
-        prev_t[] = t[]
-        prev_time[] = time[]
+        prev_t = t
+        prev_time = time
     end
     return initialize, affect!
 end
