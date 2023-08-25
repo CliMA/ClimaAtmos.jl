@@ -3,9 +3,9 @@ function remaining_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     NVTX.@range "remaining tendency" color = colorant"yellow" begin
         Yₜ .= zero(eltype(Yₜ))
-        NVTX.@range "precomputed quantities" color = colorant"orange" begin
-            set_precomputed_quantities!(Y, p, t)
-        end
+        # NVTX.@range "precomputed quantities" color = colorant"orange" begin
+        #     set_precomputed_quantities!(Y, p, t)
+        # end
         NVTX.@range "horizontal" color = colorant"orange" begin
             horizontal_advection_tendency!(Yₜ, Y, p, t)
             NVTX.@range "hyperdiffusion tendency" color = colorant"yellow" begin

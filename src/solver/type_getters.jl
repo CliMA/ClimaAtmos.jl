@@ -624,7 +624,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     T_imp! = implicit_func,
                     # Can we just pass implicit_tendency! and jac_prototype etc.?
                     lim! = limiters_func!,
-                    dss!,
+                    post_stage_callback!,
                 )
             else
                 ODE.SplitFunction(implicit_func, remaining_tendency!)

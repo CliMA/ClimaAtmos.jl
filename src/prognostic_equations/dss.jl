@@ -12,6 +12,12 @@ using ClimaCore.Utilities: half
 
 import ClimaCore.Fields: ColumnField
 
+function post_stage_callback!(Y, p, t)
+    dss!(Y, p, t)
+    set_precomputed_quantities!(Y, p, t)
+    return nothing
+end
+
 function dss!(Y, p, t)
     if p.do_dss
         Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)
