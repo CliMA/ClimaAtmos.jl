@@ -1,0 +1,13 @@
+dz_bottom: 30.0
+dz_top: 3000.0
+dt_save_to_disk: "10days"
+t_end: "300days"
+h_elem: 16
+z_elem: 63
+z_max: 55000.0
+kappa_4: 1.0e16
+forcing: "held_suarez"
+dt: "300secs"
+rayleigh_sponge: true
+zd_rayleigh: 35000.0
+job_id: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
