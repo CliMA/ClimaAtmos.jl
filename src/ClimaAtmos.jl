@@ -8,7 +8,6 @@ import .Parameters as CAP
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("solver", "types.jl"))
-include(joinpath("utils", "nvtx.jl"))
 include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
