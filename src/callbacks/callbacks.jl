@@ -22,49 +22,38 @@ include("callback_helpers.jl")
 Returns a callback to display simulation information.
 Adapted from ClimaTimeSteppers.jl #89.
 """
-function display_status_callback!()
-    prev_t = 0.0
-    t = 0.0
-    t_end = 0.0
-
-    start_time = 0.0
-    prev_time = 0.0
-    time = 0.0
-    eta = 0.0
-    speed = 0.0
+function display_status_callback!(::Type{tType}) where {tType}
+    start_time = UInt64(0.0)
+    prev_time = UInt64(0.0)
+    prev_t = tType(0.0)
+    eta = tType(0.0)
+    speed = tType(0.0)
     is_first_step = true
 
-    step = 0
-
-
-    function initialize(_, _, _, integrator)
-    end
-
     function affect!(integrator)
-        t_end = integrator.p.simulation.t_end
-        nsteps = ceil(Int, t_end / integrator.dt)
-        # speed = wallclock time / simulation time
-        # Print ETA = speed * remaining simulation time
+        t_end = maximum(integrator.tstops.valtree)
+        nsteps = ceil(Int64, t_end / integrator.dt)
         t = integrator.t
+        step = ceil(Int64, t / integrator.dt)
         time = time_ns() / 1e9
         speed = (time - prev_time) / (t - prev_t)
         eta = speed * (t_end - t)
-        step += 1
+        eta_string = eta == Inf ? "..." : string(round(Int64, eta)) * "seconds"
+
         if is_first_step
-            # @info "Time Remaining: ..."
             is_first_step = false
             start_time = time
-        else
-            @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u-d")) \n\
-            Timestep: $(step) / $(nsteps); Simulation Time: $(t) seconds \n\
-            Walltime: $(round(time - start_time, digits=2)) seconds; \
-            Time/Step: $(round(speed * integrator.dt, digits=2)) seconds"
-            # Time Remaining: $(Int64(round(eta))) seconds"
         end
+        @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u d")) \n\
+        Timestep: $(step) / $(nsteps); Simulation Time: $(t) seconds \n\
+        Walltime: $(round(time - start_time, digits=2)) seconds; \
+        Time/Step: $(round(speed * integrator.dt, digits=2)) seconds \n\
+        Time Remaining: $eta_string"
+    
         prev_t = t
         prev_time = time
     end
-    return initialize, affect!
+    return affect!
 end
 
 function dss_callback!(integrator)
