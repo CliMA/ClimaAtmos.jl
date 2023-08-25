@@ -16,11 +16,6 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP, SP} <:
     f_plane_coriolis_frequency::FT
     planet_radius::FT
     astro_unit::FT
-    # TODO: remove defaults, or move these parameters to CLIMAParameters
-    f::FT = 0 # coriolis parameter. TODO: remove?
-    Cd::FT = 0 # drag coefficients. TODO: remove?
-    ug::FT = 0
-    vg::FT = 0
     thermodynamics_params::TP
     rrtmgp_params::RP
     insolation_params::IP
@@ -28,9 +23,9 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP, SP} <:
     surfacefluxes_params::SFP
     turbconv_params::TCP
     sponge_params::SP
-    entr_coeff::FT = 1
-    entr_tau::FT = 900
-    detr_coeff::FT = 0.001
+    entr_tau::FT
+    entr_coeff::FT
+    detr_coeff::FT
     # TODO: Figure out a better place for these held-suarez parameters
     ΔT_y_dry::FT
     ΔT_y_wet::FT
@@ -77,9 +72,6 @@ Omega(ps::ACAP) = ps.Omega
 f_plane_coriolis_frequency(ps::ACAP) = ps.f_plane_coriolis_frequency
 planet_radius(ps::ACAP) = ps.planet_radius
 astro_unit(ps::ACAP) = ps.astro_unit
-f(ps::ACAP) = ps.f
-Cd(ps::ACAP) = ps.Cd
-uh_g(ps::ACAP) = CC.Geometry.UVVector(ps.ug, ps.vg)
 entr_coeff(ps::ACAP) = ps.entr_coeff
 entr_tau(ps::ACAP) = ps.entr_tau
 detr_coeff(ps::ACAP) = ps.detr_coeff

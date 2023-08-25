@@ -4,54 +4,48 @@ import CLIMAParameters as CP
 import RRTMGP.Parameters as RP
 import SurfaceFluxes as SF
 import SurfaceFluxes.UniversalFunctions as UF
-import ClimaCore
-import ClimaCore as CC
 import Insolation.Parameters as IP
 import Thermodynamics as TD
 import CloudMicrophysics as CM
+# TODO: Remove these imports?
+import ClimaCore
+import ClimaCore as CC
 
-function override_climaatmos_defaults(
-    defaults::NamedTuple,
-    overrides::NamedTuple,
-)
-    intersect_keys = intersect(keys(defaults), keys(overrides))
-    intersect_vals = getproperty.(Ref(overrides), intersect_keys)
-    intersect_overrides = (; zip(intersect_keys, intersect_vals)...)
-    return merge(defaults, intersect_overrides)
-end
+function create_parameter_set(config::AtmosConfig)
+    # Helper function that creates a parameter struct. If a struct has nested 
+    # parameter structs, they must be passed to subparam_structs as a NamedTuple.
+    function create_parameter_struct(param_struct; subparam_structs = (;))
+        aliases = string.(fieldnames(param_struct))
+        aliases = setdiff(aliases, string.(propertynames(subparam_structs)))
+        pairs = CP.get_parameter_values!(toml_dict, aliases)
+        # Workaround for setting τ_precip = dt
+        if parsed_args["override_τ_precip"] &&
+           param_struct == CM.Parameters.CloudMicrophysicsParameters
+            pairs = (;
+                pairs...,
+                τ_precip = FT(CA.time_to_seconds(parsed_args["dt"])),
+            )
+        end
+        return param_struct{FT, typeof.(values(subparam_structs))...}(;
+            pairs...,
+            subparam_structs...,
+        )
+    end
 
-function create_climaatmos_parameter_set(
-    toml_dict::CP.AbstractTOMLDict,
-    parsed_args,
-    overrides::NamedTuple = NamedTuple(),
-)
+    (; toml_dict, parsed_args) = config
     FT = CP.float_type(toml_dict)
-    FTD = FT # can change to Dual for testing duals
 
-    aliases = string.(fieldnames(TD.Parameters.ThermodynamicsParameters))
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "Thermodynamics")
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-    thermo_params = TD.Parameters.ThermodynamicsParameters{FTD}(; pairs...)
-    TP = typeof(thermo_params)
-
-    aliases = string.(fieldnames(CM.Parameters.ModalNucleationParameters))
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "CloudMicrophysics")
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
+    thermo_params =
+        create_parameter_struct(TD.Parameters.ThermodynamicsParameters)
     modal_nucleation_params =
-        CM.Parameters.ModalNucleationParameters{FTD}(; pairs...)
-    MNP = typeof(modal_nucleation_params)
-
-    aliases = string.(fieldnames(CM.Parameters.CloudMicrophysicsParameters))
-    aliases = setdiff(aliases, ["thermo_params"])
-    aliases = setdiff(aliases, ["modal_nuc_params"])
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "CloudMicrophysics")
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-    microphys_params = CM.Parameters.CloudMicrophysicsParameters{FTD, TP, MNP}(;
-        pairs...,
-        thermo_params,
-        modal_nucleation_params,
+        create_parameter_struct(CM.Parameters.ModalNucleationParameters)
+    rrtmgp_params = create_parameter_struct(RP.RRTMGPParameters)
+    insolation_params = create_parameter_struct(IP.InsolationParameters)
+    sponge_params = create_parameter_struct(CAP.SpongeParameters)
+    microphys_params = create_parameter_struct(
+        CM.Parameters.CloudMicrophysicsParameters;
+        subparam_structs = (; thermo_params, modal_nucleation_params),
     )
-    MP = typeof(microphys_params)
 
     aliases = [
         "Pr_0_Businger",
@@ -69,114 +63,30 @@ function create_climaatmos_parameter_set(
         ζ_a = pairs.ζ_a_Businger,
         γ = pairs.γ_Businger,
     )
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-    ufp = UF.BusingerParams{FTD}(; pairs...)
-    UFP = typeof(ufp)
+    ufp = UF.BusingerParams{FT}(; pairs...)
 
-    pairs = CP.get_parameter_values!(
-        toml_dict,
-        ["von_karman_const"],
-        "SurfaceFluxesParameters",
+    surf_flux_params = create_parameter_struct(
+        SF.Parameters.SurfaceFluxesParameters;
+        subparam_structs = (; ufp, thermo_params),
     )
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-    surf_flux_params = SF.Parameters.SurfaceFluxesParameters{FTD, UFP, TP}(;
-        pairs...,
-        ufp,
-        thermo_params,
+    turbconv_params = create_parameter_struct(
+        TCP.TurbulenceConvectionParameters;
+        subparam_structs = (; microphys_params, surf_flux_params),
     )
-    SFP = typeof(surf_flux_params)
-
-    aliases = string.(fieldnames(TCP.TurbulenceConvectionParameters))
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "EDMF")
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-    tc_params = TCP.TurbulenceConvectionParameters{FTD, MP, SFP}(;
-        pairs...,
-        microphys_params,
-        surf_flux_params,
+    param_set = create_parameter_struct(
+        CAP.ClimaAtmosParameters;
+        subparam_structs = (;
+            thermodynamics_params = thermo_params,
+            rrtmgp_params,
+            insolation_params,
+            microphysics_params = microphys_params,
+            surfacefluxes_params = surf_flux_params,
+            turbconv_params,
+            sponge_params,
+        ),
     )
-
-    aliases = string.(fieldnames(RP.RRTMGPParameters))
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "RRTMGP")
-    params = override_climaatmos_defaults((; pairs...), overrides) # overrides
-    rrtmgp_params = RP.RRTMGPParameters{FTD}(; params...)
-
-    aliases = string.(fieldnames(IP.InsolationParameters))
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "Insolation")
-    params = override_climaatmos_defaults((; pairs...), overrides) # overrides
-    insolation_params = IP.InsolationParameters{FTD}(; params...)
-
-    pairs = CP.get_parameter_values!(
-        toml_dict,
-        [
-            "alpha_rayleigh_w",
-            "alpha_rayleigh_uh",
-            "zd_viscous",
-            "zd_rayleigh",
-            "kappa_2_sponge",
-        ],
-    )
-    pairs = (; pairs...) # convert to NamedTuple
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-    sponge_params = CAP.SpongeParameters(; pairs...)
-
-    pairs = CP.get_parameter_values!(
-        toml_dict,
-        ["Omega", "planet_radius", "astro_unit", "ΔT_y_dry", "ΔT_y_wet", "C_E"],
-        "ClimaAtmos",
-    )
-    pairs = (; pairs...) # convert to NamedTuple
-    pairs = override_climaatmos_defaults((; pairs...), overrides)
-
-    param_set = CAP.ClimaAtmosParameters(;
-        ug = FTD(1.0), # for Ekman problem
-        vg = FTD(0.0), # for Ekman problem
-        f = FTD(5e-5), # for Ekman problem
-        Cd = FTD(0.01 / (2e2 / 30)), # for Ekman problem
-        Omega = FTD(pairs.Omega),
-        planet_radius = FTD(pairs.planet_radius),
-        astro_unit = FTD(pairs.astro_unit),
-        f_plane_coriolis_frequency = FTD(0),
-        thermodynamics_params = thermo_params,
-        microphysics_params = microphys_params,
-        insolation_params = insolation_params,
-        rrtmgp_params = rrtmgp_params,
-        surfacefluxes_params = surf_flux_params,
-        turbconv_params = tc_params,
-        entr_coeff = FTD(parsed_args["entr_coeff"]),
-        entr_tau = FTD(parsed_args["entr_tau"]),
-        detr_coeff = FTD(parsed_args["detr_coeff"]),
-        ΔT_y_dry = FTD(pairs.ΔT_y_dry),
-        ΔT_y_wet = FTD(pairs.ΔT_y_wet),
-        C_E = FTD(pairs.C_E),
-        sponge_params,
-    )
+    # TODO: Add parameter logging option from config
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
     return param_set
-end
-
-# TODO: unify these parameters and refactor this method.
-function create_parameter_set(config::AtmosConfig)
-    (; toml_dict, parsed_args) = config
-    FT = eltype(config)
-    dt = FT(CA.time_to_seconds(parsed_args["dt"]))
-
-    return if CA.is_column_edmf(parsed_args)
-        overrides = (; τ_precip = dt)
-        create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
-    elseif CA.is_column_without_edmf(parsed_args)
-        overrides = (; τ_precip = dt)
-        create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
-    else
-        overrides = (;
-            R_d = 287.0,
-            grav = 9.80616,
-            Omega = 7.29212e-5,
-            planet_radius = 6.371229e6,
-            ρ_cloud_liq = 1e3,
-            τ_precip = dt,
-            qc_0 = 5e-6, # criterion for removal after supersaturation
-        )
-        create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)
-    end
 end

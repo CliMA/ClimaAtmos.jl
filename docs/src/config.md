@@ -21,7 +21,7 @@ debugging_tc: true
 surface_setup: Bomex
 turbconv_case: Bomex
 t_end: 6hours
-turbconv: "edmf"
+turbconv: edmf
 z_stretch: false
 config: column
 subsidence: Bomex
