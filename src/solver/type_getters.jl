@@ -13,7 +13,8 @@ import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DEQ
 
-function get_atmos(config::AtmosConfig, turbconv_params)
+function get_atmos(config::AtmosConfig, params)
+    (; turbconv_params, sponge_params) = params
     (; parsed_args) = config
     FT = eltype(config)
     moisture_model = get_moisture_model(parsed_args)
@@ -36,7 +37,8 @@ function get_atmos(config::AtmosConfig, turbconv_params)
     @assert edmfx_nh_pressure in (false, true)
 
     model_config = get_model_config(parsed_args)
-    vert_diff = get_vertical_diffusion_model(diffuse_momentum, parsed_args, FT)
+    vert_diff =
+        get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
     atmos = AtmosModel(;
         moisture_model,
         model_config,
@@ -70,8 +72,16 @@ function get_atmos(config::AtmosConfig, turbconv_params)
         ),
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
-        viscous_sponge = get_viscous_sponge_model(parsed_args, FT),
-        rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
+        viscous_sponge = get_viscous_sponge_model(
+            parsed_args,
+            sponge_params,
+            FT,
+        ),
+        rayleigh_sponge = get_rayleigh_sponge_model(
+            parsed_args,
+            sponge_params,
+            FT,
+        ),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
     )
@@ -688,7 +698,7 @@ end
 function get_integrator(config::AtmosConfig)
     params = create_parameter_set(config)
 
-    atmos = get_atmos(config, params.turbconv_params)
+    atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
     simulation = get_simulation(config, config.comms_ctx)
     initial_condition = get_initial_condition(config.parsed_args)

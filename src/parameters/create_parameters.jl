@@ -98,7 +98,21 @@ function create_climaatmos_parameter_set(
 
     pairs = CP.get_parameter_values!(
         toml_dict,
-        ["Omega", "planet_radius", "astro_unit", "ΔT_y_dry", "ΔT_y_wet"],
+        [
+            "alpha_rayleigh_w",
+            "alpha_rayleigh_uh",
+            "zd_viscous",
+            "zd_rayleigh",
+            "kappa_2_sponge",
+        ],
+    )
+    pairs = (; pairs...) # convert to NamedTuple
+    pairs = override_climaatmos_defaults((; pairs...), overrides)
+    sponge_params = CAP.SpongeParameters(; pairs...)
+
+    pairs = CP.get_parameter_values!(
+        toml_dict,
+        ["Omega", "planet_radius", "astro_unit", "ΔT_y_dry", "ΔT_y_wet", "C_E"],
         "ClimaAtmos",
     )
     pairs = (; pairs...) # convert to NamedTuple
@@ -123,6 +137,8 @@ function create_climaatmos_parameter_set(
         detr_coeff = FTD(parsed_args["detr_coeff"]),
         ΔT_y_dry = FTD(pairs.ΔT_y_dry),
         ΔT_y_wet = FTD(pairs.ΔT_y_wet),
+        C_E = FTD(pairs.C_E),
+        sponge_params,
     )
     # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
     # CP.log_parameter_information(toml_dict, logfilepath)
@@ -134,6 +150,7 @@ function create_parameter_set(config::AtmosConfig)
     (; toml_dict, parsed_args) = config
     FT = eltype(config)
     dt = FT(CA.time_to_seconds(parsed_args["dt"]))
+
     return if CA.is_column_edmf(parsed_args)
         overrides = (; MSLP = 100000.0, τ_precip = dt)
         create_climaatmos_parameter_set(toml_dict, parsed_args, overrides)

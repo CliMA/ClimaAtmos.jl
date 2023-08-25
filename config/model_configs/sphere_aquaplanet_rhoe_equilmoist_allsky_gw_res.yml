@@ -1,7 +1,6 @@
 rad: "allskywithclear"
 dt_save_to_disk: "18hours"
 rayleigh_sponge: true
-zd_rayleigh: 30000.0
 orographic_gravity_wave: "gfdl_restart"
 z_elem: 25
 dt: "400secs"
@@ -16,3 +15,4 @@ precip_model: "0M"
 regression_test: true
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 moist: "equil"
+toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]

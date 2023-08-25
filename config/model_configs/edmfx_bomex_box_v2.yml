@@ -10,7 +10,6 @@ surface_setup: "Bomex"
 perturb_initstate: false
 edmfx_entr_detr: true
 t_end: "10800secs"
-C_E: 0.044
 y_max: 100000.0
 y_elem: 2
 turbconv: "edmfx"
@@ -25,3 +24,4 @@ z_max: 3000.0
 ls_adv: "Bomex"
 job_id: "edmfx_bomex_box_v2"
 moist: "equil"
+toml: [toml/edmfx_bomex_box_v2.toml]

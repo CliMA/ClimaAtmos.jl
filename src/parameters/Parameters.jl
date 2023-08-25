@@ -10,7 +10,8 @@ const ACAP = AbstractClimaAtmosParameters
 
 Base.broadcastable(param_set::ACAP) = tuple(param_set)
 
-Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
+Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP, SP} <:
+                   ACAP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT
@@ -26,11 +27,26 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     microphysics_params::MPP
     surfacefluxes_params::SFP
     turbconv_params::TCP
+    sponge_params::SP
     entr_coeff::FT = 1
     detr_coeff::FT = 0.001
     # TODO: Figure out a better place for these held-suarez parameters
     ΔT_y_dry::FT
     ΔT_y_wet::FT
+    C_E::FT
+end
+
+"""
+    SpongeParameters{FT}
+
+Parameters for both the viscous and rayleigh sponge.
+"""
+Base.@kwdef struct SpongeParameters{FT}
+    alpha_rayleigh_w::FT
+    alpha_rayleigh_uh::FT
+    zd_viscous::FT
+    zd_rayleigh::FT
+    kappa_2_sponge::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
