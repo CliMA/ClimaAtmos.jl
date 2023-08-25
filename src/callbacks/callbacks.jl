@@ -58,7 +58,7 @@ function display_status_callback!()
             @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u-d")) \n\
             Timestep: $(step) / $(nsteps); Simulation Time: $(t) seconds \n\
             Walltime: $(round(time - start_time, digits=2)) seconds; \
-            Time/Step: $(round(speed * integrator.dt, digits=2)) seconds \n\ "
+            Time/Step: $(round(speed * integrator.dt, digits=2)) seconds"
             # Time Remaining: $(Int64(round(eta))) seconds"
         end
         prev_t = t
