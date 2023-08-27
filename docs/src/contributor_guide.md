@@ -28,7 +28,7 @@ Discussions are recommended for asking questions about (for example) the user in
 
 * New users help write ClimaAtmos code and documentation by [forking the ClimaAtmos repository](https://docs.github.com/en/github/collaborating-with-pull-requests/working-with-forks), [using git](https://guides.github.com/introduction/git-handbook/) to edit code and docs, and then creating a [pull request](https://docs.github.com/en/github/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork). Pull requests are reviewed by ClimaAtmos collaborators.
 
-* A pull request can be merged once it is reviewed and approved by collaborators. If the pull request author has write access, they have the responsibility of merging their pull request. Otherwise, ClimaAtmos.jl collabators will execute the merge with permission from the pull request author.
+* A pull request can be merged once it is reviewed and approved by collaborators. If the pull request author has write access, they have the responsibility of merging their pull request. Otherwise, ClimaAtmos.jl collaborators will execute the merge with permission from the pull request author.
 
 * Note: for small or minor changes (such as fixing a typo in documentation), the [GitHub editor](https://docs.github.com/en/github/managing-files-in-a-repository/managing-files-on-github/editing-files-in-your-repository) is super useful for forking and opening a pull request with a single click.
 
@@ -36,15 +36,15 @@ Discussions are recommended for asking questions about (for example) the user in
 
 ### General coding guidelines
 1. Keep the number of members of Julia structs small if possible (less than 8 members).
-2. Code should reflect "human intuition" if possible. This mean abstraction should reflect how humans reason about the problem under consideration.
-3. Code with small blast radius. If your code needs to be modified or extendended, the resulting required changes should be as small and as localized as possible.
+2. Code should reflect "human intuition" if possible. This means abstraction should reflect how humans reason about the problem under consideration.
+3. Code with small blast radius. If your code needs to be modified or extended, the resulting required changes should be as small and as localized as possible.
 4. When you write code, write it with testing and debugging in mind.
 5. Ideally, the lowest level structs have no defaults for their member fields. Nobody can remember all the defaults, so it is better to introduce them at the high-level API only.
 6. Make sure that module imports are specific so that it is easy to trace back where functions that are used inside a module are coming from.
 7. Consider naming abstract Julia types "AbstractMyType" in order to avoid confusion for the reader of your code.
 8. Comments in your code should explain why the code exists and clarify if necessary, not just restate the line of code in words.
 9. Be mindful of namespace issues when writing functional code, especially when writing function code that represents mathematical or physical concepts.
-10. Condider using keywords in your structs to allow readers to more effectively reason about your code.
+10. Consider using keywords in your structs to allow readers to more effectively reason about your code.
 
 ## What is a "collaborator" and how can I become one?
 
