@@ -276,6 +276,7 @@ steps:
     steps:
       
       - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge(35km), helem_16 np_3"
+        command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_dry_nz63_55km_rs35km.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_dry_nz63_55km_rs35km --out_dir longrun_hs_rhoe_dry_nz63_55km_rs35km
         artifact_paths: "longrun_hs_rhoe_dry_nz63_55km_rs35km.yml/*"
@@ -285,6 +286,7 @@ steps:
           slurm_ntasks: 64
 
       - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge(35km), helem_16 np_3"
+        command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km --out_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
         artifact_paths: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
@@ -294,6 +296,7 @@ steps:
           slurm_ntasks: 64
       
       - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge(35km), helem_16 np_3"
+        command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml --out_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml
         artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml/*"
