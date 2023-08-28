@@ -4,39 +4,61 @@
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields, RecursiveApply
 
-function set_diagnostic_edmfx_draft_quantities_level!(
-    thermo_params,
-    K,
-    ts,
-    ρ,
-    uₕ,
+function kinetic_energy!(
+    K_level,
+    uₕ_level,
+    u³_halflevel,
     local_geometry_level,
-    u³,
     local_geometry_halflevel,
-    h_tot,
-    q_tot,
-    p,
-    Φ,
 )
-    FT = eltype(thermo_params)
-    @. K =
+    @. K_level =
         (
             dot(
-                C123(uₕ, local_geometry_level),
-                CT123(uₕ, local_geometry_level),
+                C123(uₕ_level, local_geometry_level),
+                CT123(uₕ_level, local_geometry_level),
             ) +
             dot(
-                C123(u³, local_geometry_halflevel),
-                CT123(u³, local_geometry_halflevel),
+                C123(u³_halflevel, local_geometry_halflevel),
+                CT123(u³_halflevel, local_geometry_halflevel),
             ) +
             2 * dot(
-                CT123(uₕ, local_geometry_level),
-                C123(u³, local_geometry_halflevel),
+                CT123(uₕ_level, local_geometry_level),
+                C123(u³_halflevel, local_geometry_halflevel),
             )
         ) / 2
-    @. ts =
-        TD.PhaseEquil_phq(thermo_params, p, h_tot - K - Φ, q_tot, 8, FT(0.0003))
-    @. ρ = TD.air_density(thermo_params, ts)
+end
+
+function set_diagnostic_edmfx_draft_quantities_level!(
+    thermo_params,
+    K_level,
+    ts_level,
+    ρ_level,
+    uₕ_level,
+    u³_halflevel,
+    h_tot_level,
+    q_tot_level,
+    p_level,
+    Φ_level,
+    local_geometry_level,
+    local_geometry_halflevel,
+)
+    FT = eltype(thermo_params)
+    kinetic_energy!(
+        K_level,
+        uₕ_level,
+        u³_halflevel,
+        local_geometry_level,
+        local_geometry_halflevel,
+    )
+    @. ts_level = TD.PhaseEquil_phq(
+        thermo_params,
+        p_level,
+        h_tot_level - K_level - Φ_level,
+        q_tot_level,
+        8,
+        FT(0.0003),
+    )
+    @. ρ_level = TD.air_density(thermo_params, ts_level)
     return nothing
 end
 
@@ -46,6 +68,13 @@ function set_diagnostic_edmfx_env_quantities_level!(
     u³_halflevel,
     u³ʲs_halflevel,
     u³⁰_halflevel,
+    uₕ_level,
+    K⁰_level,
+    K_level,
+    h_tot⁰_level,
+    h_tot_level,
+    local_geometry_level,
+    local_geometry_halflevel,
     turbconv_model,
 )
     @. u³⁰_halflevel = divide_by_ρa(
@@ -55,6 +84,14 @@ function set_diagnostic_edmfx_env_quantities_level!(
         ρ_level,
         turbconv_model,
     )
+    kinetic_energy!(
+        K⁰_level,
+        uₕ_level,
+        u³⁰_halflevel,
+        local_geometry_level,
+        local_geometry_halflevel,
+    )
+    @. h_tot⁰_level = h_tot_level - K_level + K⁰_level
     return nothing
 end
 
@@ -90,7 +127,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p.simulation
-    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot) = p
+    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot, ᶜK) = p
     (; q_tot) = p.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.sfc_conditions
@@ -106,7 +143,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜentr_detrʲs,
         ᶜnh_pressureʲs,
     ) = p
-    (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
+    (; ᶠu³⁰, ᶜu⁰, ᶜK⁰, ᶜh_tot⁰, ᶜtke⁰) = p
+    (; ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -194,27 +232,37 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             tsʲ_int_level,
             ρʲ_int_level,
             uₕ_int_level,
-            local_geometry_int_level,
             u³ʲ_int_halflevel,
-            local_geometry_int_halflevel,
             h_totʲ_int_level,
             q_totʲ_int_level,
             p_int_level,
             Φ_int_level,
+            local_geometry_int_level,
+            local_geometry_int_halflevel,
         )
 
         @. ρaʲ_int_level = ρʲ_int_level * turbconv_model.a_int
     end
 
     ρaʲs_int_level = Fields.field_values(Fields.level(ᶜρaʲs, 1))
+    K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
     u³ʲs_int_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, half))
     u³⁰_int_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, half))
+    K⁰_int_level = Fields.field_values(Fields.level(ᶜK⁰, 1))
+    h_tot⁰_int_level = Fields.field_values(Fields.level(ᶜh_tot⁰, 1))
     set_diagnostic_edmfx_env_quantities_level!(
         ρ_int_level,
         ρaʲs_int_level,
         u³_int_halflevel,
         u³ʲs_int_halflevel,
         u³⁰_int_halflevel,
+        uₕ_int_level,
+        K⁰_int_level,
+        K_int_level,
+        h_tot⁰_int_level,
+        h_tot_int_level,
+        local_geometry_int_level,
+        local_geometry_int_halflevel,
         turbconv_model,
     )
 
@@ -223,6 +271,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ρ_level = Fields.field_values(Fields.level(Y.c.ρ, i))
         uₕ_level = Fields.field_values(Fields.level(Y.c.uₕ, i))
         u³_halflevel = Fields.field_values(Fields.level(ᶠu³, i - half))
+        K_level = Fields.field_values(Fields.level(ᶜK, i))
         h_tot_level = Fields.field_values(Fields.level(ᶜh_tot, i))
         q_tot_level = Fields.field_values(Fields.level(q_tot, i))
         p_level = Fields.field_values(Fields.level(ᶜp, i))
@@ -244,7 +293,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         u³⁰_prev_halflevel =
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
-        h_tot_prev_level = Fields.field_values(Fields.level(ᶜh_tot, i - 1))
+        h_tot⁰_prev_level = Fields.field_values(Fields.level(ᶜh_tot⁰, i - 1))
         q_tot_prev_level = Fields.field_values(Fields.level(q_tot, i - 1))
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
@@ -406,7 +455,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                         (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
                     ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
-                CT3(0),
+                u³_halflevel,
                 CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
             )
             @. ρaʲ_level = ifelse(
@@ -432,7 +481,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
                     (
-                        entr_detrʲ_prev_level.entr * h_tot_prev_level -
+                        entr_detrʲ_prev_level.entr * h_tot⁰_prev_level -
                         entr_detrʲ_prev_level.detr * h_totʲ_prev_level
                     )
                 )
@@ -480,25 +529,34 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 tsʲ_level,
                 ρʲ_level,
                 uₕ_level,
-                local_geometry_level,
                 u³ʲ_halflevel,
-                local_geometry_halflevel,
                 h_totʲ_level,
                 q_totʲ_level,
                 p_level,
                 Φ_level,
+                local_geometry_level,
+                local_geometry_halflevel,
             )
         end
 
         ρaʲs_level = Fields.field_values(Fields.level(ᶜρaʲs, i))
         u³ʲs_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, i - half))
         u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i - half))
+        K⁰_level = Fields.field_values(Fields.level(ᶜK⁰, i))
+        h_tot⁰_level = Fields.field_values(Fields.level(ᶜh_tot⁰, i))
         set_diagnostic_edmfx_env_quantities_level!(
             ρ_level,
             ρaʲs_level,
             u³_halflevel,
             u³ʲs_halflevel,
             u³⁰_halflevel,
+            uₕ_level,
+            K⁰_level,
+            K_level,
+            h_tot⁰_level,
+            h_tot_level,
+            local_geometry_level,
+            local_geometry_halflevel,
             turbconv_model,
         )
     end
