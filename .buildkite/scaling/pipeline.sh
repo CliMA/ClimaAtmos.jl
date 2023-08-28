@@ -13,7 +13,7 @@ parent_folder=scaling_configs
 mkdir -p "$parent_folder"
 
 low_resolution_lines=\
-dt: 200secs 
+"dt: 200secs 
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
@@ -30,7 +30,7 @@ h_elem: 6
 kappa_4: 2e17"
 
 medium_resolution_lines=\
-dt: 200secs 
+"dt: 200secs 
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
@@ -48,7 +48,7 @@ h_elem: 16
 kappa_4: 1e16"
 
 high_resolution_lines=\
-dt: 200secs 
+"dt: 200secs 
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
