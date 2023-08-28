@@ -17,7 +17,7 @@ low_resolution_lines=\
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
-vert_diff: \"true\"
+# vert_diff: \"true\"
 moist: equil 
 forcing: held_suarez 
 precip_model: 0M 
@@ -34,7 +34,7 @@ medium_resolution_lines=\
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
-vert_diff: \"true\"
+# vert_diff: \"true\"
 moist: equil 
 forcing: held_suarez 
 precip_model: 0M 
