@@ -13,6 +13,16 @@ parent_folder=scaling_configs
 mkdir -p "$parent_folder"
 
 low_resolution_lines=\
+dt: 200secs 
+t_end: 2days 
+ode_algo: ARS343 
+dt_save_to_disk: Inf 
+# vert_diff: "true" 
+moist: equil 
+forcing: held_suarez 
+precip_model: 0M 
+job_id: sphere_held_suarez_rhoe_equilmoist
+output_dir: output/sphere_held_suarez_rhoe_equilmoist
 "t_end: 10days
 dt: 400secs
 z_elem: 10
@@ -20,6 +30,16 @@ h_elem: 6
 kappa_4: 2e17"
 
 medium_resolution_lines=\
+dt: 200secs 
+t_end: 2days 
+ode_algo: ARS343 
+dt_save_to_disk: Inf 
+# vert_diff: "true" 
+moist: equil 
+forcing: held_suarez 
+precip_model: 0M 
+job_id: sphere_held_suarez_rhoe_equilmoist
+output_dir: output/sphere_held_suarez_rhoe_equilmoist
 "t_end: 4days
 dt: 150secs
 z_elem: 45
@@ -28,6 +48,16 @@ h_elem: 16
 kappa_4: 1e16"
 
 high_resolution_lines=\
+dt: 200secs 
+t_end: 2days 
+ode_algo: ARS343 
+dt_save_to_disk: Inf 
+# vert_diff: "true" 
+moist: equil 
+forcing: held_suarez 
+precip_model: 0M 
+job_id: sphere_held_suarez_rhoe_equilmoist
+output_dir: output/sphere_held_suarez_rhoe_equilmoist
 "t_end: 1days
 dt: 50secs
 z_elem: 45
