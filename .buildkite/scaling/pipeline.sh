@@ -17,7 +17,7 @@ dt: 200secs
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
-# vert_diff: "true" 
+vert_diff: "true" 
 moist: equil 
 forcing: held_suarez 
 precip_model: 0M 
@@ -34,7 +34,7 @@ dt: 200secs
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
-# vert_diff: "true" 
+vert_diff: "true" 
 moist: equil 
 forcing: held_suarez 
 precip_model: 0M 
@@ -52,7 +52,7 @@ dt: 200secs
 t_end: 2days 
 ode_algo: ARS343 
 dt_save_to_disk: Inf 
-# vert_diff: "true" 
+vert_diff: "true" 
 moist: equil 
 forcing: held_suarez 
 precip_model: 0M 
