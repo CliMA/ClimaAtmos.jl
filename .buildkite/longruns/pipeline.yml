@@ -284,6 +284,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
+          slurm_mem_per_cpu: 16GB
 
       - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge(35km), helem_16 np_3"
         command:
@@ -294,6 +295,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
+          slurm_mem_per_cpu: 16GB
       
       - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge(35km), helem_16 np_3"
         command:
@@ -304,6 +306,7 @@ steps:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
+          slurm_mem_per_cpu: 16GB
 
   - group: "TurbulenceConvection"
     steps:
