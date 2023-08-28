@@ -105,11 +105,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜρʲs,
         ᶜentr_detrʲs,
         ᶜnh_pressureʲs,
-        ᶜS_q_totʲs,
-        ᶜS_e_totʲs_helper,
     ) = p
-    (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length, ᶜS_q_tot⁰) =
-        p
+    (; ᶠu³⁰, ᶜu⁰, ᶜtke⁰, ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
