@@ -198,7 +198,8 @@ fi
 done
 
 cat << EOM
-    - wait
+    - wait: ~
+      continue_on_failure: true
 
     - label: ":chart_with_upwards_trend:"
       key: "cpu_scaling_plots_$res-resolution"
@@ -218,7 +219,8 @@ EOM
 done
 
 cat << EOM
-  - wait
+  - wait: ~
+    continue_on_failure: true
 
   - label: ":broom: clean up config files" 
     command: "rm -rf $parent_folder"
