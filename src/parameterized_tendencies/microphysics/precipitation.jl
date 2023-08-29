@@ -25,7 +25,6 @@ function precipitation_cache(Y, precip_model::Microphysics0Moment)
     return (;
         precip_model,
         ᶜS_ρq_tot = similar(Y.c, FT),
-        ᶜλ = similar(Y.c, FT),
         ᶜ3d_rain = similar(Y.c, FT),
         ᶜ3d_snow = similar(Y.c, FT),
         col_integrated_rain = similar(Fields.level(Y.c.ρ, 1), FT),
@@ -63,6 +62,26 @@ function compute_precipitation_cache!(
         (qt_tendency_precip_formation_bulk + qt_tendency_precip_formation_en)
 end
 
+function compute_precipitation_cache!(
+    Y,
+    p,
+    colidx,
+    ::Microphysics0Moment,
+    ::DiagnosticEDMFX,
+)
+    # For environment we multiply by grid mean ρ and not byᶜρa⁰
+    # I.e. assuming a⁰=1
+
+    (; ᶜS_ρq_tot, ᶜS_q_tot⁰, ᶜS_q_totʲs, ᶜρaʲs) = p
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    ρ = Y.c.ρ
+
+    @. ᶜS_ρq_tot[colidx] = ᶜS_q_tot⁰[colidx] * ρ[colidx]
+    for j in 1:n
+        @. ᶜS_ρq_tot[colidx] += ᶜS_q_totʲs.:($$j)[colidx] * ᶜρaʲs.:($$j)[colidx]
+    end
+end
+
 function precipitation_tendency!(
     Yₜ,
     Y,
@@ -71,7 +90,6 @@ function precipitation_tendency!(
     colidx,
     precip_model::Microphysics0Moment,
 )
-    FT = Spaces.undertype(axes(Y.c))
     (;
         ᶜts,
         ᶜΦ,
@@ -79,7 +97,6 @@ function precipitation_tendency!(
         ᶜ3d_rain,
         ᶜ3d_snow,
         ᶜS_ρq_tot,
-        ᶜλ,
         col_integrated_rain,
         col_integrated_snow,
         params,
@@ -111,18 +128,31 @@ function precipitation_tendency!(
     @. col_integrated_snow[colidx] =
         col_integrated_snow[colidx] / CAP.ρ_cloud_liq(params)
 
-    # liquid fraction
-    @. ᶜλ[colidx] = TD.liquid_fraction(thermo_params, ᶜts[colidx])
-
     if :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] +=
-            ᶜS_ρq_tot[colidx] * (
-                ᶜλ[colidx] *
-                TD.internal_energy_liquid(thermo_params, ᶜts[colidx]) +
-                (1 - ᶜλ[colidx]) *
-                TD.internal_energy_ice(thermo_params, ᶜts[colidx]) +
-                ᶜΦ[colidx]
-            )
+        #TODO - this is a hack right now. But it will be easier to clean up
+        # once we drop the support for the old EDMF code
+        if turbconv_model isa DiagnosticEDMFX
+            @. Yₜ.c.ρe_tot[colidx] +=
+                sum(
+                    p.ᶜS_q_totʲs[colidx] *
+                    p.ᶜρaʲs[colidx] *
+                    p.ᶜS_e_totʲs_helper[colidx],
+                ) +
+                p.ᶜS_q_tot⁰[colidx] *
+                Y.c.ρ[colidx] *
+                e_tot_0M_precipitation_sources_helper(
+                    thermo_params,
+                    ᶜts[colidx],
+                    ᶜΦ[colidx],
+                )
+        else
+            @. Yₜ.c.ρe_tot[colidx] +=
+                ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
+                    thermo_params,
+                    ᶜts[colidx],
+                    ᶜΦ[colidx],
+                )
+        end
     end
     return nothing
 end

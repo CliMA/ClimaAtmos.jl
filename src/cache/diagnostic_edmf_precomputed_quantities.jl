@@ -120,7 +120,7 @@ end
 Updates the precomputed quantities stored in `p` for diagnostic edmfx.
 """
 function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
-    (; moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model, precip_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -142,11 +142,14 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜρʲs,
         ᶜentr_detrʲs,
         ᶜnh_pressureʲs,
+        ᶜS_q_totʲs,
+        ᶜS_e_totʲs_helper,
     ) = p
-    (; ᶠu³⁰, ᶜu⁰, ᶜK⁰, ᶜh_tot⁰, ᶜtke⁰) = p
+    (; ᶠu³⁰, ᶜu⁰, ᶜK⁰, ᶜh_tot⁰, ᶜtke⁰, ᶜS_q_tot⁰) = p
     (; ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
+    microphys_params = CAP.microphysics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
@@ -286,6 +289,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         end_index = fieldcount(eltype(∂x∂ξ_level)) # This will be 4 in 2D and 9 in 3D.
         ∂x³∂ξ³_level = ∂x∂ξ_level.:($end_index)
 
+        Φ_prev_level = Fields.field_values(Fields.level(ᶜΦ, i - 1))
         ρ_ref_prev_level = Fields.field_values(Fields.level(ᶜρ_ref, i - 1))
         ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
         ∇Φ³_data_prev_level = ∇Φ³_prev_level.components.data.:1
@@ -316,6 +320,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             ᶜq_totʲ = ᶜq_totʲs.:($j)
             ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
             ᶜnh_pressureʲ = ᶜnh_pressureʲs.:($j)
+            ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
+            ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
             u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i - half))
@@ -341,6 +347,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 Fields.field_values(Fields.level(ᶜnh_pressureʲ, i - 1))
             scale_height =
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+            S_q_totʲ_prev_level =
+                Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
+            S_e_totʲ_helper_prev_level =
+                Fields.field_values(Fields.level(ᶜS_e_totʲ_helper, i - 1))
 
             @. entr_detrʲ_prev_level = pi_groups_entr_detr(
                 params,
@@ -380,6 +390,18 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             nh_pressureʲ_data_prev_level =
                 nh_pressureʲ_prev_level.components.data.:1
 
+            # Updraft q_tot sources from precipitation formation
+            # To be applied in updraft continuity, moisture and energy
+            # for updrafts and grid mean
+            @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
+                precip_model,
+                thermo_params,
+                microphys_params,
+                dt,
+                q_totʲ_prev_level,
+                tsʲ_prev_level,
+            )
+
             @. ρaʲu³ʲ_data =
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_halflevel.J *
@@ -391,7 +413,10 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
-                    (entr_detrʲ_prev_level.entr - entr_detrʲ_prev_level.detr)
+                    (
+                        entr_detrʲ_prev_level.entr -
+                        entr_detrʲ_prev_level.detr + S_q_totʲ_prev_level
+                    )
                 )
 
             # Using constant exponents in broadcasts allocate, so we use
@@ -469,6 +494,12 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
             )
 
+            @. S_e_totʲ_helper_prev_level =
+                e_tot_0M_precipitation_sources_helper(
+                    thermo_params,
+                    tsʲ_prev_level,
+                    Φ_prev_level,
+                )
             @. ρaʲu³ʲ_datah_tot =
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_halflevel.J *
@@ -482,7 +513,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     ρaʲ_prev_level *
                     (
                         entr_detrʲ_prev_level.entr * h_tot⁰_prev_level -
-                        entr_detrʲ_prev_level.detr * h_totʲ_prev_level
+                        entr_detrʲ_prev_level.detr * h_totʲ_prev_level +
+                        S_q_totʲ_prev_level * S_e_totʲ_helper_prev_level
                     )
                 )
             @. h_totʲ_level = ifelse(
@@ -509,7 +541,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     ρaʲ_prev_level *
                     (
                         entr_detrʲ_prev_level.entr * q_tot_prev_level -
-                        entr_detrʲ_prev_level.detr * q_totʲ_prev_level
+                        entr_detrʲ_prev_level.detr * q_totʲ_prev_level +
+                        S_q_totʲ_prev_level
                     )
                 )
             @. q_totʲ_level = ifelse(
@@ -565,16 +598,27 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     i_top = Spaces.nlevels(axes(Y.c))
     u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i_top + half))
     @. u³⁰_halflevel = CT3(0)
+
     for j in 1:n
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         ᶜuʲ = ᶜuʲs.:($j)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
+        ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
+        ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
+
         u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
+
         entr_detrʲ_level = Fields.field_values(Fields.level(ᶜentr_detrʲ, i_top))
         fill!(entr_detrʲ_level, RecursiveApply.rzero(eltype(entr_detrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
+
+        S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
+        S_e_totʲ_helper_level =
+            Fields.field_values(Fields.level(ᶜS_e_totʲ_helper, i_top))
+        @. S_q_totʲ_level = 0
+        @. S_e_totʲ_helper_level = 0
     end
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
@@ -665,6 +709,16 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ustar_values,
         int_local_geometry_values,
         sfc_local_geometry_values,
+    )
+
+    # Environment precipitation sources (to be applied to grid mean)
+    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
+        precip_model,
+        thermo_params,
+        microphys_params,
+        dt,
+        q_tot,
+        ᶜts,
     )
 
     return nothing

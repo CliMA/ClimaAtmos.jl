@@ -54,7 +54,9 @@ function precipitation_formation(
             qi_tendency += S_qt * (1 - λ)
             θ_liq_ice_tendency -=
                 S_qt / Π_m / c_pm * (L_v0 * λ + L_s0 * (1 - λ))
-            e_tot_tendency += (λ * I_l + (1 - λ) * I_i + Φ) * S_qt
+            e_tot_tendency +=
+                S_qt *
+                e_tot_0M_precipitation_sources_helper(thermo_params, ts, Φ)
         end
 
         if precip_model isa Microphysics1Moment
