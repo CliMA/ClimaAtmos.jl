@@ -381,7 +381,7 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
     has_sgs = hasproperty(time_series[1][2], :draft_area)
 
     negative_values_allowed_names =
-        (:u_velocity, :v_velocity, :w_velocity, :buoyancy)
+        (:u_velocity, :v_velocity, :w_velocity, :buoyancy, :specific_enthalpy)
 
     env_or_gm = has_sgs ? :env : :gm
     draft_or_gm = has_sgs ? :draft : :gm
