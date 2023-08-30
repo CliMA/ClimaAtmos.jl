@@ -1,7 +1,7 @@
 agents:
   queue: central
   slurm_mem: 8G
-  modules: julia/1.8.5 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
+  modules: julia/1.9.2 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -10,9 +10,11 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
+  JULIA_CPU_TARGET: 'broadwell;skylake'
   CONFIG_PATH: "config/model_configs"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
+  SLURM_KILL_BAD_EXIT: 1
 
 steps:
   - label: "init :computer:"
@@ -53,6 +55,7 @@ steps:
 
     agents:
       slurm_cpus_per_task: 8
+      slurm_gpus: 1
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50
@@ -495,19 +498,20 @@ steps:
       - label: ":computer: Prep restart for MPI"
         key: "mpi_baro_wave_make_restart"
         command: >
-          mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_make_restart.yml
         artifact_paths: "mpi_make_restart/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
+          slurm_mem: 16G
 
       - label: ":computer: Test restart for MPI baroclinic wave"
         key: "restart_mpi_baro_wave"
         depends_on: "mpi_baro_wave_make_restart"
         command: >
-          mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/restart_mpi_baroclinic_wave_rhoe.yml
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
         env:
@@ -515,6 +519,7 @@ steps:
           RESTART_FILE: "mpi_make_restart/restart/day5.0.hdf5"
         agents:
           slurm_ntasks: 2
+          slurm_mem: 16G
         timeout_in_minutes: 20
         soft_fail: true
         #retry:
@@ -522,29 +527,30 @@ steps:
 
       - label: ":computer: MPI no lim ARS aquaplanet (ρe) equilmoist clearsky radiation"
         command: >
-          mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky.yml
         artifact_paths: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
-          slurm_mem: 20GB
+          slurm_mem: 16GB
 
       - label: ":computer: Prep for calling remap pipeline"
         key: "prep_remap"
         command: >
-          mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $MPI_CONFIG_PATH/prep_remap.yml
         artifact_paths: "prep_remap/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
+          slurm_mem: 16G
 
       - label: ":computer: Exercise remap pipeline"
         key: "remap_pipeline"
-        depends_on: "mpi_baro_wave_make_restart"
+        depends_on: "prep_remap"
         command: >
           julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
           --data_dir prep_remap/ --out_dir remap_pipeline_output
@@ -552,7 +558,7 @@ steps:
 
       - label: ":computer: Exercise parallel remap pipeline"
         key: "parallel_remap_pipeline"
-        depends_on: "mpi_baro_wave_make_restart"
+        depends_on: "remap_pipeline"
         command: >
           julia -p 4 --color=yes --project=examples post_processing/remap/remap_pipeline_parallel.jl
           --data_dir prep_remap/ --out_dir parallel_remap_pipeline_output
@@ -580,13 +586,14 @@ steps:
 
       - label: ":computer: MPI io test"
         command: >
-          mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/test_mpi_io.yml
         artifact_paths: "test_mpi_io/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 2
+          slurm_mem: 16G
 
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       - label: ":computer: checkbounds"
