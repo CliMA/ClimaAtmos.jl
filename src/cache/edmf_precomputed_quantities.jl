@@ -145,6 +145,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     end
 
     ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -153,6 +154,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             params,
             p.atmos.edmfx_entr_detr,
             ᶜz,
+            z_sfc,
             ᶜp,
             Y.c.ρ,
             buoyancy_flux,
@@ -215,6 +217,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         p.params,
         ustar,
         ᶜz,
+        z_sfc,
         ᶜdz,
         sfc_tke,
         ᶜlinear_buoygrad,
