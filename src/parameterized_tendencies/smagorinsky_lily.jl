@@ -27,7 +27,7 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
     (; Cs) = sl
 
     FT = eltype(Y)
-    (; ᶠu³, ᶜu, ᶜD) = p
+    (; ᶠu³, ᶜD) = p
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜshear² = p.ᶜtemp_scalar
     ᶠu = p.ᶠtemp_C123
@@ -38,48 +38,29 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
     # ᶜD = p.ᶜtemp_scalar
-    two_v_t = p.ᶜtemp_scalar_2
-    @. two_v_t = 2*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    v_t = p.ᶜtemp_scalar_2
+    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
     Pr = 1/3
-    @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    @. ᶜD = (1/Pr)*v_t
 
 
-    # @. Yₜ.c.uₕ.components.data.:1 -=
-    # divₕ(-(Y.c.ρ * two_v_t * gradₕ(Y.c.uₕ.components.data.:1))) / Y.c.ρ
-
-    # @. Yₜ.c.uₕ.components.data.:2 -=
-    # divₕ(-(Y.c.ρ * two_v_t * gradₕ(Y.c.uₕ.components.data.:2))) / Y.c.ρ
-
+    # momentum balance adjustment
     @. Yₜ.c.uₕ -=
-    (gradₕ(divₕ(-(Y.c.ρ * two_v_t * Y.c.uₕ))) -
-    Geometry.project(Geometry.Covariant12Axis(),
-     curlₕ(Geometry.project(Geometry.Covariant3Axis(),
-      curlₕ(-(Y.c.ρ * two_v_t * Y.c.uₕ)))))) / Y.c.ρ 
+    2*v_t * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
 
-    # @. Yₜ.f.u₃.components.data.:1 -= 
-    # ᶠinterp(divₕ(-(Y.c.ρ * two_v_t * ᶜinterp(gradₕ(Y.f.u₃.components.data.:1)))) / Y.c.ρ) 
- 
-    ᶜtemp_C3 = p.ᶜtemp_C3
-    @. ᶜtemp_C3 = -(Y.c.ρ * two_v_t * ᶜinterp(Y.f.u₃))
-
-    ᶜtemp_C3_2 = p.ᶜtemp_C3_2
-    @. ᶜtemp_C3_2 = -(Y.c.ρ * two_v_t * ᶜinterp(Y.f.u₃))
-
-    ᶜtemp_C12 = p.ᶜtemp_C12
-    @. ᶜtemp_C12 = gradₕ(divₕ(ᶜtemp_C3_2)) - 
-    Geometry.project(Geometry.Covariant12Axis(),
-     curlₕ(Geometry.project(Geometry.Covariant3Axis(),
-     curlₕ(ᶜtemp_C3))))
-
-    @. Yₜ.f.u₃ -=
-    Geometry.project(Geometry.Covariant3Axis(), ᶠinterp((ᶜtemp_C12) / Y.c.ρ))
+    ᶠv_t = p.ᶠtemp_scalar
+    @. ᶠv_t = ᶠinterp(v_t)
+    @. Yₜ.f.u₃ -= 2 * ᶠv_t * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
     
+    # energy adjustment
     (; ᶜspecific) = p
 
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p
         @. Yₜ.c.ρe_tot += divₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot)) 
     end
+
+    # q_tot and other tracer adjustment
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
 
@@ -107,7 +88,7 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
     (; Cs) = sl
 
     FT = eltype(Y)
-    (; ᶠu³, ᶜu, ᶜD) = p
+    (; ᶠu³, ᶜD) = p
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜshear² = p.ᶜtemp_scalar
     ᶠu = p.ᶠtemp_C123
@@ -118,10 +99,10 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
     # ᶜD = p.ᶜtemp_scalar
-    two_v_t = p.ᶜtemp_scalar_2
-    @. two_v_t = 2*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    v_t = p.ᶜtemp_scalar_2
+    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
     Pr = 1/3
-    @. ᶜD = (1/Pr)*((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    @. ᶜD = (1/Pr)*v_t
 
 
     (; ᶜspecific, sfc_conditions) = p
@@ -134,17 +115,17 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
         bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
     )
     @. Yₜ.c.uₕ[colidx] -=
-        ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(two_v_t[colidx]) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+        ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(2*v_t[colidx]) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
 
+    # TODO: is the code below doing what you think it does?
     divᵥ_u3 = Operators.DivergenceC2F(
         top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
         bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))), 
     )
 
     @. Yₜ.f.u₃[colidx] -= 
-        divᵥ_u3(-(Y.c.ρ[colidx] * two_v_t[colidx] * ᶜgradᵥ(Y.f.u₃[colidx]))) / ᶠinterp(Y.c.ρ[colidx])
+        divᵥ_u3(-(Y.c.ρ[colidx] * 2*v_t[colidx] * ᶜgradᵥ(Y.f.u₃[colidx]))) / ᶠinterp(Y.c.ρ[colidx])
     
-
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p
         
@@ -155,6 +136,7 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
 
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ_ρe_tot(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜh_tot[colidx])))
     end
+
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
         if χ_name == :q_tot
