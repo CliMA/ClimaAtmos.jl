@@ -7,7 +7,6 @@ dt: "0.5secs"
 surface_setup: "Bomex"
 perturb_initstate: false
 t_end: "600secs"
-C_E: 0.044
 y_max: 10000.0
 z_stretch: false
 vert_diff: "true"
@@ -17,3 +16,4 @@ z_max: 3000.0
 ls_adv: "Bomex"
 job_id: "bomex_box_rhoe"
 moist: "equil"
+toml: [toml/bomex_box_rhoe.toml]

@@ -1,7 +1,5 @@
 dt_save_to_disk: "4days"
 rayleigh_sponge: true
-zd_rayleigh: 30000.0
-zd_viscous: 30000.0
 dt: "450secs"
 z_elem: 25
 t_end: "4days"
@@ -14,3 +12,4 @@ regression_test: true
 viscous_sponge: true
 job_id: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge"
 moist: "equil"
+toml: [toml/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.toml]

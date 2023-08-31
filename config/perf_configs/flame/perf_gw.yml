@@ -1,6 +1,5 @@
 rad: "allskywithclear"
 rayleigh_sponge: true
-zd_rayleigh: 30000.0
 orographic_gravity_wave: "raw_topo"
 z_elem: 25
 dt: "1secs"
@@ -14,3 +13,4 @@ z_max: 45000.0
 precip_model: "0M"
 job_id: "flame_perf_gw"
 moist: "equil"
+toml: [toml/flame_perf_gw.toml]

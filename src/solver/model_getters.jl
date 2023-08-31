@@ -50,14 +50,14 @@ end
 function get_vertical_diffusion_model(
     diffuse_momentum,
     parsed_args,
+    params,
     ::Type{FT},
 ) where {FT}
     vert_diff_name = parsed_args["vert_diff"]
     return if vert_diff_name in ("false", false, "none")
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
-        C_E = FT(parsed_args["C_E"])
-        VerticalDiffusion{diffuse_momentum, FT}(; C_E)
+        VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -76,30 +76,35 @@ function get_surface_model(parsed_args)
     end
 end
 
-function get_viscous_sponge_model(parsed_args, ::Type{FT}) where {FT}
+function get_viscous_sponge_model(
+    parsed_args,
+    sponge_params,
+    ::Type{FT},
+) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")
         nothing
     elseif vs_name in ("true", true, "ViscousSponge")
-        zd = parsed_args["zd_viscous"]
-        κ₂ = parsed_args["kappa_2_sponge"]
+        zd = sponge_params.zd_viscous
+        κ₂ = sponge_params.kappa_2_sponge
         ViscousSponge{FT}(; zd, κ₂)
     else
         error("Uncaught viscous sponge model `$vs_name`.")
     end
 end
 
-function get_rayleigh_sponge_model(parsed_args, ::Type{FT}) where {FT}
+function get_rayleigh_sponge_model(
+    parsed_args,
+    sponge_params,
+    ::Type{FT},
+) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
         nothing
     elseif rs_name in ("true", true, "RayleighSponge")
-        zd = parsed_args["zd_rayleigh"]
-        α_uₕ = parsed_args["alpha_rayleigh_uh"]
-        α_w = parsed_args["alpha_rayleigh_w"]
-        isnothing(zd) && (zd = FT(15e3))
-        isnothing(α_uₕ) && (α_uₕ = FT(1e-4))
-        isnothing(α_w) && (α_w = FT(1))
+        zd = sponge_params.zd_rayleigh
+        α_uₕ = sponge_params.alpha_rayleigh_uh
+        α_w = sponge_params.alpha_rayleigh_w
         RayleighSponge{FT}(; zd, α_uₕ, α_w)
     else
         error("Uncaught rayleigh sponge model `$rs_name`.")

@@ -1,7 +1,6 @@
 rad: "clearsky"
 dt_save_to_disk: "10days"
 rayleigh_sponge: true
-zd_rayleigh: 35000.0
 z_elem: 50
 dt: "150secs"
 surface_setup: "DefaultMoninObukhov"
@@ -11,9 +10,9 @@ dz_bottom: 30.0
 vert_diff: "true"
 h_elem: 16
 kappa_4: 1.0e16
-alpha_rayleigh_w: 10.0
 FLOAT_TYPE: "Float64"
 z_max: 45000.0
 precip_model: "0M"
 job_id: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64"
 moist: "equil"
+toml: [toml/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64.toml]

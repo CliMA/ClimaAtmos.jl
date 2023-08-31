@@ -10,7 +10,7 @@ x_elem: 80
 use_reference_state: false
 config: "plane"
 kappa_4: 1.0e6
-alpha_rayleigh_w: 0.1
 z_max: 25000.0
 topography: "Agnesi"
 job_id: "plane_agnesi_mountain_test_uniform"
+toml: [toml/plane_agnesi_mountain_test_uniform.toml]

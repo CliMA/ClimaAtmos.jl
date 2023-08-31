@@ -9,5 +9,5 @@ kappa_4: 1.0e16
 forcing: "held_suarez"
 dt: "300secs"
 rayleigh_sponge: true
-zd_rayleigh: 35000.0
 job_id: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
+toml: [toml/longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.toml]

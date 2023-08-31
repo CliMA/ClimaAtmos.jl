@@ -1,7 +1,6 @@
 rad: "allskywithclear"
 dt_save_to_disk: "18hours"
 rayleigh_sponge: true
-zd_rayleigh: 30000.0
 orographic_gravity_wave: "raw_topo"
 z_elem: 25
 dt: "400secs"
@@ -17,3 +16,4 @@ regression_test: true
 surface_temperature: "ZonallyAsymmetric"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"
 moist: "equil"
+toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
