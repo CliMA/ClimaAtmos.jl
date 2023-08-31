@@ -356,6 +356,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 params,
                 p.atmos.edmfx_entr_detr,
                 z_prev_level,
+                z_sfc_halflevel,
                 p_prev_level,
                 ρ_prev_level,
                 buoyancy_flux_sfc_halflevel,
@@ -674,10 +675,12 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
     @. ᶜmixing_length = mixing_length(
         params,
         ustar,
         ᶜz,
+        z_sfc,
         ᶜdz,
         max(sfc_tke, 0),
         ᶜlinear_buoygrad,

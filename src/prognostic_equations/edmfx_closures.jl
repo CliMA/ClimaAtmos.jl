@@ -75,6 +75,7 @@ function edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMF
     (; params, ᶜρʲs, ᶜρ_ref, ᶠgradᵥ_ᶜΦ, ᶜuʲs, ᶜu⁰, ᶠu₃⁰) = p
     FT = eltype(Y)
     ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶠlg = Fields.local_geometry_field(Y.f)
 
     turbconv_params = CAP.turbconv_params(params)
@@ -90,6 +91,7 @@ function edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMF
                 updraft_top = Spaces.level(ᶜz[colidx], level)[]
             end
         end
+        updraft_top = updraft_top - z_sfc[colidx][]
 
         @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠupdraft_nh_pressure(
             params,
@@ -130,6 +132,7 @@ function pi_groups_entr_detr(
     params,
     entr_detr_flag::Bool,
     ᶜz::FT,
+    z_sfc::FT,
     ᶜp::FT,
     ᶜρ::FT,
     buoy_flux_surface::FT,
@@ -162,13 +165,15 @@ function pi_groups_entr_detr(
 
         # non-dimensional pi-groups
         # TODO - using Π₁ blows things up
-        Π₁ = ᶜz * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + w_star^2 + eps(FT))
+        Π₁ =
+            (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) /
+            ((ᶜwʲ - ᶜw⁰)^2 + w_star^2 + eps(FT))
         Π₃ = sqrt(ᶜaʲ)
         Π₄ = ᶜRHʲ - ᶜRH⁰
-        Π₆ = ᶜz / ref_H
+        Π₆ = (ᶜz - z_sfc) / ref_H
         entr = max(
             0,
-            ᶜwʲ / ᶜz * (
+            ᶜwʲ / (ᶜz - z_sfc) * (
                 -4.013288 - 0.000968 * Π₁ + 0.356974 * Π₃ - 0.403124 * Π₄ +
                 1.503261 * Π₆
             ),
@@ -184,7 +189,7 @@ function pi_groups_entr_detr(
         # TODO - Temporary: Switch to Π groups after simple tests are done
         # (kinematic, bubble, Bomex)
         # and/or we can calibrate things in ClimaAtmos
-        entr = max(0, min(entr_coeff * ᶜwʲ / ᶜz, 1 / dt))
+        entr = max(0, min(entr_coeff * ᶜwʲ / (ᶜz - z_sfc), 1 / dt))
         detr = max(0, min(detr_coeff * ᶜwʲ, 1 / dt))
 
         return (; entr, detr)
@@ -269,6 +274,7 @@ function mixing_length(
     params,
     ustar::FT,
     ᶜz::FT,
+    z_sfc::FT,
     ᶜdz::FT,
     sfc_tke::FT,
     ᶜlinear_buoygrad::FT,
@@ -293,10 +299,10 @@ function mixing_length(
     # kz scale (surface layer)
     if obukhov_length < 0.0 #unstable
         l_W =
-            vkc * ᶜz / (sqrt(sfc_tke / ustar / ustar) * c_m) *
-            min((1 - 100 * ᶜz / obukhov_length)^FT(0.2), 1 / vkc)
+            vkc * (ᶜz - z_sfc) / (sqrt(sfc_tke / ustar / ustar) * c_m) *
+            min((1 - 100 * (ᶜz - z_sfc) / obukhov_length)^FT(0.2), 1 / vkc)
     else # neutral or stable
-        l_W = vkc * ᶜz / (sqrt(sfc_tke / ustar / ustar) * c_m)
+        l_W = vkc * (ᶜz - z_sfc) / (sqrt(sfc_tke / ustar / ustar) * c_m)
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
