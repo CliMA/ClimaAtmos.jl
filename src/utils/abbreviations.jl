@@ -1,4 +1,4 @@
-using ClimaCore: Geometry, Operators
+using ClimaCore: Geometry, Operators, MatrixFields
 
 # Alternatively, we could use Vec₁₂₃, Vec³, etc., if that is more readable.
 const C1 = Geometry.Covariant1Vector
@@ -70,8 +70,10 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
     top = Operators.FirstOrderOneSided(),
 )
 
-const ᶜinterp_stencil = Operators.Operator2Stencil(ᶜinterp)
-const ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ)
-const ᶜadvdivᵥ_stencil = Operators.Operator2Stencil(ᶜadvdivᵥ)
-const ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp)
-const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
+const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
+const ᶜdivᵥ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ)
+const ᶜadvdivᵥ_matrix = MatrixFields.operator_matrix(ᶜadvdivᵥ)
+const ᶠinterp_matrix = MatrixFields.operator_matrix(ᶠinterp)
+const ᶠgradᵥ_matrix = MatrixFields.operator_matrix(ᶠgradᵥ)
+const ᶠupwind1_matrix = MatrixFields.operator_matrix(ᶠupwind1)
+const ᶠupwind3_matrix = MatrixFields.operator_matrix(ᶠupwind3)

@@ -44,9 +44,8 @@ include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
-include(joinpath("prognostic_equations", "implicit", "wfact.jl"))
-include(joinpath("prognostic_equations", "implicit", "schur_complement_W.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
+include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?

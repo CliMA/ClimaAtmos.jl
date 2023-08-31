@@ -1,4 +1,3 @@
-using LinearAlgebra
 import OrdinaryDiffEq as ODE
 import Logging
 import TerminalLoggers

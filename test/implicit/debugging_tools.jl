@@ -1,56 +1,58 @@
 using ForwardDiff: Dual
-using SparseArrays: spdiagm
+using ClimaCore: Spaces, Fields, Operators, MatrixFields
 
-using ClimaCore: Spaces, Operators
+# TODO: Turn this into a unit test for the implicit solver once the code is more
+# modular.
 
-get_var(obj, ::Tuple{}) = obj
-get_var(obj, tup::Tuple) = get_var(getproperty(obj, tup[1]), Base.tail(tup))
-function exact_column_jacobian_block(
-    implicit_tendency!,
-    Y,
-    p,
-    t,
-    i,
-    j,
-    h,
-    Yₜ_name,
-    Y_name,
-)
-    T = eltype(Y)
-    Y_var = get_var(Y, Y_name)
-    Y_var_vert_space = Spaces.column(axes(Y_var), i, j, h)
-    bot_level = Operators.left_idx(Y_var_vert_space)
-    top_level = Operators.right_idx(Y_var_vert_space)
-    partials = ntuple(_ -> zero(T), top_level - bot_level + 1)
+function autodiff_wfact_block(Y, p, dtγ, t, Yₜ_name, Y_name, colidx)
+    Y_field = MatrixFields.get_field(Y, Y_name)
+    bot_level = Operators.left_idx(axes(Y_field))
+    top_level = Operators.right_idx(axes(Y_field))
+    partials = ntuple(_ -> 0, top_level - bot_level + 1)
+
     Yᴰ = Dual.(Y, partials...)
-    Yᴰ_var = get_var(Yᴰ, Y_name)
-    ith_ε(i) = Dual.(zero(T), Base.setindex(partials, one(T), i)...)
+    Yᴰ_field = MatrixFields.get_field(Yᴰ, Y_name)
+    ith_ε(i) = Dual.(0, Base.setindex(partials, 1, i)...)
     set_level_εs!(level) =
-        parent(Spaces.level(Yᴰ_var, level)) .+= ith_ε(level - bot_level + 1)
+        parent(Spaces.level(Yᴰ_field, level)) .+= ith_ε(level - bot_level + 1)
     foreach(set_level_εs!, bot_level:top_level)
+
+    (; atmos) = p
+    convert_to_duals(fields) =
+        Fields._values(similar(Fields.FieldVector(; fields...), eltype(Yᴰ)))
+    dry_atmos_name_pairs = map(propertynames(atmos)) do name
+        name => name == :moisture_model ? DryModel() : atmos.:($name)
+    end
+    dry_atmos = AtmosModel(; dry_atmos_name_pairs...)
+    pᴰ = (;
+        p...,
+        convert_to_duals(temporary_quantities(atmos, axes(Y.c), axes(Y.f)))...,
+        convert_to_duals(precomputed_quantities(Y, dry_atmos))...,
+        atmos = dry_atmos,
+        sfc_setup = nothing,
+    )
+
     Yₜᴰ = similar(Yᴰ)
-    implicit_tendency!(Yₜᴰ, Yᴰ, p, t)
-    col = Spaces.column(get_var(Yₜᴰ, Yₜ_name), i, j, h)
-    return vcat(map(dual -> [dual.partials.values...]', parent(col))...)
+    implicit_tendency!(Yₜᴰ, Yᴰ, pᴰ, t)
+    Yₜᴰ_field = MatrixFields.get_field(Yₜᴰ, Yₜ_name)
+    ∂Yₜ∂Y_array_block =
+        vcat(map(d -> [d.partials.values...]', parent(Yₜᴰ_field[colidx]))...)
+    return Yₜ_name == Y_name ? dtγ * ∂Yₜ∂Y_array_block - I :
+           dtγ * ∂Yₜ∂Y_array_block
 end
 
-# Note: These only work for scalar stencils.
-vector_column(arg, i, j, h) = parent(Spaces.column(arg, i, j, h))
-function matrix_column(stencil, stencil_input_space, i, j, h)
-    lbw, ubw = Operators.bandwidths(eltype(stencil))
-    coefs_column = Spaces.column(stencil, i, j, h).coefs
-    row_space = axes(coefs_column)
-    lrow = Operators.left_idx(row_space)
-    rrow = Operators.right_idx(row_space)
-    num_rows = rrow - lrow + 1
-    col_space = Spaces.column(stencil_input_space, i, j, h)
-    lcol = Operators.left_idx(col_space)
-    rcol = Operators.right_idx(col_space)
-    num_cols = rcol - lcol + 1
-    diag_key_value(diag) =
-        (diag + lrow - lcol) => view(
-            parent(getproperty(coefs_column, diag - lbw + 1)),
-            (max(lrow, lcol - diag):min(rrow, rcol - diag)) .- (lrow - 1),
+function verify_wfact(A, Y, p, dtγ, t, colidx)
+    for (Yₜ_name, Y_name) in keys(A.matrix)
+        computed_block = map(
+            x -> x[1],
+            MatrixFields.column_field2array(A.matrix[Yₜ_name, Y_name][colidx]),
         )
-    return spdiagm(num_rows, num_cols, map(diag_key_value, lbw:ubw)...)
+        Yₜ_name == Y_name && computed_block == -I && continue
+        reference_block =
+            autodiff_wfact_block(Y, p, dtγ, t, Yₜ_name, Y_name, colidx)
+        max_error = maximum(abs.(computed_block - reference_block))
+        @info t, Yₜ_name, Y_name, maximum(reference_block), max_error
+        # display(computed_block)
+        # display(reference_block)
+    end
 end

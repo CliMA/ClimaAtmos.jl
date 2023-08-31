@@ -1,4 +1,4 @@
-using LinearAlgebra: ×, norm, dot
+using LinearAlgebra: ×, norm, dot, Adjoint
 
 import .Parameters as CAP
 using ClimaCore: Operators, Fields, Limiters, Geometry, Spaces
@@ -94,10 +94,7 @@ function default_cache(
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
         ᶜf,
-        ∂ᶜK∂ᶠu₃_data = similar(
-            Y.c,
-            Operators.StencilCoefs{-half, half, NTuple{2, FT}},
-        ),
+        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         params,
         energy_upwinding,
         tracer_upwinding,

@@ -47,3 +47,9 @@ ClimaAtmos.InitialConditions.LifeCycleTan2018
 ClimaAtmos.InitialConditions.Bomex
 ClimaAtmos.InitialConditions.Soares
 ```
+
+### Implicit Solver
+
+```@docs
+ClimaAtmos.ImplicitEquationJacobian
+```
