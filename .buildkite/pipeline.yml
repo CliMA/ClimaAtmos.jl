@@ -229,19 +229,6 @@ steps:
           --job_id sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
-      - label: ":computer: baroclinic wave (ρe) h_elem8"
-        command:
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_he8.yml
-
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir sphere_baroclinic_wave_rhoe_he8 --out_dir sphere_baroclinic_wave_rhoe_he8
-
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir sphere_baroclinic_wave_rhoe_he8 --fig_dir sphere_baroclinic_wave_rhoe_he8
-          --case_name dry_baroclinic_wave
-        artifact_paths: "sphere_baroclinic_wave_rhoe_he8/*"
-
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -259,25 +246,6 @@ steps:
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
-
-      - label: ":computer: SSP 1st-order tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist.yml
-
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          --out_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          --fig_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          --case_name moist_baroclinic_wave
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-          --out_dir sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist
-        artifact_paths: "sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist/*"
 
       - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
         command: >
@@ -351,21 +319,6 @@ steps:
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
           --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
-
-      - label: ":computer: SSP 1st-order tracer & energy upwind held suarez (ρe) equilmoist hightop sponge"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge.yml
-
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge
-          --out_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge
-
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge
-          --fig_dir sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge
-          --case_name moist_held_suarez
-        artifact_paths: "sphere_ssp_first_tracer_energy_upwind_held_suarez_rhoe_equilmoist_hightop_sponge/*"
 
   - group: "Sphere Examples (Aquaplanet)"
     steps:

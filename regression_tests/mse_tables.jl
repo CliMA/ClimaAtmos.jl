@@ -20,14 +20,6 @@ all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, 
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0
 all_best_mse["sphere_baroclinic_wave_rhoe_equilmoist"][(:f, :u₃, :components, :data, 1)] = 0
 #
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 0
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 2)] = 0
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρe_tot)] = 0
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρq_tot)] = 0
-all_best_mse["sphere_first_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:f, :u₃, :components, :data, 1)] = 0
-#
 all_best_mse["sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"] = OrderedCollections.OrderedDict()
 all_best_mse["sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :ρ)] = 0
 all_best_mse["sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"][(:c, :uₕ, :components, :data, 1)] = 0

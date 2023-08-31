@@ -48,7 +48,6 @@ steps:
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
-
       - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_bw_rhoe_equil_highres.yml
@@ -58,7 +57,6 @@ steps:
         agents:
           slurm_ntasks: 32
           slurm_time: 24:00:00
-
 
       - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
@@ -80,92 +78,46 @@ steps:
         agents:
           slurm_ntasks: 32
           slurm_time: 24:00:00
-
-      - label: ":computer: SSP 1st-order tracer & energy upwind equilmoist baroclinic wave (ρe_tot) high resolution"
+      
+      - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres --out_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres --fig_dir longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
-        artifact_paths: "longrun_ssp_first_tracer_energy_upwind_bw_rhoe_equil_highres/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_time: 24:00:00
-
-      - label: ":computer: SSP 3rd-order tracer & energy upwind equilmoist baroclinic wave (ρe_tot) high resolution"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres --out_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres --fig_dir longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres --case_name moist_baroclinic_wave
-        artifact_paths: "longrun_ssp_third_tracer_energy_upwind_bw_rhoe_equil_highres/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_time: 24:00:00
-
-      - label: ":computer: held suarez (ρe_tot) high resolution hightop"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_highres_hightop.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_highres_hightop --out_dir longrun_hs_rhoe_highres_hightop
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_highres_hightop --fig_dir longrun_hs_rhoe_highres_hightop --case_name dry_held_suarez
-        artifact_paths: "longrun_hs_rhoe_highres_hightop/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_time: 24:00:00
-
-      - label: ":computer: no lim ARS held suarez (ρe_tot) equilmoist high resolution"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equil_highres.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres --out_dir longrun_hs_rhoe_equil_highres
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equil_highres --fig_dir longrun_hs_rhoe_equil_highres --case_name moist_held_suarez
-        artifact_paths: "longrun_hs_rhoe_equil_highres/*"
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_dry_nz63_55km_rs35km.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_dry_nz63_55km_rs35km --out_dir longrun_hs_rhoe_dry_nz63_55km_rs35km
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_dry_nz63_55km_rs35km --fig_dir longrun_hs_rhoe_dry_nz63_55km_rs35km --case_name aquaplanet
+        artifact_paths: "longrun_hs_rhoe_dry_nz63_55km_rs35km/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_time: 24:00:00
+          slurm_mem_per_cpu: 16GB
 
-      - label: ":computer: lim ARS zalesak held suarez (ρe_tot) equilmoist high resolution"
+      - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_zalesak_tracer_energy_hs_rhoe_equil_highres.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres --out_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres --fig_dir longrun_zalesak_tracer_energy_hs_rhoe_equil_highres --case_name moist_held_suarez
-        artifact_paths: "longrun_zalesak_tracer_energy_hs_rhoe_equil_highres/*"
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km --out_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km --fig_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km --case_name aquaplanet
+        artifact_paths: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_mem_per_cpu: 32GB
-          slurm_time: 24:00:00
-
-      - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
+          slurm_mem_per_cpu: 16GB
+      
+      - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge (35km), helem_16 np_3"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --fig_dir longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64 --case_name aquaplanet
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M --out_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M --fig_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M --case_name aquaplanet
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M/*"
+        env:
+          CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_ntasks: 64
-          slurm_time: 24:00:00
-
-      - label: ":computer: lim ARS zalesak aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float64"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64 --out_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64 --fig_dir longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64 --case_name aquaplanet
-        artifact_paths: "longrun_zalesak_tracer_energy_aquaplanet_rhoe_equil_highres_clearsky_ft64/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 32GB
-          slurm_time: 24:00:00
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution hightop rayleigh sponge(30e3, 10)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --out_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --fig_dir longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3 --case_name aquaplanet
-        artifact_paths: "longrun_hs_rhoe_equilmoist_highres_hightop_rayleigh30e3/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_time: 24:00:00
+          slurm_mem_per_cpu: 16GB
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equilmoist_clearsky_highres_hightop_rayleigh35e3_ft64.yml
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft64.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --out_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --fig_dir longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64 --case_name aquaplanet
         artifact_paths: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_float64/*"
@@ -217,31 +169,11 @@ steps:
         agents:
           slurm_cpus_per_task: 8
           slurm_time: 24:00:00
-
-      - label: ":computer: aquaplanet (ρe_tot) equilmoist gray radiation"
-        command:
-          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_gray.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray --out_dir longrun_aquaplanet_rhoe_equil_gray
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_aquaplanet_rhoe_equil_gray --fig_dir longrun_aquaplanet_rhoe_equil_gray --case_name aquaplanet
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray/*"
-        agents:
-          slurm_cpus_per_task: 8
-          slurm_time: 24:00:00
       
 
   - group: "Experimental Long runs"
 
     steps:
-
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution monin obukhov"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equil_highres_monin_obukhov.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equil_highres_monin_obukhov --out_dir longrun_hs_rhoe_equil_highres_monin_obukhov
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir longrun_hs_rhoe_equil_highres_monin_obukhov --fig_dir longrun_hs_rhoe_equil_highres_monin_obukhov --case_name moist_held_suarez
-        artifact_paths: "longrun_hs_rhoe_equil_highres_monin_obukhov/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_time: 24:00:00
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist high resolution allsky radiation float64"
         command:
@@ -252,41 +184,6 @@ steps:
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
-  - group: "Milestone 1.5.2a"
-    steps:
-      
-      - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge(35km), helem_16 np_3"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_dry_nz63_55km_rs35km.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_dry_nz63_55km_rs35km --out_dir longrun_hs_rhoe_dry_nz63_55km_rs35km
-        artifact_paths: "longrun_hs_rhoe_dry_nz63_55km_rs35km.yml/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-
-      - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge(35km), helem_16 np_3"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km --out_dir longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
-        artifact_paths: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-      
-      - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge(35km), helem_16 np_3"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml --out_dir longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml
-        artifact_paths: "longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.yml/*"
-        env:
-          CLIMACORE_DISTRIBUTED: "MPI"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
 
   - group: "TurbulenceConvection"
     steps:
