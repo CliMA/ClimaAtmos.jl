@@ -227,7 +227,6 @@ function compute_diagnostics(integrator)
             potential_temperature = TD.dry_pottemp.(thermo_params, ᶜts),
             specific_enthalpy = TD.specific_enthalpy.(thermo_params, ᶜts),
             buoyancy = CAP.grav(params) .* (p.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
-            diffusivity = ᶜD,
         )
         if !(p.atmos.moisture_model isa DryModel)
             diagnostics = (;

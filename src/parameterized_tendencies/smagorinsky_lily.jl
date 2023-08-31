@@ -7,6 +7,40 @@ import ClimaCore.Operators as Operators
 import LinearAlgebra as la
 import ClimaCore: Geometry
 
+smagorinsky_lilly_cache(::Nothing, Y) = NamedTuple()
+function smagorinsky_lilly_cache(sl::SmagorinskyLily, Y)
+    # Cs is the Smagorinsky coefficient, ^cJ is the volume of the cell. ^cD is 
+    # calculated from the Smagorinsky-Lily model for eddy viscosity as described
+    # in (Sridhar et al. 2022).
+
+    # D = v/Pr, where v = (Cs * cbrt(J))^2 * sqrt(2*Sij*Sij). The cube root of the
+    # volume is the average length of the sides of the cell.
+    (; Cs) = sl
+    
+    FT = eltype(Y)
+
+    ᶜtemp_scalar = similar(Y.c.ρ, FT)
+    ᶜtemp_scalar_2 = similar(Y.c.ρ, FT)
+    ᶜtemp_scalar_3 = similar(Y.c.ρ, FT)
+    ᶠtemp_C123 = similar(Y.f, C123{FT})
+    ᶜtemp_CT3 = similar(Y.c, CT3{FT})
+
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜshear² = ᶜtemp_scalar
+    ᶠu = ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(Y.f.u₃)
+    ct3_unit = ᶜtemp_CT3
+    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
+    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
+
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜD = ᶜtemp_scalar_2
+    v_t = ᶜtemp_scalar_3
+    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    Pr = 1/3
+    @. ᶜD = (1/Pr)*v_t
+    return (; v_t, ᶜD)
+end
 
 horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
@@ -17,32 +51,8 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
 
-    # Cs is the Smagorinsky coefficient, ^cJ is the volume of the cell. ^cD is 
-    # calculated from the Smagorinsky-Lily model for eddy viscosity as described
-    # in (Sridhar et al. 2022).
-
-    # D = v/Pr, where v = (Cs * cbrt(J))^2 * sqrt(2*Sij*Sij). The cube root of the
-    # volume is the average length of the sides of the cell.
-
     (; Cs) = sl
-
-    FT = eltype(Y)
-    (; ᶠu³, ᶜD) = p
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜshear² = p.ᶜtemp_scalar
-    ᶠu = p.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ct3_unit = p.ᶜtemp_CT3
-    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
-    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
-
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    # ᶜD = p.ᶜtemp_scalar
-    v_t = p.ᶜtemp_scalar_2
-    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
-    Pr = 1/3
-    @. ᶜD = (1/Pr)*v_t
-
+    (; v_t, ᶜD) = p
 
     # momentum balance adjustment
     @. Yₜ.c.uₕ -=
@@ -70,7 +80,6 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
         @. ᶜρχₜ += divₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
     end
 
-    
 end
 
 function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::SmagorinskyLily) 
@@ -78,38 +87,14 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
 
-    # Cs is the Smagorinsky coefficient, ^cJ is the volume of the cell. ^cD is 
-    # calculated from the Smagorinsky-Lily model for eddy viscosity as described
-    # in (Sridhar et al. 2022).
-
-    # D = v/Pr, where v = (Cs * cbrt(J))^2 * sqrt(2*Sij*Sij). The cube root of the
-    # volume is the average length of the sides of the cell.
-
     (; Cs) = sl
-
-    FT = eltype(Y)
-    (; ᶠu³, ᶜD) = p
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜshear² = p.ᶜtemp_scalar
-    ᶠu = p.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ct3_unit = p.ᶜtemp_CT3
-    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
-    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
-
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    # ᶜD = p.ᶜtemp_scalar
-    v_t = p.ᶜtemp_scalar_2
-    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
-    Pr = 1/3
-    @. ᶜD = (1/Pr)*v_t
-
-
+    (; v_t, ᶜD) = p
     (; ᶜspecific, sfc_conditions) = p
     
     ρ_flux_χ = p.sfc_temp_C3
 
-    
+    FT = eltype(Y)
+
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
@@ -156,6 +141,5 @@ function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::Smagorin
 
         @. ᶜρχₜ[colidx] -= ᶜdivᵥ_ρχ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜD[colidx]) * ᶠgradᵥ(ᶜχ[colidx])))
     end
-
     
 end

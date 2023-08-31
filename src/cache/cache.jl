@@ -95,7 +95,6 @@ function default_cache(
         ᶜρ_ref,
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
-        ᶜD = similar(Y.c, FT),
         ᶜf,
         ∂ᶜK∂ᶠu₃_data = similar(
             Y.c,
@@ -155,6 +154,7 @@ function additional_cache(
     return merge(
         rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
         viscous_sponge_cache(atmos.viscous_sponge, Y),
+        smagorinsky_lilly_cache(atmos.smagorinsky_lily, Y),
         precipitation_cache(Y, precip_model),
         subsidence_cache(Y, atmos.subsidence),
         large_scale_advection_cache(Y, atmos.ls_adv),
