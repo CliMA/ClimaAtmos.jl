@@ -396,5 +396,58 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
     end
 end
 
+"""
+    ScheduledDiagnosticIterations(sd_time::ScheduledDiagnosticTime, Δt)
+
+
+Create a `ScheduledDiagnosticIterations` given a `ScheduledDiagnosticTime` and a timestep
+`Δt`. In this, ensure that `compute_every` and `output_every` are meaningful for the given
+timestep.
+
+"""
+
+function ScheduledDiagnosticIterations(
+    sd_time::ScheduledDiagnosticTime,
+    Δt::T,
+) where {T}
+
+    # If we have the timestep, we can convert time in seconds into iterations
+
+    # if compute_every is :timestep, then we want to compute after every iterations
+    compute_every =
+        sd_time.compute_every == :timestep ? 1 : sd_time.compute_every / Δt
+    output_every = sd_time.output_every / Δt
+
+    isinteger(output_every) || error(
+        "output_every should be multiple of the timestep for variable $(sd_time.variable.long_name)",
+    )
+    isinteger(compute_every) || error(
+        "compute_every should be multiple of the timestep for variable $(sd_time.variable.long_name)",
+    )
+
+    ScheduledDiagnosticIterations(;
+        sd_time.variable,
+        output_every = convert(Int, output_every),
+        sd_time.output_writer,
+        sd_time.reduction_time_func,
+        sd_time.reduction_space_func,
+        compute_every = convert(Int, compute_every),
+        sd_time.pre_output_hook!,
+    )
+end
+
+# We provide also a companion constructor for ScheduledDiagnosticIterations which returns
+# itself (without copy) when called with a timestep.
+#
+# This is so that we can assume that
+# ScheduledDiagnosticIterations(ScheduledDiagnostic{Time, Iterations}, Δt)
+# always returns a valid ScheduledDiagnosticIterations
+ScheduledDiagnosticIterations(
+    sd::ScheduledDiagnosticIterations,
+    _Δt::T,
+) where {T} = sd
+
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
+
+

@@ -87,6 +87,10 @@ the end of every integration step. This is particularly convenient when defining
 default diagnostics, as they should be largely independent on the choice of the
 specific simulation being run (and its timestep).
 
+Given a timestep `dt`, a `ScheduledDiagnosticIterations` can be obtained from a
+`ScheduledDiagnosticTime` `sd` simply by calling
+``ScheduledDiagnosticIterations(sd, dt)`.
+
 ## I want to add a new diagnostic variable
 
 Diagnostic variables are represented in `ClimaAtmos` with a `DiagnosticVariable`
