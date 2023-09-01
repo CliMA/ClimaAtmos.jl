@@ -2,6 +2,46 @@
 
 ## I want to compute and output a diagnostic variable
 
+### From a script
+
+The simplest way to get started with diagnostics is to use the defaults for your
+atmospheric model. `ClimaAtmos` defines a function `get_default_diagnostic`. You
+can execute this function on an `AtmosModel` or on any of its fields to obtain a
+list of diagnostics ready to be passed to the simulation. So, for example
+
+```julia
+
+model = ClimaAtmos.AtmosModel(..., moisture_model = ClimaAtmos.DryModel(), ...)
+
+diagnostics = ClimaAtmos.get_default_diagnostics(model)
+# => List of diagnostics that include the ones specified for the DryModel
+```
+
+Technically, the diagnostics are represented as `ScheduledDiagnostic` objects,
+which contain information about what variable has to be computed, how often,
+where to save it, and so on (read below for more information on this). You can
+construct your own lists of `ScheduledDiagnostic`s starting from the variables
+defined by `ClimaAtmos`. The diagnostics that `ClimaAtmos` knows how to compute
+are collected in a global dictionary called `ALL_DIAGNOSTICS`. The variables in
+`ALL_DIAGNOSTICS` are identified with a long and unique name, so that you can
+access them directly. One way to do so is by using the provided convenience
+functions for common operations, e.g., continuing the previous example
+
+```julia
+
+push!(diagnostics, get_daily_max("air_density", "air_temperature"))
+```
+
+Now `diagnostics` will also contain the instructions to compute the daily
+maximum of `air_density` and `air_temperature`.
+
+**TODO: Add link to table with known diagnostics**
+
+If you are using `ClimaAtmos` with a script-based interface, you have access to
+the complete flexibility in your diagnostics. Read the section about the
+low-level interface to see how to implement custom diagnostics, reductions, or
+writers.
+
 ### The low-level interface
 
 Diagnostics are computed and output through callbacks to the main integrator.
