@@ -26,6 +26,7 @@ makedocs(
         "Contributor Guide" => "contributor_guide.md",
         "Equations" => "equations.md",
         "EDMF Equations" => "edmf_equations.md",
+        "Diagnostics" => "diagnostics.md",
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",

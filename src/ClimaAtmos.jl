@@ -117,4 +117,6 @@ include(joinpath("solver", "solve.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 
+include(joinpath("diagnostics", "Diagnostics.jl"))
+
 end # module
