@@ -85,17 +85,17 @@ function quad_loop(
     end
 
     # cloudy/dry categories for buoyancy in TKE
-    f_q_tot_sat(x_hat::Tuple{<:Real, <:Real}, ts) =
-        TD.has_condensate(thermo_params, ts) ? x_hat[2] : eltype(x_hat)(0)
+    f_q_tot_sat(x_hat::Tuple{<:Real, <:Real}, hc) =
+        hc ? x_hat[2] : eltype(x_hat)(0)
 
     get_ts(x_hat::Tuple{<:Real, <:Real}) =
         thermo_state(thermo_params; p = p_c, θ = x_hat[1], q_tot = x_hat[2])
-    f_cf(x_hat::Tuple{<:Real, <:Real}, ts) =
-        TD.has_condensate(thermo_params, ts) ? eltype(x_hat)(1) :
-        eltype(x_hat)(0)
+    f_cf(x_hat::Tuple{<:Real, <:Real}, hc) =
+        hc ? eltype(x_hat)(1) : eltype(x_hat)(0)
     function f(x_hat::Tuple{<:Real, <:Real})
         ts = get_ts(x_hat)
-        return (; cf = f_cf(x_hat, ts), q_tot_sat = f_q_tot_sat(x_hat, ts))
+        hc = TD.has_condensate(thermo_params, ts)
+        return (; cf = f_cf(x_hat, hc), q_tot_sat = f_q_tot_sat(x_hat, hc))
     end
 
     return quad(f, get_x_hat, env_thermo_quad).cf
