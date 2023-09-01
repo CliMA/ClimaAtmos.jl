@@ -274,5 +274,127 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     end
 end
 
+
+struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
+    variable::DiagnosticVariable
+    output_every::T1
+    output_writer::OW
+    reduction_time_func::F1
+    reduction_space_func::F2
+    compute_every::T2
+    pre_output_hook!::PO
+
+    """
+        ScheduledDiagnosticTime(; variable::DiagnosticVariable,
+                                            output_every,
+                                            output_writer,
+                                            reduction_time_func = nothing,
+                                            reduction_space_func = nothing,
+                                            compute_every = isa_reduction ? :timestep : output_every,
+                                            pre_output_hook! = (accum, count) -> nothing)
+
+
+    A `DiagnosticVariable` that has to be computed and output during a simulation with a
+    cadence defined by how many seconds in simulation time, with an optional reduction
+    applied to it (e.g., compute the maximum temperature over the course of every day). This
+    object is turned into a `ScheduledDiagnosticIterations`, which is turned into two
+    callbacks (one for computing and the other for output) and executed by the integrator.
+
+    Keyword arguments
+    =================
+
+    - `variable`: The diagnostic variable that has to be computed and output.
+
+    - `output_every`: Save the results to disk every `output_every` seconds.
+
+    - `output_writer`: Function that controls out to save the computed diagnostic variable to
+                       disk. `output_writer` has to take three arguments: the value that has to
+                       be output, the `ScheduledDiagnostic`, and the integrator. Internally, the
+                       integrator contains extra information (such as the current timestep). It
+                       is responsibility of the `output_writer` to properly use the provided
+                       information for meaningful output.
+
+    - `reduction_time_func`: If not `nothing`, this `ScheduledDiagnostic` receives an area of
+                             scratch space `acc` where to accumulate partial results. Then, at
+                             every `compute_every`, `reduction_time_func` is computed between
+                             the previously stored value in `acc` and the new value. This
+                             implements a running reduction. For example, if
+                             `reduction_time_func = max`, the space `acc` will hold the running
+                             maxima of the diagnostic. To implement operations like the
+                             arithmetic average, the `reduction_time_func` has to be chosen as
+                             `sum`, and a `pre_output_hook!` that renormalize `acc` by the
+                             number of samples has to be provided. For custom reductions, it is
+                             necessary to also specify the identity of operation by defining a
+                             new method to `identity_of_reduction`.
+
+    - `reduction_space_func`: NOT IMPLEMENTED YET
+
+    - `compute_every`: Run the computations every `compute_every` seconds. This is not
+                       particularly useful for point-wise diagnostics, where we enforce that
+                       `compute_every` = `output_every`. For time reductions,
+                       `compute_every` is set to `:timestep` (compute at every timestep) by
+                       default. `compute_every` has to evenly divide `output_every`.
+                       `compute_every` can take the special symbol `:timestep` which is a
+                       placeholder for the timestep of the simulation to which this
+                       `ScheduledDiagnostic` is attached.
+
+    - `pre_output_hook!`: Function that has to be run before saving to disk for reductions
+                          (mostly used to implement averages). The function `pre_output_hook!`
+                          is called with two arguments: the value accumulated during the
+                          reduction, and the number of times the diagnostic was computed from
+                          the last time it was output. `pre_output_hook!` should mutate the
+                          accumulator in place. The return value of `pre_output_hook!` is
+                          discarded. An example of `pre_output_hook!` to compute the arithmetic
+                          average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
+
+    """
+    function ScheduledDiagnosticTime(;
+        variable::DiagnosticVariable,
+        output_every,
+        output_writer,
+        reduction_time_func = nothing,
+        reduction_space_func = nothing,
+        compute_every = isnothing(reduction_time_func) ? output_every :
+                        :timestep,
+        pre_output_hook! = (accum, count) -> nothing,
+    )
+
+        # We provide an inner constructor to enforce some constraints
+
+        # compute_every could be a Symbol (:timestep). We process this that when we process
+        # the list of diagnostics
+        if !isa(compute_every, Symbol)
+            output_every % compute_every == 0 || error(
+                "output_every should be multiple of compute_every for variable $(variable.long_name)",
+            )
+        end
+
+        isa_reduction = !isnothing(reduction_time_func)
+
+        # If it is not a reduction, we compute only when we output
+        if !isa_reduction && compute_every != output_every
+            @warn "output_every != compute_every for $(variable.long_name), changing compute_every to match"
+            compute_every = output_every
+        end
+
+        T1 = typeof(output_every)
+        T2 = typeof(compute_every)
+        OW = typeof(output_writer)
+        F1 = typeof(reduction_time_func)
+        F2 = typeof(reduction_space_func)
+        PO = typeof(pre_output_hook!)
+
+        new{T1, T2, OW, F1, F2, PO}(
+            variable,
+            output_every,
+            output_writer,
+            reduction_time_func,
+            reduction_space_func,
+            compute_every,
+            pre_output_hook!,
+        )
+    end
+end
+
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
