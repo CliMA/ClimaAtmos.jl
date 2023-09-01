@@ -61,8 +61,12 @@ integrator. Internally, the integrator contains extra information (such as the
 current timestep), so the `output_writer` can implement arbitrarily complex
 behaviors. It is responsibility of the `output_writer` to properly use the
 provided information for meaningful output. `ClimaAtmos` provides functions that
-return `output_writer`s for standard operations (e.g., for writing to HDF5
-files).
+return `output_writer`s for standard operations. The main one is currently
+`HDF5Writer`, which should be enough for most use cases. To use it, just
+initialize a `ClimaAtmos.HDF5Writer` object with your choice of configuration
+and pass it as a `output_writer` argument to the `ScheduledDiagnostic`. More
+information about the options supported by `ClimaAtmos.HDF5Writer` is available
+in its constructor.
 
 There are two flavors of `ScheduledDiagnostic`s:
 `ScheduledDiagnosticIterations`, and `ScheduledDiagnosticTime`. The main
