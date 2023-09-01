@@ -357,10 +357,10 @@ uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.12"
 
 [[deps.CloudMicrophysics]]
-deps = ["DocStringExtensions", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "8e98d1f3ffb1e2171bf472afcedfd77f74e85026"
+deps = ["CLIMAParameters", "DocStringExtensions", "ForwardDiff", "KernelAbstractions", "NonlinearSolve", "SpecialFunctions", "Thermodynamics"]
+git-tree-sha1 = "b9e41fe99cb337f9ca0bd8bf5f62d76d33273669"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.10.3"
+version = "0.13.2"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
@@ -2505,10 +2505,10 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "5.10.1+6"
 
 [[deps.SurfaceFluxes]]
-deps = ["DocStringExtensions", "KernelAbstractions", "RootSolvers", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "d6a2fc6e439c8cef9d0c04a0929090bb2218ba85"
+deps = ["DocStringExtensions", "KernelAbstractions", "Logging", "RootSolvers", "StaticArrays", "Thermodynamics"]
+git-tree-sha1 = "74972e5395caa7be35b767cd847fbbde980c2965"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.6.3"
+version = "0.7.1"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["DocStringExtensions"]
@@ -2577,9 +2577,9 @@ version = "1.0.1"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "dd055cd2ef16f8d373a7dc833f4ddf72165524c5"
+git-tree-sha1 = "ac3b5236da4d028b9a3984ae7b28730d46892dbf"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.10.2"
+version = "0.11.0"
 
 [[deps.ThreadingUtilities]]
 deps = ["ManualMemory"]
