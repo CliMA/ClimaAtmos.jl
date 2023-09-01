@@ -33,6 +33,12 @@
 #   ScheduledDiagnosticIterations as an internal representation and ScheduledDiagnosticTime
 #   as the external interface.
 #
+# - A function to convert a list of ScheduledDiagnosticIterations into a list of
+#   AtmosCallbacks. This function takes three arguments: the list of diagnostics and two
+#   dictionaries that map each scheduled diagnostic to an area of memory where to save the
+#   result and where to keep track of how many times the function was called (so that we
+#   can compute stuff like averages).
+#
 # - This file also also include several other files, including (but not limited to):
 #   - core_diagnostics.jl
 #   - reduction_identities.jl
@@ -451,3 +457,106 @@ ScheduledDiagnosticIterations(
 include("reduction_identities.jl")
 
 
+
+"""
+    get_callbacks_from_diagnostics(diagnostics, storage, counters)
+
+
+Translate a list of diagnostics into a list of callbacks.
+
+Positional arguments
+=====================
+
+- `diagnostics`: List of `ScheduledDiagnosticIterations` that have to be converted to
+                 callbacks. We want to have `ScheduledDiagnosticIterations` here so that we
+                 can define callbacks that occur at the end of every N integration steps.
+
+- `storage`: Dictionary that maps a given `ScheduledDiagnosticIterations` to a potentially
+             pre-allocated area of memory where to accumulate/save results.
+
+- `counters`: Dictionary that maps a given `ScheduledDiagnosticIterations` to the counter
+              that tracks how many times the given diagnostics was computed from the last
+              time it was output to disk.
+
+"""
+function get_callbacks_from_diagnostics(diagnostics, storage, counters)
+    # We have two types of callbacks: to compute and accumulate diagnostics, and to dump
+    # them to disk. Note that our callbacks do not contain any branching
+
+    # storage is used to pre-allocate memory and to accumulate partial results for those
+    # diagnostics that perform reductions.
+
+    callbacks = Any[]
+
+    for diag in diagnostics
+        variable = diag.variable
+        isa_reduction = !isnothing(diag.reduction_time_func)
+
+        # reduction is used below. If we are not given a reduction_time_func, we just want
+        # to move the computed quantity to its storage (so, we return the second argument,
+        # which that will be the newly computed one). If we have a reduction, we apply it
+        # point-wise
+        reduction = isa_reduction ? diag.reduction_time_func : (_, y) -> y
+
+        # If we have a reduction, we have to reset the accumulator to its neutral state. (If
+        # we don't have a reduction, we don't have to do anything)
+        #
+        # ClimaAtmos defines methods for identity_of_reduction for standard
+        # reduction_time_func in reduction_identities.jl
+        reset_accumulator! =
+            isa_reduction ?
+            () -> begin
+                # identity_of_reduction works by dispatching over Val{operation}
+                identity =
+                    identity_of_reduction(Val(diag.reduction_time_func))
+                # We also need to make sure that we are consistent with the types
+                float_type = eltype(storage[diag])
+                identity_ft = convert(float_type, identity)
+                storage[diag] .= identity_ft
+            end : () -> nothing
+
+        compute_callback =
+            integrator -> begin
+                # FIXME: Change when ClimaCore overrides .= for us to avoid multiple allocations
+                value = variable.compute_from_integrator(integrator, nothing)
+                storage[diag] .= reduction.(storage[diag], value)
+                counters[diag] += 1
+                return nothing
+            end
+
+        output_callback =
+            integrator -> begin
+                # Any operations we have to perform before writing to output?
+                # Here is where we would divide by N to obtain an arithmetic average
+                diag.pre_output_hook!(storage[diag], counters[diag])
+
+                # Write to disk
+                diag.output_writer(storage[diag], diag, integrator)
+
+                reset_accumulator!()
+                counters[diag] = 0
+                return nothing
+            end
+
+        # Here we have skip_first = true. This is important because we are going to manually
+        # call all the callbacks so that we can verify that they are meaningful for the
+        # model under consideration (and they don't have bugs).
+        append!(
+            callbacks,
+            [
+                call_every_n_steps(
+                    compute_callback,
+                    diag.compute_every,
+                    skip_first = true,
+                ),
+                call_every_n_steps(
+                    output_callback,
+                    diag.output_every,
+                    skip_first = true,
+                ),
+            ],
+        )
+    end
+
+    return callbacks
+end
