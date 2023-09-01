@@ -32,6 +32,10 @@
 #   relationship between the periods and the timesteps. In some sense, you can think of
 #   ScheduledDiagnosticIterations as an internal representation and ScheduledDiagnosticTime
 #   as the external interface.
+#
+# - This file also also include several other files, including (but not limited to):
+#   - core_diagnostics.jl
+#   - reduction_identities.jl
 
 """
     DiagnosticVariable
@@ -269,3 +273,6 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         )
     end
 end
+
+# We define all the known identities in reduction_identities.jl
+include("reduction_identities.jl")
