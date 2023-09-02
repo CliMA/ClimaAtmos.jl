@@ -319,6 +319,7 @@ function precipitation_advection_tendency!(
     microphys_params = CAP.microphysics_params(params)
     rain_type = CM.CommonTypes.RainType()
     snow_type = CM.CommonTypes.SnowType()
+    velo_type = CM.CommonTypes.Blk1MVelType()
 
     # TODO - some positivity limiters are needed
 
@@ -331,6 +332,7 @@ function precipitation_advection_tendency!(
                 ρq_rai * CM1.terminal_velocity(
                     microphys_params,
                     rain_type,
+                    velo_type,
                     ρ_c,
                     ρq_rai / ρ_c,
                 ),
@@ -344,6 +346,7 @@ function precipitation_advection_tendency!(
                 ρq_sno * CM1.terminal_velocity(
                     microphys_params,
                     snow_type,
+                    velo_type,
                     ρ_c,
                     ρq_sno / ρ_c,
                 ),

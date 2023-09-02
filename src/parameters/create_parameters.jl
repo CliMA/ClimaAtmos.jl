@@ -34,13 +34,22 @@ function create_climaatmos_parameter_set(
     thermo_params = TD.Parameters.ThermodynamicsParameters{FTD}(; pairs...)
     TP = typeof(thermo_params)
 
-    aliases = string.(fieldnames(CM.Parameters.CloudMicrophysicsParameters))
-    aliases = setdiff(aliases, ["thermo_params"])
+    aliases = string.(fieldnames(CM.Parameters.ModalNucleationParameters))
     pairs = CP.get_parameter_values!(toml_dict, aliases, "CloudMicrophysics")
     pairs = override_climaatmos_defaults((; pairs...), overrides)
-    microphys_params = CM.Parameters.CloudMicrophysicsParameters{FTD, TP}(;
+    modal_nucleation_params =
+        CM.Parameters.ModalNucleationParameters{FTD}(; pairs...)
+    MNP = typeof(modal_nucleation_params)
+
+    aliases = string.(fieldnames(CM.Parameters.CloudMicrophysicsParameters))
+    aliases = setdiff(aliases, ["thermo_params"])
+    aliases = setdiff(aliases, ["modal_nuc_params"])
+    pairs = CP.get_parameter_values!(toml_dict, aliases, "CloudMicrophysics")
+    pairs = override_climaatmos_defaults((; pairs...), overrides)
+    microphys_params = CM.Parameters.CloudMicrophysicsParameters{FTD, TP, MNP}(;
         pairs...,
         thermo_params,
+        modal_nucleation_params,
     )
     MP = typeof(microphys_params)
 
