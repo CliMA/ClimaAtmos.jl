@@ -85,8 +85,10 @@ function radiation_model_cache(
                 input_center_pressure,
                 input_center_volume_mixing_ratio_o3,
             )
+            ᶜvolume_mixing_ratio_o3_field =
+                @. FT(pressure2ozone(default_cache.ᶜp))
             center_volume_mixing_ratio_o3 =
-                RRTMGPI.field2array(@. FT(pressure2ozone(default_cache.ᶜp)))
+                RRTMGPI.field2array(ᶜvolume_mixing_ratio_o3_field)
 
             # the first value for each global mean volume mixing ratio is the
             # present-day value
