@@ -90,6 +90,7 @@ steps:
         agents:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
+          slurm_time: 24:00:00
 
       - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
@@ -102,6 +103,7 @@ steps:
         agents:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
+          slurm_time: 24:00:00
       
       - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge (35km), helem_16 np_3"
         command:
@@ -114,6 +116,7 @@ steps:
         agents:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
+          slurm_time: 24:00:00
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution hightop rayleigh sponge(35e3, 10) Float64"
         command:
