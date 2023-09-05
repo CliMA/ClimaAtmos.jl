@@ -171,6 +171,19 @@ include("default_diagnostics.jl")
 # ScheduledDiagnosticTime to have placeholders values for {compute, output}_every so that we
 # can plug the timestep in it).
 
+# Design note: pre_output_hook!
+#
+# One of our key requirements is to be able to compute arithmetic averages. Unfortunately,
+# computing an arithmetic average requires keeping track of how many elements we are summing
+# up. pre_output_hook! was introduced so that we can think of an average as a sum coupled
+# with division, and perform the division (by the number of elements) before output.
+# pre_output_hook! could be used for other operations, but we decided to keep it simple and
+# target directly the most important use case for us.
+#
+# This choice restricts what reductions can be performed. For example, it is not possible to
+# have a geometric average. If more complex reduction are needed, this mechanism has to be
+# changed.
+
 struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     variable::DiagnosticVariable
     output_every::T1
