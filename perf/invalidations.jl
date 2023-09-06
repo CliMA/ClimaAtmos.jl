@@ -5,9 +5,9 @@ invalidations = @snoopr begin
     nothing
 end;
 
-import ReportMetrics
-ReportMetrics.report_invalidations(;
-    job_name = "invalidations",
+import SnoopCompile
+import PrettyTables # load report_invalidations
+SnoopCompile.report_invalidations(;
     invalidations,
     process_filename = x -> last(split(x, "packages/")),
 )

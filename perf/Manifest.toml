@@ -2,7 +2,7 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "f5d6c5759111046ce42e31519a9e5bfd6adaec3a"
+project_hash = "9556cf181fd1b65b5db679b93b4882215a7f787a"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "a4c8e0f8c09d4aa708289c1a5fc23e2d1970017a"
@@ -461,17 +461,6 @@ weakdeps = ["IntervalSets", "StaticArrays"]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
-
-[[deps.Coverage]]
-deps = ["CoverageTools", "HTTP", "JSON", "LibGit2", "MbedTLS"]
-git-tree-sha1 = "4fb5effc927fddc76a213dc4b1871dc41b666686"
-uuid = "a2441757-f6aa-5fb2-8edb-039e3f45d037"
-version = "1.6.0"
-
-[[deps.CoverageTools]]
-git-tree-sha1 = "cc5595feb314d3b226ed765a001a40ca451ad687"
-uuid = "c36e975a-824b-4404-a568-ef97ca766997"
-version = "1.3.0"
 
 [[deps.CpuId]]
 deps = ["Markdown"]
@@ -2135,12 +2124,6 @@ deps = ["SHA", "Scratch"]
 git-tree-sha1 = "90bc7a7c96410424509e4263e277e43250c05691"
 uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
 version = "1.0.0"
-
-[[deps.ReportMetrics]]
-deps = ["Coverage", "Pkg", "PrettyTables", "SnoopCompile"]
-git-tree-sha1 = "1f85f90495fa80ff68faa090f118dcefde244ca5"
-uuid = "c1654acf-408b-4272-96ce-66c258df8a6c"
-version = "0.2.6"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
