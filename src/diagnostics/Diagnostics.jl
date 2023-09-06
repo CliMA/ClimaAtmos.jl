@@ -458,6 +458,37 @@ function ScheduledDiagnosticIterations(
     )
 end
 
+"""
+    ScheduledDiagnosticTime(sd_time::ScheduledDiagnosticIterations, Δt)
+
+
+Create a `ScheduledDiagnosticTime` given a `ScheduledDiagnosticIterations` and a timestep
+`Δt`.
+
+"""
+function ScheduledDiagnosticTime(
+    sd_time::ScheduledDiagnosticIterations,
+    Δt::T,
+) where {T}
+
+    # If we have the timestep, we can convert time in iterations to seconds
+
+    # if compute_every is :timestep, then we want to compute after every iterations
+    compute_every =
+        sd_time.compute_every == 1 ? :timestep : sd_time.compute_every * Δt
+    output_every = sd_time.output_every * Δt
+
+    ScheduledDiagnosticTime(;
+        sd_time.variable,
+        output_every,
+        sd_time.output_writer,
+        sd_time.reduction_time_func,
+        sd_time.reduction_space_func,
+        compute_every,
+        sd_time.pre_output_hook!,
+    )
+end
+
 # We provide also a companion constructor for ScheduledDiagnosticIterations which returns
 # itself (without copy) when called with a timestep.
 #
