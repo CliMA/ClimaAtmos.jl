@@ -4,13 +4,12 @@ t_end: "300days"
 h_elem: 16
 z_max: 55000.0
 rayleigh_sponge: true
-zd_rayleigh: 35000.0
 z_elem: 63
 vert_diff: "true" 
 kappa_4: 2e16
-alpha_rayleigh_w: 1.0
 surface_setup: "DefaultExchangeCoefficients" 
 moist: "equil" 
 rad: "gray" 
 precip_model: "0M" 
 job_id: "longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M" 
+toml: [toml/longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.toml]
