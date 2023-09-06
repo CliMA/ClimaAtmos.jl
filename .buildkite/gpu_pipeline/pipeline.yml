@@ -18,19 +18,11 @@ steps:
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
-      - echo "--- Instantiate project"
-      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project -e 'using Pkg; Pkg.status()'"
-
-      - echo "--- Configure CUDA"
-      # force the initialization of the CUDA runtime as it is lazily loaded by default
-      - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
-
       - echo "--- Instantiate examples"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
+      - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
 
       - echo "--- Download artifacts"
       - "julia --project=examples artifacts/download_artifacts.jl"
@@ -49,8 +41,7 @@ steps:
         command: >
           julia --project -e 'using CUDA; CUDA.versioninfo()'
           
-          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report julia --color=yes --project=examples examples/hybrid/driver.jl --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave/*"
         agents:
           slurm_gpus: 1
