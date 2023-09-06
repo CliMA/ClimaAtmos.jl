@@ -260,9 +260,9 @@ version = "0.5.3"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "23890cb4479e498244b220613e8dd188aba37975"
+git-tree-sha1 = "f8c0f248eb34fb222455830e35a17f4d1bef9e1c"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.48"
+version = "0.10.49"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["CUDA", "ClimaComms", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "SciMLBase", "StaticArrays"]
@@ -857,15 +857,15 @@ version = "0.10.0"
 
 [[deps.LLVM]]
 deps = ["CEnum", "LLVMExtra_jll", "Libdl", "Printf", "Unicode"]
-git-tree-sha1 = "8695a49bfe05a2dc0feeefd06b4ca6361a018729"
+git-tree-sha1 = "a9d2ce1d5007b1e8f6c5b89c5a31ff8bd146db5c"
 uuid = "929cbde3-209d-540e-8aea-75f648917ca0"
-version = "6.1.0"
+version = "6.2.1"
 
 [[deps.LLVMExtra_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "c35203c1e1002747da220ffc3c0762ce7754b08c"
+git-tree-sha1 = "7ca6850ae880cc99b59b88517545f91a52020afa"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
-version = "0.0.23+0"
+version = "0.0.25+0"
 
 [[deps.LLVMOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1011,9 +1011,9 @@ version = "2023.2.0+0"
 
 [[deps.MPI]]
 deps = ["Distributed", "DocStringExtensions", "Libdl", "MPICH_jll", "MPIPreferences", "MPItrampoline_jll", "MicrosoftMPI_jll", "OpenMPI_jll", "PkgVersion", "PrecompileTools", "Requires", "Serialization", "Sockets"]
-git-tree-sha1 = "32cafbe56c7f0b7160a1a6c492773af66c0b722f"
+git-tree-sha1 = "df53d0e1e0dbebf2315f4cd35e13e52ad43416c2"
 uuid = "da04e1cc-30fd-572f-bb4f-1f8673147195"
-version = "0.20.14"
+version = "0.20.15"
 
     [deps.MPI.extensions]
     AMDGPUExt = "AMDGPU"
@@ -1387,9 +1387,9 @@ version = "0.4.0+0"
 
 [[deps.RootSolvers]]
 deps = ["DocStringExtensions", "ForwardDiff"]
-git-tree-sha1 = "9fb3462240d2898be5d4acf8925e47f70ec64d07"
+git-tree-sha1 = "bafbed2755bf8b1e42fd21f5bb417ff03e9cf1a1"
 uuid = "7181ea78-2dcb-4de3-ab41-2b8ab5a31e74"
-version = "0.3.5"
+version = "0.4.0"
 
 [[deps.RuntimeGeneratedFunctions]]
 deps = ["ExprTools", "SHA", "Serialization"]
@@ -1414,9 +1414,9 @@ version = "0.6.39"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "ChainRulesCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables", "TruncatedStacktraces", "ZygoteRules"]
-git-tree-sha1 = "a1e295a85fd6fae9a7b2072dd4577001210f512d"
+git-tree-sha1 = "54b005258bb5ee4b6fd0f440b528e7b7af4c9975"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.95.0"
+version = "1.96.2"
 
     [deps.SciMLBase.extensions]
     ZygoteExt = "Zygote"
@@ -1632,9 +1632,9 @@ version = "5.10.1+6"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Logging", "RootSolvers", "StaticArrays", "Thermodynamics"]
-git-tree-sha1 = "74972e5395caa7be35b767cd847fbbde980c2965"
+git-tree-sha1 = "0f82dcffc203c9d4a8ea54cb0b05ec5730117744"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.7.1"
+version = "0.7.2"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["DocStringExtensions"]
@@ -1699,9 +1699,9 @@ version = "1.0.1"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "ac3b5236da4d028b9a3984ae7b28730d46892dbf"
+git-tree-sha1 = "3f8dfde3a9b02a00509ee1bdabc25045e95101dd"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.11.0"
+version = "0.11.1"
 
 [[deps.ThreadingUtilities]]
 deps = ["ManualMemory"]
