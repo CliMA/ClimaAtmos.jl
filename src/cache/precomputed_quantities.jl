@@ -276,6 +276,23 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 function set_precomputed_quantities!(Y, p, t)
+    _Y = deepcopy(Y)
+    _p = deepcopy(p)
+    _set_precomputed_quantities!(_Y, _p, t)
+    Y1 = deepcopy(_Y)
+    _set_precomputed_quantities!(_Y, _p, t)
+    Y2 = deepcopy(_Y)
+    if !alleqeq(Y1, Y2)
+        error("set_precomputed_quantities! is not idempotent.")
+    end
+
+    _set_precomputed_quantities!(Y, p, t)
+end
+
+alleqeq(a::Fields.FieldVector, b::Fields.FieldVector) =
+    all(x -> x[1] == x[2], zip(Fields._values(a), Fields._values(b)))
+
+function _set_precomputed_quantities!(Y, p, t)
     (; energy_form, moisture_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
