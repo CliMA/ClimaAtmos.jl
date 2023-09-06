@@ -8,6 +8,8 @@ disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
 doctest(ClimaAtmos)
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
+include("make_diagnostic_table.jl")
+
 makedocs(
     CitationBibliography(joinpath(@__DIR__, "bibliography.bib")),
     modules = [ClimaAtmos],
@@ -27,6 +29,7 @@ makedocs(
         "Equations" => "equations.md",
         "EDMF Equations" => "edmf_equations.md",
         "Diagnostics" => "diagnostics.md",
+        "Available Diagnostics" => "available_diagnostics.md",
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
         "Gravity Wave Drag Parameterizations" => "gravity_wave.md",
         "Radiative Equilibrium" => "radiative_equilibrium.md",

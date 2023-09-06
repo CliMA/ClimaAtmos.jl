@@ -35,7 +35,8 @@ push!(diagnostics, get_daily_max("air_density", "air_temperature"))
 Now `diagnostics` will also contain the instructions to compute the daily
 maximum of `air_density` and `air_temperature`.
 
-**TODO: Add link to table with known diagnostics**
+The diagnostics that are built-in `ClimaAtmos` are collected in [Available
+diagnostic variables](@ref).
 
 If you are using `ClimaAtmos` with a script-based interface, you have access to
 the complete flexibility in your diagnostics. Read the section about the
