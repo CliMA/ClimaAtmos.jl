@@ -43,6 +43,7 @@
 #   - core_diagnostics.jl
 #   - default_diagnostics.jl (which defines all the higher-level interfaces and defaults)
 #   - reduction_identities.jl
+#   - diagnostic_utils.jl
 
 """
     DiagnosticVariable
@@ -138,7 +139,7 @@ function add_diagnostic_variable!(;
     long_name,
     units,
     comments,
-    compute_from_integrator
+    compute_from_integrator,
 )
     haskey(ALL_DIAGNOSTICS, short_name) &&
         error("diagnostic $short_name already defined")
@@ -148,7 +149,7 @@ function add_diagnostic_variable!(;
         long_name,
         units,
         comments,
-        compute_from_integrator
+        compute_from_integrator,
     )
 end
 
@@ -264,16 +265,18 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     )
 
         # We provide an inner constructor to enforce some constraints
+        descriptive_name =
+            get_descriptive_name(variable, output_every, reduction_time_func)
 
         output_every % compute_every == 0 || error(
-            "output_every should be multiple of compute_every for variable $(variable.long_name)",
+            "output_every should be multiple of compute_every for diagnostic $(descriptive_name)",
         )
 
         isa_reduction = !isnothing(reduction_time_func)
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every != compute_every for $(variable.long_name), changing compute_every to match"
+            @warn "output_every != compute_every for $(descriptive_name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -382,12 +385,18 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
     )
 
         # We provide an inner constructor to enforce some constraints
+        descriptive_name = get_descriptive_name(
+            variable,
+            output_every,
+            reduction_time_func;
+            units_are_seconds = false,
+        )
 
         # compute_every could be a Symbol (:timestep). We process this that when we process
         # the list of diagnostics
         if !isa(compute_every, Symbol)
             output_every % compute_every == 0 || error(
-                "output_every should be multiple of compute_every for variable $(variable.long_name)",
+                "output_every should be multiple of compute_every for diagnostic $(descriptive_name)",
             )
         end
 
@@ -395,7 +404,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every != compute_every for $(variable.long_name), changing compute_every to match"
+            @warn "output_every != compute_every for $(descriptive_name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -440,11 +449,17 @@ function ScheduledDiagnosticIterations(
         sd_time.compute_every == :timestep ? 1 : sd_time.compute_every / Δt
     output_every = sd_time.output_every / Δt
 
+    descriptive_name = get_descriptive_name(
+        sd_time.variable,
+        sd_time.output_every,
+        sd_time.reduction_time_func,
+    )
+
     isinteger(output_every) || error(
-        "output_every should be multiple of the timestep for variable $(sd_time.variable.long_name)",
+        "output_every should be multiple of the timestep for diagnostic $(descriptive_name)",
     )
     isinteger(compute_every) || error(
-        "compute_every should be multiple of the timestep for variable $(sd_time.variable.long_name)",
+        "compute_every should be multiple of the timestep for diagnostic $(descriptive_name)",
     )
 
     ScheduledDiagnosticIterations(;
@@ -500,10 +515,12 @@ ScheduledDiagnosticIterations(
     _Δt::T,
 ) where {T} = sd
 
+
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
 
-
+# Helper functions
+include("diagnostics_utils.jl")
 
 """
     get_callbacks_from_diagnostics(diagnostics, storage, counters)

@@ -3,9 +3,8 @@
 # This file defines function-generating functions for output_writers for diagnostics. The
 # writers come with opinionated defaults.
 
-
 """
-    descriptive_name(sd_t::ScheduledDiagnosticTime)
+    get_descriptive_name(sd_t::ScheduledDiagnosticTime)
 
 
 Return a compact, unique-ish, identifier for the given `ScheduledDiagnosticTime` `sd_t`.
@@ -19,44 +18,15 @@ parameters such as whether there is a reduction in space or the compute
 frequency.
 
 """
-function descriptive_name(sd_t::ScheduledDiagnosticTime)
-    var = "$(sd_t.variable.short_name)"
-
-    isa_reduction = !isnothing(sd_t.reduction_time_func)
-
-    if isa_reduction
-        red = "$(sd_t.reduction_time_func)"
-
-        # Convert period from seconds to days, hours, minutes, seconds
-        period = ""
-
-        days, rem_seconds = divrem(sd_t.output_every, 24 * 60 * 60)
-        hours, rem_seconds = divrem(rem_seconds, 60 * 60)
-        minutes, seconds = divrem(rem_seconds, 60)
-
-        if days > 0
-            period *= "$(days)d_"
-        end
-        if hours > 0
-            period *= "$(hours)h_"
-        end
-        if minutes > 0
-            period *= "$(minutes)m_"
-        end
-        if seconds > 0
-            period *= "$(seconds)s_"
-        end
-
-        suffix = period * red
-    else
-        # Not a reduction
-        suffix = "inst"
-    end
-    return "$(var)_$(suffix)"
-end
+get_descriptive_name(sd_t::ScheduledDiagnosticTime) = get_descriptive_name(
+    sd_t.variable,
+    sd_t.output_every,
+    sd_t.reduction_time_func;
+    units_are_seconds = true,
+)
 
 """
-    descriptive_name(sd_i::ScheduledDiagnosticIterations, [Δt])
+    get_descriptive_name(sd_i::ScheduledDiagnosticIterations[, Δt])
 
 
 Return a compact, unique-ish, identifier for the given
@@ -71,20 +41,20 @@ other parameters such as whether there is a reduction in space or the compute
 frequency.
 
 """
-function descriptive_name(sd_i::ScheduledDiagnosticIterations,
-                          Δt = nothing)
-
-    if !isnothing(Δt)
-        # Convert iterations into time
-        return descriptive_name(ScheduledDiagnosticTime(sd_i, Δt))
-    else
-        var = "$(sd_i.variable.short_name)"
-        suffix =
-            isnothing(sd_i.reduction_time_func) ? "inst" :
-            "$(sd_i.output_every)it_(sd_i.reduction_time_func)"
-        return "$(var)_$(suffix)"
-    end
-end
+get_descriptive_name(sd_i::ScheduledDiagnosticIterations, Δt::Nothing) =
+    get_descriptive_name(
+        sd_t.variable,
+        sd_t.output_every,
+        sd_t.reduction_time_func;
+        units_are_seconds = false,
+    )
+get_descriptive_name(sd_i::ScheduledDiagnosticIterations, Δt::T) where {T} =
+    get_descriptive_name(
+        sd_i.variable,
+        sd_i.output_every * Δt,
+        sd_i.reduction_time_func;
+        units_are_seconds = true,
+    )
 
 
 """
@@ -115,12 +85,15 @@ function HDF5Writer()
     # and the integrator
     function write_to_hdf5(value, diagnostic, integrator)
         var = diagnostic.variable
-        time = lpad(integrator.t, 10, "0")
-        red = isnothing(diagnostic.reduction_time_func) ? "" : diagnostic.reduction_time_func
+        time = integrator.t
+
+        # diagnostic here is a ScheduledDiagnosticIteration. If we want to obtain a
+        # descriptive name (e.g., something with "daily"), we have to pass the timestep as
+        # well
 
         output_path = joinpath(
             integrator.p.simulation.output_dir,
-            "$(var.short_name)_$(red)_$(time).h5",
+            "$(get_descriptive_name(diagnostic, integrator.p.simulation.dt))_$time.h5",
         )
 
         hdfwriter = InputOutput.HDF5Writer(output_path, integrator.p.comms_ctx)
