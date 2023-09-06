@@ -9,8 +9,6 @@ import ..NonEquilMoistModel
 import ..NoPrecipitation
 import ..Microphysics0Moment
 import ..Microphysics1Moment
-import ..PerfStandard
-import ..PerfExperimental
 import ..PrescribedSurfaceTemperature
 import ..PrognosticSurfaceTemperature
 import ..C3

@@ -149,14 +149,6 @@ function get_orographic_gravity_wave_model(parsed_args, ::Type{FT}) where {FT}
     end
 end
 
-function get_perf_mode(parsed_args)
-    return if parsed_args["perf_mode"] == "PerfExperimental"
-        PerfExperimental()
-    else
-        PerfStandard()
-    end
-end
-
 function get_energy_form(parsed_args, vert_diff)
     energy_name = parsed_args["energy_name"]
     @assert energy_name in ("rhoe", "rhotheta")

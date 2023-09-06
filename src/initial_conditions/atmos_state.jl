@@ -59,7 +59,7 @@ grid_scale_center_variables(ls, atmos_model) = (;
     uₕ = C12(ls.velocity, ls.geometry),
     energy_variables(ls, atmos_model.energy_form)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
-    precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
+    precip_variables(ls, atmos_model.precip_model)...,
 )
 
 # TODO: Rename ρθ to ρθ_liq_ice.
@@ -102,12 +102,15 @@ moisture_variables(ls, ::NonEquilMoistModel) = (;
     ρq_ice = ls.ρ * TD.ice_specific_humidity(ls.thermo_params, ls.thermo_state),
 )
 
-# TODO: Remove perf_mode. Currently, adding tracers hurts performance.
-precip_variables(ls, ::NoPrecipitation, ::PerfStandard) = (;)
-precip_variables(ls, ::Microphysics0Moment, ::PerfStandard) = (;)
-precip_variables(ls, ::Microphysics1Moment, ::PerfStandard) =
-    (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
-precip_variables(ls, _, ::PerfExperimental) =
+# In the ClimaAtmos CI, there's a job named `flame_perf_target_tracers`. The job
+# patches one of the following lines to add new state variables to evaluate the
+# performance cost. If you change any character in the line:
+# `precip_variables(ls, ::Microphysics0Moment) = (;)`
+# the job will fail. See discussion in
+# https://github.com/CliMA/ClimaAtmos.jl/pull/2070
+precip_variables(ls, ::NoPrecipitation) = (;)
+precip_variables(ls, ::Microphysics0Moment) = (;)
+precip_variables(ls, ::Microphysics1Moment) =
     (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
 
 # We can use paper-based cases for LES type configurations (no TKE)
