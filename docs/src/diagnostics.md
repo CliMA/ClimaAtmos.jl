@@ -79,11 +79,12 @@ More specifically, a `ScheduledDiagnostic` contains the following pieces of data
    last time it was output.
 
 To implement operations like the arithmetic average, the `reduction_time_func`
-has to be chosen as `sum`, and a `pre_output_hook!` that renormalize `acc` by
-the number of samples has to be provided. `pre_output_hook!` should mutate the
+has to be chosen as `+`, and a `pre_output_hook!` that renormalize `acc` by the
+number of samples has to be provided. `pre_output_hook!` should mutate the
 accumulator in place. The return value of `pre_output_hook!` is discarded. An
 example of `pre_output_hook!` to compute the arithmetic average is
-`pre_output_hook!(acc, N) = @. acc = acc / N`.
+`pre_output_hook!(acc, N) = @. acc = acc / N`. `ClimaAtmos` provides an alias to
+the function needed to compute averages `ClimaAtmos.average_pre_output_hook!`.
 
 For custom reductions, it is necessary to also specify the identity of operation
 by defining a new method to `identity_of_reduction`. `identity_of_reduction` is
