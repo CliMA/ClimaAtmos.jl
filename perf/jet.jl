@@ -8,6 +8,6 @@ integrator = CA.get_integrator(config)
 
 import JET
 
-import OrdinaryDiffEq
-OrdinaryDiffEq.step!(integrator) # Make sure no errors
-JET.@test_opt OrdinaryDiffEq.step!(integrator)
+import SciMLBase
+SciMLBase.step!(integrator) # Make sure no errors
+JET.@test_opt SciMLBase.step!(integrator)

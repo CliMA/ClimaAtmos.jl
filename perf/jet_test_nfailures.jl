@@ -6,8 +6,8 @@ integrator = CA.get_integrator(config)
 
 import JET
 
-import OrdinaryDiffEq
-OrdinaryDiffEq.step!(integrator) # Make sure no errors
+import SciMLBase
+SciMLBase.step!(integrator) # Make sure no errors
 
 # Suggested in: https://github.com/aviatesk/JET.jl/issues/455
 macro n_failures(ex)
@@ -20,7 +20,7 @@ end
 
 using Test
 @testset "Test N-jet failures" begin
-    n = @n_failures OrdinaryDiffEq.step!(integrator)
+    n = @n_failures SciMLBase.step!(integrator)
     # This test is intended to provide some friction when we
     # add code to our tendency function that results in degraded
     # inference. By increasing this counter, we acknowledge that

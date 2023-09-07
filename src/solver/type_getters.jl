@@ -1,7 +1,6 @@
 using Dates: DateTime, @dateformat_str
 using NCDatasets
 using Dierckx
-using DiffEqBase
 using ImageFiltering
 using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
@@ -11,7 +10,7 @@ import LinearAlgebra
 import ClimaCore.Fields
 import OrdinaryDiffEq as ODE
 import ClimaTimeSteppers as CTS
-import DiffEqCallbacks as DEQ
+import DiffEqCallbacks as DECB
 
 function get_atmos(config::AtmosConfig, params)
     (; turbconv_params, sponge_params) = params
@@ -359,7 +358,7 @@ is_ordinary_diffeq_newton(alg_or_tableau) =
     }
 
 is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
-is_imex_CTS_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(::ODE.OrdinaryDiffEqImplicitAlgorithm) = true
 is_implicit(::ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm) = true
@@ -367,11 +366,11 @@ is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
 
 is_rosenbrock(::ODE.Rosenbrock23) = true
 is_rosenbrock(::ODE.Rosenbrock32) = true
-is_rosenbrock(::DiffEqBase.AbstractODEAlgorithm) = false
+is_rosenbrock(::SciMLBase.AbstractODEAlgorithm) = false
 use_transform(ode_algo) =
     !(is_imex_CTS_algo(ode_algo) || is_rosenbrock(ode_algo))
 
-additional_integrator_kwargs(::DiffEqBase.AbstractODEAlgorithm) = (;
+additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
     adaptive = false,
     progress = isinteractive(),
     progress_steps = isinteractive() ? 1 : 1000,
@@ -382,7 +381,7 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
     # TODO: enable progress bars in ClimaTimeSteppers
 )
 
-is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
 jacobi_flags(::TotalEnergy) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK)
@@ -541,7 +540,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
         )
     end
 
-    return ODE.CallbackSet(callbacks...)
+    return SciMLBase.CallbackSet(callbacks...)
 end
 
 
@@ -622,7 +621,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
-            implicit_func = ODE.ODEFunction(
+            implicit_func = SciMLBase.ODEFunction(
                 implicit_tendency!;
                 jac_kwargs(ode_algo, Y, atmos.energy_form)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
@@ -637,14 +636,14 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     dss!,
                 )
             else
-                ODE.SplitFunction(implicit_func, remaining_tendency!)
+                SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
             end
         else
             remaining_tendency! # should be total_tendency!
         end
     end
     @info "Define ode function: $s"
-    problem = ODE.ODEProblem(func, Y, tspan, p)
+    problem = SciMLBase.ODEProblem(func, Y, tspan, p)
     saveat = if dt_save_to_sol == Inf
         tspan[2]
     elseif tspan[2] % dt_save_to_sol == 0
@@ -765,7 +764,7 @@ function get_integrator(config::AtmosConfig)
     end
 
     s = @timed_str begin
-        integrator = ODE.init(integrator_args...; integrator_kwargs...)
+        integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
     return integrator

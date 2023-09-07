@@ -7,8 +7,8 @@ integrator = CA.get_integrator(config)
 # The callbacks flame graph is very expensive, so only do 2 steps.
 @info "running step"
 
-import OrdinaryDiffEq
-OrdinaryDiffEq.step!(integrator) # compile first
+import SciMLBase
+SciMLBase.step!(integrator) # compile first
 CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
 (; output_dir, job_id) = integrator.p.simulation
@@ -18,7 +18,7 @@ mkpath(output_dir)
 
 @info "collect profile"
 Profile.clear()
-prof = Profile.@profile OrdinaryDiffEq.step!(integrator)
+prof = Profile.@profile SciMLBase.step!(integrator)
 results = Profile.fetch()
 Profile.clear()
 
@@ -32,7 +32,7 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 # use new allocation profiler
 @info "collecting allocations"
 Profile.Allocs.clear()
-Profile.Allocs.@profile sample_rate = 0.01 OrdinaryDiffEq.step!(integrator)
+Profile.Allocs.@profile sample_rate = 0.01 SciMLBase.step!(integrator)
 results = Profile.Allocs.fetch()
 Profile.Allocs.clear()
 profile = ProfileCanvas.view_allocs(results)
@@ -49,8 +49,8 @@ buffer = occursin("threaded", job_id) ? 1.4 : 1
 
 
 ## old allocation profiler (TODO: remove this)
-allocs = @allocated OrdinaryDiffEq.step!(integrator)
-@timev OrdinaryDiffEq.step!(integrator)
+allocs = @allocated SciMLBase.step!(integrator)
+@timev SciMLBase.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()

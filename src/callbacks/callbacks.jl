@@ -6,9 +6,9 @@ import ClimaCore.Fields
 import ClimaComms
 import ClimaCore as CC
 import ClimaCore.Spaces
-import OrdinaryDiffEq as ODE
+import SciMLBase
 import ClimaAtmos.Parameters as CAP
-import DiffEqCallbacks as DEQ
+import DiffEqCallbacks as DECB
 import ClimaCore: InputOutput
 import Dates
 using Insolation: instantaneous_zenith_angle
@@ -70,7 +70,7 @@ function turb_conv_affect_filter!(integrator)
     # paying for an additional `∑tendencies!` call, which is required
     # to support supplying a continuous representation of the
     # solution.
-    ODE.u_modified!(integrator, false)
+    SciMLBase.u_modified!(integrator, false)
 end
 
 function rrtmgp_model_callback!(integrator)
