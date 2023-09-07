@@ -19,7 +19,7 @@ function edmfx_tke_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     c_d = TCP.tke_diss_coeff(turbconv_params)
     (; ᶜentr_detrʲs, ᶠu³ʲs) = p
-    (; ᶠu³⁰, ᶜshear², ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) = p
+    (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) = p
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -36,7 +36,7 @@ function edmfx_tke_tendency!(
             ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
         # shear production
         @. Yₜ.c.sgs⁰.ρatke[colidx] +=
-            2 * Y.c.ρ[colidx] * ᶜK_u[colidx] * ᶜshear²[colidx]
+            2 * Y.c.ρ[colidx] * ᶜK_u[colidx] * ᶜstrain_rate_norm[colidx]
         # buoyancy production
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             Y.c.ρ[colidx] * ᶜK_h[colidx] * ᶜlinear_buoygrad[colidx]

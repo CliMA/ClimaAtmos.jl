@@ -146,7 +146,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜS_e_totʲs_helper,
     ) = p
     (; ᶠu³⁰, ᶜu⁰, ᶜK⁰, ᶜh_tot⁰, ᶜtke⁰, ᶜS_q_tot⁰) = p
-    (; ᶜlinear_buoygrad, ᶜshear², ᶜmixing_length) = p
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
@@ -651,18 +651,19 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ),
     )
 
-    # TODO: This is not correct with topography or with grid stretching
+    # TODO: Currently the shear production only includes vertical gradients
     ᶠu⁰ = p.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
-    ct3_unit = p.ᶜtemp_CT3
-    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
-    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu⁰)) * ct3_unit)
+    ᶜstrain_rate = p.ᶜtemp_UVWxUVW
+    compute_strain_rate!(ᶜstrain_rate, ᶠu⁰)
+    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     @. ᶜprandtl_nvec = turbulent_prandtl_number(
         params,
         obukhov_length,
         ᶜlinear_buoygrad,
-        ᶜshear²,
+        ᶜstrain_rate_norm,
     )
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
@@ -686,7 +687,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜlinear_buoygrad,
         max(ᶜtke⁰, 0),
         obukhov_length,
-        ᶜshear²,
+        ᶜstrain_rate_norm,
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )

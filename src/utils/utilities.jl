@@ -74,10 +74,26 @@ end
     compute_kinetic!(κ::Field, Y::FieldVector)
 
 Compute the specific kinetic energy at cell centers, storing in `κ`, where `Y`
-is the model state.s
+is the model state.
 """
 compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
     compute_kinetic!(κ, Y.c.uₕ, Y.f.u₃)
+
+"""
+    compute_strain_rate!(ϵ::Field, u::Field)
+
+Compute the strain_rate at cell centers, storing in `ϵ` from
+velocity at cell faces.
+"""
+function compute_strain_rate!(ϵ::Fields.Field, u::Fields.Field)
+    @assert eltype(u) <: C123
+    axis_uvw = Geometry.UVWAxis()
+    @. ϵ =
+        (
+            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
+            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
+        ) / 2
+end
 
 """
     g³³_field(field)

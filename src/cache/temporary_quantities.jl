@@ -51,6 +51,10 @@ function temporary_quantities(atmos, center_space, face_space)
         ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
         ᶜtemp_C123 = Fields.Field(C123{FT}, center_space), # χ₁₂₃
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
+        ᶜtemp_UVWxUVW = Fields.Field(
+            typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
+            center_space,
+        ), # ᶜstrain_rate
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
     )

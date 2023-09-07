@@ -24,7 +24,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
     (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
-    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜshear², ᶜK_u, ᶜK_h) = p
+    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) = p
     (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
     (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
@@ -197,7 +197,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         ),
     )
 
-    @. ᶜshear² = $(FT(1e-4))
+    @. ᶜstrain_rate_norm = $(FT(1e-4))
     ᶜprandtl_nvec = p.ᶜtemp_scalar
     @. ᶜprandtl_nvec = FT(1) / 3
     ᶜtke_exch = p.ᶜtemp_scalar_2
@@ -223,7 +223,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         ᶜlinear_buoygrad,
         ᶜspecific⁰.tke,
         obukhov_length,
-        ᶜshear²,
+        ᶜstrain_rate_norm,
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
