@@ -74,7 +74,7 @@ function get_atmos(config::AtmosConfig, turbconv_params)
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
-        smagorinsky_lily = get_smagorinsky_lily_model(parsed_args, FT),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, FT),
     )
 
     @info "AtmosModel: \n$(summary(atmos))"

@@ -213,7 +213,7 @@ end
 function compute_diagnostics(integrator)
     (; t, u, p) = integrator
     Y = u
-    (; params, env_thermo_quad, ᶜD) = p
+    (; params, env_thermo_quad) = p
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
 

@@ -42,11 +42,11 @@ function smagorinsky_lilly_cache(sl::SmagorinskyLily, Y)
     return (; v_t, ᶜD)
 end
 
-horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
+horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 
-function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLily) 
+function l(Yₜ, Y, p, t, sl::SmagorinskyLily) 
     if !(hasproperty(p, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end
@@ -82,7 +82,7 @@ function horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLil
 
 end
 
-function vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, sl::SmagorinskyLily) 
+function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::SmagorinskyLily) 
     if !(hasproperty(p, :ᶜspecific))
         throw(ErrorException("p does not have the property ᶜspecific."))
     end

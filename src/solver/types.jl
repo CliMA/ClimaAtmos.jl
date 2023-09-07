@@ -35,9 +35,9 @@ Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     divergence_damping_factor::FT
 end
 
-# define type for smagorinsky_lily
+# define type for smagorinsky_lilly
 abstract type AbstractEddyViscosityModel end
-Base.@kwdef struct SmagorinskyLily{FT} <: AbstractEddyViscosityModel
+Base.@kwdef struct SmagorinskyLilly{FT} <: AbstractEddyViscosityModel
     Cs::FT = 0.2
 end
 
@@ -307,7 +307,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing
-    smagorinsky_lily::SL = nothing
+    smagorinsky_lilly::SL = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)

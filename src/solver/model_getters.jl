@@ -10,12 +10,12 @@ function get_moisture_model(parsed_args)
     end
 end
 
-function get_smagorinsky_lily_model(parsed_args, ::Type{FT}) where {FT}
-    is_model_on = parsed_args["smagorinsky_lily"]
+function get_smagorinsky_lilly_model(parsed_args, ::Type{FT}) where {FT}
+    is_model_on = parsed_args["smagorinsky_lilly"]
     Cs = parsed_args["c_smag"]
     @assert is_model_on in (true, false)
     return if is_model_on == true
-        SmagorinskyLily{FT}(; Cs)
+        SmagorinskyLilly{FT}(; Cs)
     else
         nothing
     end

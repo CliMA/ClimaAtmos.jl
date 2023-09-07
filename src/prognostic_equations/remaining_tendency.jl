@@ -28,13 +28,13 @@ end
 function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
-    horizontal_smagorinsky_lily_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lily)
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
     
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, p.atmos.rayleigh_sponge)
-        vertical_smagorinsky_lily_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lily)
+        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
         forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)

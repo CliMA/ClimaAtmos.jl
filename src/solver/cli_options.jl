@@ -288,8 +288,8 @@ function argparse_settings()
         help = "Rayleigh sponge [`true`, `false` (default)]"
         arg_type = Bool
         default = false
-        "--smagorinsky_lily"
-        help = "Smagorinsmagsky lily [`true`, `false` (default)]"
+        "--smagorinsky_lilly"
+        help = "Smagorinsmagsky lilly [`true`, `false` (default)]"
         arg_type = Bool
         default = false
         "--c_smag"
