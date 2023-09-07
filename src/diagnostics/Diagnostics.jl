@@ -265,8 +265,12 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     )
 
         # We provide an inner constructor to enforce some constraints
-        descriptive_name =
-            get_descriptive_name(variable, output_every, reduction_time_func)
+        descriptive_name = get_descriptive_name(
+            variable,
+            output_every,
+            pre_output_hook!,
+            reduction_time_func,
+        )
 
         output_every % compute_every == 0 || error(
             "output_every should be multiple of compute_every for diagnostic $(descriptive_name)",
@@ -388,7 +392,8 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         descriptive_name = get_descriptive_name(
             variable,
             output_every,
-            reduction_time_func;
+            reduction_time_func,
+            pre_output_hook!;
             units_are_seconds = false,
         )
 
@@ -453,6 +458,7 @@ function ScheduledDiagnosticIterations(
         sd_time.variable,
         sd_time.output_every,
         sd_time.reduction_time_func,
+        sd_time.pre_output_hook!,
     )
 
     isinteger(output_every) || error(

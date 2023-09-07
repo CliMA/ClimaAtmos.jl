@@ -7,7 +7,8 @@
 """
     get_descriptive_name(variable::DiagnosticVariable,
                          output_every,
-                         reduction_time_func;
+                         reduction_time_func,
+                         pre_output_hook!;
                          units_are_seconds = true)
 
 
@@ -23,15 +24,25 @@ This function is useful for filenames and error messages.
 function get_descriptive_name(
     variable::DiagnosticVariable,
     output_every,
-    reduction_time_func;
+    reduction_time_func,
+    pre_output_hook!;
     units_are_seconds = true,
 )
     var = "$(variable.short_name)"
     isa_reduction = !isnothing(reduction_time_func)
 
-    if units_are_seconds
-        if isa_reduction
-            red = "$(reduction_time_func)"
+
+    if isa_reduction
+        red = "$(reduction_time_func)"
+
+        # Let's check if we are computing the average. Note that this might slip under the
+        # radar if the user passes their own pre_output_hook!.
+        if reduction_time_func == (+) &&
+           pre_output_hook! == average_pre_output_hook!
+            red = "average"
+        end
+
+        if units_are_seconds
 
             # Convert period from seconds to days, hours, minutes, seconds
             period = ""
@@ -47,15 +58,10 @@ function get_descriptive_name(
 
             suffix = period * red
         else
-            # Not a reduction
-            suffix = "inst"
+            suffix = "$(output_every)it_(reduction_time_func)"
         end
     else
-        if isa_reduction
-            suffix = "$(output_every)it_(reduction_time_func)"
-        else
-            suffix = "inst"
-        end
+        suffix = "inst"
     end
     return "$(var)_$(suffix)"
 end

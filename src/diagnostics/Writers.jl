@@ -45,14 +45,16 @@ get_descriptive_name(sd_i::ScheduledDiagnosticIterations, Δt::Nothing) =
     get_descriptive_name(
         sd_t.variable,
         sd_t.output_every,
-        sd_t.reduction_time_func;
+        sd_t.reduction_time_func,
+        sd_t.pre_output_hook!;
         units_are_seconds = false,
     )
 get_descriptive_name(sd_i::ScheduledDiagnosticIterations, Δt::T) where {T} =
     get_descriptive_name(
         sd_i.variable,
         sd_i.output_every * Δt,
-        sd_i.reduction_time_func;
+        sd_i.reduction_time_func,
+        sd_i.pre_output_hook!;
         units_are_seconds = true,
     )
 
