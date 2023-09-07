@@ -89,7 +89,7 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
     κ_d = FT(CAP.kappa_d(params))
     cv_d = FT(CAP.cv_d(params))
     T_tri = FT(CAP.T_triple(params))
-    MSLP = FT(CAP.MSLP(params))
+    p_ref_theta = FT(CAP.p_ref_theta(params))
 
     dtγ_ref[] = dtγ
 
@@ -207,12 +207,13 @@ function Wfact!(W, Y, p, dtγ, t, colidx)
         # If we ignore the dependence of pressure on moisture,
         # ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρθ) =
         #     ᶠgradᵥ_stencil(
-        #         R_d / (1 - κ_d) * (ᶜρθ * R_d / MSLP)^(κ_d / (1 - κ_d))
+        #         R_d / (1 - κ_d) * (ᶜρθ * R_d / p_ref_theta)^(κ_d / (1 - κ_d))
         #     )
         ᶜρθ = Y.c.ρθ
         @. ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx] = map_get_data(
             -1 / ᶠinterp(ᶜρ[colidx]) * ᶠgradᵥ_stencil(
-                R_d / (1 - κ_d) * (ᶜρθ[colidx] * R_d / MSLP)^(κ_d / (1 - κ_d)),
+                R_d / (1 - κ_d) *
+                (ᶜρθ[colidx] * R_d / p_ref_theta)^(κ_d / (1 - κ_d)),
             ),
         )
 

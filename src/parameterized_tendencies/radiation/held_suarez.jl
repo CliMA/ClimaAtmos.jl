@@ -37,6 +37,7 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     cv_d = FT(CAP.cv_d(params))
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
+    p_ref_theta = FT(CAP.p_ref_theta(params))
     grav = FT(CAP.grav(params))
     ΔT_y_dry = FT(CAP.ΔT_y_dry(params))
     ΔT_y_wet = FT(CAP.ΔT_y_wet(params))
@@ -79,14 +80,17 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
                 T_min,
                 (
                     T_equator - ΔT_y * abs2(sin(ᶜφ[colidx])) -
-                    Δθ_z * log(ᶜp[colidx] / MSLP) * abs2(cos(ᶜφ[colidx]))
-                ) * fast_pow(ᶜp[colidx] / MSLP, κ_d),
+                    Δθ_z *
+                    log(ᶜp[colidx] / p_ref_theta) *
+                    abs2(cos(ᶜφ[colidx]))
+                ) * fast_pow(ᶜp[colidx] / p_ref_theta, κ_d),
             )
         )
 
     @. Yₜ.c.uₕ[colidx] -= (k_f * ᶜheight_factor[colidx]) * Y.c.uₕ[colidx]
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ[colidx] -= ᶜΔρT[colidx] * fast_pow((MSLP / ᶜp[colidx]), κ_d)
+        @. Yₜ.c.ρθ[colidx] -=
+            ᶜΔρT[colidx] * fast_pow((p_ref_theta / ᶜp[colidx]), κ_d)
     elseif :ρe_tot in propertynames(Y.c)
         @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
     end
