@@ -6,7 +6,7 @@ ClimaAtmos.TurbulenceConvection.Parameters
 
 ## Initial conditions
 
-### General 
+### General
 
 ```@docs
 ClimaAtmos.InitialConditions.InitialCondition

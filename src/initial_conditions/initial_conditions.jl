@@ -561,7 +561,7 @@ end
 """
     GABLS
 
-The `InitialCondition` described in [Kosovic2000](cite), but with a hydrostatically
+The `InitialCondition` described in [Kosovic2000](@cite), but with a hydrostatically
 balanced pressure profile.
 """
 Base.@kwdef struct GABLS <: InitialCondition
@@ -777,7 +777,7 @@ end
 """
     Rico
 
-The `InitialCondition` described in [Rauber2007](cite), but with a hydrostatically
+The `InitialCondition` described in [Rauber2007](@cite), but with a hydrostatically
 balanced pressure profile.
 """
 Base.@kwdef struct Rico <: InitialCondition
