@@ -16,7 +16,7 @@ walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=second
 function timed_solve!(integrator)
     walltime = @elapsed begin
         s = @timed_str begin
-            sol = ODE.solve!(integrator)
+            sol = SciMLBase.solve!(integrator)
         end
     end
     @info "solve!: $s"
@@ -52,7 +52,7 @@ function solve_atmos!(integrator)
     @info "Running" job_id = p.simulation.job_id output_dir =
         p.simulation.output_dir tspan
     comms_ctx = ClimaComms.context(axes(integrator.u.c))
-    ODE.step!(integrator)
+    SciMLBase.step!(integrator)
     precompile_callbacks(integrator)
     GC.gc()
     try
@@ -111,7 +111,7 @@ for the flags outlined in a table.
 """
 function benchmark_step!(integrator, Y₀, n_steps = 10)
     for i in 1:n_steps
-        ODE.step!(integrator)
+        SciMLBase.step!(integrator)
         integrator.u .= Y₀ # temporary hack to simplify performance benchmark.
     end
     return nothing
@@ -131,7 +131,7 @@ into account.
 function cycle!(integrator; n_cycles = 1)
     n_steps = n_steps_per_cycle(integrator) * n_cycles
     for i in 1:n_steps
-        ODE.step!(integrator)
+        SciMLBase.step!(integrator)
     end
     return nothing
 end
@@ -150,7 +150,7 @@ Precompiles `step!` and all callbacks
 in the `integrator`.
 """
 function precompile_atmos(integrator)
-    B = Base.precompile(ODE.step!, (typeof(integrator),))
+    B = Base.precompile(SciMLBase.step!, (typeof(integrator),))
     @assert B
     precompile_callbacks(integrator)
     return nothing

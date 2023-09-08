@@ -544,8 +544,13 @@ function hydrostatic_pressure_profile(;
     dp_dz(p, _, z) =
         -grav * TD.air_density(thermo_params, ts(p, z, T, θ, q_tot))
 
-    prob = ODE.ODEProblem(dp_dz, p_0, (FT(0), z_max))
-    return ODE.solve(prob, ODE.Tsit5(), reltol = 10eps(FT), abstol = 10eps(FT))
+    prob = SciMLBase.ODEProblem(dp_dz, p_0, (FT(0), z_max))
+    return SciMLBase.solve(
+        prob,
+        ODE.Tsit5(),
+        reltol = 10eps(FT),
+        abstol = 10eps(FT),
+    )
 end
 
 """

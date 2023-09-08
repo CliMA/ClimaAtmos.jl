@@ -6,9 +6,9 @@ integrator = CA.get_integrator(config)
 
 (; parsed_args) = config
 
-import OrdinaryDiffEq as ODE
+import SciMLBase
 import ClimaTimeSteppers as CTS
-ODE.step!(integrator) # compile first
+SciMLBase.step!(integrator) # compile first
 
 (; sol, u, p, dt, t) = integrator
 
@@ -41,7 +41,7 @@ trials["implicit_tendency!"] = get_trial(implicit_fun(integrator), implicit_args
 trials["remaining_tendency!"] = get_trial(remaining_fun(integrator), remaining_args(integrator), "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(CA.additional_tendency!, (X, u, p, t), "additional_tendency!");
 trials["hyperdiffusion_tendency!"] = get_trial(CA.hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
-trials["step!"] = get_trial(ODE.step!, (integrator, ), "step!");
+trials["step!"] = get_trial(SciMLBase.step!, (integrator, ), "step!");
 #! format: on
 
 table_summary = OrderedCollections.OrderedDict()

@@ -1,4 +1,4 @@
-import DiffEqCallbacks
+import SciMLBase
 #####
 ##### Callback helpers
 #####
@@ -7,7 +7,7 @@ function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
     previous_step = Ref(0)
     @assert n ≠ Inf "Adding callback that never gets called!"
     cb! = AtmosCallback(f!, EveryNSteps(n))
-    return ODE.DiscreteCallback(
+    return SciMLBase.DiscreteCallback(
         (u, t, integrator) ->
             (previous_step[] += 1) % n == 0 ||
                 (call_at_end && t == integrator.sol.prob.tspan[2]),
@@ -31,7 +31,7 @@ function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
             next_t[] = min(next_t[], t_end)
         end
     end
-    return ODE.DiscreteCallback(
+    return SciMLBase.DiscreteCallback(
         (u, t, integrator) -> t >= next_t[],
         affect!;
         initialize = (cb, u, t, integrator) -> begin
@@ -50,21 +50,21 @@ function callback_from_affect(affect!)
         x = getproperty(affect!, p)
         if x isa AtmosCallback
             return x
-        elseif x isa DiffEqCallbacks.SavedValues
+        elseif x isa DECB.SavedValues
             return x
         end
     end
     error("Callback not found in $(affect!)")
 end
-function atmos_callbacks(cbs::ODE.CallbackSet)
+function atmos_callbacks(cbs::SciMLBase.CallbackSet)
     all_cbs = [cbs.continuous_callbacks..., cbs.discrete_callbacks...]
     callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
-    filter!(x -> !(x isa DiffEqCallbacks.SavedValues), callback_objs)
+    filter!(x -> !(x isa DECB.SavedValues), callback_objs)
     return callback_objs
 end
 
 n_measured_calls(integrator) = n_measured_calls(integrator.callback)
-n_measured_calls(cbs::ODE.CallbackSet) =
+n_measured_calls(cbs::SciMLBase.CallbackSet) =
     map(x -> x.n_measured_calls, atmos_callbacks(cbs))
 
 n_expected_calls(integrator) = n_expected_calls(
@@ -72,12 +72,12 @@ n_expected_calls(integrator) = n_expected_calls(
     integrator.dt,
     integrator.sol.prob.tspan,
 )
-n_expected_calls(cbs::ODE.CallbackSet, dt, tspan) =
+n_expected_calls(cbs::SciMLBase.CallbackSet, dt, tspan) =
     map(x -> n_expected_calls(x, dt, tspan), atmos_callbacks(cbs))
 
 n_steps_per_cycle(integrator) =
     n_steps_per_cycle(integrator.callback, integrator.dt)
-function n_steps_per_cycle(cbs::ODE.CallbackSet, dt)
+function n_steps_per_cycle(cbs::SciMLBase.CallbackSet, dt)
     nspc = n_steps_per_cycle_per_cb(cbs, dt)
     return isempty(nspc) ? 1 : lcm(nspc)
 end
@@ -85,7 +85,7 @@ end
 n_steps_per_cycle_per_cb(integrator) =
     n_steps_per_cycle_per_cb(integrator.callback, integrator.dt)
 
-function n_steps_per_cycle_per_cb(cbs::ODE.CallbackSet, dt)
+function n_steps_per_cycle_per_cb(cbs::SciMLBase.CallbackSet, dt)
     return map(atmos_callbacks(cbs)) do cb
         cbf = callback_frequency(cb)
         if cbf isa EveryΔt

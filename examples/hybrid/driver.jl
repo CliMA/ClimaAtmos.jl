@@ -17,9 +17,9 @@ using Statistics: mean
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
 import ClimaComms
-using OrdinaryDiffEq
+using SciMLBase
 using PrettyTables
-using DiffEqCallbacks
+import DiffEqCallbacks as DECB
 using JLD2
 using NCDatasets
 using ClimaTimeSteppers
