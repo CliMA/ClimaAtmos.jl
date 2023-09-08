@@ -250,7 +250,7 @@ function lamb_smooth_minimum(
 end
 
 """
-    mixing_length(params, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, shear², ᶜPr, ᶜtke_exch)
+    mixing_length(params, ustar, ᶜz, sfc_tke, ᶜlinear_buoygrad, ᶜtke, obukhov_length, ᶜstrain_rate_norm, ᶜPr, ᶜtke_exch)
 
 where:
 - `params`: set with model parameters
@@ -260,7 +260,7 @@ where:
 - `ᶜlinear_buoygrad`: buoyancy gradient
 - `ᶜtke`: env turbulent kinetic energy
 - `obukhov_length`: surface Monin Obukhov length
-- `ᶜshear²`: shear term
+- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor
 - `ᶜPr`: Prandtl number
 - `ᶜtke_exch`: subdomain exchange term
 
@@ -280,7 +280,7 @@ function mixing_length(
     ᶜlinear_buoygrad::FT,
     ᶜtke::FT,
     obukhov_length::FT,
-    ᶜshear²::FT,
+    ᶜstrain_rate_norm::FT,
     ᶜPr::FT,
     ᶜtke_exch::FT,
 ) where {FT}
@@ -306,7 +306,7 @@ function mixing_length(
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
-    a_pd = c_m * (ᶜshear² - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
+    a_pd = c_m * (ᶜstrain_rate_norm - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
     # Dissipation term
     c_neg = c_d * ᶜtke * sqrt(ᶜtke)
     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
@@ -334,7 +334,8 @@ function mixing_length(
     c_smag = FT(0.2)
     N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
     if N_eff > 0.0
-        l_smag = c_smag * ᶜdz * max(0, 1 - N_eff^2 / ᶜPr / ᶜshear²)^(1 / 4)
+        l_smag =
+            c_smag * ᶜdz * max(0, 1 - N_eff^2 / ᶜPr / ᶜstrain_rate_norm)^(1 / 4)
     else
         l_smag = c_smag * ᶜdz
     end
@@ -366,13 +367,13 @@ function turbulent_prandtl_number(
     params,
     obukhov_length::FT,
     ᶜlinear_buoygrad::FT,
-    ᶜshear²::FT,
+    ᶜstrain_rate_norm::FT,
 ) where {FT}
     turbconv_params = CAP.turbconv_params(params)
     Ri_c = TCP.Ri_crit(turbconv_params)
     ω_pr = TCP.Prandtl_number_scale(turbconv_params)
     Pr_n = TCP.Prandtl_number_0(turbconv_params)
-    ᶜRi_grad = min(ᶜlinear_buoygrad / max(ᶜshear², eps(FT)), Ri_c)
+    ᶜRi_grad = min(ᶜlinear_buoygrad / max(ᶜstrain_rate_norm, eps(FT)), Ri_c)
     if obukhov_length > 0 && ᶜRi_grad > 0 #stable
         # CSB (Dan Li, 2019, eq. 75), where ω_pr = ω_1 + 1 = 53.0 / 13.0
         prandtl_nvec =
