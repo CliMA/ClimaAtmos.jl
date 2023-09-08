@@ -533,9 +533,8 @@ function get_callbacks(parsed_args, simulation, atmos, params)
         )
     end
 
-    return SciMLBase.CallbackSet(callbacks...)
+    return callbacks
 end
-
 
 function get_cache(
     Y,
@@ -742,8 +741,44 @@ function get_integrator(config::AtmosConfig)
         callback = get_callbacks(config.parsed_args, simulation, atmos, params)
     end
     @info "get_callbacks: $s"
+
+    # Initialize diagnostics
+    @info "Initializing diagnostics"
+
+    diagnostics = get_default_diagnostics(atmos)
+
+    # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
+    # ensuring that there is consistency in the timestep and the periods and translating
+    # those periods that depended on the timestep
+    diagnostics_iterations =
+        [ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics]
+
+    # For diagnostics that perform reductions, the storage is used as an accumulator, for
+    # the other ones it is still defined to avoid allocating new space every time.
+    diagnostic_storage = Dict()
+    diagnostic_counters = Dict()
+
+    # NOTE: The diagnostics_callbacks are not called at the initial timestep
+    diagnostics_callbacks = get_callbacks_from_diagnostics(
+        diagnostics_iterations,
+        diagnostic_storage,
+        diagnostic_counters,
+    )
+
+    # We need to ensure the precomputed quantities are indeed precomputed
+    # TODO: Remove this when we can assume that the precomputed_quantities are in sync with the state
+    sync_precomputed = call_every_n_steps(
+        (int) -> set_precomputed_quantities!(int.u, int.p, int.t),
+    )
+
+    callback = SciMLBase.CallbackSet(
+        callback...,
+        sync_precomputed,
+        diagnostics_callbacks...,
+    )
     @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(callback, simulation.dt))"
     @info "n_steps_per_cycle: $(n_steps_per_cycle(callback, simulation.dt))"
+
     tspan = (t_start, simulation.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
@@ -760,5 +795,22 @@ function get_integrator(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
+
+    for diag in diagnostics_iterations
+        variable = diag.variable
+        try
+            # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
+            diagnostic_storage[diag] =
+                variable.compute_from_integrator(integrator, nothing)
+            diagnostic_counters[diag] = 1
+            # If it is not a reduction, call the output writer as well
+            if isnothing(diag.reduction_time_func)
+                diag.output_writer(diagnostic_storage[diag], diag, integrator)
+            end
+        catch e
+            error("Could not compute diagnostic $(variable.long_name): $e")
+        end
+    end
+
     return integrator
 end
