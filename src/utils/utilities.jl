@@ -4,7 +4,7 @@
 import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
-import DiffEqBase
+import SciMLBase
 import JLD2
 
 is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρaθ, :ρae_tot)

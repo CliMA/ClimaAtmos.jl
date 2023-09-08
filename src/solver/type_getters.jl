@@ -1,9 +1,9 @@
 using Dates: DateTime, @dateformat_str
 using NCDatasets
 using Dierckx
-using DiffEqBase
 using ImageFiltering
 using Interpolations
+import SciMLBase
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -359,7 +359,7 @@ is_ordinary_diffeq_newton(alg_or_tableau) =
     }
 
 is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
-is_imex_CTS_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
 
 is_implicit(::ODE.OrdinaryDiffEqImplicitAlgorithm) = true
 is_implicit(::ODE.OrdinaryDiffEqAdaptiveImplicitAlgorithm) = true
@@ -367,11 +367,11 @@ is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
 
 is_rosenbrock(::ODE.Rosenbrock23) = true
 is_rosenbrock(::ODE.Rosenbrock32) = true
-is_rosenbrock(::DiffEqBase.AbstractODEAlgorithm) = false
+is_rosenbrock(::SciMLBase.AbstractODEAlgorithm) = false
 use_transform(ode_algo) =
     !(is_imex_CTS_algo(ode_algo) || is_rosenbrock(ode_algo))
 
-additional_integrator_kwargs(::DiffEqBase.AbstractODEAlgorithm) = (;
+additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
     adaptive = false,
     progress = isinteractive(),
     progress_steps = isinteractive() ? 1 : 1000,
@@ -382,7 +382,7 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
     # TODO: enable progress bars in ClimaTimeSteppers
 )
 
-is_cts_algo(::DiffEqBase.AbstractODEAlgorithm) = false
+is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
 jacobi_flags(::TotalEnergy) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK)
