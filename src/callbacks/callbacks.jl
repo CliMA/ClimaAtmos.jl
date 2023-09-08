@@ -23,35 +23,36 @@ Returns a callback to display simulation information.
 Adapted from ClimaTimeSteppers.jl #89.
 """
 function display_status_callback!(::Type{tType}) where {tType}
-    start_time = UInt64(0.0)
-    prev_time = UInt64(0.0)
-    prev_t = tType(0.0)
-    eta = tType(0.0)
-    speed = tType(0.0)
-    is_first_step = true
+    # start_time = UInt64(0.0)
+    # prev_time = UInt64(0.0)
+    # prev_t = tType(0.0)
+    # eta = tType(0.0)
+    # speed = tType(0.0)
+    # is_first_step = true
 
     function affect!(integrator)
-        t_end = maximum(integrator.tstops.valtree)
-        nsteps = ceil(Int64, t_end / integrator.dt)
-        t = integrator.t
-        step = ceil(Int64, t / integrator.dt)
-        time = time_ns() / 1e9
-        speed = (time - prev_time) / (t - prev_t)
-        eta = speed * (t_end - t)
-        eta_string = eta == Inf ? "..." : string(round(Int64, eta)) * "seconds"
+        # t_end = maximum(integrator.tstops.valtree)
+        # nsteps = ceil(Int64, t_end / integrator.dt)
+        # t = integrator.t
+        # step = ceil(Int64, t / integrator.dt)
+        # time = time_ns() / 1e9
+        # speed = (time - prev_time) / (t - prev_t)
+        # eta = speed * (t_end - t)
+        # eta_string = eta == Inf ? "..." : string(round(Int64, eta)) * " seconds"
 
-        if is_first_step
-            is_first_step = false
-            start_time = time
-        end
-        @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u d")) \n\
-        Timestep: $(step) / $(nsteps); Simulation Time: $(t) seconds \n\
-        Walltime: $(round(time - start_time, digits=2)) seconds; \
-        Time/Step: $(round(speed * integrator.dt, digits=2)) seconds \n\
-        Time Remaining: $eta_string"
+        # if is_first_step
+        #     is_first_step = false
+        #     start_time = time
+        # end
+        # @info "$(Dates.format(Dates.now(), "HH:MM:SS:ss u d")) \n\
+        # Timestep: $(step) / $(nsteps); Simulation Time: $(t) seconds \n\
+        # Walltime: $(round(time - start_time, digits=2)) seconds; \
+        # Time/Step: $(round(speed * integrator.dt, digits=2)) seconds \n\
+        # Time Remaining: $eta_string"
     
-        prev_t = t
-        prev_time = time
+        # prev_t = t
+        # prev_time = time
+        return nothing
     end
     return affect!
 end
