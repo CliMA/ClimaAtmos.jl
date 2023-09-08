@@ -12,7 +12,7 @@ add_diagnostic_variable!(
     compute_from_integrator! = (out, integrator) -> begin
         # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
         # We will want: out .= integrator.u.c.ρ
-        return deepcopy(integrator.u.c.ρ)
+        return copy(integrator.u.c.ρ)
     end,
 )
 

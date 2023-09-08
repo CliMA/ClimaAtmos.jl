@@ -9,7 +9,7 @@
 function compute_tke_from_integrator!(out, integrator, ::EDMFX)
     # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
     # We will want: out .= integrator.u.c.ρ
-    return deepcopy(integrator.p.ᶜspecific⁰.tke)
+    return copy(integrator.p.ᶜspecific⁰.tke)
 end
 
 function compute_tke_from_integrator!(out, integrator, ::DiagnosticEDMFX)
