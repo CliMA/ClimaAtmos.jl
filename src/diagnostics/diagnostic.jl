@@ -162,6 +162,9 @@ include("turbconv_diagnostics.jl")
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")
 
+# Helper functions
+include("diagnostics_utils.jl")
+
 # ScheduledDiagnostics
 
 # NOTE: The definitions of ScheduledDiagnosticTime and ScheduledDiagnosticIterations are
@@ -196,6 +199,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     reduction_space_func::F2
     compute_every::T2
     pre_output_hook!::PO
+    name::String
 
     """
         ScheduledDiagnosticIterations(; variable::DiagnosticVariable,
@@ -204,7 +208,8 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                                         reduction_time_func = nothing,
                                         reduction_space_func = nothing,
                                         compute_every = isa_reduction ? 1 : output_every,
-                                        pre_output_hook! = (accum, count) -> nothing)
+                                        pre_output_hook! = (accum, count) -> nothing,
+                                        name = descriptive_name(self) )
 
 
     A `DiagnosticVariable` that has to be computed and output during a simulation with a cadence
@@ -256,6 +261,11 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                           discarded. An example of `pre_output_hook!` to compute the arithmetic
                           average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
 
+   - `name`: A descriptive name for this particular diagnostic. If none is provided, one
+             will be generated mixing the short name of the variable, the reduction, and the
+             period of the reduction.
+
+
     """
     function ScheduledDiagnosticIterations(;
         variable::DiagnosticVariable,
@@ -265,25 +275,26 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         reduction_space_func = nothing,
         compute_every = isnothing(reduction_time_func) ? output_every : 1,
         pre_output_hook! = (accum, count) -> nothing,
+        name = get_descriptive_name(
+            variable,
+            output_every,
+            reduction_time_func,
+            pre_output_hook!;
+            units_are_seconds = false,
+        ),
     )
 
         # We provide an inner constructor to enforce some constraints
-        descriptive_name = get_descriptive_name(
-            variable,
-            output_every,
-            pre_output_hook!,
-            reduction_time_func,
-        )
 
         output_every % compute_every == 0 || error(
-            "output_every should be multiple of compute_every for diagnostic $(descriptive_name)",
+            "output_every should be multiple of compute_every for diagnostic $(name)",
         )
 
         isa_reduction = !isnothing(reduction_time_func)
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every != compute_every for $(descriptive_name), changing compute_every to match"
+            @warn "output_every != compute_every for $(name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -302,6 +313,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
             reduction_space_func,
             compute_every,
             pre_output_hook!,
+            name,
         )
     end
 end
@@ -315,15 +327,17 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
     reduction_space_func::F2
     compute_every::T2
     pre_output_hook!::PO
+    name::String
 
     """
         ScheduledDiagnosticTime(; variable::DiagnosticVariable,
-                                            output_every,
-                                            output_writer,
-                                            reduction_time_func = nothing,
-                                            reduction_space_func = nothing,
-                                            compute_every = isa_reduction ? :timestep : output_every,
-                                            pre_output_hook! = (accum, count) -> nothing)
+                                  output_every,
+                                  output_writer,
+                                  reduction_time_func = nothing,
+                                  reduction_space_func = nothing,
+                                  compute_every = isa_reduction ? :timestep : output_every,
+                                  pre_output_hook! = (accum, count) -> nothing,
+                                  name = descriptive_name(self))
 
 
     A `DiagnosticVariable` that has to be computed and output during a simulation with a
@@ -379,6 +393,9 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                           discarded. An example of `pre_output_hook!` to compute the arithmetic
                           average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
 
+   - `name`: A descriptive name for this particular diagnostic. If none is provided, one
+             will be generated mixing the short name of the variable, the reduction, and the
+             period of the reduction.
     """
     function ScheduledDiagnosticTime(;
         variable::DiagnosticVariable,
@@ -389,22 +406,22 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         compute_every = isnothing(reduction_time_func) ? output_every :
                         :timestep,
         pre_output_hook! = (accum, count) -> nothing,
-    )
-
-        # We provide an inner constructor to enforce some constraints
-        descriptive_name = get_descriptive_name(
+        name = get_descriptive_name(
             variable,
             output_every,
             reduction_time_func,
             pre_output_hook!;
-            units_are_seconds = false,
-        )
+            units_are_seconds = true,
+        ),
+    )
+
+        # We provide an inner constructor to enforce some constraints
 
         # compute_every could be a Symbol (:timestep). We process this that when we process
         # the list of diagnostics
         if !isa(compute_every, Symbol)
             output_every % compute_every == 0 || error(
-                "output_every should be multiple of compute_every for diagnostic $(descriptive_name)",
+                "output_every should be multiple of compute_every for diagnostic $(name)",
             )
         end
 
@@ -412,7 +429,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every != compute_every for $(descriptive_name), changing compute_every to match"
+            @warn "output_every != compute_every for $(name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -431,6 +448,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
             reduction_space_func,
             compute_every,
             pre_output_hook!,
+            name,
         )
     end
 end
@@ -457,18 +475,11 @@ function ScheduledDiagnosticIterations(
         sd_time.compute_every == :timestep ? 1 : sd_time.compute_every / Δt
     output_every = sd_time.output_every / Δt
 
-    descriptive_name = get_descriptive_name(
-        sd_time.variable,
-        sd_time.output_every,
-        sd_time.reduction_time_func,
-        sd_time.pre_output_hook!,
-    )
-
     isinteger(output_every) || error(
-        "output_every should be multiple of the timestep for diagnostic $(descriptive_name)",
+        "output_every should be multiple of the timestep for diagnostic $(sd_time.name)",
     )
     isinteger(compute_every) || error(
-        "compute_every should be multiple of the timestep for diagnostic $(descriptive_name)",
+        "compute_every should be multiple of the timestep for diagnostic $(sd_time.name)",
     )
 
     ScheduledDiagnosticIterations(;
@@ -479,6 +490,7 @@ function ScheduledDiagnosticIterations(
         sd_time.reduction_space_func,
         compute_every = convert(Int, compute_every),
         sd_time.pre_output_hook!,
+        sd_time.name,
     )
 end
 
@@ -510,6 +522,7 @@ function ScheduledDiagnosticTime(
         sd_time.reduction_space_func,
         compute_every,
         sd_time.pre_output_hook!,
+        sd_time.name,
     )
 end
 
@@ -527,9 +540,6 @@ ScheduledDiagnosticIterations(
 
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
-
-# Helper functions
-include("diagnostics_utils.jl")
 
 """
     get_callbacks_from_diagnostics(diagnostics, storage, counters)

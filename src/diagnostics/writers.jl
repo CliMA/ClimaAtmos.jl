@@ -4,62 +4,6 @@
 # writers come with opinionated defaults.
 
 """
-    get_descriptive_name(sd_t::ScheduledDiagnosticTime)
-
-
-Return a compact, unique-ish, identifier for the given `ScheduledDiagnosticTime` `sd_t`.
-
-We split the period in seconds into days, hours, minutes, seconds. In most cases
-(with standard periods), this output will look something like
-`air_density_1d_max`. This function can be used for filenames.
-
-The name is not unique to the `ScheduledDiagnosticTime` because it ignores other
-parameters such as whether there is a reduction in space or the compute
-frequency.
-
-"""
-get_descriptive_name(sd_t::ScheduledDiagnosticTime) = get_descriptive_name(
-    sd_t.variable,
-    sd_t.output_every,
-    sd_t.reduction_time_func;
-    units_are_seconds = true,
-)
-
-"""
-    get_descriptive_name(sd_i::ScheduledDiagnosticIterations[, Δt])
-
-
-Return a compact, unique-ish, identifier for the given
-`ScheduledDiagnosticIterations` `sd_i`.
-
-If the timestep `Δt` is provided, convert the steps into seconds. In this case,
-the output will look like `air_density_1d_max`. Otherwise, the output will look
-like `air_density_100it_max`. This function can be used for filenames.
-
-The name is not unique to the `ScheduledDiagnosticIterations` because it ignores
-other parameters such as whether there is a reduction in space or the compute
-frequency.
-
-"""
-get_descriptive_name(sd_i::ScheduledDiagnosticIterations, Δt::Nothing) =
-    get_descriptive_name(
-        sd_t.variable,
-        sd_t.output_every,
-        sd_t.reduction_time_func,
-        sd_t.pre_output_hook!;
-        units_are_seconds = false,
-    )
-get_descriptive_name(sd_i::ScheduledDiagnosticIterations, Δt::T) where {T} =
-    get_descriptive_name(
-        sd_i.variable,
-        sd_i.output_every * Δt,
-        sd_i.reduction_time_func,
-        sd_i.pre_output_hook!;
-        units_are_seconds = true,
-    )
-
-
-"""
     HDF5Writer()
 
 
@@ -95,7 +39,7 @@ function HDF5Writer()
 
         output_path = joinpath(
             integrator.p.simulation.output_dir,
-            "$(get_descriptive_name(diagnostic, integrator.p.simulation.dt))_$time.h5",
+            "$(diagnostic.name)_$time.h5",
         )
 
         hdfwriter = InputOutput.HDF5Writer(output_path, integrator.p.comms_ctx)
