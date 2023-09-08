@@ -6,6 +6,7 @@ using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
+import .Diagnostics as CAD
 import LinearAlgebra
 import ClimaCore.Fields
 import OrdinaryDiffEq as ODE
@@ -745,13 +746,13 @@ function get_integrator(config::AtmosConfig)
     # Initialize diagnostics
     @info "Initializing diagnostics"
 
-    diagnostics = get_default_diagnostics(atmos)
+    diagnostics = CAD.get_default_diagnostics(atmos)
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
     # those periods that depended on the timestep
     diagnostics_iterations =
-        [ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics]
+        [CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics]
 
     # For diagnostics that perform reductions, the storage is used as an accumulator, for
     # the other ones it is still defined to avoid allocating new space every time.
@@ -759,7 +760,7 @@ function get_integrator(config::AtmosConfig)
     diagnostic_counters = Dict()
 
     # NOTE: The diagnostics_callbacks are not called at the initial timestep
-    diagnostics_callbacks = get_callbacks_from_diagnostics(
+    diagnostics_callbacks = CAD.get_callbacks_from_diagnostics(
         diagnostics_iterations,
         diagnostic_storage,
         diagnostic_counters,

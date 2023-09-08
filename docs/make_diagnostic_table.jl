@@ -18,7 +18,7 @@ open(out_path, "w") do file
     write(file, "| Short name | Long name  | Units | Comments |\n")
     write(file, "|---|---|---|---|\n")
 
-    for d in values(CA.ALL_DIAGNOSTICS)
+    for d in values(CA.Diagnostics.ALL_DIAGNOSTICS)
         write(file, "| `$(d.short_name)` ")
         write(file, "| `$(d.long_name)` ")
         write(file, "| $(d.units) ")
