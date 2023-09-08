@@ -33,12 +33,10 @@ function radiation_model_cache(
     radiation_mode::RRTMGPI.AbstractRRTMGPMode = RRTMGPI.ClearSkyRadiation();
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
-    idealized_insolation = true,
-    idealized_clouds = false,
     data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
-    (; idealized_h2o) = radiation_mode
+    (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
     rrtmgp_params = CAP.rrtmgp_params(params)
     if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation

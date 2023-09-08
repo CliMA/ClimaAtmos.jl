@@ -90,15 +90,23 @@ array2data(
 abstract type AbstractRRTMGPMode end
 struct GrayRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
+    idealized_insolation::Bool
+    idealized_clouds::Bool
 end
 struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
+    idealized_insolation::Bool
+    idealized_clouds::Bool
 end
 struct AllSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool
+    idealized_insolation::Bool
+    idealized_clouds::Bool
 end
 struct AllSkyRadiationWithClearSkyDiagnostics <: AbstractRRTMGPMode
     idealized_h2o::Bool
+    idealized_insolation::Bool
+    idealized_clouds::Bool
 end
 
 """
