@@ -287,14 +287,14 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         # We provide an inner constructor to enforce some constraints
 
         output_every % compute_every == 0 || error(
-            "output_every should be multiple of compute_every for diagnostic $(name)",
+            "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(name)",
         )
 
         isa_reduction = !isnothing(reduction_time_func)
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every != compute_every for $(name), changing compute_every to match"
+            @warn "output_every ($output_every) != compute_every ($compute_every) for $(name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -421,7 +421,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         # the list of diagnostics
         if !isa(compute_every, Symbol)
             output_every % compute_every == 0 || error(
-                "output_every should be multiple of compute_every for diagnostic $(name)",
+                "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(name)",
             )
         end
 
@@ -429,7 +429,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every != compute_every for $(name), changing compute_every to match"
+            @warn "output_every ($output_every) != compute_every ($compute_every) for $(name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -476,10 +476,10 @@ function ScheduledDiagnosticIterations(
     output_every = sd_time.output_every / Δt
 
     isinteger(output_every) || error(
-        "output_every should be multiple of the timestep for diagnostic $(sd_time.name)",
+        "output_every ($output_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.name)",
     )
     isinteger(compute_every) || error(
-        "compute_every should be multiple of the timestep for diagnostic $(sd_time.name)",
+        "compute_every ($compute_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.name)",
     )
 
     ScheduledDiagnosticIterations(;
