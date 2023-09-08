@@ -181,6 +181,10 @@ end
 function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)
+    idealized_insolation = parsed_args["idealized_insolation"]
+    @assert idealized_insolation in (true, false)
+    idealized_clouds = parsed_args["idealized_clouds"]
+    @assert idealized_clouds in (true, false)
     radiation_name = parsed_args["rad"]
     @assert radiation_name in (
         nothing,
@@ -193,13 +197,29 @@ function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
         "TRMM_LBA",
     )
     return if radiation_name == "clearsky"
-        RRTMGPI.ClearSkyRadiation(idealized_h2o)
+        RRTMGPI.ClearSkyRadiation(
+            idealized_h2o,
+            idealized_insolation,
+            idealized_clouds,
+        )
     elseif radiation_name == "gray"
-        RRTMGPI.GrayRadiation(idealized_h2o)
+        RRTMGPI.GrayRadiation(
+            idealized_h2o,
+            idealized_insolation,
+            idealized_clouds,
+        )
     elseif radiation_name == "allsky"
-        RRTMGPI.AllSkyRadiation(idealized_h2o)
+        RRTMGPI.AllSkyRadiation(
+            idealized_h2o,
+            idealized_insolation,
+            idealized_clouds,
+        )
     elseif radiation_name == "allskywithclear"
-        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(idealized_h2o)
+        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(
+            idealized_h2o,
+            idealized_insolation,
+            idealized_clouds,
+        )
     elseif radiation_name == "DYCOMS_RF01"
         RadiationDYCOMS_RF01{FT}()
     elseif radiation_name == "TRMM_LBA"
