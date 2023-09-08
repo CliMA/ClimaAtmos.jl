@@ -189,6 +189,37 @@ avoid extra memory allocations (which hurt performance). If `out` is `nothing`,
 and new area of memory is allocated. If `out` is a `ClimaCore.Field`, the
 operation is done in-place without additional memory allocations.
 
+If your diagnostic depends on the details of the model, we recommend using
+additional functions so that the correct one can be found through dispatching.
+For instance, if you want to compute relative humidity, which does not make
+sense for dry simulations, you should define the functions
+
+```julia
+function compute_relative_humidity_from_integrator(
+    integrator,
+    out,
+    moisture_model::T,
+)
+    error("Cannot compute relative_humidity with moisture_model = $T")
+end
+
+function compute_relative_humidity_from_integrator(
+    integrator,
+    out,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
+    # We will want: out .= integrator.u.c.ρ
+    thermo_params = CAP.thermodynamics_params(integrator.p.params)
+    return TD.relative_humidity.(thermo_params, integrator.p.ᶜts)
+end
+```
+
+This will return the correct relative humidity and throw informative errors when
+it cannot be computed. We could specialize
+`compute_relative_humidity_from_integrator` further if the relative humidity
+were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
+
 ### Adding to the `ALL_DIAGNOSTICS` dictionary
 
 `ClimaAtmos` comes with a collection of pre-defined `DiagnosticVariable` in the
