@@ -85,12 +85,12 @@ Keyword arguments
                              function should perform the calculation in-place (i.e., using
                              `.=`).
 """
-Base.@kwdef struct DiagnosticVariable{T <: AbstractString, T2}
-    short_name::T
-    long_name::T
-    units::T
-    comments::T
-    compute_from_integrator!::T2
+Base.@kwdef struct DiagnosticVariable{T}
+    short_name::String
+    long_name::String
+    units::String
+    comments::String
+    compute_from_integrator!::T
 end
 
 # ClimaAtmos diagnostics
