@@ -67,7 +67,7 @@ done
 # set up environment and agents
 cat << EOM
 env:
-  JULIA_VERSION: "1.8.5"
+  JULIA_VERSION: "1.9.3"
   MPICH_VERSION: "4.0.0"
   OPENMPI_VERSION: "4.1.1"
   MPI_IMPL: "$mpi_impl"
