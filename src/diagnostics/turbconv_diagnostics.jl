@@ -6,21 +6,24 @@
 # the model. This is also exposed to the user, which could define their own
 # compute_tke_from_integrator.
 
-function compute_tke_from_integrator(integrator, out, ::EDMFX)
+function compute_tke_from_integrator!(out, integrator, ::EDMFX)
     # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
     # We will want: out .= integrator.u.c.ρ
     return deepcopy(integrator.p.ᶜspecific⁰.tke)
 end
 
-function compute_tke_from_integrator(integrator, out, ::DiagnosticEDMFX)
+function compute_tke_from_integrator!(out, integrator, ::DiagnosticEDMFX)
     # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
     # We will want: out .= integrator.u.c.ρ
-    return deepcopy(integrator.p.tke⁰)
+    return copy(integrator.p.tke⁰)
 end
 
-function compute_tke_from_integrator(
-    integrator,
+compute_tke_from_integrator!(out, integrator) =
+    compute_tke_from_integrator!(out, integrator, integrator.p.atmos)
+
+function compute_tke_from_integrator!(
     out,
+    integrator,
     turbconv_model::T,
 ) where {T}
     error("Cannot compute tke with turbconv_model = $T")
@@ -33,9 +36,6 @@ add_diagnostic_variable!(
     long_name = "turbolent_kinetic_energy",
     units = "J",
     comments = "Turbolent Kinetic Energy",
-    compute_from_integrator = (integrator, out) -> compute_tke_from_integrator(
-        integrator,
-        out,
-        integrator.p.atmos.turbconv_model,
-    ),
+    compute_from_integrator! = (integrator, out) ->
+        compute_tke_from_integrator!,
 )

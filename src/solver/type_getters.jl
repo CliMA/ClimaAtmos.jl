@@ -751,8 +751,9 @@ function get_integrator(config::AtmosConfig)
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
     # those periods that depended on the timestep
-    diagnostics_iterations =
-        [CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics]
+    diagnostics_iterations = [
+        CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics
+    ]
 
     # For diagnostics that perform reductions, the storage is used as an accumulator, for
     # the other ones it is still defined to avoid allocating new space every time.
@@ -802,7 +803,7 @@ function get_integrator(config::AtmosConfig)
         try
             # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
             diagnostic_storage[diag] =
-                variable.compute_from_integrator(integrator, nothing)
+                variable.compute_from_integrator!(nothing, integrator)
             diagnostic_counters[diag] = 1
             # If it is not a reduction, call the output writer as well
             if isnothing(diag.reduction_time_func)
