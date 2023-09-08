@@ -2,7 +2,7 @@
 #
 # This file contains:
 #
-# - The definition of what a DiagnosticVariable is. Morally, a DiagnosticVariable is a
+# - The definition of what a DiagnosticVariable is. Conceptually, a DiagnosticVariable is a
 #   variable we know how to compute from the state. We attach more information to it for
 #   documentation and to reference to it with its short name. DiagnosticVariables can exist
 #   irrespective of the existence of an actual simulation that is being run. ClimaAtmos
@@ -13,7 +13,7 @@
 #   You can add your own file if you want to define several new diagnostics that are
 #   conceptually related.
 #
-# - The definition of what a ScheduledDiagnostics is. Morally, a ScheduledDiagnostics is a
+# - The definition of what a ScheduledDiagnostics is. Conceptually, a ScheduledDiagnostics is a
 #   DiagnosticVariable we want to compute in a given simulation. For example, it could be
 #   the temperature averaged over a day. We can have multiple ScheduledDiagnostics for the
 #   same DiagnosticVariable (e.g., daily and monthly average temperatures).
