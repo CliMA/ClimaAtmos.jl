@@ -7,8 +7,8 @@ struct CentField <: FieldLocation end
 struct FaceField <: FieldLocation end
 struct SingleValuePerColumn <: FieldLocation end
 
-field_loc(::CentField) = :cent
-field_loc(::FaceField) = :face
+field_loc(::CentField) = :c
+field_loc(::FaceField) = :f
 field_loc(::SingleValuePerColumn) = :svpc
 
 #=

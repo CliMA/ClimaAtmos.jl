@@ -206,7 +206,7 @@ struct State{P, A, T, CACHE, C, SC}
     surface_conditions::SC
 end
 
-Grid(state::State) = Grid(axes(state.prog.cent))
+Grid(state::State) = Grid(axes(state.prog.c))
 
 float_type(state::State) = eltype(state.prog)
 # float_type(field::CC.Fields.Field) = CC.Spaces.undertype(axes(field))

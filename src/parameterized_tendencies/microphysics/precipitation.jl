@@ -53,9 +53,9 @@ function compute_precipitation_cache!(
 )
     (; ᶜS_ρq_tot) = p
     qt_tendency_precip_formation_en =
-        p.edmf_cache.aux.cent.turbconv.en.qt_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.en.qt_tendency_precip_formation[colidx]
     qt_tendency_precip_formation_bulk =
-        p.edmf_cache.aux.cent.turbconv.bulk.qt_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.bulk.qt_tendency_precip_formation[colidx]
 
     @. ᶜS_ρq_tot[colidx] =
         Y.c.ρ[colidx] *
@@ -196,21 +196,21 @@ function compute_precipitation_cache!(
 
     # Sources of precipitation from EDMF SGS sub-domains
     e_tot_tendency_precip_formation_en =
-        p.edmf_cache.aux.cent.turbconv.en.e_tot_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.en.e_tot_tendency_precip_formation[colidx]
     e_tot_tendency_precip_formation_bulk =
-        p.edmf_cache.aux.cent.turbconv.bulk.e_tot_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.bulk.e_tot_tendency_precip_formation[colidx]
     qt_tendency_precip_formation_en =
-        p.edmf_cache.aux.cent.turbconv.en.qt_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.en.qt_tendency_precip_formation[colidx]
     qt_tendency_precip_formation_bulk =
-        p.edmf_cache.aux.cent.turbconv.bulk.qt_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.bulk.qt_tendency_precip_formation[colidx]
     qr_tendency_precip_formation_en =
-        p.edmf_cache.aux.cent.turbconv.en.qr_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.en.qr_tendency_precip_formation[colidx]
     qr_tendency_precip_formation_bulk =
-        p.edmf_cache.aux.cent.turbconv.bulk.qr_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.bulk.qr_tendency_precip_formation[colidx]
     qs_tendency_precip_formation_en =
-        p.edmf_cache.aux.cent.turbconv.en.qs_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.en.qs_tendency_precip_formation[colidx]
     qs_tendency_precip_formation_bulk =
-        p.edmf_cache.aux.cent.turbconv.bulk.qs_tendency_precip_formation[colidx]
+        p.edmf_cache.aux.c.turbconv.bulk.qs_tendency_precip_formation[colidx]
 
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
