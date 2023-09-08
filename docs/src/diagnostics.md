@@ -88,10 +88,10 @@ the function needed to compute averages `ClimaAtmos.average_pre_output_hook!`.
 
 For custom reductions, it is necessary to also specify the identity of operation
 by defining a new method to `identity_of_reduction`. `identity_of_reduction` is
-a function that takes a `Val{op}` argument, where `op` is the operation for
-which we want to define the identity. For instance, for the `max`,
-`identity_of_reduction` would be `identity_of_reduction(::Val{max}) = -Inf`. The
-identities known to `ClimaAtmos` are defined in the
+a function that takes a `op` argument, where `op` is the operation for which we
+want to define the identity. For instance, for the `max`,
+`identity_of_reduction` would be `identity_of_reduction(::typeof{max}) = -Inf`.
+The identities known to `ClimaAtmos` are defined in the
 `diagnostics/reduction_identities.jl` file. The identity is needed to ensure
 that we have a neutral state for the accumulators that are used in the
 reductions.

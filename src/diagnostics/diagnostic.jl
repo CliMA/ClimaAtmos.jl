@@ -589,9 +589,8 @@ function get_callbacks_from_diagnostics(diagnostics, storage, counters)
         reset_accumulator! =
             isa_reduction ?
             () -> begin
-                # identity_of_reduction works by dispatching over Val{operation}
                 identity =
-                    identity_of_reduction(Val(diag.reduction_time_func))
+                    identity_of_reduction(diag.reduction_time_func)
                 # We also need to make sure that we are consistent with the types
                 float_type = eltype(storage[diag])
                 identity_ft = convert(float_type, identity)

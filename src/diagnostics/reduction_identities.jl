@@ -13,7 +13,7 @@
 # We have to know the identity for every operation we want to support. Of course, users are
 # welcome to define their own by adding new methods to identity_of_reduction.
 
-identity_of_reduction(::Val{max}) = -Inf
-identity_of_reduction(::Val{min}) = +Inf
-identity_of_reduction(::Val{+}) = 0
-identity_of_reduction(::Val{*}) = 1
+identity_of_reduction(::typeof(max)) = -Inf
+identity_of_reduction(::typeof(min)) = +Inf
+identity_of_reduction(::typeof(+)) = 0
+identity_of_reduction(::typeof(*)) = 1
