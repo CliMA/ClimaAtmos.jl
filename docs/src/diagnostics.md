@@ -23,13 +23,13 @@ where to save it, and so on (read below for more information on this). You can
 construct your own lists of `ScheduledDiagnostic`s starting from the variables
 defined by `ClimaAtmos`. The diagnostics that `ClimaAtmos` knows how to compute
 are collected in a global dictionary called `ALL_DIAGNOSTICS`. The variables in
-`ALL_DIAGNOSTICS` are identified with a long and unique name, so that you can
-access them directly. One way to do so is by using the provided convenience
+`ALL_DIAGNOSTICS` are identified with by the short and unique name, so that you
+can access them directly. One way to do so is by using the provided convenience
 functions for common operations, e.g., continuing the previous example
 
 ```julia
 
-push!(diagnostics, get_daily_max("air_density", "air_temperature"))
+push!(diagnostics, daily_max("air_density", "air_temperature"))
 ```
 
 Now `diagnostics` will also contain the instructions to compute the daily
@@ -156,10 +156,10 @@ In `ClimaAtmos`, we follow the convention that:
 - `short_name` is the name used to identify the variable in the output files and
                 in the file names. It is short, but descriptive. We identify
                 diagnostics by their short name, so the diagnostics defined by
-                `ClimaAtmos` have to have unique `long_name`s. We follow the
-                Coupled Model Intercomparison Project (CMIP) convetions.
+                `ClimaAtmos` have to have unique `short_name`s. We follow the
+                Coupled Model Intercomparison Project (CMIP) conventions.
 
-- `long_name`: Name used to identify the variable in the input files.
+- `long_name`: Name used to describe the variable in the output file.
 
 - `units`: Physical units of the variable.
 
@@ -168,8 +168,10 @@ In `ClimaAtmos`, we follow the convention that:
 
 In `ClimaAtmos`, we try to follow [this Google
 spreadsheet](https://docs.google.com/spreadsheets/d/1qUauozwXkq7r1g-L4ALMIkCNINIhhCPx)
-for variable naming (except for the `short_names`, which we prefer being more
-descriptive).
+for variable naming, with a `long_name` the does not have spaces and capital
+letters. [Standard
+names](http://cfconventions.org/Data/cf-standard-names/current/build/cf-standard-name-table.html)
+are not used.
 
 ### Compute function
 
@@ -223,7 +225,7 @@ were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
 ### Adding to the `ALL_DIAGNOSTICS` dictionary
 
 `ClimaAtmos` comes with a collection of pre-defined `DiagnosticVariable` in the
-`ALL_DIAGNOSTICS` dictionary. `ALL_DIAGNOSTICS` maps a `long_name` with the
+`ALL_DIAGNOSTICS` dictionary. `ALL_DIAGNOSTICS` maps a `short_name` with the
 corresponding `DiagnosticVariable`.
 
 If you are extending `ClimaAtmos` and want to add a new diagnostic variable to
