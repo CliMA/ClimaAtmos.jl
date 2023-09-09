@@ -541,6 +541,34 @@ ScheduledDiagnosticIterations(
 # We define all the known identities in reduction_identities.jl
 include("reduction_identities.jl")
 
+# Helper functions for the callbacks:
+# - reset_accumulator!
+# - accumulate!
+
+# When the reduction is nothing, do nothing
+reset_accumulator!(_, reduction_time_func::Nothing) = nothing
+
+# If we have a reduction, we have to reset the accumulator to its neutral state. (If we
+# don't have a reduction, we don't have to do anything)
+#
+# ClimaAtmos defines methods for identity_of_reduction for standard reduction_time_func in
+# reduction_identities.jl
+function reset_accumulator!(diag_accumulator, reduction_time_func)
+    # identity_of_reduction works by dispatching over operation
+    identity = identity_of_reduction(reduction_time_func)
+    float_type = eltype(diag_accumulator)
+    identity_ft = convert(float_type, identity)
+    diag_accumulator .= identity_ft
+end
+
+# When the reduction is nothing, we do not need to accumulate anything
+accumulate!(_, _, reduction_time_func::Nothing) = nothing
+
+# When we have a reduction, apply it between the accumulated value one
+function accumulate!(diag_accumulator, diag_storage, reduction_time_func)
+    diag_accumulator .= reduction_time_func.(diag_accumulator, diag_storage)
+end
+
 """
     get_callbacks_from_diagnostics(diagnostics, storage, counters)
 
@@ -555,14 +583,22 @@ Positional arguments
                  can define callbacks that occur at the end of every N integration steps.
 
 - `storage`: Dictionary that maps a given `ScheduledDiagnosticIterations` to a potentially
-             pre-allocated area of memory where to accumulate/save results.
+             pre-allocated area of memory where to save the newly computed results.
+
+- `accumulator`: Dictionary that maps a given `ScheduledDiagnosticIterations` to a potentially
+                 pre-allocated area of memory where to accumulate results.
 
 - `counters`: Dictionary that maps a given `ScheduledDiagnosticIterations` to the counter
               that tracks how many times the given diagnostics was computed from the last
               time it was output to disk.
 
 """
-function get_callbacks_from_diagnostics(diagnostics, storage, counters)
+function get_callbacks_from_diagnostics(
+    diagnostics,
+    storage,
+    accumulators,
+    counters,
+)
     # We have two types of callbacks: to compute and accumulate diagnostics, and to dump
     # them to disk. Note that our callbacks do not contain any branching
 
@@ -573,41 +609,33 @@ function get_callbacks_from_diagnostics(diagnostics, storage, counters)
 
     for diag in diagnostics
         variable = diag.variable
-        isa_reduction = !isnothing(diag.reduction_time_func)
-
-        # reduction is used below. If we are not given a reduction_time_func, we just want
-        # to move the computed quantity to its storage (so, we return the second argument,
-        # which that will be the newly computed one). If we have a reduction, we apply it
-        # point-wise
-        reduction = isa_reduction ? diag.reduction_time_func : (_, y) -> y
-
-        # If we have a reduction, we have to reset the accumulator to its neutral state. (If
-        # we don't have a reduction, we don't have to do anything)
-        #
-        # ClimaAtmos defines methods for identity_of_reduction for standard
-        # reduction_time_func in reduction_identities.jl
-        reset_accumulator! =
-            isa_reduction ?
-            () -> begin
-                identity =
-                    identity_of_reduction(diag.reduction_time_func)
-                # We also need to make sure that we are consistent with the types
-                float_type = eltype(storage[diag])
-                identity_ft = convert(float_type, identity)
-                storage[diag] .= identity_ft
-            end : () -> nothing
 
         compute_callback =
             integrator -> begin
                 # FIXME: Change when ClimaCore overrides .= for us to avoid multiple allocations
-                value = variable.compute_from_integrator!(nothing, integrator)
-                storage[diag] .= reduction.(storage[diag], value)
+                variable.compute_from_integrator!(storage[diag], integrator)
+
+                # accumulator[diag] is not defined for non-reductions
+                diag_accumulator = get(accumulators, diag, nothing)
+
+                accumulate!(
+                    diag_accumulator,
+                    storage[diag],
+                    diag.reduction_time_func,
+                )
                 counters[diag] += 1
                 return nothing
             end
 
         output_callback =
             integrator -> begin
+                # Move accumulated value to storage so that we can output it (for
+                # reductions). This provides a unified interface to pre_output_hook! and
+                # output, at the cost of an additional copy. If this copy turns out to be
+                # too expensive, we can move the if statement below.
+                isnothing(diag.reduction_time_func) ||
+                    (storage[diag] .= accumulators[diag])
+
                 # Any operations we have to perform before writing to output?
                 # Here is where we would divide by N to obtain an arithmetic average
                 diag.pre_output_hook!(storage[diag], counters[diag])
@@ -615,7 +643,10 @@ function get_callbacks_from_diagnostics(diagnostics, storage, counters)
                 # Write to disk
                 diag.output_writer(storage[diag], diag, integrator)
 
-                reset_accumulator!()
+                # accumulator[diag] is not defined for non-reductions
+                diag_accumulator = get(accumulators, diag, nothing)
+
+                reset_accumulator!(diag_accumulator, diag.reduction_time_func)
                 counters[diag] = 0
                 return nothing
             end
@@ -628,12 +659,12 @@ function get_callbacks_from_diagnostics(diagnostics, storage, counters)
             call_every_n_steps(
                 compute_callback,
                 diag.compute_every,
-                skip_first=true,
+                skip_first = true,
             ),
             call_every_n_steps(
                 output_callback,
                 diag.output_every,
-                skip_first=true,
+                skip_first = true,
             ),
         )
     end

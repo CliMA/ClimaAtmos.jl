@@ -755,15 +755,17 @@ function get_integrator(config::AtmosConfig)
         CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics
     ]
 
-    # For diagnostics that perform reductions, the storage is used as an accumulator, for
-    # the other ones it is still defined to avoid allocating new space every time.
+    # For diagnostics that perform reductions, the storage is used for the values computed
+    # at each call. Reductions also save the accumulated value in in diagnostic_accumulators.
     diagnostic_storage = Dict()
+    diagnostic_accumulators = Dict()
     diagnostic_counters = Dict()
 
     # NOTE: The diagnostics_callbacks are not called at the initial timestep
     diagnostics_callbacks = CAD.get_callbacks_from_diagnostics(
         diagnostics_iterations,
         diagnostic_storage,
+        diagnostic_accumulators,
         diagnostic_counters,
     )
 
@@ -808,6 +810,9 @@ function get_integrator(config::AtmosConfig)
             # If it is not a reduction, call the output writer as well
             if isnothing(diag.reduction_time_func)
                 diag.output_writer(diagnostic_storage[diag], diag, integrator)
+            else
+                # Add to the accumulator
+                diagnostic_accumulators[diag] = copy(diagnostic_storage[diag])
             end
         catch e
             error("Could not compute diagnostic $(variable.long_name): $e")
