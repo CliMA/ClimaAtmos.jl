@@ -37,23 +37,23 @@ get_default_diagnostics(_) = []
 
 Helper function to define functions like `get_daily_max`.
 """
-function produce_common_diagnostic_function(
+function common_diagnostics(
     period,
-    reduction;
+    reduction,
+    output_writer,
+    short_names...;
     pre_output_hook! = (accum, count) -> nothing,
 )
-    return (long_names...; output_writer = HDF5Writer()) -> begin
-        [
-            ScheduledDiagnosticTime(
-                variable = ALL_DIAGNOSTICS[long_name],
-                compute_every = :timestep,
-                output_every = period, # seconds
-                reduction_time_func = reduction,
-                output_writer = output_writer,
-                pre_output_hook! = pre_output_hook!,
-            ) for long_name in long_names
-        ]
-    end
+    return [
+        ScheduledDiagnosticTime(
+            variable = ALL_DIAGNOSTICS[short_name],
+            compute_every = :timestep,
+            output_every = period, # seconds
+            reduction_time_func = reduction,
+            output_writer = output_writer,
+            pre_output_hook! = pre_output_hook!,
+        ) for short_name in short_names
+    ]
 end
 
 function average_pre_output_hook!(accum, counter)
@@ -67,14 +67,17 @@ end
 
 Return a list of `ScheduledDiagnostics` that compute the daily max for the given variables.
 """
-get_daily_max = produce_common_diagnostic_function(24 * 60 * 60, max)
+daily_max(long_names...; output_writer = HDF5Writer()) =
+    common_diagnostics(24 * 60 * 60, max, output_writer, long_names...)
+
 """
     get_daily_min(long_names...; output_writer = HDF5Writer())
 
 
 Return a list of `ScheduledDiagnostics` that compute the daily min for the given variables.
 """
-get_daily_min = produce_common_diagnostic_function(24 * 60 * 60, min)
+daily_min(long_names...; output_writer = HDF5Writer()) =
+    common_diagnostics(24 * 60 * 60, min, output_writer, long_names...)
 """
     get_daily_average(long_names...; output_writer = HDF5Writer())
 
@@ -82,9 +85,11 @@ get_daily_min = produce_common_diagnostic_function(24 * 60 * 60, min)
 Return a list of `ScheduledDiagnostics` that compute the daily average for the given variables.
 """
 # An average is just a sum with a normalization before output
-get_daily_average = produce_common_diagnostic_function(
+daily_average(long_names...; output_writer = HDF5Writer()) = common_diagnostics(
     24 * 60 * 60,
-    (+);
+    (+),
+    output_writer,
+    long_names...;
     pre_output_hook! = average_pre_output_hook!,
 )
 
@@ -94,7 +99,8 @@ get_daily_average = produce_common_diagnostic_function(
 
 Return a list of `ScheduledDiagnostics` that compute the hourly max for the given variables.
 """
-get_hourly_max = produce_common_diagnostic_function(60 * 60, max)
+hourly_max(long_names...; output_writer = HDF5Writer()) =
+    common_diagnostics(60 * 60, max, output_writer, long_names...)
 
 """
     get_hourly_min(long_names...; output_writer = HDF5Writer())
@@ -102,7 +108,8 @@ get_hourly_max = produce_common_diagnostic_function(60 * 60, max)
 
 Return a list of `ScheduledDiagnostics` that compute the hourly min for the given variables.
 """
-get_hourly_min = produce_common_diagnostic_function(60 * 60, min)
+hourly_min(long_names...; output_writer = HDF5Writer()) =
+    common_diagnostics(60 * 60, min, output_writer, long_names...)
 
 """
     get_daily_average(long_names...; output_writer = HDF5Writer())
@@ -112,11 +119,14 @@ Return a list of `ScheduledDiagnostics` that compute the hourly average for the 
 """
 
 # An average is just a sum with a normalization before output
-get_hourly_average = produce_common_diagnostic_function(
-    60 * 60,
-    (+);
-    pre_output_hook! = average_pre_output_hook!,
-)
+hourly_average(long_names...; output_writer = HDF5Writer()) =
+    common_diagnostics(
+        60 * 60,
+        (+),
+        output_writer,
+        long_names...;
+        pre_output_hook! = average_pre_output_hook!,
+    )
 
 # Include all the subdefaults
 include("defaults/moisture_model.jl")

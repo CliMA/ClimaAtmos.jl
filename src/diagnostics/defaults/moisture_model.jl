@@ -1,8 +1,7 @@
 # FIXME: Gabriele added this as an example. Put something meaningful here!
 function get_default_diagnostics(::T) where {T <: DryModel}
     return vcat(
-        get_daily_average("air_density"),
-        get_hourly_max("air_density"),
+        daily_average("air_density"),
         [
             ScheduledDiagnosticTime(
                 variable = ALL_DIAGNOSTICS["air_density"],
