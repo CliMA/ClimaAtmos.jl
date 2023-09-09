@@ -206,27 +206,28 @@ struct State{P, A, T, CACHE, C, SC}
     surface_conditions::SC
 end
 
-Grid(state::State) = Grid(axes(state.prog.cent))
+Grid(state::State) = Grid(axes(state.prog.c))
 
 float_type(state::State) = eltype(state.prog)
 # float_type(field::CC.Fields.Field) = CC.Spaces.undertype(axes(field))
 float_type(field::CC.Fields.Field) = eltype(parent(field))
 
+import ClimaCore.Fields as Fields
+import ClimaCore.Spaces as Spaces
+
+
+Base.@propagate_inbounds function field_vector_column(
+    fv::Fields.FieldVector{T},
+    colidx::Fields.ColumnIndex,
+) where {T}
+    values = map(x -> x[colidx], Fields._values(fv))
+    return Fields.FieldVector{T, typeof(values)}(values)
+end
+
 function tc_column_state(prog, p, tendencies, colidx, t)
-    prog_cent_column = CC.column(prog.c, colidx)
-    prog_face_column = CC.column(prog.f, colidx)
-    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
-    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
-    tends_cent_column = CC.column(tendencies.c, colidx)
-    tends_face_column = CC.column(tendencies.f, colidx)
-    prog_column =
-        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
-    aux_column =
-        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
-    tends_column = CC.Fields.FieldVector(
-        cent = tends_cent_column,
-        face = tends_face_column,
-    )
+    prog_column = field_vector_column(prog, colidx)
+    aux_column = field_vector_column(p.edmf_cache.aux, colidx)
+    tends_column = field_vector_column(tendencies, colidx)
     surface_conditions = CC.column(p.sfc_conditions, colidx)[]
     return State(
         prog_column,
@@ -239,14 +240,8 @@ function tc_column_state(prog, p, tendencies, colidx, t)
 end
 
 function tc_column_state(prog, p, tendencies::Nothing, colidx, t)
-    prog_cent_column = CC.column(prog.c, colidx)
-    prog_face_column = CC.column(prog.f, colidx)
-    aux_cent_column = CC.column(p.edmf_cache.aux.cent, colidx)
-    aux_face_column = CC.column(p.edmf_cache.aux.face, colidx)
-    prog_column =
-        CC.Fields.FieldVector(cent = prog_cent_column, face = prog_face_column)
-    aux_column =
-        CC.Fields.FieldVector(cent = aux_cent_column, face = aux_face_column)
+    prog_column = field_vector_column(prog, colidx)
+    aux_column = field_vector_column(p.edmf_cache.aux, colidx)
     tends_column = nothing
     surface_conditions = CC.column(p.sfc_conditions, colidx)[]
     return State(

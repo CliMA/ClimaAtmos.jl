@@ -352,8 +352,8 @@ function compute_diagnostics(integrator)
             ) .+ ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa TC.EDMFModel
-        tc_cent(p) = p.edmf_cache.aux.cent.turbconv
-        tc_face(p) = p.edmf_cache.aux.face.turbconv
+        tc_cent(p) = p.edmf_cache.aux.c.turbconv
+        tc_face(p) = p.edmf_cache.aux.f.turbconv
         turbulence_convection_diagnostic = (;
             bulk_up_area = tc_cent(p).bulk.area,
             bulk_up_h_tot = tc_cent(p).bulk.h_tot,

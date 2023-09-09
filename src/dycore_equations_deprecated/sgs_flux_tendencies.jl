@@ -124,7 +124,7 @@ function turbconv_aux(atmos, edmf, Y, ::Type{FT}) where {FT}
 
     aux_cent_fields = cent_aux_vars.(FT, ᶜlocal_geometry, atmos, edmf)
     aux_face_fields = face_aux_vars.(FT, ᶠlocal_geometry, atmos, edmf)
-    aux = Fields.FieldVector(cent = aux_cent_fields, face = aux_face_fields)
+    aux = Fields.FieldVector(; c = aux_cent_fields, f = aux_face_fields)
     return aux
 end
 
@@ -174,8 +174,8 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     grid = TC.Grid(state)
     if test_consistency
-        parent(state.aux.face) .= NaN
-        parent(state.aux.cent) .= NaN
+        parent(state.aux.f) .= NaN
+        parent(state.aux.c) .= NaN
     end
 
     assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
@@ -213,8 +213,8 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 
     grid = TC.Grid(state)
     if test_consistency
-        parent(state.aux.face) .= NaN
-        parent(state.aux.cent) .= NaN
+        parent(state.aux.f) .= NaN
+        parent(state.aux.c) .= NaN
     end
 
     assign_thermo_aux!(state, edmf.moisture_model, thermo_params)
@@ -237,14 +237,9 @@ function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
     # Note: This "filter relaxation tendency" can be scaled down if needed, but
     # it must be present in order to prevent Y and Y_filtered from diverging
     # during each timestep.
-    Yₜ_turbconv =
-        Fields.FieldVector(c = Yₜ.c.turbconv[colidx], f = Yₜ.f.turbconv[colidx])
-    Y_filtered_turbconv = Fields.FieldVector(
-        c = Y_filtered.c.turbconv[colidx],
-        f = Y_filtered.f.turbconv[colidx],
-    )
-    Y_turbconv =
-        Fields.FieldVector(c = Y.c.turbconv[colidx], f = Y.f.turbconv[colidx])
+    Yₜ_turbconv = TC.field_vector_column(Yₜ, colidx)
+    Y_filtered_turbconv = TC.field_vector_column(Y_filtered, colidx)
+    Y_turbconv = TC.field_vector_column(Y, colidx)
     Yₜ_turbconv .+= (Y_filtered_turbconv .- Y_turbconv) ./ Δt
     return nothing
 end
