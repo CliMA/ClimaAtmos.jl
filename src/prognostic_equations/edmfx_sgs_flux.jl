@@ -128,7 +128,7 @@ function edmfx_sgs_flux_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_upwinding, sfc_conditions) = p
-    (; ᶠu³, ᶜh_tot, ᶜspecific) = p
+    (; ᶠu³, ᶜu, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
     (; ᶜh_tot⁰, ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
@@ -194,15 +194,42 @@ function edmfx_sgs_flux_tendency!(
             )
         end
 
+        # mass flux
+        ᶠinterp_u₃ = Operators.InterpolateC2F(
+            top = Operators.SetValue(C3(FT(0))),
+            bottom = Operators.SetValue(C3(FT(0))),
+        )
+        ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
+        for j in 1:n
+            @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+            @. Yₜ.f.u₃[colidx] -= ᶠinterp_u₃(
+                C3(
+                    ᶜρaʲs.:($$j)[colidx] * ᶜdivᵥ(
+                        Geometry.outer(ᶠu³_diff_colidx, ᶠu³_diff_colidx),
+                    ) / Y.c.ρ[colidx],
+                ),
+            )
+        end
         # diffusive flux
         ᶠρaK_u = p.ᶠtemp_scalar
         @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
+        ᶠstrain_rate = p.ᶠtemp_UVWxUVW
+        compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu[colidx])
+        @. Yₜ.c.uₕ[colidx] -= C12(
+            ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) / Y.c.ρ[colidx],
+        )
+        @. Yₜ.f.u₃[colidx] -= ᶠinterp_u₃(
+            C3(
+                ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) /
+                Y.c.ρ[colidx],
+            ),
+        )
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
         )
         @. Yₜ.c.uₕ[colidx] -=
-            ᶜdivᵥ_uₕ(-(ᶠρaK_u[colidx] * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+            ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
     end
 
     # TODO: Add momentum mass flux
