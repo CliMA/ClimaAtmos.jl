@@ -680,7 +680,7 @@ function get_diagnostics(parsed_args, atmos_model)
                 reduction_time_func = reduction_time_func,
                 pre_output_hook! = pre_output_hook!,
                 output_writer = CAD.HDF5Writer(),
-                name = name,
+                output_name = name,
             ),
         )
     end

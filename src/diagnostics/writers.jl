@@ -39,7 +39,7 @@ function HDF5Writer()
 
         output_path = joinpath(
             integrator.p.simulation.output_dir,
-            "$(diagnostic.name)_$time.h5",
+            "$(diagnostic.output_name)_$time.h5",
         )
 
         hdfwriter = InputOutput.HDF5Writer(output_path, integrator.p.comms_ctx)

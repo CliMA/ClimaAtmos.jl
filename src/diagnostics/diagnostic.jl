@@ -199,7 +199,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     reduction_space_func::F2
     compute_every::T2
     pre_output_hook!::PO
-    name::String
+    output_name::String
 
     """
         ScheduledDiagnosticIterations(; variable::DiagnosticVariable,
@@ -209,7 +209,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                                         reduction_space_func = nothing,
                                         compute_every = isa_reduction ? 1 : output_every,
                                         pre_output_hook! = nothing,
-                                        name = descriptive_name(self) )
+                                        output_name = descriptive_name(self) )
 
 
     A `DiagnosticVariable` that has to be computed and output during a simulation with a cadence
@@ -261,9 +261,9 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                           discarded. An example of `pre_output_hook!` to compute the arithmetic
                           average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
 
-   - `name`: A descriptive name for this particular diagnostic. If none is provided, one
-             will be generated mixing the short name of the variable, the reduction, and the
-             period of the reduction.
+   - `output_name`: A descriptive name for this particular diagnostic. If none is provided,
+                    one will be generated mixing the short name of the variable, the
+                    reduction, and the period of the reduction.
 
 
     """
@@ -275,7 +275,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         reduction_space_func = nothing,
         compute_every = isnothing(reduction_time_func) ? output_every : 1,
         pre_output_hook! = nothing,
-        name = get_descriptive_name(
+        output_name = get_descriptive_name(
             variable,
             output_every,
             reduction_time_func,
@@ -287,14 +287,14 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         # We provide an inner constructor to enforce some constraints
 
         output_every % compute_every == 0 || error(
-            "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(name)",
+            "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_name)",
         )
 
         isa_reduction = !isnothing(reduction_time_func)
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every ($output_every) != compute_every ($compute_every) for $(name), changing compute_every to match"
+            @warn "output_every ($output_every) != compute_every ($compute_every) for $(output_name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -320,7 +320,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
             reduction_space_func,
             compute_every,
             pre_output_hook!,
-            name,
+            output_name,
         )
     end
 end
@@ -334,7 +334,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
     reduction_space_func::F2
     compute_every::T2
     pre_output_hook!::PO
-    name::String
+    output_name::String
 
     """
         ScheduledDiagnosticTime(; variable::DiagnosticVariable,
@@ -344,7 +344,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                                   reduction_space_func = nothing,
                                   compute_every = isa_reduction ? :timestep : output_every,
                                   pre_output_hook! = nothing,
-                                  name = descriptive_name(self))
+                                  output_name = descriptive_name(self))
 
 
     A `DiagnosticVariable` that has to be computed and output during a simulation with a
@@ -400,10 +400,11 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                           discarded. An example of `pre_output_hook!` to compute the arithmetic
                           average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
 
-   - `name`: A descriptive name for this particular diagnostic. If none is provided, one
-             will be generated mixing the short name of the variable, the reduction, and the
-             period of the reduction.
+   - `output_name`: A descriptive name for this particular diagnostic. If none is provided,
+                    one will be generated mixing the short name of the variable, the
+                    reduction, and the period of the reduction.
     """
+
     function ScheduledDiagnosticTime(;
         variable::DiagnosticVariable,
         output_every,
@@ -413,7 +414,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         compute_every = isnothing(reduction_time_func) ? output_every :
                         :timestep,
         pre_output_hook! = nothing,
-        name = get_descriptive_name(
+        output_name = get_descriptive_name(
             variable,
             output_every,
             reduction_time_func,
@@ -428,7 +429,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         # the list of diagnostics
         if !isa(compute_every, Symbol)
             output_every % compute_every == 0 || error(
-                "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(name)",
+                "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_name)",
             )
         end
 
@@ -436,7 +437,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every ($output_every) != compute_every ($compute_every) for $(name), changing compute_every to match"
+            @warn "output_every ($output_every) != compute_every ($compute_every) for $(output_name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -462,7 +463,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
             reduction_space_func,
             compute_every,
             pre_output_hook!,
-            name,
+            output_name,
         )
     end
 end
@@ -490,10 +491,10 @@ function ScheduledDiagnosticIterations(
     output_every = sd_time.output_every / Δt
 
     isinteger(output_every) || error(
-        "output_every ($output_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.name)",
+        "output_every ($output_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
     )
     isinteger(compute_every) || error(
-        "compute_every ($compute_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.name)",
+        "compute_every ($compute_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
     )
 
     ScheduledDiagnosticIterations(;
@@ -504,7 +505,7 @@ function ScheduledDiagnosticIterations(
         sd_time.reduction_space_func,
         compute_every = convert(Int, compute_every),
         sd_time.pre_output_hook!,
-        sd_time.name,
+        sd_time.output_name,
     )
 end
 
@@ -536,7 +537,7 @@ function ScheduledDiagnosticTime(
         sd_time.reduction_space_func,
         compute_every,
         sd_time.pre_output_hook!,
-        sd_time.name,
+        sd_time.output_name,
     )
 end
 

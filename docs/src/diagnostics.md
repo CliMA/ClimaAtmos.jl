@@ -15,7 +15,7 @@ Second, you can specify the diagnostics you want to output directly in the
 ```
 diagnostics:
   - short_name: air_density
-    name: a_name
+    output_name: a_name
     period: 3hours
   - reduction_time: average
     short_name: air_density
@@ -23,7 +23,7 @@ diagnostics:
 ```
 This adds two diagnostics (both for `air_density`). The `period` keyword
 identifies the period over which to compute the reduction and how often to save
-to disk. `name` is optional, and if provided, it identifies the name of the
+to disk. `output_name` is optional, and if provided, it identifies the name of the
 output file.
 
 ### From a script
@@ -101,6 +101,8 @@ More specifically, a `ScheduledDiagnostic` contains the following pieces of data
    `pre_output_hook!` is called with two arguments: the value accumulated during
    the reduction, and the number of times the diagnostic was computed from the
    last time it was output.
+- `output_name`: A descriptive name that can be used by the `output_writer`. If
+   not provided, a default one is generated.
 
 To implement operations like the arithmetic average, the `reduction_time_func`
 has to be chosen as `+`, and a `pre_output_hook!` that renormalize `acc` by the
