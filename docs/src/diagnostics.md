@@ -2,6 +2,30 @@
 
 ## I want to compute and output a diagnostic variable
 
+### From a YAML file
+
+If you configure your simulation with YAML files, there are two options that are
+important to know about. When `output_default_diagnostics` is set to `true`, the
+default diagnostics for the given atmospheric model will be output. Note that
+they might be incompatible with your simulation (e.g., you want to output
+hourly maxima when the timestep is 4 hours).
+
+Second, you can specify the diagnostics you want to output directly in the
+`diagnostics` section of your YAML file. For instance:
+```
+diagnostics:
+  - short_name: air_density
+    name: a_name
+    period: 3hours
+  - reduction_time: average
+    short_name: air_density
+    period: 12hours
+```
+This adds two diagnostics (both for `air_density`). The `period` keyword
+identifies the period over which to compute the reduction and how often to save
+to disk. `name` is optional, and if provided, it identifies the name of the
+output file.
+
 ### From a script
 
 The simplest way to get started with diagnostics is to use the defaults for your
