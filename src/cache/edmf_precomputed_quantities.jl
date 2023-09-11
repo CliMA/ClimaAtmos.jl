@@ -230,7 +230,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     ᶠu⁰ = p.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
     ᶜstrain_rate = p.ᶜtemp_UVWxUVW
-    compute_strain_rate!(ᶜstrain_rate, ᶠu⁰)
+    compute_strain_rate_center!(ᶜstrain_rate, ᶠu⁰)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.ᶜtemp_scalar
