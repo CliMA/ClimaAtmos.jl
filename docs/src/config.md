@@ -1,3 +1,27 @@
+# Running the model with custom configurations
+There are two main ways of setting the model configuration: with a file or a dictionary.
+
+### Runing from a file
+Given a configuration file, you can run the model from the terminal using:
+```
+julia --project=examples examples/driver.jl --config_file <filepath>`
+```
+If you are running the model from the REPL and want to rerun the model 
+with a new configuration file without recompiling,
+a convenience function `run_model_from_file(config_file)` is defined. 
+
+### Running from a dictionary
+You can also set the config interactively, but this is more involved:
+```julia
+config_dict = Dict(
+"FLOAT_TYPE" => Float64,
+"z_max" => 3000.0,
+"z_elem" => 60,
+"dt" => "20secs",
+)
+config = ClimaAtmos.AtmosConfig(; config_dict)
+include("examples/hybrid/driver.jl")
+```
 
 # Creating custom configurations
 To create a custom configuration, first make a .yml file.
@@ -5,12 +29,8 @@ In the file, you can set configuration arguments as `key: value` pairs to overri
 YAML parsing is fairly forgiving -- values will generally be parsed to the correct type.
 The only exception is true/false strings. These need quotes around them, or they will be parsed to `Bool`s.
 
-To start the model with a custom configuration, run: 
-
-`julia --project=examples examples/driver.jl --config_file <yaml>`
-
-### Example
-Below is the default Bomex configuration:
+### Configuration File Example
+Below is the default Bomex configuration. Many more can be found in `/config/`
 ```
 edmf_coriolis: Bomex
 dt_save_to_disk: 5mins

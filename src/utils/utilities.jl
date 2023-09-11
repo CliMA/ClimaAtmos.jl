@@ -262,3 +262,16 @@ end
 struct AllNothing end
 const all_nothing = AllNothing()
 Base.getproperty(::AllNothing, ::Symbol) = nothing
+
+"""
+    run_model_from_file(config_file)
+
+Convenience function to run the driver with a given config file.
+Note that this does not set the global Random seed, 
+so results may not be fully reproducible. 
+"""
+function run_model_from_file(config_file)
+    config = AtmosConfig(; parsed_args = Dict("config_file" => config_file))
+    integrator = get_integrator(config)
+    return solve_atmos!(integrator)
+end
