@@ -41,7 +41,7 @@ compute_relative_humidity_from_integrator!(out, integrator) =
     compute_relative_humidity_from_integrator!(
         out,
         integrator,
-        integrator.p.atmos,
+        integrator.p.atmos.moisture_model,
     )
 
 # FIXME: Gabriele wrote this as an example. Gabriele doesn't know anything about the
