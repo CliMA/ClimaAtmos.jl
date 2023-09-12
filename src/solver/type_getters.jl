@@ -901,8 +901,12 @@ function get_integrator(config::AtmosConfig)
         variable = diag.variable
         try
             # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-            diagnostic_storage[diag] =
-                variable.compute_from_integrator!(nothing, integrator)
+            diagnostic_storage[diag] = variable.compute!(
+                nothing,
+                integrator.u,
+                integrator.p,
+                integrator.t,
+            )
             diagnostic_counters[diag] = 1
             # If it is not a reduction, call the output writer as well
             if isnothing(diag.reduction_time_func)

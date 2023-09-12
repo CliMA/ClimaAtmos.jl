@@ -77,7 +77,7 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 
-- `compute_from_integrator!`: Function that compute the diagnostic variable from the state.
+- `compute!`: Function that compute the diagnostic variable from the state.
                              It has to take two arguments: the `integrator`, and a
                              pre-allocated area of memory where to write the result of the
                              computation. It the no pre-allocated area is available, a new
@@ -90,7 +90,7 @@ Base.@kwdef struct DiagnosticVariable{T}
     long_name::String
     units::String
     comments::String
-    compute_from_integrator!::T
+    compute!::T
 end
 
 # ClimaAtmos diagnostics
@@ -103,7 +103,7 @@ const ALL_DIAGNOSTICS = Dict{String, DiagnosticVariable}()
                                long_name,
                                units,
                                description,
-                               compute_from_integrator!)
+                               compute!)
 
 
 Add a new variable to the `ALL_DIAGNOSTICS` dictionary (this function mutates the state of
@@ -127,7 +127,7 @@ Keyword arguments
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 
-- `compute_from_integrator!`: Function that compute the diagnostic variable from the state.
+- `compute!`: Function that compute the diagnostic variable from the state.
                              It has to take two arguments: the `integrator`, and a
                              pre-allocated area of memory where to write the result of the
                              computation. It the no pre-allocated area is available, a new
@@ -141,18 +141,13 @@ function add_diagnostic_variable!(;
     long_name,
     units,
     comments,
-    compute_from_integrator!,
+    compute!,
 )
     haskey(ALL_DIAGNOSTICS, short_name) &&
         error("diagnostic $short_name already defined")
 
-    ALL_DIAGNOSTICS[short_name] = DiagnosticVariable(;
-        short_name,
-        long_name,
-        units,
-        comments,
-        compute_from_integrator!,
-    )
+    ALL_DIAGNOSTICS[short_name] =
+        DiagnosticVariable(; short_name, long_name, units, comments, compute!)
 end
 
 # Do you want to define more diagnostics? Add them here
@@ -628,7 +623,12 @@ function get_callbacks_from_diagnostics(
         compute_callback =
             integrator -> begin
                 # FIXME: Change when ClimaCore overrides .= for us to avoid multiple allocations
-                variable.compute_from_integrator!(storage[diag], integrator)
+                variable.compute!(
+                    storage[diag],
+                    integrator.u,
+                    integrator.p,
+                    integrator.t,
+                )
 
                 # accumulator[diag] is not defined for non-reductions
                 diag_accumulator = get(accumulators, diag, nothing)

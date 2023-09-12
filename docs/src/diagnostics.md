@@ -208,17 +208,18 @@ are not used.
 ### Compute function
 
 The other piece of information needed to specify a `DiagnosticVariable` is a
-function `compute_from_integrator!`. Schematically, a `compute_from_integrator!` has to look like
+function `compute!`. Schematically, a `compute!` has to look like
 ```julia
-function compute_from_integrator!(out, integrator)
+function compute!(out, state, cache, time)
     # FIXME: Remove this line when ClimaCore implements the broadcasting to enable this
-    out .= # Calculcations with the state (= integrator.u) and the parameters (= integrator.p)
+    out .= # Calculcations with the state and the cache
 end
 ```
-Diagnostics are implemented as callbacks function which pass the `integrator`
-object (from `OrdinaryDiffEq`) to `compute_from_integrator!`.
 
-`compute_from_integrator!` also takes a second argument, `out`, which is used to
+Diagnostics are implemented as callbacks functions which pass the `state`,
+`cache`, and `time` from the integrator to `compute!`.
+
+`compute!` also takes a second argument, `out`, which is used to
 avoid extra memory allocations (which hurt performance). If `out` is `nothing`,
 and new area of memory is allocated. If `out` is a `ClimaCore.Field`, the
 operation is done in-place without additional memory allocations.
@@ -229,17 +230,21 @@ For instance, if you want to compute relative humidity, which does not make
 sense for dry simulations, you should define the functions
 
 ```julia
-function compute_relative_humidity_from_integrator!(
+function compute_relative_humidity!(
     out,
-    integrator,
+    state,
+    cache,
+    time,
     moisture_model::T,
 ) where {T}
     error("Cannot compute relative_humidity with moisture_model = $T")
 end
 
-function compute_relative_humidity_from_integrator!(
+function compute_relative_humidity!(
     out,
-    integrator,
+    state,
+    cache,
+    time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
@@ -248,17 +253,19 @@ function compute_relative_humidity_from_integrator!(
     return TD.relative_humidity.(thermo_params, integrator.p.ᶜts)
 end
 
-compute_relative_humidity_from_integrator!(out, integrator) =
-    compute_relative_humidity_from_integrator!(
+compute_relative_humidity!(out, integrator) =
+    compute_relative_humidity!(
         out,
-        integrator,
-        integrator.p.atmos,
+        state,
+        cache,
+        time,
+        cache.atmos,
     )
 ```
 
 This will return the correct relative humidity and throw informative errors when
 it cannot be computed. We could specialize
-`compute_relative_humidity_from_integrator` further if the relative humidity
+`compute_relative_humidity` further if the relative humidity
 were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
 
 ### Adding to the `ALL_DIAGNOSTICS` dictionary

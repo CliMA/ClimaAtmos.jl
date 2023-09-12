@@ -4,28 +4,23 @@
 
 # This is an example of how to compute the same diagnostic variable differently depending on
 # the model. This is also exposed to the user, which could define their own
-# compute_tke_from_integrator.
+# compute_tke.
 
-function compute_tke_from_integrator!(out, integrator, ::EDMFX)
+function compute_tke!(out, state, cache, time, ::EDMFX)
     # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
     # We will want: out .= integrator.u.c.ρ
-    return copy(integrator.p.ᶜspecific⁰.tke)
+    return copy(cache.ᶜspecific⁰.tke)
 end
 
-function compute_tke_from_integrator!(out, integrator, ::DiagnosticEDMFX)
+function compute_tke!(out, state, cache, time, ::DiagnosticEDMFX)
     # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
     # We will want: out .= integrator.u.c.ρ
-    return copy(integrator.p.tke⁰)
+    return copy(cache.tke⁰)
 end
 
-compute_tke_from_integrator!(out, integrator) =
-    compute_tke_from_integrator!(out, integrator, integrator.p.atmos)
+compute_tke!(out, state, cache, time) = compute_tke!(out, state, cache.atmos)
 
-function compute_tke_from_integrator!(
-    out,
-    integrator,
-    turbconv_model::T,
-) where {T}
+function compute_tke!(out, state, cache, time, turbconv_model::T) where {T}
     error("Cannot compute tke with turbconv_model = $T")
 end
 
@@ -36,6 +31,5 @@ add_diagnostic_variable!(
     long_name = "turbolent_kinetic_energy",
     units = "J",
     comments = "Turbolent Kinetic Energy",
-    compute_from_integrator! = (integrator, out) ->
-        compute_tke_from_integrator!,
+    compute! = compute_tke!,
 )
