@@ -2,7 +2,7 @@ import Thermodynamics as TD
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
-import ClimaAtmos.InitialConditions as ICs
+import .InitialConditions as ICs
 
 """
     set_discrete_hydrostatic_balanced_state!(Y, p)

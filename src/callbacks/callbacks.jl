@@ -1,5 +1,5 @@
 import ClimaCore.DataLayouts as DL
-import ClimaAtmos.RRTMGPInterface as RRTMGPI
+import .RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
 import LinearAlgebra
 import ClimaCore.Fields
@@ -7,7 +7,7 @@ import ClimaComms
 import ClimaCore as CC
 import ClimaCore.Spaces
 import SciMLBase
-import ClimaAtmos.Parameters as CAP
+import .Parameters as CAP
 import DiffEqCallbacks as DECB
 import ClimaCore: InputOutput
 import Dates
