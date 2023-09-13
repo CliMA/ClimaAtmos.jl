@@ -1,7 +1,6 @@
 module Diagnostics
 
-import ClimaCore: InputOutput
-import ClimaCore: Fields
+import ClimaCore: Fields, Geometry, InputOutput, Meshes, Spaces
 
 import ..AtmosModel
 import ..call_every_n_steps

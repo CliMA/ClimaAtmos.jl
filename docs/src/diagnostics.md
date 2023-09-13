@@ -17,14 +17,20 @@ diagnostics:
   - short_name: air_density
     output_name: a_name
     period: 3hours
+    writer: nc
   - reduction_time: average
     short_name: air_density
     period: 12hours
+    writer: h5
 ```
 This adds two diagnostics (both for `air_density`). The `period` keyword
 identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
 output file.
+
+The default `writer` is HDF5. If `writer` is `nc` or `netcdf`, the output is
+remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
+Currently, only 3D fields on cubed spheres are supported.
 
 ### From a script
 

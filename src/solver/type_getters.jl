@@ -634,6 +634,15 @@ function get_diagnostics(parsed_args, atmos_model)
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
+    # The default writer is HDF5
+    ALLOWED_WRITERS = Dict(
+        "nothing" => CAD.HDF5Writer(),
+        "h5" => CAD.HDF5Writer(),
+        "hdf5" => CAD.HDF5Writer(),
+        "nc" => CAD.NetCDFWriter(),
+        "netcdf" => CAD.NetCDFWriter(),
+    )
+
     for yaml_diag in yaml_diagnostics
         # Return "nothing" if "reduction_time" is not in the YAML block
         #
@@ -647,6 +656,14 @@ function get_diagnostics(parsed_args, atmos_model)
         else
             reduction_time_func, pre_output_hook! =
                 ALLOWED_REDUCTIONS[reduction_time_yaml]
+        end
+
+        writer_ext = lowercase(get(yaml_diag, "writer", "nothing"))
+
+        if !haskey(ALLOWED_WRITERS, writer_ext)
+            error("writer $writer_ext not implemented")
+        else
+            writer = ALLOWED_WRITERS[writer_ext]
         end
 
         name = get(yaml_diag, "name", nothing)
@@ -679,7 +696,7 @@ function get_diagnostics(parsed_args, atmos_model)
                 compute_every = compute_every,
                 reduction_time_func = reduction_time_func,
                 pre_output_hook! = pre_output_hook!,
-                output_writer = CAD.HDF5Writer(),
+                output_writer = writer,
                 output_name = name,
             ),
         )
