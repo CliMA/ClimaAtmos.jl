@@ -39,26 +39,24 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     MSLP = FT(CAP.MSLP(params))
     p_ref_theta = FT(CAP.p_ref_theta(params))
     grav = FT(CAP.grav(params))
-    ΔT_y_dry = FT(CAP.ΔT_y_dry(params))
-    ΔT_y_wet = FT(CAP.ΔT_y_wet(params))
+    Δθ_z = FT(CAP.Δθ_z(params))
+    T_min = FT(CAP.T_min_hs(params))
     thermo_params = CAP.thermodynamics_params(params)
+    σ_b = CAP.σ_b(params)
+    k_a = 1 / (40 * day)
+    k_s = 1 / (4 * day)
+    k_f = 1 / day
 
     z_surface =
         Fields.level(Fields.coordinate_field(Y.f).z[colidx], Fields.half)
 
-    σ_b = FT(7 / 10)
-    k_a = 1 / (40 * day)
-    k_s = 1 / (4 * day)
-    k_f = 1 / day
     if :ρq_tot in propertynames(Y.c)
-        ΔT_y = ΔT_y_wet
-        T_equator = FT(294)
+        ΔT_y = FT(CAP.ΔT_y_wet(params))
+        T_equator = FT(CAP.T_equator_wet(params))
     else
-        ΔT_y = ΔT_y_dry
-        T_equator = FT(315)
+        ΔT_y = FT(CAP.ΔT_y_dry(params))
+        T_equator = FT(CAP.T_equator_dry(params))
     end
-    Δθ_z = FT(10)
-    T_min = FT(200)
 
     @. ᶜσ[colidx] =
         ᶜp[colidx] / (

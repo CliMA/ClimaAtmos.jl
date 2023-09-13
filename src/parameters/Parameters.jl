@@ -10,34 +10,30 @@ const ACAP = AbstractClimaAtmosParameters
 
 Base.broadcastable(param_set::ACAP) = tuple(param_set)
 
-Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP, SP} <:
-                   ACAP
-    Omega::FT
-    f_plane_coriolis_frequency::FT
-    planet_radius::FT
-    astro_unit::FT
+Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
     insolation_params::IP
     microphysics_params::MPP
-    surfacefluxes_params::SFP
+    surface_fluxes_params::SFP
     turbconv_params::TCP
-    sponge_params::SP
+    Omega::FT
+    f_plane_coriolis_frequency::FT
+    planet_radius::FT
+    astro_unit::FT
     entr_tau::FT
     entr_coeff::FT
     detr_coeff::FT
-    # TODO: Figure out a better place for these held-suarez parameters
+    C_E::FT
+    # Held Suarez
     ΔT_y_dry::FT
     ΔT_y_wet::FT
-    C_E::FT
-end
-
-"""
-    SpongeParameters{FT}
-
-Parameters for both the viscous and rayleigh sponge.
-"""
-Base.@kwdef struct SpongeParameters{FT}
+    σ_b::FT
+    T_equator_dry::FT
+    T_equator_wet::FT
+    T_min_hs::FT
+    Δθ_z::FT
+    # Sponge
     alpha_rayleigh_w::FT
     alpha_rayleigh_uh::FT
     zd_viscous::FT
@@ -47,36 +43,14 @@ end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
 
-rrtmgp_params(ps::ACAP) = ps.rrtmgp_params
-thermodynamics_params(ps::ACAP) = ps.thermodynamics_params
-surface_fluxes_params(ps::ACAP) = ps.surfacefluxes_params
-microphysics_params(ps::ACAP) = ps.microphysics_params
-insolation_params(ps::ACAP) = ps.insolation_params
-turbconv_params(ps::ACAP) = ps.turbconv_params
-
 # Forward Thermodynamics parameters
 for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
-
 # Thermodynamics derived parameters
-molmass_ratio(ps::ACAP) = TD.Parameters.molmass_ratio(thermodynamics_params(ps))
-R_d(ps::ACAP) = TD.Parameters.R_d(thermodynamics_params(ps))
-R_v(ps::ACAP) = TD.Parameters.R_v(thermodynamics_params(ps))
-cp_d(ps::ACAP) = TD.Parameters.cp_d(thermodynamics_params(ps))
-cv_v(ps::ACAP) = TD.Parameters.cv_v(thermodynamics_params(ps))
-cv_l(ps::ACAP) = TD.Parameters.cv_l(thermodynamics_params(ps))
-cv_d(ps::ACAP) = TD.Parameters.cv_d(thermodynamics_params(ps))
-
-Omega(ps::ACAP) = ps.Omega
-f_plane_coriolis_frequency(ps::ACAP) = ps.f_plane_coriolis_frequency
-planet_radius(ps::ACAP) = ps.planet_radius
-astro_unit(ps::ACAP) = ps.astro_unit
-entr_coeff(ps::ACAP) = ps.entr_coeff
-entr_tau(ps::ACAP) = ps.entr_tau
-detr_coeff(ps::ACAP) = ps.detr_coeff
-ΔT_y_dry(ps::ACAP) = ps.ΔT_y_dry
-ΔT_y_wet(ps::ACAP) = ps.ΔT_y_wet
+for var in [:molmass_ratio, :R_d, :R_v, :cp_d, :cv_v, :cv_l, :cv_d]
+    @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
+end
 
 # Forwarding CloudMicrophysics parameters
 ρ_cloud_liq(ps::ACAP) = CM.Parameters.ρ_cloud_liq(microphysics_params(ps))
@@ -84,5 +58,12 @@ detr_coeff(ps::ACAP) = ps.detr_coeff
 # Insolation parameters
 day(ps::ACAP) = IP.day(insolation_params(ps))
 tot_solar_irrad(ps::ACAP) = IP.tot_solar_irrad(insolation_params(ps))
+
+# Define parameters as functions
+# Place derived parameters in exceptions vector
+exceptions = []
+for var in filter(x -> !(x in exceptions), fieldnames(ClimaAtmosParameters))
+    @eval $var(ps::ACAP) = ps.$var
+end
 
 end

@@ -246,3 +246,6 @@ prognostic_surface:
 override_τ_precip:
   help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
   value: true
+log_params:
+  help: "Log parameters to file [`false` (default), `true`]"
+  value: false

@@ -200,9 +200,9 @@ version = "0.1.2"
 
 [[deps.CLIMAParameters]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "d35d039179f27abc063f7ae5c564573fe5316bb2"
+git-tree-sha1 = "9872c4383d3c212096b2750bf1c2237a4670a3af"
 uuid = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
-version = "0.7.19"
+version = "0.7.20"
 
 [[deps.CPUSummary]]
 deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]

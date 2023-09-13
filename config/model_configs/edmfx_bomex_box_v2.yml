@@ -16,7 +16,6 @@ turbconv: "edmfx"
 z_stretch: false
 vert_diff: "true"
 x_elem: 2
-detr_coeff: 0.01
 config: "box"
 subsidence: "Bomex"
 kappa_4: 1.0e12
