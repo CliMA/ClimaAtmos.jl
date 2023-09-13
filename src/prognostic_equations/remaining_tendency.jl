@@ -22,6 +22,7 @@ function remaining_tendency!(Yₜ, Y, p, t)
             dss!(Yₜ, p, t)
         end
     end
+    any(isnan, Yₜ) && error("Found NaN in remaining tendency")
     return Yₜ
 end
 

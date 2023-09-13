@@ -19,6 +19,7 @@ function limited_tendency!(Yₜ, Y, p, t)
     NVTX.@range "tracer hyperdiffusion tendency" color = colorant"yellow" begin
         tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
+    any(isnan, Yₜ) && error("Found NaN in limited tendency")
     return nothing
 end
 

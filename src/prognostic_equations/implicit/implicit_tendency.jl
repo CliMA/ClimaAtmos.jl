@@ -31,6 +31,7 @@ function implicit_tendency!(Yₜ, Y, p, t)
             zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
         end
     end
+    any(isnan, Yₜ) && error("Found NaN in implicit tendency")
     return nothing
 end
 
