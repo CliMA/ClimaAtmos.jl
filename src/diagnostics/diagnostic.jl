@@ -484,10 +484,10 @@ function ScheduledDiagnosticIterations(
     output_every = sd_time.output_every / Δt
 
     isinteger(output_every) || error(
-        "output_every ($output_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
+        "output_every ($(sd_time.output_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
     )
     isinteger(compute_every) || error(
-        "compute_every ($compute_every) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
+        "compute_every ($(sd_time.compute_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
     )
 
     ScheduledDiagnosticIterations(;
