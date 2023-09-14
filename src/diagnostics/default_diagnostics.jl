@@ -42,7 +42,7 @@ function common_diagnostics(
     reduction,
     output_writer,
     short_names...;
-    pre_output_hook! = (accum, count) -> nothing,
+    pre_output_hook! = nothing,
 )
     return [
         ScheduledDiagnosticTime(

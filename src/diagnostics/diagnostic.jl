@@ -208,7 +208,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                                         reduction_time_func = nothing,
                                         reduction_space_func = nothing,
                                         compute_every = isa_reduction ? 1 : output_every,
-                                        pre_output_hook! = (accum, count) -> nothing,
+                                        pre_output_hook! = nothing,
                                         name = descriptive_name(self) )
 
 
@@ -274,7 +274,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         reduction_time_func = nothing,
         reduction_space_func = nothing,
         compute_every = isnothing(reduction_time_func) ? output_every : 1,
-        pre_output_hook! = (accum, count) -> nothing,
+        pre_output_hook! = nothing,
         name = get_descriptive_name(
             variable,
             output_every,
@@ -296,6 +296,13 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         if !isa_reduction && compute_every != output_every
             @warn "output_every ($output_every) != compute_every ($compute_every) for $(name), changing compute_every to match"
             compute_every = output_every
+        end
+
+        # pre_output_hook! has to be a function, but it is much more intuitive to specify
+        # `nothing` when we want nothing to happen. Here, we convert the nothing keyword
+        # into a function that does nothing
+        if isnothing(pre_output_hook!)
+            pre_output_hook! = (accum, count) -> nothing
         end
 
         T1 = typeof(output_every)
@@ -336,7 +343,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                                   reduction_time_func = nothing,
                                   reduction_space_func = nothing,
                                   compute_every = isa_reduction ? :timestep : output_every,
-                                  pre_output_hook! = (accum, count) -> nothing,
+                                  pre_output_hook! = nothing,
                                   name = descriptive_name(self))
 
 
@@ -405,7 +412,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         reduction_space_func = nothing,
         compute_every = isnothing(reduction_time_func) ? output_every :
                         :timestep,
-        pre_output_hook! = (accum, count) -> nothing,
+        pre_output_hook! = nothing,
         name = get_descriptive_name(
             variable,
             output_every,
@@ -431,6 +438,13 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         if !isa_reduction && compute_every != output_every
             @warn "output_every ($output_every) != compute_every ($compute_every) for $(name), changing compute_every to match"
             compute_every = output_every
+        end
+
+        # pre_output_hook! has to be a function, but it is much more intuitive to specify
+        # `nothing` when we want nothing to happen. Here, we convert the nothing keyword
+        # into a function that does nothing
+        if isnothing(pre_output_hook!)
+            pre_output_hook! = (accum, count) -> nothing
         end
 
         T1 = typeof(output_every)
