@@ -26,7 +26,6 @@ import ClimaCore.Fields: ColumnField
 # This is a constant Coriolis frequency that is only used if space is flat
 function default_cache(
     Y,
-    parsed_args,
     params,
     atmos,
     spaces,
@@ -35,9 +34,6 @@ function default_cache(
     surface_setup,
 )
     FT = eltype(params)
-    (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
-        numerics
-    (; apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     R_d = FT(CAP.R_d(params))
     MSLP = FT(CAP.MSLP(params))
@@ -46,7 +42,7 @@ function default_cache(
     ᶜΦ = CAP.grav(params) .* ᶜcoord.z
     ᶜρ_ref = @. MSLP * exp(-grav * ᶜcoord.z / (R_d * T_ref)) / (R_d * T_ref)
     ᶜp_ref = @. ᶜρ_ref * R_d * T_ref
-    if !parsed_args["use_reference_state"]
+    if !numerics.use_reference_state
         ᶜρ_ref .*= 0
         ᶜp_ref .*= 0
     end
@@ -66,16 +62,12 @@ function default_cache(
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
 
     limiter =
-        apply_limiter ? Limiters.QuasiMonotoneLimiter(similar(Y.c, FT)) :
-        nothing
+        isnothing(numerics.limiter) ? nothing :
+        numerics.limiter(similar(Y.c, FT))
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
-    test = if parsed_args["test_dycore_consistency"]
-        TestDycoreConsistency()
-    else
-        nothing
-    end
+    test = numerics.test_dycore_consistency
 
     default_cache = (;
         is_init = Ref(true),
@@ -92,10 +84,6 @@ function default_cache(
         ᶜf,
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         params,
-        energy_upwinding,
-        tracer_upwinding,
-        density_upwinding,
-        edmfx_upwinding,
         do_dss,
         ghost_buffer,
         net_energy_flux_toa,

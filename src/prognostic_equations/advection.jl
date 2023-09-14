@@ -73,12 +73,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
-    is_total_energy = p.atmos.energy_form isa TotalEnergy
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜu, ᶠu³, ᶜK, ᶜf) = p
-    (; edmfx_upwinding) = n > 0 || advect_tke ? p : all_nothing
+    (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p : all_nothing
     (; ᶜp, ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p : all_nothing
     (; ᶠu³⁰) = advect_tke ? p : all_nothing
