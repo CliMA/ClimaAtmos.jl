@@ -29,7 +29,6 @@ We need to implement the following features/options:
 - ...more features/options
 
 """
-
 function HDF5Writer()
     # output_drivers are called with the three arguments: the value, the ScheduledDiagnostic,
     # and the integrator

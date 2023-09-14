@@ -19,8 +19,7 @@ is interpreted as in units of number of iterations.
 
 This function is useful for filenames and error messages.
 
- """
-
+"""
 function get_descriptive_name(
     variable::DiagnosticVariable,
     output_every,

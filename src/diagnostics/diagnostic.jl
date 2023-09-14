@@ -399,7 +399,6 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                     one will be generated mixing the short name of the variable, the
                     reduction, and the period of the reduction.
     """
-
     function ScheduledDiagnosticTime(;
         variable::DiagnosticVariable,
         output_every,
@@ -472,7 +471,6 @@ Create a `ScheduledDiagnosticIterations` given a `ScheduledDiagnosticTime` and a
 timestep.
 
 """
-
 function ScheduledDiagnosticIterations(
     sd_time::ScheduledDiagnosticTime,
     Δt::T,

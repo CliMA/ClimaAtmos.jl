@@ -154,14 +154,13 @@ Return a `ScheduledDiagnostics` that computes the hourly min for the given varia
 hourly_min(short_names; output_writer = HDF5Writer()) =
     hourly_mins(short_names; output_writer)[1]
 
+# An average is just a sum with a normalization before output
 """
     hourly_averages(short_names...; output_writer = HDF5Writer())
 
 
 Return a list of `ScheduledDiagnostics` that compute the hourly average for the given variables.
 """
-
-# An average is just a sum with a normalization before output
 hourly_averages(short_names...; output_writer = HDF5Writer()) =
     common_diagnostics(
         60 * 60,
@@ -170,6 +169,7 @@ hourly_averages(short_names...; output_writer = HDF5Writer()) =
         short_names...;
         pre_output_hook! = average_pre_output_hook!,
     )
+
 """
     hourly_average(short_names...; output_writer = HDF5Writer())
 
