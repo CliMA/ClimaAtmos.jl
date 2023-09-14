@@ -24,16 +24,8 @@ import ..TotalEnergy
 import ..EDMFX
 import ..DiagnosticEDMFX
 
-# Abbreviations (following utils/abbreviations.jl)
-const curlₕ = Operators.Curl()
-const CT3 = Geometry.Contravariant3Vector
-const ᶜinterp = Operators.InterpolateF2C()
-# TODO: Implement proper extrapolation instead of simply reusing the first
-# interior value at the surface.
-const ᶠinterp = Operators.InterpolateC2F(
-    bottom = Operators.Extrapolate(),
-    top = Operators.Extrapolate(),
-)
+# We need the abbreviations for symbols like curl, grad, and so on
+include(joinpath("..", "utils", "abbreviations.jl"))
 
 include("diagnostic.jl")
 include("writers.jl")
