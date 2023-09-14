@@ -42,7 +42,6 @@
 #
 # - This file also also include several other files, including (but not limited to):
 #   - core_diagnostics.jl
-#   - turbconv_diagnostics.jl
 #   - default_diagnostics.jl (which defines all the higher-level interfaces and defaults)
 #   - reduction_identities.jl
 #   - diagnostic_utils.jl
@@ -167,7 +166,6 @@ end
 
 # Do you want to define more diagnostics? Add them here
 include("core_diagnostics.jl")
-include("turbconv_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")
@@ -635,8 +633,7 @@ function get_callbacks_from_diagnostics(
 
         compute_callback =
             integrator -> begin
-                # FIXME: Change when ClimaCore overrides .= for us to avoid multiple allocations
-                storage[diag] .= variable.compute!(
+                variable.compute!(
                     storage[diag],
                     integrator.u,
                     integrator.p,

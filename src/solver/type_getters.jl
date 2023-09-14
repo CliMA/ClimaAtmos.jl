@@ -900,7 +900,8 @@ function get_integrator(config::AtmosConfig)
     for diag in diagnostics_iterations
         variable = diag.variable
         try
-            # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
+            # The first time we call compute! we use its return value. All the subsequent
+            # times (in the callbacks), we will write the result in place
             diagnostic_storage[diag] = variable.compute!(
                 nothing,
                 integrator.u,

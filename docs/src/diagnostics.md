@@ -211,10 +211,16 @@ The other piece of information needed to specify a `DiagnosticVariable` is a
 function `compute!`. Schematically, a `compute!` has to look like
 ```julia
 function compute!(out, state, cache, time)
-    # FIXME: Remove this line when ClimaCore implements the broadcasting to enable this
-    out .= # Calculations with the state and the cache
+    if isnothing(out)
+        return ... # Calculations with the state and the cache
+    else
+        out .= ... # Calculations with the state and the cache
+    end
 end
 ```
+The first time `compute!` is called, the function has to allocate memory and
+return its output. All the subsequent times, `out` will be the pre-allocated
+area of memory, so the function has to write the new value in place.
 
 Diagnostics are implemented as callbacks functions which pass the `state`,
 `cache`, and `time` from the integrator to `compute!`.
@@ -247,10 +253,11 @@ function compute_relative_humidity!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
-    thermo_params = CAP.thermodynamics_params(integrator.p.params)
-    return TD.relative_humidity.(thermo_params, integrator.p.ᶜts)
+    if isnothing(out)
+        return TD.relative_humidity.(thermo_params, cache.ᶜts)
+    else
+        out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
+    end
 end
 
 compute_relative_humidity!(out, state, cache, time) =
@@ -283,10 +290,12 @@ function compute_relative_humidity!(
     time,
     ::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     thermo_params = CAP.thermodynamics_params(cache.params)
-    return TD.relative_humidity.(thermo_params, cache.ᶜts)
+    if isnothing(out)
+        return TD.relative_humidity.(thermo_params, cache.ᶜts)
+    else
+        out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
+    end
 end
 ```
 

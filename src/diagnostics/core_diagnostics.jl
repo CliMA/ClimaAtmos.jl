@@ -55,9 +55,11 @@ add_diagnostic_variable!(
     units = "kg m^-3",
     comments = "Density of air, a prognostic variable",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
-        return copy(state.c.ρ)
+        if isnothing(out)
+            return copy(state.c.ρ)
+        else
+            out .= state.c.ρ
+        end
     end,
 )
 
@@ -73,9 +75,11 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Eastward (zonal) wind component, a prognostic variable",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
-        return copy(Geometry.UVector.(cache.ᶜu))
+        if isnothing(out)
+            return copy(Geometry.UVector.(cache.ᶜu))
+        else
+            out .= Geometry.UVector.(cache.ᶜu)
+        end
     end,
 )
 
@@ -91,9 +95,11 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Northward (meridional) wind component, a prognostic variable",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
-        return copy(Geometry.VVector.(cache.ᶜu))
+        if isnothing(out)
+            return copy(Geometry.VVector.(cache.ᶜu))
+        else
+            out .= Geometry.VVector.(cache.ᶜu)
+        end
     end,
 )
 
@@ -109,9 +115,11 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Vertical wind component, a prognostic variable",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
-        return copy(Geometry.WVector.(cache.ᶜu))
+        if isnothing(out)
+            return copy(Geometry.WVector.(cache.ᶜu))
+        else
+            out .= Geometry.WVector.(cache.ᶜu)
+        end
     end,
 )
 
@@ -124,10 +132,12 @@ add_diagnostic_variable!(
     units = "K",
     comments = "Temperature of air",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
         thermo_params = CAP.thermodynamics_params(cache.params)
-        return TD.air_temperature.(thermo_params, cache.ᶜts)
+        if isnothing(out)
+            return TD.air_temperature.(thermo_params, cache.ᶜts)
+        else
+            out .= TD.air_temperature.(thermo_params, cache.ᶜts)
+        end
     end,
 )
 
@@ -140,10 +150,12 @@ add_diagnostic_variable!(
     units = "K",
     comments = "Potential temperature of air",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
         thermo_params = CAP.thermodynamics_params(cache.params)
-        return TD.dry_pottemp.(thermo_params, cache.ᶜts)
+        if isnothing(out)
+            return TD.dry_pottemp.(thermo_params, cache.ᶜts)
+        else
+            out .= TD.dry_pottemp.(thermo_params, cache.ᶜts)
+        end
     end,
 )
 
@@ -156,9 +168,11 @@ add_diagnostic_variable!(
     units = "Pa",
     comments = "Pressure of air",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
-        return copy(cache.ᶜp)
+        if isnothing(out)
+            return copy(cache.ᶜp)
+        else
+            out .= cache.ᶜp
+        end
     end,
 )
 
@@ -171,13 +185,14 @@ add_diagnostic_variable!(
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
-        # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-        # We will want: out .= integrator.u.c.ρ
         ᶜvort = @. Geometry.WVector(curlₕ(state.c.uₕ))
-        if cache.do_dss
-            Spaces.weighted_dss!(ᶜvort)
+        # We need to ensure smoothness, so we call DSS
+        Spaces.weighted_dss!(ᶜvort)
+        if isnothing(out)
+            return copy(ᶜvort)
+        else
+            out .= ᶜvort
         end
-        return copy(ᶜvort)
     end,
 )
 
@@ -203,10 +218,12 @@ function compute_relative_humidity!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     thermo_params = CAP.thermodynamics_params(cache.params)
-    return TD.relative_humidity.(thermo_params, cache.ᶜts)
+    if isnothing(out)
+        return TD.relative_humidity.(thermo_params, cache.ᶜts)
+    else
+        out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
+    end
 end
 
 add_diagnostic_variable!(
@@ -238,10 +255,12 @@ function compute_specific_humidity!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     thermo_params = CAP.thermodynamics_params(cache.params)
-    return TD.total_specific_humidity.(thermo_params, cache.ᶜts)
+    if isnothing(out)
+        return TD.total_specific_humidity.(thermo_params, cache.ᶜts)
+    else
+        out .= TD.total_specific_humidity.(thermo_params, cache.ᶜts)
+    end
 end
 
 add_diagnostic_variable!(
@@ -273,10 +292,16 @@ function compute_surface_specific_humidity!(
     time,
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     thermo_params = CAP.thermodynamics_params(cache.params)
-    return TD.total_specific_humidity.(thermo_params, cache.sfc_conditions.ts)
+    if isnothing(out)
+        return TD.total_specific_humidity.(
+            thermo_params,
+            cache.sfc_conditions.ts,
+        )
+    else
+        out .=
+            TD.total_specific_humidity.(thermo_params, cache.sfc_conditions.ts)
+    end
 end
 
 add_diagnostic_variable!(
@@ -291,10 +316,12 @@ add_diagnostic_variable!(
 # Surface temperature (2d)
 ###
 function compute_surface_temperature!(out, state, cache, time)
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     thermo_params = CAP.thermodynamics_params(cache.params)
-    return TD.air_temperature.(thermo_params, cache.sfc_conditions.ts)
+    if isnothing(out)
+        return TD.air_temperature.(thermo_params, cache.sfc_conditions.ts)
+    else
+        out .= TD.air_temperature.(thermo_params, cache.sfc_conditions.ts)
+    end
 end
 
 add_diagnostic_variable!(
@@ -331,9 +358,11 @@ function compute_eastward_drag!(
     time,
     energy_form::T,
 ) where {T <: TotalEnergy}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
-    return drag_vector(state, cache).components.data.:1
+    if isnothing(out)
+        return drag_vector(state, cache).components.data.:1
+    else
+        out .= drag_vector(state, cache).components.data.:1
+    end
 end
 
 add_diagnostic_variable!(
@@ -359,9 +388,11 @@ function compute_northward_drag!(
     time,
     energy_form::T,
 ) where {T <: TotalEnergy}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
-    return drag_vector(state, cache).components.data.:2
+    if isnothing(out)
+        return drag_vector(state, cache).components.data.:2
+    else
+        out .= drag_vector(state, cache).components.data.:2
+    end
 end
 
 add_diagnostic_variable!(
@@ -376,13 +407,15 @@ add_diagnostic_variable!(
 # Surface energy flux (2d) - TODO: this may need to be split into sensible and latent heat fluxes
 ###
 function compute_surface_energy_flux!(out, state, cache, time)
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     (; ρ_flux_h_tot) = cache.sfc_conditions
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
-    return dot.(ρ_flux_h_tot, surface_ct3_unit)
+    if isnothing(out)
+        return dot.(ρ_flux_h_tot, surface_ct3_unit)
+    else
+        out .= dot.(ρ_flux_h_tot, surface_ct3_unit)
+    end
 end
 
 add_diagnostic_variable!(
@@ -424,13 +457,16 @@ function compute_surface_evaporation!(
     moisture_model::T,
     energy_form::TotalEnergy,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
-    # We will want: out .= integrator.u.c.ρ
     (; ρ_flux_q_tot) = cache.sfc_conditions
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
-    return dot.(ρ_flux_q_tot, surface_ct3_unit)
+
+    if isnothing(out)
+        return dot.(ρ_flux_q_tot, surface_ct3_unit)
+    else
+        out .= dot.(ρ_flux_q_tot, surface_ct3_unit)
+    end
 end
 
 add_diagnostic_variable!(
