@@ -51,11 +51,11 @@ Technically, the diagnostics are represented as `ScheduledDiagnostic` objects,
 which contain information about what variable has to be computed, how often,
 where to save it, and so on (read below for more information on this). You can
 construct your own lists of `ScheduledDiagnostic`s starting from the variables
-defined by `ClimaAtmos`. The diagnostics that `ClimaAtmos` knows how to compute
-are collected in a global dictionary called `ALL_DIAGNOSTICS`. The variables in
-`ALL_DIAGNOSTICS` are identified with by the short and unique name, so that you
-can access them directly. One way to do so is by using the provided convenience
-functions for common operations, e.g., continuing the previous example
+defined by `ClimaAtmos`. The `DiagnosticVariable`s in `ClimaAtmos` are
+identified with by the short and unique name, so that you can access them
+directly with the function `get_diagnostic_variable`. One way to do so is by
+using the provided convenience functions for common operations, e.g., continuing
+the previous example
 
 ```julia
 
@@ -290,17 +290,14 @@ function compute_relative_humidity!(
 end
 ```
 
-### Adding to the `ALL_DIAGNOSTICS` dictionary
+### The `ClimaAtmos` `DiagnosticVariable`s
 
-`ClimaAtmos` comes with a collection of pre-defined `DiagnosticVariable` in the
-`ALL_DIAGNOSTICS` dictionary. `ALL_DIAGNOSTICS` maps a `short_name` with the
-corresponding `DiagnosticVariable`.
-
-If you are extending `ClimaAtmos` and want to add a new diagnostic variable to
-`ALL_DIAGNOSTICS`, go ahead and look at the files we `include` in
+`ClimaAtmos` comes with a collection of pre-defined `DiagnosticVariable`, index
+with their `short_name`s. If you are extending `ClimaAtmos` and want to add a
+new diagnostic variable, go ahead and look at the files we `include` in
 `diagnostics/Diagnostics.jl`. You can add more diagnostics in those files or add
 a new one. We provide a convenience function, `add_diagnostic_variable!` to add
-new `DiagnosticVariable`s to the `ALL_DIAGNOSTICS` dictionary.
-`add_diagnostic_variable!` take the same arguments as the constructor for
-`DiagnosticVariable`, but also performs additional checks. So, use
-`add_diagnostic_variable!` instead of editing the `ALL_DIAGNOSTICS` directly.
+new `DiagnosticVariable`s. `add_diagnostic_variable!` take the same arguments as
+the constructor for `DiagnosticVariable`, but also performs additional checks.
+Similarly, if you want to retrieve a diagnostic from `ALL_DIAGNOSTICS`, use the
+`get_diagnostic_variable`function.

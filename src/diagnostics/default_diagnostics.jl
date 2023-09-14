@@ -46,7 +46,7 @@ function common_diagnostics(
 )
     return [
         ScheduledDiagnosticTime(
-            variable = ALL_DIAGNOSTICS[short_name],
+            variable = get_diagnostic_variable(short_name),
             compute_every = :timestep,
             output_every = period, # seconds
             reduction_time_func = reduction,

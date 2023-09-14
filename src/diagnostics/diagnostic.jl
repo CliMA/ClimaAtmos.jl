@@ -11,7 +11,8 @@
 # - A dictionary `ALL_DIAGNOSTICS` with all the diagnostics we know how to compute, keyed
 #   over their short name. If you want to add more diagnostics, look at the included files.
 #   You can add your own file if you want to define several new diagnostics that are
-#   conceptually related.
+#   conceptually related. The dictionary `ALL_DIAGNOSTICS` should be considered an
+#   implementation detail.
 #
 # - The definition of what a ScheduledDiagnostics is. Conceptually, a ScheduledDiagnostics is a
 #   DiagnosticVariable we want to compute in a given simulation. For example, it could be
@@ -148,6 +149,20 @@ function add_diagnostic_variable!(;
 
     ALL_DIAGNOSTICS[short_name] =
         DiagnosticVariable(; short_name, long_name, units, comments, compute!)
+end
+
+"""
+
+    get_diagnostic_variable!(short_name)
+
+
+Return a `DiagnosticVariable` from its `short_name`, if it exists.
+"""
+function get_diagnostic_variable(short_name)
+    haskey(ALL_DIAGNOSTICS, short_name) ||
+        error("diagnostic $short_name does not exist")
+
+    return ALL_DIAGNOSTICS[short_name]
 end
 
 # Do you want to define more diagnostics? Add them here

@@ -675,7 +675,7 @@ function get_diagnostics(parsed_args, atmos_model)
 
         if isnothing(name)
             name = CAD.get_descriptive_name(
-                CAD.ALL_DIAGNOSTICS[yaml_diag["short_name"]],
+                CAD.get_diagnostic_variable(yaml_diag["short_name"]),
                 period_seconds,
                 reduction_time_func,
                 pre_output_hook!,
@@ -691,7 +691,7 @@ function get_diagnostics(parsed_args, atmos_model)
         push!(
             diagnostics,
             CAD.ScheduledDiagnosticTime(
-                variable = CAD.ALL_DIAGNOSTICS[yaml_diag["short_name"]],
+                variable = CAD.get_diagnostic_variable(yaml_diag["short_name"]),
                 output_every = period_seconds,
                 compute_every = compute_every,
                 reduction_time_func = reduction_time_func,
