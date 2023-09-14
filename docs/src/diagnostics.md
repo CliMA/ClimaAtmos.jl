@@ -212,7 +212,7 @@ function `compute!`. Schematically, a `compute!` has to look like
 ```julia
 function compute!(out, state, cache, time)
     # FIXME: Remove this line when ClimaCore implements the broadcasting to enable this
-    out .= # Calculcations with the state and the cache
+    out .= # Calculations with the state and the cache
 end
 ```
 
@@ -253,13 +253,13 @@ function compute_relative_humidity!(
     return TD.relative_humidity.(thermo_params, integrator.p.ᶜts)
 end
 
-compute_relative_humidity!(out, integrator) =
+compute_relative_humidity!(out, state, cache, time) =
     compute_relative_humidity!(
         out,
         state,
         cache,
         time,
-        cache.atmos,
+        cache.atmos.moisture_model,
     )
 ```
 
@@ -267,6 +267,28 @@ This will return the correct relative humidity and throw informative errors when
 it cannot be computed. We could specialize
 `compute_relative_humidity` further if the relative humidity
 were computed differently for `EquilMoistModel` and `NonEquilMoistModel`.
+
+In `ClimaAtmos`, we define some helper functions to produce error messages, so
+the above code can be written as
+```julia
+compute_relative_humidity!(out, state, cache, time) =
+    compute_relative_humidity!(out, state, cache, time, cache.atmos.moisture_model)
+compute_relative_humidity!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("relative_humidity", model)
+
+function compute_relative_humidity!(
+    out,
+    state,
+    cache,
+    time,
+    ::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    # FIXME: Avoid extra allocations when ClimaCore overloads .= for this use case
+    # We will want: out .= integrator.u.c.ρ
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    return TD.relative_humidity.(thermo_params, cache.ᶜts)
+end
+```
 
 ### Adding to the `ALL_DIAGNOSTICS` dictionary
 

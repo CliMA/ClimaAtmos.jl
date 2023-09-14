@@ -623,7 +623,7 @@ function get_callbacks_from_diagnostics(
         compute_callback =
             integrator -> begin
                 # FIXME: Change when ClimaCore overrides .= for us to avoid multiple allocations
-                variable.compute!(
+                storage[diag] .= variable.compute!(
                     storage[diag],
                     integrator.u,
                     integrator.p,
