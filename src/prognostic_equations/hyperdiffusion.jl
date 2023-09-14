@@ -49,7 +49,7 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs)
 end
 
-function hyperdiffusion_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
@@ -187,7 +187,7 @@ function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 end
 
-function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 

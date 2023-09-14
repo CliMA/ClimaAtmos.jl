@@ -16,18 +16,16 @@ import ClimaCore.Fields: ColumnField
 
 include("callback_helpers.jl")
 
-function dss_callback!(integrator)
+NVTX.@annotate function dss_callback!(integrator)
     Y = integrator.u
     ghost_buffer = integrator.p.ghost_buffer
     if integrator.p.do_dss
-        NVTX.@range "dss callback" color = colorant"yellow" begin
-            Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
-            Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
-            Spaces.weighted_dss_internal2!(Y.c, ghost_buffer.c)
-            Spaces.weighted_dss_internal2!(Y.f, ghost_buffer.f)
-            Spaces.weighted_dss_ghost2!(Y.c, ghost_buffer.c)
-            Spaces.weighted_dss_ghost2!(Y.f, ghost_buffer.f)
-        end
+        Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_internal2!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_internal2!(Y.f, ghost_buffer.f)
+        Spaces.weighted_dss_ghost2!(Y.c, ghost_buffer.c)
+        Spaces.weighted_dss_ghost2!(Y.f, ghost_buffer.f)
     end
     return nothing
 end
@@ -51,7 +49,7 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
-function turb_conv_affect_filter!(integrator)
+NVTX.@annotate function turb_conv_affect_filter!(integrator)
     p = integrator.p
     (; edmf_cache) = p
     (; edmf, param_set) = edmf_cache
@@ -73,7 +71,7 @@ function turb_conv_affect_filter!(integrator)
     SciMLBase.u_modified!(integrator, false)
 end
 
-function rrtmgp_model_callback!(integrator)
+NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
@@ -210,7 +208,7 @@ function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
-function compute_diagnostics(integrator)
+NVTX.@annotate function compute_diagnostics(integrator)
     (; t, u, p) = integrator
     Y = u
     (; params, env_thermo_quad) = p

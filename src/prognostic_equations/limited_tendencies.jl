@@ -12,17 +12,15 @@ using ClimaCore.Utilities: half
 
 import ClimaCore.Fields: ColumnField
 
-function limited_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function limited_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     set_precomputed_quantities!(Y, p, t)
     horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
-    NVTX.@range "tracer hyperdiffusion tendency" color = colorant"yellow" begin
-        tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    end
+    tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
-function limiters_func!(Y, p, t, ref_Y)
+NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     (; limiter) = p
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     if !isnothing(limiter)
