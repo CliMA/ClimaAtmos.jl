@@ -1,5 +1,5 @@
 # FIXME: Gabriele added this as an example. Put something meaningful here!
-function get_default_diagnostics(::T) where {T <: DryModel}
+function get_default_diagnostics(::DryModel)
     return [
         daily_averages("air_density")...,
         ScheduledDiagnosticTime(
