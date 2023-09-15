@@ -16,34 +16,34 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p
     end
 
-    @. Yₜ.c.ρ -= divₕ(Y.c.ρ * ᶜu)
+    @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
     if p.atmos.turbconv_model isa EDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= divₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
+            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
         end
     end
 
     if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= divₕ(Y.c.ρθ * ᶜu)
+        @. Yₜ.c.ρθ -= wdivₕ(Y.c.ρθ * ᶜu)
     elseif :ρe_tot in propertynames(Y.c)
         (; ᶜh_tot) = p
-        @. Yₜ.c.ρe_tot -= divₕ(Y.c.ρ * ᶜh_tot * ᶜu)
+        @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
     end
     if p.atmos.turbconv_model isa EDMFX
         for j in 1:n
             if :ρθ in propertynames(Y.c)
                 @. Yₜ.c.sgsʲs.:($$j).ρaθ -=
-                    divₕ(Y.c.sgsʲs.:($$j).ρaθ * ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).ρaθ * ᶜuʲs.:($$j))
             elseif :ρe_tot in propertynames(Y.c)
                 (; ᶜh_totʲs) = p
                 @. Yₜ.c.sgsʲs.:($$j).ρae_tot -=
-                    divₕ(Y.c.sgsʲs.:($$j).ρa * ᶜh_totʲs.:($$j) * ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜh_totʲs.:($$j) * ᶜuʲs.:($$j))
             end
         end
     end
 
     if use_prognostic_tke(p.atmos.turbconv_model)
-        @. Yₜ.c.sgs⁰.ρatke -= divₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
+        @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
     @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp - ᶜp_ref) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
@@ -59,7 +59,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
-        @. Yₜ.c.:($$ρχ_name) -= divₕ(Y.c.:($$ρχ_name) * ᶜu)
+        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
 
     if p.atmos.turbconv_model isa EDMFX
@@ -67,7 +67,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             for ρaχ_name in
                 filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
                 @. Yₜ.c.sgsʲs.:($$j).:($$ρaχ_name) -=
-                    divₕ(Y.c.sgsʲs.:($$j).:($$ρaχ_name) * ᶜuʲs.:($$j))
+                    wdivₕ(Y.c.sgsʲs.:($$j).:($$ρaχ_name) * ᶜuʲs.:($$j))
             end
         end
     end
