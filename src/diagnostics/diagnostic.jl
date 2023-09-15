@@ -579,7 +579,7 @@ function reset_accumulator!(diag_accumulator, reduction_time_func)
     identity = identity_of_reduction(reduction_time_func)
     float_type = Spaces.undertype(axes((diag_accumulator)))
     identity_ft = convert(float_type, identity)
-    diag_accumulator .= identity_ft
+    fill!(parent(diag_accumulator), identity_ft)
 end
 
 # When the reduction is nothing, we do not need to accumulate anything
