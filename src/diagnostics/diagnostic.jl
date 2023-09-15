@@ -577,7 +577,7 @@ reset_accumulator!(_, reduction_time_func::Nothing) = nothing
 function reset_accumulator!(diag_accumulator, reduction_time_func)
     # identity_of_reduction works by dispatching over operation
     identity = identity_of_reduction(reduction_time_func)
-    float_type = eltype(diag_accumulator)
+    float_type = Spaces.undertype(axes((diag_accumulator)))
     identity_ft = convert(float_type, identity)
     diag_accumulator .= identity_ft
 end
