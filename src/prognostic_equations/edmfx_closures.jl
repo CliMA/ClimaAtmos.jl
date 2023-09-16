@@ -152,6 +152,7 @@ function pi_groups_entr_detr(
         g = CAP.grav(params)
 
         entr_coeff = CAP.entr_coeff(params)
+        entr_tau = CAP.entr_tau(params)
         detr_coeff = CAP.detr_coeff(params)
 
         turbconv_params = CAP.turbconv_params(params)
@@ -189,7 +190,7 @@ function pi_groups_entr_detr(
         # TODO - Temporary: Switch to Π groups after simple tests are done
         # (kinematic, bubble, Bomex)
         # and/or we can calibrate things in ClimaAtmos
-        entr = max(0, min(entr_coeff * ᶜwʲ / (ᶜz - z_sfc), 1 / dt))
+        entr = max(0, min(1 / entr_tau, 1 / dt))
         detr = max(0, min(detr_coeff * ᶜwʲ, 1 / dt))
 
         return (; entr, detr)

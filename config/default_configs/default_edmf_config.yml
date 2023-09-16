@@ -35,6 +35,9 @@ debugging_tc:
 entr_coeff:
   help: "Entrainment coefficient"
   value: 1.0
+entr_tau:
+  help: "Entrainment timescale"
+  value: 900.0
 detr_coeff:
   help: "Detrainment coefficient"
   value: 0.001

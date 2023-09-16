@@ -29,6 +29,7 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP, SP} <:
     turbconv_params::TCP
     sponge_params::SP
     entr_coeff::FT = 1
+    entr_tau::FT = 900
     detr_coeff::FT = 0.001
     # TODO: Figure out a better place for these held-suarez parameters
     ΔT_y_dry::FT
@@ -80,6 +81,7 @@ f(ps::ACAP) = ps.f
 Cd(ps::ACAP) = ps.Cd
 uh_g(ps::ACAP) = CC.Geometry.UVVector(ps.ug, ps.vg)
 entr_coeff(ps::ACAP) = ps.entr_coeff
+entr_tau(ps::ACAP) = ps.entr_tau
 detr_coeff(ps::ACAP) = ps.detr_coeff
 ΔT_y_dry(ps::ACAP) = ps.ΔT_y_dry
 ΔT_y_wet(ps::ACAP) = ps.ΔT_y_wet
