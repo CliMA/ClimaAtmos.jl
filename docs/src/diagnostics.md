@@ -14,16 +14,16 @@ Second, you can specify the diagnostics you want to output directly in the
 `diagnostics` section of your YAML file. For instance:
 ```
 diagnostics:
-  - short_name: air_density
+  - short_name: rhoa
     output_name: a_name
     period: 3hours
     writer: nc
   - reduction_time: average
-    short_name: air_density
+    short_name: rhoa
     period: 12hours
     writer: h5
 ```
-This adds two diagnostics (both for `air_density`). The `period` keyword
+This adds two diagnostics (both for `rhoa`). The `period` keyword
 identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
 output file.
@@ -188,8 +188,7 @@ In `ClimaAtmos`, we follow the convention that:
 - `short_name` is the name used to identify the variable in the output files and
                 in the file names. It is short, but descriptive. We identify
                 diagnostics by their short name, so the diagnostics defined by
-                `ClimaAtmos` have to have unique `short_name`s. We follow the
-                Coupled Model Intercomparison Project (CMIP) conventions.
+                `ClimaAtmos` have to have unique `short_name`s.
 
 - `long_name`: Name used to describe the variable in the output file.
 
@@ -198,12 +197,8 @@ In `ClimaAtmos`, we follow the convention that:
 - `comments`: More verbose explanation of what the variable is, or comments related to how
               it is defined or computed.
 
-In `ClimaAtmos`, we try to follow [this Google
-spreadsheet](https://docs.google.com/spreadsheets/d/1qUauozwXkq7r1g-L4ALMIkCNINIhhCPx)
-for variable naming, with a `long_name` the does not have spaces and capital
-letters. [Standard
-names](http://cfconventions.org/Data/cf-standard-names/current/build/cf-standard-name-table.html)
-are not used.
+In `ClimaAtmos`, we follow the [CMIP6 MIP table](https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb)
+for short names and long names where available. Standard names in the table are not used.
 
 ### Compute function
 

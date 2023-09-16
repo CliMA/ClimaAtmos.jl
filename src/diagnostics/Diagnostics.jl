@@ -20,6 +20,12 @@ import ..NonEquilMoistModel
 # energy_form
 import ..TotalEnergy
 
+# precip_model
+import ..Microphysics0Moment
+
+# radiation
+import ClimaAtmos.RRTMGPInterface as RRTMGPI
+
 # turbconv_model
 import ..EDMFX
 import ..DiagnosticEDMFX
