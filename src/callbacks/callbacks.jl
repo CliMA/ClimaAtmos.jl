@@ -201,8 +201,7 @@ function rrtmgp_model_callback!(integrator)
             1000 * Y.c.ρ * TD.liquid_specific_humidity(thermo_params, ᶜts) * ᶜΔz
         @. ᶜiwp =
             1000 * Y.c.ρ * TD.ice_specific_humidity(thermo_params, ᶜts) * ᶜΔz
-        @. ᶜfrac =
-            get_cloud_fraction(thermo_params, env_thermo_quad, FT(ᶜp), ᶜts)
+        @. ᶜfrac = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0 * ᶜΔz)
     end
 
     RRTMGPI.update_fluxes!(radiation_model)
