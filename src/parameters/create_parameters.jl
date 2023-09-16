@@ -143,6 +143,7 @@ function create_climaatmos_parameter_set(
         surfacefluxes_params = surf_flux_params,
         turbconv_params = tc_params,
         entr_coeff = FTD(parsed_args["entr_coeff"]),
+        entr_tau = FTD(parsed_args["entr_tau"]),
         detr_coeff = FTD(parsed_args["detr_coeff"]),
         ΔT_y_dry = FTD(pairs.ΔT_y_dry),
         ΔT_y_wet = FTD(pairs.ΔT_y_wet),

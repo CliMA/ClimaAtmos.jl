@@ -205,7 +205,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ρʲ_int_level = Fields.field_values(Fields.level(ᶜρʲ, 1))
 
         @. u³ʲ_int_halflevel = CT3(
-            Geometry.WVector($(FT(0.01)), local_geometry_int_halflevel),
+            Geometry.WVector($(FT(0)), local_geometry_int_halflevel),
             local_geometry_int_halflevel,
         )
         @. h_totʲ_int_level = sgs_scalar_first_interior_bc(
