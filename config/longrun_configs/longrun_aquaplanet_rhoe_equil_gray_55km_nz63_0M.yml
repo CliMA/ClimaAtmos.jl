@@ -5,6 +5,8 @@ h_elem: 16
 z_max: 55000.0
 rayleigh_sponge: true
 z_elem: 63
+dz_bottom: 30.0
+dz_top: 3000.0
 vert_diff: "true" 
 kappa_4: 2e16
 surface_setup: "DefaultExchangeCoefficients" 
