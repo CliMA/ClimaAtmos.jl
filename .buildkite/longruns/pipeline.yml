@@ -222,3 +222,35 @@ steps:
           slurm_time: 24:00:00
         env: 
           JOB_NAME: "longrun_compressible_edmf_trmm"
+
+  - group: "DYAMOND"
+
+    steps:
+
+      - label: ":computer: aquaplanet dyamond"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_ntasks: 64
+          slurm_mem_per_cpu: 32GB
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_dyamond"
+  
+  - group: "AMIP"
+
+    steps:
+
+      - label: ":computer: aquaplanet amip"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_ntasks: 64
+          slurm_mem_per_cpu: 16GB
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_amip"
