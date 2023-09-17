@@ -6,7 +6,7 @@ using LinearAlgebra: ×, dot
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 
-function horizontal_advection_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu, ᶜK, ᶜp, ᶜΦ, ᶜp_ref) = p
     if p.atmos.turbconv_model isa AbstractEDMF
@@ -51,7 +51,7 @@ function horizontal_advection_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
-function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p
     if p.atmos.turbconv_model isa EDMFX
@@ -74,7 +74,7 @@ function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
-function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)

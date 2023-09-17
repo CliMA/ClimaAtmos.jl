@@ -4,32 +4,21 @@
 
 import ClimaCore: Fields, Geometry
 
-function implicit_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
-    NVTX.@range "implicit tendency" color = colorant"yellow" begin
-        Yₜ .= zero(eltype(Yₜ))
-        NVTX.@range "precomputed quantities" color = colorant"orange" begin
-            set_precomputed_quantities!(Y, p, t)
+    Yₜ .= zero(eltype(Yₜ))
+    set_precomputed_quantities!(Y, p, t)
+    Fields.bycolumn(axes(Y.c)) do colidx
+        implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
+        if p.turbconv_model isa TurbulenceConvection.EDMFModel
+            implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         end
-        Fields.bycolumn(axes(Y.c)) do colidx
-            implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-            if p.turbconv_model isa TurbulenceConvection.EDMFModel
-                implicit_sgs_flux_tendency!(
-                    Yₜ,
-                    Y,
-                    p,
-                    t,
-                    colidx,
-                    p.turbconv_model,
-                )
-            end
-            # NOTE: All ρa tendencies should be applied before calling this function
-            pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        # NOTE: All ρa tendencies should be applied before calling this function
+        pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
 
-            # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
-            # please DO NOT add additional velocity tendencies after this function
-            zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
-        end
+        # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+        # please DO NOT add additional velocity tendencies after this function
+        zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
     end
     return nothing
 end

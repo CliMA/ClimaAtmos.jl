@@ -275,7 +275,7 @@ Note: If you need to use any of the precomputed quantities, please call this
 function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
-function set_precomputed_quantities!(Y, p, t)
+NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     (; energy_form, moisture_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)

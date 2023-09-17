@@ -240,7 +240,7 @@ function LinearAlgebra.ldiv!(x, A::SchurComplementW, b)
     x .= A.temp2
 end
 
-function LinearAlgebra.ldiv!(
+NVTX.@annotate function LinearAlgebra.ldiv!(
     x::Fields.FieldVector,
     A::SchurComplementW,
     b::Fields.FieldVector,
@@ -257,35 +257,33 @@ function LinearAlgebra.ldiv!(
             changing the ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode or the energy variable."
         @warn str maxlog = 1
     end
-    NVTX.@range "linsolve" color = colorant"lime" begin
-        # Initialize x to -b, which correctly sets all the components of x that
-        # correspond to variables without implicit tendencies.
-        @. x = -b
-        # TODO: Figure out why moving this into _ldiv_serial! results in a lot
-        # of allocations for EDMFX.
+    # Initialize x to -b, which correctly sets all the components of x that
+    # correspond to variables without implicit tendencies.
+    @. x = -b
+    # TODO: Figure out why moving this into _ldiv_serial! results in a lot
+    # of allocations for EDMFX.
 
-        # Compute Schur complement
-        Fields.bycolumn(axes(x.c)) do colidx
-            _ldiv_serial!(
-                A,
-                x.c[colidx],
-                x.f[colidx],
-                b.c[colidx],
-                b.f[colidx],
-                dtγ,
-                transform,
-                cond,
-                ∂ᶜρₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
-                ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
-                ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
-                ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
-                ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
-                isnothing(∂ᶜTCₜ∂ᶜTC) ? nothing : ∂ᶜTCₜ∂ᶜTC[colidx],
-                isnothing(∂ᶠTCₜ∂ᶠTC) ? nothing : ∂ᶠTCₜ∂ᶠTC[colidx],
-                S[colidx],
-            )
-        end
+    # Compute Schur complement
+    Fields.bycolumn(axes(x.c)) do colidx
+        _ldiv_serial!(
+            A,
+            x.c[colidx],
+            x.f[colidx],
+            b.c[colidx],
+            b.f[colidx],
+            dtγ,
+            transform,
+            cond,
+            ∂ᶜρₜ∂ᶠ𝕄[colidx],
+            ∂ᶜ𝔼ₜ∂ᶠ𝕄[colidx],
+            ∂ᶠ𝕄ₜ∂ᶜ𝔼[colidx],
+            ∂ᶠ𝕄ₜ∂ᶜρ[colidx],
+            ∂ᶠ𝕄ₜ∂ᶠ𝕄[colidx],
+            ∂ᶜ𝕋ₜ∂ᶠ𝕄_field[colidx],
+            isnothing(∂ᶜTCₜ∂ᶜTC) ? nothing : ∂ᶜTCₜ∂ᶜTC[colidx],
+            isnothing(∂ᶠTCₜ∂ᶠTC) ? nothing : ∂ᶠTCₜ∂ᶠTC[colidx],
+            S[colidx],
+        )
     end
 end
 

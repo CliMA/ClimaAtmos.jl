@@ -12,7 +12,7 @@ using ClimaCore.Utilities: half
 
 import ClimaCore.Fields: ColumnField
 
-function dss!(Y, p, t)
+NVTX.@annotate function dss!(Y, p, t)
     if p.do_dss
         Spaces.weighted_dss_start2!(Y.c, p.ghost_buffer.c)
         Spaces.weighted_dss_start2!(Y.f, p.ghost_buffer.f)

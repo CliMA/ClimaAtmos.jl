@@ -1,31 +1,19 @@
 
-function remaining_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function remaining_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
-    NVTX.@range "remaining tendency" color = colorant"yellow" begin
-        Yₜ .= zero(eltype(Yₜ))
-        NVTX.@range "precomputed quantities" color = colorant"orange" begin
-            set_precomputed_quantities!(Y, p, t)
-        end
-        NVTX.@range "horizontal" color = colorant"orange" begin
-            horizontal_advection_tendency!(Yₜ, Y, p, t)
-            NVTX.@range "hyperdiffusion tendency" color = colorant"yellow" begin
-                hyperdiffusion_tendency!(Yₜ, Y, p, t)
-            end
-        end
-        NVTX.@range "vertical" color = colorant"orange" begin
-            explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-        end
-        NVTX.@range "additional_tendency!" color = colorant"orange" begin
-            additional_tendency!(Yₜ, Y, p, t)
-        end
-        NVTX.@range "dss_remaining_tendency" color = colorant"blue" begin
-            dss!(Yₜ, p, t)
-        end
+    Yₜ .= zero(eltype(Yₜ))
+    set_precomputed_quantities!(Y, p, t)
+    NVTX.@range "horizontal" color = colorant"orange" begin
+        horizontal_advection_tendency!(Yₜ, Y, p, t)
+        hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
+    explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+    additional_tendency!(Yₜ, Y, p, t)
+    dss!(Yₜ, p, t)
     return Yₜ
 end
 
-function additional_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
