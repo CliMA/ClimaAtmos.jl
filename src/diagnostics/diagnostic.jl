@@ -70,7 +70,10 @@ Keyword arguments
                 names. Short but descriptive. `ClimaAtmos` follows the CMIP conventions and
                 the diagnostics are identified by the short name.
 
-- `long_name`: Name used to identify the variable in the output files.
+- `long_name`: Name used to describe the variable in the output files.
+
+- `standard_name`: Standard name, as in
+                   http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
 
 - `units`: Physical units of the variable.
 
@@ -88,6 +91,7 @@ Keyword arguments
 Base.@kwdef struct DiagnosticVariable{T}
     short_name::String
     long_name::String
+    standard_name::String
     units::String
     comments::String
     compute!::T
@@ -101,6 +105,7 @@ const ALL_DIAGNOSTICS = Dict{String, DiagnosticVariable}()
 
     add_diagnostic_variable!(; short_name,
                                long_name,
+                               standard_name,
                                units,
                                description,
                                compute!)
@@ -122,6 +127,9 @@ Keyword arguments
 
 - `long_name`: Name used to identify the variable in the output files.
 
+- `standard_name`: Standard name, as in
+                   http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
+
 - `units`: Physical units of the variable.
 
 - `comments`: More verbose explanation of what the variable is, or comments related to how
@@ -139,15 +147,22 @@ Keyword arguments
 function add_diagnostic_variable!(;
     short_name,
     long_name,
+    standard_name = "",
     units,
-    comments,
+    comments = "",
     compute!,
 )
     haskey(ALL_DIAGNOSTICS, short_name) &&
         error("diagnostic $short_name already defined")
 
-    ALL_DIAGNOSTICS[short_name] =
-        DiagnosticVariable(; short_name, long_name, units, comments, compute!)
+    ALL_DIAGNOSTICS[short_name] = DiagnosticVariable(;
+        short_name,
+        long_name,
+        standard_name,
+        units,
+        comments,
+        compute!,
+    )
 end
 
 """
@@ -208,7 +223,8 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
     reduction_space_func::F2
     compute_every::T2
     pre_output_hook!::PO
-    output_name::String
+    output_short_name::String
+    output_long_name::String
 
     """
         ScheduledDiagnosticIterations(; variable::DiagnosticVariable,
@@ -218,7 +234,8 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                                         reduction_space_func = nothing,
                                         compute_every = isa_reduction ? 1 : output_every,
                                         pre_output_hook! = nothing,
-                                        output_name = descriptive_name(self) )
+                                        output_short_name = descriptive_short_name(self),
+                                        output_short_name = descriptive_long_name(self))
 
 
     A `DiagnosticVariable` that has to be computed and output during a simulation with a cadence
@@ -270,10 +287,15 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
                           discarded. An example of `pre_output_hook!` to compute the arithmetic
                           average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
 
-   - `output_name`: A descriptive name for this particular diagnostic. If none is provided,
-                    one will be generated mixing the short name of the variable, the
-                    reduction, and the period of the reduction.
+   - `output_short_name`: A descriptive name for this particular diagnostic. If none is
+                          provided, one will be generated mixing the short name of the
+                          variable, the reduction, and the period of the reduction.
+                          Normally, it has to be unique. In `ClimaAtmos`, we follow the CMIP
+                          conventions for this.
 
+   - `output_long_name`: A descriptive name for this particular diagnostic. If none is
+                         provided, one will be generated mixing the short name of the
+                         variable, the reduction, and the period of the reduction.
 
     """
     function ScheduledDiagnosticIterations(;
@@ -284,7 +306,14 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         reduction_space_func = nothing,
         compute_every = isnothing(reduction_time_func) ? output_every : 1,
         pre_output_hook! = nothing,
-        output_name = get_descriptive_name(
+        output_short_name = get_descriptive_short_name(
+            variable,
+            output_every,
+            reduction_time_func,
+            pre_output_hook!;
+            units_are_seconds = false,
+        ),
+        output_long_name = get_descriptive_long_name(
             variable,
             output_every,
             reduction_time_func,
@@ -296,14 +325,14 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         # We provide an inner constructor to enforce some constraints
 
         output_every % compute_every == 0 || error(
-            "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_name)",
+            "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_short_name)",
         )
 
         isa_reduction = !isnothing(reduction_time_func)
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every ($output_every) != compute_every ($compute_every) for $(output_name), changing compute_every to match"
+            @warn "output_every ($output_every) != compute_every ($compute_every) for $(output_short_name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -329,7 +358,8 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
             reduction_space_func,
             compute_every,
             pre_output_hook!,
-            output_name,
+            output_short_name,
+            output_long_name,
         )
     end
 end
@@ -343,7 +373,8 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
     reduction_space_func::F2
     compute_every::T2
     pre_output_hook!::PO
-    output_name::String
+    output_short_name::String
+    output_long_name::String
 
     """
         ScheduledDiagnosticTime(; variable::DiagnosticVariable,
@@ -353,7 +384,9 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                                   reduction_space_func = nothing,
                                   compute_every = isa_reduction ? :timestep : output_every,
                                   pre_output_hook! = nothing,
-                                  output_name = descriptive_name(self))
+                                  output_short_name = descriptive_short_name(self),
+                                  output_long_name = descriptive_long_name(self),
+                                  )
 
 
     A `DiagnosticVariable` that has to be computed and output during a simulation with a
@@ -409,9 +442,15 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
                           discarded. An example of `pre_output_hook!` to compute the arithmetic
                           average is `pre_output_hook!(acc, N) = @. acc = acc / N`.
 
-   - `output_name`: A descriptive name for this particular diagnostic. If none is provided,
-                    one will be generated mixing the short name of the variable, the
-                    reduction, and the period of the reduction.
+   - `output_short_name`: A descriptive name for this particular diagnostic. If none is
+                          provided, one will be generated mixing the short name of the
+                          variable, the reduction, and the period of the reduction.
+                          Normally, it has to be unique. In `ClimaAtmos`, we follow the CMIP
+                          conventions for this.
+
+   - `output_long_name`: A descriptive name for this particular diagnostic. If none is
+                         provided, one will be generated mixing the short name of the
+                         variable, the reduction, and the period of the reduction.
     """
     function ScheduledDiagnosticTime(;
         variable::DiagnosticVariable,
@@ -422,7 +461,14 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         compute_every = isnothing(reduction_time_func) ? output_every :
                         :timestep,
         pre_output_hook! = nothing,
-        output_name = get_descriptive_name(
+        output_short_name = get_descriptive_short_name(
+            variable,
+            output_every,
+            reduction_time_func,
+            pre_output_hook!;
+            units_are_seconds = true,
+        ),
+        output_long_name = get_descriptive_long_name(
             variable,
             output_every,
             reduction_time_func,
@@ -437,7 +483,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         # the list of diagnostics
         if !isa(compute_every, Symbol)
             output_every % compute_every == 0 || error(
-                "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_name)",
+                "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_short_name)",
             )
         end
 
@@ -445,7 +491,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
         # If it is not a reduction, we compute only when we output
         if !isa_reduction && compute_every != output_every
-            @warn "output_every ($output_every) != compute_every ($compute_every) for $(output_name), changing compute_every to match"
+            @warn "output_every ($output_every) != compute_every ($compute_every) for $(output_short_name), changing compute_every to match"
             compute_every = output_every
         end
 
@@ -471,7 +517,8 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
             reduction_space_func,
             compute_every,
             pre_output_hook!,
-            output_name,
+            output_short_name,
+            output_long_name,
         )
     end
 end
@@ -498,10 +545,10 @@ function ScheduledDiagnosticIterations(
     output_every = sd_time.output_every / Δt
 
     isinteger(output_every) || error(
-        "output_every ($(sd_time.output_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
+        "output_every ($(sd_time.output_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_short_name)",
     )
     isinteger(compute_every) || error(
-        "compute_every ($(sd_time.compute_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_name)",
+        "compute_every ($(sd_time.compute_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_short_name)",
     )
 
     ScheduledDiagnosticIterations(;
@@ -512,7 +559,8 @@ function ScheduledDiagnosticIterations(
         sd_time.reduction_space_func,
         compute_every = convert(Int, compute_every),
         sd_time.pre_output_hook!,
-        sd_time.output_name,
+        sd_time.output_short_name,
+        sd_time.output_long_name,
     )
 end
 
@@ -544,7 +592,8 @@ function ScheduledDiagnosticTime(
         sd_time.reduction_space_func,
         compute_every,
         sd_time.pre_output_hook!,
-        sd_time.output_name,
+        sd_time.output_short_name,
+        sd_time.output_long_name,
     )
 end
 

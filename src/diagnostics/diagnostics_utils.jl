@@ -1,15 +1,16 @@
 # diagnostic_utils.jl
 #
 # This file contains:
-# - get_descriptive_name: to condense ScheduledDiagnostic information into few characters.
+# - get_descriptive_short_name: to condense ScheduledDiagnostic information into few characters.
+# - get_descriptive_long_name: to produce full names that are clearly human-understandable
 
 
 """
-    get_descriptive_name(variable::DiagnosticVariable,
-                         output_every,
-                         reduction_time_func,
-                         pre_output_hook!;
-                         units_are_seconds = true)
+    get_descriptive_short_name(variable::DiagnosticVariable,
+                               output_every,
+                               reduction_time_func,
+                               pre_output_hook!;
+                               units_are_seconds = true)
 
 
 Return a compact, unique-ish, identifier generated from the given information.
@@ -20,7 +21,7 @@ is interpreted as in units of number of iterations.
 This function is useful for filenames and error messages.
 
 """
-function get_descriptive_name(
+function get_descriptive_short_name(
     variable::DiagnosticVariable,
     output_every,
     reduction_time_func,
@@ -63,4 +64,65 @@ function get_descriptive_name(
         suffix = "inst"
     end
     return "$(var)_$(suffix)"
+end
+
+"""
+    get_descriptive_long_name(variable::DiagnosticVariable,
+                              output_every,
+                              reduction_time_func,
+                              pre_output_hook!;
+                              units_are_seconds = true)
+
+
+Return a verbose description of the given output variable.
+
+`output_every` is interpreted as in seconds if `units_are_seconds` is `true`. Otherwise, it
+is interpreted as in units of number of iterations.
+
+This function is useful for attributes in output files.
+
+"""
+function get_descriptive_long_name(
+    variable::DiagnosticVariable,
+    output_every,
+    reduction_time_func,
+    pre_output_hook!;
+    units_are_seconds = true,
+)
+    var = "$(variable.long_name)"
+    isa_reduction = !isnothing(reduction_time_func)
+
+    if isa_reduction
+        red = "$(reduction_time_func)"
+
+        # Let's check if we are computing the average. Note that this might slip under the
+        # radar if the user passes their own pre_output_hook!.
+        if reduction_time_func == (+) &&
+           pre_output_hook! == average_pre_output_hook!
+            red = "average"
+        end
+
+        if units_are_seconds
+
+            # Convert period from seconds to days, hours, minutes, seconds
+            period = ""
+
+            days, rem_seconds = divrem(output_every, 24 * 60 * 60)
+            hours, rem_seconds = divrem(rem_seconds, 60 * 60)
+            minutes, seconds = divrem(rem_seconds, 60)
+
+            days > 0 && (period *= "$(days) Day(s)")
+            hours > 0 && (period *= "$(hours) Hour(s)")
+            minutes > 0 && (period *= "$(minutes) Minute(s)")
+            seconds > 0 && (period *= "$(seconds) Second(s)")
+
+            period_str = period * red
+        else
+            period_str = "$(output_every) Iterations"
+        end
+        suffix = "$(red) within $(period_str)"
+    else
+        suffix = "Instantaneous"
+    end
+    return "$(var), $(suffix)"
 end

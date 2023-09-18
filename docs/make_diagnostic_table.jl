@@ -15,12 +15,16 @@ open(out_path, "w") do file
 
     write(file, "# Available diagnostic variables\n\n")
 
-    write(file, "| Short name | Long name  | Units | Comments |\n")
-    write(file, "|---|---|---|---|\n")
+    write(
+        file,
+        "| Short name | Long name | Standard name | Units | Comments |\n",
+    )
+    write(file, "|---|---|---|---|---|\n")
 
     for d in values(CA.Diagnostics.ALL_DIAGNOSTICS)
         write(file, "| `$(d.short_name)` ")
-        write(file, "| `$(d.long_name)` ")
+        write(file, "| $(d.long_name) ")
+        write(file, "| `$(d.standard_name)` ")
         write(file, "| $(d.units) ")
         write(file, "| $(d.comments)|\n")
     end

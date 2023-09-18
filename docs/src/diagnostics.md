@@ -107,8 +107,11 @@ More specifically, a `ScheduledDiagnostic` contains the following pieces of data
    `pre_output_hook!` is called with two arguments: the value accumulated during
    the reduction, and the number of times the diagnostic was computed from the
    last time it was output.
-- `output_name`: A descriptive name that can be used by the `output_writer`. If
-   not provided, a default one is generated.
+- `output_short_name`: A descriptive name that can be used by the
+   `output_writer`. If not provided, a default one is generated. It has to be
+   unique.
+- `output_long_name`: A descriptive name that can be used by the `output_writer`
+   as attribute. If not provided, a default one is generated.
 
 To implement operations like the arithmetic average, the `reduction_time_func`
 has to be chosen as `+`, and a `pre_output_hook!` that renormalize `acc` by the
@@ -190,7 +193,11 @@ In `ClimaAtmos`, we follow the convention that:
                 diagnostics by their short name, so the diagnostics defined by
                 `ClimaAtmos` have to have unique `short_name`s.
 
-- `long_name`: Name used to describe the variable in the output file.
+- `long_name`: Name used to describe the variable in the output file as attribute.
+
+- `standard_name`: Standard name, as in
+  [CF
+  conventions](http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html)
 
 - `units`: Physical units of the variable.
 

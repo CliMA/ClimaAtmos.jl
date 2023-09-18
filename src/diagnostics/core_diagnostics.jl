@@ -52,6 +52,7 @@ error_diagnostic_variable(variable, model::T) where {T} =
 add_diagnostic_variable!(
     short_name = "rhoa",
     long_name = "Air Density",
+    standard_name = "air_density",
     units = "kg m^-3",
     comments = "Density of air",
     compute! = (out, state, cache, time) -> begin
@@ -69,6 +70,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "ua",
     long_name = "Eastward Wind",
+    standard_name = "eastward_wind",
     units = "m s^-1",
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
@@ -86,6 +88,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "va",
     long_name = "Northward Wind",
+    standard_name = "northward_wind",
     units = "m s^-1",
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
@@ -106,6 +109,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "wa",
     long_name = "Upward Air Velocity",
+    standard_name = "upward_air_velocity",
     units = "m s^-1",
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
@@ -123,6 +127,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "ta",
     long_name = "Air Temperature",
+    standard_name = "air_temperature",
     units = "K",
     comments = "Temperature of air",
     compute! = (out, state, cache, time) -> begin
@@ -141,6 +146,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "thetaa",
     long_name = "Air Potential Temperature",
+    standard_name = "air_potential_temperature",
     units = "K",
     comments = "Potential temperature of air",
     compute! = (out, state, cache, time) -> begin
@@ -176,6 +182,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "rv",
     long_name = "Relative Vorticity",
+    standard_name = "relative_vorticity",
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
@@ -217,6 +224,7 @@ end
 add_diagnostic_variable!(
     short_name = "hur",
     long_name = "Relative Humidity",
+    standard_name = "relative_humidity",
     units = "",
     comments = "Total amount of water vapor in the air relative to the amount achievable by saturation at the current temperature",
     compute! = compute_hur!,
@@ -247,6 +255,7 @@ end
 add_diagnostic_variable!(
     short_name = "hus",
     long_name = "Specific Humidity",
+    standard_name = "specific_humidity",
     units = "kg kg^-1",
     comments = "Mass of all water phases per mass of air",
     compute! = compute_hus!,
@@ -282,6 +291,7 @@ end
 add_diagnostic_variable!(
     short_name = "hussfc",
     long_name = "Surface Specific Humidity",
+    standard_name = "specific_humidity",
     units = "kg kg^-1",
     comments = "Mass of all water phases per mass of air in the layer infinitely close to the surface",
     compute! = compute_hussfc!,
@@ -293,6 +303,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "ts",
     long_name = "Surface Temperature",
+    standard_name = "surface_temperature",
     units = "K",
     comments = "Temperature of the lower boundary of the atmosphere",
     compute! = (out, state, cache, time) -> begin
@@ -344,6 +355,7 @@ compute_tauv!(out, state, cache, time) =
 add_diagnostic_variable!(
     short_name = "tauu",
     long_name = "Surface Downward Eastward Wind Stress",
+    standard_name = "downward_eastward_stress",
     units = "Pa",
     comments = "Eastward component of the surface drag",
     compute! = compute_tauu!,
@@ -352,6 +364,7 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "tauv",
     long_name = "Surface Downward Northward Wind Stress",
+    standard_name = "downward_northward_stress",
     units = "Pa",
     comments = "Northward component of the surface drag",
     compute! = compute_tauv!,
@@ -454,6 +467,7 @@ end
 add_diagnostic_variable!(
     short_name = "pr",
     long_name = "Precipitation",
+    standard_name = "precipitation",
     units = "m s^-1",
     comments = "Total precipitation including rain and snow",
     compute! = compute_pr!,

@@ -42,21 +42,25 @@ function HDF5Writer()
 
         output_path = joinpath(
             integrator.p.simulation.output_dir,
-            "$(diagnostic.output_name)_$time.h5",
+            "$(diagnostic.output_short_name)_$(time).h5",
         )
 
         hdfwriter = InputOutput.HDF5Writer(output_path, integrator.p.comms_ctx)
-        InputOutput.HDF5.write_attribute(hdfwriter.file, "time", time)
-        InputOutput.HDF5.write_attribute(
-            hdfwriter.file,
-            "long_name",
-            var.long_name,
+        InputOutput.write!(hdfwriter, value, "$(diagnostic.output_short_name)")
+        attributes = Dict(
+            "time" => time,
+            "long_name" => diagnostic.output_long_name,
+            "variable_units" => var.units,
+            "standard_variable_name" => var.standard_name,
         )
-        InputOutput.write!(
-            hdfwriter,
-            Fields.FieldVector(; Symbol(var.short_name) => value),
-            "diagnostics",
+
+        # TODO: Use directly InputOutput functions
+        InputOutput.HDF5.h5writeattr(
+            hdfwriter.file.filename,
+            "fields/$(diagnostic.output_short_name)",
+            attributes,
         )
+
         Base.close(hdfwriter)
         return nothing
     end
@@ -111,7 +115,7 @@ function NetCDFWriter(;
         # well
         output_path = joinpath(
             integrator.p.simulation.output_dir,
-            "$(diagnostic.output_name)_$time.nc",
+            "$(diagnostic.output_short_name)_$time.nc",
         )
 
         vert_domain = axes(field).vertical_topology.mesh.domain
@@ -141,7 +145,7 @@ function NetCDFWriter(;
         NCDatasets.defDim(nc, "lat", num_points_latitude)
         NCDatasets.defDim(nc, "z", num_points_altitude)
 
-        nc.attrib["long_name"] = var.long_name
+        nc.attrib["long_name"] = diagnostic.output_long_name
         nc.attrib["units"] = var.units
         nc.attrib["comments"] = var.comments
 

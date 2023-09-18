@@ -34,6 +34,7 @@ end
 add_diagnostic_variable!(
     short_name = "rsd",
     long_name = "Downwelling Shortwave Radiation",
+    standard_name = "surface_downwelling_shortwave_flux_in_air",
     units = "W m^-2",
     comments = "Downwelling shortwave radiation",
     compute! = compute_rsd!,
@@ -71,6 +72,7 @@ end
 add_diagnostic_variable!(
     short_name = "rsu",
     long_name = "Upwelling Shortwave Radiation",
+    standard_name = "surface_upwelling_shortwave_flux_in_air",
     units = "W m^-2",
     comments = "Upwelling shortwave radiation",
     compute! = compute_rsu!,
@@ -108,6 +110,7 @@ end
 add_diagnostic_variable!(
     short_name = "rld",
     long_name = "Downwelling Longwave Radiation",
+    standard_name = "surface_downwelling_longwave_flux_in_air",
     units = "W m^-2",
     comments = "Downwelling longwave radiation",
     compute! = compute_rld!,
@@ -145,6 +148,7 @@ end
 add_diagnostic_variable!(
     short_name = "rlu",
     long_name = "Upwelling Longwave Radiation",
+    standard_name = "surface_upwelling_longwave_flux_in_air",
     units = "W m^-2",
     comments = "Upwelling longwave radiation",
     compute! = compute_rlu!,
@@ -182,6 +186,7 @@ end
 add_diagnostic_variable!(
     short_name = "rsdcs",
     long_name = "Downwelling Clear-Sky Shortwave Radiation",
+    standard_name = "surface_downwelling_shortwave_flux_in_air_assuming_clear_sky",
     units = "W m^-2",
     comments = "Downwelling clear sky shortwave radiation",
     compute! = compute_rsdcs!,
@@ -219,6 +224,7 @@ end
 add_diagnostic_variable!(
     short_name = "rsucs",
     long_name = "Upwelling Clear-Sky Shortwave Radiation",
+    standard_name = "surface_upwelling_shortwave_flux_in_air_assuming_clear_sky",
     units = "W m^-2",
     comments = "Upwelling clear sky shortwave radiation",
     compute! = compute_rsucs!,
@@ -256,6 +262,7 @@ end
 add_diagnostic_variable!(
     short_name = "rldcs",
     long_name = "Downwelling Clear-Sky Longwave Radiation",
+    standard_name = "surface_downwelling_longwave_flux_in_air_assuming_clear_sky",
     units = "W m^-2",
     comments = "Downwelling clear sky longwave radiation",
     compute! = compute_rldcs!,
@@ -293,6 +300,7 @@ end
 add_diagnostic_variable!(
     short_name = "rlucs",
     long_name = "Upwelling Clear-Sky Longwave Radiation",
+    standard_name = "surface_upwelling_longwave_flux_in_air_assuming_clear_sky",
     units = "W m^-2",
     comments = "Upwelling clear sky longwave radiation",
     compute! = compute_rlucs!,
