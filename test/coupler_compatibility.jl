@@ -35,9 +35,7 @@ const T2 = 290
 @testset "Coupler Compatibility (Hacky Version)" begin
     # Initialize a model. The value of surface_setup is irrelevant, since it
     # will get overwritten.
-    config = CA.AtmosConfig(;
-        config_dict = Dict("initial_condition" => "DryBaroclinicWave"),
-    )
+    config = CA.AtmosConfig(Dict("initial_condition" => "DryBaroclinicWave"))
     integrator = CA.get_integrator(config)
     (; p, t) = integrator
     Y = integrator.u
@@ -74,8 +72,8 @@ end
 @testset "Coupler Compatibility (Proper Version)" begin
     # Initialize a model. Set surface_setup to PrescribedSurface to prevent
     # ClimaAtmos from modifying the surface conditions.
-    config = CA.AtmosConfig(;
-        config_dict = Dict(
+    config = CA.AtmosConfig(
+        Dict(
             "initial_condition" => "DryBaroclinicWave",
             "surface_setup" => "PrescribedSurface",
         ),
@@ -172,8 +170,8 @@ end
     # Verify that using PrescribedSurface does not break the initialization of
     # RRTMGP or diagnostic EDMF. We currently need a moisture model in order to
     # use diagnostic EDMF.
-    config = CA.AtmosConfig(;
-        config_dict = Dict(
+    config = CA.AtmosConfig(
+        Dict(
             "surface_setup" => "PrescribedSurface",
             "moist" => "equil",
             "rad" => "clearsky",

@@ -1,9 +1,22 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosCoveragePerfConfig()
-integrator = CA.get_integrator(config)
 
+include("common.jl")
+
+length(ARGS) < 2 && error("Usage: benchmark.jl <target_job> <job_id>")
+target_job = ARGS[1]
+job_id = get(ARGS, 2, target_job)
+
+config_dict =
+    target_job != "default" ? CA.config_from_target_job(target_job) :
+    CA.default_config_dict()
+
+# Need to set internal job_id for diagnostics saved by model
+config_dict["job_id"] = job_id
+
+config = AtmosCoveragePerfConfig(; config_dict)
+integrator = CA.get_integrator(config)
 # The callbacks flame graph is very expensive, so only do 2 steps.
 @info "running step"
 
@@ -11,10 +24,8 @@ import SciMLBase
 SciMLBase.step!(integrator) # compile first
 CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
-(; output_dir, job_id) = integrator.p.simulation
 output_dir = job_id
 mkpath(output_dir)
-
 
 @info "collect profile"
 Profile.clear()

@@ -1,13 +1,3 @@
-#=
-```
-julia --project=examples perf/benchmark_dump.jl
-```
-Or, interactively,
-```
-julia --project=examples
-include(joinpath("perf", "benchmark_dump.jl"));
-```
-=#
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -17,16 +7,16 @@ using Plots
 using PrettyTables
 import YAML
 
+# Need to generate config_dict here to override `h_elem` in the loop below
 parsed_args = CA.parse_commandline(CA.argparse_settings())
 config_dict = YAML.load_file(parsed_args["config_file"])
 output_dir = joinpath(config_dict["job_id"])
 
 steptimes = []
-
 # Iterate through varying number of horizontal elements
 for h_elem in 8:8:40
     config_dict["h_elem"] = h_elem
-    config = CA.AtmosConfig(; config_dict = config_dict)
+    config = CA.AtmosConfig(config_dict)
     integrator = CA.get_integrator(config)
     Y₀ = deepcopy(integrator.u)
 
