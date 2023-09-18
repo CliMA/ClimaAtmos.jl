@@ -18,7 +18,7 @@ function edmfx_tke_tendency!(
     (; params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = TCP.tke_diss_coeff(turbconv_params)
-    (; ᶜentr_detrʲs, ᶠu³ʲs) = p
+    (; ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p
     (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) = p
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p
     ᶠgradᵥ = Operators.GradientC2F()
@@ -45,9 +45,9 @@ function edmfx_tke_tendency!(
         for j in 1:n
             @. Yₜ.c.sgs⁰.ρatke[colidx] +=
                 Y.c.ρ[colidx] * (
-                    ᶜentr_detrʲs.:($$j).entr[colidx] * 1 / 2 * norm_sqr(
+                    ᶜentrʲs.:($$j)[colidx] * 1 / 2 * norm_sqr(
                         ᶜinterp(ᶠu³⁰[colidx]) - ᶜinterp(ᶠu³ʲs.:($$j)[colidx]),
-                    ) - ᶜentr_detrʲs.:($$j).detr[colidx] * ᶜtke⁰[colidx]
+                    ) - ᶜdetrʲs.:($$j)[colidx] * ᶜtke⁰[colidx]
                 )
         end
         # pressure work

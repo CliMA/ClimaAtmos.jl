@@ -372,6 +372,34 @@ function get_turbconv_model(
     end
 end
 
+function get_entrainment_model(parsed_args)
+    entr_model = parsed_args["edmfx_entr_model"]
+    return if entr_model == nothing || entr_model == "nothing"
+        NoEntrainment()
+    elseif entr_model == "PiGroups"
+        PiGroupsEntrainment()
+    elseif entr_model == "ConstantCoefficient"
+        ConstantCoefficientEntrainment()
+    elseif entr_model == "ConstantTimescale"
+        ConstantTimescaleEntrainment()
+    else
+        error("Invalid entr_model $(entr_model)")
+    end
+end
+
+function get_detrainment_model(parsed_args)
+    detr_model = parsed_args["edmfx_detr_model"]
+    return if detr_model == nothing || detr_model == "nothing"
+        NoDetrainment()
+    elseif detr_model == "PiGroups"
+        PiGroupsDetrainment()
+    elseif detr_model == "ConstantCoefficient"
+        ConstantCoefficientDetrainment()
+    else
+        error("Invalid entr_model $(entr_model)")
+    end
+end
+
 function get_surface_thermo_state_type(parsed_args)
     dict = Dict()
     dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()

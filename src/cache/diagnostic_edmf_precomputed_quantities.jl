@@ -140,7 +140,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶜq_totʲs,
         ᶜtsʲs,
         ᶜρʲs,
-        ᶜentr_detrʲs,
+        ᶜentrʲs,
+        ᶜdetrʲs,
         ᶜnh_pressureʲs,
         ᶜS_q_totʲs,
         ᶜS_e_totʲs_helper,
@@ -318,7 +319,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             ᶜtsʲ = ᶜtsʲs.:($j)
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜq_totʲ = ᶜq_totʲs.:($j)
-            ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
+            ᶜentrʲ = ᶜentrʲs.:($j)
+            ᶜdetrʲ = ᶜdetrʲs.:($j)
             ᶜnh_pressureʲ = ᶜnh_pressureʲs.:($j)
             ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
             ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
@@ -341,8 +343,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 Fields.field_values(Fields.level(ᶜq_totʲ, i - 1))
             ρʲ_prev_level = Fields.field_values(Fields.level(ᶜρʲ, i - 1))
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
-            entr_detrʲ_prev_level =
-                Fields.field_values(Fields.level(ᶜentr_detrʲ, i - 1))
+            entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
+            detrʲ_prev_level = Fields.field_values(Fields.level(ᶜdetrʲ, i - 1))
             nh_pressureʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜnh_pressureʲ, i - 1))
             scale_height =
@@ -352,9 +354,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             S_e_totʲ_helper_prev_level =
                 Fields.field_values(Fields.level(ᶜS_e_totʲ_helper, i - 1))
 
-            @. entr_detrʲ_prev_level = pi_groups_entr_detr(
+            @. entrʲ_prev_level = entrainment(
                 params,
-                p.atmos.edmfx_entr_detr,
                 z_prev_level,
                 z_sfc_halflevel,
                 p_prev_level,
@@ -374,6 +375,31 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρ_prev_level),
                 dt,
+                p.atmos.edmfx_entr_model,
+            )
+
+            @. detrʲ_prev_level = detrainment(
+                params,
+                z_prev_level,
+                z_sfc_halflevel,
+                p_prev_level,
+                ρ_prev_level,
+                buoyancy_flux_sfc_halflevel,
+                ρaʲ_prev_level / ρʲ_prev_level,
+                get_physical_w(
+                    u³ʲ_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                TD.relative_humidity(thermo_params, tsʲ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
+                get_physical_w(
+                    u³⁰_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                TD.relative_humidity(thermo_params, ts_prev_level),
+                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                dt,
+                p.atmos.edmfx_detr_model,
             )
 
             # TODO: use updraft top instead of scale height
@@ -414,10 +440,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
-                    (
-                        entr_detrʲ_prev_level.entr -
-                        entr_detrʲ_prev_level.detr + S_q_totʲ_prev_level
-                    )
+                    (entrʲ_prev_level - detrʲ_prev_level + S_q_totʲ_prev_level)
                 )
 
             # Using constant exponents in broadcasts allocate, so we use
@@ -457,8 +480,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_level.J *
                     2 *
                     (
-                        entr_detrʲ_prev_level.entr * u³⁰_data_prev_halflevel -
-                        entr_detrʲ_prev_level.entr * u³ʲ_data_prev_halflevel
+                        entrʲ_prev_level * u³⁰_data_prev_halflevel -
+                        entrʲ_prev_level * u³ʲ_data_prev_halflevel
                     )
                 )
 
@@ -513,8 +536,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
                     (
-                        entr_detrʲ_prev_level.entr * h_tot⁰_prev_level -
-                        entr_detrʲ_prev_level.detr * h_totʲ_prev_level +
+                        entrʲ_prev_level * h_tot⁰_prev_level -
+                        detrʲ_prev_level * h_totʲ_prev_level +
                         S_q_totʲ_prev_level * S_e_totʲ_helper_prev_level
                     )
                 )
@@ -541,8 +564,8 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
                     (
-                        entr_detrʲ_prev_level.entr * q_tot_prev_level -
-                        entr_detrʲ_prev_level.detr * q_totʲ_prev_level +
+                        entrʲ_prev_level * q_tot_prev_level -
+                        detrʲ_prev_level * q_totʲ_prev_level +
                         S_q_totʲ_prev_level
                     )
                 )
@@ -604,15 +627,18 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         ᶜuʲ = ᶜuʲs.:($j)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
-        ᶜentr_detrʲ = ᶜentr_detrʲs.:($j)
+        ᶜentrʲ = ᶜentrʲs.:($j)
+        ᶜdetrʲ = ᶜdetrʲs.:($j)
         ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
         ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
 
         u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
 
-        entr_detrʲ_level = Fields.field_values(Fields.level(ᶜentr_detrʲ, i_top))
-        fill!(entr_detrʲ_level, RecursiveApply.rzero(eltype(entr_detrʲ_level)))
+        entrʲ_level = Fields.field_values(Fields.level(ᶜentrʲ, i_top))
+        detrʲ_level = Fields.field_values(Fields.level(ᶜdetrʲ, i_top))
+        fill!(entrʲ_level, RecursiveApply.rzero(eltype(entrʲ_level)))
+        fill!(detrʲ_level, RecursiveApply.rzero(eltype(detrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
         S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
@@ -671,7 +697,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     # TKE equation, where using ᶜu⁰ results in allocation
     for j in 1:n
         @. ᶜtke_exch +=
-            ᶜρaʲs.:($$j) * ᶜentr_detrʲs.:($$j).detr / Y.c.ρ *
+            ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / Y.c.ρ *
             (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 

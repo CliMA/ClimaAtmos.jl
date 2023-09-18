@@ -78,10 +78,8 @@ function precomputed_quantities(Y, atmos)
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜentr_detrʲs = similar(
-                Y.c,
-                NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}},
-            ),
+            ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             (
                 atmos.energy_form isa TotalEnergy ?
                 (;
@@ -101,10 +99,8 @@ function precomputed_quantities(Y, atmos)
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜh_totʲs = similar(Y.c, NTuple{n, FT}),
             ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜentr_detrʲs = similar(
-                Y.c,
-                NTuple{n, NamedTuple{(:entr, :detr), NTuple{2, FT}}},
-            ),
+            ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜnh_pressureʲs = similar(Y.c, NTuple{n, CT3{FT}}),
             ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
             ᶜS_q_tot⁰ = similar(Y.c, FT),
