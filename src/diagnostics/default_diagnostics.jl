@@ -15,6 +15,8 @@ function default_diagnostics(model::AtmosModel)
     # TODO: Probably not the most elegant way to do this...
     defaults = Any[]
 
+    append!(defaults, core_default_diagnostics())
+
     for field in fieldnames(AtmosModel)
         def_model = default_diagnostics(getfield(model, field))
         append!(defaults, def_model)
@@ -180,4 +182,62 @@ hourly_average(short_names; output_writer = HDF5Writer()) =
     hourly_averages(short_names; output_writer)[1]
 
 # Include all the subdefaults
-include("defaults/moisture_model.jl")
+
+########
+# Core #
+########
+function core_default_diagnostics()
+    core_diagnostics = ["ts", "ta", "thetaa", "pfull", "rhoa", "ua", "va", "wa"]
+
+    return [
+        daily_averages(core_diagnostics...)...,
+        daily_max("ts"),
+        daily_min("ts"),
+    ]
+end
+
+###############
+# Energy form #
+###############
+function default_diagnostics(::TotalEnergy)
+    total_energy_diagnostics = ["hfes"]
+
+    return [daily_averages(total_energy_diagnostics...)...]
+end
+
+
+##################
+# Moisture model #
+##################
+function default_diagnostics(
+    ::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    moist_diagnostics = ["hur", "hus", "hussfc", "evspsbl"]
+
+    return [daily_averages(moist_diagnostics...)...]
+end
+
+#######################
+# Precipitation model #
+#######################
+function default_diagnostics(::Microphysics0Moment)
+    precip_diagnostics = ["pr"]
+
+    return [daily_averages(precip_diagnostics...)...]
+end
+
+##################
+# Radiation mode #
+##################
+function default_diagnostics(::RRTMGPI.AbstractRRTMGPMode)
+    allsky_diagnostics = ["rsd", "rsu", "rld", "rlu"]
+
+    return [daily_averages(allsky_diagnostics...)...]
+end
+
+
+function default_diagnostics(::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics)
+    clear_diagnostics = ["rsdcs", "rsucs", "rldcs", "rlucs"]
+
+    return [daily_averages(clear_diagnostics...)...]
+end
