@@ -69,6 +69,8 @@ cat << 'EOM'
 agents:
   queue: central
   slurm_mem: 8G
+  CUDA_VERSION: "11.8"
+  OPENBLAS_NUM_THREADS: 1
   modules: julia/1.9.3 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
 
 env:
