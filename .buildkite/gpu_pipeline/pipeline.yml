@@ -17,22 +17,26 @@ steps:
     key: "init_gpu_env"
     command:
       - "echo $$JULIA_DEPOT_PATH"
-
-      - echo "--- Configure MPI"
-      - julia -e 'using Pkg; Pkg.add("MPIPreferences"); using MPIPreferences; use_system_binary()'
-
       - echo "--- Instantiate project"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - echo "--- Done instantiate"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
+      - echo "--- Done precompile"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
       - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
+      - echo "--- Done CUDA"
+
 
       - echo "--- Instantiate examples"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - echo "--- Done instantiate"
+
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
+      - echo "--- Done precompile"
+
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Download artifacts"
