@@ -1,6 +1,6 @@
 using LinearAlgebra: ×, norm, dot
 
-import ClimaAtmos.Parameters as CAP
+import .Parameters as CAP
 using ClimaCore: Operators, Fields, Limiters, Geometry, Spaces
 
 import ClimaComms
