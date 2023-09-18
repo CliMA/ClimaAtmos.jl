@@ -14,8 +14,7 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
     # Grid scale quantities
     ᶜ∇²u = similar(Y.c, C123{FT})
     gs_quantities = (;
-        ᶜ∇²uₕ = similar(Y.c, C12{FT}),
-        ᶜ∇²uᵥ = similar(Y.c, C3{FT}),
+        ᶜ∇²u = similar(Y.c, C123{FT}),
         ᶜ∇²specific_energy = similar(Y.c, FT),
         ᶜ∇²specific_tracers = remove_energy_var.(specific_gs.(Y.c)),
     )
@@ -58,7 +57,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²uₕ, ᶜ∇²uᵥ, ᶜ∇²u, ᶜ∇²specific_energy) = p
+    (; do_dss, ᶜp, ᶜspecific, ᶜ∇²u, ᶜ∇²specific_energy) = p
     if turbconv_model isa EDMFX
         (;
             ᶜρa⁰,
@@ -121,11 +120,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 # DSS on Grid scale quantities
                 # Need to split the DSS computation here, because our DSS 
                 # operations do not accept Covariant123Vector types
-                @. ᶜ∇²uₕ = C12(ᶜ∇²u)
-                @. ᶜ∇²uᵥ = C3(ᶜ∇²u)
-                dss_op!(ᶜ∇²uₕ, buffer.ᶜ∇²uₕ)
-                dss_op!(ᶜ∇²uᵥ, buffer.ᶜ∇²uᵥ)
-                @. ᶜ∇²u = C123(ᶜ∇²uₕ) + C123(ᶜ∇²uᵥ)
+                dss_op!(ᶜ∇²u, buffer.ᶜ∇²u)
                 dss_op!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
                 if turbconv_model isa EDMFX && diffuse_tke
                     dss_op!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
