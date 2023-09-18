@@ -307,31 +307,40 @@ add_diagnostic_variable!(
 )
 
 ###
-# Eastward surface drag component (2d)
+# Eastward and northward surface drag component (2d)
 ###
-function drag_vector(state, cache)
+compute_tau!(_, _, _, _, energy_form::T) where {T} =
+    error_diagnostic_variable("tau", energy_form)
+
+function compute_tau!(out, state, cache, component, energy_form::TotalEnergy)
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
     (; ρ_flux_uₕ) = cache.sfc_conditions
-    return Geometry.UVVector.(
-        adjoint.(ρ_flux_uₕ) .*
-        surface_ct3_unit
-    )
+
+    if isnothing(out)
+        return getproperty(
+            Geometry.UVVector.(
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+            ).components.data,
+            component,
+        )
+    else
+        out .= getproperty(
+            Geometry.UVVector.(
+                adjoint.(ρ_flux_uₕ) .* surface_ct3_unit
+            ).components.data,
+            component,
+        )
+    end
+
+    return
 end
 
-function compute_tauu!(
-    out,
-    state,
-    cache,
-    time,
-)
-    if isnothing(out)
-        return drag_vector(state, cache).components.data.:1
-    else
-        out .= drag_vector(state, cache).components.data.:1
-    end
-end
+compute_tauu!(out, state, cache, time) =
+    compute_tau!(out, state, cache, :1, cache.atmos.energy_form)
+compute_tauv!(out, state, cache, time) =
+    compute_tau!(out, state, cache, :2, cache.atmos.energy_form)
 
 add_diagnostic_variable!(
     short_name = "tauu",
@@ -340,22 +349,6 @@ add_diagnostic_variable!(
     comments = "Eastward component of the surface drag",
     compute! = compute_tauu!,
 )
-
-###
-# Northward surface drag component (2d)
-###
-function compute_tauv!(
-    out,
-    state,
-    cache,
-    time,
-)
-    if isnothing(out)
-        return drag_vector(state, cache).components.data.:2
-    else
-        out .= drag_vector(state, cache).components.data.:2
-    end
-end
 
 add_diagnostic_variable!(
     short_name = "tauv",
