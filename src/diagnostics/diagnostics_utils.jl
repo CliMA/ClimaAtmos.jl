@@ -57,7 +57,7 @@ function get_descriptive_name(
 
             suffix = period * red
         else
-            suffix = "$(output_every)it_(reduction_time_func)"
+            suffix = "$(output_every)it_$(red)"
         end
     else
         suffix = "inst"
