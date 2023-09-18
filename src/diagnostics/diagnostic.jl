@@ -41,7 +41,7 @@
 #   can compute stuff like averages).
 #
 # - This file also also include several other files, including (but not limited to):
-#   - core_diagnostics.jl
+#   - core_diagnostics.jl, radiation_diagnostics.jl
 #   - default_diagnostics.jl (which defines all the higher-level interfaces and defaults)
 #   - reduction_identities.jl
 #   - diagnostic_utils.jl
@@ -166,6 +166,7 @@ end
 
 # Do you want to define more diagnostics? Add them here
 include("core_diagnostics.jl")
+include("radiation_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")
