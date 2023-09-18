@@ -65,19 +65,19 @@ for i in "${!resolutions[@]}"; do
 done
 
 # set up environment and agents
-cat << EOM
+cat << 'EOM'
 agents:
   queue: central
   slurm_mem: 8G
   modules: julia/1.9.3 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
 
 env:
-  JULIA_LOAD_PATH: "$\{JULIA_LOAD_PATH}:$\{BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
+  JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
   OPENBLAS_NUM_THREADS: 1
   JULIA_NVTX_CALLBACKS: gc
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_DEPOT_PATH: "$\{BUILDKITE_BUILD_PATH}/$\{BUILDKITE_PIPELINE_SLUG}/depot/cpu"
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
   JULIA_CPU_TARGET: 'broadwell;skylake'
   SLURM_KILL_BAD_EXIT: 1
 
