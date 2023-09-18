@@ -66,18 +66,20 @@ done
 
 # set up environment and agents
 cat << EOM
-env:
-  JULIA_VERSION: "1.9.3"
-  MPICH_VERSION: "4.0.0"
-  OPENMPI_VERSION: "4.1.1"
-  MPI_IMPL: "$mpi_impl"
-  CUDA_VERSION: "11.3"
-  OPENBLAS_NUM_THREADS: 1
-  CLIMATEMACHINE_SETTINGS_FIX_RNG_SEED: "true"
-
 agents:
-  config: cpu
   queue: central
+  slurm_mem: 8G
+  modules: julia/1.9.3 cuda/11.8 ucx/1.14.1_cuda-11.8 openmpi/4.1.5_cuda-11.8 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
+
+env:
+  JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
+  OPENBLAS_NUM_THREADS: 1
+  JULIA_NVTX_CALLBACKS: gc
+  OMPI_MCA_opal_warn_on_missing_libcuda: 0
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
+  JULIA_CPU_TARGET: 'broadwell;skylake'
+  SLURM_KILL_BAD_EXIT: 1
 
 steps:
   - label: "init :computer:"
@@ -160,7 +162,6 @@ cat << EOM
     - label: "$nprocs"
       key: "$job_id"
       command:
-        - "module load cuda/11.3 nsight-systems/2022.2.1"
         - "$launcher $command"
         - "find ${job_id} -iname '*.nsys-rep' -printf '%f\\\\n' | sort -V | jq --raw-input --slurp 'split(\"\n\") | .[0:-1] | {files: .} + {\"extension\": \"nsys-view\", \"version\": \"1.0\"}' > ${job_id}/${job_id}.nsys-view"
         - "find ${job_id} -iname '*.nsys-*' | sort -V | tar cvzf ${job_id}-nsys.tar.gz -T -"
