@@ -674,7 +674,7 @@ function get_diagnostics(parsed_args, atmos_model)
         period_seconds = time_to_seconds(yaml_diag["period"])
 
         if isnothing(name)
-            name = CAD.get_descriptive_short_name(
+            name = CAD.descriptive_short_name(
                 CAD.get_diagnostic_variable(yaml_diag["short_name"]),
                 period_seconds,
                 reduction_time_func,

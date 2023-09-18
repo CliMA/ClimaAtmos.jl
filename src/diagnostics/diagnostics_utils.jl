@@ -1,16 +1,16 @@
 # diagnostic_utils.jl
 #
 # This file contains:
-# - get_descriptive_short_name: to condense ScheduledDiagnostic information into few characters.
-# - get_descriptive_long_name: to produce full names that are clearly human-understandable
+# - descriptive_short_name: to condense ScheduledDiagnostic information into few characters.
+# - descriptive_long_name: to produce full names that are clearly human-understandable
 
 
 """
-    get_descriptive_short_name(variable::DiagnosticVariable,
-                               output_every,
-                               reduction_time_func,
-                               pre_output_hook!;
-                               units_are_seconds = true)
+    descriptive_short_name(variable::DiagnosticVariable,
+                           output_every,
+                           reduction_time_func,
+                           pre_output_hook!;
+                           units_are_seconds = true)
 
 
 Return a compact, unique-ish, identifier generated from the given information.
@@ -21,7 +21,7 @@ is interpreted as in units of number of iterations.
 This function is useful for filenames and error messages.
 
 """
-function get_descriptive_short_name(
+function descriptive_short_name(
     variable::DiagnosticVariable,
     output_every,
     reduction_time_func,
@@ -67,11 +67,11 @@ function get_descriptive_short_name(
 end
 
 """
-    get_descriptive_long_name(variable::DiagnosticVariable,
-                              output_every,
-                              reduction_time_func,
-                              pre_output_hook!;
-                              units_are_seconds = true)
+    descriptive_long_name(variable::DiagnosticVariable,
+                          output_every,
+                          reduction_time_func,
+                          pre_output_hook!;
+                          units_are_seconds = true)
 
 
 Return a verbose description of the given output variable.
@@ -82,7 +82,7 @@ is interpreted as in units of number of iterations.
 This function is useful for attributes in output files.
 
 """
-function get_descriptive_long_name(
+function descriptive_long_name(
     variable::DiagnosticVariable,
     output_every,
     reduction_time_func,

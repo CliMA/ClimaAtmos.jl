@@ -35,7 +35,7 @@ Currently, only 3D fields on cubed spheres are supported.
 ### From a script
 
 The simplest way to get started with diagnostics is to use the defaults for your
-atmospheric model. `ClimaAtmos` defines a function `get_default_diagnostic`. You
+atmospheric model. `ClimaAtmos` defines a function `default_diagnostic`. You
 can execute this function on an `AtmosModel` or on any of its fields to obtain a
 list of diagnostics ready to be passed to the simulation. So, for example
 
@@ -43,7 +43,7 @@ list of diagnostics ready to be passed to the simulation. So, for example
 
 model = ClimaAtmos.AtmosModel(..., moisture_model = ClimaAtmos.DryModel(), ...)
 
-diagnostics = ClimaAtmos.get_default_diagnostics(model)
+diagnostics = ClimaAtmos.default_diagnostics(model)
 # => List of diagnostics that include the ones specified for the DryModel
 ```
 
@@ -53,7 +53,7 @@ where to save it, and so on (read below for more information on this). You can
 construct your own lists of `ScheduledDiagnostic`s starting from the variables
 defined by `ClimaAtmos`. The `DiagnosticVariable`s in `ClimaAtmos` are
 identified with by the short and unique name, so that you can access them
-directly with the function `get_diagnostic_variable`. One way to do so is by
+directly with the function `diagnostic_variable`. One way to do so is by
 using the provided convenience functions for common operations, e.g., continuing
 the previous example
 

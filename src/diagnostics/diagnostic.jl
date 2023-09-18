@@ -306,14 +306,14 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         reduction_space_func = nothing,
         compute_every = isnothing(reduction_time_func) ? output_every : 1,
         pre_output_hook! = nothing,
-        output_short_name = get_descriptive_short_name(
+        output_short_name = descriptive_short_name(
             variable,
             output_every,
             reduction_time_func,
             pre_output_hook!;
             units_are_seconds = false,
         ),
-        output_long_name = get_descriptive_long_name(
+        output_long_name = descriptive_long_name(
             variable,
             output_every,
             reduction_time_func,
@@ -461,14 +461,14 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         compute_every = isnothing(reduction_time_func) ? output_every :
                         :timestep,
         pre_output_hook! = nothing,
-        output_short_name = get_descriptive_short_name(
+        output_short_name = descriptive_short_name(
             variable,
             output_every,
             reduction_time_func,
             pre_output_hook!;
             units_are_seconds = true,
         ),
-        output_long_name = get_descriptive_long_name(
+        output_long_name = descriptive_long_name(
             variable,
             output_every,
             reduction_time_func,
