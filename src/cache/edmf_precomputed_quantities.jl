@@ -142,8 +142,10 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         sgsʲs_ρaq_tot_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρaq_tot, 1))
 
+        turbconv_params = CAP.turbconv_params(params)
         @. sgsʲs_ρa_int_val =
-            $(FT(0.1)) * TD.air_density(thermo_params, ᶜtsʲ_int_val)
+            $(FT(turbconv_params.surface_area)) *
+            TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρae_tot_int_val =
             sgsʲs_ρa_int_val * TD.total_energy(
                 thermo_params,

@@ -41,7 +41,6 @@ function create_parameter_set(config::AtmosConfig)
         create_parameter_struct(CM.Parameters.ModalNucleationParameters)
     rrtmgp_params = create_parameter_struct(RP.RRTMGPParameters)
     insolation_params = create_parameter_struct(IP.InsolationParameters)
-    sponge_params = create_parameter_struct(CAP.SpongeParameters)
     microphys_params = create_parameter_struct(
         CM.Parameters.CloudMicrophysicsParameters;
         subparam_structs = (; thermo_params, modal_nucleation_params),
@@ -80,13 +79,13 @@ function create_parameter_set(config::AtmosConfig)
             rrtmgp_params,
             insolation_params,
             microphysics_params = microphys_params,
-            surfacefluxes_params = surf_flux_params,
+            surface_fluxes_params = surf_flux_params,
             turbconv_params,
-            sponge_params,
         ),
     )
-    # TODO: Add parameter logging option from config
-    # logfilepath = joinpath(@__DIR__, "logfilepath_$FT.toml")
-    # CP.log_parameter_information(toml_dict, logfilepath)
+    if parsed_args["log_params"]
+        logfilepath = joinpath(@__DIR__, "$(parsed_args["job_id"])_$FT.toml")
+        CP.log_parameter_information(toml_dict, logfilepath)
+    end
     return param_set
 end

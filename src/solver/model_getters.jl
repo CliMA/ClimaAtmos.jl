@@ -76,35 +76,27 @@ function get_surface_model(parsed_args)
     end
 end
 
-function get_viscous_sponge_model(
-    parsed_args,
-    sponge_params,
-    ::Type{FT},
-) where {FT}
+function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")
         nothing
     elseif vs_name in ("true", true, "ViscousSponge")
-        zd = sponge_params.zd_viscous
-        κ₂ = sponge_params.kappa_2_sponge
+        zd = params.zd_viscous
+        κ₂ = params.kappa_2_sponge
         ViscousSponge{FT}(; zd, κ₂)
     else
         error("Uncaught viscous sponge model `$vs_name`.")
     end
 end
 
-function get_rayleigh_sponge_model(
-    parsed_args,
-    sponge_params,
-    ::Type{FT},
-) where {FT}
+function get_rayleigh_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     rs_name = parsed_args["rayleigh_sponge"]
     return if rs_name in ("false", false)
         nothing
     elseif rs_name in ("true", true, "RayleighSponge")
-        zd = sponge_params.zd_rayleigh
-        α_uₕ = sponge_params.alpha_rayleigh_uh
-        α_w = sponge_params.alpha_rayleigh_w
+        zd = params.zd_rayleigh
+        α_uₕ = params.alpha_rayleigh_uh
+        α_w = params.alpha_rayleigh_w
         RayleighSponge{FT}(; zd, α_uₕ, α_w)
     else
         error("Uncaught rayleigh sponge model `$rs_name`.")

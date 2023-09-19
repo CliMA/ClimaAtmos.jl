@@ -13,7 +13,7 @@ import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DECB
 
 function get_atmos(config::AtmosConfig, params)
-    (; turbconv_params, sponge_params) = params
+    (; turbconv_params) = params
     (; parsed_args) = config
     FT = eltype(config)
     moisture_model = get_moisture_model(parsed_args)
@@ -72,16 +72,8 @@ function get_atmos(config::AtmosConfig, params)
         ),
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
-        viscous_sponge = get_viscous_sponge_model(
-            parsed_args,
-            sponge_params,
-            FT,
-        ),
-        rayleigh_sponge = get_rayleigh_sponge_model(
-            parsed_args,
-            sponge_params,
-            FT,
-        ),
+        viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
+        rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
     )
