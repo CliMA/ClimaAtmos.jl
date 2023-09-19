@@ -133,7 +133,7 @@ fi
 if [[ "$mpi_impl" == "mpich" ]]; then
     launcher="srun --cpu-bind=cores"
 else
-    launcher="mpiexec --map-by node:PE=$cpus_per_proc --bind-to core"
+    launcher="mpiexec --bind-to core"
 fi
 
 if [[ "$res" == "low" ]]; then
