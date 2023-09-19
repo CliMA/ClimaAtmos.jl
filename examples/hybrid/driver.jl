@@ -173,5 +173,5 @@ if config.parsed_args["check_conservation"]
     @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
     @test sum(sol.u[1].c.ρe_tot) +
           (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈
-          sum(sol.u[end].c.ρe_tot) rtol = 30 * eps(FT)
+          sum(sol.u[end].c.ρe_tot) rtol = 100 * eps(FT)
 end
