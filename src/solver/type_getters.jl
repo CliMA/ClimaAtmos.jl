@@ -877,16 +877,24 @@ function get_integrator(config::AtmosConfig)
         (int) -> set_precomputed_quantities!(int.u, int.p, int.t),
     )
 
+    # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
+    # and continuous. This is not hard, but can introduce significant latency. However, all
+    # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
+    # information to the constructor
+    continuous_callbacks = tuple()
+    discrete_callbacks = (callback...,
+                          sync_precomputed,
+                          diagnostics_callbacks...)
+
     s = @timed_str begin
-        callback = SciMLBase.CallbackSet(
-            callback...,
-            sync_precomputed,
-            diagnostics_callbacks...,
+        all_callbacks = SciMLBase.CallbackSet(
+            continuous_callbacks,
+            discrete_callbacks
         )
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
-    @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(callback, simulation.dt))"
-    @info "n_steps_per_cycle: $(n_steps_per_cycle(callback, simulation.dt))"
+    @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(all_callbacks, simulation.dt))"
+    @info "n_steps_per_cycle: $(n_steps_per_cycle(all_callbacks, simulation.dt))"
 
     tspan = (t_start, simulation.t_end)
     s = @timed_str begin
@@ -896,7 +904,7 @@ function get_integrator(config::AtmosConfig)
             p,
             tspan,
             ode_algo,
-            callback,
+            all_callbacks,
         )
     end
 
