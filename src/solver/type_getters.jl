@@ -842,8 +842,10 @@ function get_integrator(config::AtmosConfig)
     @info "get_callbacks: $s"
 
     # Initialize diagnostics
-    @info "Initializing diagnostics"
-    diagnostics = get_diagnostics(config.parsed_args, atmos)
+    s = @timed_str begin
+        diagnostics = get_diagnostics(config.parsed_args, atmos)
+    end
+    @info "initializing diagnostics: $s"
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
@@ -859,12 +861,15 @@ function get_integrator(config::AtmosConfig)
     diagnostic_counters = Dict()
 
     # NOTE: The diagnostics_callbacks are not called at the initial timestep
-    diagnostics_callbacks = CAD.get_callbacks_from_diagnostics(
-        diagnostics_iterations,
-        diagnostic_storage,
-        diagnostic_accumulators,
-        diagnostic_counters,
-    )
+    s = @timed_str begin
+        diagnostics_callbacks = CAD.get_callbacks_from_diagnostics(
+            diagnostics_iterations,
+            diagnostic_storage,
+            diagnostic_accumulators,
+            diagnostic_counters,
+        )
+    end
+    @info "Prepared diagnostic callbacks: $s"
 
     # We need to ensure the precomputed quantities are indeed precomputed
     # TODO: Remove this when we can assume that the precomputed_quantities are in sync with the state
@@ -872,11 +877,14 @@ function get_integrator(config::AtmosConfig)
         (int) -> set_precomputed_quantities!(int.u, int.p, int.t),
     )
 
-    callback = SciMLBase.CallbackSet(
-        callback...,
-        sync_precomputed,
-        diagnostics_callbacks...,
-    )
+    s = @timed_str begin
+        callback = SciMLBase.CallbackSet(
+            callback...,
+            sync_precomputed,
+            diagnostics_callbacks...,
+        )
+    end
+    @info "Prepared SciMLBase.CallbackSet callbacks: $s"
     @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(callback, simulation.dt))"
     @info "n_steps_per_cycle: $(n_steps_per_cycle(callback, simulation.dt))"
 
@@ -897,29 +905,34 @@ function get_integrator(config::AtmosConfig)
     end
     @info "init integrator: $s"
 
-    for diag in diagnostics_iterations
-        variable = diag.variable
-        try
-            # The first time we call compute! we use its return value. All the subsequent
-            # times (in the callbacks), we will write the result in place
-            diagnostic_storage[diag] = variable.compute!(
-                nothing,
-                integrator.u,
-                integrator.p,
-                integrator.t,
-            )
-            diagnostic_counters[diag] = 1
-            # If it is not a reduction, call the output writer as well
-            if isnothing(diag.reduction_time_func)
-                diag.output_writer(diagnostic_storage[diag], diag, integrator)
-            else
-                # Add to the accumulator
-                diagnostic_accumulators[diag] = copy(diagnostic_storage[diag])
+    s = @timed_str begin
+        for diag in diagnostics_iterations
+            variable = diag.variable
+            try
+                # The first time we call compute! we use its return value. All
+                # the subsequent times (in the callbacks), we will write the
+                # result in place
+                diagnostic_storage[diag] = variable.compute!(
+                    nothing,
+                    integrator.u,
+                    integrator.p,
+                    integrator.t,
+                )
+                diagnostic_counters[diag] = 1
+                # If it is not a reduction, call the output writer as well
+                if isnothing(diag.reduction_time_func)
+                    diag.output_writer(diagnostic_storage[diag], diag, integrator)
+                else
+                    # Add to the accumulator
+                    diagnostic_accumulators[diag] =
+                        copy(diagnostic_storage[diag])
+                end
+            catch e
+                error("Could not compute diagnostic $(variable.long_name): $e")
             end
-        catch e
-            error("Could not compute diagnostic $(variable.long_name): $e")
         end
     end
+    @info "Init diagnostics: $s"
 
     return integrator
 end
