@@ -643,20 +643,47 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX Bomex in a box entr 1 detr 0.001 dt 1 t_end 3hrs"
+      - label: ":genie: EDMFX GABLS in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_bomex_box_v1.yml
-        artifact_paths: "edmfx_bomex_box_v1/*"
+          --config_file $CONFIG_PATH/edmfx_gabls_box.yml
+        artifact_paths: "edmfx_gabls_box/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX Bomex in a box entr 1 detr 0.01 dt 1 t_end 3hrs"
+      - label: ":genie: EDMFX Dycoms RF01 in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_bomex_box_v2.yml
-        artifact_paths: "edmfx_bomex_box_v2/*"
+          --config_file $CONFIG_PATH/edmfx_dycoms_rf01_box.yml
+        artifact_paths: "edmfx_dycoms_rf01_box/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX Bomex in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/edmfx_bomex_box.yml
+        artifact_paths: "edmfx_bomex_box/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX Rico in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/edmfx_rico_box.yml
+        artifact_paths: "edmfx_rico_box/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: EDMFX TRMM in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/edmfx_trmm_box.yml
+        artifact_paths: "edmfx_trmm_box/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
