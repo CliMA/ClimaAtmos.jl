@@ -88,7 +88,7 @@ steps:
     key: "init_cpu_env"
     command:
       - echo "--- Instantiate"
-      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project=examples -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
