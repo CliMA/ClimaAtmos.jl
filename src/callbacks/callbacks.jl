@@ -508,11 +508,10 @@ function save_to_disk_func(integrator)
     hdfwriter = InputOutput.HDF5Writer(output_file, p.comms_ctx)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
-    InputOutput.write!(
-        hdfwriter,
-        Fields.FieldVector(; pairs(diagnostic)...),
-        "diagnostics",
-    )
+    FT = Spaces.undertype(axes(Y.c))
+    values = map(Fields.wrap, diagnostic)
+    fv = Fields.FieldVector{FT}(values)
+    InputOutput.write!(hdfwriter, fv, "diagnostics")
     Base.close(hdfwriter)
     return nothing
 end
