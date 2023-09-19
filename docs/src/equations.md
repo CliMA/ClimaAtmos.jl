@@ -33,7 +33,6 @@ We make use of the following operators
 
 ### Differential operators
 
-- ``\mathcal{D}_h`` is the [discrete horizontal spectral divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Divergence).
 - ``\hat{\mathcal{D}}_h`` is the [discrete horizontal spectral weak divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakDivergence).
 - ``\mathcal{D}^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
 !!! todo
@@ -107,7 +106,7 @@ Follows the continuity equation
 This is discretized using the following
 ```math
 \frac{\partial}{\partial t} \rho
-= - \mathcal{D}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right]
+= - \hat{\mathcal{D}}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right]
 ```
 
 with the
@@ -210,7 +209,7 @@ which is stabilized with the addition of a 4th-order hyperdiffusion term on tota
 This is discretized using
 ```math
 \frac{\partial}{\partial t} \rho e \approx
-- \mathcal{D}_h[ (\rho e + p) \bar{\boldsymbol{u}} ]
+- \hat{\mathcal{D}}_h[ (\rho e + p) \bar{\boldsymbol{u}} ]
 - \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right)
   + \boldsymbol{F}_R \right] - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi) ).
 ```
@@ -247,7 +246,7 @@ This is stabilized with the addition of a 4th-order hyperdiffusion term
 This is discretized using
 ```math
 \frac{\partial}{\partial t} \rho \chi \approx
-- \mathcal{D}_h[ \rho \chi \bar{\boldsymbol{u}}]
+- \hat{\mathcal{D}}_h[ \rho \chi \bar{\boldsymbol{u}}]
 - \mathcal{D}^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right]
 - \nu_\chi \hat{\mathcal{D}}_h ( \rho \, \mathcal{G}_h (\psi) )
 ```
