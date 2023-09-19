@@ -25,7 +25,17 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
     (; ᶜspecific⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰) = p
     (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) = p
-    (; ᶜspecificʲs, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜh_totʲs, ᶜentr_detrʲs) = p
+    (;
+        ᶜspecificʲs,
+        ᶜuʲs,
+        ᶠu³ʲs,
+        ᶜKʲs,
+        ᶜtsʲs,
+        ᶜρʲs,
+        ᶜh_totʲs,
+        ᶜentrʲs,
+        ᶜdetrʲs,
+    ) = p
     (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
     @. ᶜspecific⁰ = specific_full_sgs⁰(Y.c, turbconv_model)
@@ -150,9 +160,8 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     for j in 1:n
-        @. ᶜentr_detrʲs.:($$j) = pi_groups_entr_detr(
+        @. ᶜentrʲs.:($$j) = entrainment(
             params,
-            p.atmos.edmfx_entr_detr,
             ᶜz,
             z_sfc,
             ᶜp,
@@ -166,6 +175,24 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             TD.relative_humidity(thermo_params, ᶜts⁰),
             ᶜphysical_buoyancy(params, ᶜρ_ref, ᶜρ⁰),
             dt,
+            p.atmos.edmfx_entr_model,
+        )
+        @. ᶜdetrʲs.:($$j) = detrainment(
+            params,
+            ᶜz,
+            z_sfc,
+            ᶜp,
+            Y.c.ρ,
+            buoyancy_flux,
+            Y.c.sgsʲs.:($$j).ρa / ᶜρʲs.:($$j),
+            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
+            ᶜphysical_buoyancy(params, ᶜρ_ref, ᶜρʲs.:($$j)),
+            get_physical_w(ᶜu⁰, ᶜlg),
+            TD.relative_humidity(thermo_params, ᶜts⁰),
+            ᶜphysical_buoyancy(params, ᶜρ_ref, ᶜρ⁰),
+            dt,
+            p.atmos.edmfx_detr_model,
         )
     end
 
@@ -204,7 +231,7 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     @. ᶜtke_exch = 0
     for j in 1:n
         @. ᶜtke_exch +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜentr_detrʲs.:($$j).detr / ᶜρa⁰ * (
+            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
                 1 / 2 *
                 (
                     get_physical_w(ᶜuʲs.:($$j), ᶜlg) - get_physical_w(ᶜu⁰, ᶜlg)

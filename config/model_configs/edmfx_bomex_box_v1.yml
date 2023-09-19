@@ -8,7 +8,8 @@ dt: "1secs"
 edmfx_upwinding: first_order
 surface_setup: "Bomex"
 perturb_initstate: false
-edmfx_entr_detr: true
+edmfx_entr_model: "ConstantCoefficient" 
+edmfx_detr_model: "ConstantCoefficient" 
 t_end: "10800secs"
 y_max: 100000.0
 y_elem: 2

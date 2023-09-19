@@ -5,11 +5,12 @@ rad: gray
 turbconv: diagnostic_edmfx 
 prognostic_tke: true
 edmfx_upwinding: first_order 
-edmfx_entr_detr: true 
+edmfx_entr_model: "ConstantTimescale" 
+edmfx_detr_model: "ConstantCoefficient" 
 edmfx_nh_pressure: true 
 edmfx_sgs_flux: true
 moist: equil 
 precip_model: 0M
-dt: 50secs 
-t_end: 3hours 
+dt: 10secs 
+t_end: 1hours 
 dt_save_to_disk: 600secs

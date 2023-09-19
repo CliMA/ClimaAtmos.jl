@@ -26,8 +26,8 @@ function get_atmos(config::AtmosConfig, params)
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
 
-    edmfx_entr_detr = parsed_args["edmfx_entr_detr"]
-    @assert edmfx_entr_detr in (false, true)
+    edmfx_entr_model = get_entrainment_model(parsed_args)
+    edmfx_detr_model = get_detrainment_model(parsed_args)
 
     edmfx_sgs_flux = parsed_args["edmfx_sgs_flux"]
     @assert edmfx_sgs_flux in (false, true)
@@ -48,7 +48,8 @@ function get_atmos(config::AtmosConfig, params)
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
-        edmfx_entr_detr,
+        edmfx_entr_model,
+        edmfx_detr_model,
         edmfx_sgs_flux,
         edmfx_nh_pressure,
         precip_model,

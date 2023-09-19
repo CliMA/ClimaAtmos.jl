@@ -175,6 +175,18 @@ use_prognostic_tke(::EDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::Any) = false
 
+abstract type AbstractEntrainmentModel end
+struct NoEntrainment <: AbstractEntrainmentModel end
+struct PiGroupsEntrainment <: AbstractEntrainmentModel end
+struct ConstantCoefficientEntrainment <: AbstractEntrainmentModel end
+struct ConstantTimescaleEntrainment <: AbstractEntrainmentModel end
+
+abstract type AbstractDetrainmentModel end
+
+struct NoDetrainment <: AbstractDetrainmentModel end
+struct PiGroupsDetrainment <: AbstractDetrainmentModel end
+struct ConstantCoefficientDetrainment <: AbstractDetrainmentModel end
+
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
 struct GaussianQuad <: AbstractQuadratureType end
@@ -220,6 +232,8 @@ Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::EDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
+Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
+Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractEnvThermo) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
@@ -262,7 +276,8 @@ Base.@kwdef struct AtmosModel{
     LA,
     EC,
     AT,
-    EED,
+    EEM,
+    EDM,
     ESF,
     ENP,
     TCM,
@@ -286,7 +301,8 @@ Base.@kwdef struct AtmosModel{
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
-    edmfx_entr_detr::EED = nothing
+    edmfx_entr_model::EEM = nothing
+    edmfx_detr_model::EDM = nothing
     edmfx_sgs_flux::ESF = nothing
     edmfx_nh_pressure::ENP = nothing
     turbconv_model::TCM = nothing

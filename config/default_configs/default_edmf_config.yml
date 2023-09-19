@@ -23,9 +23,12 @@ edmfx_nh_pressure:
 turbconv_case:
   help: "The case run by Turbulence convection scheme [`Bomex` (default), `Bomex`, `DYCOMS_RF01`, `TRMM_LBA`, `GABLS`]"
   value: ~
-edmfx_entr_detr:
-  help: "If set to true, it switches on EDMFX entrainment/detrainment closure.  [`true`, `false` (default)]"
-  value: false
+edmfx_entr_model:
+  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `ConstantCoefficent`, `ConstantTimescale`]"
+  value: ~
+edmfx_detr_model:
+  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `ConstantCoefficent`]"
+  value: ~
 edmfx_upwinding:
   help: "EDMFX upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
