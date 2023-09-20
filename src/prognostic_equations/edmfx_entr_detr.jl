@@ -57,8 +57,6 @@ function entrainment(
         return FT(0)
     else
         g = CAP.grav(params)
-        turbconv_params = CAP.turbconv_params(params)
-        ᶜaʲ_max = TCP.max_area(turbconv_params)
 
         # pressure scale height (height where pressure drops by 1/e)
         ref_H = ᶜp / (ᶜρ * g)
@@ -104,13 +102,9 @@ function entrainment(
     dt::FT,
     ::ConstantCoefficientEntrainment,
 ) where {FT}
-    if ᶜaʲ <= FT(0)
-        return FT(0)
-    else
-        entr_coeff = CAP.entr_coeff(params)
-        entr = max(0, min(entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc), 1 / dt))
-        return entr
-    end
+    entr_coeff = CAP.entr_coeff(params)
+    entr = min(entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc), 1 / dt)
+    return entr
 end
 
 function entrainment(
@@ -130,13 +124,9 @@ function entrainment(
     dt::FT,
     ::ConstantTimescaleEntrainment,
 ) where {FT}
-    if ᶜaʲ <= FT(0)
-        return FT(0)
-    else
-        entr_tau = CAP.entr_tau(params)
-        entr = max(0, min(1 / entr_tau, 1 / dt))
-        return entr
-    end
+    entr_tau = CAP.entr_tau(params)
+    entr = min(1 / entr_tau, 1 / dt)
+    return entr
 end
 
 """
@@ -241,14 +231,9 @@ function detrainment(
     dt::FT,
     ::ConstantCoefficientDetrainment,
 ) where {FT}
-
-    if ᶜaʲ <= FT(0)
-        return FT(0)
-    else
-        detr_coeff = CAP.detr_coeff(params)
-        detr = max(0, min(detr_coeff * abs(ᶜwʲ), 1 / dt))
-        return detr
-    end
+    detr_coeff = CAP.detr_coeff(params)
+    detr = min(detr_coeff * abs(ᶜwʲ), 1 / dt)
+    return detr
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
