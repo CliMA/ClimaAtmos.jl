@@ -2,6 +2,9 @@
 ##### EDMF entrainment detrainment
 #####
 
+# return a harmonic mean of (a, 1-a)
+hm_limiter(a) = 2 * a * (1 - a)
+
 """
    Return entrainment rate [1/s].
 
@@ -105,6 +108,28 @@ function entrainment(
     entr_coeff = CAP.entr_coeff(params)
     entr = min(entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc), 1 / dt)
     return entr
+end
+
+function entrainment(
+    params,
+    ᶜz::FT,
+    z_sfc::FT,
+    ᶜp::FT,
+    ᶜρ::FT,
+    buoy_flux_surface::FT,
+    ᶜaʲ::FT,
+    ᶜwʲ::FT,
+    ᶜRHʲ::FT,
+    ᶜbuoyʲ::FT,
+    ᶜw⁰::FT,
+    ᶜRH⁰::FT,
+    ᶜbuoy⁰::FT,
+    dt::FT,
+    ::ConstantCoefficientHarmonicsEntrainment,
+) where {FT}
+    entr_coeff = CAP.entr_coeff(params)
+    entr = min(entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc), 1 / dt)
+    return entr * FT(2) * hm_limiter(ᶜaʲ)
 end
 
 function entrainment(
@@ -236,12 +261,34 @@ function detrainment(
     return detr
 end
 
+function detrainment(
+    params,
+    ᶜz::FT,
+    z_sfc::FT,
+    ᶜp::FT,
+    ᶜρ::FT,
+    buoy_flux_surface::FT,
+    ᶜaʲ::FT,
+    ᶜwʲ::FT,
+    ᶜRHʲ::FT,
+    ᶜbuoyʲ::FT,
+    ᶜw⁰::FT,
+    ᶜRH⁰::FT,
+    ᶜbuoy⁰::FT,
+    dt::FT,
+    ::ConstantCoefficientHarmonicsDetrainment,
+) where {FT}
+    detr_coeff = CAP.detr_coeff(params)
+    detr = min(detr_coeff * abs(ᶜwʲ), 1 / dt)
+    return detr * FT(2) * hm_limiter(ᶜaʲ)
+end
+
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜspecificʲs, ᶜh_totʲs, ᶜentrʲs, ᶜdetrʲs) = p
-    (; ᶜu⁰, ᶜspecific⁰, ᶜh_tot⁰) = p
+    (; ᶜspecific⁰, ᶜh_tot⁰, ᶠu₃⁰) = p
 
     for j in 1:n
 
@@ -262,8 +309,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             )
 
         @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] +=
-            ᶠinterp(ᶜentrʲs.:($$j)[colidx] * C3(ᶜu⁰[colidx])) -
-            ᶠinterp(ᶜentrʲs.:($$j)[colidx]) * Y.f.sgsʲs.:($$j).u₃[colidx]
+            ᶠinterp(ᶜentrʲs.:($$j)[colidx]) *
+            (ᶠu₃⁰[colidx] - Y.f.sgsʲs.:($$j).u₃[colidx])
     end
     return nothing
 end
