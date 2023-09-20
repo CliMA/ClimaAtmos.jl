@@ -344,8 +344,8 @@ function output_sgs_quantities(Y, p, t)
     set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³)
     ᶜts⁺ = @. ts_sgs(thermo_args..., ᶜspecific⁺, ᶜK⁺, ᶜΦ, ᶜp)
-    ᶜa⁺ = @. ρa⁺(Y.c) / TD.air_density(thermo_params, ᶜts⁺)
-    ᶜa⁰ = @. ᶜρa⁰ / ᶜρ⁰
+    ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
+    ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
     return (; ᶜspecific⁺, ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
 end
 
@@ -361,6 +361,6 @@ function output_diagnostic_sgs_quantities(Y, p, t)
     ᶠu³⁺ = p.ᶠu³ʲs[1]
     ᶜu⁺ = @. (C123(Y.c.uₕ) + C123(ᶜinterp(ᶠu³⁺)))
     ᶜts⁺ = @. ᶜtsʲs[1]
-    ᶜa⁺ = @. ᶜρaʲs[1] / TD.air_density(thermo_params, ᶜts⁺)
+    ᶜa⁺ = @. draft_area(ᶜρaʲs[1], TD.air_density(thermo_params, ᶜts⁺))
     return (; ᶜu⁺, ᶠu³⁺, ᶜts⁺, ᶜa⁺)
 end

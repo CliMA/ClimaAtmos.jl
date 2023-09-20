@@ -7,6 +7,13 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
 """
+    Return draft area given ρa and ρ
+"""
+function draft_area(ρa::FT, ρ::FT) where {FT}
+    return ρa / ρ
+end
+
+"""
     Return buoyancy on cell centers.
 """
 function ᶜphysical_buoyancy(params, ᶜρ_ref::FT, ᶜρ::FT) where {FT}
@@ -86,8 +93,10 @@ function edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMF
         # look for updraft top
         updraft_top = FT(0)
         for level in 1:Spaces.nlevels(axes(ᶜz))
-            if Spaces.level(Y.c.sgsʲs.:($j).ρa[colidx], level)[] /
-               Spaces.level(ᶜρʲs.:($j)[colidx], level)[] > a_min
+            if draft_area(
+                Spaces.level(Y.c.sgsʲs.:($j).ρa[colidx], level)[],
+                Spaces.level(ᶜρʲs.:($j)[colidx], level)[],
+            ) > a_min
                 updraft_top = Spaces.level(ᶜz[colidx], level)[]
             end
         end
