@@ -676,11 +676,8 @@ function get_callbacks_from_diagnostics(
     # storage is used to pre-allocate memory and to accumulate partial results for those
     # diagnostics that perform reductions.
 
-    callbacks = Any[]
-
-    for diag in diagnostics
+    callback_arrays = map(diagnostics) do diag
         variable = diag.variable
-
         compute_callback =
             integrator -> begin
                 variable.compute!(
@@ -729,8 +726,7 @@ function get_callbacks_from_diagnostics(
         # Here we have skip_first = true. This is important because we are going to manually
         # call all the callbacks so that we can verify that they are meaningful for the
         # model under consideration (and they don't have bugs).
-        push!(
-            callbacks,
+        return [
             call_every_n_steps(
                 compute_callback,
                 diag.compute_every,
@@ -741,8 +737,9 @@ function get_callbacks_from_diagnostics(
                 diag.output_every,
                 skip_first = true,
             ),
-        )
+        ]
     end
 
-    return callbacks
+    # We need to flatten to tuples
+    return vcat(callback_arrays...)
 end

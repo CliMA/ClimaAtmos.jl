@@ -12,17 +12,22 @@ Return a list of `ScheduledDiagnostic`s associated with the given `model`.
 
 """
 function default_diagnostics(model::AtmosModel)
-    # TODO: Probably not the most elegant way to do this...
-    defaults = Any[]
+    # Unfortunately, [] is not treated nicely in a map (we would like it to be "excluded"),
+    # so we need to manually filter out the submodels that don't have defaults associated
+    # to
+    non_empty_fields = filter(
+        x -> default_diagnostics(getfield(model, x)) != [],
+        fieldnames(AtmosModel),
+    )
 
-    append!(defaults, core_default_diagnostics())
-
-    for field in fieldnames(AtmosModel)
-        def_model = default_diagnostics(getfield(model, field))
-        append!(defaults, def_model)
-    end
-
-    return defaults
+    # We use a map because we want to ensure that diagnostics is a well defined type, not
+    # Any. This reduces latency.
+    return vcat(
+        core_default_diagnostics(),
+        map(non_empty_fields) do field
+            default_diagnostics(getfield(model, field))
+        end...,
+    )
 end
 
 # Base case: if we call default_diagnostics on something that we don't have information

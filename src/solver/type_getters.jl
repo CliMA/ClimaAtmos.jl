@@ -609,13 +609,9 @@ end
 
 function get_diagnostics(parsed_args, atmos_model)
 
-    diagnostics =
-        parsed_args["output_default_diagnostics"] ?
-        CAD.get_default_diagnostics(atmos_model) : Any[]
-
-    # We either get the diagnostics section in the YAML file, or we return an empty
-    # dictionary (which will result in an empty list being created by the map below)
-    yaml_diagnostics = get(parsed_args, "diagnostics", Dict())
+    # We either get the diagnostics section in the YAML file, or we return an empty list
+    # (which will result in an empty list being created by the map below)
+    yaml_diagnostics = get(parsed_args, "diagnostics", [])
 
     # ALLOWED_REDUCTIONS is the collection of reductions we support. The keys are the
     # strings that have to be provided in the YAML file. The values are tuples with the
@@ -643,7 +639,7 @@ function get_diagnostics(parsed_args, atmos_model)
         "netcdf" => CAD.NetCDFWriter(),
     )
 
-    for yaml_diag in yaml_diagnostics
+    diagnostics = map(yaml_diagnostics) do yaml_diag
         # Return "nothing" if "reduction_time" is not in the YAML block
         #
         # We also normalize everything to lowercase, so that can accept "max" but
@@ -688,21 +684,22 @@ function get_diagnostics(parsed_args, atmos_model)
             compute_every = :timestep
         end
 
-        push!(
-            diagnostics,
-            CAD.ScheduledDiagnosticTime(
-                variable = CAD.get_diagnostic_variable(yaml_diag["short_name"]),
-                output_every = period_seconds,
-                compute_every = compute_every,
-                reduction_time_func = reduction_time_func,
-                pre_output_hook! = pre_output_hook!,
-                output_writer = writer,
-                output_short_name = name,
-            ),
+        return CAD.ScheduledDiagnosticTime(
+            variable = CAD.get_diagnostic_variable(yaml_diag["short_name"]),
+            output_every = period_seconds,
+            compute_every = compute_every,
+            reduction_time_func = reduction_time_func,
+            pre_output_hook! = pre_output_hook!,
+            output_writer = writer,
+            output_short_name = name,
         )
     end
 
-    return diagnostics
+    if parsed_args["output_default_diagnostics"]
+        return [CAD.default_diagnostics(atmos_model)..., diagnostics...]
+    else
+        return collect(diagnostics)
+    end
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
