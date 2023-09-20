@@ -410,7 +410,11 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
     end
     if has_sgs
         if has_moisture
-            contour_variables = (contour_variables..., (:gm, :cloud_fraction))
+            contour_variables = (
+                contour_variables...,
+                (:gm, :cloud_fraction),
+                (:draft, :w_velocity),
+            )
         end
         contour_variables =
             (contour_variables..., (:draft, :area), (:env, :tke))
@@ -448,8 +452,12 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
             profile_variables =
                 (profile_variables..., ((:gm,), :cloud_fraction))
         end
-        profile_variables =
-            (profile_variables..., ((:draft,), :area), ((:env,), :tke))
+        profile_variables = (
+            profile_variables...,
+            ((:draft,), :area),
+            ((:env,), :tke),
+            ((:env,), :mixing_length),
+        )
     end
 
     ##
