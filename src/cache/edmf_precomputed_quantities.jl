@@ -226,9 +226,20 @@ function set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
         ),
     )
 
-    @. ᶜstrain_rate_norm = $(FT(1e-4))
+    # TODO: Currently the shear production only includes vertical gradients
+    ᶠu⁰ = p.ᶠtemp_C123
+    @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
+    ᶜstrain_rate = p.ᶜtemp_UVWxUVW
+    compute_strain_rate!(ᶜstrain_rate, ᶠu⁰)
+    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+
     ᶜprandtl_nvec = p.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = FT(1) / 3
+    @. ᶜprandtl_nvec = turbulent_prandtl_number(
+        params,
+        obukhov_length,
+        ᶜlinear_buoygrad,
+        ᶜstrain_rate_norm,
+    )
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
