@@ -1,0 +1,11 @@
+precip_model: "0M"
+vert_diff: "true"
+z_elem: 20
+dz_bottom: 100
+dt_save_to_disk: "12hours"
+initial_condition: "MoistBaroclinicWave"
+dt: "40secs"
+t_end: "12hours"
+job_id: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"
+moist: "equil"
+toml: [toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml]

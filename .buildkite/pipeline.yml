@@ -246,6 +246,20 @@ steps:
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
+      
+      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist explicit vertdiff"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
+
+          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
+          --data_dir sphere_baroclinic_wave_rhoe_equilmoist_expvdiff
+          --out_dir sphere_baroclinic_wave_rhoe_equilmoist_expvdiff
+
+          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
+          --nc_dir sphere_baroclinic_wave_rhoe_equilmoist_expvdiff
+          --fig_dir sphere_baroclinic_wave_rhoe_equilmoist_expvdiff --case_name aquaplanet
+        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
 
       - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
         command: >
