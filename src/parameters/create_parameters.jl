@@ -37,13 +37,11 @@ function create_parameter_set(config::AtmosConfig)
 
     thermo_params =
         create_parameter_struct(TD.Parameters.ThermodynamicsParameters)
-    modal_nucleation_params =
-        create_parameter_struct(CM.Parameters.ModalNucleationParameters)
     rrtmgp_params = create_parameter_struct(RP.RRTMGPParameters)
     insolation_params = create_parameter_struct(IP.InsolationParameters)
     microphys_params = create_parameter_struct(
         CM.Parameters.CloudMicrophysicsParameters;
-        subparam_structs = (; thermo_params, modal_nucleation_params),
+        subparam_structs = (; thermo_params),
     )
 
     aliases = [

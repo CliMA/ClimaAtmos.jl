@@ -60,9 +60,7 @@ day(ps::ACAP) = IP.day(insolation_params(ps))
 tot_solar_irrad(ps::ACAP) = IP.tot_solar_irrad(insolation_params(ps))
 
 # Define parameters as functions
-# Place derived parameters in exceptions vector
-exceptions = []
-for var in filter(x -> !(x in exceptions), fieldnames(ClimaAtmosParameters))
+for var in fieldnames(ClimaAtmosParameters)
     @eval $var(ps::ACAP) = ps.$var
 end
 
