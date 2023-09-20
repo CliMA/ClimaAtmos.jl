@@ -723,20 +723,9 @@ function get_callbacks_from_diagnostics(
                 return nothing
             end
 
-        # Here we have skip_first = true. This is important because we are going to manually
-        # call all the callbacks so that we can verify that they are meaningful for the
-        # model under consideration (and they don't have bugs).
         return [
-            call_every_n_steps(
-                compute_callback,
-                diag.compute_every,
-                skip_first = true,
-            ),
-            call_every_n_steps(
-                output_callback,
-                diag.output_every,
-                skip_first = true,
-            ),
+            AtmosCallback(compute_callback, EveryNSteps(diag.compute_every)),
+            AtmosCallback(output_callback, EveryNSteps(diag.output_every)),
         ]
     end
 

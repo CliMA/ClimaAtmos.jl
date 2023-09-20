@@ -852,14 +852,14 @@ function get_integrator(config::AtmosConfig)
     ]
 
     # For diagnostics that perform reductions, the storage is used for the values computed
-    # at each call. Reductions also save the accumulated value in in diagnostic_accumulators.
+    # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
     diagnostic_storage = Dict()
     diagnostic_accumulators = Dict()
     diagnostic_counters = Dict()
 
     # NOTE: The diagnostics_callbacks are not called at the initial timestep
     s = @timed_str begin
-        diagnostics_callbacks = CAD.get_callbacks_from_diagnostics(
+        diagnostics_functions = CAD.get_callbacks_from_diagnostics(
             diagnostics_iterations,
             diagnostic_storage,
             diagnostic_accumulators,
@@ -868,8 +868,27 @@ function get_integrator(config::AtmosConfig)
     end
     @info "Prepared diagnostic callbacks: $s"
 
+    # It would be nice to just pass the callbacks to the integrator. However, this leads to
+    # a significant increase in compile time for reasons that are not known. For this
+    # reason, we only add one callback to the integrator, and this function takes care of
+    # executing the other callbacks. This single function is orchestrate_diagnostics
+
+    function orchestrate_diagnostics(integrator)
+        diagnostics_to_be_run =
+            filter(d -> integrator.step % d.cbf.n == 0, diagnostics_functions)
+
+        for diag_func in diagnostics_to_be_run
+            diag_func.f!(integrator)
+        end
+    end
+
+    diagnostic_callbacks =
+        call_every_n_steps(orchestrate_diagnostics, skip_first = true)
+
     # We need to ensure the precomputed quantities are indeed precomputed
-    # TODO: Remove this when we can assume that the precomputed_quantities are in sync with the state
+
+    # TODO: Remove this when we can assume that the precomputed_quantities are in sync with
+    # the state
     sync_precomputed = call_every_n_steps(
         (int) -> set_precomputed_quantities!(int.u, int.p, int.t),
     )
@@ -879,19 +898,21 @@ function get_integrator(config::AtmosConfig)
     # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
     # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback...,
-                          sync_precomputed,
-                          diagnostics_callbacks...)
+    discrete_callbacks = (callback..., sync_precomputed, diagnostic_callbacks)
 
     s = @timed_str begin
-        all_callbacks = SciMLBase.CallbackSet(
-            continuous_callbacks,
-            discrete_callbacks
-        )
+        all_callbacks =
+            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
-    @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(all_callbacks, simulation.dt))"
-    @info "n_steps_per_cycle: $(n_steps_per_cycle(all_callbacks, simulation.dt))"
+    steps_cycle_non_diag =
+        n_steps_per_cycle_per_cb(all_callbacks, simulation.dt)
+    steps_cycle_diag =
+        n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
+    steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])
+    @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
+    @info "n_steps_per_cycle_per_cb_diagnostic: $steps_cycle_diag"
+    @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
     tspan = (t_start, simulation.t_end)
     s = @timed_str begin

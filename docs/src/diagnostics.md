@@ -77,7 +77,9 @@ writers.
 
 Diagnostics are computed and output through callbacks to the main integrator.
 `ClimaAtmos` produces the list of callbacks from a ordered list of
-`ScheduledDiagnostic`s.
+`ScheduledDiagnostic`s. These callbacks are orchestrated by a callback
+`orchestrate_diagnostics` that runs at the end of every step and calls all the
+diagnostic callbacks that are scheduled to be run at that step.
 
 A `ScheduledDiagnostic` is an instruction on how to compute and output a given
 `DiagnosticVariable` (see below), along with specific choices regarding

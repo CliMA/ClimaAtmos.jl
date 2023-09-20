@@ -7,7 +7,9 @@ import ClimaCore.Utilities: half
 import Thermodynamics as TD
 
 import ..AtmosModel
-import ..call_every_n_steps
+import ..AtmosCallback
+import ..EveryNSteps
+
 import ..Parameters as CAP
 
 import ..unit_basis_vector_data
