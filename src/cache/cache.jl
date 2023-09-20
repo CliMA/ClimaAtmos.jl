@@ -81,7 +81,6 @@ function default_cache(
     default_cache = (;
         is_init = Ref(true),
         simulation,
-        spaces,
         atmos,
         comms_ctx = ClimaComms.context(axes(Y.c)),
         sfc_setup = surface_setup(params),
