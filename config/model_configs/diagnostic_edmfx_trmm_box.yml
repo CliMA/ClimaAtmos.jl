@@ -13,6 +13,7 @@ edmfx_sgs_flux: true
 moist: equil
 apply_limiter: false
 precip_model: "0M"
+override_τ_precip: false
 config: box
 hyperdiff: "true"
 kappa_4: 1e12
@@ -27,3 +28,4 @@ dt: 10secs
 t_end: 6hours
 dt_save_to_disk: 10mins
 FLOAT_TYPE: "Float64"
+toml: [toml/diagnostic_edmfx_trmm_box.toml]
