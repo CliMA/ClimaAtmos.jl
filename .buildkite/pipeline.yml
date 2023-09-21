@@ -626,6 +626,14 @@ steps:
         artifact_paths: "diagnostic_edmfx_trmm_box/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Diagnostic EDMFX TRMM stretched grid in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
+        artifact_paths: "diagnostic_edmfx_trmm_stretched_box/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
         command: >
