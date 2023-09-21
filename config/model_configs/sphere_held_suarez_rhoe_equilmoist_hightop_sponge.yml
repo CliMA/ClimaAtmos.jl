@@ -13,3 +13,4 @@ viscous_sponge: true
 job_id: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge"
 moist: "equil"
 toml: [toml/sphere_held_suarez_rhoe_equilmoist_hightop_sponge.toml]
+output_default_diagnostics: true
