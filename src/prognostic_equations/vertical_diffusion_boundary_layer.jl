@@ -103,7 +103,8 @@ function vertical_diffusion_boundary_layer_tendency!(
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
         )
         @. Yₜ.c.uₕ[colidx] -=
-            ᶜdivᵥ_uₕ(-(ᶠρK_E[colidx] * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+            ᶜdivᵥ_uₕ(-(ᶠρK_E[colidx] * ᶠgradᵥ(UVW(Y.c.uₕ[colidx])))) /
+            Y.c.ρ[colidx]
     end
 
     if :ρe_tot in propertynames(Y.c)
