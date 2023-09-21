@@ -61,7 +61,7 @@ responsibility of the `output_writer` to follow the conventions about the meanin
 metadata and their use.
 
 In `ClimaAtmos`, we roughly follow the naming conventions listed in this file:
-https://docs.google.com/spreadsheets/d/1qUauozwXkq7r1g-L4ALMIkCNINIhhCPx
+https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
 
 Keyword arguments
 =================
@@ -115,7 +115,7 @@ Add a new variable to the `ALL_DIAGNOSTICS` dictionary (this function mutates th
 `ClimaAtmos.ALL_DIAGNOSTICS`).
 
 If possible, please follow the naming scheme outline in
-https://docs.google.com/spreadsheets/d/1qUauozwXkq7r1g-L4ALMIkCNINIhhCPx
+https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
 
 Keyword arguments
 =================
