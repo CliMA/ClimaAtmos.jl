@@ -25,6 +25,7 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     entr_coeff::FT
     detr_coeff::FT
     C_E::FT
+    C_H::FT
     # Held Suarez
     ΔT_y_dry::FT
     ΔT_y_wet::FT

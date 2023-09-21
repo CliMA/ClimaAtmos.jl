@@ -31,7 +31,7 @@ Bulk surface, parameterized only by a default exchange coefficient.
 struct DefaultExchangeCoefficients <: SurfaceSetup end
 function (::DefaultExchangeCoefficients)(params)
     FT = eltype(params)
-    C = FT(0.0044)
+    C = params.C_H
     return SurfaceState(; parameterization = ExchangeCoefficients(C))
 end
 
