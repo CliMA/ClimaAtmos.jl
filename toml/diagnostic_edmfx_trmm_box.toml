@@ -1,0 +1,4 @@
+[precipitation_timescale]
+alias = "τ_precip"
+value = 100
+type = "float"

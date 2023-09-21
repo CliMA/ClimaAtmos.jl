@@ -39,7 +39,7 @@ function q_tot_precipitation_sources(
             m_prs,
             TD.PhasePartition(t_prs, ts),
             TD.q_vap_saturation(t_prs, ts),
-        ) / 10,  # to be fixed after we get rid of parameter overwrites
+        ),
     )
 end
 
