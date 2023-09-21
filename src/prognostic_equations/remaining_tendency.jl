@@ -8,7 +8,6 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Y, p, t)
     end
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
-    dss!(Yₜ, p, t)
     return Yₜ
 end
 
