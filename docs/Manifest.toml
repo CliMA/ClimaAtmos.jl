@@ -2,7 +2,7 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "7fc686bc0a71a5f83e48b1285d03c4910b039279"
+project_hash = "301caeb1fbfc5d6ca500a3f8b030e7faf6158d3d"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "5d2e21d7b0d8c22f67483ef95ebdc39c0e6b6003"
@@ -265,10 +265,12 @@ uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.10.50"
 
 [[deps.ClimaTimeSteppers]]
-deps = ["CUDA", "ClimaComms", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "54b602435b0107b6c2dfe7664e0f7ff5fc78fb91"
+deps = ["CUDA", "ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
+git-tree-sha1 = "0565251b237342299aa6efa60c0bb5b908e9ba69"
+repo-rev = "ck/pscb"
+repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.7.7"
+version = "0.7.9"
 
 [[deps.CloseOpenIntervals]]
 deps = ["Static", "StaticArrayInterface"]
