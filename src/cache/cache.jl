@@ -87,7 +87,6 @@ function default_cache(
         test,
         moisture_model = atmos.moisture_model,
         model_config = atmos.model_config,
-        Yₜ = similar(Y), # only needed when using increment formulation
         limiter,
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),

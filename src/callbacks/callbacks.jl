@@ -266,7 +266,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
     if p.atmos.precip_model isa Microphysics0Moment
         (; ᶜS_ρq_tot, col_integrated_rain, col_integrated_snow) = p
         Fields.bycolumn(axes(Y.c)) do colidx
-            precipitation_tendency!(p.Yₜ, Y, p, t, colidx, p.precip_model)
+            precipitation_tendency!(nothing, Y, p, t, colidx, p.precip_model)
         end # TODO: Set the diagnostics without computing the tendency.
         precip_diagnostic = (;
             precipitation_removal = ᶜS_ρq_tot,

@@ -105,8 +105,10 @@ function precipitation_tendency!(
     thermo_params = CAP.thermodynamics_params(params)
     cm_params = CAP.microphysics_params(params)
     compute_precipitation_cache!(Y, p, colidx, precip_model, turbconv_model)
-    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
-    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+    if !isnothing(Yₜ)
+        @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+        @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+    end
     T_freeze = TD.Parameters.T_freeze(thermo_params)
 
     # update precip in cache for coupler's use
@@ -131,7 +133,7 @@ function precipitation_tendency!(
     if :ρe_tot in propertynames(Y.c)
         #TODO - this is a hack right now. But it will be easier to clean up
         # once we drop the support for the old EDMF code
-        if turbconv_model isa DiagnosticEDMFX
+        if turbconv_model isa DiagnosticEDMFX && !isnothing(Yₜ)
             @. Yₜ.c.ρe_tot[colidx] +=
                 sum(
                     p.ᶜS_q_totʲs[colidx] *
@@ -145,7 +147,7 @@ function precipitation_tendency!(
                     ᶜts[colidx],
                     ᶜΦ[colidx],
                 )
-        else
+        elseif !isnothing(Yₜ)
             @. Yₜ.c.ρe_tot[colidx] +=
                 ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
                     thermo_params,
@@ -326,33 +328,35 @@ function precipitation_advection_tendency!(
     # TODO: need to add horizontal advection + vertical velocity of air
 
     # TODO: use correct advection operators
-    @. Yₜ.c.ρq_rai[colidx] += ᶜdivᵥ(
-        wvec(
-            RB(
-                ρq_rai * CM1.terminal_velocity(
-                    microphys_params,
-                    rain_type,
-                    velo_type,
-                    ρ_c,
-                    ρq_rai / ρ_c,
+    if !isnothing(Yₜ)
+        @. Yₜ.c.ρq_rai[colidx] += ᶜdivᵥ(
+            wvec(
+                RB(
+                    ρq_rai * CM1.terminal_velocity(
+                        microphys_params,
+                        rain_type,
+                        velo_type,
+                        ρ_c,
+                        ρq_rai / ρ_c,
+                    ),
                 ),
             ),
-        ),
-    )
+        )
 
-    @. Yₜ.c.ρq_sno[colidx] += ᶜdivᵥ(
-        wvec(
-            RB(
-                ρq_sno * CM1.terminal_velocity(
-                    microphys_params,
-                    snow_type,
-                    velo_type,
-                    ρ_c,
-                    ρq_sno / ρ_c,
+        @. Yₜ.c.ρq_sno[colidx] += ᶜdivᵥ(
+            wvec(
+                RB(
+                    ρq_sno * CM1.terminal_velocity(
+                        microphys_params,
+                        snow_type,
+                        velo_type,
+                        ρ_c,
+                        ρq_sno / ρ_c,
+                    ),
                 ),
             ),
-        ),
-    )
+        )
+    end
     return nothing
 end
 
@@ -373,17 +377,19 @@ function precipitation_tendency!(
         p.atmos.turbconv_model,
     )
 
-    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
-    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
-    @. Yₜ.c.ρq_rai[colidx] += ᶜS_ρq_rai[colidx]
-    @. Yₜ.c.ρq_sno[colidx] += ᶜS_ρq_sno[colidx]
+    if !isnothing(Yₜ)
+        @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+        @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+        @. Yₜ.c.ρq_rai[colidx] += ᶜS_ρq_rai[colidx]
+        @. Yₜ.c.ρq_sno[colidx] += ᶜS_ρq_sno[colidx]
 
-    if :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]
-    else
-        error(
-            "1-moment microphysics can only be coupled to ρe_tot energy variable",
-        )
+        if :ρe_tot in propertynames(Y.c)
+            @. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]
+        else
+            error(
+                "1-moment microphysics can only be coupled to ρe_tot energy variable",
+            )
+        end
     end
 
     precipitation_advection_tendency!(Yₜ, Y, p, colidx, precip_model)
