@@ -215,8 +215,14 @@ function edmfx_sgs_flux_tendency!(
         @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
         ᶠstrain_rate = p.ᶠtemp_UVWxUVW
         compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu[colidx])
+        # set boundary momentum fluxes
+        ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+            bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
+        )
         @. Yₜ.c.uₕ[colidx] -= C12(
-            ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) / Y.c.ρ[colidx],
+            ᶜdivᵥ_uₕ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) /
+            Y.c.ρ[colidx],
         )
         @. Yₜ.f.u₃[colidx] -= ᶠinterp_u₃(
             C3(
@@ -224,12 +230,6 @@ function edmfx_sgs_flux_tendency!(
                 Y.c.ρ[colidx],
             ),
         )
-        ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-            bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
-        )
-        @. Yₜ.c.uₕ[colidx] -=
-            ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
     end
 
     # TODO: Add momentum mass flux
