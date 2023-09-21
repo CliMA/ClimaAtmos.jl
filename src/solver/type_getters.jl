@@ -746,7 +746,9 @@ function get_integrator(config::AtmosConfig)
     # Initialize diagnostics
     @info "Initializing diagnostics"
 
-    diagnostics = CAD.get_default_diagnostics(atmos)
+    diagnostics =
+        config.parsed_args["output_default_diagnostics"] ?
+        CAD.get_default_diagnostics(atmos) : []
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
