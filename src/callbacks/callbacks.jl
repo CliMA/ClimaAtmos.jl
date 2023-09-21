@@ -207,6 +207,46 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
+function common_diagnostics(p, ᶜu, ᶜts)
+    (; env_thermo_quad, params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    ᶜρ = TD.air_density.(thermo_params, ᶜts)
+    diagnostics = (;
+        u_velocity = Geometry.UVector.(ᶜu),
+        v_velocity = Geometry.VVector.(ᶜu),
+        w_velocity = Geometry.WVector.(ᶜu),
+        temperature = TD.air_temperature.(thermo_params, ᶜts),
+        potential_temperature = TD.dry_pottemp.(thermo_params, ᶜts),
+        specific_enthalpy = TD.specific_enthalpy.(thermo_params, ᶜts),
+        buoyancy = CAP.grav(p.params) .* (p.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
+    )
+    if !(p.atmos.moisture_model isa DryModel)
+        diagnostics = (;
+            diagnostics...,
+            q_vap = TD.vapor_specific_humidity.(thermo_params, ᶜts),
+            q_liq = TD.liquid_specific_humidity.(thermo_params, ᶜts),
+            q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
+            q_tot = TD.total_specific_humidity.(thermo_params, ᶜts),
+            relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
+            cloud_fraction_gm = get_cloud_fraction.(
+                thermo_params,
+                env_thermo_quad,
+                p.ᶜp,
+                ᶜts,
+            ),
+        )
+    end
+    return diagnostics
+end
+
+# Adds a prefix to the front of each name in the named tuple. This function
+# is not type stable, but that probably doesn't matter for diagnostics.
+add_prefix(diagnostics::NamedTuple{names}, prefix) where {names} =
+    NamedTuple{Symbol.(prefix, names)}(values(diagnostics))
+
+cloud_fraction(thermo_params, ts, area::FT) where {FT} =
+    TD.has_condensate(thermo_params, ts) && area > 1e-3 ? FT(1) : FT(0)
+
 NVTX.@annotate function compute_diagnostics(integrator)
     (; t, u, p) = integrator
     Y = u
@@ -214,41 +254,11 @@ NVTX.@annotate function compute_diagnostics(integrator)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
 
-    function common_diagnostics(ᶜu, ᶜts)
-        ᶜρ = TD.air_density.(thermo_params, ᶜts)
-        diagnostics = (;
-            u_velocity = Geometry.UVector.(ᶜu),
-            v_velocity = Geometry.VVector.(ᶜu),
-            w_velocity = Geometry.WVector.(ᶜu),
-            temperature = TD.air_temperature.(thermo_params, ᶜts),
-            potential_temperature = TD.dry_pottemp.(thermo_params, ᶜts),
-            specific_enthalpy = TD.specific_enthalpy.(thermo_params, ᶜts),
-            buoyancy = CAP.grav(params) .* (p.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
-        )
-        if !(p.atmos.moisture_model isa DryModel)
-            diagnostics = (;
-                diagnostics...,
-                q_vap = TD.vapor_specific_humidity.(thermo_params, ᶜts),
-                q_liq = TD.liquid_specific_humidity.(thermo_params, ᶜts),
-                q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
-                q_tot = TD.total_specific_humidity.(thermo_params, ᶜts),
-                relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
-                cloud_fraction_gm = get_cloud_fraction.(
-                    thermo_params,
-                    env_thermo_quad,
-                    ᶜp,
-                    ᶜts,
-                ),
-            )
-        end
-        return diagnostics
-    end
-
     set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
 
     (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p
     dycore_diagnostic = (;
-        common_diagnostics(ᶜu, ᶜts)...,
+        common_diagnostics(p, ᶜu, ᶜts)...,
         pressure = ᶜp,
         kinetic_energy = ᶜK,
         sfc_temperature = TD.air_temperature.(thermo_params, sfc_conditions.ts),
@@ -281,19 +291,11 @@ NVTX.@annotate function compute_diagnostics(integrator)
         precip_diagnostic = NamedTuple()
     end
 
-    # Adds a prefix to the front of each name in the named tuple. This function
-    # is not type stable, but that probably doesn't matter for diagnostics.
-    add_prefix(diagnostics::NamedTuple{names}, prefix) where {names} =
-        NamedTuple{Symbol.(prefix, names)}(values(diagnostics))
-
-    cloud_fraction(ts, area::FT) where {FT} =
-        TD.has_condensate(thermo_params, ts) && area > 1e-3 ? FT(1) : FT(0)
-
     if p.atmos.turbconv_model isa EDMFX
         (; ᶜspecific⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_sgs_quantities(Y, p, t)
         env_diagnostics = (;
-            common_diagnostics(ᶜu⁰, ᶜts⁰)...,
+            common_diagnostics(p, ᶜu⁰, ᶜts⁰)...,
             area = ᶜa⁰,
             cloud_fraction = get_cloud_fraction.(
                 thermo_params,
@@ -305,9 +307,9 @@ NVTX.@annotate function compute_diagnostics(integrator)
             mixing_length = ᶜmixing_length,
         )
         draft_diagnostics = (;
-            common_diagnostics(ᶜu⁺, ᶜts⁺)...,
+            common_diagnostics(p, ᶜu⁺, ᶜts⁺)...,
             area = ᶜa⁺,
-            cloud_fraction = cloud_fraction.(ᶜts⁺, ᶜa⁺),
+            cloud_fraction = cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
@@ -318,7 +320,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
                 env_thermo_quad,
                 ᶜp,
                 ᶜts⁰,
-            ) .+ ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
+            ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜtke⁰, ᶜmixing_length) = p
@@ -334,9 +336,9 @@ NVTX.@annotate function compute_diagnostics(integrator)
             mixing_length = ᶜmixing_length,
         )
         draft_diagnostics = (;
-            common_diagnostics(ᶜu⁺, ᶜts⁺)...,
+            common_diagnostics(p, ᶜu⁺, ᶜts⁺)...,
             area = ᶜa⁺,
-            cloud_fraction = cloud_fraction.(ᶜts⁺, ᶜa⁺),
+            cloud_fraction = cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
@@ -346,7 +348,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
                 env_thermo_quad,
                 ᶜp,
                 ᶜts,
-            ) .+ ᶜa⁺ .* cloud_fraction.(ᶜts⁺, ᶜa⁺),
+            ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa TC.EDMFModel
         tc_cent(p) = p.edmf_cache.aux.c.turbconv
