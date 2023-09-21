@@ -457,7 +457,7 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
         FT,
         FT,
         FT,
-        typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+        typeof(C3(FT(0)) ⊗ UVW(FT(0), FT(0), FT(0))),
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,
     }
