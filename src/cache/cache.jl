@@ -113,7 +113,7 @@ function default_cache(
         temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
         hyperdiffusion_cache(Y, atmos, do_dss)...,
     )
-    set_precomputed_quantities!(Y, default_cache, FT(0))
+    # set_precomputed_quantities!(Y, default_cache, FT(0))
     default_cache.is_init[] = false
     return default_cache
 end

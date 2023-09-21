@@ -57,7 +57,7 @@ NVTX.@annotate function turb_conv_affect_filter!(integrator)
     Y = integrator.u
     tc_params = CAP.turbconv_params(param_set)
 
-    set_precomputed_quantities!(Y, p, t) # sets ᶜts for set_edmf_surface_bc
+    # set_precomputed_quantities!(Y, p, t) # sets ᶜts for set_edmf_surface_bc
     Fields.bycolumn(axes(Y.c)) do colidx
         state = TC.tc_column_state(Y, p, nothing, colidx, t)
         grid = TC.Grid(state)
@@ -76,7 +76,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    set_precomputed_quantities!(Y, p, t) # sets ᶜts and sfc_conditions
+    # set_precomputed_quantities!(Y, p, t) # sets ᶜts and sfc_conditions
 
     (; ᶜts, sfc_conditions, params, env_thermo_quad) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p
@@ -244,7 +244,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
         return diagnostics
     end
 
-    set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
+    # set_precomputed_quantities!(Y, p, t) # sets ᶜu, ᶜK, ᶜts, ᶜp, & SGS analogues
 
     (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p
     dycore_diagnostic = (;

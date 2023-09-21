@@ -7,7 +7,7 @@ import ClimaCore: Fields, Geometry
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
-    set_precomputed_quantities!(Y, p, t)
+    # set_precomputed_quantities!(Y, p, t)
     Fields.bycolumn(axes(Y.c)) do colidx
         implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         if p.turbconv_model isa TurbulenceConvection.EDMFModel
