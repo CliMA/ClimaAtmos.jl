@@ -42,7 +42,7 @@ ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We striv
 
 ## Installation instructions
 
-Recommended Julia: Stable release v1.8.5
+Recommended Julia: Stable release v1.9.3
 
 ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
 
