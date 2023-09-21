@@ -1,7 +1,7 @@
 dt_save_to_disk: "5days"
 initial_condition: "MoistBaroclinicWave"
 max_newton_iters_ode: 4
-dt: "500secs"
+dt: "400secs"
 tracer_upwinding: zalesak
 t_end: "5days"
 ode_algo: "SSP333"

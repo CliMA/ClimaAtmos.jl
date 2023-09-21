@@ -1,5 +1,5 @@
 job_id: "gpu_baroclinic_wave_rhoe" 
-dt: "580secs" 
+dt: "400secs"
 t_end: "10days" 
 dt_save_to_disk: "2days" 
 initial_condition: "DryBaroclinicWave" 
