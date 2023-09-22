@@ -21,7 +21,8 @@ steps:
     key: "init_cpu_env"
     command:
       - "echo $$JULIA_DEPOT_PATH"
-      - echo "---- Resolve"
+      - echo "--- Resolve"
+      - rm Manifest.toml
       - "julia --project -e 'using Pkg; Pkg.resolve()'"
       - echo "--- Instantiate project"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
