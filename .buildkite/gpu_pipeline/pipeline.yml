@@ -10,33 +10,33 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
-  GPU_CONFIG_PATH: "config/gpu_configs/"
+  JULIA_CPU_TARGET: 'broadwell;skylake'
+  CONFIG_PATH: "config/model_configs"
+  PERF_CONFIG_PATH: "config/perf_configs"
+  MPI_CONFIG_PATH: "config/mpi_configs"
+  SLURM_KILL_BAD_EXIT: 1
 
 steps:
-  - label: "init :GPU:"
-    key: "init_gpu_env"
+  - label: "init :computer:"
+    key: "init_cpu_env"
     command:
       - "echo $$JULIA_DEPOT_PATH"
+
+      - echo "--- Configure MPI"
+      - julia -e 'using Pkg; Pkg.add("MPIPreferences"); using MPIPreferences; use_system_binary()'
+
       - echo "--- Instantiate project"
-      - "julia --project -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true)'"
-      - echo "--- Done instantiate"
+      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
-      - echo "--- Done precompile"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
       - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
-      - echo "--- Done CUDA"
-
 
       - echo "--- Instantiate examples"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - echo "--- Done instantiate"
-
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
-      - echo "--- Done precompile"
-
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Download artifacts"
