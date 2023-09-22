@@ -1,0 +1,10 @@
+dt: 200secs 
+t_end: 800days 
+ode_algo: ARS343 
+dt_save_to_disk: 5hours 
+moist: equil 
+forcing: held_suarez 
+precip_model: 0M 
+job_id: column_held_suarez_rhoe_equilmoist
+output_dir: output/column_held_suarez_rhoe_equilmoist
+config: column
