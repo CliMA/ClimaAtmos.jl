@@ -89,7 +89,8 @@ ax1 = Axis(
     xgridvisible = true,
     ygridvisible = false,
 )
-scatterlines!(ax1, nprocs_clima_atmos, sypd_clima_atmos)
+scatterlines!(nprocs_clima_atmos, sypd_clima_atmos)
+# Plot a second axis to display tick labels clearly
 ax1 = Axis(
     fig[1, 1],
     yaxisposition = :right,
@@ -103,15 +104,7 @@ ax1 = Axis(
     yscale = log10,
     ytickformat = "{:.2f}",
 )
-hlines!(
-    ax1,
-    sypd_clima_atmos,
-    xscale = log10,
-    yscale = log10,
-    color = :gray,
-    alpha = 0.5,
-    linestyle = :dash,
-)
+scatterlines!(nprocs_clima_atmos, sypd_clima_atmos)
 
 ax2 = Axis(
     fig[2, 1],
