@@ -1,6 +1,4 @@
 import ClimaAtmos as CA
-import Random
-Random.seed!(1234)
 
 if !(@isdefined config)
     config = CA.AtmosConfig()
