@@ -155,9 +155,9 @@ steps:
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
         command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir JOB_NAME --out_dir JOB_NAME
-        artifact_paths: "JOB_NAME/*"
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
