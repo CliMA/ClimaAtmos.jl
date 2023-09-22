@@ -18,7 +18,7 @@ steps:
     command:
       - "echo $$JULIA_DEPOT_PATH"
       - echo "--- Instantiate project"
-      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
+      - "julia --project -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true)'"
       - echo "--- Done instantiate"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - echo "--- Done precompile"
