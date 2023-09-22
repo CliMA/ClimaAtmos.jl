@@ -99,7 +99,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 
     if diffuse_momentum(p.atmos.vert_diff)
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+            top = Operators.SetValue(C3(FT(0)) ⊗ UVW(FT(0), FT(0), FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
         )
         @. Yₜ.c.uₕ[colidx] -= C12(
