@@ -89,8 +89,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜh_totʲs) = n > 0 && is_total_energy ? p : all_nothing
     (; ᶠu³⁰) = advect_tke ? p : all_nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.ᶜρa⁰ : Y.c.ρ) : nothing
+    ᶜρ⁰ = advect_tke ? (n > 0 ? p.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? (n > 0 ? p.ᶜspecific⁰.tke : p.ᶜtke⁰) : nothing
-    ᶜ1 = p.ᶜtemp_scalar
+    ᶜa_scalar = p.ᶜtemp_scalar
     ᶜω³ = p.ᶜtemp_CT3
     ᶠω¹² = p.ᶠtemp_CT12
     ᶠω¹²ʲs = p.ᶠtemp_CT12ʲs
@@ -139,24 +140,28 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
         # TODO: Move this to implicit_vertical_advection_tendency!.
         for j in 1:n
-            @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
+            @. ᶜa_scalar[colidx] =
+                draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
             vertical_transport!(
                 Yₜ.c.sgsʲs.:($j).ρa[colidx],
                 ᶜJ[colidx],
-                Y.c.sgsʲs.:($j).ρa[colidx],
+                ᶜρʲs.:($j)[colidx],
                 ᶠu³ʲs.:($j)[colidx],
-                ᶜ1[colidx],
+                ᶜa_scalar[colidx],
                 dt,
                 edmfx_upwinding,
             )
 
             if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
+                @. ᶜa_scalar[colidx] =
+                    ᶜh_totʲs.:($$j)[colidx] *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
                 vertical_transport!(
                     Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
                     ᶜJ[colidx],
-                    Y.c.sgsʲs.:($j).ρa[colidx],
+                    ᶜρʲs.:($j)[colidx],
                     ᶠu³ʲs.:($j)[colidx],
-                    ᶜh_totʲs.:($j)[colidx],
+                    ᶜa_scalar[colidx],
                     dt,
                     edmfx_upwinding,
                 )
@@ -165,12 +170,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
                 matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
                 χ_name == :e_tot && continue
+                @. ᶜa_scalar[colidx] =
+                    ᶜχʲ[colidx] *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
                 vertical_transport!(
                     ᶜρaχʲₜ[colidx],
                     ᶜJ[colidx],
-                    Y.c.sgsʲs.:($j).ρa[colidx],
+                    ᶜρʲs.:($j)[colidx],
                     ᶠu³ʲs.:($j)[colidx],
-                    ᶜχʲ[colidx],
+                    ᶜa_scalar[colidx],
                     dt,
                     edmfx_upwinding,
                 )
@@ -179,12 +187,14 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
         # TODO: Move this to implicit_vertical_advection_tendency!.
         if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
+            @. ᶜa_scalar[colidx] =
+                ᶜtke⁰[colidx] * draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
             vertical_transport!(
                 Yₜ.c.sgs⁰.ρatke[colidx],
                 ᶜJ[colidx],
-                ᶜρa⁰[colidx],
+                ᶜρ⁰[colidx],
                 ᶠu³⁰[colidx],
-                ᶜtke⁰[colidx],
+                ᶜa_scalar[colidx],
                 dt,
                 edmfx_upwinding,
             )
