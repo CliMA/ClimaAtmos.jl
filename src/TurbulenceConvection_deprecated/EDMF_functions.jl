@@ -207,7 +207,7 @@ function compute_diffusive_fluxes(
 
     @. aux_tc_f.diffusive_flux_qt = -aux_tc_f.ρ_ae_KH * ∇q_tot_en(aux_en.q_tot)
     @. aux_tc_f.diffusive_flux_h = -aux_tc_f.ρ_ae_KH * ∇h_tot_en(aux_en.h_tot)
-    @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * ∇uₕ_gm(prog_gm_uₕ)
+    @. aux_tc_f.diffusive_flux_uₕ = -aux_tc_f.ρ_ae_KM * C12(∇uₕ_gm(prog_gm_uₕ))
 
     return nothing
 end
