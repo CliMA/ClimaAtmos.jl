@@ -470,10 +470,10 @@ Base.@kwdef struct MoistAdiabaticProfileEDMFX <: InitialCondition
 end
 
 draft_area(::Type{FT}) where {FT} =
-    z -> FT(0.5) * exp(-(z - FT(4000.0))^2 / 2 / FT(1000.0)^2)
+    z -> z < 0.7e4 ? FT(0.5) * exp(-(z - FT(4e3))^2 / 2 / FT(1e3)^2) : FT(0)
 
 edmfx_q_tot(::Type{FT}) where {FT} =
-    z -> FT(0.001) * exp(-(z - FT(4000.0))^2 / 2 / FT(1000.0)^2)
+    z -> z < 0.7e4 ? FT(1e-3) * exp(-(z - FT(4e3))^2 / 2 / FT(1e3)^2) : FT(0)
 
 function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
     (; perturb) = initial_condition

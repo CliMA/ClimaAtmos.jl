@@ -10,12 +10,14 @@ hyperdiff: "true"
 kappa_4: 1e8
 x_max: 1e4
 y_max: 1e4
-z_max: 3e4
+z_max: 5.5e4
 x_elem: 2
 y_elem: 2
-z_elem: 45
+z_elem: 63
 dz_bottom: 30.0
+dz_top: 3000.0
 dt: "10secs"
 t_end: "3600secs"
 dt_save_to_disk: "100secs"
+FLOAT_TYPE: "Float64"
 toml: [toml/edmfx_box_advection.toml]
