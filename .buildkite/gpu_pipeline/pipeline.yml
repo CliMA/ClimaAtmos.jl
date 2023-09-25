@@ -50,3 +50,14 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_time: 23:00:00
+
+      - label: "target_gpu_implicit_baroclinic_wave_4process"
+        command: >
+          julia --project -e 'using CUDA; CUDA.versioninfo()'
+          
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
+        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_ntasks: 4
