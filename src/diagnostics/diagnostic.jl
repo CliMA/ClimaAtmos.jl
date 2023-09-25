@@ -638,6 +638,7 @@ accumulate!(_, _, reduction_time_func::Nothing) = nothing
 # When we have a reduction, apply it between the accumulated value one
 function accumulate!(diag_accumulator, diag_storage, reduction_time_func)
     diag_accumulator .= reduction_time_func.(diag_accumulator, diag_storage)
+    return nothing
 end
 
 """
