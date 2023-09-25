@@ -6,7 +6,6 @@ using Interpolations
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
-import .Diagnostics as CAD
 import LinearAlgebra
 import ClimaCore.Fields
 import OrdinaryDiffEq as ODE
