@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.9.3 cuda/julia-pref openmpi/4.1.5-cuda
+  modules: julia/1.9.3 cuda/julia-pref openmpi/4.1.5
 
 env:
   OPENBLAS_NUM_THREADS: 1
@@ -21,6 +21,7 @@ steps:
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
       - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
+      - julia --project -e 'using CUDA; CUDA.versioninfo()'
 
       - echo "--- Instantiate examples"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
@@ -29,6 +30,7 @@ steps:
 
       - echo "--- Download artifacts"
       - "julia --project=examples artifacts/download_artifacts.jl"
+      
     agents:
       slurm_gpus: 1
     env:
@@ -40,10 +42,9 @@ steps:
   - group: "GPU target simulations"
     steps:
 
-      - label: "target_gpu_implicit_baroclinic_wave"
+      - label: "dry baroclinic wave"
+        key: "target_gpu_implicit_baroclinic_wave"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
-          
           nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
@@ -52,10 +53,9 @@ steps:
           slurm_gpus: 1
           slurm_time: 23:00:00
 
-      - label: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
+      - label: "moist Held-Suarez"
+        key: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
-          
           nsys profile --trace=nvtx,cuda --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
@@ -64,12 +64,12 @@ steps:
           slurm_gpus: 1
           slurm_time: 23:00:00
 
-      - label: "target_gpu_implicit_baroclinic_wave_4process"
-        command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
-          
-          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report
-          mpiexec julia --color=yes --project=examples examples/hybrid/driver.jl
+      - label: "dry baroclinic wave - 4 gpus"
+        key: "target_gpu_implicit_baroclinic_wave_4process"
+        command: >         
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
+          srun
+          julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
         agents:
