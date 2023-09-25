@@ -52,6 +52,18 @@ steps:
           slurm_gpus: 1
           slurm_time: 23:00:00
 
+      - label: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
+        command: >
+          julia --project -e 'using CUDA; CUDA.versioninfo()'
+          
+          nsys profile --trace=nvtx,cuda --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
+        artifact_paths: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 23:00:00
+
       - label: "target_gpu_implicit_baroclinic_wave_4process"
         command: >
           julia --project -e 'using CUDA; CUDA.versioninfo()'
