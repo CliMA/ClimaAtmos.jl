@@ -89,7 +89,8 @@ Then, to run interactively:
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
-config = CA.AtmosCoveragePerfConfig();
+include("common.jl")
+config = AtmosCoveragePerfConfig();
 integrator = CA.get_integrator(config);
 Y₀ = deepcopy(integrator.u);
 CA.benchmark_step!(integrator, Y₀);

@@ -389,42 +389,6 @@ struct AtmosConfig{FT, TD, PA, C}
     comms_ctx::C
 end
 
-"""
-    AtmosCoveragePerfConfig()
-    AtmosCoveragePerfConfig(; s, config_dict)
-Creates a model configuration for many performance tests.
-Creates a config from the following in order of top priority to last:
-1. Configuration from the given config file/dict
-2. Default perf configuration
-3. Target job configuration
-4. Default configuration
-"""
-function AtmosCoveragePerfConfig(;
-    s = argparse_settings(),
-    config_dict = nothing,
-)
-    parsed_args = parse_commandline(s)
-    if isnothing(config_dict)
-        config_dict = YAML.load_file(parsed_args["config_file"])
-    end
-    target_job_config = if haskey(config_dict, "target_job")
-        config_from_target_job(config_dict["target_job"])
-    else
-        Dict()
-    end
-    perf_defaults = joinpath(
-        dirname(@__FILE__),
-        "..",
-        "..",
-        "config",
-        "default_configs",
-        "default_perf.yml",
-    )
-    perf_default_config = YAML.load_file(perf_defaults)
-    config_dict = merge(target_job_config, perf_default_config, config_dict)
-    return AtmosConfig(; s, config_dict)
-end
-
 function AtmosConfig(;
     s = argparse_settings(),
     parsed_args = parse_commandline(s),
@@ -439,6 +403,16 @@ function AtmosConfig(;
         @info "Using default configuration"
         default_config_dict()
     end
+    return AtmosConfig(config; comms_ctx)
+end
+
+"""
+    AtmosConfig(config::Dict; comms_ctx = nothing)
+
+Creates an AtmosConfig given the `config` Dict and kwargs:
+ - `comms_ctx` (optional) ClimaComms context.
+"""
+function AtmosConfig(config::Dict; comms_ctx = nothing)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;

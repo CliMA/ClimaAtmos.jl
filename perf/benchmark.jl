@@ -1,7 +1,8 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosCoveragePerfConfig()
+include("common.jl")
+config = AtmosCoveragePerfConfig()
 integrator = CA.get_integrator(config)
 
 (; parsed_args) = config
