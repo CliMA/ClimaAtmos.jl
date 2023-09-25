@@ -67,8 +67,8 @@ steps:
       - label: "dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command: >         
-          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
-          srun --gpu-bind=per_task:1
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{OMPI_COMM_WORLD_RANK}
+          mpiexec
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
