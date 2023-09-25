@@ -466,3 +466,11 @@ function AtmosConfig(;
     return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
 end
 Base.eltype(::AtmosConfig{FT}) where {FT} = FT
+
+# In order to specify C2F operator boundary conditions with 0 instead of FT(0),
+# we need to tell ClimaCore how to convert AxisTensor components from Int to FT.
+# TODO: Move this monkey patch to ClimaCore in the next release.
+using ClimaCore.Geometry: AxisTensor, components
+AxisTensor{T′, N, A, S′}(a::AxisTensor{T, N, A, S}) where {T, N, A, S, T′, S′} =
+    AxisTensor(axes(a), S′(components(a)))
+Base.convert(::Type{AT}, a::AxisTensor) where {AT <: AxisTensor} = AT(a)

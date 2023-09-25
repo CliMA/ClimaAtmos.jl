@@ -1,0 +1,11 @@
+job_id: "flame_perf_diagnostics"
+diagnostics:
+  - short_name: ua
+    period: 1secs
+    reduction_time: average
+  - short_name: va
+    period: 1secs
+    reduction_time: max
+  - short_name: ta
+    period: 1secs
+    reduction_time: max

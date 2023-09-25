@@ -533,9 +533,8 @@ function get_callbacks(parsed_args, simulation, atmos, params)
         )
     end
 
-    return SciMLBase.CallbackSet(callbacks...)
+    return callbacks
 end
-
 
 function get_cache(
     Y,
@@ -605,6 +604,101 @@ function get_simulation(config::AtmosConfig, comms_ctx)
     )
 
     return sim
+end
+
+function get_diagnostics(parsed_args, atmos_model)
+
+    # We either get the diagnostics section in the YAML file, or we return an empty list
+    # (which will result in an empty list being created by the map below)
+    yaml_diagnostics = get(parsed_args, "diagnostics", [])
+
+    # ALLOWED_REDUCTIONS is the collection of reductions we support. The keys are the
+    # strings that have to be provided in the YAML file. The values are tuples with the
+    # function that has to be passed to reduction_time_func and the one that has to passed
+    # to pre_output_hook!
+
+    # We make "nothing" a string so that we can accept also the word "nothing", in addition
+    # to the absence of the value
+    #
+    # NOTE: Everything has to be lowercase in ALLOWED_REDUCTIONS (so that we can match
+    # "max" and "Max")
+    ALLOWED_REDUCTIONS = Dict(
+        "nothing" => (nothing, nothing), # nothing is: just dump the variable
+        "max" => (max, nothing),
+        "min" => (min, nothing),
+        "average" => ((+), CAD.average_pre_output_hook!),
+    )
+
+    # The default writer is HDF5
+    ALLOWED_WRITERS = Dict(
+        "nothing" => CAD.HDF5Writer(),
+        "h5" => CAD.HDF5Writer(),
+        "hdf5" => CAD.HDF5Writer(),
+        "nc" => CAD.NetCDFWriter(),
+        "netcdf" => CAD.NetCDFWriter(),
+    )
+
+    diagnostics = map(yaml_diagnostics) do yaml_diag
+        # Return "nothing" if "reduction_time" is not in the YAML block
+        #
+        # We also normalize everything to lowercase, so that can accept "max" but
+        # also "Max"
+        reduction_time_yaml =
+            lowercase(get(yaml_diag, "reduction_time", "nothing"))
+
+        if !haskey(ALLOWED_REDUCTIONS, reduction_time_yaml)
+            error("reduction $reduction_time_yaml not implemented")
+        else
+            reduction_time_func, pre_output_hook! =
+                ALLOWED_REDUCTIONS[reduction_time_yaml]
+        end
+
+        writer_ext = lowercase(get(yaml_diag, "writer", "nothing"))
+
+        if !haskey(ALLOWED_WRITERS, writer_ext)
+            error("writer $writer_ext not implemented")
+        else
+            writer = ALLOWED_WRITERS[writer_ext]
+        end
+
+        name = get(yaml_diag, "name", nothing)
+
+        haskey(yaml_diag, "period") ||
+            error("period keyword required for diagnostics")
+
+        period_seconds = time_to_seconds(yaml_diag["period"])
+
+        if isnothing(name)
+            name = CAD.descriptive_short_name(
+                CAD.get_diagnostic_variable(yaml_diag["short_name"]),
+                period_seconds,
+                reduction_time_func,
+                pre_output_hook!,
+            )
+        end
+
+        if isnothing(reduction_time_func)
+            compute_every = period_seconds
+        else
+            compute_every = :timestep
+        end
+
+        return CAD.ScheduledDiagnosticTime(
+            variable = CAD.get_diagnostic_variable(yaml_diag["short_name"]),
+            output_every = period_seconds,
+            compute_every = compute_every,
+            reduction_time_func = reduction_time_func,
+            pre_output_hook! = pre_output_hook!,
+            output_writer = writer,
+            output_short_name = name,
+        )
+    end
+
+    if parsed_args["output_default_diagnostics"]
+        return [CAD.default_diagnostics(atmos_model)..., diagnostics...]
+    else
+        return collect(diagnostics)
+    end
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
@@ -742,8 +836,83 @@ function get_integrator(config::AtmosConfig)
         callback = get_callbacks(config.parsed_args, simulation, atmos, params)
     end
     @info "get_callbacks: $s"
-    @info "n_steps_per_cycle_per_cb: $(n_steps_per_cycle_per_cb(callback, simulation.dt))"
-    @info "n_steps_per_cycle: $(n_steps_per_cycle(callback, simulation.dt))"
+
+    # Initialize diagnostics
+    s = @timed_str begin
+        diagnostics = get_diagnostics(config.parsed_args, atmos)
+    end
+    @info "initializing diagnostics: $s"
+
+    # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
+    # ensuring that there is consistency in the timestep and the periods and translating
+    # those periods that depended on the timestep
+    diagnostics_iterations = [
+        CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics
+    ]
+
+    # For diagnostics that perform reductions, the storage is used for the values computed
+    # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
+    diagnostic_storage = Dict()
+    diagnostic_accumulators = Dict()
+    diagnostic_counters = Dict()
+
+    # NOTE: The diagnostics_callbacks are not called at the initial timestep
+    s = @timed_str begin
+        diagnostics_functions = CAD.get_callbacks_from_diagnostics(
+            diagnostics_iterations,
+            diagnostic_storage,
+            diagnostic_accumulators,
+            diagnostic_counters,
+        )
+    end
+    @info "Prepared diagnostic callbacks: $s"
+
+    # It would be nice to just pass the callbacks to the integrator. However, this leads to
+    # a significant increase in compile time for reasons that are not known. For this
+    # reason, we only add one callback to the integrator, and this function takes care of
+    # executing the other callbacks. This single function is orchestrate_diagnostics
+
+    function orchestrate_diagnostics(integrator)
+        diagnostics_to_be_run =
+            filter(d -> integrator.step % d.cbf.n == 0, diagnostics_functions)
+
+        for diag_func in diagnostics_to_be_run
+            diag_func.f!(integrator)
+        end
+    end
+
+    diagnostic_callbacks =
+        call_every_n_steps(orchestrate_diagnostics, skip_first = true)
+
+    # We need to ensure the precomputed quantities are indeed precomputed
+
+    # TODO: Remove this when we can assume that the precomputed_quantities are in sync with
+    # the state
+    sync_precomputed = call_every_n_steps(
+        (int) -> set_precomputed_quantities!(int.u, int.p, int.t),
+    )
+
+    # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
+    # and continuous. This is not hard, but can introduce significant latency. However, all
+    # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
+    # information to the constructor
+    continuous_callbacks = tuple()
+    discrete_callbacks = (callback..., sync_precomputed, diagnostic_callbacks)
+
+    s = @timed_str begin
+        all_callbacks =
+            SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
+    end
+    @info "Prepared SciMLBase.CallbackSet callbacks: $s"
+    steps_cycle_non_diag =
+        n_steps_per_cycle_per_cb(all_callbacks, simulation.dt)
+    steps_cycle_diag =
+        n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
+    steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])
+    @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
+    @info "n_steps_per_cycle_per_cb_diagnostic: $steps_cycle_diag"
+    @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
+
     tspan = (t_start, simulation.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
@@ -752,7 +921,7 @@ function get_integrator(config::AtmosConfig)
             p,
             tspan,
             ode_algo,
-            callback,
+            all_callbacks,
         )
     end
 
@@ -760,5 +929,35 @@ function get_integrator(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
+
+    s = @timed_str begin
+        for diag in diagnostics_iterations
+            variable = diag.variable
+            try
+                # The first time we call compute! we use its return value. All
+                # the subsequent times (in the callbacks), we will write the
+                # result in place
+                diagnostic_storage[diag] = variable.compute!(
+                    nothing,
+                    integrator.u,
+                    integrator.p,
+                    integrator.t,
+                )
+                diagnostic_counters[diag] = 1
+                # If it is not a reduction, call the output writer as well
+                if isnothing(diag.reduction_time_func)
+                    diag.output_writer(diagnostic_storage[diag], diag, integrator)
+                else
+                    # Add to the accumulator
+                    diagnostic_accumulators[diag] =
+                        copy(diagnostic_storage[diag])
+                end
+            catch e
+                error("Could not compute diagnostic $(variable.long_name): $e")
+            end
+        end
+    end
+    @info "Init diagnostics: $s"
+
     return integrator
 end

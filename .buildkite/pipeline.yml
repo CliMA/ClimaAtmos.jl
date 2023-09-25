@@ -1023,6 +1023,14 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":fire: Flame graph: perf target (diagnostics)"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          --config_file $PERF_CONFIG_PATH/flame/diagnostics.yml
+        artifact_paths: "flame_perf_diagnostics/*"
+        agents:
+          slurm_mem: 20GB
+
       # Inference
       - label: ":rocket: JET n-failures (inference)"
         command: >

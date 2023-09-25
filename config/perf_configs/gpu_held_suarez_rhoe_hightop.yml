@@ -3,6 +3,6 @@ z_elem: 25
 dz_bottom: 300 
 forcing: "held_suarez" 
 job_id: "gpu_held_suarez_rhoe_hightop" 
-dt: "500secs" 
+dt: "400secs"
 t_end: "8days" 
 dt_save_to_disk: "4days"

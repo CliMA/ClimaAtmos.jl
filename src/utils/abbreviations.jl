@@ -75,11 +75,3 @@ const ᶜdivᵥ_stencil = Operators.Operator2Stencil(ᶜdivᵥ)
 const ᶜadvdivᵥ_stencil = Operators.Operator2Stencil(ᶜadvdivᵥ)
 const ᶠinterp_stencil = Operators.Operator2Stencil(ᶠinterp)
 const ᶠgradᵥ_stencil = Operators.Operator2Stencil(ᶠgradᵥ)
-
-# In order to specify C2F operator boundary conditions with 0 instead of FT(0),
-# we need to tell ClimaCore how to convert AxisTensor components from Int to FT.
-# TODO: Move this monkey patch to ClimaCore in the next release.
-using ClimaCore.Geometry: AxisTensor, components
-AxisTensor{T′, N, A, S′}(a::AxisTensor{T, N, A, S}) where {T, N, A, S, T′, S′} =
-    AxisTensor(axes(a), S′(components(a)))
-Base.convert(::Type{AT}, a::AxisTensor) where {AT <: AxisTensor} = AT(a)

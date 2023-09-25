@@ -74,6 +74,13 @@ function override_default_config(config_dict::AbstractDict;)
         v = config_dict[k]
         config[k] = isnothing(default_config[k]) ? v : default_type(v)
     end
+
+    # The "diagnostics" entry is a more complex type that doesn't fit the schema described in
+    # the previous lines. So, we manually add it.
+    if haskey(config_dict, "diagnostics")
+        config["diagnostics"] = config_dict["diagnostics"]
+    end
+
     return config
 end
 

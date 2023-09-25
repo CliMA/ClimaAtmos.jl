@@ -54,11 +54,12 @@ allocs = @allocated SciMLBase.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 7968
-allocs_limit["flame_perf_target_tracers"] = 207600
-allocs_limit["flame_perf_target_edmfx"] = 274832
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 748176
-allocs_limit["flame_perf_target_edmf"] = 12031972048
+allocs_limit["flame_perf_target"] = 12864
+allocs_limit["flame_perf_target_tracers"] = 212496
+allocs_limit["flame_perf_target_edmfx"] = 304064
+allocs_limit["flame_perf_diagnostics"] = 3023192
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 754848
+allocs_limit["flame_perf_target_edmf"] = 12459299664
 allocs_limit["flame_perf_target_threaded"] = 6175664
 allocs_limit["flame_perf_target_callbacks"] = 45111592
 allocs_limit["flame_perf_gw"] = 4911463328

@@ -3,7 +3,7 @@ dt_save_to_disk: "4days"
 regression_test: true
 t_end: "8days"
 forcing: "held_suarez"
-dt: "500secs"
+dt: "400secs"
 z_elem: 25
 job_id: "sphere_held_suarez_rhoe_hightop"
 z_max: 45000.0
