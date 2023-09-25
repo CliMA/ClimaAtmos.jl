@@ -44,7 +44,8 @@ steps:
         command: >
           julia --project -e 'using CUDA; CUDA.versioninfo()'
           
-          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report julia --color=yes --project=examples examples/hybrid/driver.jl
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report
+          julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave/*"
         agents:
@@ -55,6 +56,7 @@ steps:
         command: >
           julia --project -e 'using CUDA; CUDA.versioninfo()'
           
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
