@@ -42,10 +42,14 @@ steps:
   - group: "GPU target simulations"
     steps:
 
-
-      - label: "test"
+      - label: "dry baroclinic wave - 4 gpus"
+        key: "target_gpu_implicit_baroclinic_wave_4process"
         command: >         
-          srun julia --project test.jl
+          srun
+          nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
+        artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_ntasks: 4
