@@ -79,18 +79,40 @@ compute_kinetic!(κ::Fields.Field, Y::Fields.FieldVector) =
     compute_kinetic!(κ, Y.c.uₕ, Y.f.u₃)
 
 """
-    compute_strain_rate!(ϵ::Field, u::Field)
+    compute_strain_rate_center!(ϵ::Field, u::Field)
 
 Compute the strain_rate at cell centers, storing in `ϵ` from
 velocity at cell faces.
 """
-function compute_strain_rate!(ϵ::Fields.Field, u::Fields.Field)
+function compute_strain_rate_center!(ϵ::Fields.Field, u::Fields.Field)
     @assert eltype(u) <: C123
     axis_uvw = Geometry.UVWAxis()
     @. ϵ =
         (
             Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))) +
             adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(u))))
+        ) / 2
+end
+
+"""
+    compute_strain_rate_face!(ϵ::Field, u::Field)
+
+Compute the strain_rate at cell faces, storing in `ϵ` from
+velocity at cell centers.
+"""
+function compute_strain_rate_face!(ϵ::Fields.Field, u::Fields.Field)
+    @assert eltype(u) <: C123
+    ∇ᵥuvw_boundary =
+        Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
+    ᶠgradᵥ = Operators.GradientC2F(
+        bottom = Operators.SetGradient(∇ᵥuvw_boundary),
+        top = Operators.SetGradient(∇ᵥuvw_boundary),
+    )
+    axis_uvw = Geometry.UVWAxis()
+    @. ϵ =
+        (
+            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))) +
+            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(u))))
         ) / 2
 end
 

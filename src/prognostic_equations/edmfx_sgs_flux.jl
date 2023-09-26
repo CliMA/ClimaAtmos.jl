@@ -11,14 +11,14 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     (; edmfx_upwinding, sfc_conditions) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs, ᶜh_totʲs, ᶜspecificʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜspecific⁰) = p
+    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰, ᶜspecific⁰) = p
     (; ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_flux
-        # mass flux
+        # energy mass flux
         ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
         for j in 1:n
@@ -46,7 +46,7 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             edmfx_upwinding,
         )
 
-        # diffusive flux
+        # energy diffusive flux
         ᶠρaK_h = p.ᶠtemp_scalar
         @. ᶠρaK_h[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_h[colidx])
 
@@ -58,7 +58,7 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot⁰[colidx])))
 
         if !(p.atmos.moisture_model isa DryModel)
-            # mass flux
+            # specific humidity mass flux
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
                 @. ᶜq_tot_diff_colidx =
@@ -86,7 +86,7 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
                 edmfx_upwinding,
             )
 
-            # diffusive flux
+            # specific humidity diffusive flux
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(
@@ -98,18 +98,22 @@ function edmfx_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
             )
         end
 
-        # diffusive flux
+        # momentum diffusive flux
         ᶠρaK_u = p.ᶠtemp_scalar
         @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_u[colidx])
+        ᶠstrain_rate = p.ᶠtemp_UVWxUVW
+        compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu⁰[colidx])
+        @. Yₜ.c.uₕ[colidx] -= C12(
+            ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) / Y.c.ρ[colidx],
+        )
+        # apply boundary condition for momentum flux
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
         )
         @. Yₜ.c.uₕ[colidx] -=
-            ᶜdivᵥ_uₕ(-(ᶠρaK_u[colidx] * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+            ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
     end
-
-    # TODO: Add momentum mass flux
 
     # TODO: Add tracer flux
 
@@ -128,15 +132,15 @@ function edmfx_sgs_flux_tendency!(
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_upwinding, sfc_conditions) = p
-    (; ᶠu³, ᶜh_tot, ᶜspecific) = p
+    (; ᶠu³, ᶜu, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
-    (; ᶜh_tot⁰, ᶜK_u, ᶜK_h) = p
+    (; ᶜK_u, ᶜK_h) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_flux
-        # mass flux
+        # energy mass flux
         # TODO: check if there is contribution from the environment
         ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
@@ -154,7 +158,7 @@ function edmfx_sgs_flux_tendency!(
             )
         end
 
-        # diffusive flux
+        # energy diffusive flux
         ᶠρaK_h = p.ᶠtemp_scalar
         @. ᶠρaK_h[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_h[colidx])
 
@@ -163,10 +167,10 @@ function edmfx_sgs_flux_tendency!(
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]),
         )
         @. Yₜ.c.ρe_tot[colidx] -=
-            ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot⁰[colidx])))
+            ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot[colidx])))
 
         if !(p.atmos.moisture_model isa DryModel)
-            # mass flux
+            # specific humidity mass flux
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
                 @. ᶜq_tot_diff_colidx =
@@ -182,7 +186,7 @@ function edmfx_sgs_flux_tendency!(
                 )
             end
 
-            # diffusive flux
+            # specific humidity diffusive flux
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(
@@ -194,18 +198,22 @@ function edmfx_sgs_flux_tendency!(
             )
         end
 
-        # diffusive flux
+        # momentum diffusive flux
         ᶠρaK_u = p.ᶠtemp_scalar
         @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
+        ᶠstrain_rate = p.ᶠtemp_UVWxUVW
+        compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu[colidx])
+        @. Yₜ.c.uₕ[colidx] -= C12(
+            ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) / Y.c.ρ[colidx],
+        )
+        # apply boundary condition for momentum flux
         ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
         )
         @. Yₜ.c.uₕ[colidx] -=
-            ᶜdivᵥ_uₕ(-(ᶠρaK_u[colidx] * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+            ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
     end
-
-    # TODO: Add momentum mass flux
 
     # TODO: Add tracer flux
 

@@ -54,6 +54,10 @@ function temporary_quantities(atmos, center_space, face_space)
             typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
             center_space,
         ), # ᶜstrain_rate
+        ᶠtemp_UVWxUVW = Fields.Field(
+            typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),
+            face_space,
+        ), # ᶠstrain_rate
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
     )
