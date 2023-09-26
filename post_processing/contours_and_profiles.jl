@@ -429,6 +429,7 @@ function contours_and_profiles(output_dir, ref_job_id = nothing)
         (all_categories, :w_velocity),
         (all_categories, :buoyancy),
         (all_categories, :specific_enthalpy),
+        (all_categories, :density),
     )
     if has_moisture
         profile_variables = (

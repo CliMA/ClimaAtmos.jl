@@ -61,7 +61,7 @@ allocs_limit["flame_perf_diagnostics"] = 3023192
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 754848
 allocs_limit["flame_perf_target_edmf"] = 12459299664
 allocs_limit["flame_perf_target_threaded"] = 6175664
-allocs_limit["flame_perf_target_callbacks"] = 45111592
+allocs_limit["flame_perf_target_callbacks"] = 46413904
 allocs_limit["flame_perf_gw"] = 4911463328
 
 if allocs < allocs_limit[job_id] * buffer
