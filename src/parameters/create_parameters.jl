@@ -7,9 +7,6 @@ import SurfaceFluxes.UniversalFunctions as UF
 import Insolation.Parameters as IP
 import Thermodynamics as TD
 import CloudMicrophysics as CM
-# TODO: Remove these imports?
-import ClimaCore
-import ClimaCore as CC
 
 function create_parameter_set(config::AtmosConfig)
     # Helper function that creates a parameter struct. If a struct has nested 
