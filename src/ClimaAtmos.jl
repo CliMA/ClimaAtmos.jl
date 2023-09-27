@@ -22,7 +22,7 @@ include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
 import .RRTMGPInterface as RRTMGPI
 include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 
-include(joinpath("TurbulenceConvection_deprecated", "TurbulenceConvection.jl"))
+include(joinpath("TurbulenceConvection", "TurbulenceConvection.jl"))
 import .TurbulenceConvection as TC
 
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
@@ -100,7 +100,6 @@ include(
 include(joinpath("parameterized_tendencies", "sponge", "rayleigh_sponge.jl"))
 include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(joinpath("prognostic_equations", "advection.jl"))
-include(joinpath("dycore_equations_deprecated", "sgs_flux_tendencies.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
 include(joinpath("cache", "cache.jl"))

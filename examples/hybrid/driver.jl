@@ -46,51 +46,6 @@ if is_edmfx && config.parsed_args["post_process"]
     zip_and_cleanup_output(simulation.output_dir, "hdf5files.zip")
 end
 
-if config.parsed_args["debugging_tc"] && !is_edmfx
-    include(
-        joinpath(
-            @__DIR__,
-            "..",
-            "..",
-            "regression_tests",
-            "self_reference_or_path.jl",
-        ),
-    )
-
-    main_branch_root = get_main_branch_buildkite_path()
-    main_branch_data_path = joinpath(main_branch_root, reference_job_id)
-
-    day = floor(Int, simulation.t_end / (60 * 60 * 24))
-    sec = floor(Int, simulation.t_end % (60 * 60 * 24))
-
-    zip_file = "hdf5files.zip"
-    mktempdir(
-        simulation.output_dir;
-        prefix = "temp_unzip_path_",
-    ) do temp_main_branch_path
-        # Unzip files to temp directory, to avoid collisions with other jobs
-        unzip_file_in_path(
-            main_branch_data_path,
-            zip_file,
-            temp_main_branch_path,
-        )
-        # hdf5 files from the main branch are in `temp_dir`
-
-        plot_tc_contours(
-            simulation.output_dir;
-            main_branch_data_path = temp_main_branch_path,
-        )
-        plot_tc_profiles(
-            simulation.output_dir;
-            hdf5_filename = "day$day.$sec.hdf5",
-            main_branch_data_path = temp_main_branch_path,
-        )
-    end
-    if atmos.model_config isa CA.SingleColumnModel
-        zip_and_cleanup_output(simulation.output_dir, zip_file)
-    end
-end
-
 if sol_res.ret_code == :simulation_crashed
     error(
         "The ClimaAtmos simulation has crashed. See the stack trace for details.",
@@ -116,14 +71,8 @@ if !CA.is_distributed(config.comms_ctx) &&
    !is_edmfx &&
    !(atmos.model_config isa CA.SphericalModel)
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if CA.is_column_without_edmf(config.parsed_args)
+    if CA.is_column_without_edmfx(config.parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
-    elseif CA.is_column_edmf(config.parsed_args)
-        postprocessing_edmf(
-            sol,
-            simulation.output_dir,
-            config.parsed_args["fps"],
-        )
     elseif CA.is_solid_body(config.parsed_args)
         postprocessing(sol, simulation.output_dir, config.parsed_args["fps"])
     elseif atmos.model_config isa CA.BoxModel

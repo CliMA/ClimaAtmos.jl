@@ -12,27 +12,36 @@ To start the model with a custom configuration, run:
 ### Example
 Below is the default Bomex configuration:
 ```
-edmf_coriolis: Bomex
-dt_save_to_disk: 5mins
-hyperdiff: "false"
+job_id: "prognostic_edmfx_bomex_box"
+initial_condition: "Bomex"
+subsidence: "Bomex"
+edmf_coriolis: "Bomex"
+ls_adv: "Bomex"
+surface_setup: "Bomex"
+turbconv: "prognostic_edmfx"
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+prognostic_tke: false
+moist: "equil"
+config: "box"
+hyperdiff: "true"
+kappa_4: 1.0e12
+x_max: 1e5
+y_max: 1e5
+z_max: 3e3
+x_elem: 2
+y_elem: 2
 z_elem: 60
-dt: 20secs
-debugging_tc: true
-surface_setup: Bomex
-turbconv_case: Bomex
-t_end: 6hours
-turbconv: edmf
 z_stretch: false
-config: column
-subsidence: Bomex
-FLOAT_TYPE: Float64
-z_max: 3000.0
-apply_limiter: false
-regression_test: true
-ls_adv: Bomex
-dt_save_to_sol: 5mins
-job_id: edmf_bomex
-moist: equil
+perturb_initstate: false
+dt: "5secs"
+t_end: "6hours"
+dt_save_to_disk: "10mins"
+toml: [toml/prognostic_edmfx_box.toml]
 ```
 
 To add a new configuration argument/key, open `.buildkite/default_config.yml`.

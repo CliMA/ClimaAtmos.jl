@@ -9,9 +9,6 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     Fields.bycolumn(axes(Y.c)) do colidx
         implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-        if p.turbconv_model isa TurbulenceConvection.EDMFModel
-            implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
-        end
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
 

@@ -35,27 +35,6 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
-NVTX.@annotate function turb_conv_affect_filter!(integrator)
-    p = integrator.p
-    (; edmf_cache) = p
-    (; edmf, param_set) = edmf_cache
-    t = integrator.t
-    Y = integrator.u
-    tc_params = CAP.turbconv_params(param_set)
-
-    Fields.bycolumn(axes(Y.c)) do colidx
-        state = TC.tc_column_state(Y, p, nothing, colidx, t)
-        grid = TC.Grid(state)
-        TC.affect_filter!(edmf, grid, state, tc_params, t)
-    end
-
-    # We're lying to SciMLBase.jl, in order to avoid
-    # paying for an additional `∑tendencies!` call, which is required
-    # to support supplying a continuous representation of the
-    # solution.
-    SciMLBase.u_modified!(integrator, false)
-end
-
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -331,60 +310,6 @@ NVTX.@annotate function compute_diagnostics(integrator)
                 ᶜp,
                 ᶜts,
             ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
-        )
-    elseif p.atmos.turbconv_model isa TC.EDMFModel
-        tc_cent(p) = p.edmf_cache.aux.c.turbconv
-        tc_face(p) = p.edmf_cache.aux.f.turbconv
-        turbulence_convection_diagnostic = (;
-            bulk_up_area = tc_cent(p).bulk.area,
-            bulk_up_h_tot = tc_cent(p).bulk.h_tot,
-            bulk_up_q_tot = tc_cent(p).bulk.q_tot,
-            bulk_up_q_liq = tc_cent(p).bulk.q_liq,
-            bulk_up_q_ice = tc_cent(p).bulk.q_ice,
-            bulk_up_temperature = tc_cent(p).bulk.T,
-            bulk_up_cloud_fraction = tc_cent(p).bulk.cloud_fraction,
-            bulk_up_e_tot_tendency_precip_formation = tc_cent(
-                p,
-            ).bulk.e_tot_tendency_precip_formation,
-            bulk_up_qt_tendency_precip_formation = tc_cent(
-                p,
-            ).bulk.qt_tendency_precip_formation,
-            env_area = tc_cent(p).en.area,
-            env_q_tot = tc_cent(p).en.q_tot,
-            env_q_liq = tc_cent(p).en.q_liq,
-            env_q_ice = tc_cent(p).en.q_ice,
-            env_theta_liq_ice = tc_cent(p).en.θ_liq_ice,
-            env_theta_virt = tc_cent(p).en.θ_virt,
-            env_theta_dry = tc_cent(p).en.θ_dry,
-            env_e_tot = tc_cent(p).en.e_tot,
-            env_e_kin = tc_cent(p).en.e_kin,
-            env_h_tot = tc_cent(p).en.h_tot,
-            env_RH = tc_cent(p).en.RH,
-            env_temperature = tc_cent(p).en.T,
-            env_cloud_fraction = tc_cent(p).en.cloud_fraction,
-            env_TKE = tc_cent(p).en.tke,
-            env_e_tot_tendency_precip_formation = tc_cent(
-                p,
-            ).en.e_tot_tendency_precip_formation,
-            env_qt_tendency_precip_formation = tc_cent(
-                p,
-            ).en.qt_tendency_precip_formation,
-            face_env_buoyancy = tc_face(p).en.buoy,
-            face_up1_buoyancy = tc_face(p).bulk.buoy_up1,
-            face_bulk_w = tc_face(p).bulk.w,
-            face_env_w = tc_face(p).en.w,
-            bulk_up_filter_flag_1 = tc_cent(p).bulk.filter_flag_1,
-            bulk_up_filter_flag_2 = tc_cent(p).bulk.filter_flag_2,
-            bulk_up_filter_flag_3 = tc_cent(p).bulk.filter_flag_3,
-            bulk_up_filter_flag_4 = tc_cent(p).bulk.filter_flag_4,
-            env_q_vap = tc_cent(p).en.q_tot .- tc_cent(p).en.q_liq .-
-                        tc_cent(p).en.q_ice,
-            draft_q_vap = tc_cent(p).bulk.q_tot .- tc_cent(p).bulk.q_liq .-
-                          tc_cent(p).bulk.q_ice,
-            cloud_fraction = tc_cent(p).en.area .*
-                             tc_cent(p).en.cloud_fraction .+
-                             tc_cent(p).bulk.area .*
-                             tc_cent(p).bulk.cloud_fraction,
         )
     else
         turbulence_convection_diagnostic = NamedTuple()

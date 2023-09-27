@@ -387,18 +387,10 @@ function atmos_surface_conditions(
     energy_flux = if atmos.energy_form isa PotentialTemperature
         (; ρ_flux_θ = shf / TD.cp_m(thermo_params, ts) * surface_normal)
     elseif atmos.energy_form isa TotalEnergy
-        if atmos.turbconv_model isa TC.EDMFModel
-            (;
-                ρ_flux_h_tot = (shf + lhf) * surface_normal,
-                ρ_flux_θ = shf / TD.cp_m(thermo_params, ts) * surface_normal,
-            )
-        else
-            (; ρ_flux_h_tot = (shf + lhf) * surface_normal)
-        end
+        (; ρ_flux_h_tot = (shf + lhf) * surface_normal)
     end
     moisture_flux =
-        atmos.moisture_model isa DryModel &&
-        !(atmos.turbconv_model isa TC.EDMFModel) ? (;) :
+        atmos.moisture_model isa DryModel ? (;) :
         (; ρ_flux_q_tot = evaporation * surface_normal)
     return (;
         ts,
@@ -431,15 +423,10 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = if atmos.energy_form isa PotentialTemperature
         (:ρ_flux_θ,)
     elseif atmos.energy_form isa TotalEnergy
-        if atmos.turbconv_model isa TC.EDMFModel
-            (:ρ_flux_h_tot, :ρ_flux_θ)
-        else
-            (:ρ_flux_h_tot,)
-        end
+        (:ρ_flux_h_tot,)
     end
     moisture_flux_names =
-        atmos.moisture_model isa DryModel &&
-        !(atmos.turbconv_model isa TC.EDMFModel) ? () : (:ρ_flux_q_tot,)
+        atmos.moisture_model isa DryModel ? () : (:ρ_flux_q_tot,)
     names = (
         :ts,
         :ustar,

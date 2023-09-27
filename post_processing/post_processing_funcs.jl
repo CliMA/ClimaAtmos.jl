@@ -205,10 +205,6 @@ function safe_index(ius, t)
     end
 end
 
-function postprocessing_edmf(sol, output_dir, fps)
-    profile_animation(sol, output_dir, fps)
-end
-
 function custom_postprocessing(sol, output_dir, p)
     thermo_params = CAP.thermodynamics_params(params)
     get_var(i, var) = Fields.single_field(sol.u[i], var)
