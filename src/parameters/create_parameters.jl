@@ -70,7 +70,7 @@ function create_parameter_set(config::AtmosConfig)
         TCP.TurbulenceConvectionParameters;
         subparam_structs = (; microphys_params, surf_flux_params),
     )
-    param_set = create_parameter_struct(
+    return create_parameter_struct(
         CAP.ClimaAtmosParameters;
         subparam_structs = (;
             thermodynamics_params = thermo_params,
@@ -81,9 +81,4 @@ function create_parameter_set(config::AtmosConfig)
             turbconv_params,
         ),
     )
-    if parsed_args["log_params"]
-        logfilepath = joinpath(@__DIR__, "$(parsed_args["job_id"])_$FT.toml")
-        CP.log_parameter_information(toml_dict, logfilepath)
-    end
-    return param_set
 end

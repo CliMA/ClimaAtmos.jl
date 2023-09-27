@@ -787,6 +787,10 @@ function get_integrator(config::AtmosConfig)
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
     simulation = get_simulation(config, config.comms_ctx)
+    if config.parsed_args["log_params"]
+        filepath = joinpath(simulation.output_dir, "$(job_id)_parameters.toml")
+        CP.log_parameter_information(config.toml_dict, filepath)
+    end
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
