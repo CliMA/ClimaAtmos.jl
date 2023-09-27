@@ -7,9 +7,6 @@ import SurfaceFluxes.UniversalFunctions as UF
 import Insolation.Parameters as IP
 import Thermodynamics as TD
 import CloudMicrophysics as CM
-# TODO: Remove these imports?
-import ClimaCore
-import ClimaCore as CC
 
 function create_parameter_set(config::AtmosConfig)
     # Helper function that creates a parameter struct. If a struct has nested 
@@ -70,7 +67,7 @@ function create_parameter_set(config::AtmosConfig)
         TCP.TurbulenceConvectionParameters;
         subparam_structs = (; microphys_params, surf_flux_params),
     )
-    param_set = create_parameter_struct(
+    return create_parameter_struct(
         CAP.ClimaAtmosParameters;
         subparam_structs = (;
             thermodynamics_params = thermo_params,
@@ -81,9 +78,4 @@ function create_parameter_set(config::AtmosConfig)
             turbconv_params,
         ),
     )
-    if parsed_args["log_params"]
-        logfilepath = joinpath(@__DIR__, "$(parsed_args["job_id"])_$FT.toml")
-        CP.log_parameter_information(toml_dict, logfilepath)
-    end
-    return param_set
 end
