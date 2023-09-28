@@ -176,9 +176,11 @@ function mixing_length(
     c_d = TCP.tke_diss_coeff(turbconv_params)
     smin_ub = TCP.smin_ub(turbconv_params)
     smin_rm = TCP.smin_rm(turbconv_params)
-    l_max = TCP.l_max(turbconv_params)
     c_b = TCP.static_stab_coeff(turbconv_params)
     vkc = TCP.von_karman_const(turbconv_params)
+
+    # compute the maximum mixing length at height z
+    l_z = ᶜz - z_sfc
 
     # compute the l_W - the wall constraint mixing length
     # which imposes an upper limit on the size of eddies near the surface
@@ -210,9 +212,9 @@ function mixing_length(
     # compute l_N - the effective static stability length scale.
     N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
     if N_eff > 0.0
-        l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_max)
+        l_N = min(sqrt(max(c_b * ᶜtke, 0)) / N_eff, l_z)
     else
-        l_N = l_max
+        l_N = l_z
     end
 
     # compute l_smag - the Smagorinsky length scale.
@@ -228,9 +230,9 @@ function mixing_length(
 
     # add limiters
     l = SA.SVector(
-        (l_N < eps(FT) || l_N > l_max) ? l_max : l_N,
-        (l_TKE < eps(FT) || l_TKE > l_max) ? l_max : l_TKE,
-        (l_W < eps(FT) || l_W > l_max) ? l_max : l_W,
+        (l_N < eps(FT) || l_N > l_z) ? l_z : l_N,
+        (l_TKE < eps(FT) || l_TKE > l_z) ? l_z : l_TKE,
+        (l_W < eps(FT) || l_W > l_z) ? l_z : l_W,
     )
     # get soft minimum
     # TODO: limit it with l_smag
