@@ -6,6 +6,7 @@ function CTS.step_u!(
 )
     (; u, p, t, dt, alg) = integrator
     (; T_lim!, T_exp!, T_imp!, lim!, dss!) = f
+    (; post_explicit!, post_implicit!) = f
     (; tableau, newtons_method) = alg
     (; a_imp, b_imp, c_exp, c_imp) = tableau
     (; U, U_lim, U_exp, T_lim, T_exp, T_imp, temp, β, γ, newtons_method_cache) =
@@ -42,12 +43,14 @@ function CTS.step_u!(
         end
 
         dss!(U_exp, p, t_exp)
+        # i ≠ 1 && post_explicit!(U_exp, p, t_exp) # TODO: is this needed?
 
         @. U = U_exp
         for j in 1:(i - 1)
             iszero(a_imp[i, j]) && continue
             @. U += dt * a_imp[i, j] * T_imp[j]
         end
+        i ≠ 1 && post_explicit!(U, p, t_exp) # TODO: is this the correct placement? is t_exp correct here?
 
         if !iszero(a_imp[i, i]) # Implicit solve
             @assert !isnothing(newtons_method)
@@ -61,12 +64,16 @@ function CTS.step_u!(
             implicit_equation_jacobian! =
                 (jacobian, Ui) ->
                     T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
+            call_post_implicit! = Ui -> begin
+                post_implicit!(Ui, p, t_imp)
+            end
             CTS.solve_newton!(
                 newtons_method,
                 newtons_method_cache,
                 U,
                 implicit_equation_residual!,
                 implicit_equation_jacobian!,
+                call_post_implicit!,
             )
         end
 
@@ -108,6 +115,7 @@ function CTS.step_u!(
     end
 
     dss!(u, p, t_final)
+    post_explicit!(u, p, t_final)
 
     return u
 end
