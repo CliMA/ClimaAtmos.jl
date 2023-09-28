@@ -16,6 +16,73 @@ perturb_coeff(p::Geometry.LatLongZPoint{FT}) where {FT} = sind(p.long)
 perturb_coeff(p::Geometry.XZPoint{FT}) where {FT} = sin(p.x)
 perturb_coeff(p::Geometry.XYZPoint{FT}) where {FT} = sin(p.x)
 
+"""
+    ColumnInterpolatableField(::Fields.ColumnField)
+
+A column field object that can be interpolated
+in the z-coordinate. For example:
+
+```julia
+cif = ColumnInterpolatableField(column_field)
+z = 1.0
+column_field_at_z = cif(z)
+```
+
+!!! warn
+    This function allocates and is not GPU-compatible
+    so please avoid using this inside `step!` only use
+    this for initialization.
+"""
+struct ColumnInterpolatableField{F, D}
+    f::F
+    data::D
+    function ColumnInterpolatableField(f::Fields.ColumnField)
+        zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
+        fdata = vec(parent(f))
+        data = Dierckx.Spline1D(zdata, fdata; k = 1)
+        return new{typeof(f), typeof(data)}(f, data)
+    end
+end
+(f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
+
+import ClimaComms
+import ClimaCore.Domains as Domains
+import ClimaCore.Meshes as Meshes
+import ClimaCore.Geometry as Geometry
+import ClimaCore.Operators as Operators
+import ClimaCore.Topologies as Topologies
+import ClimaCore.Spaces as Spaces
+
+"""
+    column_indefinite_integral(f, ϕ₀, zspan; nelems = 100)
+
+The column integral, returned as
+an interpolate-able field.
+"""
+function column_indefinite_integral(
+    f::Function,
+    ϕ₀::FT,
+    zspan::Tuple{FT, FT};
+    nelems = 100, # sets resolution for integration
+) where {FT <: Real}
+    # --- Make a space for integration:
+    z_domain = Domains.IntervalDomain(
+        Geometry.ZPoint(first(zspan)),
+        Geometry.ZPoint(last(zspan));
+        boundary_tags = (:bottom, :top),
+    )
+    z_mesh = Meshes.IntervalMesh(z_domain; nelems)
+    context = ClimaComms.SingletonCommsContext()
+    z_topology = Topologies.IntervalTopology(context, z_mesh)
+    cspace = Spaces.CenterFiniteDifferenceSpace(z_topology)
+    fspace = Spaces.FaceFiniteDifferenceSpace(z_topology)
+    # ---
+    zc = Fields.coordinate_field(cspace)
+    ᶠintegral = Fields.Field(FT, fspace)
+    Operators.column_integral_indefinite!(f, ᶠintegral, ϕ₀)
+    return ColumnInterpolatableField(ᶠintegral)
+end
+
 ##
 ## Simple Profiles
 ##
@@ -534,23 +601,26 @@ function hydrostatic_pressure_profile(;
     ts(p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _) =
         error("Only one of T and θ can be specified")
     ts(p, z, T::FunctionOrSpline, ::Nothing, ::Nothing) =
-        TD.PhaseDry_pT(thermo_params, p, T(z))
+        TD.PhaseDry_pT(thermo_params, p, oftype(p, T(z)))
     ts(p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing) =
-        TD.PhaseDry_pθ(thermo_params, p, θ(z))
+        TD.PhaseDry_pθ(thermo_params, p, oftype(p, θ(z)))
     ts(p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline) =
-        TD.PhaseEquil_pTq(thermo_params, p, T(z), q_tot(z))
+        TD.PhaseEquil_pTq(
+            thermo_params,
+            p,
+            oftype(p, T(z)),
+            oftype(p, q_tot(z)),
+        )
     ts(p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline) =
-        TD.PhaseEquil_pθq(thermo_params, p, θ(z), q_tot(z))
-    dp_dz(p, _, z) =
-        -grav * TD.air_density(thermo_params, ts(p, z, T, θ, q_tot))
+        TD.PhaseEquil_pθq(
+            thermo_params,
+            p,
+            oftype(p, θ(z)),
+            oftype(p, q_tot(z)),
+        )
+    dp_dz(p, z) = -grav * TD.air_density(thermo_params, ts(p, z, T, θ, q_tot))
 
-    prob = SciMLBase.ODEProblem(dp_dz, p_0, (FT(0), z_max))
-    return SciMLBase.solve(
-        prob,
-        ODE.Tsit5(),
-        reltol = 10eps(FT),
-        abstol = 10eps(FT),
-    )
+    return column_indefinite_integral(dp_dz, p_0, (FT(0), FT(z_max)))
 end
 
 """

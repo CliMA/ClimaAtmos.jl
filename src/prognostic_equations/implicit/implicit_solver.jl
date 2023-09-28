@@ -167,9 +167,9 @@ function ImplicitEquationJacobian(
     )
 end
 
-# We only use A, but OrdinaryDiffEq.jl and ClimaTimeSteppers.jl require us to
-# pass jac_prototype and then call similar(jac_prototype) to obtain A. This is a
-# workaround to avoid unnecessary allocations.
+# We only use A, but ClimaTimeSteppers.jl require us to
+# pass jac_prototype and then call similar(jac_prototype) to
+# obtain A. This is a workaround to avoid unnecessary allocations.
 Base.similar(A::ImplicitEquationJacobian) = A
 
 # This method specifies how to solve the equation E'(Y) * ΔY = E(Y) for ΔY.
@@ -197,12 +197,12 @@ function ldiv!(
     x .= A.temp_x
 end
 
-# This function is used by OrdinaryDiffEq.jl instead of ldiv!.
+# This function is used by DiffEqBase.jl instead of ldiv!.
 linsolve!(::Type{Val{:init}}, f, u0; kwargs...) = _linsolve!
 _linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
 
 # This method specifies how to compute E'(Y), which is referred to as "Wfact" in
-# OrdinaryDiffEq.jl.
+# DiffEqBase.jl.
 function Wfact!(A, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
         # Remove unnecessary values from p to avoid allocations in bycolumn.
