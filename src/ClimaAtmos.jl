@@ -114,6 +114,7 @@ include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
 
 include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
+include(joinpath("time_stepper", "time_stepper.jl"))
 include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
