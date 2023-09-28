@@ -36,10 +36,6 @@ function HDF5Writer()
         var = diagnostic.variable
         time = integrator.t
 
-        # diagnostic here is a ScheduledDiagnosticIteration. If we want to obtain a
-        # descriptive name (e.g., something with "daily"), we have to pass the timestep as
-        # well
-
         output_path = joinpath(
             integrator.p.simulation.output_dir,
             "$(diagnostic.output_short_name)_$(time).h5",
@@ -110,9 +106,6 @@ function NetCDFWriter(;
         Meshes.AbstractCubedSphere ||
             error("NetCDF writer supports only cubed sphere at the moment")
 
-        # diagnostic here is a ScheduledDiagnosticIteration. If we want to obtain a
-        # descriptive name (e.g., something with "daily"), we have to pass the timestep as
-        # well
         output_path = joinpath(
             integrator.p.simulation.output_dir,
             "$(diagnostic.output_short_name)_$time.nc",
