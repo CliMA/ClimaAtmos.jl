@@ -6,6 +6,7 @@ function CTS.step_u!(
 )
     (; u, p, t, dt, alg) = integrator
     (; T_lim!, T_exp!, T_imp!, lim!, dss!) = f
+    (; post_explicit!, post_implicit!) = f
     (; tableau, newtons_method) = alg
     (; a_imp, b_imp, c_exp, c_imp) = tableau
     (; U, U_lim, U_exp, T_lim, T_exp, T_imp, temp, β, γ, newtons_method_cache) =
@@ -87,6 +88,7 @@ function CTS.step_u!(
         end
 
         if !iszero(β[i])
+            post_explicit!(U, p, t_exp)
             T_lim!(T_lim, U, p, t_exp)
             T_exp!(T_exp, U, p, t_exp)
         end

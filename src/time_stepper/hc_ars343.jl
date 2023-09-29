@@ -27,6 +27,7 @@ function CTS.step_u!(
     @. U = u
     lim!(U, p, t_exp, u)
     dss!(U, p, t_exp)
+    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
 
@@ -66,6 +67,7 @@ function CTS.step_u!(
 
     @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
 
+    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
 
@@ -108,6 +110,7 @@ function CTS.step_u!(
 
     @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
 
+    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
     i = 4
@@ -152,6 +155,7 @@ function CTS.step_u!(
 
     @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
 
+    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
 
