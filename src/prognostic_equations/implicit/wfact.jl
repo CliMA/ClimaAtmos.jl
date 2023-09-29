@@ -60,7 +60,6 @@ end
 
 NVTX.@annotate function Wfact!(W, Y, p, dtγ, t)
     fill_with_nans!(p)
-    set_precomputed_quantities!(Y, p, t)
     Fields.bycolumn(axes(Y.c)) do colidx
         Wfact!(W, Y, p, dtγ, t, colidx)
     end
