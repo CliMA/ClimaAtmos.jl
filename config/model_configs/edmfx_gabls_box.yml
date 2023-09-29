@@ -20,9 +20,9 @@ x_elem: 2
 y_elem: 2
 z_elem: 8
 z_stretch: false
-dt: "10secs"
+dt: "5secs"
 t_end: "9hours"
 dt_save_to_disk: "10mins"
 perturb_initstate: false
 FLOAT_TYPE: "Float64"
-toml: [toml/edmfx_box_gabls.toml]
+toml: [toml/edmfx_box.toml]

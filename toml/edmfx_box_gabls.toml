@@ -1,9 +1,0 @@
-[C_E]
-alias = "C_E"
-value = 0.044
-type = "float"
-
-[EDMF_surface_area]
-alias = "surface_area"
-value = 1e-4
-type = "float"

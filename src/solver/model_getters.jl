@@ -372,6 +372,8 @@ function get_entrainment_model(parsed_args)
         PiGroupsEntrainment()
     elseif entr_model == "ConstantCoefficient"
         ConstantCoefficientEntrainment()
+    elseif entr_model == "ConstantCoefficientHarmonics"
+        ConstantCoefficientHarmonicsEntrainment()
     elseif entr_model == "ConstantTimescale"
         ConstantTimescaleEntrainment()
     else
@@ -387,6 +389,8 @@ function get_detrainment_model(parsed_args)
         PiGroupsDetrainment()
     elseif detr_model == "ConstantCoefficient"
         ConstantCoefficientDetrainment()
+    elseif detr_model == "ConstantCoefficientHarmonics"
+        ConstantCoefficientHarmonicsDetrainment()
     else
         error("Invalid entr_model $(entr_model)")
     end

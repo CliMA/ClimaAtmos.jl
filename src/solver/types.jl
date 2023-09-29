@@ -179,6 +179,7 @@ abstract type AbstractEntrainmentModel end
 struct NoEntrainment <: AbstractEntrainmentModel end
 struct PiGroupsEntrainment <: AbstractEntrainmentModel end
 struct ConstantCoefficientEntrainment <: AbstractEntrainmentModel end
+struct ConstantCoefficientHarmonicsEntrainment <: AbstractEntrainmentModel end
 struct ConstantTimescaleEntrainment <: AbstractEntrainmentModel end
 
 abstract type AbstractDetrainmentModel end
@@ -186,6 +187,7 @@ abstract type AbstractDetrainmentModel end
 struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct ConstantCoefficientDetrainment <: AbstractDetrainmentModel end
+struct ConstantCoefficientHarmonicsDetrainment <: AbstractDetrainmentModel end
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end

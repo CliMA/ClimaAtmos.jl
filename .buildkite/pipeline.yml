@@ -670,7 +670,6 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/edmfx_gabls_box.yml
         artifact_paths: "edmfx_gabls_box/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 
