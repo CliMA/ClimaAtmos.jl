@@ -218,7 +218,7 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml"
         artifact_paths: "$$JOB_NAME/*"
         agents:
-          slurm_mem: 20GB
+          slurm_mem_per_cpu: 20GB
           slurm_time: 24:00:00
         env: 
           JOB_NAME: "longrun_compressible_edmf_trmm"
