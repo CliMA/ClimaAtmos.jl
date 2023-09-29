@@ -16,7 +16,8 @@ edmfx_upwinding: "first_order"
 edmfx_entr_model: "ConstantTimescale" 
 edmfx_detr_model: "ConstantCoefficient" 
 edmfx_nh_pressure: true 
-edmfx_sgs_flux: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 dt_save_to_disk: "3hours"
 dt: "10secs" 

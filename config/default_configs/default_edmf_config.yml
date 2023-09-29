@@ -35,6 +35,9 @@ edmfx_upwinding:
 debugging_tc:
   help: "Save most of the tc aux state to HDF5 file [`false` (default), `true`]"
   value: false
-edmfx_sgs_flux:
-  help: "If set to true, it switches on EDMFX SGS flux.  [`true`, `false` (default)]"
+edmfx_sgs_mass_flux:
+  help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
+  value: false
+edmfx_sgs_diffusive_flux:
+  help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
   value: false

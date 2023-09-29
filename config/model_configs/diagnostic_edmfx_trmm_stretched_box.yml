@@ -9,7 +9,8 @@ edmfx_upwinding: first_order
 edmfx_entr_model: "ConstantTimescale" 
 edmfx_detr_model: "ConstantCoefficient" 
 edmfx_nh_pressure: true
-edmfx_sgs_flux: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
 moist: equil
 apply_limiter: false
 precip_model: "0M"
