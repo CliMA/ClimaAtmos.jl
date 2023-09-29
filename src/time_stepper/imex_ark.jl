@@ -49,7 +49,7 @@ function CTS.step_u!(
             end
 
             dss!(U, p, t_exp)
-            i ≠ 1 && post_explicit!(U, p, t_exp)
+            post_explicit!(U, p, t_exp)
 
             if !iszero(a_imp[i, i]) # Implicit solve
                 @assert !isnothing(newtons_method)

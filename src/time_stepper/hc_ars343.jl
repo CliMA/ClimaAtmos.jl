@@ -27,6 +27,7 @@ function CTS.step_u!(
     @. U = u
     lim!(U, p, t_exp, u)
     dss!(U, p, t_exp)
+    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
 
