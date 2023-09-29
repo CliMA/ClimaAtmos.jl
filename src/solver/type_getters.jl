@@ -892,18 +892,12 @@ function get_integrator(config::AtmosConfig)
 
     # We need to ensure the precomputed quantities are indeed precomputed
 
-    # TODO: Remove this when we can assume that the precomputed_quantities are in sync with
-    # the state
-    sync_precomputed = call_every_n_steps(
-        (int) -> set_precomputed_quantities!(int.u, int.p, int.t),
-    )
-
     # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
     # and continuous. This is not hard, but can introduce significant latency. However, all
     # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
     # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., sync_precomputed, diagnostic_callbacks)
+    discrete_callbacks = (callback..., diagnostic_callbacks)
 
     s = @timed_str begin
         all_callbacks =
