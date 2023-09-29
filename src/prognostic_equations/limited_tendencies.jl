@@ -14,7 +14,6 @@ import ClimaCore.Fields: ColumnField
 
 NVTX.@annotate function limited_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
-    set_precomputed_quantities!(Y, p, t)
     horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     return nothing

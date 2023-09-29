@@ -43,14 +43,14 @@ function CTS.step_u!(
         end
 
         dss!(U_exp, p, t_exp)
-        # i ≠ 1 && post_explicit!(U_exp, p, t_exp) # TODO: is this needed?
+        # post_explicit!(U_exp, p, t_exp) # TODO: is this needed?
 
         @. U = U_exp
         for j in 1:(i - 1)
             iszero(a_imp[i, j]) && continue
             @. U += dt * a_imp[i, j] * T_imp[j]
         end
-        i ≠ 1 && post_explicit!(U, p, t_exp) # TODO: is this the correct placement? is t_exp correct here?
+        post_explicit!(U, p, t_exp) # TODO: is this the correct placement? is t_exp correct here?
 
         if !iszero(a_imp[i, i]) # Implicit solve
             @assert !isnothing(newtons_method)
