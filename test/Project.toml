@@ -88,7 +88,7 @@ PrettyTables = "1, 2"
 ProgressLogging = "0.1"
 QuadGK = "2"
 SafeTestsets = "0.1"
-SciMLBase = "1"
+SciMLBase = "1, 2"
 TOML = "1"
 
 [extras]
