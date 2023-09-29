@@ -8,6 +8,7 @@ turbconv: "edmfx"
 ode_algo: "SSP33ShuOsher"
 precip_model: "0M"
 reference_job_id: "sphere_baroclinic_wave_rhoe_equilmoist"
-edmfx_sgs_flux: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
 job_id: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx"
 moist: "equil"

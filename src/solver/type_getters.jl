@@ -29,8 +29,11 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_entr_model = get_entrainment_model(parsed_args)
     edmfx_detr_model = get_detrainment_model(parsed_args)
 
-    edmfx_sgs_flux = parsed_args["edmfx_sgs_flux"]
-    @assert edmfx_sgs_flux in (false, true)
+    edmfx_sgs_mass_flux = parsed_args["edmfx_sgs_mass_flux"]
+    @assert edmfx_sgs_mass_flux in (false, true)
+
+    edmfx_sgs_diffusive_flux = parsed_args["edmfx_sgs_diffusive_flux"]
+    @assert edmfx_sgs_diffusive_flux in (false, true)
 
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
@@ -50,7 +53,8 @@ function get_atmos(config::AtmosConfig, params)
         advection_test,
         edmfx_entr_model,
         edmfx_detr_model,
-        edmfx_sgs_flux,
+        edmfx_sgs_mass_flux,
+        edmfx_sgs_diffusive_flux,
         edmfx_nh_pressure,
         precip_model,
         forcing_type,

@@ -280,7 +280,8 @@ Base.@kwdef struct AtmosModel{
     AT,
     EEM,
     EDM,
-    ESF,
+    ESMF,
+    ESDF,
     ENP,
     TCM,
     NOGW,
@@ -305,7 +306,8 @@ Base.@kwdef struct AtmosModel{
     advection_test::AT = nothing
     edmfx_entr_model::EEM = nothing
     edmfx_detr_model::EDM = nothing
-    edmfx_sgs_flux::ESF = nothing
+    edmfx_sgs_mass_flux::ESMF = nothing
+    edmfx_sgs_diffusive_flux::ESDF = nothing
     edmfx_nh_pressure::ENP = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
