@@ -16,6 +16,7 @@ function CTS.step_u!(
         jacobian = newtons_method_cache.j
         if (!isnothing(jacobian)) &&
            CTS.needs_update!(newtons_method.update_j, CTS.NewTimeStep(t))
+            post_implicit!(u, p, t)
             T_imp!.Wfact(jacobian, u, p, dt * γ, t)
         end
     end
@@ -45,11 +46,13 @@ function CTS.step_u!(
         t_imp = t + dt * c_imp[i]
         implicit_equation_residual! =
             (residual, Ui) -> begin
+                post_implicit!(Ui, p, t_imp)
                 T_imp!(residual, Ui, p, t_imp)
                 @. residual = temp + dt * a_imp[i, i] * residual - Ui
             end
         implicit_equation_jacobian! =
             (jacobian, Ui) -> begin
+                post_implicit!(Ui, p, t_imp)
                 T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
             end
         call_post_implicit! = Ui -> begin
@@ -88,11 +91,13 @@ function CTS.step_u!(
         t_imp = t + dt * c_imp[i]
         implicit_equation_residual! =
             (residual, Ui) -> begin
+                post_implicit!(Ui, p, t_imp)
                 T_imp!(residual, Ui, p, t_imp)
                 @. residual = temp + dt * a_imp[i, i] * residual - Ui
             end
         implicit_equation_jacobian! =
             (jacobian, Ui) -> begin
+                post_implicit!(Ui, p, t_imp)
                 T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
             end
         call_post_implicit! = Ui -> begin
@@ -133,11 +138,13 @@ function CTS.step_u!(
         t_imp = t + dt * c_imp[i]
         implicit_equation_residual! =
             (residual, Ui) -> begin
+                post_implicit!(Ui, p, t_imp)
                 T_imp!(residual, Ui, p, t_imp)
                 @. residual = temp + dt * a_imp[i, i] * residual - Ui
             end
         implicit_equation_jacobian! =
             (jacobian, Ui) -> begin
+                post_implicit!(Ui, p, t_imp)
                 T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
             end
         call_post_implicit! = Ui -> begin

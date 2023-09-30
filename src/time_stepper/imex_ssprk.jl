@@ -21,6 +21,7 @@ function CTS.step_u!(
             if γ isa Nothing
                 sdirk_error(name)
             else
+                post_implicit!(u, p, t)
                 T_imp!.Wfact(jacobian, u, p, dt * γ, t)
             end
         end
@@ -56,12 +57,15 @@ function CTS.step_u!(
             # TODO: can/should we remove these closures?
             implicit_equation_residual! =
                 (residual, Ui) -> begin
+                    post_implicit!(Ui, p, t_imp)
                     T_imp!(residual, Ui, p, t_imp)
                     @. residual = temp + dt * a_imp[i, i] * residual - Ui
                 end
             implicit_equation_jacobian! =
-                (jacobian, Ui) ->
+                (jacobian, Ui) -> begin
+                    post_implicit!(Ui, p, t_imp)
                     T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
+                end
             CTS.solve_newton!(
                 newtons_method,
                 newtons_method_cache,
@@ -79,6 +83,7 @@ function CTS.step_u!(
             if iszero(a_imp[i, i])
                 # If its coefficient is 0, T_imp[i] is effectively being
                 # treated explicitly.
+                post_implicit!(U, p, t_imp)
                 T_imp!(T_imp[i], U, p, t_imp)
             else
                 # If T_imp[i] is being treated implicitly, ensure that it
