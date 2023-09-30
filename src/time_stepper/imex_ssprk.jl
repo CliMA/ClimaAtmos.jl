@@ -66,12 +66,25 @@ function CTS.step_u!(
                     post_implicit!(Ui, p, t_imp)
                     T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
                 end
+
+            call_post_implicit! =
+                Ui -> begin
+
+                    if (!all(iszero, a_imp[:, i]) || !iszero(b_imp[i]))
+                        # If T_imp[i] is being treated implicitly, ensure that it
+                        # exactly satisfies the implicit equation.
+                        @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
+                    end
+                    post_implicit!(Ui, p, t_imp)
+                end
+
             CTS.solve_newton!(
                 newtons_method,
                 newtons_method_cache,
                 U,
                 implicit_equation_residual!,
                 implicit_equation_jacobian!,
+                call_post_implicit!,
             )
         end
 
@@ -79,21 +92,15 @@ function CTS.step_u!(
         # give the same results for redundant columns (as long as the implicit
         # tendency only acts in the vertical direction).
 
-        if !all(iszero, a_imp[:, i]) || !iszero(b_imp[i])
-            if iszero(a_imp[i, i])
-                # If its coefficient is 0, T_imp[i] is effectively being
-                # treated explicitly.
-                post_implicit!(U, p, t_imp)
-                T_imp!(T_imp[i], U, p, t_imp)
-            else
-                # If T_imp[i] is being treated implicitly, ensure that it
-                # exactly satisfies the implicit equation.
-                @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
-            end
+        if (!all(iszero, a_imp[:, i]) || !iszero(b_imp[i])) &&
+           iszero(a_imp[i, i])
+            # If its coefficient is 0, T_imp[i] is effectively being
+            # treated explicitly.
+            post_implicit!(U, p, t_imp)
+            T_imp!(T_imp[i], U, p, t_imp)
         end
 
         if !iszero(β[i])
-            post_explicit!(U, p, t_exp)
             T_lim!(T_lim, U, p, t_exp)
             T_exp!(T_exp, U, p, t_exp)
         end

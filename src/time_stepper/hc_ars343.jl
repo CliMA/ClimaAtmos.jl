@@ -39,9 +39,9 @@ function CTS.step_u!(
     lim!(U, p, t_exp, u)
     @. U += dt * a_exp[i, 1] * T_exp[1]
     dss!(U, p, t_exp)
-    # post_explicit!(U, p, t_exp)
 
     @. temp = U # used in closures
+
     let i = i
         t_imp = t + dt * c_imp[i]
         implicit_equation_residual! =
@@ -55,9 +55,11 @@ function CTS.step_u!(
                 post_implicit!(Ui, p, t_imp)
                 T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
             end
-        call_post_implicit! = Ui -> begin
-            # post_implicit!(Ui, p, t_imp)
-        end
+        call_post_implicit! =
+            Ui -> begin
+                @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
+                post_implicit!(Ui, p, t_imp)
+            end
         CTS.solve_newton!(
             newtons_method,
             newtons_method_cache,
@@ -68,9 +70,6 @@ function CTS.step_u!(
         )
     end
 
-    @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
-
-    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
 
@@ -84,7 +83,6 @@ function CTS.step_u!(
     @. U += dt * a_exp[i, 2] * T_exp[2]
     @. U += dt * a_imp[i, 2] * T_imp[2]
     dss!(U, p, t_exp)
-    # post_explicit!(U, p, t_exp)
 
     @. temp = U # used in closures
     let i = i
@@ -100,9 +98,11 @@ function CTS.step_u!(
                 post_implicit!(Ui, p, t_imp)
                 T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
             end
-        call_post_implicit! = Ui -> begin
-            # post_implicit!(Ui, p, t_imp)
-        end
+        call_post_implicit! =
+            Ui -> begin
+                @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
+                post_implicit!(Ui, p, t_imp)
+            end
         CTS.solve_newton!(
             newtons_method,
             newtons_method_cache,
@@ -113,9 +113,6 @@ function CTS.step_u!(
         )
     end
 
-    @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
-
-    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
     i = 4
@@ -131,9 +128,9 @@ function CTS.step_u!(
     @. U += dt * a_imp[i, 2] * T_imp[2]
     @. U += dt * a_imp[i, 3] * T_imp[3]
     dss!(U, p, t_exp)
-    # post_explicit!(U, p, t_exp)
 
     @. temp = U # used in closures
+
     let i = i
         t_imp = t + dt * c_imp[i]
         implicit_equation_residual! =
@@ -147,9 +144,11 @@ function CTS.step_u!(
                 post_implicit!(Ui, p, t_imp)
                 T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
             end
-        call_post_implicit! = Ui -> begin
-            # post_implicit!(Ui, p, t_imp)
-        end
+        call_post_implicit! =
+            Ui -> begin
+                @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
+                post_implicit!(Ui, p, t_imp)
+            end
         CTS.solve_newton!(
             newtons_method,
             newtons_method_cache,
@@ -160,9 +159,6 @@ function CTS.step_u!(
         )
     end
 
-    @. T_imp[i] = (U - temp) / (dt * a_imp[i, i])
-
-    post_explicit!(U, p, t_exp)
     T_lim!(T_lim[i], U, p, t_exp)
     T_exp!(T_exp[i], U, p, t_exp)
 
