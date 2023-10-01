@@ -9,13 +9,12 @@ doctest(ClimaAtmos)
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
 include("make_diagnostic_table.jl")
-
-makedocs(
-    CitationBibliography(joinpath(@__DIR__, "bibliography.bib")),
+bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
+makedocs(;
+    plugins = [bib],
     modules = [ClimaAtmos],
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
-    strict = true,
     checkdocs = :exports,
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
