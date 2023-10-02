@@ -1,5 +1,6 @@
 import NVTX
 import ClimaTimeSteppers as CTS
+import Krylov
 
 Base.@kwdef struct AtmosODEFunction{TL, TE, TI, L, D, PE, PI} <:
                    CTS.AbstractClimaODEFunction
