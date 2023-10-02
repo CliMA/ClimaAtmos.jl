@@ -12,11 +12,11 @@ function rayleigh_sponge_cache(rs::RayleighSponge, Y)
     (; zd, α_uₕ, α_w) = rs
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
-    ᶜαₘ_uₕ = @. ifelse(ᶜz > zd, α_uₕ, FT(0))
-    ᶠαₘ_w = @. ifelse(ᶠz > zd, α_w, FT(0))
+    ᶜαₘ_uₕ = @. ifelse(ᶜz > zd, α_uₕ, $(FT(0)))
+    ᶠαₘ_w = @. ifelse(ᶠz > zd, α_w, $(FT(0)))
     zmax = maximum(ᶠz)
-    ᶜβ_rayleigh_uₕ = @. ᶜαₘ_uₕ * sin(FT(π) / 2 * (ᶜz - zd) / (zmax - zd))^2
-    ᶠβ_rayleigh_w = @. ᶠαₘ_w * sin(FT(π) / 2 * (ᶠz - zd) / (zmax - zd))^2
+    ᶜβ_rayleigh_uₕ = @. ᶜαₘ_uₕ * sin($(FT(π)) / 2 * (ᶜz - zd) / (zmax - zd))^2
+    ᶠβ_rayleigh_w = @. ᶠαₘ_w * sin($(FT(π)) / 2 * (ᶠz - zd) / (zmax - zd))^2
     return (; ᶜβ_rayleigh_uₕ, ᶠβ_rayleigh_w)
 end
 
