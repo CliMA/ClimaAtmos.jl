@@ -1,8 +1,11 @@
 module Diagnostics
 
+import ClimaComms
+
 import LinearAlgebra: dot
 
-import ClimaCore: Fields, Geometry, InputOutput, Meshes, Spaces, Operators
+import ClimaCore:
+    Fields, Geometry, InputOutput, Meshes, Spaces, Operators, Domains
 import ClimaCore.Utilities: half
 import Thermodynamics as TD
 
@@ -40,4 +43,6 @@ include(joinpath("..", "utils", "abbreviations.jl"))
 
 include("diagnostic.jl")
 include("writers.jl")
+
+export close
 end

@@ -28,7 +28,7 @@ identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
 output file.
 
-The default `writer` is HDF5. If `writer` is `nc` or `netcdf`, the output is
+The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
 
@@ -91,7 +91,7 @@ More specifically, a `ScheduledDiagnostic` contains the following pieces of data
 
 - `variable`: The diagnostic variable that has to be computed and output.
 - `output_every`: Frequency of how often to save the results to disk.
-- `output_writer`: Function that controls out to save the computed diagnostic
+- `output_writer`: Object that controls out to save the computed diagnostic
   variable to disk.
 - `reduction_time_func`: If not `nothing`, the `ScheduledDiagnostic` receives an
   area of scratch space `acc` where to accumulate partial results. Then, at

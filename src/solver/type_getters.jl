@@ -637,7 +637,7 @@ function get_diagnostics(parsed_args, atmos_model)
 
     # The default writer is HDF5
     ALLOWED_WRITERS = Dict(
-        "nothing" => hdf5_writer,
+        "nothing" => netcdf_writer,
         "h5" => hdf5_writer,
         "hdf5" => hdf5_writer,
         "nc" => netcdf_writer,
@@ -959,7 +959,12 @@ function get_integrator(config::AtmosConfig)
                 diagnostic_counters[diag] = 1
                 # If it is not a reduction, call the output writer as well
                 if isnothing(diag.reduction_time_func)
-                    diag.output_writer(diagnostic_storage[diag], diag, integrator)
+                    CAD.write_field!(
+                        diag.output_writer,
+                        diagnostic_storage[diag],
+                        diag,
+                        integrator,
+                    )
                 else
                     # Add to the accumulator
                     diagnostic_accumulators[diag] =
