@@ -60,7 +60,7 @@ function CTS.step_u!(
                 @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
                 post_implicit!(Ui, p, t_imp)
             end
-        CTS.solve_newton!(
+        _solve_newton!(
             newtons_method,
             newtons_method_cache,
             U,
@@ -104,7 +104,7 @@ function CTS.step_u!(
                 @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
                 post_implicit!(Ui, p, t_imp)
             end
-        CTS.solve_newton!(
+        _solve_newton!(
             newtons_method,
             newtons_method_cache,
             U,
@@ -150,7 +150,7 @@ function CTS.step_u!(
                 @. T_imp[i] = (Ui - temp) / (dt * a_imp[i, i])
                 post_implicit!(Ui, p, t_imp)
             end
-        CTS.solve_newton!(
+        _solve_newton!(
             newtons_method,
             newtons_method_cache,
             U,

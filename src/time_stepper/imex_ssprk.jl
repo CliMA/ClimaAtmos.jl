@@ -77,7 +77,7 @@ function CTS.step_u!(
                     post_implicit!(Ui, p, t_imp)
                 end
 
-            CTS.solve_newton!(
+            _solve_newton!(
                 newtons_method,
                 newtons_method_cache,
                 U,
