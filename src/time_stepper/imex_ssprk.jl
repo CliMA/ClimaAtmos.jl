@@ -64,7 +64,6 @@ function CTS.step_u!(
                 end
             implicit_equation_jacobian! =
                 (jacobian, Ui) -> begin
-                    post_implicit!(Ui, p, t_imp)
                     T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
                 end
 
@@ -99,7 +98,6 @@ function CTS.step_u!(
            iszero(a_imp[i, i])
             # If its coefficient is 0, T_imp[i] is effectively being
             # treated explicitly.
-            post_implicit!(U, p, t_imp)
             T_imp!(T_imp[i], U, p, t_imp)
         end
 

@@ -67,7 +67,6 @@ function CTS.step_u!(
                     end
                 implicit_equation_jacobian! =
                     (jacobian, Ui) -> begin
-                        post_implicit!(Ui, p, t_imp)
                         T_imp!.Wfact(jacobian, Ui, p, dt * a_imp[i, i], t_imp)
                     end
 
