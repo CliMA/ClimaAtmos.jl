@@ -52,11 +52,11 @@ function CTS.step_u!(
             dss!(U, p, t_exp)
 
             if iszero(a_imp[i, i])
-                post_explicit!(U, p, t_exp)
+                post_explicit!(U, p, t_imp)
             else # Implicit solve
                 @assert !isnothing(newtons_method)
                 @. temp = U
-                post_explicit!(U, p, t_exp)
+                post_explicit!(U, p, t_imp)
                 # TODO: can/should we remove these closures?
                 implicit_equation_residual! =
                     (residual, Ui) -> begin

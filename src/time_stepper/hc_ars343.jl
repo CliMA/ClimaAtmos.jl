@@ -41,10 +41,10 @@ function CTS.step_u!(
     dss!(U, p, t_exp)
 
     @. temp = U # used in closures
-    post_explicit!(U, p, t_exp)
 
     let i = i
         t_imp = t + dt * c_imp[i]
+        post_explicit!(U, p, t_imp)
         implicit_equation_residual! =
             (residual, Ui) -> begin
                 post_implicit!(Ui, p, t_imp)
@@ -85,9 +85,10 @@ function CTS.step_u!(
     dss!(U, p, t_exp)
 
     @. temp = U # used in closures
-    post_explicit!(U, p, t_exp)
+
     let i = i
         t_imp = t + dt * c_imp[i]
+        post_explicit!(U, p, t_imp)
         implicit_equation_residual! =
             (residual, Ui) -> begin
                 post_implicit!(Ui, p, t_imp)
@@ -130,10 +131,10 @@ function CTS.step_u!(
     dss!(U, p, t_exp)
 
     @. temp = U # used in closures
-    post_explicit!(U, p, t_exp)
 
     let i = i
         t_imp = t + dt * c_imp[i]
+        post_explicit!(U, p, t_imp)
         implicit_equation_residual! =
             (residual, Ui) -> begin
                 post_implicit!(Ui, p, t_imp)
