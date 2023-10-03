@@ -82,8 +82,8 @@ function CTS.step_u!(
                 newtons_method_cache,
                 U,
                 implicit_equation_residual!,
-                implicit_equation_jacobian!,
                 call_post_implicit!,
+                implicit_equation_jacobian!,
             )
         else
             post_explicit!(U, p, t_imp)

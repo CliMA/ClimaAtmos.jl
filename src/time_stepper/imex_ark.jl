@@ -60,7 +60,6 @@ function CTS.step_u!(
                 # TODO: can/should we remove these closures?
                 implicit_equation_residual! =
                     (residual, Ui) -> begin
-                        post_implicit!(Ui, p, t_imp)
                         T_imp!(residual, Ui, p, t_imp)
                         @. residual =
                             temp + dt * a_imp[i, i] * residual - Ui
@@ -84,8 +83,8 @@ function CTS.step_u!(
                     newtons_method_cache,
                     U,
                     implicit_equation_residual!,
-                    implicit_equation_jacobian!,
                     call_post_implicit!,
+                    implicit_equation_jacobian!,
                 )
             end
 
