@@ -372,8 +372,9 @@ additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
     progress = isinteractive(),
     progress_steps = isinteractive() ? 1 : 1000,
 )
+import DiffEqBase
 additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
-    kwargshandle = ODE.KeywordArgSilent, # allow custom kwargs
+    kwargshandle = DiffEqBase.KeywordArgSilent, # allow custom kwargs
     adjustfinal = true,
     # TODO: enable progress bars in ClimaTimeSteppers
 )
