@@ -25,6 +25,7 @@ makedocs(;
         "Home" => "index.md",
         "Installation instructions" => "installation_instructions.md",
         "Contributor Guide" => "contributor_guide.md",
+        "Performing Simulations" => "atmos_simulations.md",
         "Equations" => "equations.md",
         "EDMF Equations" => "edmf_equations.md",
         "Diagnostics" => "diagnostics.md",

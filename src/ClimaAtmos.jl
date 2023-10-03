@@ -121,4 +121,6 @@ include(joinpath("solver", "solve.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 
+include(joinpath("simulation", "AtmosGrids.jl"))
+
 end # module
