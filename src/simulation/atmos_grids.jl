@@ -264,8 +264,8 @@ function VerticallyUniformBoxGrid(; nh_poly,
                                     y_max,
                                     z_elem,
                                     z_max,
-                                      topography = nothing,
-                                      topo_smoothing = false,
+                                    topography = nothing,
+                                    topo_smoothing = false,
                                     enable_bubble = false,
                                     comms_ctx = ClimaComms.context(),
                                     float_type = Float64)
@@ -461,15 +461,15 @@ const Sphere = VerticallyStretchedSphereGrid
 
 """
 function VerticallyUniformSphereGrid(; nh_poly,
-                                         h_elem,
-                                         radius,
-                                         z_elem,
-                                         z_max,
-                                         topography = nothing,
-                                         topo_smoothing = false,
-                                         enable_bubble = false,
-                                         comms_ctx = ClimaComms.context(),
-                                         float_type = Float64)
+                                       h_elem,
+                                       radius,
+                                       z_elem,
+                                       z_max,
+                                       topography = nothing,
+                                       topo_smoothing = false,
+                                       enable_bubble = false,
+                                       comms_ctx = ClimaComms.context(),
+                                       float_type = Float64)
 
 
 Construct an `SphereGrid` for a cubed sphere with columns with uniform resolution.
@@ -563,14 +563,14 @@ end
 
 """
 function VerticallyStretchedPlaneGrid(; nh_poly,
-                                      x_elem,
-                                      x_max,
-                                      z_elem,
-                                      z_max,
-                                      dz_bottom,
-                                      dz_top,
-                                      comms_ctx = ClimaComms.context(),
-                                      float_type = Float64)
+                                        x_elem,
+                                        x_max,
+                                        z_elem,
+                                        z_max,
+                                        dz_bottom,
+                                        dz_top,
+                                        comms_ctx = ClimaComms.context(),
+                                        float_type = Float64)
 
 Construct a `PlaneGrid` for a periodic linear domain with columns with
 non-uniform resolution (as prescribed by
@@ -638,14 +638,14 @@ const Plane = VerticallyStretchedPlaneGrid
 
 """
 function VerticallyUniformPlaneGrid(; nh_poly,
-                                    x_elem,
-                                    x_max,
-                                    y_elem,
-                                    y_max,
-                                    z_elem,
-                                    z_max,
-                                    comms_ctx = ClimaComms.context(),
-                                    float_type = Float64)
+                                      x_elem,
+                                      x_max,
+                                      y_elem,
+                                      y_max,
+                                      z_elem,
+                                      z_max,
+                                      comms_ctx = ClimaComms.context(),
+                                      float_type = Float64)
 
 Construct an `PlaneGrid` for a periodic box with columns with uniform resolution.
 

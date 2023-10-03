@@ -6,7 +6,6 @@ include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
-include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("solver", "types.jl"))
 include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
@@ -113,6 +112,9 @@ include(joinpath("callbacks", "callbacks.jl"))
 include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
 
+include(joinpath("simulation", "AtmosGrids.jl"))
+import .Grid as CAG
+
 include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args) model getters
 include(joinpath("time_stepper", "time_stepper.jl"))
 include(joinpath("solver", "type_getters.jl"))
@@ -120,7 +122,5 @@ include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
-
-include(joinpath("simulation", "AtmosGrids.jl"))
 
 end # module

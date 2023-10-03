@@ -6,7 +6,7 @@ import ClimaAtmos as CA
 # Here, we copy and paste the ClimaAtmos.get_spaces functions from commit fab2f3c to ensure
 # that we produce the same spaces. (The function is modified to take planet_radius directly,
 # otherwise it would be a massive pain)
-# include("get_spaces.jl")
+include("get_spaces.jl")
 
 @testset "UniformColumnGrid" begin
 
