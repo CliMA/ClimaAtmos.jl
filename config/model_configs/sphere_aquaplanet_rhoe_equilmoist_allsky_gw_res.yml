@@ -15,4 +15,4 @@ precip_model: "0M"
 regression_test: true
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 moist: "equil"
-toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+toml: toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml

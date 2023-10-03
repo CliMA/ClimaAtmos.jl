@@ -26,4 +26,4 @@ t_end: "9hours"
 dt_save_to_disk: "10mins"
 perturb_initstate: false
 FLOAT_TYPE: "Float64"
-toml: [toml/edmfx_box.toml]
+toml: toml/edmfx_box.toml

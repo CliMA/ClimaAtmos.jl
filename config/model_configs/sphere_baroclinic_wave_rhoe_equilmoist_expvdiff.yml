@@ -8,4 +8,4 @@ dt: "40secs"
 t_end: "12hours"
 job_id: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"
 moist: "equil"
-toml: [toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml]
+toml: toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml

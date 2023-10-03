@@ -427,10 +427,18 @@ the default configurations set in `default_config_dict()`.
 function AtmosConfig(config::Dict; comms_ctx = nothing)
     config = override_default_config(config)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
-    toml_dict = CP.create_toml_dict(
-        FT;
-        override_file = CP.merge_toml_files(config["toml"]),
-    )
+
+    # Check that config["toml"] is a filepath and the file does not exist
+    if config["toml"] isa AbstractString && !isfile(config["toml"])
+        @info "Could not find TOML file at path $(joinpath(pwd(), config["toml"]))"
+        prepend_path = joinpath(dirname(@__FILE__), "..", "..", config["toml"])
+        if isfile(prepend_path)
+            @info "Prepending `pkgdir(CA)` to relative TOML file path"
+            config["toml"] = prepend_path
+        end
+    end
+    toml_dict = CP.create_toml_dict(FT; override_file = config["toml"])
+
     # TODO: is there a better way? We need a better
     #       mechanism on the ClimaCore side.
     if config["trunc_stack_traces"]

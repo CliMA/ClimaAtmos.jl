@@ -27,4 +27,4 @@ perturb_initstate: false
 dt: "1secs"
 t_end: "10800secs"
 dt_save_to_disk: "10secs"
-toml: [toml/edmfx_box.toml]
+toml: toml/edmfx_box.toml

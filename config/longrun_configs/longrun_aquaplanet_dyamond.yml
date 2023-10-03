@@ -17,4 +17,4 @@ dt: "50secs"
 t_end: "1days"
 FLOAT_TYPE: "Float64"
 job_id: "longrun_aquaplanet_dyamond" 
-toml: [toml/longrun_aquaplanet_dyamond.toml]
+toml: toml/longrun_aquaplanet_dyamond.toml

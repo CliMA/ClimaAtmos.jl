@@ -24,4 +24,4 @@ dt: "10secs"
 t_end: "1days"
 FLOAT_TYPE: "Float64"
 job_id: "longrun_aquaplanet_amip" 
-toml: [toml/longrun_aquaplanet_amip.toml]
+toml: toml/longrun_aquaplanet_amip.toml

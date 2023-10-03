@@ -16,4 +16,4 @@ z_max: 3000.0
 ls_adv: "Bomex"
 job_id: "bomex_box_rhoe"
 moist: "equil"
-toml: [toml/bomex_box_rhoe.toml]
+toml: toml/bomex_box_rhoe.toml

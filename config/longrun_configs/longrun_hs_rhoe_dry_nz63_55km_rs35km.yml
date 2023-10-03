@@ -10,4 +10,4 @@ forcing: "held_suarez"
 dt: "300secs"
 rayleigh_sponge: true
 job_id: "longrun_hs_rhoe_dry_nz63_55km_rs35km"
-toml: [toml/longrun_hs_rhoe_dry_nz63_55km_rs35km.toml]
+toml: toml/longrun_hs_rhoe_dry_nz63_55km_rs35km.toml

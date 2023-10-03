@@ -26,4 +26,4 @@ z_stretch: false
 dt: 1secs
 t_end: 2400secs
 dt_save_to_disk: 2secs
-toml: [toml/edmfx_box.toml]
+toml: toml/edmfx_box.toml

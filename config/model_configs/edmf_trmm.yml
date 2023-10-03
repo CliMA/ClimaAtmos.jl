@@ -18,4 +18,4 @@ regression_test: true
 dt_save_to_sol: "5mins"
 job_id: "edmf_trmm"
 rad: "TRMM_LBA"
-toml: [toml/edmf_trmm.toml]
+toml: toml/edmf_trmm.toml

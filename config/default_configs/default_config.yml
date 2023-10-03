@@ -232,8 +232,8 @@ subsidence:
   help: "Subsidence [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `DYCOMS`]"
   value: ~
 toml:
-  help: "TOML file(s) used to override model parameters"
-  value: []
+  help: "TOML file used to override model parameters"
+  value: ~
 prognostic_tke:
   help: "A flag for prognostic TKE [`false` (default), `true`]"
   value: false

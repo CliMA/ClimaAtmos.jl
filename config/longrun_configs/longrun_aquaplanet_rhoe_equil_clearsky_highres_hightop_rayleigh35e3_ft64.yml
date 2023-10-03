@@ -15,4 +15,4 @@ z_max: 45000.0
 precip_model: "0M"
 job_id: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft64"
 moist: "equil"
-toml: [toml/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft64.toml]
+toml: toml/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft64.toml

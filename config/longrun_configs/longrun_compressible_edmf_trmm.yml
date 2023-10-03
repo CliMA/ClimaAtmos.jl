@@ -14,4 +14,4 @@ rayleigh_sponge: true
 job_id: "longrun_compressible_edmf_trmm" 
 dt: "0.2secs" 
 t_end: "3.8hours"
-toml: [longrun_compressible_edmf_trmm.toml]
+toml: longrun_compressible_edmf_trmm.toml
