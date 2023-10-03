@@ -25,6 +25,15 @@ used in the field:
   resolution is `VerticallyUniformSphereGrid`. Given that
   `VerticallyStretchedSphereGrid` is a commonly used domain, we also provide an
   alias `Sphere` for it.
+- `VerticallyStretchedPlaneGrid`, a period linear domain with columns (1D)
+  domain with non-uniform resolution in the vertical direction (higher
+  resolution at the bottom of the column). The variant with vertically uniform
+  resolution is `VerticallyUniformPlaneGrid`. Given that
+  `VerticallyStretchedPlaneGrid` is a commonly used domain, we also provide an
+  alias `Plane` for it.
+
+All the cases, except for the `ColumnGrid` and `PlaneGrid`, support bubble
+corrections by passing `enable_bubble` to the constructor.
 
 By convention, all the `AbstractAtmosGrid`s in `ClimaAtmos` have a name that
 ends in `Grid`.
@@ -47,3 +56,6 @@ cells respectively. We refer users to the `ClimaCore` documentation to learn
 more about the notion of `Spaces`.
 
 Developers are encouraged to also define a `Base.summary` method.
+
+
+

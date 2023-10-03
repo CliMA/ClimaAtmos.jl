@@ -33,6 +33,8 @@ import ClimaAtmos as CA
             "dz_top" => NaN,
             "topography" => "NoWarp",
             "bubble" => false,
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
         )
         planet_radius = convert(FT, 1.0)
 
@@ -88,6 +90,8 @@ end
             "h_elem" => NaN,
             "topography" => "NoWarp",
             "bubble" => false,
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
         )
         planet_radius = convert(FT, 1.0)
 
@@ -111,7 +115,14 @@ end
 @testset "VerticallyStretchedBoxGrid" begin
 
     # Check that we can build some grids
-    for FT in (Float64, Float32), enable_bubble in (true, false)
+    for FT in (Float64, Float32),
+        enable_bubble in (true, false),
+        (topography, topography_name) in (
+            (nothing, "NoWarp"),
+            (CA.topography_agnesi, "Agnesi"),
+            (CA.topography_schar, "Schar"),
+        )
+
         nh_poly = 3
         dz_bottom = 500
         dz_top = 5000
@@ -134,6 +145,7 @@ end
             dz_top,
             float_type = FT,
             enable_bubble,
+            topography,
         )
         @test box.x_max == convert(FT, x_max)
         @test box.y_max == convert(FT, y_max)
@@ -157,9 +169,11 @@ end
             "z_stretch" => true,
             "config" => "box",
             "bubble" => enable_bubble,
+            "topography" => topography_name,
             # Not used
             "h_elem" => NaN,
-            "topography" => "NoWarp",
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
         )
         planet_radius = convert(FT, 1.0)
 
@@ -183,7 +197,14 @@ end
 @testset "VerticallyUniformBoxGrid" begin
 
     # Check that we can build some grids
-    for FT in (Float64, Float32), enable_bubble in (true, false)
+    for FT in (Float64, Float32),
+        enable_bubble in (true, false),
+        (topography, topography_name) in (
+            (nothing, "NoWarp"),
+            (CA.topography_agnesi, "Agnesi"),
+            (CA.topography_schar, "Schar"),
+        )
+
         nh_poly = 3
         x_elem = 6
         y_elem = 6
@@ -202,6 +223,7 @@ end
             z_max,
             float_type = FT,
             enable_bubble,
+            topography = topography,
         )
         @test box.x_max == convert(FT, x_max)
         @test box.y_max == convert(FT, y_max)
@@ -222,11 +244,13 @@ end
             "z_stretch" => false,
             "config" => "box",
             "bubble" => enable_bubble,
+            "topography" => topography_name,
             # Not used
             "dz_bottom" => NaN,
             "dz_top" => NaN,
             "h_elem" => NaN,
-            "topography" => "NoWarp",
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
         )
         planet_radius = convert(FT, 1.0)
 
@@ -250,7 +274,14 @@ end
 @testset "VerticallyStretchedSphereGrid" begin
 
     # Check that we can build some grids
-    for FT in (Float64, Float32), enable_bubble in (true, false)
+    for FT in (Float64, Float32),
+        enable_bubble in (true, false),
+        (topography, topography_name) in (
+            (nothing, "NoWarp"),
+            (CA.topography_dcmip200, "DCMIP200"),
+            (CA.generate_topography_earth(), "Earth"),
+        )
+
         nh_poly = 3
         dz_bottom = 500
         dz_top = 5000
@@ -269,6 +300,7 @@ end
             dz_top,
             float_type = FT,
             enable_bubble,
+            topography,
         )
         @test sphere.radius == convert(FT, radius)
         @test CA.Grid.float_type(sphere) == FT
@@ -288,8 +320,9 @@ end
             "z_stretch" => true,
             "config" => "sphere",
             "bubble" => enable_bubble,
-            # Not used
-            "topography" => "NoWarp",
+            "topography" => topography_name,
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
         )
         planet_radius = convert(FT, radius)
 
@@ -313,10 +346,18 @@ end
 @testset "VerticallyUniformSphereGrid" begin
 
     # Check that we can build some grids
-    for FT in (Float64, Float32), enable_bubble in (true, false)
+    for FT in (Float64, Float32),
+        enable_bubble in (true, false),
+        (topography, topography_name) in (
+            (nothing, "NoWarp"),
+            (CA.topography_dcmip200, "DCMIP200"),
+            (CA.generate_topography_earth(), "Earth"),
+        )
+
         nh_poly = 3
         h_elem = 6
         y_elem = 6
+        radius = 100
         x_max = 300000
         y_max = 300000
         z_elem = 10
@@ -330,6 +371,7 @@ end
             z_max,
             float_type = FT,
             enable_bubble,
+            topography = topography,
         )
         @test sphere.radius == convert(FT, radius)
         @test CA.Grid.float_type(sphere) == FT
@@ -346,10 +388,12 @@ end
             "z_stretch" => false,
             "config" => "sphere",
             "bubble" => enable_bubble,
+            "topography" => topography_name,
             # Not used
             "dz_bottom" => NaN,
             "dz_top" => NaN,
-            "topography" => "NoWarp",
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
         )
         planet_radius = convert(FT, radius)
 
@@ -366,6 +410,133 @@ end
         @test parent(sphere.center_space.center_local_geometry) ==
               parent(traditional_spaces.center_space.center_local_geometry)
         @test parent(sphere.face_space.center_local_geometry) ==
+              parent(traditional_spaces.face_space.center_local_geometry)
+    end
+end
+
+@testset "VerticallyStretchedPlaneGrid" begin
+
+    # Check that we can build some grids
+    for FT in (Float64, Float32)
+        nh_poly = 3
+        dz_bottom = 500
+        dz_top = 5000
+        x_elem = 6
+        x_max = 300000
+        z_elem = 10
+        z_max = 30000
+
+        plane = CA.Grid.Plane(;
+            nh_poly,
+            x_elem,
+            z_elem,
+            x_max,
+            z_max,
+            dz_bottom,
+            dz_top,
+            float_type = FT,
+        )
+        @test plane.x_max == convert(FT, x_max)
+        @test plane.z_max == convert(FT, z_max)
+        @test CA.Grid.float_type(plane) == FT
+        @test CA.Grid.context(plane) == ClimaComms.context()
+        @test plane.z_stretch ==
+              Meshes.GeneralizedExponentialStretching(FT(dz_bottom), FT(dz_top))
+
+        # The traditional interface takes arguments even if they are not needed
+        parsed_args = Dict(
+            "nh_poly" => nh_poly,
+            "x_elem" => x_elem,
+            "x_max" => x_max,
+            "z_elem" => z_elem,
+            "z_max" => z_max,
+            "dz_bottom" => dz_bottom,
+            "dz_top" => dz_top,
+            "z_stretch" => true,
+            "config" => "plane",
+            # Not used
+            "bubble" => false,
+            "h_elem" => NaN,
+            "topography" => "NoWarp",
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
+        )
+        planet_radius = convert(FT, 1.0)
+
+        traditional_spaces =
+            get_spaces(parsed_args, planet_radius, ClimaComms.context())
+
+        # We cannot compare directly the spaces because they are complex objects made with
+        # mutable components, so we compare the relevant bits
+
+        @test typeof(plane.center_space) ==
+              typeof(traditional_spaces.center_space)
+        @test typeof(plane.face_space) == typeof(traditional_spaces.face_space)
+
+        @test parent(plane.center_space.center_local_geometry) ==
+              parent(traditional_spaces.center_space.center_local_geometry)
+        @test parent(plane.face_space.center_local_geometry) ==
+              parent(traditional_spaces.face_space.center_local_geometry)
+    end
+end
+
+@testset "VerticallyUniformPlaneGrid" begin
+
+    # Check that we can build some grids
+    for FT in (Float64, Float32)
+        nh_poly = 3
+        x_elem = 6
+        x_max = 300000
+        z_elem = 10
+        z_max = 30000
+
+        plane = CA.Grid.VerticallyUniformPlaneGrid(;
+            nh_poly,
+            x_elem,
+            z_elem,
+            x_max,
+            z_max,
+            float_type = FT,
+        )
+        @test plane.x_max == convert(FT, x_max)
+        @test plane.z_max == convert(FT, z_max)
+        @test CA.Grid.float_type(plane) == FT
+        @test CA.Grid.context(plane) == ClimaComms.context()
+        @test plane.z_stretch == Meshes.Uniform()
+
+        # The traditional interface takes arguments even if they are not needed
+        parsed_args = Dict(
+            "nh_poly" => nh_poly,
+            "x_elem" => x_elem,
+            "x_max" => x_max,
+            "z_elem" => z_elem,
+            "z_max" => z_max,
+            "z_stretch" => false,
+            "config" => "plane",
+            "topography" => "NoWarp",
+            # Not used
+            "bubble" => false,
+            "dz_bottom" => NaN,
+            "dz_top" => NaN,
+            "h_elem" => NaN,
+            "topo_smoothing" => false,
+            "smoothing_order" => 3,
+        )
+        planet_radius = convert(FT, 1.0)
+
+        traditional_spaces =
+            get_spaces(parsed_args, planet_radius, ClimaComms.context())
+
+        # We cannot compare directly the spaces because they are complex objects made with
+        # mutable components, so we compare the relevant bits
+
+        @test typeof(plane.center_space) ==
+              typeof(traditional_spaces.center_space)
+        @test typeof(plane.face_space) == typeof(traditional_spaces.face_space)
+
+        @test parent(plane.center_space.center_local_geometry) ==
+              parent(traditional_spaces.center_space.center_local_geometry)
+        @test parent(plane.face_space.center_local_geometry) ==
               parent(traditional_spaces.face_space.center_local_geometry)
     end
 end

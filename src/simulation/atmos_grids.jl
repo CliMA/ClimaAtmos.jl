@@ -2,10 +2,12 @@
 # - ColumnGrid (with UniformColumnGrid and StretchedColumnGrid)
 # - BoxGrid (with VerticallyUniformBoxGrid and VerticallyStretchedBoxGrid)
 # - SphereGrid (with VerticallyUniformSphereGrid and VerticallyStretchedSphereGrid)
+# - PlaneGrid (with VerticallyUniformPlaneGrid and VerticallyStretchedPlaneGrid)
 #
 # We provide aliases for common grids:
 # - Box = VerticallyStretchedBoxGrid
 # - Sphere = VerticallyStretchedSphereGrid
+# - Plane = VerticallyStretchedPlaneGrid
 #
 # We also provide convenience functions to build these grids.
 include("atmos_grids_makers.jl")
@@ -69,25 +71,10 @@ function UniformColumnGrid(;
     comms_ctx = ClimaComms.context(),
     float_type = Float64,
 )
-    isa(comms_ctx, ClimaComms.SingletonCommsContext) ||
-        error("ColumnGrids are incompatible with MPI")
-
     # Promote types
     z_max = float_type(z_max)
-
-    # Vertical space
     z_stretch = Meshes.Uniform()
-    z_space =
-        make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
-
-    # Horizontal space
-    h_space = make_trivial_horizontal_space(; comms_ctx, float_type)
-
-    # 3D space
-    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
-
-    return ColumnGrid(; center_space, face_space, z_elem, z_max, z_stretch)
+    return make_column(z_elem, z_max, z_stretch, comms_ctx, float_type)
 end
 
 
@@ -99,7 +86,7 @@ function StretchedColumnGrid(; z_elem,
                                comms_ctx = ClimaComms.context(),
                                float_type = Float64)
 
-Construct an `AbstractAtmosGrid` for a column with non-uniform resolution (as
+Construct an `ColumnGrid` for a column with non-uniform resolution (as
 prescribed by `ClimaCore.Meshes.GeneralizedExponentialStretching`).
 
 Keyword arguments
@@ -125,27 +112,9 @@ function StretchedColumnGrid(;
     comms_ctx = ClimaComms.context(),
     float_type = Float64,
 )
-
-    isa(comms_ctx, ClimaComms.SingletonCommsContext) ||
-        error("ColumnGrids are incompatible with MPI")
-
-    # Promote types
-    z_max, dz_bottom, dz_top =
-        [float_type(v) for v in [z_max, dz_bottom, dz_top]]
-
-    # Vertical space
+    z_max, dz_bottom, dz_top = map(float_type, (z_max, dz_bottom, dz_top))
     z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
-    z_space =
-        make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
-
-    # Horizontal space
-    h_space = make_trivial_horizontal_space(; comms_ctx, float_type)
-
-    # 3D space
-    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
-
-    return ColumnGrid(; center_space, face_space, z_max, z_elem, z_stretch)
+    return make_column(z_elem, z_max, z_stretch, comms_ctx, float_type)
 end
 
 ###########
@@ -158,6 +127,7 @@ Base.@kwdef struct BoxGrid{
     I <: Integer,
     FT <: Real,
     SR <: Meshes.StretchingRule,
+    T,
 } <: AbstractAtmosGrid
     center_space::CS
     face_space::FS
@@ -174,6 +144,8 @@ Base.@kwdef struct BoxGrid{
     z_stretch::SR
 
     enable_bubble::Bool
+
+    topography::T
 end
 
 function Base.summary(io::IO, grid::BoxGrid)
@@ -196,8 +168,11 @@ function Base.summary(io::IO, grid::BoxGrid)
         io,
         "  ",
         grid.enable_bubble ? "with" : "without",
-        " bubble correction",
+        ": bubble correction",
     )
+    if !isnothing(grid.topography)
+        println(io, "  with: $(grid.topography) topography")
+    end
 end
 
 """
@@ -210,11 +185,13 @@ function VerticallyStretchedBoxGrid(; nh_poly,
                                       z_max,
                                       dz_bottom,
                                       dz_top,
+                                      topography = nothing,
+                                      topo_smoothing = false,
                                       enable_bubble = false,
                                       comms_ctx = ClimaComms.context(),
                                       float_type = Float64)
 
-Construct an `AbstractAtmosGrid` for a periodic box with columns with non-uniform
+Construct an `BoxGrid` for a periodic box with columns with non-uniform
 resolution (as prescribed by `ClimaCore.Meshes.GeneralizedExponentialStretching`).
 
 Keyword arguments
@@ -229,6 +206,8 @@ Keyword arguments
 - `dz_bottom`: Resolution at the lower end of the column (in meters).
 - `dz_top`: Resolution at the top end of the column (in meters).
 - `z_max`: Height of the column (in meters).
+- `topography`: Define the surface elevation profile. Provided as a warp function (or nothing).
+- `topo_smoothing`: Whether to order-2 smoothing on the LGL mesh.
 - `enable_bubble`: Enables the `bubble correction` for more accurate element areas.
 - `comms_ctx`: Context of the computational environment where the simulation should be run,
                as defined in ClimaComms. By default, the CLIMACOMMS_DEVICE environment
@@ -248,41 +227,16 @@ function VerticallyStretchedBoxGrid(;
     z_max,
     dz_bottom,
     dz_top,
+    topography = nothing,
+    topo_smoothing = false,
     enable_bubble = false,
     comms_ctx = ClimaComms.context(),
     float_type = Float64,
 )
-
-    # Promote types
     x_max, y_max, z_max, dz_bottom, dz_top =
-        [float_type(v) for v in [x_max, y_max, z_max, dz_bottom, dz_top]]
-
-    # Vertical
+        map(float_type, (x_max, y_max, z_max, dz_bottom, dz_top))
     z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
-    z_space =
-        make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
-
-    # Horizontal
-    x_domain = Domains.IntervalDomain(
-        Geometry.XPoint(zero(x_max)),
-        Geometry.XPoint(x_max);
-        periodic = true,
-    )
-    y_domain = Domains.IntervalDomain(
-        Geometry.YPoint(zero(y_max)),
-        Geometry.YPoint(y_max);
-        periodic = true,
-    )
-    h_domain = Domains.RectangleDomain(x_domain, y_domain)
-    h_mesh = Meshes.RectilinearMesh(h_domain, x_elem, y_elem)
-    h_space = make_horizontal_space(; nh_poly, h_mesh, comms_ctx, enable_bubble)
-
-    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
-
-    return BoxGrid(;
-        center_space,
-        face_space,
+    return make_box(;
         nh_poly,
         x_elem,
         x_max,
@@ -292,6 +246,10 @@ function VerticallyStretchedBoxGrid(;
         z_max,
         z_stretch,
         enable_bubble,
+        topography,
+        topo_smoothing,
+        comms_ctx,
+        float_type,
     )
 end
 
@@ -306,6 +264,8 @@ function VerticallyUniformBoxGrid(; nh_poly,
                                     y_max,
                                     z_elem,
                                     z_max,
+                                      topography = nothing,
+                                      topo_smoothing = false,
                                     enable_bubble = false,
                                     comms_ctx = ClimaComms.context(),
                                     float_type = Float64)
@@ -322,6 +282,8 @@ Keyword arguments
 - `y_max`: Depth of the box (in meters) (`y_min` is 0).
 - `z_elem`: Number of spectral elements on the vertical direction.
 - `z_max`: Height of the column (in meters).
+- `topography`: Define the surface elevation profile. Provided as a warp function (or nothing).
+- `topo_smoothing`: Whether to order-2 smoothing on the LGL mesh.
 - `enable_bubble`: Enables the `bubble correction` for more accurate element areas.
 - `comms_ctx`: Context of the computational environment where the simulation should be run,
                as defined in ClimaComms. By default, the CLIMACOMMS_DEVICE environment
@@ -339,40 +301,18 @@ function VerticallyUniformBoxGrid(;
     y_max,
     z_elem,
     z_max,
+    topography = nothing,
+    topo_smoothing = false,
     enable_bubble = false,
     comms_ctx = ClimaComms.context(),
     float_type = Float64,
 )
-
     # Promote types
-    x_max, y_max, z_max = [float_type(v) for v in [x_max, y_max, z_max]]
+    x_max, y_max, z_max = map(float_type, (x_max, y_max, z_max))
 
     # Vertical
     z_stretch = Meshes.Uniform()
-    z_space =
-        make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
-
-    # Horizontal
-    x_domain = Domains.IntervalDomain(
-        Geometry.XPoint(zero(x_max)),
-        Geometry.XPoint(x_max);
-        periodic = true,
-    )
-    y_domain = Domains.IntervalDomain(
-        Geometry.YPoint(zero(y_max)),
-        Geometry.YPoint(y_max);
-        periodic = true,
-    )
-    h_domain = Domains.RectangleDomain(x_domain, y_domain)
-    h_mesh = Meshes.RectilinearMesh(h_domain, x_elem, y_elem)
-    h_space = make_horizontal_space(; nh_poly, h_mesh, comms_ctx, enable_bubble)
-
-    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
-
-    return BoxGrid(;
-        center_space,
-        face_space,
+    return make_box(;
         nh_poly,
         x_elem,
         x_max,
@@ -382,6 +322,10 @@ function VerticallyUniformBoxGrid(;
         z_max,
         z_stretch,
         enable_bubble,
+        topography,
+        topo_smoothing,
+        comms_ctx,
+        float_type,
     )
 end
 
@@ -395,6 +339,7 @@ Base.@kwdef struct SphereGrid{
     I <: Integer,
     FT <: Real,
     SR <: Meshes.StretchingRule,
+    T,
 } <: AbstractAtmosGrid
     center_space::CS
     face_space::FS
@@ -409,6 +354,8 @@ Base.@kwdef struct SphereGrid{
     z_stretch::SR
 
     enable_bubble::Bool
+
+    topography::T
 end
 
 function Base.summary(io::IO, grid::SphereGrid)
@@ -420,15 +367,18 @@ function Base.summary(io::IO, grid::SphereGrid)
     for field in fieldnames(typeof(grid.z_stretch))
         println(io, "  with: $(field): $(getproperty(grid.z_stretch, field))")
     end
-    println(io, "Radius: $radius meters")
-    println(io, "Horizontal elements per edge")
+    println(io, "Radius: $(grid.radius) meters")
+    println(io, "Horizontal elements per edge: $(grid.h_elem)")
     println(io, "  with: $(grid.nh_poly)-degree polynomials")
     println(
         io,
         "  ",
         grid.enable_bubble ? "with" : "without",
-        " bubble correction",
+        ": bubble correction",
     )
+    if !isnothing(grid.topography)
+        println(io, "  with: $(grid.topography) topography")
+    end
 end
 
 """
@@ -439,6 +389,8 @@ function VerticallyStretchedSphereGrid(; nh_poly,
                                          z_max,
                                          dz_bottom,
                                          dz_top,
+                                         topography = nothing,
+                                         topo_smoothing = false,
                                          enable_bubble = false,
                                          comms_ctx = ClimaComms.context(),
                                          float_type = Float64)
@@ -461,6 +413,8 @@ Keyword arguments
 - `dz_bottom`: Resolution at the lower end of the column (in meters).
 - `dz_top`: Resolution at the top end of the column (in meters).
 - `z_max`: Height of the column (in meters).
+- `topography`: Define the surface elevation profile. Provided as a warp function (or nothing).
+- `topo_smoothing`: Whether to order-2 smoothing on the LGL mesh.
 - `enable_bubble`: Enables the `bubble correction` for more accurate element areas.
 - `comms_ctx`: Context of the computational environment where the simulation should be run,
                as defined in ClimaComms. By default, the CLIMACOMMS_DEVICE environment
@@ -478,38 +432,27 @@ function VerticallyStretchedSphereGrid(;
     z_max,
     dz_bottom,
     dz_top,
+    topography = nothing,
+    topo_smoothing = false,
     enable_bubble = false,
     comms_ctx = ClimaComms.context(),
     float_type = Float64,
 )
-
-    # Promote types
     radius, dz_bottom, dz_top, z_max =
-        [float_type(v) for v in [radius, dz_bottom, dz_top, z_max]]
-
-    # Vertical
+        map(float_type, (radius, dz_bottom, dz_top, z_max))
     z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
-    z_space =
-        make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
-
-    # Horizontal
-    h_domain = Domains.SphereDomain(radius)
-    h_mesh = Meshes.EquiangularCubedSphere(h_domain, h_elem)
-    h_space = make_horizontal_space(; nh_poly, h_mesh, comms_ctx, enable_bubble)
-
-    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
-
-    return SphereGrid(;
-        center_space,
-        face_space,
-        nh_poly,
+    return make_sphere(;
         h_elem,
         radius,
+        nh_poly,
         z_elem,
         z_max,
         z_stretch,
+        topography,
+        topo_smoothing,
         enable_bubble,
+        comms_ctx,
+        float_type,
     )
 end
 
@@ -522,6 +465,8 @@ function VerticallyUniformSphereGrid(; nh_poly,
                                          radius,
                                          z_elem,
                                          z_max,
+                                         topography = nothing,
+                                         topo_smoothing = false,
                                          enable_bubble = false,
                                          comms_ctx = ClimaComms.context(),
                                          float_type = Float64)
@@ -537,6 +482,8 @@ Keyword arguments
 - `h_elem`: Number of spectral elements per edge.
 - `z_elem`: Number of spectral elements on the vertical direction.
 - `z_max`: Height of the column (in meters).
+- `topography`: Define the surface elevation profile. Provided as a warp function (or nothing).
+- `topo_smoothing`: Whether to order-2 smoothing on the LGL mesh.
 - `enable_bubble`: Enables the `bubble correction` for more accurate element areas.
 - `comms_ctx`: Context of the computational environment where the simulation should be run,
                as defined in ClimaComms. By default, the CLIMACOMMS_DEVICE environment
@@ -552,13 +499,183 @@ function VerticallyUniformSphereGrid(;
     radius,
     z_elem,
     z_max,
+    topography = nothing,
+    topo_smoothing = false,
     enable_bubble = false,
+    comms_ctx = ClimaComms.context(),
+    float_type = Float64,
+)
+    radius, z_max = map(float_type, (radius, z_max))
+    z_stretch = Meshes.Uniform()
+    return make_sphere(;
+        h_elem,
+        radius,
+        nh_poly,
+        z_elem,
+        z_max,
+        z_stretch,
+        topography,
+        topo_smoothing,
+        enable_bubble,
+        comms_ctx,
+        float_type,
+    )
+end
+
+#############
+# PlaneGrid #
+#############
+
+Base.@kwdef struct PlaneGrid{
+    CS <: Spaces.ExtrudedFiniteDifferenceSpace,
+    FS <: Spaces.ExtrudedFiniteDifferenceSpace,
+    I <: Integer,
+    FT <: Real,
+    SR <: Meshes.StretchingRule,
+} <: AbstractAtmosGrid
+    center_space::CS
+    face_space::FS
+
+    nh_poly::I
+
+    x_elem::I
+    x_max::FT
+    z_elem::I
+    z_max::FT
+
+    z_stretch::SR
+end
+
+function Base.summary(io::IO, grid::PlaneGrid)
+    println(io, "Grid type: $(nameof(typeof(grid)))")
+    println(io, "Number of vertical elements: $(grid.z_elem)")
+    println(io, "Height: $(grid.z_max) meters")
+    println(io, "Vertical grid stretching: $(nameof(typeof(grid.z_stretch)))")
+    # Add information about the stretching, if any
+    for field in fieldnames(typeof(grid.z_stretch))
+        println(io, "  with: $(field): $(getproperty(grid.z_stretch, field))")
+    end
+    FT = float_type(grid)
+    println(io, "Horizontal domain: $x∈ [$(zero(FT)), $(grid.x_max)]")
+    println(io, "  with: $(grid.x_elem) elements")
+    println(io, "  with: $(grid.nh_poly)-degree polynomials")
+end
+
+"""
+function VerticallyStretchedPlaneGrid(; nh_poly,
+                                      x_elem,
+                                      x_max,
+                                      z_elem,
+                                      z_max,
+                                      dz_bottom,
+                                      dz_top,
+                                      comms_ctx = ClimaComms.context(),
+                                      float_type = Float64)
+
+Construct a `PlaneGrid` for a periodic linear domain with columns with
+non-uniform resolution (as prescribed by
+`ClimaCore.Meshes.GeneralizedExponentialStretching`).
+
+Keyword arguments
+=================
+
+- `nh_poly`: Horizontal polynomial degree.
+- `x_elem`: Number of spectral elements on the x direction.
+- `x_max`: Length of the box (in meters) (`x_min` is 0).
+- `z_elem`: Number of spectral elements on the vertical direction.
+- `dz_bottom`: Resolution at the lower end of the column (in meters).
+- `dz_top`: Resolution at the top end of the column (in meters).
+- `z_max`: Height of the column (in meters).
+- `comms_ctx`: Context of the computational environment where the simulation should be run,
+               as defined in ClimaComms. By default, the CLIMACOMMS_DEVICE environment
+               variable is read for one of "CPU", "CPUSingleThreaded", "CPUMultiThreaded",
+               "CUDA". If none is found, the fallback is to use a GPU (if available), or a
+               single threaded CPU (if not).
+- `float_type`: Floating point type. Typically, Float32 or Float64 (default).
+
+"""
+function VerticallyStretchedPlaneGrid(;
+    nh_poly,
+    x_elem,
+    x_max,
+    z_elem,
+    z_max,
+    dz_bottom,
+    dz_top,
     comms_ctx = ClimaComms.context(),
     float_type = Float64,
 )
 
     # Promote types
-    radius, z_max = [float_type(v) for v in [radius, z_max]]
+    x_max, z_max, dz_bottom, dz_top =
+        map(float_type, (x_max, z_max, dz_bottom, dz_top))
+
+    # Vertical
+    z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
+    z_space =
+        make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
+
+    # Horizontal
+    h_space = make_plane_horizontal_space(; x_max, x_elem, nh_poly, comms_ctx)
+
+    center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
+    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
+
+    return PlaneGrid(;
+        center_space,
+        face_space,
+        nh_poly,
+        x_elem,
+        x_max,
+        z_elem,
+        z_max,
+        z_stretch,
+    )
+end
+
+# Alias for a commonly used grid type
+const Plane = VerticallyStretchedPlaneGrid
+
+"""
+function VerticallyUniformPlaneGrid(; nh_poly,
+                                    x_elem,
+                                    x_max,
+                                    y_elem,
+                                    y_max,
+                                    z_elem,
+                                    z_max,
+                                    comms_ctx = ClimaComms.context(),
+                                    float_type = Float64)
+
+Construct an `PlaneGrid` for a periodic box with columns with uniform resolution.
+
+Keyword arguments
+=================
+
+- `nh_poly`: Horizontal polynomial degree.
+- `x_elem`: Number of spectral elements on the x direction.
+- `x_max`: Length of the box (in meters) (`x_min` is 0).
+- `z_elem`: Number of spectral elements on the vertical direction.
+- `z_max`: Height of the column (in meters).
+- `comms_ctx`: Context of the computational environment where the simulation should be run,
+               as defined in ClimaComms. By default, the CLIMACOMMS_DEVICE environment
+               variable is read for one of "CPU", "CPUSingleThreaded", "CPUMultiThreaded",
+               "CUDA". If none is found, the fallback is to use a GPU (if available), or a
+               single threaded CPU (if not).
+- `float_type`: Floating point type. Typically, Float32 or Float64 (default).
+
+"""
+function VerticallyUniformPlaneGrid(;
+    nh_poly,
+    x_elem,
+    x_max,
+    z_elem,
+    z_max,
+    comms_ctx = ClimaComms.context(),
+    float_type = Float64,
+)
+    # Promote types
+    x_max, z_max = [float_type(v) for v in [x_max, z_max]]
 
     # Vertical
     z_stretch = Meshes.Uniform()
@@ -566,22 +683,19 @@ function VerticallyUniformSphereGrid(;
         make_vertical_space(; z_elem, z_max, z_stretch, comms_ctx, float_type)
 
     # Horizontal
-    h_domain = Domains.SphereDomain(radius)
-    h_mesh = Meshes.EquiangularCubedSphere(h_domain, h_elem)
-    h_space = make_horizontal_space(; nh_poly, h_mesh, comms_ctx, enable_bubble)
+    h_space = make_plane_horizontal_space(; x_max, x_elem, nh_poly, comms_ctx)
 
     center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
 
-    return SphereGrid(;
+    return PlaneGrid(;
         center_space,
         face_space,
         nh_poly,
-        h_elem,
-        radius,
+        x_elem,
+        x_max,
         z_elem,
         z_max,
         z_stretch,
-        enable_bubble,
     )
 end

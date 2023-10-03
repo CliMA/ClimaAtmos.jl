@@ -1,6 +1,10 @@
 using ClimaCore:
     Geometry, Domains, Meshes, Topologies, Spaces, Hypsography, Fields
 using ClimaComms
+using NCDatasets
+import ImageFiltering: Kernel
+import ImageFiltering: imfilter
+import Interpolations: Periodic, Flat, linear_interpolation
 
 function periodic_line_mesh(; x_max, x_elem)
     domain = Domains.IntervalDomain(
@@ -88,7 +92,6 @@ function make_hybrid_spaces(
         boundary_tags = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
-    @info "z heights" z_mesh.faces
     if surface_warp == nothing
         device = ClimaComms.device(h_space)
         comms_ctx = ClimaComms.SingletonCommsContext(device)
@@ -123,15 +126,15 @@ function get_spaces(parsed_args, planet_radius, comms_ctx)
 
     @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
     if topography == "DCMIP200"
-        warp_function = topography_dcmip200
+        warp_function = CA.topography_dcmip200
     elseif topography == "Agnesi"
-        warp_function = topography_agnesi
+        warp_function = CA.topography_agnesi
     elseif topography == "Schar"
-        warp_function = topography_schar
+        warp_function = CA.topography_schar
     elseif topography == "NoWarp"
         warp_function = nothing
     elseif topography == "Earth"
-        data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        data_path = joinpath(CA.topo_elev_dataset_path(), "ETOPO1_coarse.nc")
         earth_spline = NCDataset(data_path) do data
             zlevels = data["elevation"][:]
             lon = data["longitude"][:]
@@ -145,11 +148,8 @@ function get_spaces(parsed_args, planet_radius, comms_ctx)
                 extrapolation_bc = (Periodic(), Flat()),
             )
         end
-        @info "Generated interpolation stencil"
-        warp_function = generate_topography_warp(earth_spline)
+        warp_function = CA.generate_topography_warp(earth_spline)
     end
-    @info "Topography" topography
-
 
     h_elem = parsed_args["h_elem"]
     radius = planet_radius
@@ -177,7 +177,6 @@ function get_spaces(parsed_args, planet_radius, comms_ctx)
             )
         end
     elseif parsed_args["config"] == "column" # single column
-        @warn "perturb_initstate flag is ignored for single column configuration"
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
         quad = Spaces.Quadratures.GL{1}()
         horizontal_mesh = periodic_rectangle_mesh(;
@@ -186,10 +185,6 @@ function get_spaces(parsed_args, planet_radius, comms_ctx)
             x_elem = 1,
             y_elem = 1,
         )
-        if bubble
-            @warn "Bubble correction not compatible with single column configuration. It will be switched off."
-            bubble = false
-        end
         h_space =
             make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
         z_stretch = if parsed_args["z_stretch"]
@@ -253,7 +248,6 @@ function get_spaces(parsed_args, planet_radius, comms_ctx)
     quad_style = Spaces.quadrature_style(hspace)
     Nq = Spaces.Quadratures.degrees_of_freedom(quad_style)
 
-    @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
     return (;
         center_space,
         face_space,

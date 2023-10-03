@@ -77,3 +77,25 @@ function topography_schar(coords)
     zₛ = @. h_c * exp(-((x - x_c) / a_c)^2) * (cospi((x - x_c) / λ_c))^2
     return zₛ
 end
+
+"""
+    generate_topography_earth(x,z)
+
+Return a function that describes the Earth topography.
+"""
+function generate_topography_earth(; smooth_degree::Int = 3)
+    data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+    earth_spline = NCDataset(data_path) do data
+        zlevels = data["elevation"][:]
+        lon = data["longitude"][:]
+        lat = data["latitude"][:]
+        # Apply Smoothing
+        esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
+        linear_interpolation(
+            (lon, lat),
+            esmth,
+            extrapolation_bc = (Periodic(), Flat()),
+        )
+    end
+    return generate_topography_warp(earth_spline)
+end
