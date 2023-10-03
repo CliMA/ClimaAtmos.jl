@@ -14,6 +14,11 @@ used in the field:
   (higher resolution at the bottom of the column). The variant with constant
   resolution is called `UniformColumnGrid`. Columns can only be run on
   single-threaded simulations.
+- `VerticallyStretchedBoxGrid`, a period box with columns (1D) domain with
+  non-uniform resolution in the vertical direction (higher resolution at the
+  bottom of the column). The variant with vertically uniform resolution is
+  `VerticallyUniformBoxGrid`. Given that `VerticallyStretchedBoxGrid` is a
+  commonly used domain, we also provide an alias `Box` for it.
 
 By convention, all the `AbstractAtmosGrid`s in `ClimaAtmos` have a name that
 ends in `Grid`.

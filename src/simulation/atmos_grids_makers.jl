@@ -65,3 +65,36 @@ function make_trivial_horizontal_space(; comms_ctx, float_type)
     )
     return Spaces.SpectralElementSpace2D(h_topology, h_quadrature;)
 end
+
+
+"""
+    make_horizontal_space(; nh_poly,
+                            h_mesh,
+                            comms_ctx::ClimaComms.AbstractCommsContext,
+                            float_type,
+                            enable_bubble,
+                            )
+
+Return a 2D `Spaces.SpectralElementSpace2D` built from the given horizontal `h_mesh`.
+"""
+function make_horizontal_space(;
+    nh_poly,
+    h_mesh,
+    comms_ctx,
+    enable_bubble = false,
+)
+    h_quadrature = Spaces.Quadratures.GLL{nh_poly + 1}()
+
+    # We have to pick different topologies depending if we are running on a single process or not.
+    make_topology =
+        comms_ctx isa ClimaComms.SingletonCommsContext ? Topologies.Topology2D :
+        Topologies.DistributedTopology2D
+
+    h_topology =
+        make_topology(comms_ctx, h_mesh, Topologies.spacefillingcurve(h_mesh))
+    return Spaces.SpectralElementSpace2D(
+        h_topology,
+        h_quadrature;
+        enable_bubble = enable_bubble,
+    )
+end
