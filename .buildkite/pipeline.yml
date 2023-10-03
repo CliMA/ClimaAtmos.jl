@@ -12,6 +12,7 @@ env:
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
   JULIA_CPU_TARGET: 'broadwell;skylake'
   CONFIG_PATH: "config/model_configs"
+  GPU_CONFIG_PATH: "config/gpu_configs/"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
   SLURM_KILL_BAD_EXIT: 1
@@ -910,6 +911,17 @@ steps:
         depends_on:
           - "sphere_held_suarez_rhoe_hightop"
           - "gpu_held_suarez_rhoe_hightop"
+
+      - label: "GPU: GPU moist Held-Suarez"
+        command: >
+          julia --project -e 'using CUDA; CUDA.versioninfo()'
+
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $GPU_CONFIG_PATH/central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
+        artifact_paths: "central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
+        agents:
+          slurm_gpus: 1
+        soft_fail: true
 
   - group: "GPU Performance"
     steps:
