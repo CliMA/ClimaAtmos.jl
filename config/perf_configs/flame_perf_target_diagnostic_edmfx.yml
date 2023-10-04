@@ -1,0 +1,9 @@
+dt_save_to_disk: "600secs"
+edmfx_entr_model: "ConstantTimescale"
+edmfx_nh_pressure: true
+edmfx_upwinding: "first_order"
+prognostic_tke: true
+edmfx_sgs_flux: true
+turbconv: "diagnostic_edmfx"
+job_id: "flame_perf_target_diagnostic_edmfx"
+edmfx_detr_model: "ConstantCoefficient"

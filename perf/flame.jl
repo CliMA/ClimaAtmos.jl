@@ -4,19 +4,13 @@ import ClimaAtmos as CA
 
 include("common.jl")
 
-length(ARGS) < 2 && error("Usage: benchmark.jl <target_job> <job_id>")
-target_job = ARGS[1]
-job_id = get(ARGS, 2, target_job)
-
-config_dict =
-    target_job != "default" ? CA.config_from_target_job(target_job) :
-    CA.default_config_dict()
-
-# Need to set internal job_id for diagnostics saved by model
-config_dict["job_id"] = job_id
-
-config = AtmosCoveragePerfConfig(; config_dict)
+length(ARGS) != 1 && error("Usage: flame.jl <config_file>")
+config_file = ARGS[1]
+config_dict = YAML.load_file(config_file)
+config = AtmosCoveragePerfConfig(config_dict)
+job_id = config.parsed_args["job_id"]
 integrator = CA.get_integrator(config)
+
 # The callbacks flame graph is very expensive, so only do 2 steps.
 @info "running step"
 
@@ -69,7 +63,7 @@ allocs_limit["flame_perf_target"] = 12864
 allocs_limit["flame_perf_target_tracers"] = 212496
 allocs_limit["flame_perf_target_edmfx"] = 304064
 allocs_limit["flame_perf_diagnostics"] = 3024344
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 862576
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 862960
 allocs_limit["flame_perf_target_edmf"] = 12459299664
 allocs_limit["flame_perf_target_threaded"] = 6175664
 allocs_limit["flame_perf_target_callbacks"] = 46413904

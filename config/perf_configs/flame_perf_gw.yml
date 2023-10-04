@@ -1,0 +1,9 @@
+dz_bottom: 300.0
+rayleigh_sponge: true
+toml:
+  - "toml/flame_perf_gw.toml"
+orographic_gravity_wave: "raw_topo"
+idealized_insolation: false
+non_orographic_gravity_wave: true
+job_id: "flame_perf_gw"
+z_max: 45000.0

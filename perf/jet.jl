@@ -1,9 +1,12 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosCoveragePerfConfig(;
-    config_dict = CA.config_from_target_job("edmfx_adv_test_box"),
-)
+
+include("common.jl")
+
+config_dict = Dict("z_elem" => 63, "dt" => "10secs", "t_end" => "3600secs")
+config = AtmosCoveragePerfConfig(config_dict)
+
 integrator = CA.get_integrator(config)
 
 import JET

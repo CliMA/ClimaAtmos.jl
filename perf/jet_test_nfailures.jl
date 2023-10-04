@@ -4,14 +4,11 @@ import ClimaAtmos as CA
 
 include("common.jl")
 
-length(ARGS) < 2 && error("Usage: benchmark.jl <target_job> <job_id>")
-target_job = ARGS[1]
-job_id = get(ARGS, 2, target_job)
+length(ARGS) != 1 && error("Usage: jet_test_nfailures.jl <config_file>")
+config_file = ARGS[1]
+config_dict = YAML.load_file(config_file)
+config = AtmosCoveragePerfConfig(config_dict)
 
-config_dict =
-    target_job != "default" ? CA.config_from_target_job(target_job) :
-    CA.default_config_dict()
-config = AtmosCoveragePerfConfig(; config_dict)
 integrator = CA.get_integrator(config)
 
 import JET
