@@ -172,6 +172,6 @@ function CTS.step_u!(
     @. u += dt * b_imp[3] * T_imp[3]
     @. u += dt * b_imp[4] * T_imp[4]
     dss!(u, p, t_final)
-    # post_explicit!(u, p, t_final)
+    post_explicit!(u, p, t_final)
     return u
 end

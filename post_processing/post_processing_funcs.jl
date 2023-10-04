@@ -277,7 +277,6 @@ function postprocessing_plane(sol, output_dir, p)
     )
 
     Y = sol.u[end]
-    CA.set_precomputed_quantities!(Y, p, sol.t[end]) # sets ᶜts and ᶜu
 
     ## Plots for last timestep
     function gen_plot_plane(
