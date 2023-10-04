@@ -719,7 +719,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             )
             if is_cts_algo(ode_algo)
-                CA.AtmosODEFunction(;
+                CTS.ClimaODEFunction(;
                     T_lim! = limited_tendency!,
                     T_exp! = remaining_tendency!,
                     T_imp! = implicit_func,
