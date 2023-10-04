@@ -5,11 +5,12 @@ using Base.CoreLogging
 using DocumenterCitations
 
 disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
-doctest(ClimaAtmos)
+bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
+
+doctest(ClimaAtmos; plugins = [bib])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
 include("make_diagnostic_table.jl")
-bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
 makedocs(;
     plugins = [bib],
     modules = [ClimaAtmos],
