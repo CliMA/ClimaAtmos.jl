@@ -12,28 +12,18 @@ include(joinpath("..", "perf", "common.jl"))
     @test config.parsed_args["y_elem"] == 6
 
     # Test with `target_job`
-    config = AtmosCoveragePerfConfig(;
-        config_dict = CA.config_from_target_job("sphere_baroclinic_wave_rhoe"),
+    config = AtmosCoveragePerfConfig(
+        CA.config_from_target_job("sphere_baroclinic_wave_rhoe"),
     )
     # Target job config overridden by `default_perf`
-    @test config.parsed_args["dt"] == "1secs"
+    @test config.parsed_args["dt"] == "400secs"
     # Target job config not overridden by `default_perf`
     @test config.parsed_args["regression_test"] == true
 
     # Test that config_dict overrides `default_perf`
     config_dict = Dict("dt" => "50secs", "turbconv_case" => "GABLS")
-    config = AtmosCoveragePerfConfig(; config_dict)
-    @test config.parsed_args["dt"] == "1secs"
+    config = AtmosCoveragePerfConfig(config_dict)
+    @test config.parsed_args["dt"] == "50secs"
     @test config.parsed_args["turbconv_case"] == "GABLS"
-
-    # Test that `default_perf` overrides `target_job`
-    config = AtmosCoveragePerfConfig(;
-        config_dict = CA.config_from_target_job("sphere_baroclinic_wave_rhoe"),
-    )
-    # default_perf
-    @test config.parsed_args["dt"] == "1secs"
-    # target_job
-    @test config.parsed_args["regression_test"] == true
-    # defaults
-    @test config.parsed_args["y_elem"] == 6
+    @test config.parsed_args["regression_test"] == false
 end

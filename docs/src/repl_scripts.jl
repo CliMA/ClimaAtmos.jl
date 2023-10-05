@@ -16,7 +16,7 @@ function print_repl_script(config)
         end
     end
     ib *= """\n"""
-    ib *= """config = CA.AtmosConfig(; config_dict);\n"""
+    ib *= """config = CA.AtmosConfig(config_dict);\n"""
     ib *= """\n"""
     ib *= """include("examples/hybrid/driver.jl")\n"""
     println(ib)
