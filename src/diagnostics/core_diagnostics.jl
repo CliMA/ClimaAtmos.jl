@@ -557,3 +557,36 @@ add_diagnostic_variable!(
     comments = "Total precipitation including rain and snow",
     compute! = compute_pr!,
 )
+###
+# Topography
+###
+compute_orog!(out, state, cache, time) =
+    compute_orog!(out, state, cache, time, axes(state.c).hypsography)
+
+function compute_orog!(out, state, cache, time, hypsography::Spaces.Flat)
+    # When we have a Flat topography, we just have to return a field of zeros
+    if isnothing(out)
+        return zeros(Spaces.horizontal_space(axes(state.c.ρ)))
+    else
+        # There's shouldn't be much point in this branch, but let's leave it here for
+        # consistency
+        out .= zeros(Spaces.horizontal_space(axes(state.c.ρ)))
+    end
+end
+
+function compute_orog!(out, state, cache, time, hypsography)
+    if isnothing(out)
+        return hypsography.surface
+    else
+        out .= hypsography.surface
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "orog",
+    long_name = "Surface Altitude",
+    standard_name = "surface_altitude",
+    units = "m",
+    comments = "Elevation of the horizontal coordinates",
+    compute! = compute_orog!,
+)
