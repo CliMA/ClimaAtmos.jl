@@ -825,8 +825,10 @@ function get_integrator(config::AtmosConfig)
     # executing the other callbacks. This single function is orchestrate_diagnostics
 
     function orchestrate_diagnostics(integrator)
-        diagnostics_to_be_run =
-            filter(d -> integrator.step % d.cbf.n == 0, diagnostics_functions)
+        diagnostics_to_be_run = filter(
+            d -> d.cbf.n > 0 && integrator.step % d.cbf.n == 0,
+            diagnostics_functions,
+        )
 
         for diag_func in diagnostics_to_be_run
             diag_func.f!(integrator)
