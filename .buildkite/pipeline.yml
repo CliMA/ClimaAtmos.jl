@@ -992,9 +992,17 @@ steps:
           slurm_mem: 20GB
 
       - label: ":fire: Flame graph: perf target (with tracers)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          --config_file  $PERF_CONFIG_PATH/flame/perf_target_tracers.yml
+        command:
+          # Monkey-patch ClimaAtmos to add tracers to a Microphysics0Moment simulation
+          - sed -i 's/precip_variables(ls, ::Microphysics0Moment) = (;)/precip_variables(ls, ::Microphysics0Moment) = (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))/' src/initial_conditions/atmos_state.jl
+          # Create a new temporary depot so that we can precompile the new code
+          - export JULIA_DEPOT_PATH="$(mktemp -d)"
+          # Compile the code
+          - julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+          - julia --project=perf -e 'using Pkg; Pkg.precompile()'
+          - julia --project=perf -e 'using Pkg; Pkg.status()'
+          # Run it
+          - julia --color=yes --project=perf perf/flame.jl --config_file $PERF_CONFIG_PATH/flame/perf_target_tracers.yml
         artifact_paths: "flame_perf_target_tracers/*"
         agents:
           slurm_mem: 20GB
