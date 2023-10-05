@@ -73,5 +73,7 @@ p = Plots.plot(
     ylabel = "time (ms)",
     label = "step time",
     linewidth = 3,
+    left_margin = 20Plots.mm,
+    bottom_margin = 10Plots.mm,
 )
 Plots.png(p, joinpath(output_dir, "scaling.png"))
