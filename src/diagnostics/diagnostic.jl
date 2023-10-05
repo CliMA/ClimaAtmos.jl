@@ -249,7 +249,8 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
 
     - `variable`: The diagnostic variable that has to be computed and output.
 
-    - `output_every`: Save the results to disk every `output_every` iterations.
+    - `output_every`: Save the results to disk every `output_every` iterations. If `output_every`
+                      is non-positive, only output at the first time step.
 
     - `output_writer`: Function that controls out to save the computed diagnostic variable to
                        disk. `output_writer` has to take three arguments: the value that has to
@@ -325,7 +326,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
 
         # We provide an inner constructor to enforce some constraints
 
-        output_every % compute_every == 0 || error(
+        (output_every <= 0 || output_every % compute_every == 0) || error(
             "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_short_name)",
         )
 
@@ -401,7 +402,8 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
     - `variable`: The diagnostic variable that has to be computed and output.
 
-    - `output_every`: Save the results to disk every `output_every` seconds.
+    - `output_every`: Save the results to disk every `output_every` seconds. If `output_every`
+                      is non-positive, only output at the first time step.
 
     - `output_writer`: Function that controls out to save the computed diagnostic variable to
                        disk. `output_writer` has to take three arguments: the value that has to
@@ -483,7 +485,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         # compute_every could be a Symbol (:timestep). We process this that when we process
         # the list of diagnostics
         if !isa(compute_every, Symbol)
-            output_every % compute_every == 0 || error(
+            (output_every <= 0 || output_every % compute_every == 0) || error(
                 "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_short_name)",
             )
         end

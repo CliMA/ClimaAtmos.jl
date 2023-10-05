@@ -90,8 +90,9 @@ and time, or can be the result of a reduction in a period that is defined by
 More specifically, a `ScheduledDiagnostic` contains the following pieces of data
 
 - `variable`: The diagnostic variable that has to be computed and output.
-- `output_every`: Frequency of how often to save the results to disk.
-- `output_writer`: Object that controls out to save the computed diagnostic
+- `output_every`: Frequency of how often to save the results to disk. If
+  `output_every` is non-positive, only output at the first time step.
+- `output_writer`: Function that controls out to save the computed diagnostic
   variable to disk.
 - `reduction_time_func`: If not `nothing`, the `ScheduledDiagnostic` receives an
   area of scratch space `acc` where to accumulate partial results. Then, at

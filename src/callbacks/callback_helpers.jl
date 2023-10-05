@@ -99,4 +99,4 @@ function n_steps_per_cycle_per_cb(cbs::SciMLBase.CallbackSet, dt)
 end
 
 n_steps_per_cycle_per_cb_diagnostic(cbs) =
-    [callback_frequency(cb).n for cb in cbs]
+    [callback_frequency(cb).n for cb in cbs if callback_frequency(cb).n > 0]
