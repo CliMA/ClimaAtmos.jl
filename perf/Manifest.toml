@@ -211,9 +211,9 @@ version = "0.1.2"
 
 [[deps.CLIMAParameters]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "10564207abddc934fd107061635be5c1a4983bbf"
+git-tree-sha1 = "e1820c154d02ba381e9a91ea7a5870b282d32abc"
 uuid = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
-version = "0.7.21"
+version = "0.7.22"
 
 [[deps.CPUSummary]]
 deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]
@@ -2221,9 +2221,9 @@ version = "0.6.39"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "ChainRulesCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FillArrays", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables", "TruncatedStacktraces", "ZygoteRules"]
-git-tree-sha1 = "0842f7f77bf2d9546e0bbc543d03be3d53a30600"
+git-tree-sha1 = "cc82f4c0ee2493cb2c1b3df66a2ef7fc45b6eacb"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.1.0"
+version = "2.2.0"
 
     [deps.SciMLBase.extensions]
     PyCallExt = "PyCall"
