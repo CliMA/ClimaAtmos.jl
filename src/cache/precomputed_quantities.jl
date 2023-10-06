@@ -358,9 +358,9 @@ values of the first updraft.
 function output_diagnostic_sgs_quantities(Y, p, t)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜρaʲs, ᶜtsʲs) = p
-    ᶠu³⁺ = p.ᶠu³ʲs[1]
+    ᶠu³⁺ = p.ᶠu³ʲs.:1
     ᶜu⁺ = @. (C123(Y.c.uₕ) + C123(ᶜinterp(ᶠu³⁺)))
-    ᶜts⁺ = @. ᶜtsʲs[1]
-    ᶜa⁺ = @. draft_area(ᶜρaʲs[1], TD.air_density(thermo_params, ᶜts⁺))
+    ᶜts⁺ = @. ᶜtsʲs.:1
+    ᶜa⁺ = @. draft_area(ᶜρaʲs.:1, TD.air_density(thermo_params, ᶜts⁺))
     return (; ᶜu⁺, ᶠu³⁺, ᶜts⁺, ᶜa⁺)
 end

@@ -67,56 +67,64 @@ function update_aux!(
     C123 = CCG.Covariant123Vector
 
     @inbounds for i in 1:N_up
-        @. aux_up[i].e_kin =
+        @. aux_up.:($$i).e_kin =
             LA.norm_sqr(
-                C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f[i].w))),
+                C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f.:($$i).w))),
             ) / 2
     end
 
     e_pot(z) = geopotential(thermo_params, z)
-    thresh_area(prog_up, ρ_c) = prog_up[i].ρarea / ρ_c[k] >= edmf.minimum_area
+
     @inbounds for i in 1:N_up
-        @. aux_up[i].e_tot = ifelse(
-            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            prog_up[i].ρae_tot / prog_up[i].ρarea,
+        @. aux_up.:($$i).e_tot = ifelse(
+            prog_up.:($$i).ρarea / ρ_c >= edmf.minimum_area,
+            prog_up.:($$i).ρae_tot / prog_up.:($$i).ρarea,
             aux_gm.e_tot,
         )
-        @. aux_up[i].q_tot = ifelse(
-            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            prog_up[i].ρaq_tot / prog_up[i].ρarea,
+        @. aux_up.:($$i).q_tot = ifelse(
+            prog_up.:($$i).ρarea / ρ_c >= edmf.minimum_area,
+            prog_up.:($$i).ρaq_tot / prog_up.:($$i).ρarea,
             aux_gm.q_tot,
         )
-        @. aux_up[i].area = ifelse(
-            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            prog_up[i].ρarea / ρ_c,
+        @. aux_up.:($$i).area = ifelse(
+            prog_up.:($$i).ρarea / ρ_c >= edmf.minimum_area,
+            prog_up.:($$i).ρarea / ρ_c,
             0,
         )
-        @. aux_up[i].e_kin = ifelse(
-            prog_up[i].ρarea / ρ_c >= edmf.minimum_area,
-            aux_up[i].e_kin,
+        @. aux_up.:($$i).e_kin = ifelse(
+            prog_up.:($$i).ρarea / ρ_c >= edmf.minimum_area,
+            aux_up.:($$i).e_kin,
             e_kin,
         )
         #####
         ##### Set primitive variables
         #####
-        e_int = @. aux_up[i].e_tot - aux_up[i].e_kin - e_pot(zc)
+        e_int = @. aux_up.:($$i).e_tot - aux_up.:($$i).e_kin - e_pot(zc)
         if edmf.moisture_model isa DryModel
-            @. aux_up[i].ts = TD.PhaseDry_pe(thermo_params, p_c, e_int)
+            @. aux_up.:($$i).ts = TD.PhaseDry_pe(thermo_params, p_c, e_int)
         elseif edmf.moisture_model isa EquilMoistModel
-            @. aux_up[i].ts =
-                TD.PhaseEquil_peq(thermo_params, p_c, e_int, aux_up[i].q_tot)
+            @. aux_up.:($$i).ts = TD.PhaseEquil_peq(
+                thermo_params,
+                p_c,
+                e_int,
+                aux_up.:($$i).q_tot,
+            )
         elseif edmf.moisture_model isa NonEquilMoistModel
             error("Unsupported moisture model")
         end
 
-        ts_up = aux_up[i].ts
-        @. aux_up[i].θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_up)
-        @. aux_up[i].h_tot =
-            TD.total_specific_enthalpy(thermo_params, ts_up, aux_up[i].e_tot)
-        @. aux_up[i].q_liq = TD.liquid_specific_humidity(thermo_params, ts_up)
-        @. aux_up[i].q_ice = TD.ice_specific_humidity(thermo_params, ts_up)
-        @. aux_up[i].T = TD.air_temperature(thermo_params, ts_up)
-        @. aux_up[i].RH = TD.relative_humidity(thermo_params, ts_up)
+        ts_up = aux_up.:($i).ts
+        @. aux_up.:($$i).θ_liq_ice = TD.liquid_ice_pottemp(thermo_params, ts_up)
+        @. aux_up.:($$i).h_tot = TD.total_specific_enthalpy(
+            thermo_params,
+            ts_up,
+            aux_up.:($$i).e_tot,
+        )
+        @. aux_up.:($$i).q_liq =
+            TD.liquid_specific_humidity(thermo_params, ts_up)
+        @. aux_up.:($$i).q_ice = TD.ice_specific_humidity(thermo_params, ts_up)
+        @. aux_up.:($$i).T = TD.air_temperature(thermo_params, ts_up)
+        @. aux_up.:($$i).RH = TD.relative_humidity(thermo_params, ts_up)
 
     end
     #####
@@ -124,14 +132,16 @@ function update_aux!(
     #####
     @. aux_bulk.area = 0
     @inbounds for i in 1:N_up
-        @. aux_bulk.area += aux_up[i].area
+        @. aux_bulk.area += aux_up.:($$i).area
     end
 
     @. aux_bulk.q_tot = 0
     @. aux_bulk.h_tot = 0
     @inbounds for i in 1:N_up
-        @. aux_bulk.q_tot += aux_up[i].area * aux_up[i].q_tot / aux_bulk.area
-        @. aux_bulk.h_tot += aux_up[i].area * aux_up[i].h_tot / aux_bulk.area
+        @. aux_bulk.q_tot +=
+            aux_up.:($$i).area * aux_up.:($$i).q_tot / aux_bulk.area
+        @. aux_bulk.h_tot +=
+            aux_up.:($$i).area * aux_up.:($$i).h_tot / aux_bulk.area
     end
     @inbounds for i in 1:N_up
         @. aux_bulk.q_tot =
@@ -146,7 +156,8 @@ function update_aux!(
     @. aux_en_f.w = prog_gm_f.u₃ / (1 - Ifb(aux_bulk.area))
     @inbounds for i in 1:N_up
         @. aux_en_f.w -=
-            Ifb(aux_up[i].area) * prog_up_f[i].w / (1 - Ifb(aux_bulk.area))
+            Ifb(aux_up.:($$i).area) * prog_up_f.:($$i).w /
+            (1 - Ifb(aux_bulk.area))
     end
 
     @. aux_en.e_kin =
@@ -265,22 +276,22 @@ function update_aux!(
         LBF_ρ(TD.air_density(thermo_params, aux_en.ts)),
     )
     @inbounds for i in 1:N_up
-        @. aux_up_f[i].buoy = buoyancy_c(
+        @. aux_up_f.:($$i).buoy = buoyancy_c(
             thermo_params,
             ρ_f,
-            LBF_ρ(TD.air_density(thermo_params, aux_up[i].ts)),
+            LBF_ρ(TD.air_density(thermo_params, aux_up.:($$i).ts)),
         )
     end
     @. aux_gm_f.buoy = (1.0 - LBF_a(aux_bulk.area)) * aux_en_f.buoy
     @inbounds for i in 1:N_up
-        @. aux_gm_f.buoy += LBF_a(aux_up[i].area) * aux_up_f[i].buoy
+        @. aux_gm_f.buoy += LBF_a(aux_up.:($$i).area) * aux_up_f.:($$i).buoy
     end
     @inbounds for i in 1:N_up
-        @. aux_up_f[i].buoy -= aux_gm_f.buoy
+        @. aux_up_f.:($$i).buoy -= aux_gm_f.buoy
     end
     # Only needed for diagnostics/plotting
     @. aux_en_f.buoy -= aux_gm_f.buoy
-    @. aux_tc_f.bulk.buoy_up1 = aux_up_f[1].buoy
+    @. aux_tc_f.bulk.buoy_up1 = aux_up_f.:(1).buoy
 
 
     #####
@@ -290,9 +301,11 @@ function update_aux!(
     @. aux_bulk.q_ice = 0
     @. aux_bulk.T = 0
     @inbounds for i in 1:N_up
-        @. aux_bulk.q_liq += aux_up[i].area * aux_up[i].q_liq / aux_bulk.area
-        @. aux_bulk.q_ice += aux_up[i].area * aux_up[i].q_ice / aux_bulk.area
-        @. aux_bulk.T += aux_up[i].area * aux_up[i].T / aux_bulk.area
+        @. aux_bulk.q_liq +=
+            aux_up.:($$i).area * aux_up.:($$i).q_liq / aux_bulk.area
+        @. aux_bulk.q_ice +=
+            aux_up.:($$i).area * aux_up.:($$i).q_ice / aux_bulk.area
+        @. aux_bulk.T += aux_up.:($$i).area * aux_up.:($$i).T / aux_bulk.area
     end
     @. aux_bulk.q_liq = ifelse(aux_bulk.area > 0, aux_bulk.q_liq, 0)
     @. aux_bulk.q_ice = ifelse(aux_bulk.area > 0, aux_bulk.q_ice, 0)
@@ -322,8 +335,8 @@ function update_aux!(
     @inbounds for i in 1:N_up
         @. aux_gm.tke +=
             0.5 *
-            aux_up[i].area *
-            LA.norm_sqr(C123(Ic(wvec(prog_up_f[i].w - prog_gm_f.u₃))))
+            aux_up.:($$i).area *
+            LA.norm_sqr(C123(Ic(wvec(prog_up_f.:($$i).w - prog_gm_f.u₃))))
     end
 
     #####
@@ -331,12 +344,12 @@ function update_aux!(
     #####
     parent(aux_tc_f.bulk.w) .= 0
     @inbounds for i in 1:N_up
-        a_up = aux_up[i].area
+        a_up = aux_up.:($i).area
         a_up_bcs = a_up_boundary_conditions(surface_conditions, edmf)
         Ifu = CCO.InterpolateC2F(; a_up_bcs...)
         @. aux_tc_f.bulk.w += ifelse(
             Ifb(aux_bulk.area) > 0,
-            Ifu(a_up) * prog_up_f[i].w / Ifb(aux_bulk.area),
+            Ifu(a_up) * prog_up_f.:($$i).w / Ifb(aux_bulk.area),
             CCG.Covariant3Vector(FT(0)),
         )
     end
@@ -346,11 +359,11 @@ function update_aux!(
     #####
     # entrainment and detrainment
     @inbounds for i in 1:N_up
-        @. aux_up[i].entr = FT(5e-4)
-        @. aux_up[i].detr = pi_groups_detrainment!(
+        @. aux_up.:($$i).entr = FT(5e-4)
+        @. aux_up.:($$i).detr = pi_groups_detrainment!(
             aux_gm.tke,
-            aux_up[i].area,
-            aux_up[i].RH,
+            aux_up.:($$i).area,
+            aux_up.:($$i).RH,
             aux_en.area,
             aux_en.tke,
             aux_en.RH,
@@ -361,13 +374,13 @@ function update_aux!(
         (; bottom = CCO.SetValue(wvec(FT(0))), top = CCO.SetValue(wvec(FT(0))))
     ∇ = CCO.DivergenceC2F(; w_bcs...)
     @inbounds for i in 1:N_up
-        updraft_top = compute_updraft_top(aux_up[i].area)
-        @. aux_up_f[i].nh_pressure = compute_nh_pressure!(
+        updraft_top = compute_updraft_top(aux_up.:($i).area)
+        @. aux_up_f.:($$i).nh_pressure = compute_nh_pressure!(
             param_set,
-            aux_up_f[i].buoy,
-            wcomponent(CCG.WVector(prog_up_f[i].w)),
-            ∇(Ic(CCG.WVector(prog_up_f[i].w))),
-            wcomponent(CCG.WVector(prog_up_f[i].w - aux_en_f.w)),
+            aux_up_f.:($$i).buoy,
+            wcomponent(CCG.WVector(prog_up_f.:($$i).w)),
+            ∇(Ic(CCG.WVector(prog_up_f.:($$i).w))),
+            wcomponent(CCG.WVector(prog_up_f.:($$i).w - aux_en_f.w)),
             updraft_top,
         )
     end
@@ -382,11 +395,11 @@ function update_aux!(
     parent(b_exch) .= 0
     w_en = aux_en_f.w
     @inbounds for i in 1:N_up
-        w_up = prog_up_f[i].w
+        w_up = prog_up_f.:($i).w
         @. b_exch +=
-            aux_up[i].area *
+            aux_up.:($$i).area *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr / aux_en.area *
+            aux_up.:($$i).detr / aux_en.area *
             (1 / 2 * (Ic(wcomponent(CCG.WVector(w_up - w_en))))^2 - aux_en.tke)
     end
 
@@ -526,31 +539,31 @@ function update_aux!(
             param_set,
             edmf.precip_model,
             prog_gm,
-            aux_up[i].area,
+            aux_up.:($$i).area,
             zc,
             Δt,
-            aux_up[i].ts,
+            aux_up.:($$i).ts,
         )
-        @. aux_up[i].θ_liq_ice_tendency_precip_formation =
-            mph.θ_liq_ice_tendency * aux_up[i].area
-        @. aux_up[i].e_tot_tendency_precip_formation =
-            mph.e_tot_tendency * aux_up[i].area
-        @. aux_up[i].qt_tendency_precip_formation =
-            mph.qt_tendency * aux_up[i].area
-        @. aux_up[i].qr_tendency_precip_formation =
-            mph.qr_tendency * aux_up[i].area
-        @. aux_up[i].qs_tendency_precip_formation =
-            mph.qs_tendency * aux_up[i].area
+        @. aux_up.:($$i).θ_liq_ice_tendency_precip_formation =
+            mph.θ_liq_ice_tendency * aux_up.:($$i).area
+        @. aux_up.:($$i).e_tot_tendency_precip_formation =
+            mph.e_tot_tendency * aux_up.:($$i).area
+        @. aux_up.:($$i).qt_tendency_precip_formation =
+            mph.qt_tendency * aux_up.:($$i).area
+        @. aux_up.:($$i).qr_tendency_precip_formation =
+            mph.qr_tendency * aux_up.:($$i).area
+        @. aux_up.:($$i).qs_tendency_precip_formation =
+            mph.qs_tendency * aux_up.:($$i).area
 
         # TODO - to be deleted once we sum all tendencies elsewhere
         @. aux_bulk.e_tot_tendency_precip_formation +=
-            aux_up[i].e_tot_tendency_precip_formation
+            aux_up.:($$i).e_tot_tendency_precip_formation
         @. aux_bulk.qt_tendency_precip_formation +=
-            aux_up[i].qt_tendency_precip_formation
+            aux_up.:($$i).qt_tendency_precip_formation
         @. aux_bulk.qr_tendency_precip_formation +=
-            aux_up[i].qr_tendency_precip_formation
+            aux_up.:($$i).qr_tendency_precip_formation
         @. aux_bulk.qs_tendency_precip_formation +=
-            aux_up[i].qs_tendency_precip_formation
+            aux_up.:($$i).qs_tendency_precip_formation
     end
 
     return nothing
