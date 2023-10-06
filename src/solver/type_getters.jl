@@ -477,9 +477,6 @@ function get_callbacks(parsed_args, simulation, atmos, params)
     (; dt) = simulation
 
     callbacks = ()
-    if startswith(parsed_args["ode_algo"], "ODE.")
-        callbacks = (callbacks..., call_every_n_steps(dss_callback!))
-    end
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
     if !(dt_save_to_disk == Inf)
         callbacks = (
