@@ -16,20 +16,6 @@ import ClimaCore.Fields: ColumnField
 
 include("callback_helpers.jl")
 
-NVTX.@annotate function dss_callback!(integrator)
-    Y = integrator.u
-    ghost_buffer = integrator.p.ghost_buffer
-    if integrator.p.do_dss
-        Spaces.weighted_dss_start2!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_start2!(Y.f, ghost_buffer.f)
-        Spaces.weighted_dss_internal2!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_internal2!(Y.f, ghost_buffer.f)
-        Spaces.weighted_dss_ghost2!(Y.c, ghost_buffer.c)
-        Spaces.weighted_dss_ghost2!(Y.f, ghost_buffer.f)
-    end
-    return nothing
-end
-
 horizontal_integral_at_boundary(f, lev) = sum(
     Spaces.level(f, lev) ./ Fields.dz_field(axes(Spaces.level(f, lev))) .* 2,
 )
