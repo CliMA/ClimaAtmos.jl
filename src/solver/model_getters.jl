@@ -391,6 +391,8 @@ function get_detrainment_model(parsed_args)
         ConstantCoefficientDetrainment()
     elseif detr_model == "ConstantCoefficientHarmonics"
         ConstantCoefficientHarmonicsDetrainment()
+    elseif detr_model == "ConstantTimescale"
+        ConstantTimescaleDetrainment()
     else
         error("Invalid entr_model $(entr_model)")
     end
