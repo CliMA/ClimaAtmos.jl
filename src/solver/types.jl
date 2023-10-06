@@ -393,56 +393,39 @@ struct AtmosConfig{FT, TD, PA, C}
     comms_ctx::C
 end
 
+Base.eltype(::AtmosConfig{FT}) where {FT} = FT
+
 """
-    AtmosCoveragePerfConfig()
-    AtmosCoveragePerfConfig(; s, config_dict)
-Creates a model configuration for many performance tests.
-Creates a config from the following in order of top priority to last:
-1. Configuration from the given config file/dict
-2. Default perf configuration
-3. Target job configuration
-4. Default configuration
+    AtmosConfig(config_file::String)
+
+Helper function for the AtmosConfig constructor. Reads a YAML file into a Dict
+and passes it to the AtmosConfig constructor.
 """
-function AtmosCoveragePerfConfig(;
-    s = argparse_settings(),
-    config_dict = nothing,
-)
-    parsed_args = parse_commandline(s)
-    if isnothing(config_dict)
-        config_dict = YAML.load_file(parsed_args["config_file"])
-    end
-    target_job_config = if haskey(config_dict, "target_job")
-        config_from_target_job(config_dict["target_job"])
-    else
-        Dict()
-    end
-    perf_defaults = joinpath(
-        dirname(@__FILE__),
-        "..",
-        "..",
-        "config",
-        "default_configs",
-        "default_perf.yml",
-    )
-    perf_default_config = YAML.load_file(perf_defaults)
-    config_dict = merge(target_job_config, perf_default_config, config_dict)
-    return AtmosConfig(; s, config_dict)
+function AtmosConfig(config_file::String; comms_ctx = nothing)
+    config = YAML.load_file(config_file)
+    return AtmosConfig(config; comms_ctx)
 end
 
-function AtmosConfig(;
-    s = argparse_settings(),
-    parsed_args = parse_commandline(s),
-    config_dict = nothing,
-    comms_ctx = nothing,
-)
-    config = if !isnothing(config_dict)
-        override_default_config(config_dict)
-    elseif !isnothing(parsed_args["config_file"])
-        override_default_config(parsed_args["config_file"])
-    else
-        @info "Using default configuration"
-        default_config_dict()
-    end
+"""
+    AtmosConfig(; comms_ctx = nothing)
+Helper function for the AtmosConfig constructor.
+Reads the `config_file` from the command line into a Dict
+and passes it to the AtmosConfig constructor.
+"""
+function AtmosConfig(; comms_ctx = nothing)
+    parsed_args = parse_commandline(argparse_settings())
+    return AtmosConfig(parsed_args["config_file"]; comms_ctx)
+end
+
+AtmosConfig(::Nothing; comms_ctx = nothing) = AtmosConfig(Dict(); comms_ctx)
+
+"""
+    AtmosConfig(config::Dict; comms_ctx = nothing)
+Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of 
+the default configurations set in `default_config_dict()`.
+"""
+function AtmosConfig(config::Dict; comms_ctx = nothing)
+    config = override_default_config(config)
     FT = config["FLOAT_TYPE"] == "Float64" ? Float64 : Float32
     toml_dict = CP.create_toml_dict(
         FT;
@@ -469,4 +452,3 @@ function AtmosConfig(;
     PA = typeof(config)
     return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
 end
-Base.eltype(::AtmosConfig{FT}) where {FT} = FT

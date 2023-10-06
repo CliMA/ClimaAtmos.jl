@@ -81,9 +81,10 @@ function override_default_config(config_dict::AbstractDict;)
         config["diagnostics"] = config_dict["diagnostics"]
     end
 
+    config == default_config && @info "Using default configuration"
+
     return config
 end
-
 
 """
     non_default_config_entries(config)

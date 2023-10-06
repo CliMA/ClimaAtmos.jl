@@ -1,5 +1,1 @@
-target_job: "sphere_baroclinic_wave_rhoe_equilmoist_edmf"
-moist: "dry"
-precip_model: ~
-rad: ~
 job_id: "jet_n_failures"

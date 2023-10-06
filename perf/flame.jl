@@ -1,7 +1,14 @@
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-config = CA.AtmosCoveragePerfConfig()
+
+include("common.jl")
+
+length(ARGS) != 1 && error("Usage: flame.jl <config_file>")
+config_file = ARGS[1]
+config_dict = YAML.load_file(config_file)
+config = AtmosCoveragePerfConfig(config_dict)
+job_id = config.parsed_args["job_id"]
 integrator = CA.get_integrator(config)
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
@@ -11,10 +18,8 @@ import SciMLBase
 SciMLBase.step!(integrator) # compile first
 CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
-(; output_dir, job_id) = integrator.p.simulation
 output_dir = job_id
 mkpath(output_dir)
-
 
 @info "collect profile"
 Profile.clear()
@@ -58,7 +63,7 @@ allocs_limit["flame_perf_target"] = 12864
 allocs_limit["flame_perf_target_tracers"] = 212496
 allocs_limit["flame_perf_target_edmfx"] = 304064
 allocs_limit["flame_perf_diagnostics"] = 3024344
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 862576
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 862960
 allocs_limit["flame_perf_target_edmf"] = 12459299664
 allocs_limit["flame_perf_target_threaded"] = 6175664
 allocs_limit["flame_perf_target_callbacks"] = 46413904

@@ -113,9 +113,6 @@ output_dir:
 device:
   help: "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"
   value: "auto"
-target_job:
-  help: "An (optional) job to target for analyzing performance"
-  value: ~
 reference_job_id:
   help: |-
     Identifier of job to use as the "reference" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch (only used if `debugging_tc` is `true`)
