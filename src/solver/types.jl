@@ -430,11 +430,12 @@ function AtmosConfig(config::Dict; comms_ctx = nothing)
 
     # Check that config["toml"] is a filepath and the file does not exist
     if config["toml"] isa AbstractString && !isfile(config["toml"])
-        @info "Could not find TOML file at path $(joinpath(pwd(), config["toml"]))"
-        prepend_path = joinpath(dirname(@__FILE__), "..", "..", config["toml"])
-        if isfile(prepend_path)
-            @info "Prepending `pkgdir(CA)` to relative TOML file path"
-            config["toml"] = prepend_path
+        @info "Could not find TOML file at path `$(joinpath(pwd(), config["toml"]))`"
+        toml_path_in_atmos_dir =
+            joinpath(dirname(@__FILE__), "..", "..", config["toml"])
+        if isfile(toml_path_in_atmos_dir)
+            @info "Using parameter file at `$toml_path_in_atmos_dir`"
+            config["toml"] = toml_path_in_atmos_dir
         end
     end
     toml_dict = CP.create_toml_dict(FT; override_file = config["toml"])

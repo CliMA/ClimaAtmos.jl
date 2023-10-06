@@ -27,3 +27,28 @@ include(joinpath("..", "perf", "common.jl"))
     @test config.parsed_args["turbconv_case"] == "GABLS"
     @test config.parsed_args["regression_test"] == false
 end
+
+@testset "Access TOML outside pkgdir(CA)" begin
+    config_file = joinpath(pkgdir(CA), "test", "config_test.yml")
+    config_dict = YAML.load_file(config_file)
+
+    # Test AtmosConfig with TOML from outside pkgdir(CA)
+    # .buildkite is chosen because we can safely assume it will exist
+    cd(joinpath(pkgdir(CA), ".buildkite"))
+    config = CA.AtmosConfig(config_dict)
+    @test config.toml_dict["C_E"]["value"] == 99
+
+    # Test TargetJobConfig 
+    # If flame_perf_gw is removed, replace it with another job id with a toml file
+    job_id = "flame_perf_gw"
+    config = TargetJobConfig(job_id)
+    @test config.toml_dict["zd_rayleigh"]["value"] == 30000.0
+
+    # Check that base dir still works
+    cd(pkgdir(CA))
+    config = CA.AtmosConfig(config_dict)
+    @test config.toml_dict["C_E"]["value"] == 99
+
+    # Reset working dir for next tests
+    cd(joinpath(pkgdir(CA), "test"))
+end
