@@ -26,7 +26,8 @@ default_args = CA.cli_defaults(CA.argparse_settings())
 end
 
 @testset "Test unique aliases" begin
-    config_dict = Dict("toml" => ["parameter_tests.toml"])
+    config_dict =
+        Dict("toml" => [joinpath(pkgdir(CA), "test", "parameter_tests.toml")])
     config = CA.AtmosConfig(config_dict)
     @test_throws ErrorException CP.get_parameter_values!(
         config.toml_dict,
@@ -35,7 +36,7 @@ end
 end
 
 @testset "Test all parameter tomls in toml/" begin
-    toml_path = joinpath("..", "toml")
+    toml_path = joinpath(pkgdir(CA), "toml")
     for toml in readdir(toml_path)
         config_dict = Dict("toml" => [joinpath(toml_path, toml)])
         config = CA.AtmosConfig(config_dict)
