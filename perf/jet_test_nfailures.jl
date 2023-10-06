@@ -15,10 +15,11 @@ import JET
 import SciMLBase
 SciMLBase.step!(integrator) # Make sure no errors
 
+import HDF5
 # Suggested in: https://github.com/aviatesk/JET.jl/issues/455
 macro n_failures(ex)
     return :(
-        let result = JET.@report_opt $(ex)
+        let result = JET.@report_opt ignored_modules = (HDF5,) $(ex)
             length(JET.get_reports(result.analyzer, result.result))
         end
     )
