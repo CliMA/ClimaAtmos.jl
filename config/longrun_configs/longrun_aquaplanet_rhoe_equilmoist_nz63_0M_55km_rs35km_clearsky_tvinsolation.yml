@@ -15,6 +15,7 @@ surface_setup: "DefaultMoninObukhov"
 vert_diff: "true"
 rad: "clearsky"
 idealized_insolation: false
+dt_rad: "1hours"
 job_id: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation"
 toml: [toml/longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky.toml]
 
