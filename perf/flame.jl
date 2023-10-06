@@ -79,3 +79,8 @@ end
 @testset "Allocations limit" begin
     @test allocs ≤ allocs_limit[job_id] * buffer
 end
+
+import ClimaComms
+if config.comms_ctx isa ClimaComms.SingletonCommsContext && !isinteractive()
+    include(joinpath(pkgdir(CA), "perf", "jet_report_nfailures.jl"))
+end
