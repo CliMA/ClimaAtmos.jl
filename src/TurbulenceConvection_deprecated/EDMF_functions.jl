@@ -97,20 +97,20 @@ function compute_sgs_flux!(
     @inbounds for i in 1:N_up
         a_up_bcs = a_up_boundary_conditions(surface_conditions, edmf)
         Ifau = CCO.InterpolateC2F(; a_up_bcs...)
-        a_up = aux_up[i].area
-        w_up_i = prog_up_f[i].w
-        @. aux_up_f[i].massflux = ρ_f * Ifau(a_up) * (w_up_i - w_gm)
+        a_up = aux_up.:($i).area
+        w_up_i = prog_up_f.:($i).w
+        @. aux_up_f.:($$i).massflux = ρ_f * Ifau(a_up) * (w_up_i - w_gm)
         @. massflux_h +=
             ρ_f * (
                 Ifau(a_up) *
                 (w_up_i - w_gm) *
-                (If(aux_up[i].h_tot) - If(h_tot_gm))
+                (If(aux_up.:($$i).h_tot) - If(h_tot_gm))
             )
         @. massflux_qt +=
             ρ_f * (
                 Ifau(a_up) *
                 (w_up_i - w_gm) *
-                (If(aux_up[i].q_tot) - If(q_tot_gm))
+                (If(aux_up.:($$i).q_tot) - If(q_tot_gm))
             )
     end
 
@@ -253,7 +253,7 @@ function set_edmf_surface_bc(
         q_surf = q_surface_bc(grid, state, edmf, i, param_set)
         a_surf = area_surface_bc(surface_conditions, edmf)
         e_kin = @. LA.norm_sqr(
-            C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f[i].w))),
+            C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f.:($$i).w))),
         ) / 2
         e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
         ts_up_i_surf =
@@ -264,10 +264,11 @@ function set_edmf_surface_bc(
             e_kin[kc_surf],
             e_pot_surf,
         )
-        prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
-        prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
-        prog_up_f[i].w[kf_surf] = CCG.Covariant3Vector(
+        prog_up.:($i).ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
+        prog_up.:($i).ρae_tot[kc_surf] =
+            prog_up.:($i).ρarea[kc_surf] * e_tot_surf
+        prog_up.:($i).ρaq_tot[kc_surf] = prog_up.:($i).ρarea[kc_surf] * q_surf
+        prog_up_f.:($i).w[kf_surf] = CCG.Covariant3Vector(
             CCG.WVector(FT(0)),
             CC.Fields.local_geometry_field(axes(prog_up_f))[kf_surf],
         )
@@ -388,21 +389,21 @@ function compute_implicit_up_tendencies!(
     LBF = CCO.LeftBiasedC2F(; bottom = CCO.SetValue(CCG.WVector(FT(0))))
 
     @inbounds for i in 1:N_up
-        w_up = prog_up_f[i].w
+        w_up = prog_up_f.:($i).w
 
-        ρarea = prog_up[i].ρarea
-        ρae_tot = prog_up[i].ρae_tot
-        ρaq_tot = prog_up[i].ρaq_tot
+        ρarea = prog_up.:($i).ρarea
+        ρae_tot = prog_up.:($i).ρae_tot
+        ρaq_tot = prog_up.:($i).ρaq_tot
 
-        tends_ρarea = tendencies_up[i].ρarea
-        tends_ρae_tot = tendencies_up[i].ρae_tot
-        tends_ρaq_tot = tendencies_up[i].ρaq_tot
+        tends_ρarea = tendencies_up.:($i).ρarea
+        tends_ρae_tot = tendencies_up.:($i).ρae_tot
+        tends_ρaq_tot = tendencies_up.:($i).ρaq_tot
 
         volume_term =
             @. -p_c / ρ_c * (-(∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))))
         @. tends_ρarea += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea))
         @. tends_ρae_tot +=
-            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up[i].h_tot)) +
+            -∇c(LBF(Ic(CCG.WVector(w_up)) * ρarea * aux_up.:($$i).h_tot)) +
             volume_term
         @. tends_ρaq_tot += -∇c(LBF(Ic(CCG.WVector(w_up)) * ρaq_tot))
 
@@ -421,8 +422,8 @@ function compute_implicit_up_tendencies!(
     grad_f = CCO.GradientC2F(; prog_bcs...)
 
     @inbounds for i in 1:N_up
-        w_up = prog_up_f[i].w
-        tends_w = tendencies_up_f[i].w
+        w_up = prog_up_f.:($i).w
+        tends_w = tendencies_up_f.:($i).w
         @. tends_w += -grad_f(LBC(LA.norm_sqr(CCG.WVector(w_up)) / 2))
         tends_w[kf_surf] = zero(tends_w[kf_surf])
     end
@@ -460,55 +461,58 @@ function compute_explicit_up_tendencies!(
 
     @inbounds for i in 1:N_up
 
-        w_up = prog_up_f[i].w
+        w_up = prog_up_f.:($i).w
         w_en = aux_en_f.w
         # Augment the tendencies of updraft area, tracers and vertical velocity
 
         # entrainment and detrainment - could be moved to implicit
         volume_term_entr = @. -p_c / ρ_c *
-           prog_up[i].ρarea *
+           prog_up.:($$i).ρarea *
            Ic(wcomponent(CCG.WVector(w_up))) *
-           (aux_up[i].entr - aux_up[i].detr)
-        @. tendencies_up[i].ρarea +=
-            prog_up[i].ρarea *
+           (aux_up.:($$i).entr - aux_up.:($$i).detr)
+        @. tendencies_up.:($$i).ρarea +=
+            prog_up.:($$i).ρarea *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            (aux_up[i].entr - aux_up[i].detr)
-        @. tendencies_up[i].ρae_tot +=
-            prog_up[i].ρarea *
+            (aux_up.:($$i).entr - aux_up.:($$i).detr)
+        @. tendencies_up.:($$i).ρae_tot +=
+            prog_up.:($$i).ρarea *
             aux_en.h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].entr -
-            prog_up[i].ρarea *
-            aux_up[i].h_tot *
+            aux_up.:($$i).entr -
+            prog_up.:($$i).ρarea *
+            aux_up.:($$i).h_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr + volume_term_entr
-        @. tendencies_up[i].ρaq_tot +=
-            prog_up[i].ρarea *
+            aux_up.:($$i).detr + volume_term_entr
+        @. tendencies_up.:($$i).ρaq_tot +=
+            prog_up.:($$i).ρarea *
             aux_en.q_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].entr -
-            prog_up[i].ρaq_tot *
+            aux_up.:($$i).entr -
+            prog_up.:($$i).ρaq_tot *
             Ic(wcomponent(CCG.WVector(w_up))) *
-            aux_up[i].detr
-        @. tendencies_up_f[i].w +=
-            w_up * I0f(aux_up[i].entr) * (wcomponent(CCG.WVector(w_en - w_up)))
+            aux_up.:($$i).detr
+        @. tendencies_up_f.:($$i).w +=
+            w_up *
+            I0f(aux_up.:($$i).entr) *
+            (wcomponent(CCG.WVector(w_en - w_up)))
 
         # precipitation formation
-        @. tendencies_up[i].ρae_tot +=
-            prog_gm.ρ * aux_up[i].e_tot_tendency_precip_formation
-        @. tendencies_up[i].ρaq_tot +=
-            prog_gm.ρ * aux_up[i].qt_tendency_precip_formation
+        @. tendencies_up.:($$i).ρae_tot +=
+            prog_gm.ρ * aux_up.:($$i).e_tot_tendency_precip_formation
+        @. tendencies_up.:($$i).ρaq_tot +=
+            prog_gm.ρ * aux_up.:($$i).qt_tendency_precip_formation
 
         # buoyancy and pressure
-        @. tendencies_up_f[i].w += CCG.Covariant3Vector(
-            CCG.WVector(aux_up_f[i].buoy + aux_up_f[i].nh_pressure),
+        @. tendencies_up_f.:($$i).w += CCG.Covariant3Vector(
+            CCG.WVector(aux_up_f.:($$i).buoy + aux_up_f.:($$i).nh_pressure),
         )
 
         # TODO - to be removed?
-        tendencies_up[i].ρarea[kc_surf] = 0
-        tendencies_up[i].ρae_tot[kc_surf] = 0
-        tendencies_up[i].ρaq_tot[kc_surf] = 0
-        tendencies_up_f[i].w[kf_surf] = zero(tendencies_up_f[i].w[kf_surf])
+        tendencies_up.:($i).ρarea[kc_surf] = 0
+        tendencies_up.:($i).ρae_tot[kc_surf] = 0
+        tendencies_up.:($i).ρaq_tot[kc_surf] = 0
+        tendencies_up_f.:($i).w[kf_surf] =
+            zero(tendencies_up_f.:($i).w[kf_surf])
     end
     return nothing
 end
@@ -545,22 +549,23 @@ function filter_updraft_vars(
     a_max = edmf.max_area
 
     @inbounds for i in 1:N_up
-        @. aux_bulk.filter_flag_1 = ifelse(prog_up[i].ρarea < FT(0), 1, 0)
-        @. aux_bulk.filter_flag_3 = ifelse(prog_up[i].ρaq_tot < FT(0), 1, 0)
-        @. aux_bulk.filter_flag_4 = ifelse(prog_up[i].ρarea > ρ_c * a_max, 1, 0)
+        @. aux_bulk.filter_flag_1 = ifelse(prog_up.:($$i).ρarea < FT(0), 1, 0)
+        @. aux_bulk.filter_flag_3 = ifelse(prog_up.:($$i).ρaq_tot < FT(0), 1, 0)
+        @. aux_bulk.filter_flag_4 =
+            ifelse(prog_up.:($$i).ρarea > ρ_c * a_max, 1, 0)
 
-        @. prog_up[i].ρarea = max(prog_up[i].ρarea, 0) #flag_1
-        @. prog_up[i].ρaq_tot = max(prog_up[i].ρaq_tot, 0) #flag_3
-        @. prog_up[i].ρarea = min(prog_up[i].ρarea, ρ_c * a_max) #flag_4
+        @. prog_up.:($$i).ρarea = max(prog_up.:($$i).ρarea, 0) #flag_1
+        @. prog_up.:($$i).ρaq_tot = max(prog_up.:($$i).ρaq_tot, 0) #flag_3
+        @. prog_up.:($$i).ρarea = min(prog_up.:($$i).ρarea, ρ_c * a_max) #flag_4
     end
     @inbounds for i in 1:N_up
-        @. prog_up_f[i].w = CCG.Covariant3Vector(
-            CCG.WVector(max(wcomponent(CCG.WVector(prog_up_f[i].w)), 0)),
+        @. prog_up_f.:($$i).w = CCG.Covariant3Vector(
+            CCG.WVector(max(wcomponent(CCG.WVector(prog_up_f.:($$i).w)), 0)),
         )
         a_up_bcs = a_up_boundary_conditions(surface_conditions, edmf)
         If = CCO.InterpolateC2F(; a_up_bcs...)
-        @. prog_up_f[i].w =
-            Int(If(prog_up[i].ρarea) >= ρ_f * a_min) * prog_up_f[i].w
+        @. prog_up_f.:($$i).w =
+            Int(If(prog_up.:($$i).ρarea) >= ρ_f * a_min) * prog_up_f.:($$i).w
     end
 
     Δz = Fields.Δz_field(axes(ρ_c))
@@ -570,51 +575,59 @@ function filter_updraft_vars(
         # this is needed to make sure Rico is unchanged.
         # TODO : look into it further to see why
         # a similar filtering of ρaθ_liq_ice breaks the simulation
-        @. prog_up[i].ρaq_tot = ifelse(
+        @. prog_up.:($$i).ρaq_tot = ifelse(
             z > Δz1 / 2,
             ifelse(
-                prog_up[i].ρarea / ρ_c < a_min,
+                prog_up.:($$i).ρarea / ρ_c < a_min,
                 0,
-                max(prog_up[i].ρaq_tot, 0),
+                max(prog_up.:($$i).ρaq_tot, 0),
             ),
-            prog_up[i].ρaq_tot,
+            prog_up.:($$i).ρaq_tot,
         )
-        @. prog_up[i].ρarea = ifelse(
+        @. prog_up.:($$i).ρarea = ifelse(
             z > Δz1 / 2,
-            ifelse(prog_up[i].ρarea / ρ_c < a_min, 0, max(prog_up[i].ρarea, 0)),
-            prog_up[i].ρarea,
+            ifelse(
+                prog_up.:($$i).ρarea / ρ_c < a_min,
+                0,
+                max(prog_up.:($$i).ρarea, 0),
+            ),
+            prog_up.:($$i).ρarea,
         )
-        @. prog_up[i].ρae_tot = ifelse(
+        @. prog_up.:($$i).ρae_tot = ifelse(
             z > Δz1 / 2,
-            ifelse(prog_up[i].ρarea / ρ_c < a_min, 0, prog_up[i].ρae_tot),
-            prog_up[i].ρae_tot,
+            ifelse(
+                prog_up.:($$i).ρarea / ρ_c < a_min,
+                0,
+                prog_up.:($$i).ρae_tot,
+            ),
+            prog_up.:($$i).ρae_tot,
         )
     end
 
     Ic = CCO.InterpolateF2C()
     C123 = CCG.Covariant123Vector
     @inbounds for i in 1:N_up
-        @. prog_up[i].ρarea = ifelse(
-            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+        @. prog_up.:($$i).ρarea = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f.:($$i).w))) <= 0,
             FT(0),
-            prog_up[i].ρarea,
+            prog_up.:($$i).ρarea,
         )
-        @. prog_up[i].ρae_tot = ifelse(
-            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+        @. prog_up.:($$i).ρae_tot = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f.:($$i).w))) <= 0,
             FT(0),
-            prog_up[i].ρae_tot,
+            prog_up.:($$i).ρae_tot,
         )
-        @. prog_up[i].ρaq_tot = ifelse(
-            Ic(wcomponent(CCG.WVector(prog_up_f[i].w))) <= 0,
+        @. prog_up.:($$i).ρaq_tot = ifelse(
+            Ic(wcomponent(CCG.WVector(prog_up_f.:($$i).w))) <= 0,
             FT(0),
-            prog_up[i].ρaq_tot,
+            prog_up.:($$i).ρaq_tot,
         )
 
         θ_surf = θ_surface_bc(grid, state, edmf, i, param_set)
         q_surf = q_surface_bc(grid, state, edmf, i, param_set)
         a_surf = area_surface_bc(surface_conditions, edmf)
         e_kin = @. LA.norm_sqr(
-            C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f[i].w))),
+            C123(prog_gm_uₕ) + C123(Ic(CCG.WVector(prog_up_f.:($$i).w))),
         ) / 2
         e_pot_surf = geopotential(thermo_params, grid.zc.z[kc_surf])
         ts_up_i_surf =
@@ -625,9 +638,10 @@ function filter_updraft_vars(
             e_kin[kc_surf],
             e_pot_surf,
         )
-        prog_up[i].ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
-        prog_up[i].ρae_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * e_tot_surf
-        prog_up[i].ρaq_tot[kc_surf] = prog_up[i].ρarea[kc_surf] * q_surf
+        prog_up.:($i).ρarea[kc_surf] = ρ_c[kc_surf] * a_surf
+        prog_up.:($i).ρae_tot[kc_surf] =
+            prog_up.:($i).ρarea[kc_surf] * e_tot_surf
+        prog_up.:($i).ρaq_tot[kc_surf] = prog_up.:($i).ρarea[kc_surf] * q_surf
     end
     return nothing
 end

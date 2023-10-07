@@ -34,9 +34,6 @@ const CenterFields = Union{
     CC.Fields.CenterFiniteDifferenceField,
 }
 
-Base.@propagate_inbounds Base.getindex(field::FDFields, i::Integer) =
-    Base.getproperty(field, i)
-
 Base.@propagate_inbounds Base.getindex(field::CenterFields, i::Cent) =
     Base.getindex(CC.Fields.field_values(field), i.i)
 Base.@propagate_inbounds Base.setindex!(field::CenterFields, v, i::Cent) =
