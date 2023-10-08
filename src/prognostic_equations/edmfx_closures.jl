@@ -76,10 +76,17 @@ end
 edmfx_nh_pressure_cache(Y, turbconv_model) = (;)
 
 edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
-function edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
+function edmfx_nh_pressure_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::Union{EDMFX, AdvectiveEDMFX},
+)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params, ᶜρʲs, ᶜρ_ref, ᶜp, ᶜp_ref, ᶠgradᵥ_ᶜΦ, ᶠu₃⁰) = p
+    (; params, ᶜρʲs, ᶠgradᵥ_ᶜΦ, ᶠu₃⁰) = p
     FT = eltype(Y)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)

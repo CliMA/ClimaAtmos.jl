@@ -52,6 +52,13 @@ vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak})
         ),
     ))
 
+vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:none}) =
+    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
+vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:first_order}) =
+    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
+vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
+    @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
+
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
         p
@@ -107,7 +114,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p
         @. Yₜ.f.u₃[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.u₃[colidx]
-        if turbconv_model isa EDMFX
+        if turbconv_model isa EDMFX || turbconv_model isa AdvectiveEDMFX
             for j in 1:n
                 @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                     ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).u₃[colidx]

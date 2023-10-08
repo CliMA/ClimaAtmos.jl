@@ -157,6 +157,12 @@ struct EDMFX{N, TKE, FT} <: AbstractEDMF
 end
 EDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} = EDMFX{N, TKE, FT}(a_half)
 
+struct AdvectiveEDMFX{N, TKE, FT} <: AbstractEDMF
+    a_half::FT # WARNING: this should never be used outside of divide_by_ρa
+end
+AdvectiveEDMFX{N, TKE}(a_half::FT) where {N, TKE, FT} =
+    AdvectiveEDMFX{N, TKE, FT}(a_half)
+
 struct DiagnosticEDMFX{N, TKE, FT} <: AbstractEDMF
     a_int::FT # area fraction of the first interior cell above the surface
     a_half::FT # WARNING: this should never be used outside of divide_by_ρa
@@ -165,13 +171,16 @@ DiagnosticEDMFX{N, TKE}(a_int::FT, a_half::FT) where {N, TKE, FT} =
     DiagnosticEDMFX{N, TKE, FT}(a_int, a_half)
 
 n_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+n_mass_flux_subdomains(::AdvectiveEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::DiagnosticEDMFX{N}) where {N} = N
 n_mass_flux_subdomains(::Any) = 0
 
 n_prognostic_mass_flux_subdomains(::EDMFX{N}) where {N} = N
+n_prognostic_mass_flux_subdomains(::AdvectiveEDMFX{N}) where {N} = N
 n_prognostic_mass_flux_subdomains(::Any) = 0
 
 use_prognostic_tke(::EDMFX{N, TKE}) where {N, TKE} = TKE
+use_prognostic_tke(::AdvectiveEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::DiagnosticEDMFX{N, TKE}) where {N, TKE} = TKE
 use_prognostic_tke(::Any) = false
 
@@ -186,7 +195,7 @@ abstract type AbstractDetrainmentModel end
 
 struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
-struct ConstantCoefficientDetrainment <: AbstractDetrainmentModel end
+struct BOverWDetrainment <: AbstractDetrainmentModel end
 struct ConstantCoefficientHarmonicsDetrainment <: AbstractDetrainmentModel end
 struct ConstantTimescaleDetrainment <: AbstractDetrainmentModel end
 
@@ -234,6 +243,7 @@ Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::EDMFX) = tuple(x)
+Base.broadcastable(x::AdvectiveEDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)

@@ -26,6 +26,7 @@ include(joinpath("TurbulenceConvection_deprecated", "TurbulenceConvection.jl"))
 import .TurbulenceConvection as TC
 
 include(joinpath("cache", "edmf_precomputed_quantities.jl"))
+include(joinpath("cache", "advective_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 

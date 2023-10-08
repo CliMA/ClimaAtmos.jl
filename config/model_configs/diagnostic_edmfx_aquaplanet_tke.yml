@@ -6,7 +6,7 @@ turbconv: diagnostic_edmfx
 prognostic_tke: true
 edmfx_upwinding: first_order 
 edmfx_entr_model: "ConstantTimescale" 
-edmfx_detr_model: "ConstantCoefficient" 
+edmfx_detr_model: "BOverW" 
 edmfx_nh_pressure: true 
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true

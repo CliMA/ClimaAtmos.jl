@@ -341,7 +341,8 @@ function get_turbconv_model(
     turbconv_params,
 )
     turbconv = parsed_args["turbconv"]
-    @assert turbconv in (nothing, "edmf", "edmfx", "diagnostic_edmfx")
+    @assert turbconv in
+            (nothing, "edmf", "edmfx", "advective_edmfx", "diagnostic_edmfx")
 
     return if turbconv == "edmf"
         TC.EDMFModel(
@@ -355,6 +356,10 @@ function get_turbconv_model(
         N = turbconv_params.updraft_number
         TKE = parsed_args["prognostic_tke"]
         EDMFX{N, TKE}(turbconv_params.min_area)
+    elseif turbconv == "advective_edmfx"
+        N = turbconv_params.updraft_number
+        TKE = parsed_args["prognostic_tke"]
+        AdvectiveEDMFX{N, TKE}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
         N = turbconv_params.updraft_number
         TKE = parsed_args["prognostic_tke"]
@@ -387,14 +392,14 @@ function get_detrainment_model(parsed_args)
         NoDetrainment()
     elseif detr_model == "PiGroups"
         PiGroupsDetrainment()
-    elseif detr_model == "ConstantCoefficient"
-        ConstantCoefficientDetrainment()
+    elseif detr_model == "BOverW"
+        BOverWDetrainment()
     elseif detr_model == "ConstantCoefficientHarmonics"
         ConstantCoefficientHarmonicsDetrainment()
     elseif detr_model == "ConstantTimescale"
         ConstantTimescaleDetrainment()
     else
-        error("Invalid entr_model $(entr_model)")
+        error("Invalid detr_model $(detr_model)")
     end
 end
 

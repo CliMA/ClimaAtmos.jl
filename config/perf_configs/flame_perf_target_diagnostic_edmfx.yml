@@ -6,4 +6,4 @@ prognostic_tke: true
 edmfx_sgs_flux: true
 turbconv: "diagnostic_edmfx"
 job_id: "flame_perf_target_diagnostic_edmfx"
-edmfx_detr_model: "ConstantCoefficient"
+edmfx_detr_model: "BOverW"

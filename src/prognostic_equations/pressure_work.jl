@@ -14,4 +14,7 @@ function pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::EDMFX)
     return nothing
 end
 
+# We ignore the small pressure term in advective EDMF for now
+pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::AdvectiveEDMFX) = nothing
+
 pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::Any) = nothing

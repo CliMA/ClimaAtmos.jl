@@ -40,6 +40,10 @@ function precomputed_quantities(Y, atmos)
         !(atmos.moisture_model isa DryModel) &&
         atmos.energy_form isa TotalEnergy
     ) || !(atmos.turbconv_model isa DiagnosticEDMFX)
+    @assert (
+        !(atmos.moisture_model isa DryModel) &&
+        atmos.energy_form isa TotalEnergy
+    ) || !(atmos.turbconv_model isa AdvectiveEDMFX)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -88,6 +92,32 @@ function precomputed_quantities(Y, atmos)
                 ) : (;)
             )...,
         ) : (;)
+    advective_sgs_quantities =
+        atmos.turbconv_model isa AdvectiveEDMFX ?
+        (;
+            ᶜtke⁰ = similar(Y.c, FT),
+            ᶜρa⁰ = similar(Y.c, FT),
+            ᶠu₃⁰ = similar(Y.f, C3{FT}),
+            ᶜu⁰ = similar(Y.c, C123{FT}),
+            ᶠu³⁰ = similar(Y.f, CT3{FT}),
+            ᶜK⁰ = similar(Y.c, FT),
+            ᶜh_tot⁰ = similar(Y.c, FT),
+            ᶜq_tot⁰ = similar(Y.c, FT),
+            ᶜts⁰ = similar(Y.c, TST),
+            ᶜρ⁰ = similar(Y.c, FT),
+            ᶜlinear_buoygrad = similar(Y.c, FT),
+            ᶜstrain_rate_norm = similar(Y.c, FT),
+            ᶜmixing_length = similar(Y.c, FT),
+            ᶜK_u = similar(Y.c, FT),
+            ᶜK_h = similar(Y.c, FT),
+            ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
+            ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
+            ᶜKʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
+            ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
+        ) : (;)
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
@@ -117,7 +147,12 @@ function precomputed_quantities(Y, atmos)
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
         ) : (;)
-    return (; gs_quantities..., sgs_quantities..., diagnostic_sgs_quantities...)
+    return (;
+        gs_quantities...,
+        sgs_quantities...,
+        advective_sgs_quantities...,
+        diagnostic_sgs_quantities...,
+    )
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
@@ -140,7 +175,7 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
     sfc_g³³ = g³³_field(sfc_u₃)
     @. sfc_u₃ = -sfc_uₕ³ / sfc_g³³ # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
-    if turbconv_model isa EDMFX
+    if turbconv_model isa EDMFX || turbconv_model isa AdvectiveEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             sfc_u₃ʲ = Fields.level(Y.f.sgsʲs.:($j).u₃.components.data.:1, half)
             @. sfc_u₃ʲ = sfc_u₃
@@ -160,7 +195,7 @@ function set_velocity_at_top!(Y, turbconv_model)
         Spaces.nlevels(axes(Y.c)) + half,
     )
     @. top_u₃ = 0
-    if turbconv_model isa EDMFX
+    if turbconv_model isa EDMFX || turbconv_model isa AdvectiveEDMFX
         for j in 1:n_mass_flux_subdomains(turbconv_model)
             top_u₃ʲ = Fields.level(
                 Y.f.sgsʲs.:($j).u₃.components.data.:1,
@@ -341,6 +376,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         set_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     end
 
+    if turbconv_model isa AdvectiveEDMFX
+        set_advective_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
+    end
+
     if turbconv_model isa DiagnosticEDMFX
         set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     end
@@ -371,6 +410,27 @@ function output_sgs_quantities(Y, p, t)
     ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
     ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
     return (; ᶜspecific⁺, ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
+end
+
+"""
+    output_advective_sgs_quantities(Y, p, t)
+
+Sets `ᶜu⁺`, `ᶠu³⁺`, `ᶜts⁺` and `ᶜa⁺` to be the same as the
+values of the first updraft.
+"""
+function output_advective_sgs_quantities(Y, p, t)
+    (; turbconv_model) = p.atmos
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜp, ᶜρa⁰, ᶜρ⁰, ᶜΦ, ᶜtsʲs) = p
+    ᶠuₕ³ = p.ᶠtemp_CT3
+    set_ᶠuₕ³!(ᶠuₕ³, Y)
+    (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) = similar.((p.ᶠu₃⁰, p.ᶜu⁰, p.ᶠu³⁰, p.ᶜK⁰))
+    set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
+    set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³)
+    ᶜts⁺ = ᶜtsʲs.:1
+    ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
+    ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
+    return (; ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
 end
 
 """
