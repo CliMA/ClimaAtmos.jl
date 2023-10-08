@@ -199,19 +199,39 @@ function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
 end
 
 function explicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
+    (; Y_filtered) = p.edmf_cache
+    # Note: We could also do Y_filtered .= Y further upstream if needed.
+    Y_filtered.c[colidx] .= Y.c[colidx]
+    Y_filtered.f[colidx] .= Y.f[colidx]
+    state = TC.tc_column_state(Y_filtered, p, Yₜ, colidx, t)
+    grid = TC.Grid(state)
+    explicit_sgs_flux_tendency!(
+        Yₜ,
+        Y,
+        p,
+        t,
+        colidx,
+        p.edmf_cache.edmf,
+        state,
+        grid,
+    )
+end
+
+function explicit_sgs_flux_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    ::TC.EDMFModel,
+    state::T,
+    grid,
+) where {T}
     (; edmf_cache, Δt) = p
     (; edmf, param_set, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
     tc_params = CAP.turbconv_params(param_set)
-
-    # Note: We could also do Y_filtered .= Y further upstream if needed.
-    Y_filtered.c[colidx] .= Y.c[colidx]
-    Y_filtered.f[colidx] .= Y.f[colidx]
-
-    state = TC.tc_column_state(Y_filtered, p, Yₜ, colidx, t)
-
-    grid = TC.Grid(state)
     if test_consistency
         parent(state.aux.f) .= NaN
         parent(state.aux.c) .= NaN
