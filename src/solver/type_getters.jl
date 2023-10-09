@@ -801,6 +801,7 @@ end
 
 function get_integrator(config::AtmosConfig)
     params = create_parameter_set(config)
+    @show params.ΔT_y
 
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
