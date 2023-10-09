@@ -42,7 +42,7 @@ is_edmfx =
     atmos.turbconv_model isa CA.EDMFX ||
     atmos.turbconv_model isa CA.AdvectiveEDMFX ||
     atmos.turbconv_model isa CA.DiagnosticEDMFX
-if is_edmfx && config.parsed_args["post_process"]
+if config.parsed_args["post_process"]
     contours_and_profiles(simulation.output_dir, reference_job_id)
     zip_and_cleanup_output(simulation.output_dir, "hdf5files.zip")
 end
