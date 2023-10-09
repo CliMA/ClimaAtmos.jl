@@ -870,6 +870,14 @@ steps:
   - group: "GPU"
     steps:
 
+      - label: "CUDA reproducer"
+        key: "cuda_repro"
+        command: >
+          julia --project -e 'using CUDA; CUDA.versioninfo()'
+          julia --color=yes --project=examples reproducer.jl
+        agents:
+          slurm_gpus: 1
+
       - label: "GPU: baroclinic wave"
         key: "gpu_baroclinic_wave_rhoe"
         command: >
