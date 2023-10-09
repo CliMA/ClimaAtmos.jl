@@ -175,6 +175,17 @@ Given a timestep `dt`, a `ScheduledDiagnosticIterations` can be obtained from a
 `ScheduledDiagnosticTime` `sd` simply by calling
 ``ScheduledDiagnosticIterations(sd, dt)`.
 
+## The NetCDF output
+
+The NetCDF writer in `ClimaAtmos` saves different diagnostics to different files
+in the same output folder. Files are named after a combination of the diagnostic
+variable `short_name`, and the details of the temporal reduction. Inside each
+NetCDF file, there is only one diagnostic variable, along with the various
+dimensions (e.g., `lat`, `lon`, and `z`). For simulations with topography, the
+variable `z` is no longer a simple vector `z[k]`, but it is a full
+multidimensional array `z[i, j, k]` which defines the elevation on the sea level
+of the point of indices `[i, j, k]`.
+
 ## I want to add a new diagnostic variable
 
 Diagnostic variables are represented in `ClimaAtmos` with a `DiagnosticVariable`
