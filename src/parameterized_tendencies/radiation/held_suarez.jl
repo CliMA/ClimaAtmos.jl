@@ -57,6 +57,7 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
         ΔT_y = FT(CAP.ΔT_y_dry(params))
         T_equator = FT(CAP.T_equator_dry(params))
     end
+    @show ΔT_y
 
     @. ᶜσ[colidx] =
         ᶜp[colidx] / (

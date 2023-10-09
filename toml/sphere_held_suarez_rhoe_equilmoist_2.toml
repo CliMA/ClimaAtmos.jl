@@ -1,0 +1,4 @@
+[equator_pole_temperature_gradient_wet]
+alias = "ΔT_y_wet"
+value = 32.5
+type = "float"
