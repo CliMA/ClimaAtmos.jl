@@ -33,4 +33,4 @@ diagnostics:
 #
 job_id: sphere_held_suarez_rhoe_equilmoist_6
 output_dir: sphere_held_suarez_rhoe_equilmoist_6
-toml: toml/sphere_held_suarez_rhoe_equilmoist_6.toml
+toml: [toml/sphere_held_suarez_rhoe_equilmoist_6.toml]
