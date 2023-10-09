@@ -14,23 +14,18 @@ steps:
   - label: "init :GPU:"
     key: "init_gpu_env"
     command:
-      - echo "--- Instantiate project"
-      - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project -e 'using Pkg; Pkg.status()'"
+      - echo "--- Instantiate examples"
+      - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=examples -e 'using Pkg; Pkg.precompile()'
+      - julia --project=examples -e 'using Pkg; Pkg.status()'
 
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
-      - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
-      - julia --project -e 'using CUDA; CUDA.versioninfo()'
-
-      - echo "--- Instantiate examples"
-      - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=examples -e 'using Pkg; Pkg.status()'"
-
+      - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
+      - julia --project=examples -e 'using CUDA; CUDA.versioninfo()'
+      
       - echo "--- Download artifacts"
-      - "julia --project=examples artifacts/download_artifacts.jl"
+      - julia --project=examples artifacts/download_artifacts.jl
       
     agents:
       slurm_gpus: 1
