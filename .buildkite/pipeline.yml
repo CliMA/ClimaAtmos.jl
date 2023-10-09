@@ -400,38 +400,6 @@ steps:
   - group: "Sphere Examples (Topography)"
     steps:
 
-      # - label: ":computer: baroclinic wave (ρe) topography (dcmip)"
-      #   command: >
-      #     julia --color=yes --project=examples examples/hybrid/driver.jl
-      #     --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
-
-      #     julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-      #     --data_dir sphere_baroclinic_wave_rhoe_topography_dcmip_rs
-      #     --out_dir sphere_baroclinic_wave_rhoe_topography_dcmip_rs
-      #   artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/*"
-
-      # - label: ":computer: held suarez (ρe) topography (dcmip)"
-      #   command: >
-      #     julia --color=yes --project=examples examples/hybrid/driver.jl
-      #     --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_topography_dcmip.yml
-
-      #     julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-      #     --data_dir sphere_held_suarez_rhoe_topography_dcmip
-      #     --out_dir sphere_held_suarez_rhoe_topography_dcmip
-      #   artifact_paths: "sphere_held_suarez_rhoe_topography_dcmip/*"
-
-      # - label: ":computer: held suarez (ρe) equilmoist topography (dcmip)"
-      #   command: >
-      #     julia --color=yes --project=examples examples/hybrid/driver.jl
-      #     --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_topography_dcmip.yml
-
-      #     julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-      #     --data_dir sphere_held_suarez_rhoe_equilmoist_topography_dcmip
-      #     --out_dir sphere_held_suarez_rhoe_equilmoist_topography_dcmip
-      #   artifact_paths: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip/*"
-      #   agents:
-      #     slurm_mem: 20GB
-
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 65 (default)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -810,145 +778,145 @@ steps:
   # #         slurm_mem: 20GB
 
   # - group: "TurbulenceConvection"
-    steps:
+    # steps:
 
-      - label: ":balloon: SCM EDMF GABLS (Dry, JFNK IMEX EDMF)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_gabls_jfnk_imex.yml
+    #   - label: ":balloon: SCM EDMF GABLS (Dry, JFNK IMEX EDMF)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_gabls_jfnk_imex.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_gabls_jfnk_imex --out_dir edmf_gabls_jfnk_imex
-        artifact_paths: "edmf_gabls_jfnk_imex/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_gabls_jfnk_imex --out_dir edmf_gabls_jfnk_imex
+    #     artifact_paths: "edmf_gabls_jfnk_imex/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_nieuwstadt.yml
+    #   - label: ":balloon: SCM EDMF: Nieuwstadt (Dry)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_nieuwstadt.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_nieuwstadt --out_dir edmf_nieuwstadt
-        artifact_paths: "edmf_nieuwstadt/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_nieuwstadt --out_dir edmf_nieuwstadt
+    #     artifact_paths: "edmf_nieuwstadt/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, JFNK IMEX EDMF)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_nieuwstadt_jfnk_imex.yml
+    #   - label: ":balloon: SCM EDMF: Nieuwstadt (Dry, JFNK IMEX EDMF)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_nieuwstadt_jfnk_imex.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_nieuwstadt_jfnk_imex --out_dir edmf_nieuwstadt_jfnk_imex
-        artifact_paths: "edmf_nieuwstadt_jfnk_imex/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_nieuwstadt_jfnk_imex --out_dir edmf_nieuwstadt_jfnk_imex
+    #     artifact_paths: "edmf_nieuwstadt_jfnk_imex/*"
+    #     soft_fail: true
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Soares"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_soares.yml
+    #   - label: ":balloon: SCM EDMF Soares"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_soares.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_soares --out_dir edmf_soares
-        artifact_paths: "edmf_soares/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_soares --out_dir edmf_soares
+    #     artifact_paths: "edmf_soares/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Soares (JFNK IMEX EDMF)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_soares_jfnk_imex.yml
+    #   - label: ":balloon: SCM EDMF Soares (JFNK IMEX EDMF)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_soares_jfnk_imex.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_soares_jfnk_imex --out_dir edmf_soares_jfnk_imex
-        artifact_paths: "edmf_soares_jfnk_imex/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_soares_jfnk_imex --out_dir edmf_soares_jfnk_imex
+    #     artifact_paths: "edmf_soares_jfnk_imex/*"
+    #     soft_fail: true
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (Default: Newton's method)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_bomex.yml
+    #   - label: ":balloon: SCM EDMF Bomex (Default: Newton's method)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_bomex.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_bomex --out_dir edmf_bomex
-        artifact_paths: "edmf_bomex/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_bomex --out_dir edmf_bomex
+    #     artifact_paths: "edmf_bomex/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (JFNK)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_bomex_jfnk.yml
+    #   - label: ":balloon: SCM EDMF Bomex (JFNK)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_bomex_jfnk.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_bomex_jfnk --out_dir edmf_bomex_jfnk
-        artifact_paths: "edmf_bomex_jfnk/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_bomex_jfnk --out_dir edmf_bomex_jfnk
+    #     artifact_paths: "edmf_bomex_jfnk/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Bomex (JFNK IMEX EDMF)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_bomex_jfnk_imex.yml
-        artifact_paths: "edmf_bomex_jfnk_imex/*"
-        agents:
-          slurm_mem: 20GB
-      - label: ":balloon: SCM EDMF DYCOMS_RF01"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_dycoms_rf01.yml
+    #   - label: ":balloon: SCM EDMF Bomex (JFNK IMEX EDMF)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_bomex_jfnk_imex.yml
+    #     artifact_paths: "edmf_bomex_jfnk_imex/*"
+    #     agents:
+    #       slurm_mem: 20GB
+    #   - label: ":balloon: SCM EDMF DYCOMS_RF01"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_dycoms_rf01.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_dycoms_rf01 --out_dir edmf_dycoms_rf01
-        artifact_paths: "edmf_dycoms_rf01/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_dycoms_rf01 --out_dir edmf_dycoms_rf01
+    #     artifact_paths: "edmf_dycoms_rf01/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF LifeCycleTan2018"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_life_cycle_tan2018.yml
+    #   - label: ":balloon: SCM EDMF LifeCycleTan2018"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_life_cycle_tan2018.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_life_cycle_tan2018 --out_dir edmf_life_cycle_tan2018
-        artifact_paths: "edmf_life_cycle_tan2018/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_life_cycle_tan2018 --out_dir edmf_life_cycle_tan2018
+    #     artifact_paths: "edmf_life_cycle_tan2018/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF Rico"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_rico.yml
+    #   - label: ":balloon: SCM EDMF Rico"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_rico.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_rico --out_dir edmf_rico
-        artifact_paths: "edmf_rico/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_rico --out_dir edmf_rico
+    #     artifact_paths: "edmf_rico/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":balloon: SCM EDMF TRMM_LBA (Short, 1-moment micro, sponge)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_trmm.yml
+    #   - label: ":balloon: SCM EDMF TRMM_LBA (Short, 1-moment micro, sponge)"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_trmm.yml
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id edmf_trmm --out_dir edmf_trmm
-        artifact_paths: "edmf_trmm/*"
-        agents:
-          slurm_mem: 20GB
+    #       julia --color=yes --project=examples regression_tests/test_mse.jl
+    #       --job_id edmf_trmm --out_dir edmf_trmm
+    #     artifact_paths: "edmf_trmm/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
-      - label: ":dart: SCM EDMF Consistency test Bomex"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmf_bomex_consistency.yml
-        artifact_paths: "edmf_bomex_consistency/*"
-        agents:
-          slurm_mem: 20GB
+    #   - label: ":dart: SCM EDMF Consistency test Bomex"
+    #     command: >
+    #       julia --color=yes --project=examples examples/hybrid/driver.jl
+    #       --config_file $CONFIG_PATH/edmf_bomex_consistency.yml
+    #     artifact_paths: "edmf_bomex_consistency/*"
+    #     agents:
+    #       slurm_mem: 20GB
 
   # - group: "GPU"
   #   steps:
