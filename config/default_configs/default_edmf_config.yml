@@ -27,7 +27,7 @@ edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `ConstantCoefficent`, `ConstantTimescale`]"
   value: ~
 edmfx_detr_model:
-  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `ConstantCoefficent`]"
+  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `ConstantCoefficent`, `ConstantTimescale`]"
   value: ~
 edmfx_upwinding:
   help: "EDMFX upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"

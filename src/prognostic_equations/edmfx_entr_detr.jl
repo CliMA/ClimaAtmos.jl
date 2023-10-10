@@ -314,3 +314,25 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     end
     return nothing
 end
+
+function detrainment(
+    params,
+    ᶜz::FT,
+    z_sfc::FT,
+    ᶜp::FT,
+    ᶜρ::FT,
+    buoy_flux_surface::FT,
+    ᶜaʲ::FT,
+    ᶜwʲ::FT,
+    ᶜRHʲ::FT,
+    ᶜbuoyʲ::FT,
+    ᶜw⁰::FT,
+    ᶜRH⁰::FT,
+    ᶜbuoy⁰::FT,
+    dt::FT,
+    ::ConstantTimescaleDetrainment,
+) where {FT}
+    detr_tau = CAP.detr_tau(params)
+    detr = min(1 / detr_tau, 1 / dt)
+    return detr
+end
