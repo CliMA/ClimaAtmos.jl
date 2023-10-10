@@ -17,6 +17,8 @@ env:
   MPI_CONFIG_PATH: "config/mpi_configs"
   SLURM_KILL_BAD_EXIT: 1
 
+timeout_in_minutes: 1440
+
 steps:
   - label: "init :computer:"
     key: "init_cpu_env"
