@@ -3,6 +3,7 @@
 # This file defines function-generating functions for output_writers for diagnostics. The
 # writers come with opinionated defaults.
 
+import ClimaComms
 import ClimaCore.Remapping: interpolate_array
 import NCDatasets
 
@@ -45,7 +46,8 @@ function HDF5Writer()
             "$(diagnostic.output_short_name)_$(time).h5",
         )
 
-        hdfwriter = InputOutput.HDF5Writer(output_path, integrator.p.comms_ctx)
+        comms_ctx = ClimaComms.context(integrator.u.c)
+        hdfwriter = InputOutput.HDF5Writer(output_path, comms_ctx)
         InputOutput.write!(hdfwriter, value, "$(diagnostic.output_short_name)")
         attributes = Dict(
             "time" => time,

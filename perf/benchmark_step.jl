@@ -26,7 +26,8 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 
 @info "Running benchmark_step!..."
 n_steps = 10
-device = ClimaComms.device(integrator.p.comms_ctx)
+comms_ctx = ClimaComms.context(integrator.u.c)
+device = ClimaComms.device(comms_ctx)
 if device isa ClimaComms.CUDADevice
     e = CUDA.@elapsed begin
         s = CA.@timed_str begin

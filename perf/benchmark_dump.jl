@@ -25,7 +25,8 @@ for h_elem in 8:8:40
 
     @info "Running benchmark_step for h_elem=$h_elem"
     n_steps = 10
-    device = ClimaComms.device(integrator.p.comms_ctx)
+    comms_ctx = ClimaComms.context(integrator.u.c)
+    device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CUDADevice
         e = CUDA.@elapsed begin
             s = CA.@timed_str begin

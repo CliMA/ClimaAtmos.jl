@@ -82,7 +82,6 @@ function default_cache(
         is_init = Ref(true),
         simulation,
         atmos,
-        comms_ctx = ClimaComms.context(axes(Y.c)),
         sfc_setup = surface_setup(params),
         test,
         moisture_model = atmos.moisture_model,
