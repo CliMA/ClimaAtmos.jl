@@ -74,7 +74,7 @@ surface_state(
 # conditions, but without throwing an error during the computation of
 # precomputed quantities for diagnostic EDMF due to uninitialized surface
 # conditions.
-# TODO: Refactor the surface conditions API to avoid needing to do this. 
+# TODO: Refactor the surface conditions API to avoid needing to do this.
 function set_dummy_surface_conditions!(p)
     (; sfc_conditions, params, atmos) = p
     FT = eltype(params)
@@ -168,7 +168,7 @@ function surface_state_to_conditions(
             coordinates isa Geometry.LatLongPoint
         )
             if atmos.sfc_temperature isa ZonallyAsymmetricSST
-                #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021  
+                #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021
                 T =
                     (
                         (-60 < coordinates.lat < 60) ?
@@ -352,7 +352,7 @@ function surface_state_to_conditions(
     end
 
     return atmos_surface_conditions(
-        SF.surface_conditions(surface_params, inputs),
+        SF.surface_conditions(surface_params, inputs, SF.FDScheme()),
         ts,
         surface_local_geometry,
         atmos,

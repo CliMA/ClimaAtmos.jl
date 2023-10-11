@@ -151,7 +151,11 @@ end
             FT(gustiness),
             FT(beta),
         )
-        return SF.surface_conditions(surface_params, surface_inputs)
+        return SF.surface_conditions(
+            surface_params,
+            surface_inputs,
+            SF.FDScheme(),
+        )
     end
 
     # Test that set_surface_conditions! can be used to update the surface
