@@ -429,9 +429,9 @@ version = "0.1.0+0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "ChainRulesCore", "DataStructures", "DocStringExtensions", "EnumX", "EnzymeCore", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PreallocationTools", "PrecompileTools", "Printf", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Static", "StaticArraysCore", "Statistics", "Tricks", "TruncatedStacktraces", "ZygoteRules"]
-git-tree-sha1 = "d5a64797f46c37ea59da9e4dcc86b208cb150182"
+git-tree-sha1 = "95b6df71e218379a831874215b0effaac791d7d7"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.133.0"
+version = "6.133.1"
 
     [deps.DiffEqBase.extensions]
     DiffEqBaseDistributionsExt = "Distributions"
@@ -478,6 +478,12 @@ deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialF
 git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.15.1"
+
+[[deps.DiskArrays]]
+deps = ["OffsetArrays"]
+git-tree-sha1 = "1bfa9de80f35ac63c6c381b2d43c590875896a1f"
+uuid = "3c3547ce-8d99-4f5e-a174-61eb10b00ae3"
+version = "0.3.22"
 
 [[deps.Distances]]
 deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
@@ -595,9 +601,9 @@ version = "0.3.2"
 
 [[deps.FastGaussQuadrature]]
 deps = ["LinearAlgebra", "SpecialFunctions", "StaticArrays"]
-git-tree-sha1 = "0f478d8bad6f52573fb7658a263af61f3d96e43a"
+git-tree-sha1 = "93ff6a4d5e7bfe27732259bfabbdd19940d8af1f"
 uuid = "442a2c76-b920-505d-bb47-c5924d526838"
-version = "0.5.1"
+version = "1.0.0"
 
 [[deps.FastLapackInterface]]
 deps = ["LinearAlgebra"]
@@ -1155,10 +1161,10 @@ uuid = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
 version = "0.2.4"
 
 [[deps.NCDatasets]]
-deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "NetCDF_jll", "NetworkOptions", "Printf"]
-git-tree-sha1 = "4263c4220f22e20729329838bf7e94a49d1ac32f"
+deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "DiskArrays", "NetCDF_jll", "NetworkOptions", "Printf"]
+git-tree-sha1 = "7fcb4378f9c648a186bcb996fa29acc929a179ed"
 uuid = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
-version = "0.12.17"
+version = "0.13.1"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -1202,9 +1208,9 @@ version = "1.2.0"
 
 [[deps.NonlinearSolve]]
 deps = ["ADTypes", "ArrayInterface", "ConcreteStructs", "DiffEqBase", "EnumX", "FiniteDiff", "ForwardDiff", "LineSearches", "LinearAlgebra", "LinearSolve", "PrecompileTools", "RecursiveArrayTools", "Reexport", "SciMLBase", "SimpleNonlinearSolve", "SparseArrays", "SparseDiffTools", "StaticArraysCore", "UnPack"]
-git-tree-sha1 = "b9a71b5bb35766e857cad2acfc86213608e69a24"
+git-tree-sha1 = "a5f1f836da05d513c4143576af8f5d8e51b759f5"
 uuid = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
-version = "2.2.0"
+version = "2.2.1"
 
 [[deps.OffsetArrays]]
 deps = ["Adapt"]
