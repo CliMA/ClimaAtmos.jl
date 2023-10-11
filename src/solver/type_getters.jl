@@ -567,7 +567,10 @@ function get_diagnostics(parsed_args, atmos_model, hypsography)
     )
 
     hdf5_writer = CAD.HDF5Writer()
-    netcdf_writer = CAD.NetCDFWriter(; hypsography)
+    netcdf_writer = CAD.NetCDFWriter(;
+        hypsography,
+        interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
+    )
     writers = (hdf5_writer, netcdf_writer)
 
     # The default writer is HDF5
