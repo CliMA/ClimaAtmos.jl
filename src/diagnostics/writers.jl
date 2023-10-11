@@ -505,7 +505,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
     if haskey(nc, "$(var.short_name)")
         # We already have something in the file
         v = nc["$(var.short_name)"]
-        spatial_size..., temporal_size = size(v)
+        temporal_size, spatial_size... = size(v)
         spatial_size == size(interpolated_field) ||
             error("incompatible dimensions for $(var.short_name)")
     else
@@ -513,7 +513,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
             nc,
             "$(var.short_name)",
             FT,
-            (dim_names..., "time"),
+            ("time", dim_names...),
             deflatelevel = writer.compression_level,
         )
         v.attrib["long_name"] = diagnostic.output_long_name
