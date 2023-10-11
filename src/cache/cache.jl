@@ -84,8 +84,6 @@ function default_cache(
         atmos,
         sfc_setup = surface_setup(params),
         test,
-        moisture_model = atmos.moisture_model,
-        model_config = atmos.model_config,
         limiter,
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),

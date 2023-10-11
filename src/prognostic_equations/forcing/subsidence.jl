@@ -34,7 +34,7 @@ function subsidence_cache(Y, subsidence::Subsidence)
 end
 
 function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
-    (; moisture_model) = p
+    moisture_model = p.atmos.moisture_model
     subsidence_profile = p.subsidence.prof
     ᶜ∇MSE_gm = p.ᶜ∇MSE_gm[colidx]
     ᶜsubsidence = p.ᶜsubsidence[colidx]
