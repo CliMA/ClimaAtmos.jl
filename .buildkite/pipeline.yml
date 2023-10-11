@@ -413,6 +413,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_default/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 0"
         command: >
@@ -425,6 +426,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_1/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 32.5"
         command: >
@@ -437,6 +439,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_2/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 100"
         command: >
@@ -449,6 +452,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_3/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 150"
 
         command: >
@@ -461,6 +465,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_4/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 200"
         command: >
@@ -473,6 +478,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_5/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 500"
         command: >
@@ -485,6 +491,7 @@ steps:
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_6/*"
         agents:
           slurm_mem: 20GB
+          slurm_ntasks: 32
       # - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
       #   command: >
       #     julia --color=yes --project=examples examples/hybrid/driver.jl

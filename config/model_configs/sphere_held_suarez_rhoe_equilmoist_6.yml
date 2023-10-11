@@ -5,31 +5,31 @@ dt_save_to_disk: 6hours
 moist: equil
 forcing: held_suarez 
 precip_model: 0M 
-diagnostics:
-  - reduction_time: average
-    short_name: thetaa
-    period: 6hours
-    writer: h5
-  - reduction_time: average
-    short_name: thetaa
-    period: 30days
-    writer: h5
-  - reduction_time: average
-    short_name: ts
-    period: 6hours
-    writer: h5
-  - reduction_time: average
-    short_name: ts
-    period: 30days
-    writer: h5
-  - reduction_time: average
-    short_name: ta
-    period: 6hours
-    writer: h5
-  - reduction_time: average
-    short_name: ta
-    period: 30days
-    writer: h5
+# diagnostics:
+#   - reduction_time: average
+#     short_name: thetaa
+#     period: 6hours
+#     writer: h5
+#   - reduction_time: average
+#     short_name: thetaa
+#     period: 30days
+#     writer: h5
+#   - reduction_time: average
+#     short_name: ts
+#     period: 6hours
+#     writer: h5
+#   - reduction_time: average
+#     short_name: ts
+#     period: 30days
+#     writer: h5
+#   - reduction_time: average
+#     short_name: ta
+#     period: 6hours
+#     writer: h5
+#   - reduction_time: average
+#     short_name: ta
+#     period: 30days
+#     writer: h5
 #
 job_id: sphere_held_suarez_rhoe_equilmoist_6
 output_dir: sphere_held_suarez_rhoe_equilmoist_6
