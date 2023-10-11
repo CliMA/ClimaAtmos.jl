@@ -191,7 +191,8 @@ hourly_average(short_names; output_writer) =
 # Core #
 ########
 function core_default_diagnostics(output_writer)
-    core_diagnostics = ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa"]
+    core_diagnostics =
+        ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa"]
 
     return [
         # We need to compute the topography at the beginning of the simulation (and only at

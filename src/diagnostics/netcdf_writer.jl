@@ -414,6 +414,9 @@ struct NetCDFWriter{T, TS}
 
     # NetCDF files that are currently open. Only the root process uses this field.
     open_files::Dict{String, NCDatasets.NCDataset}
+
+    # Whether to treat z as altitude over the surface or the sea level or over the surface
+    interpolate_z_over_msl::Bool
 end
 
 """
@@ -437,11 +440,12 @@ Keyword arguments
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
                 or X-Y-Z (the details depend on the configuration being simulated).
-- `interpolate_topography`: When `true`, the variable `z` is intended to be altitude from
-  the sea level (in meters). Values of `z` that are below the surface are filled with
-  `NaN`s. When `false`, `z` is intended to be altitude from the surface (in meters). `z`
-  becomes a multidimensional array that returns the altitude for the given horizontal
-  coordinates.
+- `interpolate_z_over_msl`: When `true`, the variable `z` is intended to be altitude from
+                            the sea level (in meters). Values of `z` that are below the
+                            surface are filled with `NaN`s. When `false`, `z` is intended to
+                            be altitude from the surface (in meters). `z` becomes a
+                            multidimensional array that returns the altitude for the given
+                            horizontal coordinates.
 - `compression_level`: How much to compress the output NetCDF file (0 is no compression, 9
   is maximum compression).
 
@@ -449,7 +453,7 @@ Keyword arguments
 function NetCDFWriter(;
     hypsography,
     num_points = (180, 80, 10),
-    interpolate_topography = false,
+    interpolate_z_over_msl = false,
     compression_level = 9,
 )
 
@@ -458,9 +462,9 @@ function NetCDFWriter(;
     # common paradigm for all the other dimensions. Moreover, with topography, we need need
     # to perform an interpolation for the surface.
 
-    if hypsography isa Spaces.Flat
-        # We don't have information about the type and space, so we set interpolated_surface
-        # to nothing, and deal with it later.
+    # We have to deal with the surface only if we are not interpolating the topography and
+    # if our topography is non-trivial
+    if hypsography isa Spaces.Flat || interpolate_z_over_msl
         interpolated_surface = nothing
     elseif hypsography isa Hypsography.LinearAdaption
         horizontal_space = axes(hypsography.surface)
@@ -472,7 +476,8 @@ function NetCDFWriter(;
         )
         vcoords = []
         remapper = Remapper(hcoords, vcoords, horizontal_space)
-        interpolated_surface = interpolate(remapper, hypsography.surface)
+        interpolated_surface =
+            interpolate(remapper, hypsography.surface, physical_z = false)
     else
         error("Cannot process hysography $hypsography")
     end
@@ -483,6 +488,7 @@ function NetCDFWriter(;
         compression_level,
         interpolated_surface,
         Dict(),
+        interpolate_z_over_msl,
     )
 end
 
@@ -532,7 +538,8 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
 
     # Now we can interpolate onto the target points
     # There's an MPI call in here (to aggregate the results)
-    interpolated_field = interpolate(remapper, field)
+    interpolated_field =
+        interpolate(remapper, field; physical_z = writer.interpolate_z_over_msl)
 
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return
