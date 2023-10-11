@@ -412,7 +412,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_default
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_default/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
@@ -426,7 +426,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_1
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_1/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
@@ -440,7 +440,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_2
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_2/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
@@ -454,7 +454,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_3
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_3/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 150"
@@ -468,7 +468,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_4
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_4/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
@@ -482,7 +482,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_5
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_5/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
 
@@ -496,7 +496,7 @@ steps:
           --out_dir sphere_held_suarez_rhoe_equilmoist_6
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_6/*"
         agents:
-          slurm_mem_per_cpu: 16GB
+          slurm_mem_per_cpu: 8GB
           slurm_ntasks: 32
           slurm_time: 24:00:00
       # - label: ":computer: Diagnostic DCMIP200 surface elevation spectra"
