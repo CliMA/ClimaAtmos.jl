@@ -404,7 +404,7 @@ steps:
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 65 (default)"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_default.yml
 
           julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
@@ -418,7 +418,7 @@ steps:
 
       - label: ":computer: held suarez (ρe) equilmoist dt_y = 0"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_1.yml
 
           julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
