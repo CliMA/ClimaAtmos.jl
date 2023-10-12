@@ -7,8 +7,8 @@ using ClimaCore.Utilities: half
 # between function calls.
 function temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
+
     FT = Spaces.undertype(center_space)
-    n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
@@ -25,7 +25,10 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
-        ᶠtemp_CT12ʲs = Fields.Field(NTuple{n, CT12{FT}}, face_space), # ᶠω¹²ʲs
+        ᶠtemp_CT12ʲs = Fields.Field(
+            NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},
+            face_space,
+        ), # ᶠω¹²ʲs
         ᶠtemp_C123 = Fields.Field(C123{FT}, face_space), # χ₁₂₃
         ᶜtemp_UVWxUVW = Fields.Field(
             typeof(UVW(FT(0), FT(0), FT(0)) * UVW(FT(0), FT(0), FT(0))'),

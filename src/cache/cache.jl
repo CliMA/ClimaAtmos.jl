@@ -73,7 +73,6 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         env_thermo_quad = SGSQuadrature(FT),
         precomputed_quantities(Y, atmos)...,
         scratch = temporary_quantities(Y, atmos),
-        hyperdiffusion_cache(Y, atmos, do_dss)...,
         numerics,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
@@ -85,6 +84,7 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
 
     return merge(
         (;
+            hyperdiff = hyperdiffusion_cache(Y, atmos),
             rayleigh_sponge = rayleigh_sponge_cache(Y, atmos),
             viscous_sponge = viscous_sponge_cache(Y, atmos),
             precipitation = precipitation_cache(Y, atmos),
