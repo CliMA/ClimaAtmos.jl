@@ -125,8 +125,8 @@ function additional_cache(Y, default_cache, params, atmos, dt)
             precipitation = precipitation_cache(Y, atmos),
             large_scale_advection = large_scale_advection_cache(Y, atmos),
             subsidence = subsidence_cache(Y, atmos),
+            edmf_coriolis = edmf_coriolis_cache(Y, atmos),
         ),
-        edmf_coriolis_cache(Y, atmos.edmf_coriolis),
         forcing_cache(Y, forcing_type),
         radiation_cache,
         non_orographic_gravity_wave_cache(
