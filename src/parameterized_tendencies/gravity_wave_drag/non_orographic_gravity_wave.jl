@@ -114,7 +114,7 @@ function non_orographic_gravity_wave_tendency!(
 )
     #unpack
     (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params) = p
-    model_config = p.atmos.model_config
+    (; model_config) = p.atmos
     (;
         gw_source_ampl,
         gw_Bw,
