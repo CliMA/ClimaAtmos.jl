@@ -67,14 +67,12 @@ function default_cache(
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
-    test = numerics.test_dycore_consistency
 
     default_cache = (;
         is_init = Ref(true),
         simulation,
         atmos,
         sfc_setup = surface_setup(params),
-        test,
         limiter,
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
