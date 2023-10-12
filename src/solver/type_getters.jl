@@ -595,7 +595,6 @@ function get_simulation(config::AtmosConfig)
     mkpath(output_dir)
 
     sim = (;
-        is_debugging_tc = parsed_args["debugging_tc"],
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
