@@ -10,7 +10,7 @@ edmfx_entr_model: "ConstantCoefficient"
 edmfx_detr_model: "ConstantCoefficient"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-edmfx_nh_pressure: false
+edmfx_nh_pressure: true
 prognostic_tke: false
 moist: "equil"
 config: "box"
@@ -24,7 +24,7 @@ y_elem: 2
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
-dt: "1secs"
-t_end: "10800secs"
+dt: "2secs"
+t_end: "3hours"
 dt_save_to_disk: "10secs"
 toml: [toml/edmfx_box.toml]

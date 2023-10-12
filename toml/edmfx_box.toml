@@ -13,3 +13,8 @@ alias = "min_area"
 value = 1.0e-3
 type = "float"
 description = "Minimum area fraction per updraft. Parameter not described in the literature."
+
+[entr_coeff]
+alias = "entr_coeff"
+value = 0.1
+type = "float"

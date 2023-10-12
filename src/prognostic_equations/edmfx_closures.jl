@@ -79,7 +79,7 @@ edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 function edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params, ᶜρʲs, ᶜρ_ref, ᶠgradᵥ_ᶜΦ, ᶜuʲs, ᶜu⁰, ᶠu₃⁰) = p
+    (; params, ᶜρʲs, ᶜρ_ref, ᶜp, ᶜp_ref, ᶠgradᵥ_ᶜΦ, ᶠu₃⁰) = p
     FT = eltype(Y)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -107,7 +107,7 @@ function edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMF
             p.atmos.edmfx_nh_pressure,
             ᶠlg[colidx],
             ᶠbuoyancy(
-                ᶠinterp(ᶜρ_ref[colidx]),
+                ᶠinterp(Y.c.ρ[colidx]),
                 ᶠinterp(ᶜρʲs.:($$j)[colidx]),
                 ᶠgradᵥ_ᶜΦ[colidx],
             ),
