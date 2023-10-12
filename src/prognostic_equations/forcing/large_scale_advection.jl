@@ -6,14 +6,13 @@ import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
-large_scale_advection_cache(Y, ls_adv::Nothing) = (; ls_adv)
+large_scale_advection_cache(Y, atmos::AtmosModel) =
+    large_scale_advection_cache(Y, atmos.ls_adv)
+
+large_scale_advection_cache(Y, ls_adv::Nothing) = (;)
 function large_scale_advection_cache(Y, ls_adv::LargeScaleAdvection)
     FT = Spaces.undertype(axes(Y.c))
-    return (;
-        ls_adv,
-        ᶜdqtdt_hadv = similar(Y.c, FT),
-        ᶜdTdt_hadv = similar(Y.c, FT),
-    )
+    return (; ᶜdqtdt_hadv = similar(Y.c, FT), ᶜdTdt_hadv = similar(Y.c, FT))
 end
 
 large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
@@ -25,13 +24,12 @@ function large_scale_advection_tendency!(
     colidx,
     ls_adv::LargeScaleAdvection,
 )
-    FT = Spaces.undertype(axes(Y.c))
     (; prof_dTdt, prof_dqtdt) = ls_adv
 
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜts = p.ᶜts[colidx]
-    ᶜdqtdt_hadv = p.ᶜdqtdt_hadv[colidx]
-    ᶜdTdt_hadv = p.ᶜdTdt_hadv[colidx]
+    ᶜdqtdt_hadv = p.large_scale_advection.ᶜdqtdt_hadv[colidx]
+    ᶜdTdt_hadv = p.large_scale_advection.ᶜdTdt_hadv[colidx]
     z = Fields.coordinate_field(axes(ᶜdqtdt_hadv)).z
 
     @. ᶜdTdt_hadv = prof_dTdt(thermo_params, ᶜts, t, z)
