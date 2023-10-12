@@ -20,12 +20,12 @@ function compute_rsd!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_sw_flux_dn),
+            FT.(cache.radiation.radiation_model.face_sw_flux_dn),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_sw_flux_dn),
+            FT.(cache.radiation.radiation_model.face_sw_flux_dn),
             axes(state.f),
         )
     end
@@ -58,12 +58,12 @@ function compute_rsu!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_sw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_sw_flux_up),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_sw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_sw_flux_up),
             axes(state.f),
         )
     end
@@ -96,12 +96,12 @@ function compute_rld!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_lw_flux_dn),
+            FT.(cache.atmos.radiation_mode.face_lw_flux_dn),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_lw_flux_dn),
+            FT.(cache.atmos.radiation_mode.face_lw_flux_dn),
             axes(state.f),
         )
     end
@@ -134,12 +134,12 @@ function compute_rlu!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_lw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_lw_flux_up),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_lw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_lw_flux_up),
             axes(state.f),
         )
     end
@@ -172,12 +172,12 @@ function compute_rsdcs!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_sw_flux_dn),
+            FT.(cache.atmos.radiation_mode.face_clear_sw_flux_dn),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_sw_flux_dn),
+            FT.(cache.atmos.radiation_mode.face_clear_sw_flux_dn),
             axes(state.f),
         )
     end
@@ -210,12 +210,12 @@ function compute_rsucs!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_sw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_clear_sw_flux_up),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_sw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_clear_sw_flux_up),
             axes(state.f),
         )
     end
@@ -248,12 +248,12 @@ function compute_rldcs!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_lw_flux_dn),
+            FT.(cache.atmos.radiation_mode.face_clear_lw_flux_dn),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_lw_flux_dn),
+            FT.(cache.atmos.radiation_mode.face_clear_lw_flux_dn),
             axes(state.f),
         )
     end
@@ -286,12 +286,12 @@ function compute_rlucs!(
     FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_lw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_clear_lw_flux_up),
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation_model.face_clear_lw_flux_up),
+            FT.(cache.atmos.radiation_mode.face_clear_lw_flux_up),
             axes(state.f),
         )
     end

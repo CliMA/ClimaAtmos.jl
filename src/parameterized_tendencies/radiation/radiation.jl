@@ -13,12 +13,15 @@ import .RRTMGPInterface as RRTMGPI
 using Dierckx: Spline1D
 using StatsBase: mean
 
+
+radiation_model_cache(Y, atmos::AtmosModel, args...) =
+    radiation_model_cache(Y, atmos.radiation_mode, args...)
+
 #####
 ##### No Radiation
 #####
 
-radiation_model_cache(Y, params, radiation_mode::Nothing; kwargs...) =
-    (; radiation_model = radiation_mode)
+radiation_model_cache(Y, radiation_mode::Nothing; args...) = (;)
 radiation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 #####
@@ -27,12 +30,12 @@ radiation_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 function radiation_model_cache(
     Y,
-    default_cache,
+    radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     params,
-    radiation_mode::RRTMGPI.AbstractRRTMGPMode = RRTMGPI.ClearSkyRadiation();
+    ᶜp; # Used for ozone
     interpolation = RRTMGPI.BestFit(),
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
-    data_loader,
+    data_loader = rrtmgp_data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
     device = context.device
@@ -85,14 +88,12 @@ function radiation_model_cache(
                 input_center_volume_mixing_ratio_o3,
             )
             if device isa ClimaComms.CUDADevice
-                fv = Fields.field_values(default_cache.ᶜp)
+                fv = Fields.field_values(ᶜp)
                 fld_array = DA(pressure2ozone.(Array(parent(fv))))
                 data = DataLayouts.rebuild(fv, fld_array)
-                ᶜvolume_mixing_ratio_o3_field =
-                    Fields.Field(data, axes(default_cache.ᶜp))
+                ᶜvolume_mixing_ratio_o3_field = Fields.Field(data, axes(ᶜp))
             else
-                ᶜvolume_mixing_ratio_o3_field =
-                    @. FT(pressure2ozone(default_cache.ᶜp))
+                ᶜvolume_mixing_ratio_o3_field = @. FT(pressure2ozone(ᶜp))
             end
             center_volume_mixing_ratio_o3 =
                 RRTMGPI.field2array(ᶜvolume_mixing_ratio_o3_field)
@@ -225,8 +226,9 @@ function radiation_model_cache(
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
     )
 end
-function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.RRTMGPModel)
-    (; ᶠradiation_flux) = p
+
+function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.AbstractRRTMGPMode)
+    (; ᶠradiation_flux) = p.radiation
     if :ρθ in propertynames(Y.c)
         error("radiation_tendency! not implemented for ρθ")
     elseif :ρe_tot in propertynames(Y.c)
@@ -239,16 +241,17 @@ end
 ##### DYCOMS_RF01 radiation
 #####
 
-function radiation_model_cache(Y, params, radiation_mode::RadiationDYCOMS_RF01;)
+function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS_RF01)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
     return (;
-        radiation_model = radiation_mode,
         ᶜκρq = similar(Y.c, FT),
         ∫_0_∞_κρq = similar(Spaces.level(Y.c, 1), FT),
         ᶠ∫_0_z_κρq = similar(Y.f, FT),
         isoline_z_ρ_q = similar(Spaces.level(Y.c, 1), NT),
         ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT}),
+        net_energy_flux_toa = [Geometry.WVector(FT(0))],
+        net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
 function radiation_tendency!(
@@ -263,7 +266,8 @@ function radiation_tendency!(
     @assert p.atmos.energy_form isa TotalEnergy
 
     (; params, ᶜspecific, ᶜts) = p
-    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) = p
+    (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) =
+        p.radiation
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
     FT = Spaces.undertype(axes(Y.c))
@@ -327,11 +331,15 @@ end
 ##### TRMM_LBA radiation
 #####
 
-function radiation_model_cache(Y, params, radiation_mode::RadiationTRMM_LBA;)
+function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
-    # TODO: should we distinguish between radiation mode vs model?
-    return (; ᶜdTdt_rad = similar(Y.c, FT), radiation_model = radiation_mode)
+    return (;
+        ᶜdTdt_rad = similar(Y.c, FT),
+        net_energy_flux_toa = [Geometry.WVector(FT(0))],
+        net_energy_flux_sfc = [Geometry.WVector(FT(0))],
+    )
 end
+
 function radiation_tendency!(
     Yₜ,
     Y,
@@ -345,7 +353,7 @@ function radiation_tendency!(
     # TODO: get working (need to add cache / function)
     rad = radiation_mode.rad_profile
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜdTdt_rad = p.ᶜdTdt_rad[colidx]
+    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad[colidx]
     ᶜρ = Y.c.ρ[colidx]
     ᶜts_gm = p.ᶜts[colidx]
     zc = Fields.coordinate_field(axes(ᶜρ)).z
