@@ -47,12 +47,14 @@ Y = Fields.FieldVector(c = Yc, f = Yf)
 
 # Initialize cache vars for orographic gravity wave
 ogw = CA.OrographicGravityWave{FT, String}()
-p = CA.orographic_gravity_wave_cache(ogw, Y, FT(radius))
+p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 
 # Unpack cache vars
-(; topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) = p
-(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) = p
-(; hmax, hmin, t11, t12, t21, t22) = p.topo_info
+(; topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+    p.orographic_gravity_wave
+(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+    p.orographic_gravity_wave
+(; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
 
 u_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:1
 v_phy = Geometry.UVVector.(Y.c.uₕ).components.data.:2

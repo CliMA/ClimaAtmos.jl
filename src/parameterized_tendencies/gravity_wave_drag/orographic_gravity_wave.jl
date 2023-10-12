@@ -16,13 +16,20 @@ Not yet included in our codebase
 
 using ClimaCore: InputOutput
 
-orographic_gravity_wave_cache(::Nothing, Y, radius) = NamedTuple()
+orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
+    orographic_gravity_wave_cache(Y, atmos.orographic_gravity_wave)
+
+orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
 orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 
-function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
+function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
+
+    @assert Spaces.horizontal_space(axes(Y.c)).topology.mesh.domain isa
+            Domains.SphereDomain
+
     FT = Spaces.undertype(axes(Y.c))
     (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) = ogw
 
@@ -30,9 +37,10 @@ function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
         orographic_info_rll = joinpath(topo_res_path(), "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == "raw_topo"
-        # TODO: right now this option may easily crash 
+        # TODO: right now this option may easily crash
         # because we did not incorporate any smoothing when interpolate back to model grid
         elevation_rll = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        radius = Spaces.horizontal_space(axes(Y.c)).topology.mesh.domain.radius
         topo_info = compute_OGW_info(Y, elevation_rll, radius, γ, h_frac)
     end
 
@@ -67,7 +75,8 @@ function orographic_gravity_wave_cache(ogw::OrographicGravityWave, Y, radius)
 end
 
 function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
-    (; params, ᶜts, ᶜT, ᶜdTdz, ᶜp) = p
+    (; params, ᶜts, ᶜT, ᶜp) = p
+    ᶜdTdz = p.orographic_gravity_wave.ᶜdTdz
     (;
         topo_k_pbl,
         topo_τ_x,
@@ -77,9 +86,10 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
         topo_τ_np,
         topo_ᶠτ_sat,
         topo_ᶠVτ,
-    ) = p
-    (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) = p
-    (; hmax, hmin, t11, t12, t21, t22) = p.topo_info
+    ) = p.orographic_gravity_wave
+    (; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+        p.orographic_gravity_wave
+    (; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
     FT = Spaces.undertype(axes(Y.c))
 
     # parameters
@@ -87,7 +97,7 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
     grav = FT(CAP.grav(params))
     cp_d = FT(CAP.cp_d(params))
 
-    # z 
+    # z
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
 
@@ -183,7 +193,6 @@ function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWav
         calc_nonpropagating_forcing!(
             uforcing[colidx],
             vforcing[colidx],
-            p,
             ᶠN[colidx],
             topo_ᶠVτ[colidx],
             ᶜp[colidx],
@@ -210,7 +219,6 @@ end
 function calc_nonpropagating_forcing!(
     ᶜuforcing,
     ᶜvforcing,
-    p,
     ᶠN,
     ᶠVτ,
     ᶜp,
@@ -270,7 +278,7 @@ function get_pbl(ᶜp, ᶜT, ᶜz, grav, cp_d)
             (grav / cp_d * (parent(ᶜz) .- parent(ᶜz)[1]))
         )
     # parent(ᶜp) .>= (FT(0.5) * parent(ᶜp)[1]) follows the criterion in GFDL codes
-    # that the lowest layer that is geq to half of pressure at first face level; while 
+    # that the lowest layer that is geq to half of pressure at first face level; while
     # in our code, when interpolate from center to face, the first face level inherits
     # values at the first center level
     return 1 + findlast(idx)[1]
@@ -309,8 +317,8 @@ function calc_base_flux!(
         topo_γ,
         topo_β,
         topo_ϵ,
-    ) = p
-    Vτ = p.topo_base_Vτ
+    ) = p.orographic_gravity_wave
+    Vτ = p.orographic_gravity_wave.topo_base_Vτ
 
     FT = eltype(Fr_crit)
     γ = topo_γ
@@ -340,7 +348,7 @@ function calc_base_flux!(
     @. FrU_clp = min(FrU_max, max(FrU_min, FrU_sat))
     # total linear drag
     @. τ_l = ((FrU_max)^(2 + γ - ϵ) - (FrU_min)^(2 + γ - ϵ)) / (2 + γ - ϵ)
-    # propagating 
+    # propagating
     @. τ_p =
         topo_a0 * (
             (FrU_clp^(2 + γ - ϵ) - FrU_min^(2 + γ - ϵ)) / (2 + γ - ϵ) +
@@ -378,7 +386,8 @@ function calc_saturation_profile!(
     ᶜp,
     k_pbl,
 )
-    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) = p
+    (; Fr_crit, topo_ρscale, topo_L0, topo_a0, topo_γ, topo_β, topo_ϵ) =
+        p.orographic_gravity_wave
     FT = eltype(Fr_crit)
     γ = topo_γ
     β = topo_β
