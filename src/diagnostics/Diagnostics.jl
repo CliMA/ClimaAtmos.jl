@@ -32,6 +32,9 @@ import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ..EDMFX
 import ..DiagnosticEDMFX
 
+# functions used to calculate diagnostics
+import ..draft_area
+
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
 

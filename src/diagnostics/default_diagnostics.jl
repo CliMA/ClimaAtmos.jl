@@ -192,7 +192,8 @@ hourly_average(short_names; output_writer = HDF5Writer()) =
 # Core #
 ########
 function core_default_diagnostics()
-    core_diagnostics = ["ts", "ta", "thetaa", "pfull", "rhoa", "ua", "va", "wa"]
+    core_diagnostics =
+        ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa"]
 
     return [
         daily_averages(core_diagnostics...)...,
@@ -217,7 +218,7 @@ end
 function default_diagnostics(
     ::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    moist_diagnostics = ["hur", "hus", "hussfc", "evspsbl"]
+    moist_diagnostics = ["hur", "hus", "clw", "cli", "hussfc", "evspsbl"]
 
     return [daily_averages(moist_diagnostics...)...]
 end
@@ -245,4 +246,62 @@ function default_diagnostics(::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics)
     clear_diagnostics = ["rsdcs", "rsucs", "rldcs", "rlucs"]
 
     return [daily_averages(clear_diagnostics...)...]
+end
+
+##################
+# Turbconv model #
+##################
+function default_diagnostics(::EDMFX)
+    edmfx_draft_diagnostics = [
+        "arup",
+        "rhoaup",
+        "waup",
+        "taup",
+        "thetaaup",
+        "haup",
+        "husup",
+        "hurup",
+        "clwup",
+        "cliup",
+    ]
+    edmfx_env_diagnostics = [
+        "aren",
+        "rhoaen",
+        "waen",
+        "taen",
+        "thetaaen",
+        "husen",
+        "huren",
+        "clwen",
+        "clien",
+        "tke",
+        "lmix",
+    ]
+
+    return [
+        daily_averages(edmfx_draft_diagnostics...)...,
+        daily_averages(edmfx_env_diagnostics...)...,
+    ]
+end
+
+
+function default_diagnostics(::DiagnosticEDMFX)
+    diagnostic_edmfx_draft_diagnostics = [
+        "arup",
+        "rhoaup",
+        "waup",
+        "taup",
+        "thetaaup",
+        "haup",
+        "husup",
+        "hurup",
+        "clwup",
+        "cliup",
+    ]
+    diagnostic_edmfx_env_diagnostics = ["waen", "tke", "lmix"]
+
+    return [
+        daily_averages(diagnostic_edmfx_draft_diagnostics...)...,
+        daily_averages(diagnostic_edmfx_env_diagnostics...)...,
+    ]
 end

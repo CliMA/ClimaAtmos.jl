@@ -47,14 +47,13 @@ error_diagnostic_variable(variable, model::T) where {T} =
     error_diagnostic_variable("Cannot compute $variable with model = $T")
 
 ###
-# Rho (3d)
+# Density (3d)
 ###
 add_diagnostic_variable!(
     short_name = "rhoa",
     long_name = "Air Density",
     standard_name = "air_density",
     units = "kg m^-3",
-    comments = "Density of air",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
             return copy(state.c.ρ)
@@ -129,7 +128,6 @@ add_diagnostic_variable!(
     long_name = "Air Temperature",
     standard_name = "air_temperature",
     units = "K",
-    comments = "Temperature of air",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
@@ -148,7 +146,6 @@ add_diagnostic_variable!(
     long_name = "Air Potential Temperature",
     standard_name = "air_potential_temperature",
     units = "K",
-    comments = "Potential temperature of air",
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
@@ -160,13 +157,29 @@ add_diagnostic_variable!(
 )
 
 ###
+# Enthalpy (3d)
+###
+add_diagnostic_variable!(
+    short_name = "ha",
+    long_name = "Air Specific Enthalpy",
+    units = "m^2 s^-2",
+    compute! = (out, state, cache, time) -> begin
+        thermo_params = CAP.thermodynamics_params(cache.params)
+        if isnothing(out)
+            return TD.specific_enthalpy.(thermo_params, cache.ᶜts)
+        else
+            out .= TD.specific_enthalpy.(thermo_params, cache.ᶜts)
+        end
+    end,
+)
+
+###
 # Air pressure (3d)
 ###
 add_diagnostic_variable!(
     short_name = "pfull",
     long_name = "Pressure at Model Full-Levels",
     units = "Pa",
-    comments = "Pressure of air",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
             return copy(cache.ᶜp)
@@ -259,6 +272,78 @@ add_diagnostic_variable!(
     units = "kg kg^-1",
     comments = "Mass of all water phases per mass of air",
     compute! = compute_hus!,
+)
+
+###
+# Liquid water specific humidity (3d)
+###
+compute_clw!(out, state, cache, time) =
+    compute_clw!(out, state, cache, time, cache.atmos.moisture_model)
+compute_clw!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("clw", model)
+
+function compute_clw!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.liquid_specific_humidity.(thermo_params, cache.ᶜts)
+    else
+        out .= TD.liquid_specific_humidity.(thermo_params, cache.ᶜts)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "clw",
+    long_name = "Mass Fraction of Cloud Liquid Water",
+    standard_name = "mass_fraction_of_cloud_liquid_water_in_air",
+    units = "kg kg^-1",
+    comments = """
+    Includes both large-scale and convective cloud. 
+    This is calculated as the mass of cloud liquid water in the grid cell divided by 
+    the mass of air (including the water in all phases) in the grid cells. 
+    """,
+    compute! = compute_clw!,
+)
+
+###
+# Ice water specific humidity (3d)
+###
+compute_cli!(out, state, cache, time) =
+    compute_cli!(out, state, cache, time, cache.atmos.moisture_model)
+compute_cli!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("cli", model)
+
+function compute_cli!(
+    out,
+    state,
+    cache,
+    time,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    if isnothing(out)
+        return TD.ice_specific_humidity.(thermo_params, cache.ᶜts)
+    else
+        out .= TD.ice_specific_humidity.(thermo_params, cache.ᶜts)
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "cli",
+    long_name = "Mass Fraction of Cloud Ice",
+    standard_name = "mass_fraction_of_cloud_ice_in_air",
+    units = "kg kg^-1",
+    comments = """
+    Includes both large-scale and convective cloud. 
+    This is calculated as the mass of cloud ice in the grid cell divided by 
+    the mass of air (including the water in all phases) in the grid cell.
+    """,
+    compute! = compute_cli!,
 )
 
 ###
