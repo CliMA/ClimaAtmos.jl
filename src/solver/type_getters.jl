@@ -493,32 +493,6 @@ function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
     return callbacks
 end
 
-function get_cache(
-    Y,
-    parsed_args,
-    params,
-    spaces,
-    atmos,
-    numerics,
-    simulation,
-    initial_condition,
-    surface_setup,
-)
-    _default_cache = default_cache(
-        Y,
-        params,
-        atmos,
-        spaces,
-        numerics,
-        simulation,
-        surface_setup,
-    )
-    merge(
-        _default_cache,
-        additional_cache(Y, _default_cache, params, atmos, simulation.dt),
-    )
-end
-
 function get_simulation(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
@@ -760,17 +734,7 @@ function get_integrator(config::AtmosConfig)
     @info "Allocating Y: $s"
 
     s = @timed_str begin
-        p = get_cache(
-            Y,
-            config.parsed_args,
-            params,
-            spaces,
-            atmos,
-            numerics,
-            simulation,
-            initial_condition,
-            surface_setup,
-        )
+        p = build_cache(Y, atmos, params, surface_setup, simulation)
     end
     @info "Allocating cache (p): $s"
 
