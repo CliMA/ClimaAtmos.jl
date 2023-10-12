@@ -10,16 +10,7 @@
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function default_cache(
-    Y,
-    params,
-    atmos,
-    spaces,
-    numerics,
-    simulation,
-    surface_setup,
-)
-
+function build_cache(Y, atmos, params, surface_setup, simulation)
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -53,8 +44,8 @@ function default_cache(
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
 
     limiter =
-        isnothing(numerics.limiter) ? nothing :
-        numerics.limiter(similar(Y.c, FT))
+        isnothing(atmos.numerics.limiter) ? nothing :
+        atmos.numerics.limiter(similar(Y.c, FT))
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
@@ -84,13 +75,6 @@ function default_cache(
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
     default_cache.is_init[] = false
-    return default_cache
-end
-
-
-# TODO: flip order so that NamedTuple() is fallback.
-function additional_cache(Y, default_cache, params, atmos, dt)
-    (; turbconv_model) = atmos
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
@@ -112,7 +96,8 @@ function additional_cache(Y, default_cache, params, atmos, dt)
             orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos),
             radiation = radiation_model_cache(Y, atmos, radiation_args...),
         ),
-        (; Δt = dt),
-        (; turbconv_model),
+        (; Δt = simulation.dt),
+        (; atmos.turbconv_model),
+        default_cache,
     )
 end
