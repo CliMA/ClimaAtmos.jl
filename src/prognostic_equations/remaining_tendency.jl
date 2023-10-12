@@ -21,7 +21,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
-        large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
+        large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
 
         (; vert_diff) = p.atmos
         vertical_diffusion_boundary_layer_tendency!(
