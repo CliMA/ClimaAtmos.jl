@@ -39,7 +39,6 @@ function default_cache(
         numerics
     (; apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
-    ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     R_d = FT(CAP.R_d(params))
     MSLP = FT(CAP.MSLP(params))
     grav = FT(CAP.grav(params))
