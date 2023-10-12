@@ -5,7 +5,7 @@ function surface_temp_tendency!(Yₜ, Y, p, t, ::PrognosticSurfaceTemperature)
     ρ_ocean = 1020 # ocean density [kg / m³]
     cp_ocean = 4184 # ocean heat capacity [J/(kg * K)]
 
-    (; ᶠradiation_flux) = p
+    (; ᶠradiation_flux) = p.radiation
     sfc_rad_flux = Spaces.level(ᶠradiation_flux, half).components.data.:1
 
     # Merlis et al., 2013 eq(9)

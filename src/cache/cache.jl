@@ -104,19 +104,11 @@ end
 
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, default_cache, params, atmos, dt)
-    (; radiation_mode, turbconv_model) = atmos
+    (; turbconv_model) = atmos
 
-    radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        radiation_model_cache(
-            Y,
-            default_cache,
-            params,
-            radiation_mode;
-            data_loader = rrtmgp_data_loader,
-        )
-    else
-        radiation_model_cache(Y, params, radiation_mode)
-    end
+    radiation_args =
+        atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
+        (params, default_cache.ᶜp) : ()
 
     return merge(
         (;
@@ -132,8 +124,8 @@ function additional_cache(Y, default_cache, params, atmos, dt)
                 atmos,
             ),
             orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos),
+            radiation = radiation_model_cache(Y, atmos, radiation_args...),
         ),
-        radiation_cache,
         (; Δt = dt),
         (; turbconv_model),
     )
