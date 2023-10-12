@@ -127,13 +127,12 @@ function additional_cache(Y, default_cache, params, atmos, dt)
             subsidence = subsidence_cache(Y, atmos),
             edmf_coriolis = edmf_coriolis_cache(Y, atmos),
             forcing = forcing_cache(Y, atmos),
+            non_orographic_gravity_wave = non_orographic_gravity_wave_cache(
+                Y,
+                atmos,
+            ),
         ),
         radiation_cache,
-        non_orographic_gravity_wave_cache(
-            atmos.non_orographic_gravity_wave,
-            atmos.model_config,
-            Y,
-        ),
         orographic_gravity_wave_cache(
             atmos.orographic_gravity_wave,
             Y,

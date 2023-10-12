@@ -36,7 +36,8 @@ function held_suarez_ΔT_y_T_equator(params, moisture_model::DryModel)
 end
 
 function held_suarez_ΔT_y_T_equator(
-    params, moisture_model::T,
+    params,
+    moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     FT = eltype(params)
     ΔT_y = FT(CAP.ΔT_y_wet(params))
