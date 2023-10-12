@@ -127,7 +127,7 @@ function additional_cache(
     end
 
     return merge(
-        rayleigh_sponge_cache(atmos.rayleigh_sponge, Y),
+        (; rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)),
         viscous_sponge_cache(atmos.viscous_sponge, Y),
         precipitation_cache(Y, precip_model),
         subsidence_cache(Y, atmos.subsidence),

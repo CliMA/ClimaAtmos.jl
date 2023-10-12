@@ -221,7 +221,10 @@ function Wfact!(A, Y, p, dtγ, t)
             p.params,
             p.atmos,
             (energy_form isa TotalEnergy ? (; p.ᶜh_tot) : (;))...,
-            (rayleigh_sponge isa RayleighSponge ? (; p.ᶠβ_rayleigh_w) : (;))...,
+            (
+                rayleigh_sponge isa RayleighSponge ?
+                (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
+            )...,
         )
 
         # Convert dtγ from a Float64 to an FT.
