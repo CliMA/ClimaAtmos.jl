@@ -14,7 +14,7 @@ face_z = FT.(0:1e3:0.47e5)
 center_z = FT(0.5) .* (face_z[1:(end - 1)] .+ face_z[2:end])
 
 # compute the source parameters
-function non_orographic_gravity_wave_cache(
+function non_orographic_gravity_wave(
     ::Type{FT};
     source_height = FT(15000),
     Bw = FT(1.2),
@@ -43,12 +43,7 @@ function non_orographic_gravity_wave_cache(
     )
 end
 
-params = non_orographic_gravity_wave_cache(
-    FT;
-    Bw = 0.4,
-    cmax = 150,
-    kwv = 2π / 100e3,
-)
+params = non_orographic_gravity_wave(FT; Bw = 0.4, cmax = 150, kwv = 2π / 100e3)
 source_level = argmin(abs.(center_z .- params.gw_source_height))
 damp_level = length(center_z)
 
@@ -119,7 +114,7 @@ for i in 1:length(lon)
     end
 end
 
-# compute zonal mean profile first and apply parameterization 
+# compute zonal mean profile first and apply parameterization
 center_u_zonalave = mean(center_u, dims = 1)[1, :, :, :]
 center_bf_zonalave = mean(center_bf, dims = 1)[1, :, :, :]
 center_ρ_zonalave = mean(center_ρ, dims = 1)[1, :, :, :]
