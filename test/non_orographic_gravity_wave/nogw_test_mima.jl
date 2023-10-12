@@ -8,7 +8,7 @@ using Plots
 const FT = Float64
 
 # compute the source parameters
-function non_orographic_gravity_wave_cache(
+function non_orographic_gravity_wave(
     lat,
     ::Type{FT};
     gw_source_pressure = FT(31500),
@@ -121,7 +121,7 @@ bf = @. (grav / T) * (dTdz + grav / cp_d)
 bf = @. ifelse(bf < 2.5e-5, sqrt(2.5e-5), sqrt(abs(bf)))
 
 # compute u/v forcings from convective gravity waves
-params = non_orographic_gravity_wave_cache(lat, FT)
+params = non_orographic_gravity_wave(lat, FT)
 
 # nogw forcing
 
