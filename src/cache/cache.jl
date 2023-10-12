@@ -131,13 +131,9 @@ function additional_cache(Y, default_cache, params, atmos, dt)
                 Y,
                 atmos,
             ),
+            orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos),
         ),
         radiation_cache,
-        orographic_gravity_wave_cache(
-            atmos.orographic_gravity_wave,
-            Y,
-            CAP.planet_radius(params),
-        ),
         (; Δt = dt),
         (; turbconv_model),
     )
