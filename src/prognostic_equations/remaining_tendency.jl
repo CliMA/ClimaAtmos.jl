@@ -33,7 +33,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             vert_diff,
         )
 
-        radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
+        radiation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.radiation_mode)
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_sgs_mass_flux_tendency!(
             Yₜ,
@@ -58,7 +58,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
 
-        # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+        # NOTE: This will zero out all momentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
     end
