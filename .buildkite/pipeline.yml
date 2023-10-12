@@ -1,6 +1,6 @@
 agents:
   queue: central
-  slurm_mem_per_cpu: 4G
+  slurm_mem_per_cpu: 8G
   modules: julia/1.9.3 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 hdf5/1.12.2-ompi415 nsight-systems/2023.2.1
 
 env:
