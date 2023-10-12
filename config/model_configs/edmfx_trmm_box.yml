@@ -8,7 +8,7 @@ edmfx_entr_model: "ConstantCoefficient"
 edmfx_detr_model: "ConstantCoefficient"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
-edmfx_nh_pressure: false
+edmfx_nh_pressure: true
 prognostic_tke: false
 moist: equil
 apply_limiter: false
