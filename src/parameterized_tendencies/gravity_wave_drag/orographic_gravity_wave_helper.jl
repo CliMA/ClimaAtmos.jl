@@ -5,7 +5,7 @@ using Statistics: mean
 """
     calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
 
-    Calculate orographic tensor (T) from 
+    Calculate orographic tensor (T) from
     - elev: surface elevation
     - χ: velocity potential
     - lon: longitude
@@ -23,8 +23,8 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
 
     # compute ∇χ
     # dχdx, dχdy = -bfscale .* calc_∇A(χ, lon, lat, earth_radius)
-    # TODO: This needs to be double checked with Steve Garner. 
-    # It looks like bfscale is multiply when he compute the raw T tensor but 
+    # TODO: This needs to be double checked with Steve Garner.
+    # It looks like bfscale is multiply when he compute the raw T tensor but
     # later divided again when creating the file that contains the actual T tensor
     # being used.
     dχdx, dχdy = .-calc_∇A(χ, lon, lat, earth_radius)

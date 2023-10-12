@@ -201,13 +201,15 @@ epsilon = 0.622
 
 # Initialize cache vars for orographic gravity wave
 ogw = CA.OrographicGravityWave{FT, String}()
-p = CA.orographic_gravity_wave_cache(ogw, Y, FT(radius))
+p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 
-(; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) = p
-(; topo_ᶠτ_sat, topo_ᶠVτ) = p
-(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) = p
-(; hmax, hmin, t11, t12, t21, t22) = p.topo_info
-(; ᶜdTdz) = p
+(; topo_k_pbl, topo_τ_x, topo_τ_y, topo_τ_l, topo_τ_p, topo_τ_np) =
+    p.orographic_gravity_wave
+(; topo_ᶠτ_sat, topo_ᶠVτ) = p.orographic_gravity_wave
+(; topo_U_sat, topo_FrU_sat, topo_FrU_max, topo_FrU_min, topo_FrU_clp) =
+    p.orographic_gravity_wave
+(; hmax, hmin, t11, t12, t21, t22) = p.orographic_gravity_wave.topo_info
+(; ᶜdTdz) = p.orographic_gravity_wave
 
 # pre-compute thermal vars
 aliases = string.(fieldnames(TD.Parameters.ThermodynamicsParameters))
@@ -227,7 +229,7 @@ thermo_params = TD.Parameters.ThermodynamicsParameters{FT}(; pairs...)
     top = Operators.Extrapolate(),
 )
 
-# z 
+# z
 ᶜz = Fields.coordinate_field(Y.c).z
 ᶠz = Fields.coordinate_field(Y.f).z
 
@@ -322,7 +324,6 @@ Fields.bycolumn(axes(Y.c.ρ)) do colidx
     CA.calc_nonpropagating_forcing!(
         uforcing[colidx],
         vforcing[colidx],
-        p,
         ᶠN[colidx],
         topo_ᶠVτ[colidx],
         ᶜp[colidx],
