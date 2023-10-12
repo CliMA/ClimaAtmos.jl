@@ -18,9 +18,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, p.atmos.rayleigh_sponge)
-        forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
-        subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
-        edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
+        forcing_tendency!(Yₜ, Y, p, t, colidx, p.atmos.forcing_type)
+        subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
+        edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
 
         (; vert_diff) = p.atmos
@@ -34,7 +34,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         )
 
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_sgs_mass_flux_tendency!(
             Yₜ,
             Y,
