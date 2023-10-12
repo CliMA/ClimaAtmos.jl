@@ -23,8 +23,10 @@ horizontal_integral_at_boundary(f, lev) = sum(
 function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
-    if !isnothing(p.radiation_model)
-        (; ᶠradiation_flux, net_energy_flux_toa, net_energy_flux_sfc, Δt) = p
+    if !isnothing(p.radiation)
+        Δt = integrator.dt
+        (; ᶠradiation_flux) = p.radiation
+        (; net_energy_flux_toa, net_energy_flux_sfc) = p
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
@@ -40,9 +42,9 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜts, sfc_conditions, params, env_thermo_quad) = p
-    (; idealized_insolation, idealized_h2o, idealized_clouds) = p
-    (; insolation_tuple, ᶠradiation_flux, radiation_model) = p
+    (; ᶜts, sfc_conditions, params) = p
+    (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
+    (; insolation_tuple, ᶠradiation_flux, radiation_model) = p.radiation
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -99,7 +101,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         max_zenith_angle = FT(π) / 2 - eps(FT)
         irradiance = FT(CAP.tot_solar_irrad(params))
         au = FT(CAP.astro_unit(params))
-        (; orbital_data) = p
+        (; orbital_data) = p.radiation
 
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -352,7 +354,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
 
     if p.atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         (; face_lw_flux_dn, face_lw_flux_up, face_sw_flux_dn, face_sw_flux_up) =
-            p.radiation_model
+            p.radiation.radiation_model
         rad_diagnostic = (;
             lw_flux_down = RRTMGPI.array2field(FT.(face_lw_flux_dn), axes(Y.f)),
             lw_flux_up = RRTMGPI.array2field(FT.(face_lw_flux_up), axes(Y.f)),
@@ -366,7 +368,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
                 face_clear_lw_flux_up,
                 face_clear_sw_flux_dn,
                 face_clear_sw_flux_up,
-            ) = p.radiation_model
+            ) = p.radiation.radiation_model
             rad_clear_diagnostic = (;
                 clear_lw_flux_down = RRTMGPI.array2field(
                     FT.(face_clear_lw_flux_dn),
