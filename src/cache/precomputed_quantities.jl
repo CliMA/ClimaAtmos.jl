@@ -149,6 +149,29 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     return nothing
 end
 
+"""
+    set_velocity_at_top!(Y, turbconv_model)
+
+Modifies `Y.f.u₃` so that `u₃` is 0 at the model top. 
+"""
+function set_velocity_at_top!(Y, turbconv_model)
+    top_u₃ = Fields.level(
+        Y.f.u₃.components.data.:1,
+        Spaces.nlevels(axes(Y.c)) + half,
+    )
+    @. top_u₃ = 0
+    if turbconv_model isa EDMFX
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            top_u₃ʲ = Fields.level(
+                Y.f.sgsʲs.:($j).u₃.components.data.:1,
+                Spaces.nlevels(axes(Y.c)) + half,
+            )
+            @. top_u₃ʲ = top_u₃
+        end
+    end
+    return nothing
+end
+
 # This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
 # ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
@@ -285,6 +308,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     # TODO: We might want to move this to dss! (and rename dss! to something
     # like enforce_constraints!).
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
+    set_velocity_at_top!(Y, turbconv_model)
 
     set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
     if n > 0
