@@ -5,7 +5,7 @@ dt_save_to_disk: 6hours
 moist: equil
 forcing: held_suarez 
 precip_model: 0M 
-# diagnosdiagnostics:
+diagnostics:
   - reduction_time: average
     short_name: thetaa
     period: 6hours
