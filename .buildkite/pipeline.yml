@@ -942,21 +942,19 @@ steps:
           slurm_mem: 32G
 
       - label: "GPU: GPU moist Held-Suarez"
-        command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
-
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $GPU_CONFIG_PATH/central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
+        command:
+          - julia --project -e 'using CUDA; CUDA.versioninfo()'
+          - >
+            julia --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file $GPU_CONFIG_PATH/central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
         artifact_paths: "central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
         agents:
           slurm_gpus: 1
-        soft_fail: true
 
       - label: "GPU: gpu_aquaplanet_dyamond"
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - > 
-            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
         artifact_paths: "gpu_aquaplanet_dyamond/*"
