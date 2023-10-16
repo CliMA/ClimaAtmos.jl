@@ -7,6 +7,7 @@ env:
   OPENBLAS_NUM_THREADS: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  CLIMAATMOS_GC_NSTEPS: 10
   GPU_CONFIG_PATH: "config/gpu_configs/"
   SLURM_GPU_BIND: none # https://github.com/open-mpi/ompi/issues/11949#issuecomment-1737712291
 
@@ -67,12 +68,17 @@ steps:
         command: 
           - mkdir -p gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
           - >
-            nsys profile --trace=nvtx,cuda --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
+            srun
+            nsys profile --trace=nvtx,cuda --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report-%q{PMI_RANK}
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
         artifact_paths: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
         agents:
+<<<<<<< HEAD
           slurm_gpus: 1
+=======
+          slurm_gpus: 4
+>>>>>>> cd280427 (deterministically call GC)
 
       - label: "dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
