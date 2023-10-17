@@ -83,7 +83,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=cores
-            nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
+            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
