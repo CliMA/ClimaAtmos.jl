@@ -1,10 +1,10 @@
-job_id: "edmfx_bomex_box"
+job_id: "advective_edmfx_bomex_box"
 initial_condition: "Bomex"
 subsidence: "Bomex"
 edmf_coriolis: "Bomex"
 ls_adv: "Bomex"
 surface_setup: "Bomex"
-turbconv: "edmfx"
+turbconv: "advective_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "ConstantCoefficient"
 edmfx_detr_model: "BOverW"
@@ -24,7 +24,7 @@ y_elem: 2
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
-dt: "2secs"
-t_end: "3hours"
-dt_save_to_disk: "10secs"
-toml: [toml/edmfx_box.toml]
+dt: "5secs"
+t_end: "6hours"
+dt_save_to_disk: "5mins"
+toml: [toml/advective_edmfx_box.toml]

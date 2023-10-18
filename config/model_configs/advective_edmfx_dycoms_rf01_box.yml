@@ -1,10 +1,10 @@
-job_id: edmfx_dycoms_rf01_box
+job_id: advective_edmfx_dycoms_rf01_box
 initial_condition: DYCOMS_RF01
 subsidence: DYCOMS
 edmf_coriolis: DYCOMS_RF01
 rad: DYCOMS_RF01
 surface_setup: DYCOMS_RF01
-turbconv: edmfx
+turbconv: advective_edmfx
 edmfx_upwinding: first_order
 edmfx_entr_model: "ConstantCoefficient"
 edmfx_detr_model: "BOverW"
@@ -26,4 +26,4 @@ z_stretch: false
 dt: 5secs
 t_end: 4hours
 dt_save_to_disk: 10mins
-toml: [toml/edmfx_box.toml]
+toml: [toml/advective_edmfx_box.toml]

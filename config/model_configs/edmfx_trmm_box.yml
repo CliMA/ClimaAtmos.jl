@@ -5,7 +5,7 @@ surface_setup: TRMM_LBA
 turbconv: edmfx
 edmfx_upwinding: first_order
 edmfx_entr_model: "ConstantCoefficient"
-edmfx_detr_model: "ConstantCoefficient"
+edmfx_detr_model: "BOverW"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true

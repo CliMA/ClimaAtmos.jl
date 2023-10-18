@@ -10,19 +10,18 @@ function edmfx_sgs_mass_flux_tendency!(
     p,
     t,
     colidx,
-    turbconv_model::EDMFX,
+    turbconv_model::Union{EDMFX, AdvectiveEDMFX},
 )
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_upwinding, sfc_conditions) = p
+    (; edmfx_upwinding) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
-    (; ᶠu³ʲs, ᶜh_totʲs, ᶜspecificʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰, ᶜspecific⁰) = p
-    (; ᶜK_u, ᶜK_h) = p
+    (; ᶠu³ʲs) = p
+    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰) = p
+    ᶜq_tot⁰ = turbconv_model isa EDMFX ? p.ᶜspecific⁰.q_tot : p.ᶜq_tot⁰
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
@@ -30,7 +29,10 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-            @. ᶜh_tot_diff_colidx = ᶜh_totʲs.:($$j)[colidx] - ᶜh_tot[colidx]
+            ᶜh_totʲ_colidx =
+                turbconv_model isa EDMFX ? p.ᶜh_totʲs.:($j)[colidx] :
+                Y.c.sgsʲs.:($j).h_tot[colidx]
+            @. ᶜh_tot_diff_colidx = ᶜh_totʲ_colidx - ᶜh_tot[colidx]
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -57,8 +59,11 @@ function edmfx_sgs_mass_flux_tendency!(
             # specific humidity
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-                @. ᶜq_tot_diff_colidx =
-                    ᶜspecificʲs.:($$j).q_tot[colidx] - ᶜspecific.q_tot[colidx]
+                ᶜq_totʲ_colidx =
+                    turbconv_model isa EDMFX ?
+                    p.ᶜspecificʲs.:($j).q_tot[colidx] :
+                    Y.c.sgsʲs.:($j).q_tot[colidx]
+                @. ᶜq_tot_diff_colidx = ᶜq_totʲ_colidx - ᶜspecific.q_tot[colidx]
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
@@ -70,8 +75,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 )
             end
             @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
-            @. ᶜq_tot_diff_colidx =
-                ᶜspecific⁰.q_tot[colidx] - ᶜspecific.q_tot[colidx]
+            @. ᶜq_tot_diff_colidx = ᶜq_tot⁰[colidx] - ᶜspecific.q_tot[colidx]
             vertical_transport!(
                 Yₜ.c.ρq_tot[colidx],
                 ᶜJ[colidx],
@@ -159,18 +163,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
     p,
     t,
     colidx,
-    turbconv_model::EDMFX,
+    turbconv_model::Union{EDMFX, AdvectiveEDMFX},
 )
 
     FT = Spaces.undertype(axes(Y.c))
-    n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_upwinding, sfc_conditions) = p
-    (; ᶠu³, ᶜh_tot, ᶜspecific) = p
-    (; ᶠu³ʲs, ᶜh_totʲs, ᶜspecificʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰, ᶜspecific⁰) = p
+    (; sfc_conditions) = p
+    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰) = p
+    ᶜq_tot⁰ = turbconv_model isa EDMFX ? p.ᶜspecific⁰.q_tot : p.ᶜq_tot⁰
     (; ᶜK_u, ᶜK_h) = p
-    (; dt) = p.simulation
-    ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_diffusive_flux
@@ -193,9 +193,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
                     sfc_conditions.ρ_flux_q_tot[colidx],
                 ),
             )
-            @. Yₜ.c.ρq_tot[colidx] -= ᶜdivᵥ_ρq_tot(
-                -(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜspecific⁰.q_tot[colidx])),
-            )
+            @. Yₜ.c.ρq_tot[colidx] -=
+                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜq_tot⁰[colidx])))
         end
 
         # momentum

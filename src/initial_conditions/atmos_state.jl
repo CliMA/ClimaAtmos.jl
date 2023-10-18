@@ -129,11 +129,26 @@ function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel, gs_vars)
     up = ntuple(_ -> (; ρarea = ρa, ρae_tot, ρaq_tot), Val(n))
     return (; turbconv = (; en, up))
 end
+
 function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
     sgsʲs = ntuple(_ -> gs_to_sgs(gs_vars, a_draft / n), Val(n))
+    return (; sgs⁰, sgsʲs)
+end
+
+function turbconv_center_variables(ls, turbconv_model::AdvectiveEDMFX, gs_vars)
+    n = n_mass_flux_subdomains(turbconv_model)
+    a_draft = ls.turbconv_state.draft_area
+    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
+    ρa = ls.ρ * a_draft / n
+    h_tot =
+        TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
+        norm_sqr(ls.velocity) / 2 +
+        CAP.grav(ls.params) * ls.geometry.coordinates.z
+    q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
+    sgsʲs = ntuple(_ -> (; ρa = ρa, h_tot = h_tot, q_tot = q_tot), Val(n))
     return (; sgs⁰, sgsʲs)
 end
 
@@ -152,6 +167,12 @@ turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
     )
 )
 turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
+    sgsʲs = ntuple(
+        _ -> (; u₃ = C3(ls.turbconv_state.velocity, ls.geometry)),
+        Val(n_mass_flux_subdomains(turbconv_model)),
+    )
+)
+turbconv_face_variables(ls, turbconv_model::AdvectiveEDMFX) = (;
     sgsʲs = ntuple(
         _ -> (; u₃ = C3(ls.turbconv_state.velocity, ls.geometry)),
         Val(n_mass_flux_subdomains(turbconv_model)),
