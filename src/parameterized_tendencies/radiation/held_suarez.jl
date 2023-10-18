@@ -28,6 +28,22 @@ function forcing_cache(Y, forcing_type::HeldSuarezForcing)
     )
 end
 
+function held_suarez_ΔT_y_T_equator(params, moisture_model::DryModel)
+    FT = eltype(params)
+    ΔT_y = FT(CAP.ΔT_y_dry(params))
+    T_equator = FT(CAP.T_equator_dry(params))
+    return ΔT_y, T_equator
+end
+
+function held_suarez_ΔT_y_T_equator(
+    params, moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    FT = eltype(params)
+    ΔT_y = FT(CAP.ΔT_y_wet(params))
+    T_equator = FT(CAP.T_equator_wet(params))
+    return ΔT_y, T_equator
+end
+
 function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     (; sfc_conditions, ᶜp, params) = p
     (; ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ) = p.forcing
@@ -52,13 +68,7 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     z_surface =
         Fields.level(Fields.coordinate_field(Y.f).z[colidx], Fields.half)
 
-    if :ρq_tot in propertynames(Y.c)
-        ΔT_y = FT(CAP.ΔT_y_wet(params))
-        T_equator = FT(CAP.T_equator_wet(params))
-    else
-        ΔT_y = FT(CAP.ΔT_y_dry(params))
-        T_equator = FT(CAP.T_equator_dry(params))
-    end
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, p.atmos.moisture_model)
 
     @. ᶜσ[colidx] =
         ᶜp[colidx] / (
