@@ -211,7 +211,7 @@ function detrainment(
         g = CAP.grav(params)
         turbconv_params = CAP.turbconv_params(params)
         ᶜaʲ_max = TCP.max_area(turbconv_params)
-        max_area_limiter = 0.1 * exp(-10 * (ᶜaʲ_max - ᶜaʲ))
+        max_area_limiter = FT(0.1) * exp(-10 * (ᶜaʲ_max - ᶜaʲ))
 
         # pressure scale height (height where pressure drops by 1/e)
         ref_H = ᶜp / (ᶜρ * g)
@@ -254,10 +254,18 @@ function detrainment(
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
     dt::FT,
-    ::ConstantCoefficientDetrainment,
+    ::BOverWDetrainment,
 ) where {FT}
     detr_coeff = CAP.detr_coeff(params)
-    detr = min(detr_coeff * abs(ᶜwʲ), 1 / dt)
+    detr_buoy_coeff = CAP.detr_buoy_coeff(params)
+    detr = min(
+        abs(ᶜwʲ) * (
+            detr_coeff +
+            detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+            max(eps(FT), (ᶜwʲ - ᶜw⁰) * (ᶜwʲ - ᶜw⁰))
+        ),
+        1 / dt,
+    )
     return detr
 end
 
@@ -281,6 +289,28 @@ function detrainment(
     detr_coeff = CAP.detr_coeff(params)
     detr = min(detr_coeff * abs(ᶜwʲ), 1 / dt)
     return detr * FT(2) * hm_limiter(ᶜaʲ)
+end
+
+function detrainment(
+    params,
+    ᶜz::FT,
+    z_sfc::FT,
+    ᶜp::FT,
+    ᶜρ::FT,
+    buoy_flux_surface::FT,
+    ᶜaʲ::FT,
+    ᶜwʲ::FT,
+    ᶜRHʲ::FT,
+    ᶜbuoyʲ::FT,
+    ᶜw⁰::FT,
+    ᶜRH⁰::FT,
+    ᶜbuoy⁰::FT,
+    dt::FT,
+    ::ConstantTimescaleDetrainment,
+) where {FT}
+    detr_tau = CAP.detr_tau(params)
+    detr = min(1 / detr_tau, 1 / dt)
+    return detr
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
@@ -315,24 +345,36 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model::EDMFX)
     return nothing
 end
 
-function detrainment(
-    params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    buoy_flux_surface::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    dt::FT,
-    ::ConstantTimescaleDetrainment,
-) where {FT}
-    detr_tau = CAP.detr_tau(params)
-    detr = min(1 / detr_tau, 1 / dt)
-    return detr
+function edmfx_entr_detr_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::AdvectiveEDMFX,
+)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶜentrʲs, ᶜdetrʲs) = p
+    (; ᶜq_tot⁰, ᶜh_tot⁰, ᶠu₃⁰) = p
+
+    for j in 1:n
+
+        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
+            Y.c.sgsʲs.:($$j).ρa[colidx] *
+            (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
+
+        @. Yₜ.c.sgsʲs.:($$j).h_tot[colidx] +=
+            ᶜentrʲs.:($$j)[colidx] *
+            (ᶜh_tot⁰[colidx] - Y.c.sgsʲs.:($$j).h_tot[colidx])
+
+        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
+            ᶜentrʲs.:($$j)[colidx] *
+            (ᶜq_tot⁰[colidx] - Y.c.sgsʲs.:($$j).q_tot[colidx])
+
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] +=
+            ᶠinterp(ᶜentrʲs.:($$j)[colidx]) *
+            (ᶠu₃⁰[colidx] - Y.f.sgsʲs.:($$j).u₃[colidx])
+    end
+    return nothing
 end

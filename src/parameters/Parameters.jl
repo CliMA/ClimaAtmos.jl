@@ -22,9 +22,10 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     planet_radius::FT
     astro_unit::FT
     entr_tau::FT
-    detr_tau::FT
     entr_coeff::FT
+    detr_tau::FT
     detr_coeff::FT
+    detr_buoy_coeff::FT
     C_E::FT
     C_H::FT
     # Held Suarez

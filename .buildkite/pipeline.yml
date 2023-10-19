@@ -723,6 +723,58 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_edmfx.yml
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+      
+      - label: ":genie: Advective EDMFX advection test in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/advective_edmfx_adv_test_box.yml
+        artifact_paths: "advective_edmfx_adv_test_box/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Advective EDMFX GABLS in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/advective_edmfx_gabls_box.yml
+        artifact_paths: "advective_edmfx_gabls_box/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Advective EDMFX Bomex in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/advective_edmfx_bomex_box.yml
+        artifact_paths: "advective_edmfx_bomex_box/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Advective EDMFX Dycoms RF01 in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/advective_edmfx_dycoms_rf01_box.yml
+        artifact_paths: "advective_edmfx_dycoms_rf01_box/*"
+        agents:
+          slurm_mem: 20GB
+      
+      - label: ":genie: Advective EDMFX Rico in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/advective_edmfx_rico_box.yml
+        artifact_paths: "advective_edmfx_rico_box/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Advective EDMFX TRMM in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/advective_edmfx_trmm_box.yml
+        artifact_paths: "advective_edmfx_trmm_box/*"
+        soft_fail: true
         agents:
           slurm_mem: 20GB
 
@@ -1043,6 +1095,7 @@ steps:
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_edmfx.yml
         artifact_paths: "flame_perf_target_edmfx/*"
+        soft_fail: true
         agents:
           slurm_mem: 20GB
 

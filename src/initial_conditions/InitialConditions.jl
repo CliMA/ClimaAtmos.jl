@@ -16,6 +16,7 @@ import ..PrognosticSurfaceTemperature
 import ..C3
 import ..C12
 import ..EDMFX
+import ..AdvectiveEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
 import ..gs_to_sgs

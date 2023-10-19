@@ -44,6 +44,7 @@ test/Manifest.toml
 *.mp4
 *.png
 *.hdf5
+*.h5
 *.g
 
 # misc

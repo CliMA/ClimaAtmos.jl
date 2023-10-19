@@ -304,6 +304,37 @@ NVTX.@annotate function compute_diagnostics(integrator)
                 ᶜts⁰,
             ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
+    elseif p.atmos.turbconv_model isa AdvectiveEDMFX
+        (; ᶜtke⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p
+        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_advective_sgs_quantities(Y, p, t)
+        env_diagnostics = (;
+            common_diagnostics(p, ᶜu⁰, ᶜts⁰)...,
+            area = ᶜa⁰,
+            cloud_fraction = get_cloud_fraction.(
+                thermo_params,
+                env_thermo_quad,
+                ᶜp,
+                ᶜts⁰,
+            ),
+            tke = ᶜtke⁰,
+            mixing_length = ᶜmixing_length,
+        )
+        draft_diagnostics = (;
+            common_diagnostics(p, ᶜu⁺, ᶜts⁺)...,
+            area = ᶜa⁺,
+            cloud_fraction = cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
+        )
+        turbulence_convection_diagnostic = (;
+            add_prefix(env_diagnostics, :env_)...,
+            add_prefix(draft_diagnostics, :draft_)...,
+            cloud_fraction = ᶜa⁰ .*
+                             get_cloud_fraction.(
+                thermo_params,
+                env_thermo_quad,
+                ᶜp,
+                ᶜts⁰,
+            ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
+        )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜtke⁰, ᶜmixing_length) = p
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
