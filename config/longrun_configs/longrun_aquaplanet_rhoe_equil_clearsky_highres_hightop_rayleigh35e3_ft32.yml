@@ -10,9 +10,9 @@ dz_bottom: 30.0
 vert_diff: "true"
 h_elem: 16
 kappa_4: 1.0e16
-FLOAT_TYPE: "Float64"
+FLOAT_TYPE: "Float32"
 z_max: 45000.0
 precip_model: "0M"
-job_id: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft64"
+job_id: "longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft32"
 moist: "equil"
-toml: [toml/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft64.toml]
+toml: [toml/longrun_aquaplanet_rhoe_equil_clearsky_highres_hightop_rayleigh35e3_ft32.toml]

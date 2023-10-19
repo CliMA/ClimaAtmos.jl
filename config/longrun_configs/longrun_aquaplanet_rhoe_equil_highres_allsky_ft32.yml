@@ -11,7 +11,7 @@ vert_diff: "true"
 h_elem: 16
 kappa_4: 1.0e16
 idealized_insolation: false
-FLOAT_TYPE: "Float64"
+FLOAT_TYPE: "Float32"
 precip_model: "0M"
-job_id: "longrun_aquaplanet_rhoe_equil_highres_allsky_ft64"
+job_id: "longrun_aquaplanet_rhoe_equil_highres_allsky_ft32"
 moist: "equil"

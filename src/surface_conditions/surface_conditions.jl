@@ -244,8 +244,8 @@ function surface_state_to_conditions(
         end
     end
 
-    surface_values = SF.SurfaceValues(coordinates.z, SA.SVector(u, v), ts)
-    interior_values = SF.InteriorValues(
+    surface_values = SF.StateValues(coordinates.z, SA.SVector(u, v), ts)
+    interior_values = SF.StateValues(
         interior_z,
         SA.SVector(interior_u, interior_v),
         interior_ts,
@@ -263,8 +263,6 @@ function surface_state_to_conditions(
             surface_values,
             parameterization.Cd,
             parameterization.Ch,
-            FT(NaN), # TODO: Remove z0m from SF.Coefficients
-            FT(NaN), # TODO: Remove z0b from SF.Coefficients
             gustiness,
             beta,
         )
@@ -316,7 +314,7 @@ function surface_state_to_conditions(
                     lhf,
                     interior_ts,
                     ts,
-                    SF.FVScheme(),
+                    SF.PointValueScheme(),
                 )
                 gustiness = get_wstar(buoyancy_flux)
                 # TODO: We are assuming that the average mixed layer depth is
