@@ -8,8 +8,28 @@ precip_model: 0M
 dt_save_restart: 200days
 job_id: sphere_held_suarez_rhoe_equilmoist_default
 output_dir: sphere_held_suarez_rhoe_equilmoist_default
-# diagnostics:
-#   - reduction_time: average
-#     short_name: rhoa
-#     period: 12hours
-#     writer: h5
+diagnostics:
+  - reduction_time: average
+    short_name: thetaa
+    period: 6hours
+    writer: nc
+  - reduction_time: average
+    short_name: thetaa
+    period: 30days
+    writer: nc
+  - reduction_time: average
+    short_name: ts
+    period: 6hours
+    writer: nc
+  - reduction_time: average
+    short_name: ts
+    period: 30days
+    writer: nc
+  - reduction_time: average
+    short_name: ta
+    period: 6hours
+    writer: nc
+  - reduction_time: average
+    short_name: ta
+    period: 30days
+    writer: nc
