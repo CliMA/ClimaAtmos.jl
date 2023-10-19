@@ -47,7 +47,8 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if p.atmos.turbconv_model isa AdvectiveEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).h_tot -=
-                adjoint(CA.CT12(Y.c.uₕ)) * CA.gradₕ(Y.c.sgsʲs.:($$j).h_tot)
+                wdivₕ(Y.c.sgsʲs.:($$j).h_tot * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).h_tot * wdivₕ(ᶜuʲs.:($$j))
         end
     end
 
@@ -63,7 +64,8 @@ end
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p
-    if p.atmos.turbconv_model isa EDMFX
+    if p.atmos.turbconv_model isa EDMFX ||
+       p.atmos.turbconv_model isa AdvectiveEDMFX
         (; ᶜuʲs) = p
     end
 
@@ -84,7 +86,8 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     if p.atmos.turbconv_model isa AdvectiveEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                adjoint(CA.CT12(Y.c.uₕ)) * CA.gradₕ(Y.c.sgsʲs.:($$j).q_tot)
+                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
         end
     end
 
