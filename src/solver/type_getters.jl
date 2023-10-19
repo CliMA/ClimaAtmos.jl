@@ -382,20 +382,13 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
 is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
-jacobi_flags(::TotalEnergy) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :no_∂ᶜp∂ᶜK)
-jacobi_flags(::PotentialTemperature) = (; ∂ᶜ𝔼ₜ∂ᶠ𝕄_mode = :exact)
-
-function jac_kwargs(ode_algo, Y, energy_form)
+function jac_kwargs(ode_algo, Y)
     if is_implicit(ode_algo)
-        W = SchurComplementW(
-            Y,
-            use_transform(ode_algo),
-            jacobi_flags(energy_form),
-        )
+        A = ImplicitEquationJacobian(Y; transform = use_transform(ode_algo))
         if use_transform(ode_algo)
-            return (; jac_prototype = W, Wfact_t = Wfact!)
+            return (; jac_prototype = A, Wfact_t = Wfact!)
         else
-            return (; jac_prototype = W, Wfact = Wfact!)
+            return (; jac_prototype = A, Wfact = Wfact!)
         end
     else
         return NamedTuple()
@@ -712,7 +705,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         func = if parsed_args["split_ode"]
             implicit_func = SciMLBase.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs(ode_algo, Y, atmos.energy_form)...,
+                jac_kwargs(ode_algo, Y)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             )
             if is_cts_algo(ode_algo)
