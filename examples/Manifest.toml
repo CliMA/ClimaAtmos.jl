@@ -299,9 +299,9 @@ version = "0.5.5"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "690b1737d6e8bfb67e8f9d4f54b37732d02f50b0"
+git-tree-sha1 = "8174265fe74081f378b11e36962c3b9cbb11c44f"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.53"
+version = "0.10.54"
 
 [[deps.ClimaCoreMakie]]
 deps = ["ClimaCore", "Makie"]
