@@ -342,7 +342,7 @@ function get_turbconv_model(
 )
     turbconv = parsed_args["turbconv"]
     @assert turbconv in
-            (nothing, "edmf", "edmfx", "advective_edmfx", "diagnostic_edmfx")
+            (nothing, "edmf", "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
 
     return if turbconv == "edmf"
         TC.EDMFModel(
@@ -352,14 +352,10 @@ function get_turbconv_model(
             parsed_args,
             turbconv_params,
         )
-    elseif turbconv == "edmfx"
+    elseif turbconv == "prognostic_edmfx"
         N = turbconv_params.updraft_number
         TKE = parsed_args["prognostic_tke"]
-        EDMFX{N, TKE}(turbconv_params.min_area)
-    elseif turbconv == "advective_edmfx"
-        N = turbconv_params.updraft_number
-        TKE = parsed_args["prognostic_tke"]
-        AdvectiveEDMFX{N, TKE}(turbconv_params.min_area)
+        PrognosticEDMFX{N, TKE}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
         N = turbconv_params.updraft_number
         TKE = parsed_args["prognostic_tke"]

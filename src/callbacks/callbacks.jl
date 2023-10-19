@@ -273,40 +273,9 @@ NVTX.@annotate function compute_diagnostics(integrator)
         precip_diagnostic = NamedTuple()
     end
 
-    if p.atmos.turbconv_model isa EDMFX
-        (; ᶜspecific⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p
-        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_sgs_quantities(Y, p, t)
-        env_diagnostics = (;
-            common_diagnostics(p, ᶜu⁰, ᶜts⁰)...,
-            area = ᶜa⁰,
-            cloud_fraction = get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                ᶜp,
-                ᶜts⁰,
-            ),
-            tke = ᶜspecific⁰.tke,
-            mixing_length = ᶜmixing_length,
-        )
-        draft_diagnostics = (;
-            common_diagnostics(p, ᶜu⁺, ᶜts⁺)...,
-            area = ᶜa⁺,
-            cloud_fraction = cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
-        )
-        turbulence_convection_diagnostic = (;
-            add_prefix(env_diagnostics, :env_)...,
-            add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = ᶜa⁰ .*
-                             get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                ᶜp,
-                ᶜts⁰,
-            ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
-        )
-    elseif p.atmos.turbconv_model isa AdvectiveEDMFX
+    if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜtke⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p
-        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_advective_sgs_quantities(Y, p, t)
+        (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_prognostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             common_diagnostics(p, ᶜu⁰, ᶜts⁰)...,
             area = ᶜa⁰,

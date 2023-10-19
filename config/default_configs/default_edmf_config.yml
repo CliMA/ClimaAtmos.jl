@@ -1,6 +1,6 @@
 # EDMF configuration
 turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), `edmf`]"
+  help: "Turbulence convection scheme [`nothing` (default), `edmf`, 'prognostic_edmfx', 'diagnostic_edmfx']"
   value: ~
 test_edmf_consistency:
   help: "Test edmf equation consistency [`false` (default), `true`]"

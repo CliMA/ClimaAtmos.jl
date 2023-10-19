@@ -130,15 +130,7 @@ function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel, gs_vars)
     return (; turbconv = (; en, up))
 end
 
-function turbconv_center_variables(ls, turbconv_model::EDMFX, gs_vars)
-    n = n_mass_flux_subdomains(turbconv_model)
-    a_draft = ls.turbconv_state.draft_area
-    sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
-    sgsʲs = ntuple(_ -> gs_to_sgs(gs_vars, a_draft / n), Val(n))
-    return (; sgs⁰, sgsʲs)
-end
-
-function turbconv_center_variables(ls, turbconv_model::AdvectiveEDMFX, gs_vars)
+function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
@@ -166,13 +158,7 @@ turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
         )
     )
 )
-turbconv_face_variables(ls, turbconv_model::EDMFX) = (;
-    sgsʲs = ntuple(
-        _ -> (; u₃ = C3(ls.turbconv_state.velocity, ls.geometry)),
-        Val(n_mass_flux_subdomains(turbconv_model)),
-    )
-)
-turbconv_face_variables(ls, turbconv_model::AdvectiveEDMFX) = (;
+turbconv_face_variables(ls, turbconv_model::PrognosticEDMFX) = (;
     sgsʲs = ntuple(
         _ -> (; u₃ = C3(ls.turbconv_state.velocity, ls.geometry)),
         Val(n_mass_flux_subdomains(turbconv_model)),

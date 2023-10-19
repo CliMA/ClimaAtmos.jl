@@ -2,19 +2,7 @@
 ##### Pressure work
 #####
 
-function pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::EDMFX)
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜp) = p
-    for j in 1:n
-        if :ρe_tot in propertynames(Y.c)
-            @. Yₜ.c.sgsʲs.:($$j).ρae_tot[colidx] -=
-                ᶜp[colidx] / Y.c.ρ[colidx] * Yₜ.c.sgsʲs.:($$j).ρa[colidx]
-        end
-    end
-    return nothing
-end
-
 # We ignore the small pressure term in advective EDMF for now
-pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::AdvectiveEDMFX) = nothing
+pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::PrognosticEDMFX) = nothing
 
 pressure_work_tendency!(Yₜ, Y, p, t, colidx, ::Any) = nothing

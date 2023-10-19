@@ -10,7 +10,7 @@ function edmfx_sgs_mass_flux_tendency!(
     p,
     t,
     colidx,
-    turbconv_model::Union{EDMFX, AdvectiveEDMFX},
+    turbconv_model::PrognosticEDMFX,
 )
 
     FT = Spaces.undertype(axes(Y.c))
@@ -18,8 +18,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_upwinding) = p
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰) = p
-    ᶜq_tot⁰ = turbconv_model isa EDMFX ? p.ᶜspecific⁰.q_tot : p.ᶜq_tot⁰
+    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -29,10 +28,8 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-            ᶜh_totʲ_colidx =
-                turbconv_model isa EDMFX ? p.ᶜh_totʲs.:($j)[colidx] :
-                Y.c.sgsʲs.:($j).h_tot[colidx]
-            @. ᶜh_tot_diff_colidx = ᶜh_totʲ_colidx - ᶜh_tot[colidx]
+            @. ᶜh_tot_diff_colidx =
+                Y.c.sgsʲs.:($$j).h_tot[colidx] - ᶜh_tot[colidx]
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -59,11 +56,8 @@ function edmfx_sgs_mass_flux_tendency!(
             # specific humidity
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-                ᶜq_totʲ_colidx =
-                    turbconv_model isa EDMFX ?
-                    p.ᶜspecificʲs.:($j).q_tot[colidx] :
-                    Y.c.sgsʲs.:($j).q_tot[colidx]
-                @. ᶜq_tot_diff_colidx = ᶜq_totʲ_colidx - ᶜspecific.q_tot[colidx]
+                @. ᶜq_tot_diff_colidx =
+                    Y.c.sgsʲs.:($$j).q_tot[colidx] - ᶜspecific.q_tot[colidx]
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
@@ -163,13 +157,12 @@ function edmfx_sgs_diffusive_flux_tendency!(
     p,
     t,
     colidx,
-    turbconv_model::Union{EDMFX, AdvectiveEDMFX},
+    turbconv_model::PrognosticEDMFX,
 )
 
     FT = Spaces.undertype(axes(Y.c))
     (; sfc_conditions) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰) = p
-    ᶜq_tot⁰ = turbconv_model isa EDMFX ? p.ᶜspecific⁰.q_tot : p.ᶜq_tot⁰
+    (; ᶜρa⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
     (; ᶜK_u, ᶜK_h) = p
     ᶠgradᵥ = Operators.GradientC2F()
 

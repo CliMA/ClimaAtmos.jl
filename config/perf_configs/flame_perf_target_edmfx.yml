@@ -1,9 +1,0 @@
-dt_save_to_disk: "30secs"
-reference_job_id: "sphere_baroclinic_wave_rhoe_equilmoist"
-ode_algo: "SSP33ShuOsher"
-initial_condition: "MoistBaroclinicWaveWithEDMF"
-edmfx_entr_model: "ConstantCoefficient"
-edmfx_detr_model: "BOverW"
-edmfx_sgs_flux: true
-turbconv: "edmfx"
-job_id: "flame_perf_target_edmfx"

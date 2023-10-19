@@ -5,11 +5,11 @@ import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
 """
-    set_advective_edmf_precomputed_quantities!(Y, p, t)
+    set_prognostic_edmf_precomputed_quantities!(Y, p, t)
 
 Updates the precomputed quantities stored in `p` for edmfx.
 """
-function set_advective_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
+function set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     (; energy_form, moisture_model, turbconv_model) = p.atmos
     #EDMFX BCs only support total energy as state variable
     @assert energy_form isa TotalEnergy

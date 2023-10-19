@@ -251,7 +251,7 @@ end
 ##################
 # Turbconv model #
 ##################
-function default_diagnostics(::EDMFX)
+function default_diagnostics(::PrognosticEDMFX)
     edmfx_draft_diagnostics = [
         "arup",
         "rhoaup",
@@ -270,6 +270,7 @@ function default_diagnostics(::EDMFX)
         "waen",
         "taen",
         "thetaaen",
+        "haen",
         "husen",
         "huren",
         "clwen",

@@ -29,7 +29,7 @@ import ..Microphysics0Moment
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
 # turbconv_model
-import ..EDMFX
+import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 
 # functions used to calculate diagnostics
