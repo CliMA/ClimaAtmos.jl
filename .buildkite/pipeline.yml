@@ -49,6 +49,7 @@ steps:
       - echo "--- Instantiate perf"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=perf --check-bounds=yes -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Download artifacts"
