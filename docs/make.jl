@@ -10,7 +10,6 @@ bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
 doctest(ClimaAtmos; plugins = [bib])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
-include("make_diagnostic_table.jl")
 makedocs(;
     plugins = [bib],
     modules = [ClimaAtmos],
