@@ -33,3 +33,11 @@ diagnostics:
     short_name: ta
     period: 30days
     writer: nc
+  - reduction_time: average
+    short_name: ha
+    period: 6hours
+    writer: nc
+  - reduction_time: average
+    short_name: ha
+    period: 30days
+    writer: nc

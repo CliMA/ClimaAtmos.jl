@@ -30,6 +30,14 @@ diagnostics:
     short_name: ta
     period: 30days
     writer: nc
+  - reduction_time: average
+    short_name: ha
+    period: 6hours
+    writer: nc
+  - reduction_time: average
+    short_name: ha
+    period: 30days
+    writer: nc
 
 job_id: sphere_held_suarez_rhoe_equilmoist_6
 output_dir: sphere_held_suarez_rhoe_equilmoist_6
