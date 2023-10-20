@@ -406,10 +406,15 @@ steps:
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_default.yml
+        artifact_paths: "sphere_held_suarez_rhoe_equilmoist_default/*"
+        agents:
+          slurm_ntasks: 32
+          slurm_time: 24:00:00
 
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir sphere_held_suarez_rhoe_equilmoist_default
-          --out_dir sphere_held_suarez_rhoe_equilmoist_default
+      - label: ":computer: held suarez (ρe) equilmoist dt_y = 500"
+        command: >
+          srun julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_held_suarez_rhoe_equilmoist_6.yml
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_default/*"
         agents:
           slurm_ntasks: 32
