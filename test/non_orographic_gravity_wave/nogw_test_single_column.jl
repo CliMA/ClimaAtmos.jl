@@ -80,6 +80,9 @@ cp_d = 1004.0
 Z = gZ ./ grav
 ρ = ones(size(T)) .* reshape(lev, (1, length(lev), 1)) ./ T / R_d
 
+@test !any(ismissing, T)
+@test !any(ismissing, Z)
+
 dTdz = zeros(size(T))
 @. dTdz[:, 1, :] = (T[:, 2, :] - T[:, 1, :]) / (Z[:, 2, :] - Z[:, 1, :])
 @. dTdz[:, end, :] =
