@@ -1,9 +1,9 @@
-job_id: "advective_edmfx_rico_box"
+job_id: "prognostic_edmfx_rico_box"
 initial_condition: "Rico"
 subsidence: "Rico"
 ls_adv: "Rico"
 surface_setup: "Rico"
-turbconv: "advective_edmfx"
+turbconv: "prognostic_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "ConstantCoefficient"
 edmfx_detr_model: "BOverW"
@@ -27,4 +27,4 @@ perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
 dt_save_to_disk: "10mins"
-toml: [toml/advective_edmfx_box.toml]
+toml: [toml/prognostic_edmfx_box.toml]

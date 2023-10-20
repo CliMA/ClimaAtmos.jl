@@ -10,7 +10,7 @@ compute_arup!(out, state, cache, time) =
 compute_arup!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("arup", turbconv_model)
 
-function compute_arup!(out, state, cache, time, turbconv_model::EDMFX)
+function compute_arup!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
@@ -63,7 +63,7 @@ function compute_rhoaup!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -94,7 +94,7 @@ function compute_waup!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
         return copy(Geometry.WVector.(cache.ᶜuʲs.:1).components.data.:1)
@@ -124,7 +124,7 @@ function compute_taup!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -155,7 +155,7 @@ function compute_thetaaup!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -186,7 +186,7 @@ function compute_haup!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -232,7 +232,7 @@ function compute_husup!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -278,7 +278,7 @@ function compute_hurup!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -324,7 +324,7 @@ function compute_clwup!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -373,7 +373,7 @@ function compute_cliup!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -402,7 +402,7 @@ compute_aren!(out, state, cache, time) =
 compute_aren!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("aren", turbconv_model)
 
-function compute_aren!(out, state, cache, time, turbconv_model::EDMFX)
+function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
@@ -451,7 +451,7 @@ function compute_rhoaen!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -481,7 +481,7 @@ function compute_waen!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
         return copy(Geometry.WVector.(cache.ᶜu⁰).components.data.:1)
@@ -506,7 +506,7 @@ compute_taen!(out, state, cache, time) =
 compute_taen!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("taen", turbconv_model)
 
-function compute_taen!(out, state, cache, time, turbconv_model::EDMFX)
+function compute_taen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return TD.air_temperature.(thermo_params, cache.ᶜts⁰)
@@ -530,7 +530,13 @@ compute_thetaaen!(out, state, cache, time) =
 compute_thetaaen!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("thetaaen", turbconv_model)
 
-function compute_thetaaen!(out, state, cache, time, turbconv_model::EDMFX)
+function compute_thetaaen!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::PrognosticEDMFX,
+)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return TD.dry_pottemp.(thermo_params, cache.ᶜts⁰)
@@ -554,7 +560,7 @@ compute_haen!(out, state, cache, time) =
 compute_haen!(_, _, _, _, turbconv_model::T) where {T} =
     error_diagnostic_variable("haen", turbconv_model)
 
-function compute_haen!(out, state, cache, time, turbconv_model::EDMFX)
+function compute_haen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return TD.dry_pottemp.(thermo_params, cache.ᶜts⁰)
@@ -598,7 +604,7 @@ function compute_husen!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::EDMFX,
+    turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -643,7 +649,7 @@ function compute_huren!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::EDMFX,
+    turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -688,7 +694,7 @@ function compute_clwen!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::EDMFX,
+    turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -737,7 +743,7 @@ function compute_clien!(
     cache,
     time,
     moisture_model::Union{EquilMoistModel, NonEquilMoistModel},
-    turbconv_model::EDMFX,
+    turbconv_model::PrognosticEDMFX,
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
@@ -771,7 +777,7 @@ function compute_lmix!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
         return copy(cache.ᶜmixing_length)
@@ -800,7 +806,7 @@ function compute_tke!(
     state,
     cache,
     time,
-    turbconv_model::Union{EDMFX, DiagnosticEDMFX},
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
         return copy(cache.ᶜtke⁰)

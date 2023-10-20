@@ -1,8 +1,8 @@
-job_id: "advective_edmfx_gabls_box"
+job_id: "prognostic_edmfx_gabls_box"
 initial_condition: GABLS
 edmf_coriolis: GABLS
 surface_setup: GABLS
-turbconv: "advective_edmfx"
+turbconv: "prognostic_edmfx"
 edmfx_upwinding: "first_order"
 edmfx_entr_model: "ConstantCoefficient"
 edmfx_detr_model: "BOverW"
@@ -26,4 +26,4 @@ t_end: "9hours"
 dt_save_to_disk: "10mins"
 perturb_initstate: false
 FLOAT_TYPE: "Float64"
-toml: [toml/advective_edmfx_box.toml]
+toml: [toml/prognostic_edmfx_box.toml]

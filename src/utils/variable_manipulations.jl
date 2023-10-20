@@ -100,33 +100,6 @@ remove_prefix(symbol, prefix_symbol) =
 # can contain non-ASCII characters like 'ρ'.
 
 """
-    gs_to_sgs(gs, [a])
-
-Converts the grid-scale state `gs` into a sub-grid-scale state by multiplying
-every per-volume variable by the subdomain area `a`. That is, for every variable
-of the form `ρ` or `ρχ` in `gs`, the result contains a variable of the form `ρa`
-or `ρaχ`, respectively. If it is not specified, `a` is assumed to be 1.
-Variables whose names do not start with `ρ` (e.g., velocities like `uₕ`) are
-omitted from the result. In addition, all precipitation variables (e.g.,
-`ρq_rai` and `ρq_sno`) are omitted from the result, since we do not keep track
-of sub-grid-scale precipitation.
-"""
-@generated function gs_to_sgs(gs, a = nothing)
-    gs_names = Base._nt_names(gs)
-    relevant_gs_names = filter(
-        name -> has_prefix(name, :ρ) && !(name in (:ρq_rai, :ρq_sno)),
-        gs_names,
-    )
-    sgs_names =
-        map(name -> Symbol(:ρa, remove_prefix(name, :ρ)), relevant_gs_names)
-    sgs_values = map(
-        name -> a === Nothing ? :(gs.$name) : :(gs.$name * a),
-        relevant_gs_names,
-    )
-    return :(NamedTuple{$sgs_names}(($(sgs_values...),)))
-end
-
-"""
     specific_gs(gs)
 
 Converts every variable of the form `ρχ` in the grid-scale state `gs` into the
@@ -205,52 +178,6 @@ out the matching subfields (as of Julia 1.8).
     )
     return :(($(subfield_tuples...),))
 end
-
-"""
-    sgs⁺(sgsʲs)
-
-Constructs the total mass-flux subdomain state, given the tuple of mass-flux
-subdomain states `sgsʲs`.
-"""
-sgs⁺(sgsʲs) = map(+, sgsʲs...)
-
-"""
-    full_sgs⁰(sgs⁰, sgsʲs, gs)
-
-Constructs the full environment state by merging the prognostic environment
-state `sgs⁰` (which contains second moment variables like `tke`) with the
-environment variables implied by the domain decomposition of the grid-scale
-state `gs` into the mass-flux subdomain states `sgsʲs` and the environment
-state.
-"""
-full_sgs⁰(sgs⁰, sgsʲs, gs) = merge(sgs⁰, map(-, gs_to_sgs(gs), sgs⁺(sgsʲs)))
-
-"""
-    specific_sgsʲs(gs, turbconv_model)
-
-Constructs a tuple of the specific mass-flux subdomain states, assuming that
-the mass-flux subdomain states are stored in `gs.sgsʲs`.
-"""
-specific_sgsʲs(gs, turbconv_model) =
-    map(sgsʲ -> specific_sgs(sgsʲ, gs, turbconv_model), gs.sgsʲs)
-
-"""
-    specific_sgs⁺(gs, turbconv_model)
-
-Constructs the average specific mass-flux subdomain state, assuming that the
-mass-flux subdomain states are stored in `gs.sgsʲs`.
-"""
-specific_sgs⁺(gs, turbconv_model) =
-    specific_sgs(sgs⁺(gs.sgsʲs), gs, turbconv_model)
-
-"""
-    specific_full_sgs⁰(gs, turbconv_model)
-
-Constructs the full specific environment state, assuming that the environment
-and mass-flux subdomain states are stored in `gs.sgs⁰` and `gs.sgsʲs`.
-"""
-specific_full_sgs⁰(gs, turbconv_model) =
-    specific_sgs(full_sgs⁰(gs.sgs⁰, gs.sgsʲs, gs), gs, turbconv_model)
 
 """
     ρa⁺(gs)

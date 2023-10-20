@@ -15,11 +15,9 @@ import ..PrescribedSurfaceTemperature
 import ..PrognosticSurfaceTemperature
 import ..C3
 import ..C12
-import ..EDMFX
-import ..AdvectiveEDMFX
+import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
-import ..gs_to_sgs
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile

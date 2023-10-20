@@ -82,7 +82,7 @@ function edmfx_nh_pressure_tendency!(
     p,
     t,
     colidx,
-    turbconv_model::Union{EDMFX, AdvectiveEDMFX},
+    turbconv_model::PrognosticEDMFX,
 )
 
     n = n_mass_flux_subdomains(turbconv_model)

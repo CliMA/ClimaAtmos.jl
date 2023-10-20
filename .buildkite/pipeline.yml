@@ -649,131 +649,54 @@ steps:
         artifact_paths: "diagnostic_edmfx_trmm_stretched_box/*"
         agents:
           slurm_mem: 20GB
-
-      - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
+      
+      - label: ":genie: Prognostic EDMFX advection test in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_tke.yml
-        artifact_paths: "diagnostic_edmfx_aquaplanet_tke/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_box.yml
+        artifact_paths: "prognostic_edmfx_adv_test_box/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX advection test in a box"
+      - label: ":genie: Prognostic EDMFX GABLS in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_adv_test_box.yml
-        artifact_paths: "edmfx_adv_test_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_box.yml
+        artifact_paths: "prognostic_edmfx_gabls_box/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX GABLS in a box"
+      - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_gabls_box.yml
-        artifact_paths: "edmfx_gabls_box/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: EDMFX Dycoms RF01 in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_dycoms_rf01_box.yml
-        artifact_paths: "edmfx_dycoms_rf01_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
+        artifact_paths: "prognostic_edmfx_bomex_box/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: EDMFX Bomex in a box"
+      - label: ":genie: Prognostic EDMFX Dycoms RF01 in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_bomex_box.yml
-        artifact_paths: "edmfx_bomex_box/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: EDMFX Rico in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_rico_box.yml
-        artifact_paths: "edmfx_rico_box/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: EDMFX TRMM in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_trmm_box.yml
-        artifact_paths: "edmfx_trmm_box/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: EDMFX advection test in a sphere"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/edmfx_adv_test_sphere.yml
-        artifact_paths: "edmfx_adv_test_sphere/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: explicit baroclinic wave (ρe) equilmoist with EDMFX"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_edmfx.yml
-        artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_edmfx/*"
-        soft_fail: true
+          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_box.yml
+        artifact_paths: "prognostic_edmfx_dycoms_rf01_box/*"
         agents:
           slurm_mem: 20GB
       
-      - label: ":genie: Advective EDMFX advection test in a box"
+      - label: ":genie: Prognostic EDMFX Rico in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/advective_edmfx_adv_test_box.yml
-        artifact_paths: "advective_edmfx_adv_test_box/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Advective EDMFX GABLS in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/advective_edmfx_gabls_box.yml
-        artifact_paths: "advective_edmfx_gabls_box/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Advective EDMFX Bomex in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/advective_edmfx_bomex_box.yml
-        artifact_paths: "advective_edmfx_bomex_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_box.yml
+        artifact_paths: "prognostic_edmfx_rico_box/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Advective EDMFX Dycoms RF01 in a box"
+      - label: ":genie: Prognostic EDMFX TRMM in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/advective_edmfx_dycoms_rf01_box.yml
-        artifact_paths: "advective_edmfx_dycoms_rf01_box/*"
-        agents:
-          slurm_mem: 20GB
-      
-      - label: ":genie: Advective EDMFX Rico in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/advective_edmfx_rico_box.yml
-        artifact_paths: "advective_edmfx_rico_box/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Advective EDMFX TRMM in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/advective_edmfx_trmm_box.yml
-        artifact_paths: "advective_edmfx_trmm_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_box.yml
+        artifact_paths: "prognostic_edmfx_trmm_box/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
@@ -1087,15 +1010,6 @@ steps:
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_tracers.yml
         artifact_paths: "flame_perf_target_tracers/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":fire: Flame graph: perf target (edmfx)"
-        command: >
-          julia --color=yes --project=perf perf/flame.jl
-          $PERF_CONFIG_PATH/flame_perf_target_edmfx.yml
-        artifact_paths: "flame_perf_target_edmfx/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 

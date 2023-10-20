@@ -114,7 +114,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p
         @. Yₜ.f.u₃[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.u₃[colidx]
-        if turbconv_model isa EDMFX || turbconv_model isa AdvectiveEDMFX
+        if turbconv_model isa PrognosticEDMFX
             for j in 1:n
                 @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                     ᶠβ_rayleigh_w[colidx] * Y.f.sgsʲs.:($$j).u₃[colidx]

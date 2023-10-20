@@ -12,14 +12,12 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if p.atmos.turbconv_model isa AbstractEDMF
         (; ᶜu⁰) = p
     end
-    if p.atmos.turbconv_model isa EDMFX ||
-       p.atmos.turbconv_model isa AdvectiveEDMFX
+    if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p
     end
 
     @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
-    if p.atmos.turbconv_model isa EDMFX ||
-       p.atmos.turbconv_model isa AdvectiveEDMFX
+    if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
         end
@@ -31,20 +29,8 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜh_tot) = p
         @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
     end
-    if p.atmos.turbconv_model isa EDMFX
-        for j in 1:n
-            if :ρθ in propertynames(Y.c)
-                @. Yₜ.c.sgsʲs.:($$j).ρaθ -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).ρaθ * ᶜuʲs.:($$j))
-            elseif :ρe_tot in propertynames(Y.c)
-                (; ᶜh_totʲs) = p
-                @. Yₜ.c.sgsʲs.:($$j).ρae_tot -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜh_totʲs.:($$j) * ᶜuʲs.:($$j))
-            end
-        end
-    end
 
-    if p.atmos.turbconv_model isa AdvectiveEDMFX
+    if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).h_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).h_tot * ᶜuʲs.:($$j)) -
@@ -64,8 +50,7 @@ end
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜu) = p
-    if p.atmos.turbconv_model isa EDMFX ||
-       p.atmos.turbconv_model isa AdvectiveEDMFX
+    if p.atmos.turbconv_model isa PrognosticEDMFX
         (; ᶜuʲs) = p
     end
 
@@ -73,17 +58,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.:($$ρχ_name) * ᶜu)
     end
 
-    if p.atmos.turbconv_model isa EDMFX
-        for j in 1:n
-            for ρaχ_name in
-                filter(is_tracer_var, propertynames(Y.c.sgsʲs.:($j)))
-                @. Yₜ.c.sgsʲs.:($$j).:($$ρaχ_name) -=
-                    wdivₕ(Y.c.sgsʲs.:($$j).:($$ρaχ_name) * ᶜuʲs.:($$j))
-            end
-        end
-    end
-
-    if p.atmos.turbconv_model isa AdvectiveEDMFX
+    if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
                 wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
@@ -105,15 +80,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶠu³, ᶜK, ᶜf) = p
     (; edmfx_upwinding) = n > 0 || advect_tke ? p : all_nothing
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p : all_nothing
-    (; ᶜspecificʲs) = turbconv_model isa EDMFX ? p : all_nothing
     (; ᶜp, ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p : all_nothing
-    (; ᶜh_totʲs) = turbconv_model isa EDMFX && is_total_energy ? p : all_nothing
     (; ᶠu³⁰) = advect_tke ? p : all_nothing
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.ᶜρ⁰ : Y.c.ρ) : nothing
-    ᶜtke⁰ =
-        advect_tke ? (turbconv_model isa EDMFX ? p.ᶜspecific⁰.tke : p.ᶜtke⁰) :
-        nothing
+    ᶜtke⁰ = advect_tke ? p.ᶜtke⁰ : nothing
     ᶜa_scalar = p.ᶜtemp_scalar
     ᶜω³ = p.ᶜtemp_CT3
     ᶠω¹² = p.ᶠtemp_CT12
@@ -162,59 +133,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
 
         # TODO: Move this to implicit_vertical_advection_tendency!.
-        if p.atmos.turbconv_model isa EDMFX
-            for j in 1:n
-                @. ᶜa_scalar[colidx] =
-                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
-                vertical_transport!(
-                    Yₜ.c.sgsʲs.:($j).ρa[colidx],
-                    ᶜJ[colidx],
-                    ᶜρʲs.:($j)[colidx],
-                    ᶠu³ʲs.:($j)[colidx],
-                    ᶜa_scalar[colidx],
-                    dt,
-                    edmfx_upwinding,
-                )
-
-                if :ρae_tot in propertynames(Yₜ.c.sgsʲs.:($j))
-                    @. ᶜa_scalar[colidx] =
-                        ᶜh_totʲs.:($$j)[colidx] * draft_area(
-                            Y.c.sgsʲs.:($$j).ρa[colidx],
-                            ᶜρʲs.:($$j)[colidx],
-                        )
-                    vertical_transport!(
-                        Yₜ.c.sgsʲs.:($j).ρae_tot[colidx],
-                        ᶜJ[colidx],
-                        ᶜρʲs.:($j)[colidx],
-                        ᶠu³ʲs.:($j)[colidx],
-                        ᶜa_scalar[colidx],
-                        dt,
-                        edmfx_upwinding,
-                    )
-                end
-
-                for (ᶜρaχʲₜ, ᶜχʲ, χ_name) in
-                    matching_subfields(Yₜ.c.sgsʲs.:($j), ᶜspecificʲs.:($j))
-                    χ_name == :e_tot && continue
-                    @. ᶜa_scalar[colidx] =
-                        ᶜχʲ[colidx] * draft_area(
-                            Y.c.sgsʲs.:($$j).ρa[colidx],
-                            ᶜρʲs.:($$j)[colidx],
-                        )
-                    vertical_transport!(
-                        ᶜρaχʲₜ[colidx],
-                        ᶜJ[colidx],
-                        ᶜρʲs.:($j)[colidx],
-                        ᶠu³ʲs.:($j)[colidx],
-                        ᶜa_scalar[colidx],
-                        dt,
-                        edmfx_upwinding,
-                    )
-                end
-            end
-        end
-
-        if p.atmos.turbconv_model isa AdvectiveEDMFX
+        if p.atmos.turbconv_model isa PrognosticEDMFX
             for j in 1:n
                 @. ᶜa_scalar[colidx] =
                     draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])

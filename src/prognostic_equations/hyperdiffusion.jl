@@ -21,22 +21,10 @@ function hyperdiffusion_cache(Y, atmos, do_dss)
 
     # Sub-grid scale quantities
     ᶜ∇²uʲs =
-        (
-            atmos.turbconv_model isa EDMFX ||
-            atmos.turbconv_model isa AdvectiveEDMFX
-        ) ? similar(Y.c, NTuple{n, C123{FT}}) : (;)
+        atmos.turbconv_model isa PrognosticEDMFX ?
+        similar(Y.c, NTuple{n, C123{FT}}) : (;)
     sgs_quantities =
-        atmos.turbconv_model isa EDMFX ?
-        (;
-            ᶜ∇²tke⁰ = similar(Y.c, FT),
-            ᶜ∇²uₕʲs = similar(Y.c, NTuple{n, C12{FT}}),
-            ᶜ∇²uᵥʲs = similar(Y.c, NTuple{n, C3{FT}}),
-            ᶜ∇²specific_energyʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜ∇²specific_tracersʲs = remove_energy_var.(
-                specific_sgsʲs.(Y.c, atmos.turbconv_model)
-            ),
-        ) :
-        atmos.turbconv_model isa AdvectiveEDMFX ?
+        atmos.turbconv_model isa PrognosticEDMFX ?
         (;
             ᶜ∇²tke⁰ = similar(Y.c, FT),
             ᶜ∇²uₕʲs = similar(Y.c, NTuple{n, C12{FT}}),
@@ -69,20 +57,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; do_dss, ᶜp, ᶜspecific, ᶜ∇²u, ᶜ∇²specific_energy) = p
-    if turbconv_model isa EDMFX
-        (;
-            ᶜρa⁰,
-            ᶜspecific⁰,
-            ᶜρʲs,
-            ᶜspecificʲs,
-            ᶜ∇²tke⁰,
-            ᶜ∇²uₕʲs,
-            ᶜ∇²uᵥʲs,
-            ᶜ∇²uʲs,
-            ᶜ∇²specific_energyʲs,
-        ) = p
-    end
-    if turbconv_model isa AdvectiveEDMFX
+    if turbconv_model isa PrognosticEDMFX
         (; ᶜρa⁰, ᶜρʲs, ᶜ∇²tke⁰, ᶜtke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²h_totʲs) = p
     end
     if turbconv_model isa DiagnosticEDMFX
@@ -100,33 +75,12 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     elseif :e_tot in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
     end
-    if turbconv_model isa EDMFX && diffuse_tke
-        @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜspecific⁰.tke))
-    end
-    if (
-        turbconv_model isa DiagnosticEDMFX || turbconv_model isa AdvectiveEDMFX
-    ) && diffuse_tke
+    if diffuse_tke
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
 
     # Sub-grid scale hyperdiffusion
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            @. ᶜ∇²uʲs.:($$j) =
-                C123(wgradₕ(divₕ(p.ᶜuʲs.:($$j)))) -
-                C123(wcurlₕ(C123(curlₕ(p.ᶜuʲs.:($$j)))))
-
-            if :θ in propertynames(ᶜspecificʲs.:($j))
-                @. ᶜ∇²specific_energyʲs.:($$j) =
-                    wdivₕ(gradₕ(ᶜspecificʲs.:($$j).θ))
-            elseif :e_tot in propertynames(ᶜspecificʲs.:($j))
-                @. ᶜ∇²specific_energyʲs.:($$j) =
-                    wdivₕ(gradₕ(ᶜspecificʲs.:($$j).e_tot + ᶜp / ᶜρʲs.:($$j)))
-            end
-        end
-    end
-
-    if turbconv_model isa AdvectiveEDMFX
+    if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. ᶜ∇²uʲs.:($$j) =
                 C123(wgradₕ(divₕ(p.ᶜuʲs.:($$j)))) -
@@ -150,8 +104,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 if diffuse_tke
                     dss_op!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
                 end
-                if (turbconv_model isa EDMFX) ||
-                   (turbconv_model isa AdvectiveEDMFX)
+                if turbconv_model isa PrognosticEDMFX
                     # Need to split the DSS computation here, because our DSS 
                     # operations do not accept Covariant123Vector types     
                     for j in 1:n
@@ -164,11 +117,6 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                         @. ᶜ∇²uʲs.:($$j) =
                             C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
                     end
-                end
-                if turbconv_model isa EDMFX
-                    dss_op!(ᶜ∇²specific_energyʲs, buffer.ᶜ∇²specific_energyʲs)
-                end
-                if turbconv_model isa AdvectiveEDMFX
                     dss_op!(ᶜ∇²h_totʲs, buffer.ᶜ∇²h_totʲs)
                 end
             end
@@ -186,27 +134,10 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜρ_energyₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
 
     # Sub-grid scale hyperdiffusion continued
-    if (turbconv_model isa EDMFX || turbconv_model isa AdvectiveEDMFX) &&
-       diffuse_tke
+    if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
         @. Yₜ.c.sgs⁰.ρatke -= κ₄ * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            if point_type <: Geometry.Abstract3DPoint
-                # only need curl-curl part
-                @. ᶜ∇²uᵥʲs.:($$j) = C3(wcurlₕ(C123(curlₕ(ᶜ∇²uʲs.:($$j)))))
-                @. Yₜ.f.sgsʲs.:($$j).u₃ +=
-                    κ₄ * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥʲs.:($$j))
-            end
-            ᶜρa_energyʲₜ =
-                :θ in propertynames(ᶜspecificʲs.:($j)) ? Yₜ.c.sgsʲs.:($j).ρaθ :
-                Yₜ.c.sgsʲs.:($j).ρae_tot
-            @. ᶜρa_energyʲₜ -=
-                κ₄ *
-                wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²specific_energyʲs.:($$j)))
-        end
-    end
-    if turbconv_model isa AdvectiveEDMFX
+    if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             if point_type <: Geometry.Abstract3DPoint
                 # only need curl-curl part
@@ -232,10 +163,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; do_dss, ᶜspecific, ᶜ∇²specific_tracers) = p
-    if turbconv_model isa EDMFX
-        (; ᶜspecificʲs, ᶜ∇²specific_tracersʲs, ᶜp) = p
-    end
-    if turbconv_model isa AdvectiveEDMFX
+    if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p
     end
     if do_dss
@@ -245,16 +173,8 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     for χ_name in propertynames(ᶜ∇²specific_tracers)
         @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
     end
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            for χ_name in propertynames(ᶜ∇²specific_tracersʲs.:($j))
-                @. ᶜ∇²specific_tracersʲs.:($$j).:($$χ_name) =
-                    wdivₕ(gradₕ(ᶜspecificʲs.:($$j).:($$χ_name)))
-            end
-        end
-    end
 
-    if turbconv_model isa AdvectiveEDMFX
+    if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             # Note: It is more correct to have ρa inside and outside the divergence
             @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
@@ -269,10 +189,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 Spaces.weighted_dss_ghost!,
             )
                 dss_op!(ᶜ∇²specific_tracers, buffer.ᶜ∇²specific_tracers)
-                if turbconv_model isa EDMFX
-                    dss_op!(ᶜ∇²specific_tracersʲs, buffer.ᶜ∇²specific_tracersʲs)
-                end
-                if turbconv_model isa AdvectiveEDMFX
+                if turbconv_model isa PrognosticEDMFX
                     dss_op!(ᶜ∇²q_totʲs, buffer.ᶜ∇²q_totʲs)
                 end
             end
@@ -288,19 +205,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. ᶜρχₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
         @. Yₜ.c.ρ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
-    if turbconv_model isa EDMFX
-        for j in 1:n
-            for (ᶜρaχʲₜ, ᶜ∇²χʲ, _) in matching_subfields(
-                Yₜ.c.sgsʲs.:($j),
-                ᶜ∇²specific_tracersʲs.:($j),
-            )
-                @. ᶜρaχʲₜ -= κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
-                @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                    κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²χʲ))
-            end
-        end
-    end
-    if turbconv_model isa AdvectiveEDMFX
+    if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -=
                 κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))

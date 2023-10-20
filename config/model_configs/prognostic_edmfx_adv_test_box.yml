@@ -1,7 +1,7 @@
-job_id: "edmfx_adv_test_box"
+job_id: "prognostic_edmfx_adv_test_box"
 initial_condition: "MoistAdiabaticProfileEDMFX"
 advection_test: true
-turbconv: "edmfx"
+turbconv: "prognostic_edmfx"
 ode_algo: "SSP33ShuOsher"
 edmfx_upwinding: "first_order"
 config: "box"
@@ -20,4 +20,4 @@ dt: "10secs"
 t_end: "3600secs"
 dt_save_to_disk: "100secs"
 FLOAT_TYPE: "Float64"
-toml: [toml/edmfx_box_advection.toml]
+toml: [toml/prognostic_edmfx_box_advection.toml]
