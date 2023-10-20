@@ -137,8 +137,8 @@ end
     )
         FT = eltype(surface_ts)
         surface_values =
-            SF.SurfaceValues(surface_z, SA.SVector(FT(0), FT(0)), surface_ts)
-        interior_values = SF.InteriorValues(
+            SF.StateValues(surface_z, SA.SVector(FT(0), FT(0)), surface_ts)
+        interior_values = SF.StateValues(
             interior_z,
             SA.SVector(interior_u, interior_v),
             interior_ts,

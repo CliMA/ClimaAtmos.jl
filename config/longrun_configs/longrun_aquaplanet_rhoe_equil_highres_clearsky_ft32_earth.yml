@@ -12,9 +12,9 @@ vert_diff: "true"
 h_elem: 16
 use_reference_state: false
 kappa_4: 3.0e16
-FLOAT_TYPE: "Float64"
+FLOAT_TYPE: "Float32"
 precip_model: "0M"
 topography: "Earth"
 dt_save_to_sol: "10days"
-job_id: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft64_earth"
+job_id: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth"
 moist: "equil"
