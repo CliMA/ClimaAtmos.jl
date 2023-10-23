@@ -5,28 +5,17 @@ import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
 """
-    set_prognostic_edmf_precomputed_quantities!(Y, p, t)
+    set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
 
-Updates the precomputed quantities stored in `p` for edmfx.
+Updates the edmf environment precomputed quantities stored in `p` for edmfx.
 """
-function set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
-    (; energy_form, moisture_model, turbconv_model) = p.atmos
-    #EDMFX BCs only support total energy as state variable
-    @assert energy_form isa TotalEnergy
-    @assert !(moisture_model isa DryModel)
+function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+    @assert !(p.atmos.moisture_model isa DryModel)
 
-    FT = Spaces.undertype(axes(Y.c))
-    (; params) = p
-    (; dt) = p.simulation
-    thermo_params = CAP.thermodynamics_params(params)
-    n = n_mass_flux_subdomains(turbconv_model)
-    thermo_args = (thermo_params, energy_form, moisture_model)
-
-    (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot, ᶜρ_ref) = p
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; turbconv_model) = p.atmos
+    (; ᶜp, ᶜΦ, ᶜh_tot) = p
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
-    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) = p
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p
-    (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -49,6 +38,30 @@ function set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
     @. ᶜK⁰ += ᶜtke⁰
     @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜh_tot⁰ - ᶜK⁰ - ᶜΦ, ᶜq_tot⁰)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+
+Updates the draft thermo state and boundary conditions
+precomputed quantities stored in `p` for edmfx.
+"""
+function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+    (; energy_form, moisture_model, turbconv_model) = p.atmos
+    #EDMFX BCs only support total energy as state variable
+    @assert energy_form isa TotalEnergy
+    @assert !(moisture_model isa DryModel)
+
+    FT = Spaces.undertype(axes(Y.c))
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+
+    (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot) = p
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
+    (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
@@ -135,6 +148,30 @@ function set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
             $(FT(turbconv_params.surface_area)) *
             TD.air_density(thermo_params, ᶜtsʲ_int_val)
     end
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+
+Updates the precomputed quantities stored in `p` for edmfx closures.
+"""
+function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+
+    (; moisture_model, turbconv_model) = p.atmos
+    @assert !(moisture_model isa DryModel)
+
+    (; params) = p
+    (; dt) = p.simulation
+    thermo_params = CAP.thermodynamics_params(params)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    (; ᶜspecific, ᶜp, ᶜρ_ref) = p
+    (; ᶜtke⁰, ᶜρa⁰, ᶜu⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p
+    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) = p
+    (; ᶜuʲs, ᶜtsʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p
+    (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
