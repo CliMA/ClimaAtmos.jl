@@ -543,7 +543,7 @@ function get_simulation(config::AtmosConfig)
     return sim
 end
 
-function get_diagnostics(parsed_args, atmos_model)
+function get_diagnostics(parsed_args, atmos_model, hypsography)
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -567,7 +567,7 @@ function get_diagnostics(parsed_args, atmos_model)
     )
 
     hdf5_writer = CAD.HDF5Writer()
-    netcdf_writer = CAD.NetCDFWriter()
+    netcdf_writer = CAD.NetCDFWriter(; hypsography)
     writers = (hdf5_writer, netcdf_writer)
 
     # The default writer is HDF5
@@ -789,7 +789,11 @@ function get_integrator(config::AtmosConfig)
 
     # Initialize diagnostics
     s = @timed_str begin
-        diagnostics, writers = get_diagnostics(config.parsed_args, atmos)
+        diagnostics, writers = get_diagnostics(
+            config.parsed_args,
+            atmos,
+            spaces.center_space.hypsography,
+        )
     end
     # Add writers to the cache, so that we can close the files in solve_atmos!
     p = merge(p, (; writers = writers))

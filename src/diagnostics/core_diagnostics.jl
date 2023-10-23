@@ -623,7 +623,7 @@ add_diagnostic_variable!(
 compute_orog!(out, state, cache, time) =
     compute_orog!(out, state, cache, time, axes(state.c).grid.hypsography)
 
-function compute_orog!(out, state, cache, time, hypsography::Spaces.Flat)
+function compute_orog!(out, state, cache, time, hypsography::Grids.Flat)
     # When we have a Flat topography, we just have to return a field of zeros
     if isnothing(out)
         return zeros(Spaces.horizontal_space(axes(state.c.ρ)))
