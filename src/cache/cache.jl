@@ -39,7 +39,6 @@ function default_cache(
         numerics
     (; apply_limiter) = numerics
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
-    ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     R_d = FT(CAP.R_d(params))
     MSLP = FT(CAP.MSLP(params))
     grav = FT(CAP.grav(params))
@@ -82,11 +81,8 @@ function default_cache(
         is_init = Ref(true),
         simulation,
         atmos,
-        comms_ctx = ClimaComms.context(axes(Y.c)),
         sfc_setup = surface_setup(params),
         test,
-        moisture_model = atmos.moisture_model,
-        model_config = atmos.model_config,
         limiter,
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),

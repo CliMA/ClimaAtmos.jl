@@ -489,7 +489,8 @@ function save_to_disk_func(integrator)
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving diagnostics to HDF5 file on day $day second $sec"
     output_file = joinpath(output_dir, "day$day.$sec.hdf5")
-    hdfwriter = InputOutput.HDF5Writer(output_file, p.comms_ctx)
+    comms_ctx = ClimaComms.context(integrator.u.c)
+    hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     FT = Spaces.undertype(axes(Y.c))
@@ -509,7 +510,8 @@ function save_restart_func(integrator)
     @info "Saving restart file to HDF5 file on day $day second $sec"
     mkpath(joinpath(output_dir, "restart"))
     output_file = joinpath(output_dir, "restart", "day$day.$sec.hdf5")
-    hdfwriter = InputOutput.HDF5Writer(output_file, integrator.p.comms_ctx)
+    comms_ctx = ClimaComms.context(integrator.u.c)
+    hdfwriter = InputOutput.HDF5Writer(output_file, comms_ctx)
     InputOutput.HDF5.write_attribute(hdfwriter.file, "time", t) # TODO: a better way to write metadata
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)

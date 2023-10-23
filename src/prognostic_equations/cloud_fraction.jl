@@ -37,20 +37,10 @@ function compute_cloud_fraction(
         θl′θl′,
         θl′qt′,
     )
-    return quad_loop(
-        env_thermo_quad,
-        env_thermo_quad.quadrature_type,
-        vars,
-        thermo_params,
-    )::FT
+    return quad_loop(env_thermo_quad, vars, thermo_params)::FT
 end
 
-function quad_loop(
-    env_thermo_quad::SGSQuadrature,
-    quadrature_type::GaussianQuad,
-    vars,
-    thermo_params,
-)
+function quad_loop(env_thermo_quad::SGSQuadrature, vars, thermo_params)
 
     # qt - total water specific humidity
     # θl - liquid ice potential temperature

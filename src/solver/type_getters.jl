@@ -465,7 +465,7 @@ thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
 
-function get_callbacks(parsed_args, simulation, atmos, params)
+function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
     FT = eltype(params)
     (; dt) = simulation
 
@@ -488,7 +488,7 @@ function get_callbacks(parsed_args, simulation, atmos, params)
             (callbacks..., call_every_dt(save_restart_func, dt_save_restart))
     end
 
-    if is_distributed(simulation.comms_ctx)
+    if is_distributed(comms_ctx)
         callbacks = (
             callbacks...,
             call_every_n_steps(
@@ -566,7 +566,7 @@ function get_cache(
     )
 end
 
-function get_simulation(config::AtmosConfig, comms_ctx)
+function get_simulation(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
@@ -581,7 +581,6 @@ function get_simulation(config::AtmosConfig, comms_ctx)
     mkpath(output_dir)
 
     sim = (;
-        comms_ctx,
         is_debugging_tc = parsed_args["debugging_tc"],
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
@@ -783,7 +782,7 @@ function get_integrator(config::AtmosConfig)
 
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
-    simulation = get_simulation(config, config.comms_ctx)
+    simulation = get_simulation(config)
     if config.parsed_args["log_params"]
         filepath = joinpath(simulation.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
@@ -834,7 +833,13 @@ function get_integrator(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(config.parsed_args, simulation, atmos, params)
+        callback = get_callbacks(
+            config.parsed_args,
+            simulation,
+            atmos,
+            params,
+            config.comms_ctx,
+        )
     end
     @info "get_callbacks: $s"
 
