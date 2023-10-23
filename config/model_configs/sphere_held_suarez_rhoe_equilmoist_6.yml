@@ -1,44 +1,28 @@
 dt: 200secs 
-t_end: 800days 
+t_end: 1200days 
 ode_algo: ARS343
-dt_save_to_disk: 30days 
+dt_save_to_disk: 100days 
 moist: equil
 forcing: held_suarez 
 precip_model: 0M 
+dt_save_restart: 200days
+job_id: sphere_held_suarez_rhoe_equilmoist_6
+output_dir: sphere_held_suarez_rhoe_equilmoist_6
 diagnostics:
   - reduction_time: average
     short_name: thetaa
-    period: 6hours
-    writer: nc
-  - reduction_time: average
-    short_name: thetaa
-    period: 30days
+    period: 60days
     writer: nc
   - reduction_time: average
     short_name: ts
-    period: 6hours
-    writer: nc
-  - reduction_time: average
-    short_name: ts
-    period: 30days
+    period: 60days
     writer: nc
   - reduction_time: average
     short_name: ta
-    period: 6hours
-    writer: nc
-  - reduction_time: average
-    short_name: ta
-    period: 30days
+    period: 60days
     writer: nc
   - reduction_time: average
     short_name: ha
-    period: 6hours
+    period: 60days
     writer: nc
-  - reduction_time: average
-    short_name: ha
-    period: 30days
-    writer: nc
-
-job_id: sphere_held_suarez_rhoe_equilmoist_6
-output_dir: sphere_held_suarez_rhoe_equilmoist_6
 toml: [toml/sphere_held_suarez_rhoe_equilmoist_6.toml]

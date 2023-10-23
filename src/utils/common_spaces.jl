@@ -88,6 +88,7 @@ function make_hybrid_spaces(
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
+    println(z_mesh.faces)
     if surface_warp == nothing
         device = ClimaComms.device(h_space)
         comms_ctx = ClimaComms.SingletonCommsContext(device)
