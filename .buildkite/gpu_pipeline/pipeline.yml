@@ -70,7 +70,7 @@ steps:
         command: 
           - mkdir -p target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
           - >
-            nsys profile --trace=nvtx,cuda --output=target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report-%q{PMI_RANK}
+            nsys profile --trace=nvtx,cuda --output=target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
         artifact_paths: "target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
@@ -78,7 +78,7 @@ steps:
           slurm_gpus: 1
           slurm_cpus_per_task: 2
 
-      - label: "moist Held-Suarez - 4 gpus"
+      - label: "moist Held-Suarez - 8 gpus"
         key: "target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process"
         command: 
           - mkdir -p target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process
@@ -91,9 +91,9 @@ steps:
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 2
-          slurm_ntasks: 4
+          slurm_ntasks: 8
 
-      - label: "dry baroclinic wave - 4 gpus"
+      - label: "dry baroclinic wave - 8 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
@@ -106,4 +106,4 @@ steps:
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 2
-          slurm_ntasks: 4
+          slurm_ntasks: 8
