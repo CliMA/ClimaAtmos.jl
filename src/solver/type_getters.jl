@@ -725,6 +725,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
                     dss!,
                     post_explicit! = set_precomputed_quantities!,
                     post_implicit! = set_precomputed_quantities!,
+                    comms_context = ClimaComms.context(Y.c),
                 )
             else
                 SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
