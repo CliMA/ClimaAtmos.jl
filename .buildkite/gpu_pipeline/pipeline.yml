@@ -51,7 +51,7 @@ steps:
         artifact_paths: "target_gpu_implicit_baroclinic_wave/*"
         agents:
           slurm_gpus: 1
-          slurm_cpus_per_task: 2
+          slurm_cpus_per_task: 4
 
       - label: "gpu_aquaplanet_dyamond"
         command:
@@ -63,7 +63,7 @@ steps:
         artifact_paths: "gpu_aquaplanet_dyamond/*"
         agents:
           slurm_gpus: 1
-          slurm_cpus_per_task: 2
+          slurm_cpus_per_task: 4
 
       - label: "moist Held-Suarez"
         key: "target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
@@ -90,7 +90,7 @@ steps:
         artifact_paths: "target_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process/*"
         agents:
           slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 2
+          slurm_cpus_per_task: 4
           slurm_ntasks: 8
 
       - label: "dry baroclinic wave - 8 gpus"
@@ -105,5 +105,5 @@ steps:
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
         agents:
           slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 2
+          slurm_cpus_per_task: 4
           slurm_ntasks: 8
