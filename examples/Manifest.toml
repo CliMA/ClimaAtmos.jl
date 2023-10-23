@@ -38,9 +38,9 @@ version = "0.4.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "76289dc51920fdc6e0013c872ba9551d54961c24"
+git-tree-sha1 = "68c4c187a232e7abe00ac29e3b03e09af9d77317"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "3.6.2"
+version = "3.7.0"
 weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -249,9 +249,9 @@ version = "0.2.2"
 
 [[deps.CUDA_Runtime_jll]]
 deps = ["Artifacts", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "105eb8cf6ec6e8b93493da42ec789c3f65f7d749"
+git-tree-sha1 = "a38bc81bd6fdc7334de537aec3ae60e7b098daa2"
 uuid = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
-version = "0.9.2+3"
+version = "0.9.2+4"
 
 [[deps.Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
@@ -2192,9 +2192,9 @@ version = "0.6.39"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "ChainRulesCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FillArrays", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables", "TruncatedStacktraces", "ZygoteRules"]
-git-tree-sha1 = "9c4f861661e72d9257834d8e517d4511e91ca43b"
+git-tree-sha1 = "151c322c309d879d114d1c0bee69c61d5933357f"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.4.2"
+version = "2.4.3"
 
     [deps.SciMLBase.extensions]
     SciMLBasePyCallExt = "PyCall"
