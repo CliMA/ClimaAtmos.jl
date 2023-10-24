@@ -154,7 +154,7 @@ end
 """
     set_velocity_at_top!(Y, turbconv_model)
 
-Modifies `Y.f.u₃` so that `u₃` is 0 at the model top. 
+Modifies `Y.f.u₃` so that `u₃` is 0 at the model top.
 """
 function set_velocity_at_top!(Y, turbconv_model)
     top_u₃ = Fields.level(
@@ -344,7 +344,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     if turbconv_model isa DiagnosticEDMFX
-        set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
+        set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
+        set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
+        set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
+        set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     end
 
     return nothing

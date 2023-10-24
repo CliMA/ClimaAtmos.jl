@@ -114,54 +114,26 @@ function surface_flux_tke(
     return ρ_int * (1 - c_d * c_m * k_star²^2) * ustar^2 * speed * c3_unit
 end
 
-"""
-    set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
 
-Updates the precomputed quantities stored in `p` for diagnostic edmfx.
 """
-function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
-    (; moisture_model, turbconv_model, precip_model) = p.atmos
+    set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
+
+Updates the bottom boundary conditions in precomputed quantities
+stored in `p` for diagnostic edmfx.
+"""
+function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
+    (; turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜz = Fields.coordinate_field(Y.c).z
-    ᶜdz = Fields.Δz_field(axes(Y.c))
-    (; params) = p
-    (; dt) = p.simulation
-    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜu, ᶜts, ᶜh_tot, ᶜK) = p
+
+    (; ᶜp, ᶜΦ, ᶠu³, ᶜh_tot, ᶜK) = p
     (; q_tot) = p.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.sfc_conditions
-    (;
-        ᶜρaʲs,
-        ᶠu³ʲs,
-        ᶜuʲs,
-        ᶜKʲs,
-        ᶜh_totʲs,
-        ᶜq_totʲs,
-        ᶜtsʲs,
-        ᶜρʲs,
-        ᶜentrʲs,
-        ᶜdetrʲs,
-        ᶜnh_pressureʲs,
-        ᶜS_q_totʲs,
-        ᶜS_e_totʲs_helper,
-    ) = p
-    (; ᶠu³⁰, ᶜu⁰, ᶜK⁰, ᶜh_tot⁰, ᶜtke⁰, ᶜS_q_tot⁰) = p
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p
-    (; ᶜK_h, ᶜK_u, ρatke_flux) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_params(params)
-    ᶜlg = Fields.local_geometry_field(Y.c)
+    (; ᶜρaʲs, ᶠu³ʲs, ᶜuʲs, ᶜKʲs, ᶜh_totʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p
+    (; ᶠu³⁰, ᶜK⁰, ᶜh_tot⁰) = p
 
-    @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
-
-    ᶜ∇Φ³ = p.ᶜtemp_CT3
-    @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
-    @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
-
-    ρaʲu³ʲ_data = p.temp_data_level
-    u³ʲ_datau³ʲ_data = p.temp_data_level_2
-    ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.temp_data_level_3
+    thermo_params = CAP.thermodynamics_params(p.params)
 
     ρ_int_level = Fields.field_values(Fields.level(Y.c.ρ, 1))
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
@@ -269,6 +241,48 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         local_geometry_int_halflevel,
         turbconv_model,
     )
+    return nothing
+end
+
+function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
+    (; turbconv_model, precip_model) = p.atmos
+    FT = eltype(Y)
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    (; params) = p
+    (; dt) = p.simulation
+    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p
+    (; q_tot) = p.ᶜspecific
+    (; buoyancy_flux) = p.sfc_conditions
+    (;
+        ᶜρaʲs,
+        ᶠu³ʲs,
+        ᶜKʲs,
+        ᶜh_totʲs,
+        ᶜq_totʲs,
+        ᶜtsʲs,
+        ᶜρʲs,
+        ᶜentrʲs,
+        ᶜdetrʲs,
+        ᶜnh_pressureʲs,
+        ᶜS_q_totʲs,
+        ᶜS_e_totʲs_helper,
+    ) = p
+    (; ᶠu³⁰, ᶜK⁰, ᶜh_tot⁰) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    microphys_params = CAP.microphysics_params(params)
+
+    ᶜ∇Φ³ = p.ᶜtemp_CT3
+    @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
+    @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
+
+    ρaʲu³ʲ_data = p.temp_data_level
+    u³ʲ_datau³ʲ_data = p.temp_data_level_2
+    ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.temp_data_level_3
+
+    z_sfc_halflevel =
+        Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
+    buoyancy_flux_sfc_halflevel = Fields.field_values(buoyancy_flux)
 
     # integral
     for i in 2:Spaces.nlevels(axes(Y.c))
@@ -310,7 +324,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         local_geometry_prev_halflevel = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.f), i - 1 - half),
         )
-
         for j in 1:n
             ᶜρaʲ = ᶜρaʲs.:($j)
             ᶠu³ʲ = ᶠu³ʲs.:($j)
@@ -353,7 +366,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
             S_e_totʲ_helper_prev_level =
                 Fields.field_values(Fields.level(ᶜS_e_totʲ_helper, i - 1))
-
             @. entrʲ_prev_level = entrainment(
                 params,
                 z_prev_level,
@@ -428,7 +440,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 q_totʲ_prev_level,
                 tsʲ_prev_level,
             )
-
             @. ρaʲu³ʲ_data =
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_halflevel.J *
@@ -595,7 +606,6 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
                 local_geometry_halflevel,
             )
         end
-
         ρaʲs_level = Fields.field_values(Fields.level(ᶜρaʲs, i))
         u³ʲs_halflevel = Fields.field_values(Fields.level(ᶠu³ʲs, i - half))
         u³⁰_halflevel = Fields.field_values(Fields.level(ᶠu³⁰, i - half))
@@ -617,6 +627,18 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
             turbconv_model,
         )
     end
+    return nothing
+end
+
+"""
+    set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
+
+Updates the top boundary condition of precomputed quantities stored in `p` for diagnostic edmfx.
+"""
+function set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; ᶜentrʲs, ᶜdetrʲs, ᶜS_q_totʲs, ᶜS_e_totʲs_helper) = p
+    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs) = p
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
@@ -647,6 +669,31 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         @. S_q_totʲ_level = 0
         @. S_e_totʲ_helper_level = 0
     end
+    return nothing
+end
+
+"""
+    set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+
+Updates the environment closures in precomputed quantities stored in `p` for diagnostic edmfx.
+"""
+function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+    (; moisture_model, turbconv_model, precip_model) = p.atmos
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    (; params) = p
+    (; dt) = p.simulation
+    (; ᶜp, ᶜu, ᶜts) = p
+    (; q_tot) = p.ᶜspecific
+    (; ustar, obukhov_length) = p.sfc_conditions
+    (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p
+    (; ᶜtke⁰, ᶠu³⁰, ᶜS_q_tot⁰, ᶜu⁰) = p
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p
+    (; ᶜK_h, ᶜK_u, ρatke_flux) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    microphys_params = CAP.microphysics_params(params)
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
 
@@ -693,6 +740,7 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
     )
     ᶜtke_exch = p.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
+    @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
     # using ᶜu⁰ would be more correct, but this is more consistent with the
     # TKE equation, where using ᶜu⁰ results in allocation
     for j in 1:n
@@ -750,6 +798,5 @@ function set_diagnostic_edmf_precomputed_quantities!(Y, p, t)
         q_tot,
         ᶜts,
     )
-
     return nothing
 end
