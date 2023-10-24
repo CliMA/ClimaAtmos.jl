@@ -13,3 +13,4 @@ config: "box"
 kappa_4: 1.0e8
 job_id: "diagnostic_edmfx_test_box"
 moist: "equil"
+toml: [toml/diagnostic_edmfx_box.toml]

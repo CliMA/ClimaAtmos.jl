@@ -27,6 +27,7 @@ z_stretch: false
 dt: "10secs" 
 t_end: "6hours" 
 dt_save_to_disk: "10mins"
+toml: [toml/diagnostic_edmfx_box.toml]
 diagnostics:
   - short_name: ts
     period: 10mins
