@@ -1,0 +1,4 @@
+[detr_buoy_coeff]
+alias = "detr_buoy_coeff"
+value = 0
+type = "float"
