@@ -230,8 +230,6 @@ end
 ##### DYCOMS_RF01 radiation
 #####
 
-include("indefinite_integral_and_mapreduce.jl")
-
 function radiation_model_cache(Y, params, radiation_mode::RadiationDYCOMS_RF01;)
     FT = Spaces.undertype(axes(Y.c))
     NT = NamedTuple{(:z, :ρ, :q_tot), NTuple{3, FT}}
@@ -273,11 +271,11 @@ function radiation_tendency!(
 
     Operators.column_integral_definite!(∫_0_∞_κρq[colidx], ᶜκρq[colidx])
 
-    column_indefinite_integral!(ᶠ∫_0_z_κρq[colidx], ᶜκρq[colidx])
+    Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq[colidx], ᶜκρq[colidx])
 
     # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
     # the level whose value of q_tot is closest to 0.008.
-    column_mapreduce!(
+    Operators.column_mapreduce!(
         (z, ρ, q_tot) -> (; z, ρ, q_tot),
         (nt1, nt2) ->
             abs(nt1.q_tot - FT(0.008)) < abs(nt2.q_tot - FT(0.008)) ? nt1 : nt2,
