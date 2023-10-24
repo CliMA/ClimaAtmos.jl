@@ -6,10 +6,13 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Spaces as Spaces
 
-viscous_sponge_cache(::Nothing, Y) = NamedTuple()
+viscous_sponge_cache(Y, atmos::AtmosModel) =
+    viscous_sponge_cache(Y, atmos.viscous_sponge)
+
+viscous_sponge_cache(Y, ::Nothing) = (;)
 viscous_sponge_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
-function viscous_sponge_cache(viscous_sponge::ViscousSponge, Y)
+function viscous_sponge_cache(Y, viscous_sponge::ViscousSponge)
     (; κ₂, zd) = viscous_sponge
     FT = Spaces.undertype(axes(Y.c))
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -22,16 +25,34 @@ function viscous_sponge_cache(viscous_sponge::ViscousSponge, Y)
     return (; ᶜβ_viscous, ᶠβ_viscous)
 end
 
-function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
-    (; ᶜβ_viscous, ᶠβ_viscous) = p
+add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t) =
+    add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t, p.atmos.energy_form)
+
+function add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t, ::TotalEnergy)
+    (; ᶜβ_viscous) = p.viscous_sponge
+    (; ᶜh_tot) = p
     ᶜρ = Y.c.ρ
+    @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(ᶜh_tot))
+end
+
+function add_viscous_sponge_energy_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::PotentialTemperature,
+)
+    (; ᶜβ_viscous) = p.viscous_sponge
+    ᶜρ = Y.c.ρ
+    @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
+end
+
+function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
+    (; ᶜβ_viscous, ᶠβ_viscous) = p.viscous_sponge
     ᶜuₕ = Y.c.uₕ
-    if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
-    elseif :ρe_tot in propertynames(Y.c)
-        (; ᶜh_tot) = p
-        @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(ᶜh_tot))
-    end
+
+    add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t)
+
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (
             wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(
