@@ -1,4 +1,29 @@
+[entr_tau]
+alias = "entr_tau"
+value = 0.001
+type = "float"
+
+[entr_coeff]
+alias = "entr_coeff"
+value = 0
+type = "float"
+
+[detr_tau]
+alias = "detr_tau"
+value = 0
+type = "float"
+
 [detr_buoy_coeff]
 alias = "detr_buoy_coeff"
+value = 0
+type = "float"
+
+[min_area_limiter_scale]
+alias = "min_area_limiter_scale"
+value = 0
+type = "float"
+
+[max_area_limiter_scale]
+alias = "max_area_limiter_scale"
 value = 0
 type = "float"

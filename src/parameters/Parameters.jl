@@ -26,6 +26,10 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
     detr_tau::FT
     detr_coeff::FT
     detr_buoy_coeff::FT
+    min_area_limiter_scale::FT
+    min_area_limiter_power::FT
+    max_area_limiter_scale::FT
+    max_area_limiter_power::FT
     c_smag::FT
     C_E::FT
     C_H::FT

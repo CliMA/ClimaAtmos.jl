@@ -103,10 +103,20 @@ function entrainment(
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
     dt::FT,
-    ::ConstantCoefficientEntrainment,
+    ::GeneralizedEntrainment,
 ) where {FT}
+    entr_inv_tau = CAP.entr_tau(params)
     entr_coeff = CAP.entr_coeff(params)
-    entr = min(entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc), 1 / dt)
+    min_area_limiter_scale = CAP.min_area_limiter_scale(params)
+    min_area_limiter_power = CAP.min_area_limiter_power(params)
+    turbconv_params = CAP.turbconv_params(params)
+    a_min = TCP.min_area(turbconv_params)
+    min_area_limiter =
+        min_area_limiter_scale * exp(-min_area_limiter_power * (ᶜaʲ - a_min))
+    entr = min(
+        entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter,
+        1 / dt,
+    )
     return entr
 end
 
@@ -125,33 +135,21 @@ function entrainment(
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
     dt::FT,
-    ::ConstantCoefficientHarmonicsEntrainment,
+    ::GeneralizedHarmonicsEntrainment,
 ) where {FT}
+    entr_inv_tau = CAP.entr_tau(params)
     entr_coeff = CAP.entr_coeff(params)
-    entr = min(entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc), 1 / dt)
+    min_area_limiter_scale = CAP.min_area_limiter_scale(params)
+    min_area_limiter_power = CAP.min_area_limiter_power(params)
+    turbconv_params = CAP.turbconv_params(params)
+    a_min = TCP.min_area(turbconv_params)
+    min_area_limiter =
+        min_area_limiter_scale * exp(-min_area_limiter_power * (ᶜaʲ - a_min))
+    entr = min(
+        entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter,
+        1 / dt,
+    )
     return entr * FT(2) * hm_limiter(ᶜaʲ)
-end
-
-function entrainment(
-    params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    buoy_flux_surface::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    dt::FT,
-    ::ConstantTimescaleEntrainment,
-) where {FT}
-    entr_tau = CAP.entr_tau(params)
-    entr = min(1 / entr_tau, 1 / dt)
-    return entr
 end
 
 """
@@ -254,16 +252,23 @@ function detrainment(
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
     dt::FT,
-    ::BOverWDetrainment,
+    ::GeneralizedDetrainment,
 ) where {FT}
+    detr_inv_tau = CAP.detr_tau(params)
     detr_coeff = CAP.detr_coeff(params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(params)
+    max_area_limiter_power = CAP.max_area_limiter_power(params)
+    turbconv_params = CAP.turbconv_params(params)
+    a_max = TCP.max_area(turbconv_params)
+    max_area_limiter =
+        max_area_limiter_scale * exp(-max_area_limiter_power * (a_max - ᶜaʲ))
     detr = min(
-        abs(ᶜwʲ) * (
-            detr_coeff +
-            detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-            max(eps(FT), (ᶜwʲ - ᶜw⁰) * (ᶜwʲ - ᶜw⁰))
-        ),
+        detr_inv_tau +
+        detr_coeff * abs(ᶜwʲ) +
+        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+        max(eps(FT), abs((ᶜwʲ - ᶜw⁰))) +
+        max_area_limiter,
         1 / dt,
     )
     return detr
@@ -284,33 +289,26 @@ function detrainment(
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
     dt::FT,
-    ::ConstantCoefficientHarmonicsDetrainment,
+    ::GeneralizedHarmonicsDetrainment,
 ) where {FT}
+    detr_inv_tau = CAP.detr_tau(params)
     detr_coeff = CAP.detr_coeff(params)
-    detr = min(detr_coeff * abs(ᶜwʲ), 1 / dt)
+    detr_buoy_coeff = CAP.detr_buoy_coeff(params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(params)
+    max_area_limiter_power = CAP.max_area_limiter_power(params)
+    turbconv_params = CAP.turbconv_params(params)
+    a_max = TCP.max_area(turbconv_params)
+    max_area_limiter =
+        max_area_limiter_scale * exp(-max_area_limiter_power * (a_max - ᶜaʲ))
+    detr = min(
+        detr_inv_tau +
+        detr_coeff * abs(ᶜwʲ) +
+        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+        max(eps(FT), abs((ᶜwʲ - ᶜw⁰))) +
+        max_area_limiter,
+        1 / dt,
+    )
     return detr * FT(2) * hm_limiter(ᶜaʲ)
-end
-
-function detrainment(
-    params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    buoy_flux_surface::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    dt::FT,
-    ::ConstantTimescaleDetrainment,
-) where {FT}
-    detr_tau = CAP.detr_tau(params)
-    detr = min(1 / detr_tau, 1 / dt)
-    return detr
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing

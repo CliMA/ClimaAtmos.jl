@@ -1,8 +1,3 @@
-[C_E]
-alias = "C_E"
-value = 0.044
-type = "float"
-
 [EDMF_surface_area]
 alias = "surface_area"
 value = 0.1
@@ -13,12 +8,17 @@ alias = "min_area"
 value = 1.0e-3
 type = "float"
 
+[entr_tau]
+alias = "entr_tau"
+value = 0
+type = "float"
+
 [entr_coeff]
 alias = "entr_coeff"
 value = 0.1
 type = "float"
 
-[entr_tau]
-alias = "entr_tau"
-value = 1800
+[detr_tau]
+alias = "detr_tau"
+value = 0
 type = "float"

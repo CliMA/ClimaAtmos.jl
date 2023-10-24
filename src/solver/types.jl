@@ -179,17 +179,15 @@ use_prognostic_tke(::Any) = false
 abstract type AbstractEntrainmentModel end
 struct NoEntrainment <: AbstractEntrainmentModel end
 struct PiGroupsEntrainment <: AbstractEntrainmentModel end
-struct ConstantCoefficientEntrainment <: AbstractEntrainmentModel end
-struct ConstantCoefficientHarmonicsEntrainment <: AbstractEntrainmentModel end
-struct ConstantTimescaleEntrainment <: AbstractEntrainmentModel end
+struct GeneralizedEntrainment <: AbstractEntrainmentModel end
+struct GeneralizedHarmonicsEntrainment <: AbstractEntrainmentModel end
 
 abstract type AbstractDetrainmentModel end
 
 struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
-struct BOverWDetrainment <: AbstractDetrainmentModel end
-struct ConstantCoefficientHarmonicsDetrainment <: AbstractDetrainmentModel end
-struct ConstantTimescaleDetrainment <: AbstractDetrainmentModel end
+struct GeneralizedDetrainment <: AbstractDetrainmentModel end
+struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
