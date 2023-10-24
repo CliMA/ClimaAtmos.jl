@@ -33,7 +33,7 @@ steps:
 
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
-      - "julia --project -e 'using CUDA; CUDA.precompile_runtime()'"
+      - "julia --project=cuda_env -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true);using CUDA; CUDA.precompile_runtime()'"
 
       - echo "--- Instantiate test"
       - "julia --project=test -e 'using Pkg; Pkg.develop(path = \".\")'"
@@ -727,8 +727,6 @@ steps:
       - label: "GPU: baroclinic wave"
         key: "gpu_baroclinic_wave_rhoe"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
-
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $PERF_CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
         artifact_paths: "gpu_implicit_barowave_ref/*"
@@ -748,8 +746,6 @@ steps:
       - label: "GPU: HS (ρe) hightop"
         key: "gpu_held_suarez_rhoe_hightop"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
-
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $PERF_CONFIG_PATH/gpu_held_suarez_rhoe_hightop.yml
         artifact_paths: "gpu_held_suarez_rhoe_hightop/*"
@@ -797,7 +793,6 @@ steps:
 
       - label: "GPU: GPU moist Held-Suarez"
         command:
-          - julia --project -e 'using CUDA; CUDA.versioninfo()'
           - >
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
@@ -822,7 +817,6 @@ steps:
       - label: "Perf: GPU implicit baro wave wrt h_elem"
         key: "gpu_implicit_barowave_wrt_h_elem"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
 
           julia --color=yes --project=examples perf/benchmark_dump.jl
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_wrt_h_elem.yml
@@ -832,7 +826,6 @@ steps:
 
       - label: "Perf: GPU implicit baro wave"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
 
           julia --color=yes --project=examples perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave.yml
@@ -842,7 +835,6 @@ steps:
 
       - label: "Perf: GPU implicit baro wave moist"
         command: >
-          julia --project -e 'using CUDA; CUDA.versioninfo()'
 
           julia --color=yes --project=examples perf/benchmark_step.jl
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
