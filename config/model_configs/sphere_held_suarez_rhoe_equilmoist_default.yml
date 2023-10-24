@@ -1,5 +1,5 @@
 dt: 200secs 
-t_end: 1200days 
+t_end: 3000days 
 ode_algo: ARS343
 dt_save_to_disk: 100days 
 moist: equil
