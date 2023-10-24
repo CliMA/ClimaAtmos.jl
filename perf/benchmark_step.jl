@@ -14,7 +14,6 @@ include(joinpath("perf", "benchmark_step.jl"));
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
-using CUDA
 import ClimaComms
 
 config = CA.AtmosConfig()
@@ -28,17 +27,9 @@ CA.benchmark_step!(integrator, Y₀); # compile first
 n_steps = 10
 comms_ctx = ClimaComms.context(integrator.u.c)
 device = ClimaComms.device(comms_ctx)
-if device isa ClimaComms.CUDADevice
-    e = CUDA.@elapsed begin
-        s = CA.@timed_str begin
-            CA.benchmark_step!(integrator, Y₀, n_steps) # run
-        end
-    end
-else
-    e = @elapsed begin
-        s = CA.@timed_str begin
-            CA.benchmark_step!(integrator, Y₀, n_steps) # run
-        end
+e = ClimaComms.@elapsed device begin
+    s = CA.@timed_str begin
+        CA.benchmark_step!(integrator, Y₀, n_steps) # run
     end
 end
 @info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
