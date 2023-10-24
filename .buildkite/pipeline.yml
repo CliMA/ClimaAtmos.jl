@@ -649,6 +649,14 @@ steps:
         artifact_paths: "diagnostic_edmfx_trmm_stretched_box/*"
         agents:
           slurm_mem: 20GB
+
+      - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_tke.yml
+        artifact_paths: "diagnostic_edmfx_aquaplanet_tke/*"
+        agents:
+          slurm_mem: 20GB
       
       - label: ":genie: Prognostic EDMFX advection test in a box"
         command: >
