@@ -60,8 +60,7 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    (; energy_upwinding, tracer_upwinding, density_upwinding, edmfx_upwinding) =
-        p
+    (; energy_upwinding, tracer_upwinding, density_upwinding) = p.atmos.numerics
     (; turbconv_model, rayleigh_sponge) = p.atmos
     (; dt) = p.simulation
     n = n_mass_flux_subdomains(turbconv_model)

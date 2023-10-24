@@ -268,6 +268,49 @@ struct TestDycoreConsistency end
 
 Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, DE_UP, ED_UP, DYCORE, LIM}
+
+    """Enable specific upwinding schemes for specific equations"""
+    energy_upwinding::EN_UP
+    tracer_upwinding::TR_UP
+    density_upwinding::DE_UP
+    edmfx_upwinding::ED_UP
+
+    """Add NaNs to certain equations to track down problems"""
+    test_dycore_consistency::DYCORE
+
+    limiter::LIM
+
+    """Whether to subtract the reference state from the evolved state"""
+    use_reference_state::Bool
+end
+Base.broadcastable(x::AtmosNumerics) = tuple(x)
+
+function Base.summary(io::IO, numerics::AtmosNumerics)
+    pns = string.(propertynames(numerics))
+    buf = maximum(length.(pns))
+    keys = propertynames(numerics)
+    vals = repeat.(" ", map(s -> buf - length(s) + 2, pns))
+    bufs = (; zip(keys, vals)...)
+    print(io, '\n')
+    for pn in propertynames(numerics)
+        prop = getproperty(numerics, pn)
+        s = string(
+            "  ", # needed for some reason
+            getproperty(bufs, pn),
+            '`',
+            string(pn),
+            '`',
+            "::",
+            '`',
+            typeof(prop),
+            '`',
+            '\n',
+        )
+        print(io, s)
+    end
+end
+
 Base.@kwdef struct AtmosModel{
     MC,
     PEM,
@@ -294,6 +337,7 @@ Base.@kwdef struct AtmosModel{
     RS,
     ST,
     SM,
+    NUM,
 }
     model_config::MC = nothing
     perf_mode::PEM = nothing
@@ -320,6 +364,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing
+    numerics::NUM = nothing
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)

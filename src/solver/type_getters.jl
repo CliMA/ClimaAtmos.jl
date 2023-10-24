@@ -80,6 +80,7 @@ function get_atmos(config::AtmosConfig, params)
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
+        numerics = get_numerics(parsed_args),
     )
 
     @info "AtmosModel: \n$(summary(atmos))"
@@ -87,16 +88,30 @@ function get_atmos(config::AtmosConfig, params)
 end
 
 function get_numerics(parsed_args)
+    test_dycore =
+        parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
+        nothing
+
+    energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"]))
+    tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
+    density_upwinding = Val(Symbol(parsed_args["density_upwinding"]))
+    edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
+
+    limiter =
+        parsed_args["apply_limiter"] ? Limiters.QuasiMonotoneLimiter : nothing
+
+
     # wrap each upwinding mode in a Val for dispatch
-    numerics = (;
-        energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"])),
-        tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"])),
-        density_upwinding = Val(Symbol(parsed_args["density_upwinding"])),
-        edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"])),
-        apply_limiter = parsed_args["apply_limiter"],
-        bubble = parsed_args["bubble"],
+    numerics = AtmosNumerics(;
+        energy_upwinding,
+        tracer_upwinding,
+        density_upwinding,
+        edmfx_upwinding,
+        limiter,
+        test_dycore_consistency = test_dycore,
+        use_reference_state = parsed_args["use_reference_state"],
     )
-    @info "numerics" numerics...
+    @info "numerics $(summary(numerics))"
 
     return numerics
 end
@@ -544,7 +559,6 @@ function get_cache(
 )
     _default_cache = default_cache(
         Y,
-        parsed_args,
         params,
         atmos,
         spaces,
@@ -581,7 +595,6 @@ function get_simulation(config::AtmosConfig)
     mkpath(output_dir)
 
     sim = (;
-        is_debugging_tc = parsed_args["debugging_tc"],
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,

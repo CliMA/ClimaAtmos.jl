@@ -219,13 +219,13 @@ function Wfact!(A, Y, p, dtγ, t)
             p.ᶜp_ref,
             p.ᶜtemp_scalar,
             p.params,
-            p.energy_upwinding,
-            p.tracer_upwinding,
-            p.density_upwinding,
             p.atmos,
             (energy_form isa TotalEnergy ? (; p.ᶜh_tot) : (;))...,
             (rayleigh_sponge isa RayleighSponge ? (; p.ᶠβ_rayleigh_w) : (;))...,
         )
+
+        (; energy_upwinding, tracer_upwinding, density_upwinding) =
+            p.atmos.numerics
 
         # Convert dtγ from a Float64 to an FT.
         FT = Spaces.undertype(axes(Y.c))
@@ -242,7 +242,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; matrix, enthalpy_flag) = A
     (; ᶜspecific, ᶠu³, ᶜK, ᶜp, ∂ᶜK_∂ᶠu₃) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, params) = p
-    (; energy_upwinding, tracer_upwinding, density_upwinding) = p
+    (; energy_upwinding, tracer_upwinding, density_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
     one_ATC3 = CT3(FT(1))'

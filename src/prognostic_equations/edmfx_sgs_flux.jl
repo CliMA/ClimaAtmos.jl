@@ -15,7 +15,7 @@ function edmfx_sgs_mass_flux_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_upwinding) = p
+    (; edmfx_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs) = p
     (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
@@ -98,7 +98,8 @@ function edmfx_sgs_mass_flux_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_upwinding, sfc_conditions) = p
+    (; edmfx_upwinding) = p.atmos.numerics
+    (; sfc_conditions) = p
     (; ᶠu³, ᶜu, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
     (; ᶜK_u, ᶜK_h) = p
@@ -223,7 +224,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_upwinding, sfc_conditions) = p
+    (; edmfx_upwinding) = p.atmos.numerics
+    (; sfc_conditions) = p
     (; ᶠu³, ᶜu, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
     (; ᶜK_u, ᶜK_h) = p
