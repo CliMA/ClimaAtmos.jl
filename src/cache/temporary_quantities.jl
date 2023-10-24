@@ -1,9 +1,6 @@
 using ClimaCore: Fields
 using ClimaCore.Utilities: half
 
-# The model also depends on f_plane_coriolis_frequency(params)
-# This is a constant Coriolis frequency that is only used if space is flat
-
 # Fields used to store variables that only need to be used in a single function
 # but cannot be computed on the fly. Unlike the precomputed quantities, these
 # can be modified at any point, so they should never be assumed to be unchanged

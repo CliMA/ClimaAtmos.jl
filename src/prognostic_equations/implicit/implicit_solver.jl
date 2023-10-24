@@ -224,9 +224,6 @@ function Wfact!(A, Y, p, dtγ, t)
             (rayleigh_sponge isa RayleighSponge ? (; p.ᶠβ_rayleigh_w) : (;))...,
         )
 
-        (; energy_upwinding, tracer_upwinding, density_upwinding) =
-            p.atmos.numerics
-
         # Convert dtγ from a Float64 to an FT.
         FT = Spaces.undertype(axes(Y.c))
         dtγ′ = FT(dtγ)
