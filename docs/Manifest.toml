@@ -38,9 +38,9 @@ version = "0.4.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "76289dc51920fdc6e0013c872ba9551d54961c24"
+git-tree-sha1 = "68c4c187a232e7abe00ac29e3b03e09af9d77317"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "3.6.2"
+version = "3.7.0"
 weakdeps = ["StaticArrays"]
 
     [deps.Adapt.extensions]
@@ -264,9 +264,9 @@ version = "0.5.5"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack"]
-git-tree-sha1 = "8174265fe74081f378b11e36962c3b9cbb11c44f"
+git-tree-sha1 = "4a5138604b65cfa2d30b90ddf5252106874940c3"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.10.54"
+version = "0.10.55"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["CUDA", "ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
@@ -516,9 +516,9 @@ version = "0.9.3"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "Dates", "DocStringExtensions", "Downloads", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "Test", "Unicode"]
-git-tree-sha1 = "147a3cbb6ddcd9448fe5e6c426b347efc68f9c86"
+git-tree-sha1 = "662fb21ae7fad33e044c2b59ece832fdce32c171"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.DocumenterCitations]]
 deps = ["AbstractTrees", "Bibliography", "Documenter", "Markdown", "MarkdownAST", "OrderedCollections", "Unicode"]
@@ -805,9 +805,9 @@ version = "0.14.7"
 
 [[deps.IntervalSets]]
 deps = ["Dates", "Random"]
-git-tree-sha1 = "8e59ea773deee525c99a8018409f64f19fb719e6"
+git-tree-sha1 = "3d8866c029dd6b16e69e0d4a939c4dfcb98fac47"
 uuid = "8197267c-284f-5f27-9208-e0e47529a953"
-version = "0.7.7"
+version = "0.7.8"
 weakdeps = ["Statistics"]
 
     [deps.IntervalSets.extensions]
@@ -824,10 +824,10 @@ uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
 [[deps.JLD2]]
-deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "Requires", "TranscodingStreams", "UUIDs"]
-git-tree-sha1 = "572d024660119ee626938419c14db0db5f3f3283"
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "PrecompileTools", "Printf", "Reexport", "Requires", "TranscodingStreams", "UUIDs"]
+git-tree-sha1 = "ebec83429b5dea3857e071d927156207ebd6d617"
 uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-version = "0.4.36"
+version = "0.4.37"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -988,9 +988,9 @@ version = "2.5.2"
 
 [[deps.LinearSolve]]
 deps = ["ArrayInterface", "ConcreteStructs", "DocStringExtensions", "EnumX", "EnzymeCore", "FastLapackInterface", "GPUArraysCore", "InteractiveUtils", "KLU", "Krylov", "Libdl", "LinearAlgebra", "MKL_jll", "PrecompileTools", "Preferences", "RecursiveFactorization", "Reexport", "Requires", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Sparspak", "SuiteSparse", "UnPack"]
-git-tree-sha1 = "31353ba539d14a342908f765407abffd8db5f3c7"
+git-tree-sha1 = "158e45dd35cec1ecade0e554c0104ee89e772d82"
 uuid = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
-version = "2.11.0"
+version = "2.11.1"
 
     [deps.LinearSolve.extensions]
     LinearSolveBandedMatricesExt = "BandedMatrices"
@@ -1195,9 +1195,9 @@ version = "1.2.0"
 
 [[deps.NonlinearSolve]]
 deps = ["ADTypes", "ArrayInterface", "ConcreteStructs", "DiffEqBase", "EnumX", "FiniteDiff", "ForwardDiff", "LineSearches", "LinearAlgebra", "LinearSolve", "PrecompileTools", "RecursiveArrayTools", "Reexport", "SciMLBase", "SimpleNonlinearSolve", "SparseArrays", "SparseDiffTools", "StaticArraysCore", "UnPack"]
-git-tree-sha1 = "ee92770e0832314ccd424d83a0ab4c75fc6dc91f"
+git-tree-sha1 = "9203b3333c9610664de2e8cbc23cfd726663df7d"
 uuid = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
-version = "2.3.0"
+version = "2.4.0"
 
     [deps.NonlinearSolve.extensions]
     NonlinearSolveFastLevenbergMarquardtExt = "FastLevenbergMarquardt"
@@ -1481,9 +1481,9 @@ version = "0.6.39"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "ChainRulesCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FillArrays", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables", "TruncatedStacktraces", "ZygoteRules"]
-git-tree-sha1 = "6134c8970f82f23c43d3580d79c3e47acf232083"
+git-tree-sha1 = "151c322c309d879d114d1c0bee69c61d5933357f"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.4.1"
+version = "2.4.3"
 
     [deps.SciMLBase.extensions]
     SciMLBasePyCallExt = "PyCall"
@@ -1530,9 +1530,9 @@ uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
 
 [[deps.SimpleNonlinearSolve]]
 deps = ["ArrayInterface", "DiffEqBase", "FiniteDiff", "ForwardDiff", "LinearAlgebra", "PackageExtensionCompat", "PrecompileTools", "Reexport", "SciMLBase", "StaticArraysCore"]
-git-tree-sha1 = "e308d089f5d0e733a017b61784c5813e672f760d"
+git-tree-sha1 = "15ff97fa4881133caa324dacafe28b5ac47ad8a2"
 uuid = "727e6d20-b764-4bd8-a329-72de5adea6c7"
-version = "0.1.22"
+version = "0.1.23"
 
     [deps.SimpleNonlinearSolve.extensions]
     SimpleNonlinearSolveNNlibExt = "NNlib"
@@ -1729,9 +1729,9 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits"]
-git-tree-sha1 = "a1f34829d5ac0ef499f6d84428bd6b4c71f02ead"
+git-tree-sha1 = "cb76cf677714c095e535e3501ac7954732aeea2d"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.11.0"
+version = "1.11.1"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
