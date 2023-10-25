@@ -93,7 +93,7 @@ function default_cache(
         net_energy_flux_sfc,
         env_thermo_quad = SGSQuadrature(FT),
         precomputed_quantities(Y, atmos)...,
-        temporary_quantities(atmos, spaces.center_space, spaces.face_space)...,
+        scratch = temporary_quantities(Y, atmos),
         hyperdiffusion_cache(Y, atmos, do_dss)...,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))

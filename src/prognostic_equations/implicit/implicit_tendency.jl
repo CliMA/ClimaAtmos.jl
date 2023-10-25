@@ -65,9 +65,9 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; dt) = p.simulation
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜspecific, ᶠu³, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, ᶜtemp_scalar) = p
+    (; ᶜspecific, ᶠu³, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
 
-    ᶜ1 = ᶜtemp_scalar
+    ᶜ1 = p.scratch.ᶜtemp_scalar
     @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
     vertical_transport!(
         Yₜ.c.ρ[colidx],

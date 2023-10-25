@@ -29,7 +29,8 @@ import ClimaCore.Fields: ColumnField
 # but cannot be computed on the fly. Unlike the precomputed quantities, these
 # can be modified at any point, so they should never be assumed to be unchanged
 # between function calls.
-function temporary_quantities(atmos, center_space, face_space)
+function temporary_quantities(Y, atmos)
+    center_space, face_space = axes(Y.c), axes(Y.f)
     FT = Spaces.undertype(center_space)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;

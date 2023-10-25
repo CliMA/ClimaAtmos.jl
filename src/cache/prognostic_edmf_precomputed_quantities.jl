@@ -244,20 +244,20 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     )
 
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu⁰ = p.ᶠtemp_C123
+    ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
-    ᶜstrain_rate = p.ᶜtemp_UVWxUVW
+    ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     compute_strain_rate_center!(ᶜstrain_rate, ᶠu⁰)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
-    ᶜprandtl_nvec = p.ᶜtemp_scalar
+    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
     @. ᶜprandtl_nvec = turbulent_prandtl_number(
         params,
         obukhov_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
     )
-    ᶜtke_exch = p.ᶜtemp_scalar_2
+    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
         @. ᶜtke_exch +=

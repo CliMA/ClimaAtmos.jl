@@ -217,7 +217,7 @@ function Wfact!(A, Y, p, dtγ, t)
             p.ᶠgradᵥ_ᶜΦ,
             p.ᶜρ_ref,
             p.ᶜp_ref,
-            p.ᶜtemp_scalar,
+            p.scratch.ᶜtemp_scalar,
             p.params,
             p.atmos,
             (energy_form isa TotalEnergy ? (; p.ᶜh_tot) : (;))...,

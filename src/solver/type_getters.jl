@@ -99,7 +99,6 @@ function get_numerics(parsed_args)
     limiter =
         parsed_args["apply_limiter"] ? Limiters.QuasiMonotoneLimiter : nothing
 
-
     # wrap each upwinding mode in a Val for dispatch
     numerics = AtmosNumerics(;
         energy_upwinding,

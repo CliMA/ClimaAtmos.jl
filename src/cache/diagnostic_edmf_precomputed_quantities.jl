@@ -272,13 +272,13 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
 
-    ᶜ∇Φ³ = p.ᶜtemp_CT3
+    ᶜ∇Φ³ = p.scratch.ᶜtemp_CT3
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
     @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
 
-    ρaʲu³ʲ_data = p.temp_data_level
-    u³ʲ_datau³ʲ_data = p.temp_data_level_2
-    ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.temp_data_level_3
+    ρaʲu³ʲ_data = p.scratch.temp_data_level
+    u³ʲ_datau³ʲ_data = p.scratch.temp_data_level_2
+    ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.scratch.temp_data_level_3
 
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
@@ -725,20 +725,20 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     )
 
     # TODO: Currently the shear production only includes vertical gradients
-    ᶠu⁰ = p.ᶠtemp_C123
+    ᶠu⁰ = p.scratch.ᶠtemp_C123
     @. ᶠu⁰ = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³⁰)
-    ᶜstrain_rate = p.ᶜtemp_UVWxUVW
+    ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     compute_strain_rate_center!(ᶜstrain_rate, ᶠu⁰)
     @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
-    ᶜprandtl_nvec = p.ᶜtemp_scalar
+    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
     @. ᶜprandtl_nvec = turbulent_prandtl_number(
         params,
         obukhov_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
     )
-    ᶜtke_exch = p.ᶜtemp_scalar_2
+    ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     @. ᶜtke⁰ = Y.c.sgs⁰.ρatke / Y.c.ρ
     # using ᶜu⁰ would be more correct, but this is more consistent with the

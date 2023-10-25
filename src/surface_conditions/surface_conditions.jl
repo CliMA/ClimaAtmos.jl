@@ -107,7 +107,8 @@ This functions needs to be called by the coupler whenever either field changes
 to ensure that the simulation is properly updated.
 """
 function set_surface_conditions!(p, surface_conditions, surface_ts)
-    (; sfc_conditions, params, atmos, ᶠtemp_scalar) = p
+    (; sfc_conditions, params, atmos) = p
+    (; ᶠtemp_scalar) = p.scratch
 
     FT = eltype(params)
     FT′ = eltype(parent(surface_conditions))
