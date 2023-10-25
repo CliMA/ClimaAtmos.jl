@@ -95,8 +95,6 @@ function ᶠupdraft_nh_pressure(
     end
 end
 
-edmfx_nh_pressure_cache(Y, turbconv_model) = (;)
-
 edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 function edmfx_nh_pressure_tendency!(
     Yₜ,

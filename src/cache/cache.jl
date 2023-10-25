@@ -139,7 +139,6 @@ function additional_cache(Y, default_cache, params, atmos, dt)
             Y,
             CAP.planet_radius(params),
         ),
-        edmfx_nh_pressure_cache(Y, atmos.turbconv_model),
         (; Δt = dt),
         (; turbconv_model),
     )
