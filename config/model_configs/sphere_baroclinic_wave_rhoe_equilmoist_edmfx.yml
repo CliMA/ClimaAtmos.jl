@@ -1,8 +1,8 @@
 dt_save_to_disk: "30secs"
 initial_condition: "MoistBaroclinicWaveWithEDMF"
 dt: "1secs"
-edmfx_entr_model: "ConstantCoefficient" 
-edmfx_detr_model: "BOverW" 
+edmfx_entr_model: "Generalized" 
+edmfx_detr_model: "Generalized" 
 edmfx_nh_pressure: true
 t_end: "6mins"
 turbconv: "edmfx"

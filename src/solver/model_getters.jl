@@ -371,12 +371,10 @@ function get_entrainment_model(parsed_args)
         NoEntrainment()
     elseif entr_model == "PiGroups"
         PiGroupsEntrainment()
-    elseif entr_model == "ConstantCoefficient"
-        ConstantCoefficientEntrainment()
-    elseif entr_model == "ConstantCoefficientHarmonics"
-        ConstantCoefficientHarmonicsEntrainment()
-    elseif entr_model == "ConstantTimescale"
-        ConstantTimescaleEntrainment()
+    elseif entr_model == "Generalized"
+        GeneralizedEntrainment()
+    elseif entr_model == "GeneralizedHarmonics"
+        GeneralizedHarmonicsEntrainment()
     else
         error("Invalid entr_model $(entr_model)")
     end
@@ -388,12 +386,10 @@ function get_detrainment_model(parsed_args)
         NoDetrainment()
     elseif detr_model == "PiGroups"
         PiGroupsDetrainment()
-    elseif detr_model == "BOverW"
-        BOverWDetrainment()
-    elseif detr_model == "ConstantCoefficientHarmonics"
-        ConstantCoefficientHarmonicsDetrainment()
-    elseif detr_model == "ConstantTimescale"
-        ConstantTimescaleDetrainment()
+    elseif detr_model == "Generalized"
+        GeneralizedDetrainment()
+    elseif detr_model == "GeneralizedHarmonics"
+        GeneralizedHarmonicsDetrainment()
     else
         error("Invalid detr_model $(detr_model)")
     end

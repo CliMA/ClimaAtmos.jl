@@ -7,8 +7,8 @@ surface_setup: DYCOMS_RF01
 turbconv: diagnostic_edmfx 
 prognostic_tke: true
 edmfx_upwinding: first_order 
-edmfx_entr_model: "ConstantTimescale" 
-edmfx_detr_model: "BOverW" 
+edmfx_entr_model: "Generalized" 
+edmfx_detr_model: "Generalized" 
 edmfx_nh_pressure: true 
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
@@ -23,7 +23,7 @@ y_elem: 2
 z_elem: 30 
 z_max: 1500 
 z_stretch: false
-dt: 10secs 
+dt: 6secs 
 t_end: 4hours 
 dt_save_to_disk: 2mins
 toml: [toml/diagnostic_edmfx_box.toml]
