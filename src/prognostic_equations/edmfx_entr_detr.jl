@@ -112,7 +112,8 @@ function entrainment(
     turbconv_params = CAP.turbconv_params(params)
     a_min = TCP.min_area(turbconv_params)
     min_area_limiter =
-        min_area_limiter_scale * exp(-min_area_limiter_power * (ᶜaʲ - a_min))
+        min_area_limiter_scale *
+        exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
     entr = min(
         entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter,
         1 / dt,
@@ -144,7 +145,8 @@ function entrainment(
     turbconv_params = CAP.turbconv_params(params)
     a_min = TCP.min_area(turbconv_params)
     min_area_limiter =
-        min_area_limiter_scale * exp(-min_area_limiter_power * (ᶜaʲ - a_min))
+        min_area_limiter_scale *
+        exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
     entr = min(
         entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter,
         1 / dt,
@@ -262,12 +264,13 @@ function detrainment(
     turbconv_params = CAP.turbconv_params(params)
     a_max = TCP.max_area(turbconv_params)
     max_area_limiter =
-        max_area_limiter_scale * exp(-max_area_limiter_power * (a_max - ᶜaʲ))
+        max_area_limiter_scale *
+        exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
     detr = min(
         detr_inv_tau +
         detr_coeff * abs(ᶜwʲ) +
         detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs((ᶜwʲ - ᶜw⁰))) +
+        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) +
         max_area_limiter,
         1 / dt,
     )
@@ -299,12 +302,13 @@ function detrainment(
     turbconv_params = CAP.turbconv_params(params)
     a_max = TCP.max_area(turbconv_params)
     max_area_limiter =
-        max_area_limiter_scale * exp(-max_area_limiter_power * (a_max - ᶜaʲ))
+        max_area_limiter_scale *
+        exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
     detr = min(
         detr_inv_tau +
         detr_coeff * abs(ᶜwʲ) +
         detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs((ᶜwʲ - ᶜw⁰))) +
+        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) +
         max_area_limiter,
         1 / dt,
     )
