@@ -35,8 +35,10 @@ function radiation_model_cache(
     data_loader,
 )
     context = ClimaComms.context(axes(Y.c))
+    device = context.device
     (; idealized_h2o, idealized_insolation, idealized_clouds) = radiation_mode
     FT = Spaces.undertype(axes(Y.c))
+    DA = ClimaComms.array_type(device){FT}
     rrtmgp_params = CAP.rrtmgp_params(params)
     if idealized_h2o && radiation_mode isa RRTMGPI.GrayRadiation
         error("idealized_h2o can't be used with $radiation_mode")
@@ -82,8 +84,16 @@ function radiation_model_cache(
                 input_center_pressure,
                 input_center_volume_mixing_ratio_o3,
             )
-            ᶜvolume_mixing_ratio_o3_field =
-                @. FT(pressure2ozone(default_cache.ᶜp))
+            if device isa ClimaComms.CUDADevice
+                fv = Fields.field_values(default_cache.ᶜp)
+                fld_array = DA(pressure2ozone.(Array(parent(fv))))
+                data = DataLayouts.rebuild(fv, fld_array)
+                ᶜvolume_mixing_ratio_o3_field =
+                    Fields.Field(data, axes(default_cache.ᶜp))
+            else
+                ᶜvolume_mixing_ratio_o3_field =
+                    @. FT(pressure2ozone(default_cache.ᶜp))
+            end
             center_volume_mixing_ratio_o3 =
                 RRTMGPI.field2array(ᶜvolume_mixing_ratio_o3_field)
 
