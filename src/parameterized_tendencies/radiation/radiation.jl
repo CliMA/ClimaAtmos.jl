@@ -4,7 +4,6 @@
 
 import ClimaComms
 import ClimaCore: Device, DataLayouts, Geometry, Spaces, Fields, Operators
-import OrdinaryDiffEq as ODE
 import Insolation
 import Thermodynamics as TD
 import .Parameters as CAP

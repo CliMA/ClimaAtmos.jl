@@ -53,3 +53,9 @@ ClimaAtmos.InitialConditions.Soares
 ```@docs
 ClimaAtmos.ImplicitEquationJacobian
 ```
+
+### Helper
+
+```@docs
+ClimaAtmos.InitialConditions.ColumnInterpolatableField
+```

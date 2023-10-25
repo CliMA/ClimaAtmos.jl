@@ -1,5 +1,4 @@
 import ClimaTimeSteppers as CTS
-import OrdinaryDiffEq as ODE
 
 struct EfficiencyStats{TS <: Tuple, WT}
     tspan::TS

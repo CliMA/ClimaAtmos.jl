@@ -49,7 +49,7 @@ NVTX.@annotate function turb_conv_affect_filter!(integrator)
         TC.affect_filter!(edmf, grid, state, tc_params, t)
     end
 
-    # We're lying to OrdinaryDiffEq.jl, in order to avoid
+    # We're lying to SciMLBase.jl, in order to avoid
     # paying for an additional `∑tendencies!` call, which is required
     # to support supplying a continuous representation of the
     # solution.
