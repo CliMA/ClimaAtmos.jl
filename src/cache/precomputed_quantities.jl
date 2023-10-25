@@ -154,7 +154,7 @@ end
 """
     set_velocity_at_top!(Y, turbconv_model)
 
-Modifies `Y.f.u₃` so that `u₃` is 0 at the model top. 
+Modifies `Y.f.u₃` so that `u₃` is 0 at the model top.
 """
 function set_velocity_at_top!(Y, turbconv_model)
     top_u₃ = Fields.level(
@@ -340,7 +340,9 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     SurfaceConditions.update_surface_conditions!(Y, p, t)
 
     if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     end
 
     if turbconv_model isa DiagnosticEDMFX
