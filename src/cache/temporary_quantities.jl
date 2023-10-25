@@ -1,16 +1,5 @@
-using LinearAlgebra: ×, norm, dot
-
-import .Parameters as CAP
-using ClimaCore: Operators, Fields, Limiters, Geometry, Spaces
-
-import ClimaComms
-using ClimaCore.Geometry: ⊗
-
-import Thermodynamics as TD
-
+using ClimaCore: Fields
 using ClimaCore.Utilities: half
-
-import ClimaCore.Fields: ColumnField
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
