@@ -12,16 +12,6 @@ using ClimaCore.Utilities: half
 
 import ClimaCore.Fields: ColumnField
 
-# Functions on which the model depends:
-# CAP.R_d(params)         # dry specific gas constant
-# CAP.kappa_d(params)     # dry adiabatic exponent
-# CAP.T_triple(params)    # triple point temperature of water
-# CAP.MSLP(params)        # reference pressure
-# CAP.grav(params)        # gravitational acceleration
-# CAP.Omega(params)       # rotation rate (only used if space is spherical)
-# CAP.cv_d(params)        # dry isochoric specific heat capacity
-# The value of cv_d is implied by the values of R_d and kappa_d
-
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 
