@@ -84,10 +84,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? p.ᶜtke⁰ : nothing
-    ᶜa_scalar = p.ᶜtemp_scalar
-    ᶜω³ = p.ᶜtemp_CT3
-    ᶠω¹² = p.ᶠtemp_CT12
-    ᶠω¹²ʲs = p.ᶠtemp_CT12ʲs
+    ᶜa_scalar = p.scratch.ᶜtemp_scalar
+    ᶜω³ = p.scratch.ᶜtemp_CT3
+    ᶠω¹² = p.scratch.ᶠtemp_CT12
+    ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)

@@ -1,26 +1,5 @@
-using LinearAlgebra: ×, norm, dot
-
-import .Parameters as CAP
-using ClimaCore: Operators, Fields, Limiters, Geometry, Spaces
-
-import ClimaComms
-using ClimaCore.Geometry: ⊗
-
-import Thermodynamics as TD
-
+using ClimaCore: Fields
 using ClimaCore.Utilities: half
-
-import ClimaCore.Fields: ColumnField
-
-# Functions on which the model depends:
-# CAP.R_d(params)         # dry specific gas constant
-# CAP.kappa_d(params)     # dry adiabatic exponent
-# CAP.T_triple(params)    # triple point temperature of water
-# CAP.MSLP(params)        # reference pressure
-# CAP.grav(params)        # gravitational acceleration
-# CAP.Omega(params)       # rotation rate (only used if space is spherical)
-# CAP.cv_d(params)        # dry isochoric specific heat capacity
-# The value of cv_d is implied by the values of R_d and kappa_d
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
@@ -29,7 +8,8 @@ import ClimaCore.Fields: ColumnField
 # but cannot be computed on the fly. Unlike the precomputed quantities, these
 # can be modified at any point, so they should never be assumed to be unchanged
 # between function calls.
-function temporary_quantities(atmos, center_space, face_space)
+function temporary_quantities(Y, atmos)
+    center_space, face_space = axes(Y.c), axes(Y.f)
     FT = Spaces.undertype(center_space)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     return (;

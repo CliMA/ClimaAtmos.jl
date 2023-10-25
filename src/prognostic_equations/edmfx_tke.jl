@@ -23,7 +23,7 @@ function edmfx_tke_tendency!(
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p
     ᶠgradᵥ = Operators.GradientC2F()
 
-    ᶠρaK_u = p.ᶠtemp_scalar
+    ᶠρaK_u = p.scratch.ᶠtemp_scalar
     if use_prognostic_tke(turbconv_model)
         # turbulent transport (diffusive flux)
         @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])

@@ -24,8 +24,8 @@ function edmfx_sgs_mass_flux_tendency!(
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
-        ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
-        ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
+        ᶠu³_diff_colidx = p.scratch.ᶠtemp_CT3[colidx]
+        ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.scratch.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
             @. ᶜh_tot_diff_colidx =
@@ -109,8 +109,8 @@ function edmfx_sgs_mass_flux_tendency!(
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
-        ᶠu³_diff_colidx = p.ᶠtemp_CT3[colidx]
-        ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.ᶜtemp_scalar[colidx]
+        ᶠu³_diff_colidx = p.scratch.ᶠtemp_CT3[colidx]
+        ᶜh_tot_diff_colidx = ᶜq_tot_diff_colidx = p.scratch.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
             @. ᶜh_tot_diff_colidx = ᶜh_totʲs.:($$j)[colidx] - ᶜh_tot[colidx]
@@ -169,7 +169,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_sgs_diffusive_flux
         # energy
-        ᶠρaK_h = p.ᶠtemp_scalar
+        ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_h[colidx])
 
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
@@ -192,9 +192,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         # momentum
-        ᶠρaK_u = p.ᶠtemp_scalar
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_u[colidx])
-        ᶠstrain_rate = p.ᶠtemp_UVWxUVW
+        ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu⁰[colidx])
         @. Yₜ.c.uₕ[colidx] -= C12(
             ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) / Y.c.ρ[colidx],
@@ -235,7 +235,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_sgs_diffusive_flux
         # energy
-        ᶠρaK_h = p.ᶠtemp_scalar
+        ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_h[colidx])
 
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
@@ -259,9 +259,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         # momentum
-        ᶠρaK_u = p.ᶠtemp_scalar
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
-        ᶠstrain_rate = p.ᶠtemp_UVWxUVW
+        ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu[colidx])
         @. Yₜ.c.uₕ[colidx] -= C12(
             ᶜdivᵥ(-(2 * ᶠρaK_u[colidx] * ᶠstrain_rate[colidx])) / Y.c.ρ[colidx],

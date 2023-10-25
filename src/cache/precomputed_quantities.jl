@@ -302,7 +302,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, energy_form, moisture_model)
     (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜΦ) = p
-    ᶠuₕ³ = p.ᶠtemp_CT3
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
 
     @. ᶜspecific = specific_gs(Y.c)
     set_ᶠuₕ³!(ᶠuₕ³, Y)
@@ -364,8 +364,8 @@ values of the first updraft.
 function output_prognostic_sgs_quantities(Y, p, t)
     (; turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜp, ᶜρa⁰, ᶜρ⁰, ᶜΦ, ᶜtsʲs) = p
-    ᶠuₕ³ = p.ᶠtemp_CT3
+    (; ᶜρa⁰, ᶜρ⁰, ᶜtsʲs) = p
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     set_ᶠuₕ³!(ᶠuₕ³, Y)
     (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) = similar.((p.ᶠu₃⁰, p.ᶜu⁰, p.ᶠu³⁰, p.ᶜK⁰))
     set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
