@@ -32,6 +32,7 @@ function default_cache(
     numerics,
     simulation,
     surface_setup,
+    dt,
 )
 
     FT = eltype(params)
@@ -74,6 +75,7 @@ function default_cache(
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
     default_cache = (;
+        dt,
         is_init = Ref(true),
         simulation,
         atmos,
@@ -109,7 +111,6 @@ function additional_cache(
     parsed_args,
     params,
     atmos,
-    dt,
     initial_condition,
 )
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
@@ -146,7 +147,6 @@ function additional_cache(
             CAP.planet_radius(params),
         ),
         edmfx_nh_pressure_cache(Y, atmos.turbconv_model),
-        (; Δt = dt),
         turbconv_cache(
             Y,
             turbconv_model,

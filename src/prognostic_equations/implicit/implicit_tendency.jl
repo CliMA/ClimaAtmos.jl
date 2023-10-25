@@ -62,7 +62,7 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; energy_upwinding, tracer_upwinding, density_upwinding) = p.atmos.numerics
     (; turbconv_model, rayleigh_sponge) = p.atmos
-    (; dt) = p.simulation
+    (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜspecific, ᶠu³, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, ᶜtemp_scalar) = p

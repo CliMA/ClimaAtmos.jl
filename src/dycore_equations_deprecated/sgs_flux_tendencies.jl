@@ -157,7 +157,7 @@ end
 # TODO: Split update_aux! and other functions into implicit and explicit parts.
 
 function implicit_sgs_flux_tendency!(Yₜ, Y, p, t, colidx, ::TC.EDMFModel)
-    (; edmf_cache, Δt) = p
+    (; edmf_cache, dt) = p
     (; edmf, param_set, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
@@ -225,7 +225,7 @@ function explicit_sgs_flux_tendency!(
     state::T,
     grid,
 ) where {T}
-    (; edmf_cache, Δt) = p
+    (; edmf_cache, dt) = p
     (; edmf, param_set, Y_filtered) = edmf_cache
     (; imex_edmf_turbconv, imex_edmf_gm, test_consistency) = edmf_cache
     thermo_params = CAP.thermodynamics_params(param_set)
@@ -239,7 +239,7 @@ function explicit_sgs_flux_tendency!(
 
     TC.affect_filter!(edmf, grid, state, tc_params, t)
 
-    TC.update_aux!(edmf, grid, state, tc_params, t, Δt)
+    TC.update_aux!(edmf, grid, state, tc_params, t, dt)
 
     # Ensure that, when a tendency is not computed with an IMEX formulation,
     # both its implicit and its explicit components are computed here.
@@ -258,6 +258,6 @@ function explicit_sgs_flux_tendency!(
     Yₜ_turbconv = TC.field_vector_column(Yₜ, colidx)
     Y_filtered_turbconv = TC.field_vector_column(Y_filtered, colidx)
     Y_turbconv = TC.field_vector_column(Y, colidx)
-    Yₜ_turbconv .+= (Y_filtered_turbconv .- Y_turbconv) ./ Δt
+    Yₜ_turbconv .+= (Y_filtered_turbconv .- Y_turbconv) ./ dt
     return nothing
 end

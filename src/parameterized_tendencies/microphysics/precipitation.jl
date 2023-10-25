@@ -192,7 +192,7 @@ function compute_precipitation_cache!(
     (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno) = p
     (; ᶜS_q_rai_evap, ᶜS_q_sno_melt, ᶜS_q_sno_sub_dep) = p
     (; ᶜts, ᶜΦ, ᶜT, params) = p
-    (; dt) = p.simulation
+    (; dt) = p
 
     FT = Spaces.undertype(axes(Y.c))
 

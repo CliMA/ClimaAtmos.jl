@@ -448,9 +448,8 @@ thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
 
-function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
+function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx, dt)
     FT = eltype(params)
-    (; dt) = simulation
 
     callbacks = ()
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
@@ -524,6 +523,7 @@ function get_cache(
     simulation,
     initial_condition,
     surface_setup,
+    dt,
 )
     _default_cache = default_cache(
         Y,
@@ -533,6 +533,7 @@ function get_cache(
         numerics,
         simulation,
         surface_setup,
+        dt,
     )
     merge(
         _default_cache,
@@ -542,13 +543,12 @@ function get_cache(
             parsed_args,
             params,
             atmos,
-            simulation.dt,
             initial_condition,
         ),
     )
 end
 
-function get_simulation(config::AtmosConfig)
+function get_simulation(config::AtmosConfig, dt)
     (; parsed_args) = config
     FT = eltype(config)
 
@@ -566,11 +566,10 @@ function get_simulation(config::AtmosConfig)
         output_dir,
         restart = haskey(ENV, "RESTART_FILE"),
         job_id,
-        dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
         t_end = FT(time_to_seconds(parsed_args["t_end"])),
     )
-    n_steps = floor(Int, sim.t_end / sim.dt)
+    n_steps = floor(Int, sim.t_end / dt)
     @info(
         "Time info:",
         dt = parsed_args["dt"],
@@ -677,8 +676,8 @@ function get_diagnostics(parsed_args, atmos_model)
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, simulation) = p
-    (; dt) = simulation
+    (; atmos) = p
+    (; dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
     s = @timed_str begin
@@ -763,11 +762,15 @@ function get_integrator(config::AtmosConfig)
 
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
-    simulation = get_simulation(config)
+    FT = eltype(config)
+    dt = FT(time_to_seconds(config.parsed_args["dt"]))
+    simulation = get_simulation(config, dt)
+
     if config.parsed_args["log_params"]
         filepath = joinpath(simulation.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
     end
+
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
@@ -799,6 +802,7 @@ function get_integrator(config::AtmosConfig)
             simulation,
             initial_condition,
             surface_setup,
+            dt,
         )
     end
     @info "Allocating cache (p): $s"
@@ -807,7 +811,6 @@ function get_integrator(config::AtmosConfig)
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
 
-    FT = Spaces.undertype(axes(Y.c))
     s = @timed_str begin
         ode_algo = ode_configuration(FT, config.parsed_args)
     end
@@ -820,6 +823,7 @@ function get_integrator(config::AtmosConfig)
             atmos,
             params,
             config.comms_ctx,
+            dt,
         )
     end
     @info "get_callbacks: $s"
@@ -833,9 +837,8 @@ function get_integrator(config::AtmosConfig)
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
     # those periods that depended on the timestep
-    diagnostics_iterations = [
-        CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics
-    ]
+    diagnostics_iterations =
+        [CAD.ScheduledDiagnosticIterations(d, dt) for d in diagnostics]
 
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
@@ -883,8 +886,7 @@ function get_integrator(config::AtmosConfig)
             SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
-    steps_cycle_non_diag =
-        n_steps_per_cycle_per_cb(all_callbacks, simulation.dt)
+    steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, dt)
     steps_cycle_diag =
         n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
     steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])

@@ -24,13 +24,13 @@ function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
     if !isnothing(p.radiation_model)
-        (; ᶠradiation_flux, net_energy_flux_toa, net_energy_flux_sfc, Δt) = p
+        (; ᶠradiation_flux, net_energy_flux_toa, net_energy_flux_sfc, dt) = p
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
-            Δt
+            dt
         net_energy_flux_sfc[] +=
-            horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+            horizontal_integral_at_boundary(ᶠradiation_flux, half) * dt
     end
     return nothing
 end

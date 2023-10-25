@@ -162,7 +162,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     @assert !(moisture_model isa DryModel)
 
     (; params) = p
-    (; dt) = p.simulation
+    (; dt) = p
     thermo_params = CAP.thermodynamics_params(params)
 
     n = n_mass_flux_subdomains(turbconv_model)

@@ -250,7 +250,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
     (; params) = p
-    (; dt) = p.simulation
+    (; dt) = p
     (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p
     (; q_tot) = p.ᶜspecific
     (; buoyancy_flux) = p.sfc_conditions
@@ -683,7 +683,7 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
-    (; dt) = p.simulation
+    (; dt) = p
     (; ᶜp, ᶜu, ᶜts) = p
     (; q_tot) = p.ᶜspecific
     (; ustar, obukhov_length) = p.sfc_conditions

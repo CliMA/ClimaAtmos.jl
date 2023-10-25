@@ -19,7 +19,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p
     (; ᶠu³ʲs) = p
     (; ᶜρa⁰, ᶠu³⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
     if p.atmos.edmfx_sgs_mass_flux
@@ -103,7 +103,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜu, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
     (; ᶜK_u, ᶜK_h) = p
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -229,7 +229,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; ᶠu³, ᶜu, ᶜh_tot, ᶜspecific) = p
     (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
     (; ᶜK_u, ᶜK_h) = p
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠgradᵥ = Operators.GradientC2F()
 
