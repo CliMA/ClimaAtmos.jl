@@ -626,6 +626,12 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; dt) = simulation
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
+    limiter =
+        isnothing(atmos.numerics.limiter) ? nothing :
+        atmos.numerics.limiter(similar(Y.c, eltype(p.params)))
+
+    limiters_func! = generate_limiters_func!(limiter)
+
     s = @timed_str begin
         func = if parsed_args["split_ode"]
             implicit_func = SciMLBase.ODEFunction(
