@@ -64,7 +64,6 @@ allocs_limit["flame_perf_target_tracers"] = 204288
 allocs_limit["flame_perf_target_edmfx"] = 253440
 allocs_limit["flame_perf_diagnostics"] = 3016328
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 920960
-allocs_limit["flame_perf_target_edmf"] = 6386476224
 allocs_limit["flame_perf_target_threaded"] = 5857808
 allocs_limit["flame_perf_target_callbacks"] = 46407936
 allocs_limit["flame_perf_gw"] = 4844555632

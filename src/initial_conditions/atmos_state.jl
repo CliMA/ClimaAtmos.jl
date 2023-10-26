@@ -114,21 +114,6 @@ precip_variables(ls, _, ::PerfExperimental) =
 # or SGS type configurations (initial TKE needed), so we do not need to assert
 # that there is no TKE when there is no turbconv_model.
 turbconv_center_variables(ls, ::Nothing, gs_vars) = (;)
-function turbconv_center_variables(ls, turbconv_model::TC.EDMFModel, gs_vars)
-    n = TC.n_updrafts(turbconv_model)
-    a_draft = max(ls.turbconv_state.draft_area, n * turbconv_model.minimum_area)
-    ρa = ls.ρ * a_draft / n
-    ρae_tot =
-        ρa * (
-            TD.internal_energy(ls.thermo_params, ls.thermo_state) +
-            norm_sqr(ls.velocity) / 2 +
-            CAP.grav(ls.params) * ls.geometry.coordinates.z
-        )
-    ρaq_tot = ρa * TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    en = (; ρatke = (ls.ρ - n * ρa) * ls.turbconv_state.tke)
-    up = ntuple(_ -> (; ρarea = ρa, ρae_tot, ρaq_tot), Val(n))
-    return (; turbconv = (; en, up))
-end
 
 function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -150,14 +135,6 @@ function turbconv_center_variables(ls, turbconv_model::DiagnosticEDMFX, gs_vars)
 end
 
 turbconv_face_variables(ls, ::Nothing) = (;)
-turbconv_face_variables(ls, turbconv_model::TC.EDMFModel) = (;
-    turbconv = (;
-        up = ntuple(
-            _ -> (; w = C3(zero(eltype(ls)))),
-            Val(TC.n_updrafts(turbconv_model)),
-        )
-    )
-)
 turbconv_face_variables(ls, turbconv_model::PrognosticEDMFX) = (;
     sgsʲs = ntuple(
         _ -> (; u₃ = C3(ls.turbconv_state.velocity, ls.geometry)),

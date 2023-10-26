@@ -103,15 +103,7 @@ end
 
 
 # TODO: flip order so that NamedTuple() is fallback.
-function additional_cache(
-    Y,
-    default_cache,
-    parsed_args,
-    params,
-    atmos,
-    dt,
-    initial_condition,
-)
+function additional_cache(Y, default_cache, params, atmos, dt)
     (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
@@ -147,13 +139,6 @@ function additional_cache(
         ),
         edmfx_nh_pressure_cache(Y, atmos.turbconv_model),
         (; Δt = dt),
-        turbconv_cache(
-            Y,
-            turbconv_model,
-            atmos,
-            params,
-            parsed_args,
-            initial_condition,
-        ),
+        (; turbconv_model),
     )
 end

@@ -57,13 +57,7 @@ function get_atmos(config::AtmosConfig, params)
         edmfx_nh_pressure,
         precip_model,
         forcing_type,
-        turbconv_model = get_turbconv_model(
-            FT,
-            moisture_model,
-            precip_model,
-            parsed_args,
-            turbconv_params,
-        ),
+        turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
             model_config,
@@ -295,51 +289,44 @@ function get_state_restart(comms_ctx)
 end
 
 function get_initial_condition(parsed_args)
-    if isnothing(parsed_args["turbconv_case"])
-        if parsed_args["initial_condition"] in [
-            "DryBaroclinicWave",
-            "MoistBaroclinicWave",
-            "DecayingProfile",
-            "MoistBaroclinicWaveWithEDMF",
-            "MoistAdiabaticProfileEDMFX",
-        ]
-            return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-                parsed_args["perturb_initstate"],
-            )
-        elseif parsed_args["initial_condition"] in [
-            "Nieuwstadt",
-            "GABLS",
-            "GATE_III",
-            "Soares",
-            "Bomex",
-            "LifeCycleTan2018",
-            "ARM_SGP",
-            "DYCOMS_RF01",
-            "DYCOMS_RF02",
-            "Rico",
-            "TRMM_LBA",
-        ]
-            return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-                parsed_args["prognostic_tke"],
-            )
-        elseif parsed_args["initial_condition"] in [
-            "IsothermalProfile",
-            "AgnesiHProfile",
-            "DryDensityCurrentProfile",
-            "RisingThermalBubbleProfile",
-            "ScharProfile",
-        ]
-            return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
-        else
-            error(
-                "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
-            )
-        end
+    if parsed_args["initial_condition"] in [
+        "DryBaroclinicWave",
+        "MoistBaroclinicWave",
+        "DecayingProfile",
+        "MoistBaroclinicWaveWithEDMF",
+        "MoistAdiabaticProfileEDMFX",
+    ]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+            parsed_args["perturb_initstate"],
+        )
+    elseif parsed_args["initial_condition"] in [
+        "Nieuwstadt",
+        "GABLS",
+        "GATE_III",
+        "Soares",
+        "Bomex",
+        "LifeCycleTan2018",
+        "ARM_SGP",
+        "DYCOMS_RF01",
+        "DYCOMS_RF02",
+        "Rico",
+        "TRMM_LBA",
+    ]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+            parsed_args["prognostic_tke"],
+        )
+    elseif parsed_args["initial_condition"] in [
+        "IsothermalProfile",
+        "AgnesiHProfile",
+        "DryDensityCurrentProfile",
+        "RisingThermalBubbleProfile",
+        "ScharProfile",
+    ]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     else
-        # turbconv_case is also used for surface fluxes for TRMM and ARM cases.
-        # I don't want to change that right now, so I'm leaving the
-        # EDMF logic as is. This should be obsolete soon.
-        return getproperty(ICs, Symbol(parsed_args["turbconv_case"]))()
+        error(
+            "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
+        )
     end
 end
 
@@ -503,13 +490,6 @@ function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end
 
-    if atmos.turbconv_model isa TC.EDMFModel
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(turb_conv_affect_filter!; skip_first = true),
-        )
-    end
-
     return callbacks
 end
 
@@ -535,15 +515,7 @@ function get_cache(
     )
     merge(
         _default_cache,
-        additional_cache(
-            Y,
-            _default_cache,
-            parsed_args,
-            params,
-            atmos,
-            simulation.dt,
-            initial_condition,
-        ),
+        additional_cache(Y, _default_cache, params, atmos, simulation.dt),
     )
 end
 

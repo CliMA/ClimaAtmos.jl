@@ -333,26 +333,12 @@ function get_edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     return EDMFCoriolis(prof_u, prof_v, coriolis_param)
 end
 
-function get_turbconv_model(
-    FT,
-    moisture_model,
-    precip_model,
-    parsed_args,
-    turbconv_params,
-)
+function get_turbconv_model(FT, parsed_args, turbconv_params)
     turbconv = parsed_args["turbconv"]
     @assert turbconv in
-            (nothing, "edmf", "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
+            (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
 
-    return if turbconv == "edmf"
-        TC.EDMFModel(
-            FT,
-            moisture_model,
-            precip_model,
-            parsed_args,
-            turbconv_params,
-        )
-    elseif turbconv == "prognostic_edmfx"
+    return if turbconv == "prognostic_edmfx"
         N = turbconv_params.updraft_number
         TKE = parsed_args["prognostic_tke"]
         PrognosticEDMFX{N, TKE}(turbconv_params.min_area)

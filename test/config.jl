@@ -21,9 +21,9 @@ include(joinpath("..", "perf", "common.jl"))
     @test config.parsed_args["regression_test"] == true
 
     # Test that config_dict overrides `default_perf`
-    config_dict = Dict("dt" => "50secs", "turbconv_case" => "GABLS")
+    config_dict = Dict("dt" => "50secs", "initial_condition" => "Bomex")
     config = AtmosCoveragePerfConfig(config_dict)
     @test config.parsed_args["dt"] == "50secs"
-    @test config.parsed_args["turbconv_case"] == "GABLS"
+    @test config.parsed_args["initial_condition"] == "Bomex"
     @test config.parsed_args["regression_test"] == false
 end
