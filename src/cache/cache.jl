@@ -1,17 +1,3 @@
-using LinearAlgebra: ×, norm, dot, Adjoint
-
-import .Parameters as CAP
-using ClimaCore: Operators, Fields, Limiters, Geometry, Spaces
-
-import ClimaComms
-using ClimaCore.Geometry: ⊗
-
-import Thermodynamics as TD
-
-using ClimaCore.Utilities: half
-
-import ClimaCore.Fields: ColumnField
-
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
