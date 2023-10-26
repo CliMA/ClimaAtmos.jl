@@ -43,10 +43,6 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         !do_dss ? (;) :
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
 
-    limiter =
-        isnothing(atmos.numerics.limiter) ? nothing :
-        atmos.numerics.limiter(similar(Y.c, FT))
-
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
@@ -55,7 +51,6 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         simulation,
         atmos,
         sfc_setup = surface_setup(params),
-        limiter,
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜρ_ref,

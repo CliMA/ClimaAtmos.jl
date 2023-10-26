@@ -20,6 +20,12 @@ p = integrator.p;
 t = integrator.t;
 Yₜ = similar(Y);
 ref_Y = similar(Y);
+
+limiter =
+    isnothing(p.atmos.numerics.limiter) ? nothing :
+    p.atmos.numerics.limiter(similar(Y.c, eltype(p.params)))
+limiters_func! = CA.generate_limiters_func!(limiter)
+
 #! format: off
 n["step!"]                                       = @n_failures SciMLBase.step!(integrator);
 n["limited_tendency!"]                           = @n_failures CA.limited_tendency!(Yₜ, Y, p, t);
@@ -33,7 +39,7 @@ n["additional_tendency!"]                        = @n_failures CA.additional_ten
 n["vertical_diffusion_boundary_layer_tendency!"] = @n_failures CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t);
 n["implicit_tendency!"]                          = @n_failures CA.implicit_tendency!(Yₜ, Y, p, t);
 n["set_precomputed_quantities!"]                 = @n_failures CA.set_precomputed_quantities!(Y, p, t);
-n["limiters_func!"]                              = @n_failures CA.limiters_func!(Y, p, t, ref_Y);
+n["limiters_func!"]                              = @n_failures limiters_func!(Y, p, t, ref_Y);
 n["update_surface_conditions!"]                  = @n_failures CA.SurfaceConditions.update_surface_conditions!(Y, p, t);
 n["dss!"]                                        = @n_failures CA.dss!(Y, p, t);
 n["fill_with_nans!"]                             = @n_failures CA.fill_with_nans!(p);
