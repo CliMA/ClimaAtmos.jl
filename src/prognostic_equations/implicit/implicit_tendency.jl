@@ -108,7 +108,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         ) / ᶠinterp(Y.c.ρ[colidx])
 
     if rayleigh_sponge isa RayleighSponge
-        (; ᶠβ_rayleigh_w) = p
+        (; ᶠβ_rayleigh_w) = p.rayleigh_sponge
         @. Yₜ.f.u₃[colidx] -= ᶠβ_rayleigh_w[colidx] * Y.f.u₃[colidx]
         if turbconv_model isa PrognosticEDMFX
             for j in 1:n

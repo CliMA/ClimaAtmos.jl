@@ -221,11 +221,11 @@ function Wfact!(A, Y, p, dtγ, t)
             p.params,
             p.atmos,
             (energy_form isa TotalEnergy ? (; p.ᶜh_tot) : (;))...,
-            (rayleigh_sponge isa RayleighSponge ? (; p.ᶠβ_rayleigh_w) : (;))...,
+            (
+                rayleigh_sponge isa RayleighSponge ?
+                (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
+            )...,
         )
-
-        (; energy_upwinding, tracer_upwinding, density_upwinding) =
-            p.atmos.numerics
 
         # Convert dtγ from a Float64 to an FT.
         FT = Spaces.undertype(axes(Y.c))

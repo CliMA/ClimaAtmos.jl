@@ -4,10 +4,13 @@
 
 import ClimaCore.Fields as Fields
 
-rayleigh_sponge_cache(::Nothing, Y) = NamedTuple()
+rayleigh_sponge_cache(Y, atmos::AtmosModel) =
+    rayleigh_sponge_cache(Y, atmos.rayleigh_sponge)
+
+rayleigh_sponge_cache(Y, ::Nothing) = (;)
 rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
-function rayleigh_sponge_cache(rs::RayleighSponge, Y)
+function rayleigh_sponge_cache(Y, rs::RayleighSponge)
     FT = Spaces.undertype(axes(Y.c))
     (; zd, α_uₕ, α_w) = rs
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -21,6 +24,6 @@ function rayleigh_sponge_cache(rs::RayleighSponge, Y)
 end
 
 function rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, ::RayleighSponge)
-    (; ᶜβ_rayleigh_uₕ) = p
+    (; ᶜβ_rayleigh_uₕ) = p.rayleigh_sponge
     @. Yₜ.c.uₕ[colidx] -= ᶜβ_rayleigh_uₕ[colidx] * Y.c.uₕ[colidx]
 end
