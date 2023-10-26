@@ -5,11 +5,13 @@
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
+forcing_cache(Y, atmos::AtmosModel) = forcing_cache(Y, atmos.forcing_type)
+
 #####
 ##### No forcing
 #####
 
-forcing_cache(Y, forcing_type::Nothing) = (; forcing_type)
+forcing_cache(Y, forcing_type::Nothing) = (;)
 forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 #####
@@ -19,7 +21,6 @@ forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 function forcing_cache(Y, forcing_type::HeldSuarezForcing)
     FT = Spaces.undertype(axes(Y.c))
     return (;
-        forcing_type,
         ᶜσ = similar(Y.c, FT),
         ᶜheight_factor = similar(Y.c, FT),
         ᶜΔρT = similar(Y.c, FT),
@@ -28,7 +29,8 @@ function forcing_cache(Y, forcing_type::HeldSuarezForcing)
 end
 
 function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
-    (; sfc_conditions, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p
+    (; sfc_conditions, ᶜp, params) = p
+    (; ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ) = p.forcing
 
     # TODO: Don't need to enforce FT here, it should be done at param creation.
     FT = Spaces.undertype(axes(Y.c))
