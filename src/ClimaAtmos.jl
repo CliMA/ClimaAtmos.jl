@@ -11,7 +11,6 @@ include(joinpath("solver", "types.jl"))
 include(joinpath("solver", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
-include(joinpath("utils", "classify_case.jl"))
 include(joinpath("topography", "topography.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 

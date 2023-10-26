@@ -29,6 +29,8 @@ import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 using ClimaCoreMakie, CairoMakie
+include(joinpath(pkgdir(CA), "post_processing", "common_utils.jl"))
+
 include(joinpath(pkgdir(CA), "post_processing", "contours_and_profiles.jl"))
 include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
 include(
@@ -57,7 +59,7 @@ end
 CA.verify_callbacks(sol.t)
 
 if CA.is_distributed(config.comms_ctx)
-    CA.export_scaling_file(
+    export_scaling_file(
         sol,
         simulation.output_dir,
         walltime,
@@ -71,9 +73,9 @@ if !CA.is_distributed(config.comms_ctx) &&
    !is_edmfx &&
    !(atmos.model_config isa CA.SphericalModel)
     ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if CA.is_column_without_edmfx(config.parsed_args)
+    if is_column_without_edmfx(config.parsed_args)
         custom_postprocessing(sol, simulation.output_dir, p)
-    elseif CA.is_solid_body(config.parsed_args)
+    elseif is_solid_body(config.parsed_args)
         postprocessing(sol, simulation.output_dir, config.parsed_args["fps"])
     elseif atmos.model_config isa CA.BoxModel
         postprocessing_box(sol, simulation.output_dir)
