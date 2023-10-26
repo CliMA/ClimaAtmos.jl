@@ -543,9 +543,12 @@ compute_pr!(_, _, _, _, precip_model::T) where {T} =
 
 function compute_pr!(out, state, cache, time, precip_model::Microphysics0Moment)
     if isnothing(out)
-        return cache.col_integrated_rain .+ cache.col_integrated_snow
+        return cache.precipitation.col_integrated_rain .+
+               cache.precipitation.col_integrated_snow
     else
-        out .= cache.col_integrated_rain .+ cache.col_integrated_snow
+        out .=
+            cache.precipitation.col_integrated_rain .+
+            cache.precipitation.col_integrated_snow
     end
 end
 

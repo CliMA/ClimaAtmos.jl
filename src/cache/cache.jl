@@ -104,7 +104,7 @@ end
 
 # TODO: flip order so that NamedTuple() is fallback.
 function additional_cache(Y, default_cache, params, atmos, dt)
-    (; precip_model, forcing_type, radiation_mode, turbconv_model) = atmos
+    (; forcing_type, radiation_mode, turbconv_model) = atmos
 
     radiation_cache = if radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         radiation_model_cache(
@@ -122,8 +122,8 @@ function additional_cache(Y, default_cache, params, atmos, dt)
         (;
             rayleigh_sponge = rayleigh_sponge_cache(Y, atmos),
             viscous_sponge = viscous_sponge_cache(Y, atmos),
+            precipitation = precipitation_cache(Y, atmos),
         ),
-        precipitation_cache(Y, precip_model),
         subsidence_cache(Y, atmos.subsidence),
         large_scale_advection_cache(Y, atmos.ls_adv),
         edmf_coriolis_cache(Y, atmos.edmf_coriolis),

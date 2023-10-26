@@ -53,7 +53,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         )
         edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
-        precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
+        precipitation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.precip_model)
+
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
 
