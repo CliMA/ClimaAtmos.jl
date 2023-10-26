@@ -331,13 +331,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         (@name(c.ρq_rai), @name(ᶜspecific.q_rai), tracer_upwinding),
         (@name(c.ρq_sno), @name(ᶜspecific.q_sno), tracer_upwinding),
     )
-    available_tracer_info =
-        MatrixFields.unrolled_filter(tracer_info) do (ρχ_name, _, _)
-            MatrixFields.has_field(Y, ρχ_name)
-        end
-    MatrixFields.unrolled_foreach(
-        available_tracer_info,
-    ) do (ρχ_name, χ_name, upwinding)
+
+    MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name, upwinding)
+        MatrixFields.has_field(Y, ρχ_name) || continue
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
 
         ᶜχ = if χ_name == @name(ᶜ1)
