@@ -1,7 +1,7 @@
 """
     update_surface_conditions!(Y, p, t)
 
-Updates the value of `p.sfc_conditions` based on the current state `Y` and time
+Updates the value of `p.precomputed.sfc_conditions` based on the current state `Y` and time
 `t`. This function will only update the surface conditions if the surface_setup
 is not a PrescribedSurface.
 """
@@ -10,16 +10,13 @@ function update_surface_conditions!(Y, p, t)
     # Need to extract the field values so that we can do
     # a DataLayout broadcast rather than a Field broadcast
     # because we are mixing surface and interior fields
-    if isnothing(p.sfc_setup)
-        p.is_init[] && set_dummy_surface_conditions!(p)
-        return
-    end
     sfc_local_geometry_values = Fields.field_values(
         Fields.level(Fields.local_geometry_field(Y.f), Fields.half),
     )
     int_local_geometry_values =
         Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
-    (; ᶜts, ᶜu, sfc_conditions, params, sfc_setup, atmos) = p
+    (; ᶜts, ᶜu, sfc_conditions) = p.precomputed
+    (; params, sfc_setup, atmos) = p
     int_ts_values = Fields.field_values(Fields.level(ᶜts, 1))
     int_u_values = Fields.field_values(Fields.level(ᶜu, 1))
     int_z_values =
@@ -74,9 +71,10 @@ surface_state(
 # conditions, but without throwing an error during the computation of
 # precomputed quantities for diagnostic EDMF due to uninitialized surface
 # conditions.
-# TODO: Refactor the surface conditions API to avoid needing to do this. 
+# TODO: Refactor the surface conditions API to avoid needing to do this.
 function set_dummy_surface_conditions!(p)
-    (; sfc_conditions, params, atmos) = p
+    (; params, atmos) = p
+    (; sfc_conditions) = p.precomputed
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     @. sfc_conditions.ustar = FT(0.2)
@@ -101,13 +99,14 @@ end
 """
     set_surface_conditions!(p, surface_conditions, surface_ts)
 
-Sets `p.sfc_conditions` according to `surface_conditions` and `surface_ts`,
+Sets `p.precomputed.sfc_conditions` according to `surface_conditions` and `surface_ts`,
 which are `Field`s of `SurfaceFluxes.SurfaceFluxConditions` and `Thermodynamics.ThermodynamicState`s
 This functions needs to be called by the coupler whenever either field changes
 to ensure that the simulation is properly updated.
 """
 function set_surface_conditions!(p, surface_conditions, surface_ts)
-    (; sfc_conditions, params, atmos) = p
+    (; params, atmos) = p
+    (; sfc_conditions,) = p.precomputed
     (; ᶠtemp_scalar) = p.scratch
 
     FT = eltype(params)

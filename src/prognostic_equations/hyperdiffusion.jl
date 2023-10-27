@@ -64,14 +64,15 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss, ᶜp, ᶜspecific) = p
+    (; do_dss) = p
+    (; ᶜp, ᶜspecific) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜρa⁰, ᶜtke⁰) = p
+        (; ᶜρa⁰, ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²h_totʲs) = p.hyperdiff
     end
     if turbconv_model isa DiagnosticEDMFX
-        (; ᶜtke⁰) = p
+        (; ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
     if do_dss
@@ -79,7 +80,9 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 
     # Grid scale hyperdiffusion
-    @. ᶜ∇²u = C123(wgradₕ(divₕ(p.ᶜu))) - C123(wcurlₕ(C123(curlₕ(p.ᶜu))))
+    @. ᶜ∇²u =
+        C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
+        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
 
     if :θ in propertynames(ᶜspecific)
         @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
@@ -94,8 +97,8 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. ᶜ∇²uʲs.:($$j) =
-                C123(wgradₕ(divₕ(p.ᶜuʲs.:($$j)))) -
-                C123(wcurlₕ(C123(curlₕ(p.ᶜuʲs.:($$j)))))
+                C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
+                C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
             @. ᶜ∇²h_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).h_tot))
         end
     end
@@ -173,7 +176,8 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; κ₄) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; do_dss, ᶜspecific) = p
+    (; ᶜspecific) = p.precomputed
+    (; do_dss) = p
     (; ᶜ∇²specific_tracers) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff

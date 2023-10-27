@@ -40,8 +40,8 @@ function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
     ᶜ∇MSE_gm = p.subsidence.ᶜ∇MSE_gm[colidx]
     ᶜsubsidence = p.subsidence.ᶜsubsidence[colidx]
     ᶜ∇q_tot_gm = p.subsidence.ᶜ∇q_tot_gm[colidx]
-    ᶜK = p.ᶜK[colidx]
-    ᶜh_tot = p.ᶜh_tot[colidx]
+    ᶜK = p.precomputed.ᶜK[colidx]
+    ᶜh_tot = p.precomputed.ᶜh_tot[colidx]
     ᶜMSE_gm_toa = p.subsidence.ᶜMSE_gm_toa[colidx]
     ᶜq_tot_gm_toa = p.subsidence.ᶜq_tot_gm_toa[colidx]
 

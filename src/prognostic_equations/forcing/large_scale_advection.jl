@@ -27,7 +27,7 @@ function large_scale_advection_tendency!(
     (; prof_dTdt, prof_dqtdt) = ls_adv
 
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜts = p.ᶜts[colidx]
+    ᶜts = p.precomputed.ᶜts[colidx]
     ᶜdqtdt_hadv = p.large_scale_advection.ᶜdqtdt_hadv[colidx]
     ᶜdTdt_hadv = p.large_scale_advection.ᶜdTdt_hadv[colidx]
     z = Fields.coordinate_field(axes(ᶜdqtdt_hadv)).z

@@ -6,7 +6,7 @@ import .InitialConditions as ICs
 
 """
     set_discrete_hydrostatic_balanced_state!(Y, p)
-Modify the energy variable in state `Y` given Y and the cache `p` so that 
+Modify the energy variable in state `Y` given Y and the cache `p` so that
 `Y` is in discrete hydrostatic balance.
 """
 function set_discrete_hydrostatic_balanced_state!(Y, p)
@@ -14,20 +14,25 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
     ᶠgradᵥ_ᶜp = similar(Y.f.u₃)
     Fields.bycolumn(axes(Y.c.ρ)) do colidx
         set_discrete_hydrostatic_balanced_pressure!(
-            p.ᶜp,
+            p.precomputed.ᶜp,
             ᶠgradᵥ_ᶜp,
             Y.c.ρ,
-            p.ᶠgradᵥ_ᶜΦ,
+            p.core.ᶠgradᵥ_ᶜΦ,
             FT(CAP.MSLP(p.params)),
             colidx,
         )
     end
     thermo_params = CAP.thermodynamics_params(p.params)
     if p.atmos.moisture_model isa DryModel
-        @. p.ᶜts = TD.PhaseDry_ρp(thermo_params, Y.c.ρ, p.ᶜp)
+        @. p.precomputed.ᶜts =
+            TD.PhaseDry_ρp(thermo_params, Y.c.ρ, p.precomputed.ᶜp)
     elseif p.atmos.moisture_model isa EquilMoistModel
-        @. p.ᶜts =
-            TD.PhaseEquil_ρpq(thermo_params, Y.c.ρ, p.ᶜp, Y.c.ρq_tot / Y.c.ρ)
+        @. p.precomputed.ᶜts = TD.PhaseEquil_ρpq(
+            thermo_params,
+            Y.c.ρ,
+            p.precomputed.ᶜp,
+            Y.c.ρq_tot / Y.c.ρ,
+        )
     else
         error("Unsupported moisture model")
     end
@@ -39,7 +44,7 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
         ICs.energy_variables(
             ls(
                 p.params,
-                p.ᶜts,
+                p.precomputed.ᶜts,
                 ᶜlocal_geometry,
                 Geometry.UVWVector(Y.c.uₕ) +
                 Geometry.UVWVector(ᶜinterp(Y.f.u₃)),
@@ -51,7 +56,7 @@ end
 
 """
     set_discrete_hydrostatic_balanced_pressure!(ᶜp, ᶠgradᵥ_ᶜp, ᶜρ, ᶠgradᵥ_ᶜΦ, p1, colidx)
-Construct discrete hydrostatic balanced pressure `ᶜp` from density `ᶜρ`, 
+Construct discrete hydrostatic balanced pressure `ᶜp` from density `ᶜρ`,
 potential energy gradient `ᶠgradᵥ_ᶜΦ`, and surface pressure `p1`.
 
 Yₜ.f.u₃ = 0 ==>

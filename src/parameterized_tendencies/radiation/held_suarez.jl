@@ -46,7 +46,8 @@ function held_suarez_ΔT_y_T_equator(
 end
 
 function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
-    (; sfc_conditions, ᶜp, params) = p
+    (; params) = p
+    (; ᶜp, sfc_conditions) = p.precomputed
     (; ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ) = p.forcing
 
     # TODO: Don't need to enforce FT here, it should be done at param creation.

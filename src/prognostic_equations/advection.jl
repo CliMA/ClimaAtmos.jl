@@ -8,12 +8,13 @@ import ClimaCore.Geometry as Geometry
 
 NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu, ᶜK, ᶜp, ᶜΦ, ᶜp_ref) = p
+    (; ᶜΦ, ᶜp_ref) = p.core
+    (; ᶜu, ᶜK, ᶜp) = p.precomputed
     if p.atmos.turbconv_model isa AbstractEDMF
-        (; ᶜu⁰) = p
+        (; ᶜu⁰) = p.precomputed
     end
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜuʲs) = p
+        (; ᶜuʲs) = p.precomputed
     end
 
     @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
@@ -26,7 +27,7 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     if :ρθ in propertynames(Y.c)
         @. Yₜ.c.ρθ -= wdivₕ(Y.c.ρθ * ᶜu)
     elseif :ρe_tot in propertynames(Y.c)
-        (; ᶜh_tot) = p
+        (; ᶜh_tot) = p.precomputed
         @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
     end
 
@@ -49,9 +50,9 @@ end
 
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜu) = p
+    (; ᶜu) = p.precomputed
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜuʲs) = p
+        (; ᶜuʲs) = p.precomputed
     end
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
@@ -76,14 +77,17 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜu, ᶠu³, ᶜK, ᶜf) = p
+    (; ᶜf) = p.core
+    (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p : all_nothing
-    (; ᶜp, ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p : all_nothing
-    (; ᶠu³⁰) = advect_tke ? p : all_nothing
-    ᶜρa⁰ = advect_tke ? (n > 0 ? p.ᶜρa⁰ : Y.c.ρ) : nothing
-    ᶜρ⁰ = advect_tke ? (n > 0 ? p.ᶜρ⁰ : Y.c.ρ) : nothing
-    ᶜtke⁰ = advect_tke ? p.ᶜtke⁰ : nothing
+    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
+    (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
+    (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
+    ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
+    ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
+    ᶜtke⁰ =
+        advect_tke ?
+        (n > 0 ? p.precomputed.ᶜspecific⁰.tke : p.precomputed.ᶜtke⁰) : nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12

@@ -42,7 +42,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     p = integrator.p
     t = integrator.t
 
-    (; ᶜts, sfc_conditions, params) = p
+    (; ᶜts, sfc_conditions) = p.precomputed
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
     (; insolation_tuple, ᶠradiation_flux, radiation_model) = p.radiation
 
@@ -182,7 +182,7 @@ function common_diagnostics(p, ᶜu, ᶜts)
         temperature = TD.air_temperature.(thermo_params, ᶜts),
         potential_temperature = TD.dry_pottemp.(thermo_params, ᶜts),
         specific_enthalpy = TD.specific_enthalpy.(thermo_params, ᶜts),
-        buoyancy = CAP.grav(p.params) .* (p.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
+        buoyancy = CAP.grav(p.params) .* (p.core.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
         density = TD.air_density.(thermo_params, ᶜts),
     )
     if !(p.atmos.moisture_model isa DryModel)
@@ -196,7 +196,7 @@ function common_diagnostics(p, ᶜu, ᶜts)
             cloud_fraction_gm = get_cloud_fraction.(
                 thermo_params,
                 env_thermo_quad,
-                p.ᶜp,
+                p.precomputed.ᶜp,
                 ᶜts,
             ),
         )
@@ -219,7 +219,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
 
-    (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p
+    (; ᶜu, ᶜK, ᶜts, ᶜp, sfc_conditions) = p.precomputed
     dycore_diagnostic = (;
         common_diagnostics(p, ᶜu, ᶜts)...,
         pressure = ᶜp,
@@ -263,7 +263,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜtke⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p
+        (; ᶜtke⁰, ᶜu⁰, ᶜts⁰, ᶜmixing_length) = p.precomputed
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰) = output_prognostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             common_diagnostics(p, ᶜu⁰, ᶜts⁰)...,
@@ -294,7 +294,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
             ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
-        (; ᶜtke⁰, ᶜmixing_length) = p
+        (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
             cloud_fraction = get_cloud_fraction.(
@@ -330,7 +330,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
             Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
         surface_ct3_unit =
             CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
-        (; ρ_flux_uₕ, ρ_flux_h_tot) = p.sfc_conditions
+        (; ρ_flux_uₕ, ρ_flux_h_tot) = p.precomputed.sfc_conditions
         sfc_flux_momentum =
             Geometry.UVVector.(
                 adjoint.(ρ_flux_uₕ ./ Spaces.level(ᶠinterp.(Y.c.ρ), half)) .*
@@ -342,7 +342,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
             sfc_flux_energy = dot.(ρ_flux_h_tot, surface_ct3_unit),
         )
         if :ρq_tot in propertynames(Y.c)
-            (; ρ_flux_q_tot) = p.sfc_conditions
+            (; ρ_flux_q_tot) = p.precomputed.sfc_conditions
             vert_diff_diagnostic = (;
                 vert_diff_diagnostic...,
                 sfc_evaporation = dot.(ρ_flux_q_tot, surface_ct3_unit),

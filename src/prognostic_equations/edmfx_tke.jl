@@ -18,9 +18,10 @@ function edmfx_tke_tendency!(
     (; params) = p
     turbconv_params = CAP.turbconv_params(params)
     c_d = TCP.tke_diss_coeff(turbconv_params)
-    (; ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p
-    (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) = p
-    (; ᶜK_u, ᶜK_h, ρatke_flux) = p
+    (; ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
+    (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) =
+        p.precomputed
+    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     ᶠρaK_u = p.scratch.ᶠtemp_scalar

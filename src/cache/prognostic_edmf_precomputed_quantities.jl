@@ -14,8 +14,10 @@ function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³
 
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
-    (; ᶜp, ᶜΦ, ᶜh_tot) = p
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
+    (; ᶜΦ,) = p.core
+    (; ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰, ᶜq_tot⁰) =
+        p.precomputed
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
@@ -59,9 +61,10 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
 
-    (; ᶜspecific, ᶜp, ᶜΦ, ᶜh_tot) = p
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p
-    (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
+    (; ᶜΦ,) = p.core
+    (; ᶜspecific, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
@@ -90,7 +93,8 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         )
         ᶜρ_int_val = Fields.field_values(Fields.level(Y.c.ρ, 1))
         ᶜp_int_val = Fields.field_values(Fields.level(ᶜp, 1))
-        (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) = p.sfc_conditions
+        (; ρ_flux_h_tot, ρ_flux_q_tot, ustar, obukhov_length) =
+            p.precomputed.sfc_conditions
         buoyancy_flux_val = Fields.field_values(buoyancy_flux)
         ρ_flux_h_tot_val = Fields.field_values(ρ_flux_h_tot)
         ρ_flux_q_tot_val = Fields.field_values(ρ_flux_q_tot)
@@ -167,11 +171,13 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜspecific, ᶜp, ᶜρ_ref) = p
-    (; ᶜtke⁰, ᶜρa⁰, ᶜu⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p
-    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) = p
-    (; ᶜuʲs, ᶜtsʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p
-    (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
+    (; ᶜρ_ref) = p.core
+    (; ᶜspecific, ᶜp) = p.precomputed
+    (; ᶜtke⁰, ᶜρa⁰, ᶜu⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) =
+        p.precomputed
+    (; ᶜuʲs, ᶜtsʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)

@@ -15,13 +15,13 @@ function compute_arup!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     if isnothing(out)
         return draft_area.(
             (state.c.sgsʲs.:1).ρa,
-            TD.air_density.(thermo_params, cache.ᶜtsʲs.:1),
+            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
         )
     else
         out .=
             draft_area.(
                 (state.c.sgsʲs.:1).ρa,
-                TD.air_density.(thermo_params, cache.ᶜtsʲs.:1),
+                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
             )
     end
 end
@@ -30,14 +30,14 @@ function compute_arup!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
-            cache.ᶜρaʲs.:1,
-            TD.air_density.(thermo_params, cache.ᶜtsʲs.:1),
+            cache.precomputed.ᶜρaʲs.:1,
+            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
         )
     else
         out .=
             draft_area.(
-                cache.ᶜρaʲs.:1,
-                TD.air_density.(thermo_params, cache.ᶜtsʲs.:1),
+                cache.precomputed.ᶜρaʲs.:1,
+                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
             )
     end
 end
@@ -67,9 +67,9 @@ function compute_rhoaup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_density.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.air_density.(thermo_params, cache.ᶜtsʲs.:1)
+        out .= TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
@@ -97,9 +97,11 @@ function compute_waup!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(Geometry.WVector.(cache.ᶜuʲs.:1).components.data.:1)
+        return copy(
+            Geometry.WVector.(cache.precomputed.ᶜuʲs.:1).components.data.:1,
+        )
     else
-        out .= Geometry.WVector.(cache.ᶜuʲs.:1).components.data.:1
+        out .= Geometry.WVector.(cache.precomputed.ᶜuʲs.:1).components.data.:1
     end
 end
 
@@ -128,9 +130,9 @@ function compute_taup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_temperature.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.air_temperature.(thermo_params, cache.ᶜtsʲs.:1)
+        out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
@@ -159,9 +161,9 @@ function compute_thetaaup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.dry_pottemp.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.dry_pottemp.(thermo_params, cache.ᶜtsʲs.:1)
+        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
@@ -190,9 +192,9 @@ function compute_haup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.specific_enthalpy.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.specific_enthalpy.(thermo_params, cache.ᶜtsʲs.:1)
+        out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
@@ -236,9 +238,16 @@ function compute_husup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.total_specific_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.total_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜtsʲs.:1,
+        )
     else
-        out .= TD.total_specific_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        out .=
+            TD.total_specific_humidity.(
+                thermo_params,
+                cache.precomputed.ᶜtsʲs.:1,
+            )
     end
 end
 
@@ -282,9 +291,9 @@ function compute_hurup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     else
-        out .= TD.relative_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
@@ -328,9 +337,16 @@ function compute_clwup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.liquid_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜtsʲs.:1,
+        )
     else
-        out .= TD.liquid_specific_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        out .=
+            TD.liquid_specific_humidity.(
+                thermo_params,
+                cache.precomputed.ᶜtsʲs.:1,
+            )
     end
 end
 
@@ -339,7 +355,7 @@ add_diagnostic_variable!(
     long_name = "Updraft Mass Fraction of Cloud Liquid Water",
     units = "kg kg^-1",
     comments = """
-    This is calculated as the mass of cloud liquid water in the first updraft divided by 
+    This is calculated as the mass of cloud liquid water in the first updraft divided by
     the mass of air (including the water in all phases) in the first updraft.
     """,
     compute! = compute_clwup!,
@@ -377,9 +393,13 @@ function compute_cliup!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        return TD.ice_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜtsʲs.:1,
+        )
     else
-        out .= TD.ice_specific_humidity.(thermo_params, cache.ᶜtsʲs.:1)
+        out .=
+            TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜtsʲs.:1)
     end
 end
 
@@ -388,7 +408,7 @@ add_diagnostic_variable!(
     long_name = "Updraft Mass Fraction of Cloud Ice",
     units = "kg kg^-1",
     comments = """
-    This is calculated as the mass of cloud ice in the first updraft divided by 
+    This is calculated as the mass of cloud ice in the first updraft divided by
     the mass of air (including the water in all phases) in the first updraft.
     """,
     compute! = compute_cliup!,
@@ -406,12 +426,15 @@ function compute_aren!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
-            cache.ᶜρa⁰,
-            TD.air_density.(thermo_params, cache.ᶜts⁰),
+            cache.precomputed.ᶜρa⁰,
+            TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
         )
     else
         out .=
-            draft_area.(cache.ᶜρa⁰, TD.air_density.(thermo_params, cache.ᶜts⁰))
+            draft_area.(
+                cache.precomputed.ᶜρa⁰,
+                TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰),
+            )
     end
 end
 
@@ -419,14 +442,14 @@ function compute_aren!(out, state, cache, time, turbconv_model::DiagnosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
         return draft_area.(
-            cache.ᶜρaʲs.:1,
-            TD.air_density.(thermo_params, cache.ᶜtsʲs.:1),
+            cache.precomputed.ᶜρaʲs.:1,
+            TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
         )
     else
         out .=
             draft_area.(
-                cache.ᶜρaʲs.:1,
-                TD.air_density.(thermo_params, cache.ᶜtsʲs.:1),
+                cache.precomputed.ᶜρaʲs.:1,
+                TD.air_density.(thermo_params, cache.precomputed.ᶜtsʲs.:1),
             )
     end
 end
@@ -455,9 +478,9 @@ function compute_rhoaen!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_density.(thermo_params, cache.ᶜts⁰)
+        return TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰)
     else
-        out .= TD.air_density.(thermo_params, cache.ᶜts⁰)
+        out .= TD.air_density.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -484,9 +507,9 @@ function compute_waen!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(Geometry.WVector.(cache.ᶜu⁰).components.data.:1)
+        return copy(Geometry.WVector.(cache.precomputed.ᶜu⁰).components.data.:1)
     else
-        out .= Geometry.WVector.(cache.ᶜu⁰).components.data.:1
+        out .= Geometry.WVector.(cache.precomputed.ᶜu⁰).components.data.:1
     end
 end
 
@@ -509,9 +532,9 @@ compute_taen!(_, _, _, _, turbconv_model::T) where {T} =
 function compute_taen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.air_temperature.(thermo_params, cache.ᶜts⁰)
+        return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts⁰)
     else
-        out .= TD.air_temperature.(thermo_params, cache.ᶜts⁰)
+        out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -539,9 +562,9 @@ function compute_thetaaen!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.dry_pottemp.(thermo_params, cache.ᶜts⁰)
+        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
     else
-        out .= TD.dry_pottemp.(thermo_params, cache.ᶜts⁰)
+        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -563,9 +586,9 @@ compute_haen!(_, _, _, _, turbconv_model::T) where {T} =
 function compute_haen!(out, state, cache, time, turbconv_model::PrognosticEDMFX)
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.dry_pottemp.(thermo_params, cache.ᶜts⁰)
+        return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
     else
-        out .= TD.dry_pottemp.(thermo_params, cache.ᶜts⁰)
+        out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -608,9 +631,13 @@ function compute_husen!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.total_specific_humidity.(thermo_params, cache.ᶜts⁰)
+        return TD.total_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜts⁰,
+        )
     else
-        out .= TD.total_specific_humidity.(thermo_params, cache.ᶜts⁰)
+        out .=
+            TD.total_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -653,9 +680,9 @@ function compute_huren!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.ᶜts⁰)
+        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     else
-        out .= TD.relative_humidity.(thermo_params, cache.ᶜts⁰)
+        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -698,9 +725,13 @@ function compute_clwen!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(thermo_params, cache.ᶜts⁰)
+        return TD.liquid_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜts⁰,
+        )
     else
-        out .= TD.liquid_specific_humidity.(thermo_params, cache.ᶜts⁰)
+        out .=
+            TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -709,7 +740,7 @@ add_diagnostic_variable!(
     long_name = "Envrionment Mass Fraction of Cloud Liquid Water",
     units = "kg kg^-1",
     comments = """
-    This is calculated as the mass of cloud liquid water in the environment divided by 
+    This is calculated as the mass of cloud liquid water in the environment divided by
     the mass of air (including the water in all phases) in the environment.
     """,
     compute! = compute_clwen!,
@@ -747,9 +778,9 @@ function compute_clien!(
 )
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(thermo_params, cache.ᶜts⁰)
+        return TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     else
-        out .= TD.ice_specific_humidity.(thermo_params, cache.ᶜts⁰)
+        out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts⁰)
     end
 end
 
@@ -758,7 +789,7 @@ add_diagnostic_variable!(
     long_name = "Environment Mass Fraction of Cloud Ice",
     units = "kg kg^-1",
     comments = """
-    This is calculated as the mass of cloud ice in the environment divided by 
+    This is calculated as the mass of cloud ice in the environment divided by
     the mass of air (including the water in all phases) in the environment.
     """,
     compute! = compute_clien!,
@@ -780,9 +811,9 @@ function compute_lmix!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(cache.ᶜmixing_length)
+        return copy(cache.precomputed.ᶜmixing_length)
     else
-        out .= cache.ᶜmixing_length
+        out .= cache.precomputed.ᶜmixing_length
     end
 end
 
@@ -809,9 +840,9 @@ function compute_tke!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(cache.ᶜtke⁰)
+        return copy(cache.precomputed.ᶜtke⁰)
     else
-        out .= cache.ᶜtke⁰
+        out .= cache.precomputed.ᶜtke⁰
     end
 end
 

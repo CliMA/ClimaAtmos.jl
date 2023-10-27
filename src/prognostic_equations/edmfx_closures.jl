@@ -84,7 +84,9 @@ function edmfx_nh_pressure_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params, ᶜρʲs, ᶠgradᵥ_ᶜΦ, ᶠu₃⁰) = p
+    (; params) = p
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶜρʲs, ᶠu₃⁰) = p.precomputed
     FT = eltype(Y)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)

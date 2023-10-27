@@ -35,7 +35,8 @@ function precipitation_cache(Y, precip_model::Microphysics0Moment)
 end
 
 function compute_precipitation_cache!(Y, p, colidx, ::Microphysics0Moment, _)
-    (; ᶜts, params) = p
+    (; params) = p
+    (; ᶜts) = p.precomputed
     (; ᶜS_ρq_tot) = p.precipitation
     cm_params = CAP.microphysics_params(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -57,7 +58,7 @@ function compute_precipitation_cache!(
     # For environment we multiply by grid mean ρ and not byᶜρa⁰
     # I.e. assuming a⁰=1
 
-    (; ᶜS_q_tot⁰, ᶜS_q_totʲs, ᶜρaʲs) = p
+    (; ᶜS_q_tot⁰, ᶜS_q_totʲs, ᶜρaʲs) = p.precomputed
     (; ᶜS_ρq_tot) = p.precipitation
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     ρ = Y.c.ρ
@@ -76,7 +77,10 @@ function precipitation_tendency!(
     colidx,
     precip_model::Microphysics0Moment,
 )
-    (; ᶜts, ᶜΦ, ᶜT, params, turbconv_model) = p # assume ᶜts has been updated
+    (; ᶜT, ᶜΦ) = p.core
+    (; ᶜts,) = p.precomputed  # assume ᶜts has been updated
+    (; params) = p
+    (; turbconv_model) = p.atmos
     (;
         ᶜ3d_rain,
         ᶜ3d_snow,
@@ -118,11 +122,11 @@ function precipitation_tendency!(
         if turbconv_model isa DiagnosticEDMFX && !isnothing(Yₜ)
             @. Yₜ.c.ρe_tot[colidx] +=
                 sum(
-                    p.ᶜS_q_totʲs[colidx] *
-                    p.ᶜρaʲs[colidx] *
-                    p.ᶜS_e_totʲs_helper[colidx],
+                    p.precomputed.ᶜS_q_totʲs[colidx] *
+                    p.precomputed.ᶜρaʲs[colidx] *
+                    p.precomputed.ᶜS_e_totʲs_helper[colidx],
                 ) +
-                p.ᶜS_q_tot⁰[colidx] *
+                p.precomputed.ᶜS_q_tot⁰[colidx] *
                 Y.c.ρ[colidx] *
                 e_tot_0M_precipitation_sources_helper(
                     thermo_params,
