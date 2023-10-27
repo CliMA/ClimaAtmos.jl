@@ -291,7 +291,7 @@ version = "0.5.5"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "Memoize", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "UnPack", "WeakValueDicts"]
-git-tree-sha1 = "02e05d9206b32e72e2432751f1cb2ddd897b17a5"
+git-tree-sha1 = "87c2e47e306a804a7410342e9f19cbfdaa223d91"
 repo-rev = "sb/mutable-grid"
 repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
