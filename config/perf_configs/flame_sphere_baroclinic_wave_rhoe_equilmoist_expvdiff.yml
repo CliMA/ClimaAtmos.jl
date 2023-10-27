@@ -1,0 +1,14 @@
+max_newton_iters_ode: 1
+use_krylov_method: true
+use_dynamic_krylov_rtol: false
+krylov_rtol: 0.99
+precip_model: "0M"
+vert_diff: "true"
+z_elem: 20
+dz_bottom: 100
+dt_save_to_disk: "12hours"
+initial_condition: "MoistBaroclinicWave"
+dt: "40secs"
+t_end: "12hours"
+job_id: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"
+moist: "equil"

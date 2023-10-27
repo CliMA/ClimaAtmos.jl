@@ -880,6 +880,14 @@ steps:
         agents:
           slurm_mem: 24GB
 
+      - label: ":fire: Flame graph: perf target (barowave jfnk)"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          $PERF_CONFIG_PATH/flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.yml
+        artifact_paths: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
+        agents:
+          slurm_mem: 40GB
+
       - label: ":fire: Flame graph: perf target (Threaded)"
         command: >
           julia --threads 8 --color=yes --project=perf perf/flame.jl
