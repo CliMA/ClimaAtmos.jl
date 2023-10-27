@@ -291,7 +291,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     )
 
     turbconv_params = CAP.turbconv_params(params)
-    c_m = TCP.tke_ed_coeff(turbconv_params)
+    c_m = CAP.tke_ed_coeff(turbconv_params)
     @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 

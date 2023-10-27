@@ -1,5 +1,3 @@
-import .TurbulenceConvection as TC
-import .TurbulenceConvection.Parameters as TCP
 import CLIMAParameters as CP
 import RRTMGP.Parameters as RP
 import SurfaceFluxes as SF
@@ -9,7 +7,7 @@ import Thermodynamics as TD
 import CloudMicrophysics as CM
 
 function create_parameter_set(config::AtmosConfig)
-    # Helper function that creates a parameter struct. If a struct has nested 
+    # Helper function that creates a parameter struct. If a struct has nested
     # parameter structs, they must be passed to subparam_structs as a NamedTuple.
     function create_parameter_struct(param_struct; subparam_structs = (;))
         aliases = string.(fieldnames(param_struct))
@@ -63,10 +61,8 @@ function create_parameter_set(config::AtmosConfig)
         SF.Parameters.SurfaceFluxesParameters;
         subparam_structs = (; ufp, thermo_params),
     )
-    turbconv_params = create_parameter_struct(
-        TCP.TurbulenceConvectionParameters;
-        subparam_structs = (; microphys_params, surf_flux_params),
-    )
+    turbconv_params =
+        create_parameter_struct(CAP.TurbulenceConvectionParameters;)
     return create_parameter_struct(
         CAP.ClimaAtmosParameters;
         subparam_structs = (;

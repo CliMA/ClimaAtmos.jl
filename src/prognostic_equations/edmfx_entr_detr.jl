@@ -105,12 +105,13 @@ function entrainment(
     dt::FT,
     ::GeneralizedEntrainment,
 ) where {FT}
-    entr_inv_tau = CAP.entr_tau(params)
-    entr_coeff = CAP.entr_coeff(params)
-    min_area_limiter_scale = CAP.min_area_limiter_scale(params)
-    min_area_limiter_power = CAP.min_area_limiter_power(params)
     turbconv_params = CAP.turbconv_params(params)
-    a_min = TCP.min_area(turbconv_params)
+    entr_inv_tau = CAP.entr_tau(turbconv_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
+    min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
+    min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
+
     min_area_limiter =
         min_area_limiter_scale *
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
@@ -138,12 +139,13 @@ function entrainment(
     dt::FT,
     ::GeneralizedHarmonicsEntrainment,
 ) where {FT}
-    entr_inv_tau = CAP.entr_tau(params)
-    entr_coeff = CAP.entr_coeff(params)
-    min_area_limiter_scale = CAP.min_area_limiter_scale(params)
-    min_area_limiter_power = CAP.min_area_limiter_power(params)
     turbconv_params = CAP.turbconv_params(params)
-    a_min = TCP.min_area(turbconv_params)
+    entr_inv_tau = CAP.entr_tau(turbconv_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
+    min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
+    min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
+
     min_area_limiter =
         min_area_limiter_scale *
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
@@ -210,9 +212,9 @@ function detrainment(
     else
         g = CAP.grav(params)
         turbconv_params = CAP.turbconv_params(params)
-        ᶜaʲ_max = TCP.max_area(turbconv_params)
-        max_area_limiter = FT(0.1) * exp(-10 * (ᶜaʲ_max - ᶜaʲ))
+        ᶜaʲ_max = CAP.max_area(turbconv_params)
 
+        max_area_limiter = FT(0.1) * exp(-10 * (ᶜaʲ_max - ᶜaʲ))
         # pressure scale height (height where pressure drops by 1/e)
         ref_H = ᶜp / (ᶜρ * g)
         # convective velocity
@@ -256,13 +258,14 @@ function detrainment(
     dt::FT,
     ::GeneralizedDetrainment,
 ) where {FT}
-    detr_inv_tau = CAP.detr_tau(params)
-    detr_coeff = CAP.detr_coeff(params)
-    detr_buoy_coeff = CAP.detr_buoy_coeff(params)
-    max_area_limiter_scale = CAP.max_area_limiter_scale(params)
-    max_area_limiter_power = CAP.max_area_limiter_power(params)
     turbconv_params = CAP.turbconv_params(params)
-    a_max = TCP.max_area(turbconv_params)
+    detr_inv_tau = CAP.detr_tau(turbconv_params)
+    detr_coeff = CAP.detr_coeff(turbconv_params)
+    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
+    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
+
     max_area_limiter =
         max_area_limiter_scale *
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
@@ -294,13 +297,14 @@ function detrainment(
     dt::FT,
     ::GeneralizedHarmonicsDetrainment,
 ) where {FT}
-    detr_inv_tau = CAP.detr_tau(params)
-    detr_coeff = CAP.detr_coeff(params)
-    detr_buoy_coeff = CAP.detr_buoy_coeff(params)
-    max_area_limiter_scale = CAP.max_area_limiter_scale(params)
-    max_area_limiter_power = CAP.max_area_limiter_power(params)
     turbconv_params = CAP.turbconv_params(params)
-    a_max = TCP.max_area(turbconv_params)
+    detr_inv_tau = CAP.detr_tau(turbconv_params)
+    detr_coeff = CAP.detr_coeff(turbconv_params)
+    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
+    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
+
     max_area_limiter =
         max_area_limiter_scale *
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
