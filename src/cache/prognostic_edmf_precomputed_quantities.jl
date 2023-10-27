@@ -165,12 +165,20 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     (; dt) = p.simulation
     thermo_params = CAP.thermodynamics_params(params)
 
+    FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜspecific, ᶜp, ᶜρ_ref) = p
+    (; ᶜu, ᶜp, ᶜρ_ref) = p
     (; ᶜtke⁰, ᶜρa⁰, ᶜu⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p
-    (; ᶜmixing_length, ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜK_u, ᶜK_h) = p
-    (; ᶜuʲs, ᶜtsʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p
+    (;
+        ᶜmixing_length,
+        ᶜlinear_buoygrad,
+        ᶜstrain_rate_norm,
+        ᶜK_u,
+        ᶜK_h,
+        ρatke_flux,
+    ) = p
+    (; ᶜuʲs, ᶠu³ʲs, ᶜtsʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p
     (; ustar, obukhov_length, buoyancy_flux) = p.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -260,13 +268,10 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     ᶜtke_exch = p.scratch.ᶜtemp_scalar_2
     @. ᶜtke_exch = 0
     for j in 1:n
+        ᶠu³ʲ = ᶠu³ʲs.:($j)
         @. ᶜtke_exch +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ * (
-                1 / 2 *
-                (
-                    get_physical_w(ᶜuʲs.:($$j), ᶜlg) - get_physical_w(ᶜu⁰, ᶜlg)
-                )^2 - ᶜtke⁰
-            )
+            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
+            (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
@@ -276,9 +281,9 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ᶜz,
         z_sfc,
         ᶜdz,
-        sfc_tke,
+        max(sfc_tke, eps(FT)),
         ᶜlinear_buoygrad,
-        ᶜtke⁰,
+        max(ᶜtke⁰, 0),
         obukhov_length,
         ᶜstrain_rate_norm,
         ᶜprandtl_nvec,
@@ -288,8 +293,25 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     turbconv_params = CAP.turbconv_params(params)
     c_m = TCP.tke_ed_coeff(turbconv_params)
     @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
-    # TODO: add Prantdl number
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
+
+    ρatke_flux_values = Fields.field_values(ρatke_flux)
+    ρ_int_values = Fields.field_values(Fields.level(ᶜρa⁰, 1))
+    u_int_values = Fields.field_values(Fields.level(ᶜu, 1))
+    ustar_values = Fields.field_values(ustar)
+    int_local_geometry_values =
+        Fields.field_values(Fields.level(Fields.local_geometry_field(Y.c), 1))
+    sfc_local_geometry_values = Fields.field_values(
+        Fields.level(Fields.local_geometry_field(Y.f), half),
+    )
+    @. ρatke_flux_values = surface_flux_tke(
+        turbconv_params,
+        ρ_int_values,
+        u_int_values,
+        ustar_values,
+        int_local_geometry_values,
+        sfc_local_geometry_values,
+    )
 
     return nothing
 end
