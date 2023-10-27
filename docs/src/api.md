@@ -1,9 +1,5 @@
 # API
 
-```@docs
-ClimaAtmos.TurbulenceConvection.Parameters
-```
-
 ## Initial conditions
 
 ### General

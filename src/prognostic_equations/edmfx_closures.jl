@@ -39,9 +39,9 @@ function surface_flux_tke(
     interior_local_geometry,
     surface_local_geometry,
 )
-    c_d = TCP.tke_diss_coeff(turbconv_params)
-    c_m = TCP.tke_ed_coeff(turbconv_params)
-    k_star² = TCP.tke_surf_scale(turbconv_params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
+    c_m = CAP.tke_ed_coeff(turbconv_params)
+    k_star² = CAP.tke_surf_scale(turbconv_params)
     speed = Geometry._norm(
         CA.CT12(u_int, interior_local_geometry),
         interior_local_geometry,
@@ -79,13 +79,13 @@ function ᶠupdraft_nh_pressure(
     else
         turbconv_params = CAP.turbconv_params(params)
         # factor multiplier for pressure buoyancy terms (effective buoyancy is (1-α_b))
-        α_b = TCP.pressure_normalmode_buoy_coeff1(turbconv_params)
+        α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
         # factor multiplier for pressure drag
-        α_d = TCP.pressure_normalmode_drag_coeff(turbconv_params)
+        α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
 
         # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
 
-        H_up_min = TCP.min_updraft_top(turbconv_params)
+        H_up_min = CAP.min_updraft_top(turbconv_params)
         plume_scale_height = max(updraft_top, H_up_min)
 
         # We also used to have advection term here: α_a * w_up * div_w_up
@@ -115,7 +115,7 @@ function edmfx_nh_pressure_tendency!(
     ᶠlg = Fields.local_geometry_field(Y.f)
 
     turbconv_params = CAP.turbconv_params(params)
-    a_min = TCP.min_area(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
 
     for j in 1:n
 
@@ -201,12 +201,12 @@ function mixing_length(
 ) where {FT}
 
     turbconv_params = CAP.turbconv_params(params)
-    c_m = TCP.tke_ed_coeff(turbconv_params)
-    c_d = TCP.tke_diss_coeff(turbconv_params)
-    smin_ub = TCP.smin_ub(turbconv_params)
-    smin_rm = TCP.smin_rm(turbconv_params)
-    c_b = TCP.static_stab_coeff(turbconv_params)
-    vkc = TCP.von_karman_const(turbconv_params)
+    c_m = CAP.tke_ed_coeff(turbconv_params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
+    smin_ub = CAP.smin_ub(turbconv_params)
+    smin_rm = CAP.smin_rm(turbconv_params)
+    c_b = CAP.static_stab_coeff(turbconv_params)
+    vkc = CAP.von_karman_const(params)
 
     # compute the maximum mixing length at height z
     l_z = ᶜz - z_sfc
@@ -287,9 +287,9 @@ function turbulent_prandtl_number(
     ᶜstrain_rate_norm::FT,
 ) where {FT}
     turbconv_params = CAP.turbconv_params(params)
-    Ri_c = TCP.Ri_crit(turbconv_params)
-    ω_pr = TCP.Prandtl_number_scale(turbconv_params)
-    Pr_n = TCP.Prandtl_number_0(turbconv_params)
+    Ri_c = CAP.Ri_crit(turbconv_params)
+    ω_pr = CAP.Prandtl_number_scale(turbconv_params)
+    Pr_n = CAP.Prandtl_number_0(turbconv_params)
     ᶜRi_grad = min(ᶜlinear_buoygrad / max(ᶜstrain_rate_norm, eps(FT)), Ri_c)
     if obukhov_length > 0 && ᶜRi_grad > 0 #stable
         # CSB (Dan Li, 2019, eq. 75), where ω_pr = ω_1 + 1 = 53.0 / 13.0

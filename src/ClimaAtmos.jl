@@ -22,9 +22,6 @@ include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
 import .RRTMGPInterface as RRTMGPI
 include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 
-include(joinpath("TurbulenceConvection", "TurbulenceConvection.jl"))
-import .TurbulenceConvection as TC
-
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
