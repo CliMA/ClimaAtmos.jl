@@ -47,6 +47,8 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         isnothing(atmos.numerics.limiter) ? nothing :
         atmos.numerics.limiter(similar(Y.c, FT))
 
+    numerics = (; limiter)
+
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
@@ -72,6 +74,7 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         precomputed_quantities(Y, atmos)...,
         scratch = temporary_quantities(Y, atmos),
         hyperdiffusion_cache(Y, atmos, do_dss)...,
+        numerics,
     )
     set_precomputed_quantities!(Y, default_cache, FT(0))
     default_cache.is_init[] = false
