@@ -3,7 +3,7 @@ set -euo pipefail
 
 FT="Float32"
 resolutions=("low" "mid" "high")
-process_counts=("1 2 4 8 16 32" "1 2 4 8 16 32 64" "1 2 4 8 16 32 64 128")
+process_counts=("1 2 4 8 16 32" "1 2 4 8 16 32 64" "1 2 4 8 16 128 512")
 max_procs_per_node=16 # limit this artificially for profiling
 profiling=disable
 exclusive=true
