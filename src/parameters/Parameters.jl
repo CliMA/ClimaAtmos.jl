@@ -43,11 +43,13 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     updraft_number::Int
 end
 
-Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, SFP, TCP} <: ACAP
+Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP} <:
+                   ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
     insolation_params::IP
     microphysics_params::MPP
+    water_params::WP
     surface_fluxes_params::SFP
     turbconv_params::TCP
     Omega::FT
@@ -94,7 +96,7 @@ for var in [:molmass_ratio, :R_d, :R_v, :cp_d, :cv_v, :cv_l, :cv_d]
 end
 
 # Forwarding CloudMicrophysics parameters
-ρ_cloud_liq(ps::ACAP) = CM.Parameters.ρ_cloud_liq(microphysics_params(ps))
+ρ_cloud_liq(ps::ACAP) = ps.water_params.ρw
 
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =

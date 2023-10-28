@@ -263,10 +263,10 @@ uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.12"
 
 [[deps.CloudMicrophysics]]
-deps = ["CLIMAParameters", "DocStringExtensions", "ForwardDiff", "KernelAbstractions", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "153238dfeb7bed07fa8f10c535d78e2340f3c882"
+deps = ["CLIMAParameters", "DocStringExtensions", "ForwardDiff", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
+git-tree-sha1 = "3d4273c5b64ea2270115abbffbb2494572bd2583"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.14.0"
+version = "0.15.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
