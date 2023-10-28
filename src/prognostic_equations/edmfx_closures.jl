@@ -258,16 +258,12 @@ function mixing_length(
     else
         l_smag = c_smag * ᶜdz
     end
-
-    # add limiters
-    l = SA.SVector(
-        (l_N < eps(FT) || l_N > l_z) ? l_z : l_N,
-        (l_TKE < eps(FT) || l_TKE > l_z) ? l_z : l_TKE,
-        (l_W < eps(FT) || l_W > l_z) ? l_z : l_W,
-    )
+    
     # get soft minimum
-    # TODO: limit it with l_smag
-    return lamb_smooth_minimum(l, smin_ub, smin_rm)
+    l_smin = lamb_smooth_minimum(SA.SVector(l_N, l_TKE, l_W), smin_ub, smin_rm)
+    l_limited = max(l_smag, min(l_smin, l_z))
+
+    return l_limited
 end
 
 """

@@ -672,6 +672,7 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     (; ᶜtke⁰, ᶠu³⁰, ᶜS_q_tot⁰, ᶜu⁰) = p
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p
+    FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -738,7 +739,7 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
         ᶜz,
         z_sfc,
         ᶜdz,
-        max(sfc_tke, 0),
+        max(sfc_tke, eps(FT)),
         ᶜlinear_buoygrad,
         max(ᶜtke⁰, 0),
         obukhov_length,

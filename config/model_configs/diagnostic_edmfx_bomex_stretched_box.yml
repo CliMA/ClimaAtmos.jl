@@ -25,7 +25,7 @@ z_elem: 30
 z_max: 3e3 
 dz_bottom: 50.0
 dz_top: 200.0
-dt: "10secs" 
+dt: "5secs" 
 t_end: "6hours" 
 dt_save_to_disk: "10mins"
 toml: [toml/diagnostic_edmfx_box.toml]
