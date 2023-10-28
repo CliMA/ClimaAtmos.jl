@@ -278,7 +278,7 @@ weakdeps = ["SparseArrays"]
     ChainRulesCoreSparseArraysExt = "SparseArrays"
 
 [[deps.ClimaAtmos]]
-deps = ["ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "CLIMAParameters", "CUDA", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DiffEqCallbacks", "Distributions", "DocStringExtensions", "FastGaussQuadrature", "ImageFiltering", "Insolation", "Interpolations", "IntervalSets", "JLD2", "Krylov", "LambertW", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "SciMLBase", "StaticArrays", "Statistics", "StatsBase", "SurfaceFluxes", "TerminalLoggers", "Test", "Thermodynamics", "YAML"]
+deps = ["ArgParse", "ArtifactWrappers", "Artifacts", "AtmosphericProfilesLibrary", "CLIMAParameters", "CUDA", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "CloudMicrophysics", "Colors", "Dates", "Dierckx", "DiffEqBase", "DiffEqCallbacks", "DocStringExtensions", "FastGaussQuadrature", "ImageFiltering", "Insolation", "Interpolations", "IntervalSets", "JLD2", "Krylov", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "Pkg", "Printf", "RRTMGP", "Random", "RootSolvers", "SciMLBase", "StaticArrays", "Statistics", "StatsBase", "SurfaceFluxes", "Test", "Thermodynamics", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.16.2"
@@ -338,8 +338,10 @@ uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.12"
 
 [[deps.CloudMicrophysics]]
-deps = ["CLIMAParameters", "DocStringExtensions", "ForwardDiff", "KernelAbstractions", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "153238dfeb7bed07fa8f10c535d78e2340f3c882"
+deps = ["CLIMAParameters", "DocStringExtensions", "ForwardDiff", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
+git-tree-sha1 = "c70f382ea31b597c408b91cdd3e440d3deb9c1f6"
+repo-rev = "main"
+repo-url = "https://github.com/CliMA/CloudMicrophysics.jl.git"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
 version = "0.14.0"
 
@@ -1207,11 +1209,6 @@ git-tree-sha1 = "f2355693d6778a178ade15952b7ac47a4ff97996"
 uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 version = "1.3.0"
 
-[[deps.LambertW]]
-git-tree-sha1 = "c5ffc834de5d61d00d2b0e18c96267cffc21f648"
-uuid = "984bce1d-4616-540c-a9ee-88d1112d94c9"
-version = "0.4.6"
-
 [[deps.Latexify]]
 deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Printf", "Requires"]
 git-tree-sha1 = "f428ae552340899a935973270b8d98e5a31c49fe"
@@ -1246,12 +1243,6 @@ uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 git-tree-sha1 = "a560dd966b386ac9ae60bdd3a3d3a326062d3c3e"
 uuid = "8cdb02fc-e678-4876-92c5-9defec4f444e"
 version = "0.3.1"
-
-[[deps.LeftChildRightSiblingTrees]]
-deps = ["AbstractTrees"]
-git-tree-sha1 = "fb6803dafae4a5d62ea5cab204b1e657d9737e7f"
-uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
-version = "0.2.0"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -2328,12 +2319,6 @@ deps = ["LinearAlgebra"]
 git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
 uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
 version = "0.1.1"
-
-[[deps.TerminalLoggers]]
-deps = ["LeftChildRightSiblingTrees", "Logging", "Markdown", "Printf", "ProgressLogging", "UUIDs"]
-git-tree-sha1 = "f133fab380933d042f6796eda4e130272ba520ca"
-uuid = "5d786b92-1e48-4d6f-9151-6b4477ca9bed"
-version = "0.1.7"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]

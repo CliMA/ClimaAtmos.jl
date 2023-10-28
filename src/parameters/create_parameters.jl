@@ -14,13 +14,6 @@ function create_parameter_set(config::AtmosConfig)
         aliases = setdiff(aliases, string.(propertynames(subparam_structs)))
         pairs = CP.get_parameter_values!(toml_dict, aliases)
         # Workaround for setting τ_precip = dt
-        if parsed_args["override_τ_precip"] &&
-           param_struct == CM.Parameters.CloudMicrophysicsParameters
-            pairs = (;
-                pairs...,
-                τ_precip = FT(CA.time_to_seconds(parsed_args["dt"])),
-            )
-        end
         return param_struct{FT, typeof.(values(subparam_structs))...}(;
             pairs...,
             subparam_structs...,
@@ -30,15 +23,35 @@ function create_parameter_set(config::AtmosConfig)
     (; toml_dict, parsed_args) = config
     FT = CP.float_type(toml_dict)
 
+    # EDMF parameters
+    turbconv_params =
+        create_parameter_struct(CAP.TurbulenceConvectionParameters;)
+    # Thermodynamics.jl parameters
     thermo_params =
         create_parameter_struct(TD.Parameters.ThermodynamicsParameters)
+    # Radiation parameters
     rrtmgp_params = create_parameter_struct(RP.RRTMGPParameters)
+    # Insolation.jl parameters
     insolation_params = create_parameter_struct(IP.InsolationParameters)
-    microphys_params = create_parameter_struct(
-        CM.Parameters.CloudMicrophysicsParameters;
-        subparam_structs = (; thermo_params),
-    )
+    # Water properties parameters (from CloudMicrophysics.jl)
+    water_params = CM.Parameters.WaterProperties(FT, toml_dict)
 
+    # Microphysics scheme parameters (from CloudMicrophysics.jl)
+    # TODO - repeating the logic from solver/model_getters.jl...
+    if parsed_args["override_τ_precip"]
+        toml_dict["τ_precip"]["value"] =
+            FT(CA.time_to_seconds(parsed_args["dt"]))
+    end
+    precip_model = parsed_args["precip_model"]
+    microphys_params = if precip_model == nothing || precip_model == "nothing"
+        nothing
+    elseif precip_model == "0M"
+        CM.Parameters.Parameters0M(FT, toml_dict)
+    else
+        error("Invalid precip_model $(precip_model)")
+    end
+
+    # SurfaceFluxes.jl parameters
     aliases = [
         "Pr_0_Businger",
         "a_m_Businger",
@@ -56,13 +69,12 @@ function create_parameter_set(config::AtmosConfig)
         γ = pairs.γ_Businger,
     )
     ufp = UF.BusingerParams{FT}(; pairs...)
-
     surf_flux_params = create_parameter_struct(
         SF.Parameters.SurfaceFluxesParameters;
         subparam_structs = (; ufp, thermo_params),
     )
-    turbconv_params =
-        create_parameter_struct(CAP.TurbulenceConvectionParameters;)
+
+    # Create the big ClimaAtmos parameters struct
     return create_parameter_struct(
         CAP.ClimaAtmosParameters;
         subparam_structs = (;
@@ -70,6 +82,7 @@ function create_parameter_set(config::AtmosConfig)
             rrtmgp_params,
             insolation_params,
             microphysics_params = microphys_params,
+            water_params,
             surface_fluxes_params = surf_flux_params,
             turbconv_params,
         ),
