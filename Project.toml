@@ -48,6 +48,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [compat]
 ArgParse = "1"
 ArtifactWrappers = "0.2"
+Artifacts = "1"
 AtmosphericProfilesLibrary = "0.1"
 CLIMAParameters = "0.7.24"
 CUDA = "4"
