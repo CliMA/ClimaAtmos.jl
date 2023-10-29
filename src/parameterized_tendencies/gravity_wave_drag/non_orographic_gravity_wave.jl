@@ -113,7 +113,9 @@ function non_orographic_gravity_wave_tendency!(
     ::NonOrographyGravityWave,
 )
     #unpack
-    (; ᶜts, ᶜT, params) = p
+    (; ᶜT,) = p.core
+    (; ᶜts) = p.precomputed
+    (; params) = p
     (; ᶜdTdz, ᶜbuoyancy_frequency) = p.non_orographic_gravity_wave
     (; model_config) = p.atmos
     (;
@@ -166,7 +168,7 @@ function non_orographic_gravity_wave_tendency!(
             parent(damp_level[colidx]) .= length(parent(ᶜz[colidx]))
         end
     elseif model_config isa SphericalModel
-        (; ᶜp) = p
+        (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
         source_level = similar(Fields.level(Y.c.ρ, 1))
         Fields.bycolumn(axes(ᶜρ)) do colidx

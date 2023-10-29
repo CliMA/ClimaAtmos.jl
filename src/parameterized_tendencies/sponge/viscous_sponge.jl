@@ -30,7 +30,7 @@ add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t) =
 
 function add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t, ::TotalEnergy)
     (; ᶜβ_viscous) = p.viscous_sponge
-    (; ᶜh_tot) = p
+    (; ᶜh_tot) = p.precomputed
     ᶜρ = Y.c.ρ
     @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(ᶜh_tot))
 end
@@ -50,9 +50,7 @@ end
 function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
     (; ᶜβ_viscous, ᶠβ_viscous) = p.viscous_sponge
     ᶜuₕ = Y.c.uₕ
-
     add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t)
-
     @. Yₜ.c.uₕ +=
         ᶜβ_viscous * (
             wgradₕ(divₕ(ᶜuₕ)) - Geometry.project(

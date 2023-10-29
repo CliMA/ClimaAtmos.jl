@@ -109,7 +109,6 @@ feature with threading disabled.
 function precomputed_quantities!(Y, p, t, colidx)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
-    (; ᶜu_bar, ᶜK, ᶜts, ᶜp, params, thermo_dispatcher) = p
 
     @. ᶜu_bar[colidx] = C123(ᶜuₕ[colidx]) + C123(ᶜinterp(ᶠu₃[colidx]))
     @. ᶜK[colidx] = norm_sqr(ᶜu_bar[colidx]) / 2

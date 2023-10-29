@@ -228,7 +228,7 @@ function custom_postprocessing(sol, output_dir, p)
     anim = @animate for (Y, t) in zip(sol.u, sol.t)
         CA.set_precomputed_quantities!(Y, p, t) # sets ᶜts
         Plots.plot(
-            vec(TD.air_temperature.(thermo_params, p.ᶜts)),
+            vec(TD.air_temperature.(thermo_params, p.precomputed.ᶜts)),
             vec(Fields.coordinate_field(Y.c).z ./ 1000);
             xlabel = "T [K]",
             ylabel = "z [km]",
@@ -294,7 +294,7 @@ function postprocessing_plane(sol, output_dir, p)
     end
 
     gen_plot_plane(
-        Geometry.UVector.(p.ᶜu),
+        Geometry.UVector.(p.precomputed.ᶜu),
         "horz_velocity.png",
         "Horizontal Velocity",
         "u[m/s]",
@@ -302,7 +302,7 @@ function postprocessing_plane(sol, output_dir, p)
     )
 
     gen_plot_plane(
-        Geometry.WVector.(p.ᶜu),
+        Geometry.WVector.(p.precomputed.ᶜu),
         "vert_velocity.png",
         "Vertical Velocity",
         "w[m/s]",
@@ -310,7 +310,7 @@ function postprocessing_plane(sol, output_dir, p)
     )
 
     gen_plot_plane(
-        TD.virtual_pottemp.(thermo_params, p.ᶜts),
+        TD.virtual_pottemp.(thermo_params, p.precomputed.ᶜts),
         "virtual_pottemp.png",
         "Virtual Pottemp",
         "Theta[K]",
