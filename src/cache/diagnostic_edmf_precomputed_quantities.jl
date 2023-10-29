@@ -289,6 +289,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         ∇Φ³_prev_level = Fields.field_values(Fields.level(ᶜ∇Φ³, i - 1))
         ∇Φ³_data_prev_level = ∇Φ³_prev_level.components.data.:1
         ρ_prev_level = Fields.field_values(Fields.level(Y.c.ρ, i - 1))
+        u³_prev_halflevel = Fields.field_values(Fields.level(ᶠu³, i - 1 - half))
         u³⁰_prev_halflevel =
             Fields.field_values(Fields.level(ᶠu³⁰, i - 1 - half))
         u³⁰_data_prev_halflevel = u³⁰_prev_halflevel.components.data.:1
@@ -359,13 +360,13 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
                 get_physical_w(
-                    u³⁰_prev_halflevel,
+                    u³_prev_halflevel,
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
-                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                FT(0),
                 dt,
                 p.atmos.edmfx_entr_model,
             )
@@ -383,13 +384,13 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρʲ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
                 get_physical_w(
-                    u³⁰_prev_halflevel,
+                    u³_prev_halflevel,
                     local_geometry_prev_halflevel,
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
-                ᶜphysical_buoyancy(params, ρ_ref_prev_level, ρ_prev_level),
+                FT(0),
                 dt,
                 p.atmos.edmfx_detr_model,
             )

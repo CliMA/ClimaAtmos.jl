@@ -123,10 +123,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 ᶠgradᵥ(ᶜKʲs.:($$j)[colidx])
 
             # TODO: Move this to implicit_vertical_advection_tendency!.
+            # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
+            # and calcuate the buoyancy term relative to the grid-mean density.
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 (
-                    ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
-                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - ᶜρ_ref[colidx]) *
+                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
                     ᶠgradᵥ_ᶜΦ[colidx]
                 ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
         end
