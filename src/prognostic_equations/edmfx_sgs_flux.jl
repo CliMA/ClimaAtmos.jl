@@ -15,9 +15,9 @@ function edmfx_sgs_mass_flux_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot, ᶜspecific) = p
-    (; ᶠu³ʲs) = p
-    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
+    (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶠu³ʲs) = p.precomputed
+    (; ᶜρa⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p.precomputed
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -95,11 +95,10 @@ function edmfx_sgs_mass_flux_tendency!(
     turbconv_model::DiagnosticEDMFX,
 )
 
-    FT = Spaces.undertype(axes(Y.c))
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_upwinding) = p.atmos.numerics
-    (; ᶠu³, ᶜh_tot, ᶜspecific) = p
-    (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p
+    (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜρaʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -158,9 +157,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
-    (; sfc_conditions) = p
-    (; ᶜρa⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p
-    (; ᶜK_u, ᶜK_h) = p
+    (; sfc_conditions) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_diffusive_flux
@@ -219,9 +218,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
-    (; sfc_conditions) = p
-    (; ᶜu, ᶜh_tot, ᶜspecific) = p
-    (; ᶜK_u, ᶜK_h) = p
+    (; sfc_conditions) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜspecific) = p.precomputed
+    (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_diffusive_flux

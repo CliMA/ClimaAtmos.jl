@@ -265,7 +265,8 @@ function radiation_tendency!(
     @assert !(p.atmos.moisture_model isa DryModel)
     @assert p.atmos.energy_form isa TotalEnergy
 
-    (; params, ᶜspecific, ᶜts) = p
+    (; params) = p
+    (; ᶜspecific, ᶜts) = p.precomputed
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_q, ᶠradiation_flux) =
         p.radiation
     thermo_params = CAP.thermodynamics_params(params)
@@ -355,7 +356,7 @@ function radiation_tendency!(
     thermo_params = CAP.thermodynamics_params(params)
     ᶜdTdt_rad = p.radiation.ᶜdTdt_rad[colidx]
     ᶜρ = Y.c.ρ[colidx]
-    ᶜts_gm = p.ᶜts[colidx]
+    ᶜts_gm = p.precomputed.ᶜts[colidx]
     zc = Fields.coordinate_field(axes(ᶜρ)).z
     @. ᶜdTdt_rad = rad(FT(t), zc)
     @. Yₜ.c.ρe_tot[colidx] += ᶜρ * TD.cv_m(thermo_params, ᶜts_gm) * ᶜdTdt_rad

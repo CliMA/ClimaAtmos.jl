@@ -75,7 +75,9 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave)
 end
 
 function orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::OrographicGravityWave)
-    (; params, ᶜts, ᶜT, ᶜp) = p
+    (; ᶜT) = p.core
+    (; params) = p
+    (; ᶜts, ᶜp) = p.precomputed
     (; ᶜdTdz) = p.orographic_gravity_wave
     (;
         topo_k_pbl,

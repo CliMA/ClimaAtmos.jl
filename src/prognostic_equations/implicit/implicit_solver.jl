@@ -208,19 +208,19 @@ function Wfact!(A, Y, p, dtγ, t)
         # Remove unnecessary values from p to avoid allocations in bycolumn.
         (; energy_form, rayleigh_sponge) = p.atmos
         p′ = (;
-            p.ᶜspecific,
-            p.ᶠu³,
-            p.ᶜK,
-            p.ᶜp,
-            p.∂ᶜK_∂ᶠu₃,
-            p.ᶜΦ,
-            p.ᶠgradᵥ_ᶜΦ,
-            p.ᶜρ_ref,
-            p.ᶜp_ref,
+            p.precomputed.ᶜspecific,
+            p.precomputed.ᶠu³,
+            p.precomputed.ᶜK,
+            p.precomputed.ᶜp,
+            p.core.∂ᶜK_∂ᶠu₃,
+            p.core.ᶜΦ,
+            p.core.ᶠgradᵥ_ᶜΦ,
+            p.core.ᶜρ_ref,
+            p.core.ᶜp_ref,
             p.scratch.ᶜtemp_scalar,
             p.params,
             p.atmos,
-            (energy_form isa TotalEnergy ? (; p.ᶜh_tot) : (;))...,
+            (energy_form isa TotalEnergy ? (; p.precomputed.ᶜh_tot) : (;))...,
             (
                 rayleigh_sponge isa RayleighSponge ?
                 (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)

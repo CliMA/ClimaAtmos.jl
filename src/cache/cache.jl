@@ -52,12 +52,7 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
-    default_cache = (;
-        is_init = Ref(true),
-        simulation,
-        atmos,
-        sfc_setup = surface_setup(params),
-        limiter,
+    core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
         ᶜρ_ref,
@@ -65,42 +60,64 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         ᶜT = similar(Y.c, FT),
         ᶜf,
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
-        params,
-        do_dss,
-        ghost_buffer,
-        net_energy_flux_toa,
-        net_energy_flux_sfc,
-        env_thermo_quad = SGSQuadrature(FT),
-        precomputed_quantities(Y, atmos)...,
-        scratch = temporary_quantities(Y, atmos),
-        numerics,
     )
-    set_precomputed_quantities!(Y, default_cache, FT(0))
-    default_cache.is_init[] = false
+
+    sfc_setup = surface_setup(params)
+    scratch = temporary_quantities(Y, atmos)
+    env_thermo_quad = SGSQuadrature(FT)
+
+    precomputed = precomputed_quantities(Y, atmos)
+    precomputing_arguments =
+        (; atmos, core, params, sfc_setup, precomputed, scratch, simulation)
+
+    # Coupler compatibility
+    isnothing(precomputing_arguments.sfc_setup) &&
+        SurfaceConditions.set_dummy_surface_conditions!(precomputing_arguments)
+
+    set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
-        (params, default_cache.ᶜp) : ()
+        (params, precomputed.ᶜp) : ()
 
-    return merge(
-        (;
-            hyperdiff = hyperdiffusion_cache(Y, atmos),
-            rayleigh_sponge = rayleigh_sponge_cache(Y, atmos),
-            viscous_sponge = viscous_sponge_cache(Y, atmos),
-            precipitation = precipitation_cache(Y, atmos),
-            large_scale_advection = large_scale_advection_cache(Y, atmos),
-            subsidence = subsidence_cache(Y, atmos),
-            edmf_coriolis = edmf_coriolis_cache(Y, atmos),
-            forcing = forcing_cache(Y, atmos),
-            non_orographic_gravity_wave = non_orographic_gravity_wave_cache(
-                Y,
-                atmos,
-            ),
-            orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos),
-            radiation = radiation_model_cache(Y, atmos, radiation_args...),
-        ),
-        (; Δt = simulation.dt),
-        (; atmos.turbconv_model),
-        default_cache,
+    hyperdiff = hyperdiffusion_cache(Y, atmos)
+    rayleigh_sponge = rayleigh_sponge_cache(Y, atmos)
+    viscous_sponge = viscous_sponge_cache(Y, atmos)
+    precipitation = precipitation_cache(Y, atmos)
+    subsidence = subsidence_cache(Y, atmos)
+    large_scale_advection = large_scale_advection_cache(Y, atmos)
+    edmf_coriolis = edmf_coriolis_cache(Y, atmos)
+    forcing = forcing_cache(Y, atmos)
+    non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
+    orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
+    radiation = radiation_model_cache(Y, atmos, radiation_args...)
+
+    p = (;
+        simulation,
+        atmos,
+        core,
+        sfc_setup,
+        params,
+        do_dss,
+        precomputed,
+        scratch,
+        hyperdiff,
+        rayleigh_sponge,
+        viscous_sponge,
+        precipitation,
+        subsidence,
+        large_scale_advection,
+        edmf_coriolis,
+        forcing,
+        non_orographic_gravity_wave,
+        orographic_gravity_wave,
+        radiation,
+        env_thermo_quad,
+        ghost_buffer,
+        dt = simulation.dt,
+        net_energy_flux_toa,
+        net_energy_flux_sfc,
+        numerics,
     )
+    return p
 end

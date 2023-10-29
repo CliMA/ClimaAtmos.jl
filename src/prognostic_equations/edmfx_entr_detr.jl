@@ -331,8 +331,8 @@ function edmfx_entr_detr_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜentrʲs, ᶜdetrʲs) = p
-    (; ᶜq_tot⁰, ᶜh_tot⁰, ᶠu₃⁰) = p
+    (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜq_tot⁰, ᶜh_tot⁰, ᶠu₃⁰) = p.precomputed
 
     for j in 1:n
 
