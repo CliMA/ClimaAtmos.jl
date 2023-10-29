@@ -223,7 +223,7 @@ function mixing_length(
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
-    a_pd = c_m * (ᶜstrain_rate_norm - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
+    a_pd = c_m * (2 * ᶜstrain_rate_norm - ᶜlinear_buoygrad / ᶜPr) * sqrt(ᶜtke)
     # Dissipation term
     c_neg = c_d * ᶜtke * sqrt(ᶜtke)
     if abs(a_pd) > eps(FT) && 4 * a_pd * c_neg > -(ᶜtke_exch * ᶜtke_exch)
@@ -252,7 +252,9 @@ function mixing_length(
     N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
     if N_eff > 0.0
         l_smag =
-            c_smag * ᶜdz * max(0, 1 - N_eff^2 / ᶜPr / ᶜstrain_rate_norm)^(1 / 4)
+            c_smag *
+            ᶜdz *
+            max(0, 1 - N_eff^2 / ᶜPr / (2 * ᶜstrain_rate_norm))^(1 / 4)
     else
         l_smag = c_smag * ᶜdz
     end
@@ -290,7 +292,7 @@ function turbulent_prandtl_number(
     Ri_c = CAP.Ri_crit(turbconv_params)
     ω_pr = CAP.Prandtl_number_scale(turbconv_params)
     Pr_n = CAP.Prandtl_number_0(turbconv_params)
-    ᶜRi_grad = min(ᶜlinear_buoygrad / max(ᶜstrain_rate_norm, eps(FT)), Ri_c)
+    ᶜRi_grad = min(ᶜlinear_buoygrad / max(2 * ᶜstrain_rate_norm, eps(FT)), Ri_c)
     if obukhov_length > 0 && ᶜRi_grad > 0 #stable
         # CSB (Dan Li, 2019, eq. 75), where ω_pr = ω_1 + 1 = 53.0 / 13.0
         prandtl_nvec =
