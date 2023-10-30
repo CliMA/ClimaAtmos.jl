@@ -77,7 +77,7 @@ function vertical_diffusion_boundary_layer_tendency!(
 )
     ᶜρ = Y.c.ρ
     FT = Spaces.undertype(axes(ᶜρ))
-    (; ᶜp, sfc_conditions, ᶜspecific) = p # assume ᶜts and ᶜp have been updated
+    (; ᶜp, ᶜspecific, sfc_conditions) = p.precomputed # assume ᶜts and ᶜp have been updated
     (; C_E) = p.atmos.vert_diff
 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -105,7 +105,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     end
 
     if :ρe_tot in propertynames(Y.c)
-        (; ᶜh_tot) = p
+        (; ᶜh_tot) = p.precomputed
 
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),

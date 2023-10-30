@@ -9,11 +9,14 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
 
+precipitation_cache(Y, atmos::AtmosModel) =
+    precipitation_cache(Y, atmos.precip_model)
+
 #####
 ##### No Precipitation
 #####
 
-precipitation_cache(Y, precip_model::NoPrecipitation) = (; precip_model)
+precipitation_cache(Y, precip_model::NoPrecipitation) = (;)
 precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 
 #####
@@ -23,7 +26,6 @@ precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 function precipitation_cache(Y, precip_model::Microphysics0Moment)
     FT = Spaces.undertype(axes(Y.c))
     return (;
-        precip_model,
         ᶜS_ρq_tot = similar(Y.c, FT),
         ᶜ3d_rain = similar(Y.c, FT),
         ᶜ3d_snow = similar(Y.c, FT),
@@ -33,7 +35,9 @@ function precipitation_cache(Y, precip_model::Microphysics0Moment)
 end
 
 function compute_precipitation_cache!(Y, p, colidx, ::Microphysics0Moment, _)
-    (; ᶜts, ᶜS_ρq_tot, params) = p
+    (; params) = p
+    (; ᶜts) = p.precomputed
+    (; ᶜS_ρq_tot) = p.precipitation
     cm_params = CAP.microphysics_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     #TODO missing limiting by q_tot/Δt
@@ -54,7 +58,8 @@ function compute_precipitation_cache!(
     # For environment we multiply by grid mean ρ and not byᶜρa⁰
     # I.e. assuming a⁰=1
 
-    (; ᶜS_ρq_tot, ᶜS_q_tot⁰, ᶜS_q_totʲs, ᶜρaʲs) = p
+    (; ᶜS_q_tot⁰, ᶜS_q_totʲs, ᶜρaʲs) = p.precomputed
+    (; ᶜS_ρq_tot) = p.precipitation
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     ρ = Y.c.ρ
 
@@ -72,20 +77,19 @@ function precipitation_tendency!(
     colidx,
     precip_model::Microphysics0Moment,
 )
+    (; ᶜT, ᶜΦ) = p.core
+    (; ᶜts,) = p.precomputed  # assume ᶜts has been updated
+    (; params) = p
+    (; turbconv_model) = p.atmos
     (;
-        ᶜts,
-        ᶜΦ,
-        ᶜT,
         ᶜ3d_rain,
         ᶜ3d_snow,
         ᶜS_ρq_tot,
         col_integrated_rain,
         col_integrated_snow,
-        params,
-        turbconv_model,
-    ) = p # assume ᶜts has been updated
+    ) = p.precipitation
+
     thermo_params = CAP.thermodynamics_params(params)
-    cm_params = CAP.microphysics_params(params)
     compute_precipitation_cache!(Y, p, colidx, precip_model, turbconv_model)
     if !isnothing(Yₜ)
         @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
@@ -118,11 +122,11 @@ function precipitation_tendency!(
         if turbconv_model isa DiagnosticEDMFX && !isnothing(Yₜ)
             @. Yₜ.c.ρe_tot[colidx] +=
                 sum(
-                    p.ᶜS_q_totʲs[colidx] *
-                    p.ᶜρaʲs[colidx] *
-                    p.ᶜS_e_totʲs_helper[colidx],
+                    p.precomputed.ᶜS_q_totʲs[colidx] *
+                    p.precomputed.ᶜρaʲs[colidx] *
+                    p.precomputed.ᶜS_e_totʲs_helper[colidx],
                 ) +
-                p.ᶜS_q_tot⁰[colidx] *
+                p.precomputed.ᶜS_q_tot⁰[colidx] *
                 Y.c.ρ[colidx] *
                 e_tot_0M_precipitation_sources_helper(
                     thermo_params,
@@ -150,7 +154,6 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
     FT = Spaces.undertype(axes(Y.c))
 
     return (;
-        precip_model,
         ᶜS_ρe_tot = similar(Y.c, FT),
         ᶜS_ρq_tot = similar(Y.c, FT),
         ᶜS_ρq_rai = similar(Y.c, FT),
@@ -238,7 +241,7 @@ function precipitation_tendency!(
     colidx,
     precip_model::Microphysics1Moment,
 )
-    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno) = p
+    (; ᶜS_ρe_tot, ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno) = p.precipitation
     compute_precipitation_cache!(
         Y,
         p,

@@ -105,13 +105,13 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
     (; turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
-
-    (; ᶜp, ᶜΦ, ᶠu³, ᶜh_tot, ᶜK) = p
-    (; q_tot) = p.ᶜspecific
+    (; ᶜΦ) = p.core
+    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
-        p.sfc_conditions
-    (; ᶜρaʲs, ᶠu³ʲs, ᶜuʲs, ᶜKʲs, ᶜh_totʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p
-    (; ᶠu³⁰, ᶜK⁰, ᶜh_tot⁰) = p
+        p.precomputed.sfc_conditions
+    (; ᶜρaʲs, ᶠu³ʲs, ᶜKʲs, ᶜh_totʲs, ᶜq_totʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜh_tot⁰) = p.precomputed
 
     thermo_params = CAP.thermodynamics_params(p.params)
 
@@ -231,9 +231,10 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
     ᶜz = Fields.coordinate_field(Y.c).z
     (; params) = p
     (; dt) = p.simulation
-    (; ᶜp, ᶜΦ, ᶜρ_ref, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p
-    (; q_tot) = p.ᶜspecific
-    (; buoyancy_flux) = p.sfc_conditions
+    (; ᶜΦ, ᶜρ_ref) = p.core
+    (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
+    (; buoyancy_flux) = p.precomputed.sfc_conditions
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -247,8 +248,8 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         ᶜnh_pressureʲs,
         ᶜS_q_totʲs,
         ᶜS_e_totʲs_helper,
-    ) = p
-    (; ᶠu³⁰, ᶜK⁰, ᶜh_tot⁰) = p
+    ) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜh_tot⁰) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
 
@@ -618,8 +619,8 @@ Updates the top boundary condition of precomputed quantities stored in `p` for d
 """
 function set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜentrʲs, ᶜdetrʲs, ᶜS_q_totʲs, ᶜS_e_totʲs_helper) = p
-    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs) = p
+    (; ᶜentrʲs, ᶜdetrʲs, ᶜS_q_totʲs, ᶜS_e_totʲs_helper) = p.precomputed
+    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs) = p.precomputed
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
@@ -665,13 +666,13 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p.simulation
-    (; ᶜp, ᶜu, ᶜts) = p
-    (; q_tot) = p.ᶜspecific
-    (; ustar, obukhov_length) = p.sfc_conditions
-    (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p
-    (; ᶜtke⁰, ᶠu³⁰, ᶜS_q_tot⁰, ᶜu⁰) = p
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p
-    (; ᶜK_h, ᶜK_u, ρatke_flux) = p
+    (; ᶜp, ᶜu, ᶜts) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
+    (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜtke⁰, ᶠu³⁰, ᶜS_q_tot⁰, ᶜu⁰) = p.precomputed
+    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p.precomputed
+    (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)

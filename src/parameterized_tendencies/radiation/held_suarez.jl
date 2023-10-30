@@ -5,11 +5,13 @@
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
+forcing_cache(Y, atmos::AtmosModel) = forcing_cache(Y, atmos.forcing_type)
+
 #####
 ##### No forcing
 #####
 
-forcing_cache(Y, forcing_type::Nothing) = (; forcing_type)
+forcing_cache(Y, forcing_type::Nothing) = (;)
 forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 
 #####
@@ -19,7 +21,6 @@ forcing_tendency!(Yₜ, Y, p, t, colidx, ::Nothing) = nothing
 function forcing_cache(Y, forcing_type::HeldSuarezForcing)
     FT = Spaces.undertype(axes(Y.c))
     return (;
-        forcing_type,
         ᶜσ = similar(Y.c, FT),
         ᶜheight_factor = similar(Y.c, FT),
         ᶜΔρT = similar(Y.c, FT),
@@ -27,8 +28,27 @@ function forcing_cache(Y, forcing_type::HeldSuarezForcing)
     )
 end
 
+function held_suarez_ΔT_y_T_equator(params, moisture_model::DryModel)
+    FT = eltype(params)
+    ΔT_y = FT(CAP.ΔT_y_dry(params))
+    T_equator = FT(CAP.T_equator_dry(params))
+    return ΔT_y, T_equator
+end
+
+function held_suarez_ΔT_y_T_equator(
+    params,
+    moisture_model::T,
+) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
+    FT = eltype(params)
+    ΔT_y = FT(CAP.ΔT_y_wet(params))
+    T_equator = FT(CAP.T_equator_wet(params))
+    return ΔT_y, T_equator
+end
+
 function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
-    (; sfc_conditions, ᶜp, ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ, params) = p
+    (; params) = p
+    (; ᶜp, sfc_conditions) = p.precomputed
+    (; ᶜσ, ᶜheight_factor, ᶜΔρT, ᶜφ) = p.forcing
 
     # TODO: Don't need to enforce FT here, it should be done at param creation.
     FT = Spaces.undertype(axes(Y.c))
@@ -50,13 +70,7 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
     z_surface =
         Fields.level(Fields.coordinate_field(Y.f).z[colidx], Fields.half)
 
-    if :ρq_tot in propertynames(Y.c)
-        ΔT_y = FT(CAP.ΔT_y_wet(params))
-        T_equator = FT(CAP.T_equator_wet(params))
-    else
-        ΔT_y = FT(CAP.ΔT_y_dry(params))
-        T_equator = FT(CAP.T_equator_dry(params))
-    end
+    ΔT_y, T_equator = held_suarez_ΔT_y_T_equator(params, p.atmos.moisture_model)
 
     @. ᶜσ[colidx] =
         ᶜp[colidx] / (

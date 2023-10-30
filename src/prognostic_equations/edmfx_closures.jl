@@ -95,8 +95,6 @@ function ᶠupdraft_nh_pressure(
     end
 end
 
-edmfx_nh_pressure_cache(Y, turbconv_model) = (;)
-
 edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
 function edmfx_nh_pressure_tendency!(
     Yₜ,
@@ -108,7 +106,9 @@ function edmfx_nh_pressure_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; params, ᶜρʲs, ᶠgradᵥ_ᶜΦ, ᶠu₃⁰) = p
+    (; params) = p
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶜρʲs, ᶠu₃⁰) = p.precomputed
     FT = eltype(Y)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)

@@ -7,11 +7,13 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Operators as Operators
 
+subsidence_cache(Y, atmos::AtmosModel) = subsidence_cache(Y, atmos.subsidence)
+
 #####
 ##### No subsidence
 #####
 
-subsidence_cache(Y, subsidence::Nothing) = (; subsidence)
+subsidence_cache(Y, subsidence::Nothing) = (;)
 subsidence_tendency!(Yₜ, Y, p, t, colidx, subsidence::Nothing) = nothing
 
 #####
@@ -22,7 +24,6 @@ function subsidence_cache(Y, subsidence::Subsidence)
     FT = Spaces.undertype(axes(Y.c))
     toa(f) = Spaces.level(f, Spaces.nlevels(axes(f)))
     return (;
-        subsidence,
         ᶜsubsidence = similar(Y.c, FT), # TODO: fix types
         ᶜ∇MSE_gm = similar(Y.c, FT), # TODO: fix types
         ᶜ∇q_tot_gm = similar(Y.c, FT), # TODO: fix types
@@ -35,14 +36,14 @@ end
 
 function subsidence_tendency!(Yₜ, Y, p, t, colidx, ::Subsidence)
     moisture_model = p.atmos.moisture_model
-    subsidence_profile = p.subsidence.prof
-    ᶜ∇MSE_gm = p.ᶜ∇MSE_gm[colidx]
-    ᶜsubsidence = p.ᶜsubsidence[colidx]
-    ᶜ∇q_tot_gm = p.ᶜ∇q_tot_gm[colidx]
-    ᶜK = p.ᶜK[colidx]
-    ᶜh_tot = p.ᶜh_tot[colidx]
-    ᶜMSE_gm_toa = p.ᶜMSE_gm_toa[colidx]
-    ᶜq_tot_gm_toa = p.ᶜq_tot_gm_toa[colidx]
+    subsidence_profile = p.atmos.subsidence.prof
+    ᶜ∇MSE_gm = p.subsidence.ᶜ∇MSE_gm[colidx]
+    ᶜsubsidence = p.subsidence.ᶜsubsidence[colidx]
+    ᶜ∇q_tot_gm = p.subsidence.ᶜ∇q_tot_gm[colidx]
+    ᶜK = p.precomputed.ᶜK[colidx]
+    ᶜh_tot = p.precomputed.ᶜh_tot[colidx]
+    ᶜMSE_gm_toa = p.subsidence.ᶜMSE_gm_toa[colidx]
+    ᶜq_tot_gm_toa = p.subsidence.ᶜq_tot_gm_toa[colidx]
 
     toa(f) = Spaces.level(f, Spaces.nlevels(axes(f)))
     wvec = Geometry.WVector

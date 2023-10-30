@@ -68,7 +68,7 @@ allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     67443909648
 allocs_limit["flame_perf_target_threaded"] = 5857808
 allocs_limit["flame_perf_target_callbacks"] = 46407936
-allocs_limit["flame_perf_gw"] = 4844555632
+allocs_limit["flame_perf_gw"] = 4868951088
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"

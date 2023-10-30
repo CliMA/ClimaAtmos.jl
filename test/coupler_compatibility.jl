@@ -61,11 +61,13 @@ const T2 = 290
     # temperature to T1 and then to T2.
     @. sfc_setup.T = FT(T1)
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
-    sfc_T = @. TD.air_temperature(thermo_params, p.sfc_conditions.ts)
+    sfc_T =
+        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
     @test all(isequal(T1), parent(sfc_T))
     @. sfc_setup.T = FT(T2)
     CA.set_precomputed_quantities!(Y, p_overwritten, t)
-    sfc_T = @. TD.air_temperature(thermo_params, p.sfc_conditions.ts)
+    sfc_T =
+        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
     @test all(isequal(T2), parent(sfc_T))
 end
 
@@ -92,7 +94,8 @@ end
     # Define a function for updating these fields, given the temperature at the
     # surface and the current cache p.
     function update_surface_fields!(sfc_ts, sfc_conditions, surface_T, p)
-        (; ᶜts, ᶜu, params) = p
+        (; params) = p
+        (; ᶜts, ᶜu) = p.precomputed
         thermo_params = CAP.thermodynamics_params(params)
         surface_params = CAP.surface_fluxes_params(params)
 
@@ -158,11 +161,13 @@ end
     # temperature to T1 and then to T2.
     update_surface_fields!(sfc_ts, sfc_conditions, FT(T1), p)
     CA.SurfaceConditions.set_surface_conditions!(p, sfc_conditions, sfc_ts)
-    sfc_T = @. TD.air_temperature(thermo_params, p.sfc_conditions.ts)
+    sfc_T =
+        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
     @test all(isequal(T1), parent(sfc_T))
     update_surface_fields!(sfc_ts, sfc_conditions, FT(T2), p)
     CA.SurfaceConditions.set_surface_conditions!(p, sfc_conditions, sfc_ts)
-    sfc_T = @. TD.air_temperature(thermo_params, p.sfc_conditions.ts)
+    sfc_T =
+        @. TD.air_temperature(thermo_params, p.precomputed.sfc_conditions.ts)
     @test all(isequal(T2), parent(sfc_T))
 end
 

@@ -62,7 +62,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; dt) = p.simulation
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜspecific, ᶠu³, ᶜp, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
+    (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
+    (; ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
     ᶜ1 = p.scratch.ᶜtemp_scalar
     @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
@@ -77,7 +78,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     )
 
     if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p
+        (; ᶜh_tot) = p.precomputed
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
             ᶜJ[colidx],

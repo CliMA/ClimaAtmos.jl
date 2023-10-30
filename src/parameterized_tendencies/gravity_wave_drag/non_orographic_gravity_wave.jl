@@ -6,21 +6,21 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 
-non_orographic_gravity_wave_cache(atmos, Y) = non_orographic_gravity_wave_cache(
-    atmos.non_orographic_gravity_wave,
-    atmos.model_config,
-    Y,
-)
+non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
+    non_orographic_gravity_wave_cache(
+        Y,
+        atmos.non_orographic_gravity_wave,
+        atmos.model_config,
+    )
 
-non_orographic_gravity_wave_cache(::Nothing, ::AbstractModelConfig, Y) =
-    NamedTuple()
+non_orographic_gravity_wave_cache(Y, ::Nothing, ::AbstractModelConfig) = (;)
 
 non_orographic_gravity_wave_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function non_orographic_gravity_wave_cache(
+    Y,
     gw::NonOrographyGravityWave,
     ::SingleColumnModel,
-    Y,
 )
     FT = Spaces.undertype(axes(Y.c))
     (; source_height, Bw, Bn, Bt_0, dc, cmax, c0, nk, cw, cn) = gw
@@ -45,9 +45,9 @@ function non_orographic_gravity_wave_cache(
 end
 
 function non_orographic_gravity_wave_cache(
+    Y,
     gw::NonOrographyGravityWave,
     ::SphericalModel,
-    Y,
 )
 
     FT = Spaces.undertype(axes(Y.c))
@@ -113,7 +113,10 @@ function non_orographic_gravity_wave_tendency!(
     ::NonOrographyGravityWave,
 )
     #unpack
-    (; ᶜts, ᶜT, ᶜdTdz, ᶜbuoyancy_frequency, params) = p
+    (; ᶜT,) = p.core
+    (; ᶜts) = p.precomputed
+    (; params) = p
+    (; ᶜdTdz, ᶜbuoyancy_frequency) = p.non_orographic_gravity_wave
     (; model_config) = p.atmos
     (;
         gw_source_ampl,
@@ -125,12 +128,12 @@ function non_orographic_gravity_wave_tendency!(
         gw_flag,
         gw_c0,
         gw_nk,
-    ) = p
+    ) = p.non_orographic_gravity_wave
 
     if model_config isa SingleColumnModel
-        (; gw_source_height) = p
+        (; gw_source_height) = p.non_orographic_gravity_wave
     elseif model_config isa SphericalModel
-        (; gw_source_pressure, gw_damp_pressure) = p
+        (; gw_source_pressure, gw_damp_pressure) = p.non_orographic_gravity_wave
     end
     ᶜρ = Y.c.ρ
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -165,7 +168,7 @@ function non_orographic_gravity_wave_tendency!(
             parent(damp_level[colidx]) .= length(parent(ᶜz[colidx]))
         end
     elseif model_config isa SphericalModel
-        (; ᶜp) = p
+        (; ᶜp) = p.precomputed
         # source level: the index of the highest level whose pressure is higher than source pressure
         source_level = similar(Fields.level(Y.c.ρ, 1))
         Fields.bycolumn(axes(ᶜρ)) do colidx
@@ -256,8 +259,8 @@ function non_orographic_gravity_wave_forcing(
     nk,
 )
     FT = eltype(ᶜz)
-    # add an extra layer above model top so that forcing between the very top 
-    # model layer and the upper boundary can be calculated 
+    # add an extra layer above model top so that forcing between the very top
+    # model layer and the upper boundary can be calculated
     append!(ᶜu, FT(2) * ᶜu[end] - ᶜu[end - 1])
     append!(ᶜρ, ᶜρ[end] * ᶜρ[end] / ᶜρ[end - 1])
     append!(ᶜbf, ᶜbf[end])
@@ -359,10 +362,10 @@ function non_orographic_gravity_wave_forcing(
 
         end # k
 
-        # model top: deposit remaining momentum flux that goes across the model top 
+        # model top: deposit remaining momentum flux that goes across the model top
         # to the levels above the damp level
         # This is not included in Joan Alexander's original code nor the GFDL implementation;
-        # but is added in MiMA based on Tiffany Shaw's paper: 
+        # but is added in MiMA based on Tiffany Shaw's paper:
         # https://journals.ametsoc.org/view/journals/clim/22/10/2009jcli2688.1.xml?tab_body=pdf
         for k in damp_level:(length(ᶜu) - 1)
             wave_forcing[k] =

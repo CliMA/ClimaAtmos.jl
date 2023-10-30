@@ -74,9 +74,9 @@ add_diagnostic_variable!(
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.UVector.(cache.ᶜu).components.data.:1)
+            return copy(Geometry.UVector.(cache.precomputed.ᶜu).components.data.:1)
         else
-            out .= Geometry.UVector.(cache.ᶜu).components.data.:1
+            out .= Geometry.UVector.(cache.precomputed.ᶜu).components.data.:1
         end
     end,
 )
@@ -92,9 +92,9 @@ add_diagnostic_variable!(
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.VVector.(cache.ᶜu).components.data.:1)
+            return copy(Geometry.VVector.(cache.precomputed.ᶜu).components.data.:1)
         else
-            out .= Geometry.VVector.(cache.ᶜu).components.data.:1
+            out .= Geometry.VVector.(cache.precomputed.ᶜu).components.data.:1
         end
     end,
 )
@@ -113,9 +113,9 @@ add_diagnostic_variable!(
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.WVector.(cache.ᶜu).components.data.:1)
+            return copy(Geometry.WVector.(cache.precomputed.ᶜu).components.data.:1)
         else
-            out .= Geometry.WVector.(cache.ᶜu).components.data.:1
+            out .= Geometry.WVector.(cache.precomputed.ᶜu).components.data.:1
         end
     end,
 )
@@ -131,9 +131,9 @@ add_diagnostic_variable!(
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.air_temperature.(thermo_params, cache.ᶜts)
+            return TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
         else
-            out .= TD.air_temperature.(thermo_params, cache.ᶜts)
+            out .= TD.air_temperature.(thermo_params, cache.precomputed.ᶜts)
         end
     end,
 )
@@ -149,9 +149,9 @@ add_diagnostic_variable!(
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.dry_pottemp.(thermo_params, cache.ᶜts)
+            return TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
         else
-            out .= TD.dry_pottemp.(thermo_params, cache.ᶜts)
+            out .= TD.dry_pottemp.(thermo_params, cache.precomputed.ᶜts)
         end
     end,
 )
@@ -166,9 +166,9 @@ add_diagnostic_variable!(
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.specific_enthalpy.(thermo_params, cache.ᶜts)
+            return TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
         else
-            out .= TD.specific_enthalpy.(thermo_params, cache.ᶜts)
+            out .= TD.specific_enthalpy.(thermo_params, cache.precomputed.ᶜts)
         end
     end,
 )
@@ -182,9 +182,9 @@ add_diagnostic_variable!(
     units = "Pa",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.ᶜp)
+            return copy(cache.precomputed.ᶜp)
         else
-            out .= cache.ᶜp
+            out .= cache.precomputed.ᶜp
         end
     end,
 )
@@ -228,9 +228,9 @@ function compute_hur!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.relative_humidity.(thermo_params, cache.ᶜts)
+        return TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
     else
-        out .= TD.relative_humidity.(thermo_params, cache.ᶜts)
+        out .= TD.relative_humidity.(thermo_params, cache.precomputed.ᶜts)
     end
 end
 
@@ -291,9 +291,13 @@ function compute_clw!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(thermo_params, cache.ᶜts)
+        return TD.liquid_specific_humidity.(
+            thermo_params,
+            cache.precomputed.ᶜts,
+        )
     else
-        out .= TD.liquid_specific_humidity.(thermo_params, cache.ᶜts)
+        out .=
+            TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
     end
 end
 
@@ -303,9 +307,9 @@ add_diagnostic_variable!(
     standard_name = "mass_fraction_of_cloud_liquid_water_in_air",
     units = "kg kg^-1",
     comments = """
-    Includes both large-scale and convective cloud. 
-    This is calculated as the mass of cloud liquid water in the grid cell divided by 
-    the mass of air (including the water in all phases) in the grid cells. 
+    Includes both large-scale and convective cloud.
+    This is calculated as the mass of cloud liquid water in the grid cell divided by
+    the mass of air (including the water in all phases) in the grid cells.
     """,
     compute! = compute_clw!,
 )
@@ -327,9 +331,9 @@ function compute_cli!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(thermo_params, cache.ᶜts)
+        return TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
     else
-        out .= TD.ice_specific_humidity.(thermo_params, cache.ᶜts)
+        out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
     end
 end
 
@@ -339,8 +343,8 @@ add_diagnostic_variable!(
     standard_name = "mass_fraction_of_cloud_ice_in_air",
     units = "kg kg^-1",
     comments = """
-    Includes both large-scale and convective cloud. 
-    This is calculated as the mass of cloud ice in the grid cell divided by 
+    Includes both large-scale and convective cloud.
+    This is calculated as the mass of cloud ice in the grid cell divided by
     the mass of air (including the water in all phases) in the grid cell.
     """,
     compute! = compute_cli!,
@@ -365,11 +369,14 @@ function compute_hussfc!(
     if isnothing(out)
         return TD.total_specific_humidity.(
             thermo_params,
-            cache.sfc_conditions.ts,
+            cache.precomputed.sfc_conditions.ts,
         )
     else
         out .=
-            TD.total_specific_humidity.(thermo_params, cache.sfc_conditions.ts)
+            TD.total_specific_humidity.(
+                thermo_params,
+                cache.precomputed.sfc_conditions.ts,
+            )
     end
 end
 
@@ -394,9 +401,16 @@ add_diagnostic_variable!(
     compute! = (out, state, cache, time) -> begin
         thermo_params = CAP.thermodynamics_params(cache.params)
         if isnothing(out)
-            return TD.air_temperature.(thermo_params, cache.sfc_conditions.ts)
+            return TD.air_temperature.(
+                thermo_params,
+                cache.precomputed.sfc_conditions.ts,
+            )
         else
-            out .= TD.air_temperature.(thermo_params, cache.sfc_conditions.ts)
+            out .=
+                TD.air_temperature.(
+                    thermo_params,
+                    cache.precomputed.sfc_conditions.ts,
+                )
         end
     end,
 )
@@ -411,7 +425,7 @@ function compute_tau!(out, state, cache, component, energy_form::TotalEnergy)
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
-    (; ρ_flux_uₕ) = cache.sfc_conditions
+    (; ρ_flux_uₕ) = cache.precomputed.sfc_conditions
 
     if isnothing(out)
         return getproperty(
@@ -464,7 +478,7 @@ compute_hfes!(_, _, _, _, energy_form::T) where {T} =
     error_diagnostic_variable("hfes", energy_form)
 
 function compute_hfes!(out, state, cache, time, energy_form::TotalEnergy)
-    (; ρ_flux_h_tot) = cache.sfc_conditions
+    (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
@@ -513,7 +527,7 @@ function compute_evspsbl!(
     moisture_model::T,
     energy_form::TotalEnergy,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    (; ρ_flux_q_tot) = cache.sfc_conditions
+    (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
@@ -543,9 +557,12 @@ compute_pr!(_, _, _, _, precip_model::T) where {T} =
 
 function compute_pr!(out, state, cache, time, precip_model::Microphysics0Moment)
     if isnothing(out)
-        return cache.col_integrated_rain .+ cache.col_integrated_snow
+        return cache.precipitation.col_integrated_rain .+
+               cache.precipitation.col_integrated_snow
     else
-        out .= cache.col_integrated_rain .+ cache.col_integrated_snow
+        out .=
+            cache.precipitation.col_integrated_rain .+
+            cache.precipitation.col_integrated_snow
     end
 end
 

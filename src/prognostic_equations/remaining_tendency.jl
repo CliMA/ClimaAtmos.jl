@@ -18,10 +18,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, p.atmos.rayleigh_sponge)
-        forcing_tendency!(Yₜ, Y, p, t, colidx, p.forcing_type)
-        subsidence_tendency!(Yₜ, Y, p, t, colidx, p.subsidence)
-        edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.edmf_coriolis)
-        large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.ls_adv)
+        forcing_tendency!(Yₜ, Y, p, t, colidx, p.atmos.forcing_type)
+        subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
+        edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
+        large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
 
         (; vert_diff) = p.atmos
         vertical_diffusion_boundary_layer_tendency!(
@@ -33,8 +33,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             vert_diff,
         )
 
-        radiation_tendency!(Yₜ, Y, p, t, colidx, p.radiation_model)
-        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
+        radiation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.radiation_mode)
+        edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_sgs_mass_flux_tendency!(
             Yₜ,
             Y,
@@ -51,13 +51,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             colidx,
             p.atmos.turbconv_model,
         )
-        edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
-        edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.turbconv_model)
-        precipitation_tendency!(Yₜ, Y, p, t, colidx, p.precip_model)
+        edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        precipitation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.precip_model)
+
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
 
-        # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
+        # NOTE: This will zero out all momentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
     end
