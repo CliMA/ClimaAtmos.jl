@@ -118,8 +118,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             @. insolation_tuple = instantaneous_zenith_angle(
                 current_datetime,
                 orbital_data,
-                Float64(bottom_coords.long),
-                Float64(bottom_coords.lat),
+                bottom_coords.long,
+                bottom_coords.lat,
                 ref_insolation_params,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
             @. solar_zenith_angle =
