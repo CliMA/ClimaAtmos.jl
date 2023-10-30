@@ -258,6 +258,7 @@ function mixing_length(
     else
         l_smag = c_smag * ᶜdz
     end
+    l_smag = FT(10)
     
     # get soft minimum
     l_smin = lamb_smooth_minimum(SA.SVector(l_N, l_TKE, l_W), smin_ub, smin_rm)
