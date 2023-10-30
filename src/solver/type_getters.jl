@@ -831,14 +831,13 @@ function get_integrator(config::AtmosConfig)
     # reason, we only add one callback to the integrator, and this function takes care of
     # executing the other callbacks. This single function is orchestrate_diagnostics
 
-    function orchestrate_diagnostics(integrator)
-        diagnostics_to_be_run = filter(
-            d -> d.cbf.n > 0 && integrator.step % d.cbf.n == 0,
-            diagnostics_functions,
-        )
-
-        for diag_func in diagnostics_to_be_run
-            diag_func.f!(integrator)
+    orchestrate_diagnostics = let diagnostics_functions = diagnostics_functions
+        integrator -> begin
+            for d in diagnostics_functions
+                if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
+                    d.f!(integrator)
+                end
+            end
         end
     end
 
