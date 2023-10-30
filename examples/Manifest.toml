@@ -2,7 +2,11 @@
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
+<<<<<<< HEAD
 project_hash = "3d0dc3a5871f31c83588896b9d599cb1fb29c6bb"
+=======
+project_hash = "314cba4e1f6458dfa3aaef9b3bde09b147ed6b03"
+>>>>>>> 4226bf89 (update to latest ClimaCore + CUDA, fix GC issues in pipeline)
 
 [[deps.ADTypes]]
 git-tree-sha1 = "5d2e21d7b0d8c22f67483ef95ebdc39c0e6b6003"
