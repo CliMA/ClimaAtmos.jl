@@ -1,4 +1,4 @@
-job_id: "prognostic_edmfx_gabls_tke_box"
+job_id: "prognostic_edmfx_gabls_tke_column"
 initial_condition: GABLS
 edmf_coriolis: GABLS
 surface_setup: GABLS
@@ -11,11 +11,8 @@ edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
 prognostic_tke: true
 moist: "equil"
-config: "box"
-hyperdiff: "true"
-kappa_4: 1e12
-x_max: 1e5
-y_max: 1e5
+config: "column"
+hyperdiff: "false"
 z_max: 400
 x_elem: 2
 y_elem: 2
