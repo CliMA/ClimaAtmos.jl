@@ -290,9 +290,11 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ᶜtke_exch,
     )
 
+    c_smag = CAP.c_smag(params)
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)
     @. ᶜK_u = c_m * ᶜmixing_length * sqrt(max(ᶜtke⁰, 0))
+    @. ᶜK_u = max(ᶜK_u, 10 * (c_smag * ᶜdz)^2 * sqrt(ᶜstrain_rate_norm))
     @. ᶜK_h = ᶜK_u / ᶜprandtl_nvec
 
     ρatke_flux_values = Fields.field_values(ρatke_flux)
