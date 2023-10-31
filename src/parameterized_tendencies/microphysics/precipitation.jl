@@ -20,7 +20,7 @@ precipitation_cache(Y, precip_model::NoPrecipitation) = (;)
 precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 
 #####
-##### 0-Moment without sgs scheme
+##### 0-Moment without sgs scheme or with diagnostic edmf
 #####
 
 function precipitation_cache(Y, precip_model::Microphysics0Moment)
@@ -142,5 +142,56 @@ function precipitation_tendency!(
                 )
         end
     end
+    return nothing
+end
+
+#####
+##### 1-Moment without sgs scheme
+#####
+
+function precipitation_cache(Y, precip_model::Microphysics1Moment)
+    FT = Spaces.undertype(axes(Y.c))
+    return (;
+        ᶜS_ρq_tot = similar(Y.c, FT),
+        ᶜS_ρq_rai = similar(Y.c, FT),
+        ᶜS_ρq_sno = similar(Y.c, FT),
+        ᶜS_ρe_tot = similar(Y.c, FT),
+        ᶜterm_vel_rain = similar(Y.c, FT),
+        ᶜterm_vel_snow = similar(Y.c, FT),
+    )
+end
+
+function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
+    (; params) = p
+    (; ᶜts) = p.precomputed
+    (; ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_ρe_tot) = p.precipitation
+    (; ᶜterm_vel_rain, ᶜterm_vel_snow) = p.precipitation
+    cmp = CAP.microphysics_params(params)
+    thp = CAP.thermodynamics_params(params)
+
+    @. ᶜS_ρq_tot[colidx] = Y.c.ρ[colidx] * FT(0)
+    @. ᶜS_ρe_tot[colidx] = Y.c.ρ[colidx] * FT(0)
+    @. ᶜS_ρq_rai[colidx] = Y.c.ρ[colidx] * FT(0)
+    @. ᶜS_ρq_sno[colidx] = Y.c.ρ[colidx] * FT(0)
+
+end
+
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    precip_model::Microphysics1Moment,
+)
+
+    (; ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_ρe_tot) = p.precipitation
+
+    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+    @. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]
+    @. Yₜ.c.ρq_rai[colidx] += ᶜS_ρq_rai[colidx]
+    @. Yₜ.c.ρq_sno[colidx] += ᶜS_ρq_sno[colidx]
+
     return nothing
 end
