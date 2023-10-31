@@ -69,9 +69,12 @@ function add_dimension_maybe!(
             dim.attrib[String(k)] = v
         end
 
-        # We use copyto! so that we don't have to specify the dimensions (e.g., instead of
-        # dim[:]), since the dimensions could be different when working with topography.
-        copyto!(dim, points)
+        if length(size(points)) == 1
+            dim[:] = points
+        else
+            # We have topography
+            dim[:, :, :] = points
+        end
     end
     return nothing
 end
@@ -154,11 +157,6 @@ function add_space_coordinates_maybe!(
     return [name]
 end
 
-# For the horizontal space, we also have to look at the domain, so we define another set of
-# functions that dispatches over the domain
-target_coordinates(space::Spaces.AbstractSpectralElementSpace, num_points) =
-    target_coordinates(space, num_points, Meshes.domain(space.topology.mesh))
-
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.AbstractSpectralElementSpace,
@@ -167,8 +165,14 @@ add_space_coordinates_maybe!(
     nc,
     space,
     num_points,
-    Meshes.domain(space.topology.mesh),
+    Meshes.domain(space.topology),
 )
+
+
+# For the horizontal space, we also have to look at the domain, so we define another set of
+# functions that dispatches over the domain
+target_coordinates(space::Spaces.AbstractSpectralElementSpace, num_points) =
+    target_coordinates(space, num_points, Meshes.domain(space.topology))
 
 # Box
 function target_coordinates(
@@ -386,16 +390,12 @@ function hcoords_from_horizontal_space(
 end
 
 """
-    hcoords_from_horizontal_space(space, hpts)
+    hcoords_from_horizontal_space(space, domain, hpts)
 
-Prepare the matrix of horizontal coordinates with the correct type according to the given
-`space` (e.g., `ClimaCore.Geometry.LatLongPoint`s).
+Prepare the matrix of horizontal coordinates with the correct type according to the given `space`
+and `domain` (e.g., `ClimaCore.Geometry.LatLongPoint`s).
 """
-hcoords_from_horizontal_space(space, hpts) = hcoords_from_horizontal_space(
-    space,
-    Meshes.domain(space.topology.mesh),
-    hpts,
-)
+function hcoords_from_horizontal_space(space, domain, hpts) end
 
 struct NetCDFWriter{T, TS}
 
@@ -478,7 +478,11 @@ function NetCDFWriter(;
     elseif hypsography isa Hypsography.LinearAdaption
         horizontal_space = axes(hypsography.surface)
         hpts = target_coordinates(horizontal_space, num_points)
-        hcoords = hcoords_from_horizontal_space(horizontal_space, hpts)
+        hcoords = hcoords_from_horizontal_space(
+            horizontal_space,
+            horizontal_space.topology.mesh.domain,
+            hpts,
+        )
         vcoords = []
         remapper = Remapper(hcoords, vcoords, horizontal_space)
         interpolated_surface =
@@ -488,11 +492,11 @@ function NetCDFWriter(;
     end
 
     return NetCDFWriter{typeof(num_points), typeof(interpolated_surface)}(
-        Dict(), # remappers
+        Dict(),
         num_points,
         compression_level,
         interpolated_surface,
-        Dict(), # open_files
+        Dict(),
         interpolate_z_over_msl,
     )
 end
@@ -532,7 +536,11 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
 
         # zcoords is going to be empty for a 2D horizontal slice
         zcoords = [Geometry.ZPoint(p) for p in vpts]
-        hcoords = hcoords_from_horizontal_space(horizontal_space, hpts)
+        hcoords = hcoords_from_horizontal_space(
+            horizontal_space,
+            Meshes.domain(horizontal_space.topology),
+            hpts,
+        )
 
         writer.remappers[var.short_name] = Remapper(hcoords, zcoords, space)
     end
@@ -598,7 +606,12 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
 
     nc["time"][time_index] = integrator.t
 
-    # selectdim(v, 1, time_index) is equivalent to v[time_index, :, :] or
-    # v[time_index, :, :, :] in 3/4 dimensions
-    selectdim(v, 1, time_index) .= interpolated_field
+    # TODO: It would be nice to find a cleaner way to do this
+    if length(dim_names) == 3
+        v[time_index, :, :, :] = interpolated_field
+    elseif length(dim_names) == 2
+        v[time_index, :, :] = interpolated_field
+    elseif length(dim_names) == 1
+        v[time_index, :] = interpolated_field
+    end
 end
