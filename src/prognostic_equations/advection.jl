@@ -20,7 +20,9 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρ -= wdivₕ(Y.c.ρ * ᶜu)
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -= wdivₕ(Y.c.sgsʲs.:($$j).ρa * ᶜuʲs.:($$j))
+            @. Yₜ.c.sgsʲs.:($$j).a -=
+                wdivₕ(Y.c.sgsʲs.:($$j).a * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).a * wdivₕ(ᶜuʲs.:($$j))
         end
     end
 
@@ -137,15 +139,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # TODO: Move this to implicit_vertical_advection_tendency!.
         if p.atmos.turbconv_model isa PrognosticEDMFX
             for j in 1:n
-                @. ᶜa_scalar[colidx] =
-                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
-                vertical_transport!(
-                    Yₜ.c.sgsʲs.:($j).ρa[colidx],
-                    ᶜJ[colidx],
-                    ᶜρʲs.:($j)[colidx],
+                vertical_advection!(
+                    Yₜ.c.sgsʲs.:($j).a[colidx],
                     ᶠu³ʲs.:($j)[colidx],
-                    ᶜa_scalar[colidx],
-                    dt,
+                    Y.c.sgsʲs.:($j).a[colidx],
                     edmfx_upwinding,
                 )
 

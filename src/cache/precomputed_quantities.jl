@@ -84,6 +84,7 @@ function precomputed_quantities(Y, atmos)
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜρaʲs = similar(Y.c, NTuple{n, FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
@@ -184,11 +185,11 @@ function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ�
     return nothing
 end
 
-function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
-    ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
+function set_sgs_ᶠu₃!(w_function, ᶠu₃, ᶜρaʲs, Y, turbconv_model)
+    #ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
     u₃ʲs(sgsʲs) = map(sgsʲ -> sgsʲ.u₃, sgsʲs)
     @. ᶠu₃ = w_function(
-        ᶠinterp(ρaʲs(Y.c.sgsʲs)),
+        ᶠinterp(ᶜρaʲs),
         u₃ʲs(Y.f.sgsʲs),
         ᶠinterp(Y.c.ρ),
         Y.f.u₃,
@@ -198,12 +199,12 @@ function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
 end
 
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
-    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Yf.u₃, CT3(ᶠu₃⁰ - Yf.u₃))) / 2 / Yc.ρ
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
-        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-        @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Yf.u₃, CT3(ᶠu₃ʲ - Yf.u₃))) / 2 / Yc.ρ
-    end
+    @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Yc.ρ
+    # for j in 1:n_mass_flux_subdomains(turbconv_model)
+    #     ᶜρaʲ = p.ᶜρaʲs.:($j)
+    #     ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
+    #     @. ᶜK += ᶜρaʲ * ᶜinterp(dot(ᶠu₃ʲ - Y.f.u₃, CT3(ᶠu₃ʲ - Y.f.u₃))) / 2 / Yc.ρ
+    # end
     return nothing
 end
 
@@ -368,7 +369,7 @@ values of the first updraft.
 function output_prognostic_sgs_quantities(Y, p, t)
     (; turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜρa⁰, ᶜρ⁰, ᶜtsʲs) = p.precomputed
+    (; ᶜρa⁰, ᶜρ⁰, ᶜtsʲs, ᶜρaʲs) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
     set_ᶠuₕ³!(ᶠuₕ³, Y)
     (ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺) =
@@ -378,10 +379,11 @@ function output_prognostic_sgs_quantities(Y, p, t)
             p.precomputed.ᶠu³⁰,
             p.precomputed.ᶜK⁰,
         ))
-    set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, Y, turbconv_model)
+    set_sgs_ᶠu₃!(u₃⁺, ᶠu₃⁺, ᶜρaʲs, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶠu₃⁺, Y.c.uₕ, ᶠuₕ³)
     ᶜts⁺ = ᶜtsʲs.:1
-    ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
+    #ᶜa⁺ = @. draft_area(ρa⁺(Y.c), TD.air_density(thermo_params, ᶜts⁺))
+    ᶜa⁺ = (Y.c.sgsʲs.:1).a
     ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
     return (; ᶠu₃⁺, ᶜu⁺, ᶠu³⁺, ᶜK⁺, ᶜts⁺, ᶜa⁺, ᶜa⁰)
 end

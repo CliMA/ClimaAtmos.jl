@@ -119,13 +119,13 @@ function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     n = n_mass_flux_subdomains(turbconv_model)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
-    ρa = ls.ρ * a_draft / n
+    a = a_draft / n
     h_tot =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
         norm_sqr(ls.velocity) / 2 +
         CAP.grav(ls.params) * ls.geometry.coordinates.z
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    sgsʲs = ntuple(_ -> (; ρa = ρa, h_tot = h_tot, q_tot = q_tot), Val(n))
+    sgsʲs = ntuple(_ -> (; a = a, h_tot = h_tot, q_tot = q_tot), Val(n))
     return (; sgs⁰, sgsʲs)
 end
 

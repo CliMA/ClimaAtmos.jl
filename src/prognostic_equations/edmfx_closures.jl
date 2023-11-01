@@ -122,10 +122,7 @@ function edmfx_nh_pressure_tendency!(
         # look for updraft top
         updraft_top = FT(0)
         for level in 1:Spaces.nlevels(axes(ᶜz))
-            if draft_area(
-                Spaces.level(Y.c.sgsʲs.:($j).ρa[colidx], level)[],
-                Spaces.level(ᶜρʲs.:($j)[colidx], level)[],
-            ) > a_min
+            if Spaces.level(Y.c.sgsʲs.:($j).a[colidx], level)[] > a_min
                 updraft_top = Spaces.level(ᶜz[colidx], level)[]
             end
         end

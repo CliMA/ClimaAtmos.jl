@@ -336,8 +336,8 @@ function edmfx_entr_detr_tendency!(
 
     for j in 1:n
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
-            Y.c.sgsʲs.:($$j).ρa[colidx] *
+        @. Yₜ.c.sgsʲs.:($$j).a[colidx] +=
+            Y.c.sgsʲs.:($$j).a[colidx] *
             (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
 
         @. Yₜ.c.sgsʲs.:($$j).h_tot[colidx] +=

@@ -16,26 +16,28 @@ function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
     (; ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜρʲs, ᶜρaʲs) = p.precomputed
     (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰, ᶜq_tot⁰) =
         p.precomputed
 
-    @. ᶜρa⁰ = ρa⁰(Y.c)
+    #@. ᶜρa⁰ = ρa⁰(Y.c)
+    @. ᶜρa⁰ = Y.c.ρ - ᶜρaʲs.:1
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
     @. ᶜh_tot⁰ = divide_by_ρa(
-        Y.c.ρ * ᶜh_tot - ρah_tot⁺(Y.c.sgsʲs),
+        Y.c.ρ * ᶜh_tot - ρah_tot⁺(Y.c.sgsʲs, ᶜρaʲs),
         ᶜρa⁰,
         Y.c.ρ * ᶜh_tot,
         Y.c.ρ,
         turbconv_model,
     )
     @. ᶜq_tot⁰ = divide_by_ρa(
-        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs),
+        Y.c.ρq_tot - ρaq_tot⁺(Y.c.sgsʲs, ᶜρaʲs),
         ᶜρa⁰,
         Y.c.ρq_tot,
         Y.c.ρ,
         turbconv_model,
     )
-    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, ᶜρaʲs, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     @. ᶜK⁰ += ᶜtke⁰
     @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜh_tot⁰ - ᶜK⁰ - ᶜΦ, ᶜq_tot⁰)
@@ -63,7 +65,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
 
     (; ᶜΦ,) = p.core
     (; ᶜspecific, ᶜp, ᶜh_tot) = p.precomputed
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs, ᶜρaʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     for j in 1:n
@@ -73,6 +75,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜtsʲ = ᶜtsʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
+        ᶜρaʲ = ᶜρaʲs.:($j)
         ᶜh_totʲ = Y.c.sgsʲs.:($j).h_tot
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
@@ -80,6 +83,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         @. ᶜtsʲ =
             TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜh_totʲ - ᶜKʲ - ᶜΦ, ᶜq_totʲ)
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
+        @. ᶜρaʲ = ᶜρʲ * Y.c.sgsʲs.:($$j).a
 
         # EDMFX boundary condition:
 
@@ -143,15 +147,16 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
             ᶜh_totʲ_int_val - ᶜKʲ_int_val - ᶜΦ_int_val,
             ᶜq_totʲ_int_val,
         )
+        sgsʲs_a_int_val =
+            Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).a, 1))
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
-        sgsʲs_ρa_int_val =
-            Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
-
+        sgsʲs_ρa_int_val = Fields.field_values(Fields.level(ᶜρaʲs.:($j), 1))
         turbconv_params = CAP.turbconv_params(params)
+        @. sgsʲs_a_int_val =
+            $(FT(turbconv_params.surface_area))
         @. sgsʲs_ρ_int_val = TD.air_density(thermo_params, ᶜtsʲ_int_val)
-        @. sgsʲs_ρa_int_val =
-            $(FT(turbconv_params.surface_area)) *
-            TD.air_density(thermo_params, ᶜtsʲ_int_val)
+        @. sgsʲs_ρa_int_val = sgsʲs_ρ_int_val * sgsʲs_a_int_val
+
     end
     return nothing
 end
@@ -184,7 +189,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ᶜK_h,
         ρatke_flux,
     ) = p.precomputed
-    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜρaʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -200,7 +205,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             ᶜp,
             Y.c.ρ,
             buoyancy_flux,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            Y.c.sgsʲs.:($$j).a,
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
             ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
@@ -217,7 +222,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             ᶜp,
             Y.c.ρ,
             buoyancy_flux,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            Y.c.sgsʲs.:($$j).a,
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
             ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
@@ -276,7 +281,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     for j in 1:n
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         @. ᶜtke_exch +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
+            ᶜρaʲs.:($$j) * ᶜdetrʲs.:($$j) / ᶜρa⁰ *
             (1 / 2 * norm_sqr(ᶜinterp(ᶠu³⁰) - ᶜinterp(ᶠu³ʲs.:($$j))) - ᶜtke⁰)
     end
 

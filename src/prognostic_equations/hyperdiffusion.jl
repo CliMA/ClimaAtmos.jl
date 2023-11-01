@@ -223,8 +223,8 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            # @. Yₜ.c.sgsʲs.:($$j).ρa -=
+            #     κ₄ * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).q_tot -= κ₄ * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
     end
