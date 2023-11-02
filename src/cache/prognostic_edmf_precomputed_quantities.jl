@@ -148,6 +148,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
 
         turbconv_params = CAP.turbconv_params(params)
+        @. sgsʲs_ρ_int_val = TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρa_int_val =
             $(FT(turbconv_params.surface_area)) *
             TD.air_density(thermo_params, ᶜtsʲ_int_val)

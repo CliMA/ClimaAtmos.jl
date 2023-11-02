@@ -344,8 +344,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     if turbconv_model isa PrognosticEDMFX
-        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+        set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     end
 
