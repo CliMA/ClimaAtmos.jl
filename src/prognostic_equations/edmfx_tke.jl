@@ -22,6 +22,7 @@ function edmfx_tke_tendency!(
     (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) =
         p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; dt) = p.simulation
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -55,8 +56,10 @@ function edmfx_tke_tendency!(
         # pressure work
         # dissipation
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-            ᶜρa⁰[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) /
-            ᶜmixing_length[colidx]
+            ᶜρa⁰[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) / max(
+                ᶜmixing_length[colidx],
+                c_d * dt * sqrt(max(ᶜtke⁰[colidx], eps(FT))),
+            )
     end
 
     return nothing
