@@ -3,8 +3,8 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     NVTX.@range "horizontal" color = colorant"orange" begin
-        horizontal_advection_tendency!(Yₜ, Y, p, t)
-        hyperdiffusion_tendency!(Yₜ, Y, p, t)
+        #horizontal_advection_tendency!(Yₜ, Y, p, t)
+        #hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)

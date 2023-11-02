@@ -92,7 +92,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
-        @. ᶜω³ = curlₕ(Y.c.uₕ)
+        #@. ᶜω³ = curlₕ(Y.c.uₕ)
+        @. ᶜω³ = zero(ᶜω³)
     elseif point_type <: Geometry.Abstract2DPoint
         @. ᶜω³ = zero(ᶜω³)
     end
@@ -103,9 +104,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     for j in 1:n
         @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
     end
-    @. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
+    #@. ᶠω¹² += CT12(curlₕ(Y.f.u₃))
     for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
+        #@. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
@@ -117,7 +118,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
             (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
         @. Yₜ.f.u₃[colidx] -=
-            ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
+           ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
 
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=

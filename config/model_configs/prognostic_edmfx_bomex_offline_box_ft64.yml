@@ -1,4 +1,4 @@
-job_id: "prognostic_edmfx_bomex_tke_box"
+job_id: "prognostic_edmfx_bomex_offline_box_ft64"
 initial_condition: "Bomex"
 subsidence: "Bomex"
 edmf_coriolis: "Bomex"
@@ -8,10 +8,10 @@ turbconv: "prognostic_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
-edmfx_sgs_mass_flux: true
-edmfx_sgs_diffusive_flux: true
+edmfx_sgs_mass_flux: false
+edmfx_sgs_diffusive_flux: false
 edmfx_nh_pressure: true
-prognostic_tke: true
+prognostic_tke: false
 moist: "equil"
 config: "box"
 hyperdiff: "false"
@@ -25,7 +25,7 @@ z_elem: 60
 z_stretch: false
 perturb_initstate: false
 dt: "5secs"
-t_end: "6hours"
+t_end: "1hours"
 dt_save_to_disk: "10mins"
 FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx_box.toml]

@@ -27,4 +27,5 @@ perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
 dt_save_to_disk: "10mins"
+FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx_box.toml]
