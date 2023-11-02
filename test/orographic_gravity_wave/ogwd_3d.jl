@@ -24,18 +24,18 @@ comms_ctx = ClimaComms.SingletonCommsContext()
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 ncfile = joinpath(gfdl_ogw_data_path(), "gfdl_ogw.nc")
 nt = NCDataset(ncfile) do ds
-    lon = ds["lon"][:]
-    lat = ds["lat"][:]
-    z_full = ds["z_full"][:]
-    temp = ds["temp"][:]
-    ucomp = ds["ucomp"][:]
-    vcomp = ds["vcomp"][:]
-    udt_topo = ds["udt_topo"][:]
-    vdt_topo = ds["vdt_topo"][:]
-    sphum = ds["sphum"][:]
-    ps = ds["ps"][:]
-    pk = ds["pk"][:]
-    bk = ds["bk"][:]
+    lon = Array(ds["lon"])
+    lat = Array(ds["lat"])
+    z_full = Array(ds["z_full"])
+    temp = Array(ds["temp"])
+    ucomp = Array(ds["ucomp"])
+    vcomp = Array(ds["vcomp"])
+    udt_topo = Array(ds["udt_topo"])
+    vdt_topo = Array(ds["vdt_topo"])
+    sphum = Array(ds["sphum"])
+    ps = Array(ds["ps"])
+    pk = Array(ds["pk"])
+    bk = Array(ds["bk"])
     (;
         lon,
         lat,
@@ -76,9 +76,9 @@ p_center = 0.5 * (p_half[:, :, 1:(end - 1), :] .+ p_half[:, :, 2:end, :])
 # earth warp
 data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
 earth_spline = NCDataset(data_path) do data
-    zlevels = data["elevation"][:]
-    lon = data["longitude"][:]
-    lat = data["latitude"][:]
+    zlevels = Array(data["elevation"])
+    lon = Array(data["longitude"])
+    lat = Array(data["latitude"])
     # Apply Smoothing
     smooth_degree = 15
     esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
@@ -386,14 +386,14 @@ apply_remap(
 
 # Plot the zonal and meridional components of the base flux
 nt = NCDataset(datafile_rll) do ds
-    lon = ds["lon"][:]
-    lat = ds["lat"][:]
-    z_coord = ds["z"][:]
-    z_center = ds["z_3d"][:]
-    ogwd_u = ds["ogwd_u"][:]
-    ogwd_v = ds["ogwd_v"][:]
-    gfdl_udt_topo = ds["gfdl_udt_topo"][:]
-    gfdl_vdt_topo = ds["gfdl_vdt_topo"][:]
+    lon = Array(ds["lon"])
+    lat = Array(ds["lat"])
+    z_coord = Array(ds["z"])
+    z_center = Array(ds["z_3d"])
+    ogwd_u = Array(ds["ogwd_u"])
+    ogwd_v = Array(ds["ogwd_v"])
+    gfdl_udt_topo = Array(ds["gfdl_udt_topo"])
+    gfdl_vdt_topo = Array(ds["gfdl_vdt_topo"])
     (;
         lon,
         lat,

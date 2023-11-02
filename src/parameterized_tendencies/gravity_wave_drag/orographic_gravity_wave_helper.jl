@@ -227,9 +227,9 @@ end
 function compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac)
     # obtain lat, lon, elevation from the elev_data
     nt = NCDataset(elev_data, "r") do ds
-        lon = ds["longitude"][:]
-        lat = ds["latitude"][:]
-        elev = ds["elevation"][:]
+        lon = Array(ds["longitude"])
+        lat = Array(ds["latitude"])
+        elev = Array(ds["elevation"])
         (; lon, lat, elev)
     end
     (; lon, lat, elev) = nt
@@ -318,8 +318,8 @@ end
 
 function get_topo_ll(orographic_info_rll)
     nt = NCDataset(orographic_info_rll, "r") do ds
-        lon = ds["lon"][:]
-        lat = ds["lat"][:]
+        lon = Array(ds["lon"])
+        lat = Array(ds["lat"])
         hmax = ds["hmax"][:, :, 1]
         hmin = ds["hmin"][:, :, 1]
         t11 = ds["t11"][:, :, 1]

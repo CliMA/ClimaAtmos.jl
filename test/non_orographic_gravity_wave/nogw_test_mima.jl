@@ -83,10 +83,10 @@ include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 mima_data = joinpath(mima_gwf_path(), "mima_gwf.nc")
 
 nt = NCDataset(mima_data) do ds
-    lon = ds["lon"][:]
-    lat = ds["lat"][:]
-    pfull = ds["pfull"][:]
-    phalf = ds["phalf"][:]
+    lon = Array(ds["lon"])
+    lat = Array(ds["lat"])
+    pfull = Array(ds["pfull"])
+    phalf = Array(ds["phalf"])
     time = ds["time"][1:13]
     lev = ds["level"][:, :, :, 1:13]
     z = ds["hght"][:, :, :, 1:13]
