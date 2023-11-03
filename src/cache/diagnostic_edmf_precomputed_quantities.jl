@@ -392,6 +392,8 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 FT(0),
+                FT(0), # ᶜentr, not implemented
+                FT(0), # ᶜvert_div, not implemented
                 dt,
                 p.atmos.edmfx_detr_model,
             )

@@ -184,6 +184,8 @@ function detrainment(
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
     dt::FT,
+    ᶜentr::FT,
+    ᶜvert_div::FT,
     ::NoDetrainment,
 ) where {FT}
     return FT(0)
@@ -203,6 +205,8 @@ function detrainment(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    ᶜentr::FT,
+    ᶜvert_div::FT,
     dt::FT,
     ::PiGroupsDetrainment,
 ) where {FT}
@@ -255,6 +259,8 @@ function detrainment(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    ᶜentr::FT,
+    ᶜvert_div::FT,
     dt::FT,
     ::GeneralizedDetrainment,
 ) where {FT}
@@ -294,6 +300,8 @@ function detrainment(
     ᶜw⁰::FT,
     ᶜRH⁰::FT,
     ᶜbuoy⁰::FT,
+    ᶜentr::FT,
+    ᶜvert_div::FT,
     dt::FT,
     ::GeneralizedHarmonicsDetrainment,
 ) where {FT}
@@ -317,6 +325,29 @@ function detrainment(
         1 / dt,
     )
     return detr * FT(2) * hm_limiter(ᶜaʲ)
+end
+
+function detrainment(
+    params,
+    ᶜz::FT,
+    z_sfc::FT,
+    ᶜp::FT,
+    ᶜρ::FT,
+    buoy_flux_surface::FT,
+    ᶜaʲ::FT,
+    ᶜwʲ::FT,
+    ᶜRHʲ::FT,
+    ᶜbuoyʲ::FT,
+    ᶜw⁰::FT,
+    ᶜRH⁰::FT,
+    ᶜbuoy⁰::FT,
+    ᶜentr::FT,
+    ᶜvert_div::FT,
+    dt::FT,
+    ::ConstantAreaDetrainment,
+) where {FT}
+    detr = max(min(ᶜentr - ᶜvert_div, 1 / dt), 0)
+    return detr
 end
 
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
