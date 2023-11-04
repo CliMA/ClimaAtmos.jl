@@ -188,6 +188,7 @@ struct NoDetrainment <: AbstractDetrainmentModel end
 struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
+struct ConstantAreaDetrainment <: AbstractDetrainmentModel end
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end

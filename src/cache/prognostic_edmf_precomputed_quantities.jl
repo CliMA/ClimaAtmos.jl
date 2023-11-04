@@ -192,6 +192,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
 
+    ᶜvert_div = p.scratch.ᶜtemp_scalar
     for j in 1:n
         @. ᶜentrʲs.:($$j) = entrainment(
             params,
@@ -210,6 +211,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             dt,
             p.atmos.edmfx_entr_model,
         )
+        @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜdetrʲs.:($$j) = detrainment(
             params,
             ᶜz,
@@ -224,6 +226,8 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
+            ᶜentrʲs.:($$j),
+            ᶜvert_div,
             dt,
             p.atmos.edmfx_detr_model,
         )

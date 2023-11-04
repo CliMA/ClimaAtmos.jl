@@ -7,7 +7,7 @@ surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
-edmfx_detr_model: "Generalized"
+edmfx_detr_model: "ConstantArea"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
@@ -22,4 +22,4 @@ perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
 dt_save_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_box.toml]
+toml: [toml/prognostic_edmfx_bomex_box.toml]
