@@ -10,12 +10,12 @@ type = "float"
 
 [EDMF_max_area]
 alias = "max_area"
-value = 0.6
+value = 0.9
 type = "float"
 
 [entr_tau]
 alias = "entr_tau"
-value = 0.001
+value = 0.002
 type = "float"
 
 [entr_coeff]
@@ -25,12 +25,12 @@ type = "float"
 
 [min_area_limiter_scale]
 alias = "min_area_limiter_scale"
-value = 1e-4
+value = 0
 type = "float"
 
 [detr_tau]
 alias = "detr_tau"
-value = 0.001
+value = 0
 type = "float"
 
 [detr_coeff]
@@ -40,10 +40,10 @@ type = "float"
 
 [detr_buoy_coeff]
 alias = "detr_buoy_coeff"
-value = 0.12
+value = 0
 type = "float"
 
 [max_area_limiter_scale]
 alias = "max_area_limiter_scale"
-value = 0.01
+value = 0
 type = "float"
