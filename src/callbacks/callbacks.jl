@@ -10,7 +10,7 @@ import SciMLBase
 import .Parameters as CAP
 import DiffEqCallbacks as DECB
 import ClimaCore: InputOutput
-import Dates
+using Dates
 using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
 
@@ -103,7 +103,13 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         irradiance = FT(CAP.tot_solar_irrad(params))
         au = FT(CAP.astro_unit(params))
         (; orbital_data) = p.radiation
-
+        epoch_string = "2000-01-01T11:58:56.816"
+        date0 = DateTime(epoch_string, dateformat"y-m-dTHH:MM:SS.s")
+        d, δ, η_UTC = Insolation.helper_instantaneous_zenith_angle(
+            current_datetime,
+            date0,
+            insolation_params,
+        )
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
             solar_zenith_angle = RRTMGPI.array2field(
@@ -114,13 +120,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 radiation_model.weighted_irradiance,
                 axes(bottom_coords),
             )
-            ref_insolation_params = tuple(insolation_params)
             @. insolation_tuple = instantaneous_zenith_angle(
-                current_datetime,
-                orbital_data,
+                d,
+                δ,
+                η_UTC,
                 bottom_coords.long,
                 bottom_coords.lat,
-                ref_insolation_params,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
             @. solar_zenith_angle =
                 min(first(insolation_tuple), max_zenith_angle)
@@ -128,13 +133,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 irradiance * (au / last(insolation_tuple))^2
         else
             # assume that the latitude and longitude are both 0 for flat space
-            insolation_tuple = instantaneous_zenith_angle(
-                current_datetime,
-                orbital_data,
-                0.0,
-                0.0,
-                insolation_params,
-            )
+            insolation_tuple = instantaneous_zenith_angle(d, δ, η_UTC, 0.0, 0.0)
             radiation_model.solar_zenith_angle .=
                 min(first(insolation_tuple), max_zenith_angle)
             radiation_model.weighted_irradiance .=
