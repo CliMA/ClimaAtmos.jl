@@ -651,46 +651,21 @@ steps:
         artifact_paths: "prognostic_edmfx_gabls_box/*"
         agents:
           slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX GABLS with TKE in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_tke_box.yml
-        artifact_paths: "prognostic_edmfx_gabls_tke_box/*"
-        agents:
-          slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX GABLS with TKE in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_tke_column.yml
-        artifact_paths: "prognostic_edmfx_gabls_tke_column/*"
-        agents:
-          slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_box.yml
+        artifact_paths: "prognostic_edmfx_bomex_fixtke_box/*"
+        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+      
       - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
         artifact_paths: "prognostic_edmfx_bomex_box/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX Bomex in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_column/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX Bomex with TKE in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_tke_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_tke_column/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
@@ -703,20 +678,20 @@ steps:
         agents:
           slurm_mem: 20GB
       
-      - label: ":genie: Prognostic EDMFX Rico in a box"
+      - label: ":genie: Prognostic EDMFX Rico in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_box.yml
-        artifact_paths: "prognostic_edmfx_rico_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
+        artifact_paths: "prognostic_edmfx_rico_column/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX TRMM in a box"
+      - label: ":genie: Prognostic EDMFX TRMM in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_box.yml
-        artifact_paths: "prognostic_edmfx_trmm_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
+        artifact_paths: "prognostic_edmfx_trmm_column/*"
         soft_fail: true
         agents:
           slurm_mem: 20GB
