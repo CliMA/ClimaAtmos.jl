@@ -5,7 +5,8 @@ import HDF5
 # Suggested in: https://github.com/aviatesk/JET.jl/issues/455
 macro n_failures(ex)
     return :(
-        let result = JET.@report_opt ignored_modules = (HDF5,) $(ex)
+        let result =
+                JET.@report_opt ignored_modules = (HDF5, OpenMPI_jll) $(ex)
             length(JET.get_reports(result.analyzer, result.result))
         end
     )
