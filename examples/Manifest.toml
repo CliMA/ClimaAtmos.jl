@@ -1038,7 +1038,7 @@ version = "1.4.0"
 
 [[deps.Insolation]]
 deps = ["Artifacts", "Dates", "DelimitedFiles", "Interpolations"]
-git-tree-sha1 = "be1929a43fd09854401d4ca9496f05f253cb63b4"
+git-tree-sha1 = "0e343cabaec54214f3aedd542422c7eb94d59171"
 repo-rev = "sk/pass_date0"
 repo-url = "https://github.com/CliMA/Insolation.jl.git"
 uuid = "e98cc03f-d57e-4e3c-b70c-8d51efe9e0d8"
