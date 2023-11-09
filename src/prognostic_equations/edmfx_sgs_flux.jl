@@ -16,8 +16,8 @@ function edmfx_sgs_mass_flux_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
-    (; ᶠu³ʲs, ᶜρʲs) = p.precomputed
-    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
+    (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -28,8 +28,10 @@ function edmfx_sgs_mass_flux_tendency!(
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
             @. ᶜa_scalar_colidx =
-                (Y.c.sgsʲs.:($$j).h_tot[colidx] - ᶜh_tot[colidx]) *
-                draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
+                (
+                    Y.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx] -
+                    ᶜh_tot[colidx]
+                ) * draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -42,7 +44,7 @@ function edmfx_sgs_mass_flux_tendency!(
         end
         @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
         @. ᶜa_scalar_colidx =
-            (ᶜh_tot⁰[colidx] - ᶜh_tot[colidx]) *
+            (ᶜmse⁰[colidx] + ᶜK⁰[colidx] - ᶜh_tot[colidx]) *
             draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
@@ -167,7 +169,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     (; sfc_conditions) = p.precomputed
-    (; ᶜρa⁰, ᶜu⁰, ᶜh_tot⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     (; ᶜK_u, ᶜK_h) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -180,8 +182,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]),
         )
-        @. Yₜ.c.ρe_tot[colidx] -=
-            ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot⁰[colidx])))
+        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ_ρe_tot(
+            -(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜmse⁰[colidx] + ᶜK⁰[colidx])),
+        )
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity

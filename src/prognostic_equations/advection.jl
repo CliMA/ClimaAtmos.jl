@@ -33,9 +33,9 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).h_tot -=
-                wdivₕ(Y.c.sgsʲs.:($$j).h_tot * ᶜuʲs.:($$j)) -
-                Y.c.sgsʲs.:($$j).h_tot * wdivₕ(ᶜuʲs.:($$j))
+            @. Yₜ.c.sgsʲs.:($$j).mse -=
+                wdivₕ(Y.c.sgsʲs.:($$j).mse * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).mse * wdivₕ(ᶜuʲs.:($$j))
         end
     end
 
@@ -75,9 +75,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
+    (; params) = p
     (; dt) = p.simulation
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf) = p.core
+    (; ᶜf, ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
@@ -90,6 +91,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
+    FT = Spaces.undertype(axes(Y.c))
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -108,6 +110,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
+
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶠΦ = p.scratch.ᶠtemp_scalar
+    @. ᶠΦ = CAP.grav(params) * ᶠz
 
     Fields.bycolumn(axes(Y.c)) do colidx
         @. Yₜ.c.uₕ[colidx] -=
@@ -132,37 +138,41 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                     ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
                     ᶠgradᵥ_ᶜΦ[colidx]
                 ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
+
+            # buoyancy term in mse equation
+            @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
+                adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx]))) *
+                (ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
+                ᶜgradᵥ(ᶠΦ[colidx]) / ᶜρʲs.:($$j)[colidx]
         end
 
         # TODO: Move this to implicit_vertical_advection_tendency!.
-        if p.atmos.turbconv_model isa PrognosticEDMFX
-            for j in 1:n
-                @. ᶜa_scalar[colidx] =
-                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
-                vertical_transport!(
-                    Yₜ.c.sgsʲs.:($j).ρa[colidx],
-                    ᶜJ[colidx],
-                    ᶜρʲs.:($j)[colidx],
-                    ᶠu³ʲs.:($j)[colidx],
-                    ᶜa_scalar[colidx],
-                    dt,
-                    edmfx_upwinding,
-                )
+        for j in 1:n
+            @. ᶜa_scalar[colidx] =
+                draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
+            vertical_transport!(
+                Yₜ.c.sgsʲs.:($j).ρa[colidx],
+                ᶜJ[colidx],
+                ᶜρʲs.:($j)[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                ᶜa_scalar[colidx],
+                dt,
+                edmfx_upwinding,
+            )
 
-                vertical_advection!(
-                    Yₜ.c.sgsʲs.:($j).h_tot[colidx],
-                    ᶠu³ʲs.:($j)[colidx],
-                    Y.c.sgsʲs.:($j).h_tot[colidx],
-                    edmfx_upwinding,
-                )
+            vertical_advection!(
+                Yₜ.c.sgsʲs.:($j).mse[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                Y.c.sgsʲs.:($j).mse[colidx],
+                edmfx_upwinding,
+            )
 
-                vertical_advection!(
-                    Yₜ.c.sgsʲs.:($j).q_tot[colidx],
-                    ᶠu³ʲs.:($j)[colidx],
-                    Y.c.sgsʲs.:($j).q_tot[colidx],
-                    edmfx_upwinding,
-                )
-            end
+            vertical_advection!(
+                Yₜ.c.sgsʲs.:($j).q_tot[colidx],
+                ᶠu³ʲs.:($j)[colidx],
+                Y.c.sgsʲs.:($j).q_tot[colidx],
+                edmfx_upwinding,
+            )
         end
 
         # TODO: Move this to implicit_vertical_advection_tendency!.

@@ -371,7 +371,7 @@ function edmfx_entr_detr_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜq_tot⁰, ᶜh_tot⁰, ᶠu₃⁰) = p.precomputed
+    (; ᶜq_tot⁰, ᶜmse⁰, ᶠu₃⁰) = p.precomputed
 
     for j in 1:n
 
@@ -379,9 +379,9 @@ function edmfx_entr_detr_tendency!(
             Y.c.sgsʲs.:($$j).ρa[colidx] *
             (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
 
-        @. Yₜ.c.sgsʲs.:($$j).h_tot[colidx] +=
+        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
             ᶜentrʲs.:($$j)[colidx] *
-            (ᶜh_tot⁰[colidx] - Y.c.sgsʲs.:($$j).h_tot[colidx])
+            (ᶜmse⁰[colidx] - Y.c.sgsʲs.:($$j).mse[colidx])
 
         @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
             ᶜentrʲs.:($$j)[colidx] *
