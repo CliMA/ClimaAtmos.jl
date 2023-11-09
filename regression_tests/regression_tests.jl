@@ -9,6 +9,8 @@ function perform_regression_tests(
     all_best_mse::AbstractDict,
     output_dir::String,
 )
+    @show versioninfo()
+
     # This is helpful for starting up new tables
     @info "Job-specific MSE table format:"
     println("all_best_mse[\"$job_id\"] = OrderedCollections.OrderedDict()")
