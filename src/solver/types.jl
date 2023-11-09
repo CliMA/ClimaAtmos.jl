@@ -267,13 +267,22 @@ struct TestDycoreConsistency end
 
 Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, DE_UP, ED_UP, DYCORE, LIM}
+Base.@kwdef struct AtmosNumerics{
+    EN_UP,
+    TR_UP,
+    DE_UP,
+    ED_UP,
+    ED_SG_UP,
+    DYCORE,
+    LIM,
+}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
     density_upwinding::DE_UP
     edmfx_upwinding::ED_UP
+    edmfx_sgsflux_upwinding::ED_SG_UP
 
     """Add NaNs to certain equations to track down problems"""
     test_dycore_consistency::DYCORE

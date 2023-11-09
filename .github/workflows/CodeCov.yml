@@ -2,12 +2,9 @@ name: CodeCov
 
 on:
   push:
-    branches:
-      - main
-      - trying
-      - staging
     tags: '*'
   pull_request:
+  merge_group:
 
 jobs:
   codecov:
