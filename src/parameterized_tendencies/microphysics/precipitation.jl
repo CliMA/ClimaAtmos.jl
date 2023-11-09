@@ -157,22 +157,109 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
         ᶜS_ρq_sno = similar(Y.c, FT),
         ᶜS_ρe_tot = similar(Y.c, FT),
         ᶜterm_vel_rain = similar(Y.c, FT),
-        ᶜterm_vel_snow = similar(Y.c, FT),
+        ᶜterm_vel_snOW = similar(Y.c, FT),
     )
 end
 
 function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     (; params) = p
+    (; dt) = p.simulation
     (; ᶜts) = p.precomputed
+    (; ᶜΦ) = p.core
     (; ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_ρe_tot) = p.precipitation
     (; ᶜterm_vel_rain, ᶜterm_vel_snow) = p.precipitation
-    cmp = CAP.microphysics_params(params)
-    thp = CAP.thermodynamics_params(params)
+    #ᶜtmp = p.scratch.ᶜtemp_scalar
 
-    @. ᶜS_ρq_tot[colidx] = Y.c.ρ[colidx] * FT(0)
-    @. ᶜS_ρe_tot[colidx] = Y.c.ρ[colidx] * FT(0)
-    @. ᶜS_ρq_rai[colidx] = Y.c.ρ[colidx] * FT(0)
-    @. ᶜS_ρq_sno[colidx] = Y.c.ρ[colidx] * FT(0)
+    #ᶜz = Fields.coordinate_field(Y.c).z
+
+    # get thermodynamics and 1-moment microphysics params
+    #cmp = CAP.microphysics_params(params)
+    #thp = CAP.thermodynamics_params(params)
+
+    # compute the precipitation terminal velocity
+    #@. ᶜterm_vel_rain[colidx] = CM1.terminal_velocity(
+    #    cmp.pr, cmp.tv.rain, Y.c.ρ[colidx], Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
+    #)
+    #@. ᶜterm_vel_snow[colidx] = CM1.terminal_velocity(
+    #    cmp.ps, cmp.tv.snow, Y.c.ρ[colidx], Y.c.ρq_snow[colidx] / Y.c.ρ[colidx]
+    #)
+
+    # zero out the source terms
+    #@. ᶜS_ρq_tot[colidx] = Y.c.ρ[colidx] * FT(0)
+    #@. ᶜS_ρe_tot[colidx] = Y.c.ρ[colidx] * FT(0)
+    #@. ᶜS_ρq_rai[colidx] = Y.c.ρ[colidx] * FT(0)
+    #@. ᶜS_ρq_sno[colidx] = Y.c.ρ[colidx] * FT(0)
+
+    # TODO - doube check energy source terms
+
+    # All the tendencies are limited by the available condensate (q_ / dt)
+
+    # rain autoconversion: q_liq -> q_rain
+    #@. tmp[colidx] = min(
+    #    TD.PhasePartition(thp, ᶜts[colidx]).liq / dt,
+    #    CM1.conv_q_liq_to_q_rai(
+    #        cmp.pr.acnv1M,
+    #        TD.PhasePartition(thp, ᶜts[colidx]).liq,
+    #        smooth_transition = true,
+    #    )
+    #)
+    #@. ᶜS_ρq_tot[colidx] -= Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρq_rai[colidx] += Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρe_tot[colidx] -= Y.c.ρ[colidx] * tmp[colidx] *
+    #    (TD.internal_energy_liquid(thp, ᶜts[colidx]) + ᶜϕ[colidx])
+
+    #@info(extrema(tmp[colidx]))
+
+    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+    #@. tmp[colidx] = min(
+    #    TD.PhasePartition(thp, ᶜts[colidx]).ice / dt,
+    #    CM1.conv_q_ice_to_q_sno_no_supersat(
+    #        cmp.ps.acnv1M,
+    #        TD.PhasePartition(thp, ᶜts[colidx]).ice,
+    #        smooth_transition = true
+    #    )
+    #)
+    #@. ᶜS_ρq_tot[colidx] -=Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρq_sno[colidx] +=Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρe_tot[colidx] -= Y.c.ρ[colidx] * tmp[colidx] *
+    #    (TD.internal_energy_ice(thp, ᶜts[colidx]) + ᶜϕ[colidx])
+
+    # accretion: q_liq + q_rain -> q_rain
+    #@. tmp[colidx] = min(
+    #    TD.PhasePartition(thp, ᶜts[colidx]).liq / dt,
+    #    CM1.accretion(
+    #        cmp.cl,
+    #        cmp.pr,
+    #        cmp.tv.rain,
+    #        cmp.ce,
+    #        TD.PhasePartition(thp, ᶜts[colidx]).liq,
+    #        Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+    #        Y.c.ρ[colidx]
+    #    )
+    #)
+    #@. ᶜS_ρq_tot[colidx] -= Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρq_rai[colidx] += Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρe_tot[colidx] -= Y.c.ρ[colidx] * tmp[colidx] *
+    #    (TD.internal_energy_liquid(thp, ᶜts[colidx]) + ᶜϕ[colidx])
+
+    # accretion: q_ice + q_snow -> q_snow
+    #@. tmp[colidx] = min(
+    #    TD.PhasePartition(thp, ᶜts[colidx]).ice / dt,
+    #    CM1.accretion(
+    #        cmp.ci,
+    #        cpm.ps,
+    #        cmp.tv.snow,
+    #        cmp.ce,
+    #        TD.PhasePartition(thp, ᶜts[colidx]).ice,
+    #        Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+    #        Y.c.ρ[colidx]
+    #    )
+    #)
+    #@. ᶜS_ρq_tot[colidx] -=Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρq_sno[colidx] +=Y.c.ρ[colidx] * tmp[colidx]
+    #@. ᶜS_ρe_tot[colidx] -= Y.c.ρ[colidx] * tmp[colidx] *
+    #    (TD.internal_energy_ice(thp, ᶜts[colidx]) + ᶜϕ[colidx])
+
 
 end
 
@@ -185,13 +272,13 @@ function precipitation_tendency!(
     precip_model::Microphysics1Moment,
 )
 
-    (; ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_ρe_tot) = p.precipitation
+    #(; ᶜS_ρq_tot, ᶜS_ρq_rai, ᶜS_ρq_sno, ᶜS_ρe_tot) = p.precipitation
 
-    @. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
-    @. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
-    @. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]
-    @. Yₜ.c.ρq_rai[colidx] += ᶜS_ρq_rai[colidx]
-    @. Yₜ.c.ρq_sno[colidx] += ᶜS_ρq_sno[colidx]
+    #@. Yₜ.c.ρ[colidx] += ᶜS_ρq_tot[colidx]
+    #@. Yₜ.c.ρq_tot[colidx] += ᶜS_ρq_tot[colidx]
+    #@. Yₜ.c.ρe_tot[colidx] += ᶜS_ρe_tot[colidx]
+    #@. Yₜ.c.ρq_rai[colidx] += ᶜS_ρq_rai[colidx]
+    #@. Yₜ.c.ρq_sno[colidx] += ᶜS_ρq_sno[colidx]
 
     return nothing
 end
