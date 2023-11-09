@@ -82,7 +82,7 @@ cat << EOM
     - label: ":computer: MPI Held-Suarez $res resolution test(ρe_tot) - ($nprocs) process"
       key: $job_id
       command:
-        - module load cuda/11.3 nsight-systems/2022.2.1
+        - module load cuda/11.3 nsight-systems/2023.3.1
         - mpiexec $command
       artifact_paths:
         - "$job_id/scaling_data_${nprocs}_processes.jld2"
