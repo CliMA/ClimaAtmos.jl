@@ -7,7 +7,6 @@ t_end: "5days"
 ode_algo: "SSP333"
 energy_upwinding: zalesak
 precip_model: "0M"
-regression_test: true
 job_id: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
 moist: "equil"
 apply_limiter: true

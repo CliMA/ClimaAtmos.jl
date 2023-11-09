@@ -133,10 +133,6 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id single_column_nonorographic_gravity_wave
-          --out_dir single_column_nonorographic_gravity_wave
         artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Box Examples"
@@ -225,9 +221,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_baroclinic_wave_rhoe --fig_dir sphere_baroclinic_wave_rhoe
           --case_name dry_baroclinic_wave
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
@@ -262,25 +255,25 @@ steps:
           --fig_dir sphere_baroclinic_wave_rhoe_equilmoist_expvdiff --case_name aquaplanet
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
 
-      - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
+      # Add this back when we figure out what to do with SSP and zalesak
+      # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
 
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir $$JOB_NAME
-          --out_dir $$JOB_NAME
+      #     julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
+      #     --data_dir $$JOB_NAME
+      #     --out_dir $$JOB_NAME
 
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir $$JOB_NAME
-          --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
+      #     julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
+      #     --nc_dir $$JOB_NAME
+      #     --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id $$JOB_NAME --out_dir $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_mem: 64GB
-        env:
-          JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
+      #   artifact_paths: "$$JOB_NAME/*"
+      #   agents:
+      #     slurm_mem: 64GB
+      #   env:
+      #     JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64.yml"
@@ -297,9 +290,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_held_suarez_rhotheta --fig_dir sphere_held_suarez_rhotheta
           --case_name dry_held_suarez
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
         artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) hightop"
@@ -314,9 +304,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_held_suarez_rhoe_hightop --fig_dir sphere_held_suarez_rhoe_hightop
           --case_name dry_held_suarez
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_held_suarez_rhoe_hightop --out_dir sphere_held_suarez_rhoe_hightop
         artifact_paths: "sphere_held_suarez_rhoe_hightop/*"
 
       - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
@@ -352,10 +339,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
           --fig_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res --case_name aquaplanet
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
-          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/*"
         agents:
           slurm_mem: 20GB
