@@ -53,6 +53,7 @@ function create_parameter_set(config::AtmosConfig)
          ps = CM.Parameters.Snow(FT, toml_dict),
          ce = CM.Parameters.CollisionEff(FT, toml_dict),
          tv = CM.Parameters.Blk1MVelType(FT, toml_dict),
+         aps = CM.Parameters.AirProperties(FT, toml_dict),
         )
     else
         error("Invalid precip_model $(precip_model)")
