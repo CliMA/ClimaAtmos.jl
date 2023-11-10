@@ -79,7 +79,6 @@ PoissonRandom = "0.4"
 PrettyTables = "1, 2"
 ProgressLogging = "0.1"
 QuadGK = "2"
-SciMLBase = "1, 2"
 TOML = "1"
 julia = "1.7"
 
