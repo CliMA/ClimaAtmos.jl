@@ -12,7 +12,6 @@ vert_diff: "true"
 idealized_insolation: false
 z_max: 45000.0
 precip_model: "0M"
-regression_test: true
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]

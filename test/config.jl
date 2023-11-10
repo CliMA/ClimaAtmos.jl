@@ -18,7 +18,7 @@ include(joinpath("..", "perf", "common.jl"))
     # Target job config overridden by `default_perf`
     @test config.parsed_args["dt"] == "400secs"
     # Target job config not overridden by `default_perf`
-    @test config.parsed_args["regression_test"] == true
+    @test config.parsed_args["initial_condition"] == "DryBaroclinicWave"
 
     # Test that config_dict overrides `default_perf`
     config_dict = Dict("dt" => "50secs", "initial_condition" => "Bomex")
