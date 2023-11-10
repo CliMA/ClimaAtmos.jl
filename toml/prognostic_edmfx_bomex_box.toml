@@ -20,17 +20,17 @@ type = "float"
 
 [entr_coeff]
 alias = "entr_coeff"
-value = 0.2
+value = 0.1
 type = "float"
 
 [min_area_limiter_scale]
 alias = "min_area_limiter_scale"
-value = 0.01
+value = 0.001
 type = "float"
 
 [min_area_limiter_power]
 alias = "min_area_limiter_power"
-value = 100
+value = 10
 type = "float"
 
 [detr_tau]
@@ -40,7 +40,7 @@ type = "float"
 
 [detr_coeff]
 alias = "detr_coeff"
-value = 1e-3
+value = 2e-3
 type = "float"
 
 [detr_buoy_coeff]
@@ -50,7 +50,7 @@ type = "float"
 
 [detr_vertdiv_coeff]
 alias = "detr_vertdiv_coeff"
-value = 0.5
+value = 0.6
 type = "float"
 
 [max_area_limiter_scale]

@@ -268,6 +268,7 @@ function detrainment(
     detr_inv_tau = CAP.detr_tau(turbconv_params)
     detr_coeff = CAP.detr_coeff(turbconv_params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
@@ -275,13 +276,16 @@ function detrainment(
     max_area_limiter =
         max_area_limiter_scale *
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
-    detr = min(
-        detr_inv_tau +
-        detr_coeff * abs(ᶜwʲ) +
-        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) +
-        max_area_limiter,
-        1 / dt,
+    detr = max(
+        min(
+            detr_inv_tau +
+            detr_coeff * abs(ᶜwʲ) +
+            detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+            max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div +
+            max_area_limiter,
+            1 / dt,
+        ),
+        0,
     )
     return detr
 end
@@ -309,6 +313,7 @@ function detrainment(
     detr_inv_tau = CAP.detr_tau(turbconv_params)
     detr_coeff = CAP.detr_coeff(turbconv_params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
@@ -316,13 +321,16 @@ function detrainment(
     max_area_limiter =
         max_area_limiter_scale *
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
-    detr = min(
-        detr_inv_tau +
-        detr_coeff * abs(ᶜwʲ) +
-        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) +
-        max_area_limiter,
-        1 / dt,
+    detr = max(
+        min(
+            detr_inv_tau +
+            detr_coeff * abs(ᶜwʲ) +
+            detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+            max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div +
+            max_area_limiter,
+            1 / dt,
+        ),
+        0,
     )
     return detr * FT(2) * hm_limiter(ᶜaʲ)
 end
