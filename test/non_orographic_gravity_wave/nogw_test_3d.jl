@@ -52,13 +52,13 @@ include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
 era_data = joinpath(era_global_dataset_path(), "box-era5-monthly.nc")
 
 nt = NCDataset(era_data) do ds
-    lon = ds["longitude"][:]
-    lat = ds["latitude"][:]
-    lev = ds["level"][:] .* 100
-    time = ds["time"][:]
-    gZ = ds["z"][:]
-    T = ds["t"][:]
-    u = ds["u"][:]
+    lon = Array(ds["longitude"])
+    lat = Array(ds["latitude"])
+    lev = Array(ds["level"]) .* 100
+    time = Array(ds["time"])
+    gZ = Array(ds["z"])
+    T = Array(ds["t"])
+    u = Array(ds["u"])
     (; lon, lat, lev, time, gZ, T, u)
 end
 (; lon, lat, lev, time, gZ, T, u) = nt

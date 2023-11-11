@@ -640,6 +640,12 @@ git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.15.1"
 
+[[deps.DiskArrays]]
+deps = ["OffsetArrays"]
+git-tree-sha1 = "1bfa9de80f35ac63c6c381b2d43c590875896a1f"
+uuid = "3c3547ce-8d99-4f5e-a174-61eb10b00ae3"
+version = "0.3.22"
+
 [[deps.Distances]]
 deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
 git-tree-sha1 = "5225c965635d8c21168e32a12954675e7bea1151"
@@ -1646,10 +1652,10 @@ uuid = "3b2b4ff1-bcff-5658-a3ee-dbcf1ce5ac09"
 version = "0.4.4"
 
 [[deps.NCDatasets]]
-deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "NetCDF_jll", "NetworkOptions", "Printf"]
-git-tree-sha1 = "4263c4220f22e20729329838bf7e94a49d1ac32f"
+deps = ["CFTime", "CommonDataModel", "DataStructures", "Dates", "DiskArrays", "NetCDF_jll", "NetworkOptions", "Printf"]
+git-tree-sha1 = "7fcb4378f9c648a186bcb996fa29acc929a179ed"
 uuid = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
-version = "0.12.17"
+version = "0.13.1"
 
 [[deps.NLSolversBase]]
 deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
@@ -1790,9 +1796,9 @@ version = "10.42.0+0"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
-git-tree-sha1 = "66b2fcd977db5329aa35cac121e5b94dd6472198"
+git-tree-sha1 = "f6f85a2edb9c356b829934ad3caed2ad0ebbfc99"
 uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
-version = "0.11.28"
+version = "0.11.29"
 
 [[deps.PNGFiles]]
 deps = ["Base64", "CEnum", "ImageCore", "IndirectArrays", "OffsetArrays", "libpng_jll"]
@@ -1832,9 +1838,9 @@ version = "0.12.3"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "716e24b21538abc91f6205fd1d8363f39b442851"
+git-tree-sha1 = "a935806434c9d4c506ba941871b327b96d41f2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.7.2"
+version = "2.8.0"
 
 [[deps.Permutations]]
 deps = ["Combinatorics", "LinearAlgebra", "Random"]
@@ -1921,9 +1927,9 @@ version = "0.1.2"
 
 [[deps.Polynomials]]
 deps = ["LinearAlgebra", "RecipesBase", "Setfield", "SparseArrays"]
-git-tree-sha1 = "ea78a2764f31715093de7ab495e12c0187f231d1"
+git-tree-sha1 = "5a95b69396b77fdb2c48970a535610c4743810e2"
 uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
-version = "4.0.4"
+version = "4.0.5"
 
     [deps.Polynomials.extensions]
     PolynomialsChainRulesCoreExt = "ChainRulesCore"
@@ -2053,9 +2059,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "52a01d4a1963925ec60c76413d8c557e153c5e5e"
+git-tree-sha1 = "ba6fe2d8e3648f27cdc29de64fb634a1846ba670"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.9.2"
+version = "0.9.3"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
@@ -2143,9 +2149,9 @@ version = "1.1.1"
 
 [[deps.Revise]]
 deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
-git-tree-sha1 = "ba168f8fc36bf83c8d0573d464b7aab0f8a81623"
+git-tree-sha1 = "62fbfbbed77a20e9390c4f02219cb3b11d21708d"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.5.7"
+version = "3.5.8"
 
 [[deps.RingLists]]
 deps = ["Random"]

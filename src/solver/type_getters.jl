@@ -1,8 +1,8 @@
 using Dates: DateTime, @dateformat_str
-using NCDatasets
 using Dierckx
 using ImageFiltering
 using Interpolations
+import NCDatasets
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -132,10 +132,10 @@ function get_spaces(parsed_args, params, comms_ctx)
         warp_function = nothing
     elseif topography == "Earth"
         data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-        earth_spline = NCDataset(data_path) do data
-            zlevels = data["elevation"][:]
-            lon = data["longitude"][:]
-            lat = data["latitude"][:]
+        earth_spline = NCDatasets.NCDataset(data_path) do data
+            zlevels = Array(data["elevation"])
+            lon = Array(data["longitude"])
+            lat = Array(data["latitude"])
             # Apply Smoothing
             smooth_degree = Int(parsed_args["smoothing_order"])
             esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))

@@ -66,12 +66,12 @@ function generate_paperplots_dry_baro_wave(fig_dir, nc_files)
         ncfile = filter(x -> endswith(x, "day$day.0.nc"), nc_files)
         if !isempty(ncfile)
             nt = NCDataset(ncfile[1], "r") do nc
-                lon = nc["lon"][:]
-                lat = nc["lat"][:]
-                z = nc["z"][:]
-                p = nc["pressure"][:]
-                T = nc["temperature"][:]
-                vort = nc["vorticity"][:]
+                lon = Array(nc["lon"])
+                lat = Array(nc["lat"])
+                z = Array(nc["z"])
+                p = Array(nc["pressure"])
+                T = Array(nc["temperature"])
+                vort = Array(nc["vorticity"])
                 (; lon, lat, z, p, T, vort)
             end
             (; lon, lat, z, p, T, vort) = nt
@@ -117,20 +117,21 @@ function generate_paperplots_moist_baro_wave(fig_dir, nc_files)
         ncfile = filter(x -> endswith(x, "day$day.0.nc"), nc_files)
         if !isempty(ncfile)
             nt = NCDataset(ncfile[1], "r") do nc
-                lon = nc["lon"][:]
-                lat = nc["lat"][:]
-                z = nc["z"][:]
-                p = nc["pressure"][:]
-                T = nc["temperature"][:]
-                vort = nc["vorticity"][:]
-                qt = nc["qt"][:]
-                cloud_water = nc["cloud_liquid"][:] + nc["cloud_ice"][:]
-                water_vapor = nc["water_vapor"][:]
-                rho = nc["rho"][:]
-                w = nc["w"][:]
-                u = nc["u"][:]
-                v = nc["v"][:]
-                z_sfc = nc["sfc_elevation"][:]
+                lon = Array(nc["lon"])
+                lat = Array(nc["lat"])
+                z = Array(nc["z"])
+                p = Array(nc["pressure"])
+                T = Array(nc["temperature"])
+                vort = Array(nc["vorticity"])
+                qt = Array(nc["qt"])
+                cloud_water =
+                    Array(nc["cloud_liquid"]) + Array(nc["cloud_ice"])
+                water_vapor = Array(nc["water_vapor"])
+                rho = Array(nc["rho"])
+                w = Array(nc["w"])
+                u = Array(nc["u"])
+                v = Array(nc["v"])
+                z_sfc = Array(nc["sfc_elevation"])
                 (;
                     lon,
                     lat,
@@ -341,9 +342,9 @@ function generate_elevation_spectra(fig_dir, nc_files)
     ncfile = filter(x -> endswith(x, "day0.0.nc"), nc_files)
     if !isempty(ncfile)
         nt = NCDataset(ncfile[1], "r") do nc
-            z_sfc = nc["sfc_elevation"][:]
-            lon = nc["lon"][:]
-            lat = nc["lat"][:]
+            z_sfc = Array(nc["sfc_elevation"])
+            lon = Array(nc["lon"])
+            lat = Array(nc["lat"])
             (; lon, lat, z_sfc)
         end
         (; lon, lat, z_sfc) = nt
@@ -407,54 +408,56 @@ function generate_paperplots_held_suarez(fig_dir, nc_files; moist)
     for (i, ifile) in enumerate(nc_file)
         nc = NCDataset(ifile, "r")
         if i == 1
-            global lat = nc["lat"][:]
-            global lon = nc["lon"][:]
-            global z = nc["z"][:]
-            global u = nc["u"][:]
-            global v = nc["v"][:]
-            global w = nc["w"][:]
-            global T = nc["temperature"][:]
-            global θ = nc["potential_temperature"][:]
+            global lat = Array(nc["lat"])
+            global lon = Array(nc["lon"])
+            global z = Array(nc["z"])
+            global u = Array(nc["u"])
+            global v = Array(nc["v"])
+            global w = Array(nc["w"])
+            global T = Array(nc["temperature"])
+            global θ = Array(nc["potential_temperature"])
             if moist
-                global qt = nc["qt"][:]
+                global qt = Array(nc["qt"])
             end
             if haskey(nc, "sfc_flux_energy")
-                sfc_flux_energy = nc["sfc_flux_energy"][:]
+                sfc_flux_energy = Array(nc["sfc_flux_energy"])
             end
             if haskey(nc, "sfc_evaporation")
-                sfc_evaporation = nc["sfc_evaporation"][:]
+                sfc_evaporation = Array(nc["sfc_evaporation"])
             end
             if haskey(nc, "lw_flux_up")
                 # NOTE: We define net as up - down
-                lw_flux_net = nc["lw_flux_up"][:] - nc["lw_flux_down"][:]
-                sw_flux_net = nc["sw_flux_up"][:] - nc["sw_flux_down"][:]
+                lw_flux_net =
+                    Array(nc["lw_flux_up"]) - Array(nc["lw_flux_down"])
+                sw_flux_net =
+                    Array(nc["sw_flux_up"]) - Array(nc["sw_flux_down"])
             end
         else
-            u = cat(u, nc["u"][:], dims = 4)
-            v = cat(v, nc["v"][:], dims = 4)
-            w = cat(w, nc["w"][:], dims = 4)
-            T = cat(T, nc["temperature"][:], dims = 4)
-            θ = cat(θ, nc["potential_temperature"][:], dims = 4)
+            u = cat(u, Array(nc["u"]), dims = 4)
+            v = cat(v, Array(nc["v"]), dims = 4)
+            w = cat(w, Array(nc["w"]), dims = 4)
+            T = cat(T, Array(nc["temperature"]), dims = 4)
+            θ = cat(θ, Array(nc["potential_temperature"]), dims = 4)
             if moist
-                qt = cat(qt, nc["qt"][:], dims = 4)
+                qt = cat(qt, Array(nc["qt"]), dims = 4)
             end
             if haskey(nc, "sfc_flux_energy")
                 sfc_flux_energy =
-                    cat(sfc_flux_energy, nc["sfc_flux_energy"][:], dims = 3)
+                    cat(sfc_flux_energy, Array(nc["sfc_flux_energy"]), dims = 3)
             end
             if haskey(nc, "sfc_evaporation")
                 sfc_evaporation =
-                    cat(sfc_evaporation, nc["sfc_evaporation"][:], dims = 3)
+                    cat(sfc_evaporation, Array(nc["sfc_evaporation"]), dims = 3)
             end
             if haskey(nc, "lw_flux_up")
                 lw_flux_net = cat(
                     lw_flux_net,
-                    nc["lw_flux_up"][:] - nc["lw_flux_down"][:],
+                    Array(nc["lw_flux_up"]) - Array(nc["lw_flux_down"]),
                     dims = 4,
                 )
                 sw_flux_net = cat(
                     sw_flux_net,
-                    nc["sw_flux_up"][:] - nc["sw_flux_down"][:],
+                    Array(nc["sw_flux_up"]) - Array(nc["sw_flux_down"]),
                     dims = 4,
                 )
             end

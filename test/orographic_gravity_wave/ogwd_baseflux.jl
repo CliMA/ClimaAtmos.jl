@@ -114,10 +114,10 @@ apply_remap(datafile_rll, datafile_cg, weightfile, ["tau_x", "tau_y"])
 
 # Plot the zonal and meridional components of the base flux
 nt = NCDataset(datafile_rll) do ds
-    lon = ds["lon"][:]
-    lat = ds["lat"][:]
-    tau_x = ds["tau_x"][:]
-    tau_y = ds["tau_y"][:]
+    lon = Array(ds["lon"])
+    lat = Array(ds["lat"])
+    tau_x = Array(ds["tau_x"])
+    tau_y = Array(ds["tau_y"])
     (; lon, lat, tau_x, tau_y)
 end
 (; lon, lat, tau_x, tau_y) = nt
