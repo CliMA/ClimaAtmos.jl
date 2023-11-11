@@ -8,7 +8,7 @@ env:
   OPENBLAS_NUM_THREADS: 1
   JULIA_NVTX_CALLBACKS: gc
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
-  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 200
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
   JULIA_CPU_TARGET: 'broadwell;skylake'
   CONFIG_PATH: "config/model_configs"
@@ -59,7 +59,6 @@ steps:
       slurm_gpus: 1
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
-      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
 
   - wait
 
