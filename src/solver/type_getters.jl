@@ -324,6 +324,7 @@ function get_initial_condition(parsed_args)
         "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
         "ScharProfile",
+        "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     else

@@ -946,3 +946,47 @@ function (initial_condition::TRMM_LBA)(params)
     end
     return local_state
 end
+
+"""
+    PrecipitatingColumn
+
+A 1-dimensional precipitating column test
+"""
+Base.@kwdef struct PrecipitatingColumn <: InitialCondition
+    prognostic_tke::Bool = false
+end
+
+qₚ(::Type{FT}, z_min, z_max, val) where {FT} =
+    z -> (z > z_min && z < z_max) ? FT(val) : FT(0)
+
+function (initial_condition::PrecipitatingColumn)(params)
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(101300.0)
+    θ = FT(273.15+10)
+    q_tot = FT(0.015)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    u = FT(0)
+    v = FT(0)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+
+        q_rai = qₚ(FT, 800, 2000, 1e-3)(z)
+        q_sno = qₚ(FT, 1500, 5000, 0.5e-3)(z)
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pθq(
+                thermo_params,
+                p(z),
+                θ(z),
+                q_tot(z),
+            ),
+            velocity = Geometry.UVVector(u(z), v(z)),
+            turbconv_state = nothing,
+            precip_state = (; q_rai = q_rai, q_sno = q_sno),
+        )
+    end
+    return local_state
+end
