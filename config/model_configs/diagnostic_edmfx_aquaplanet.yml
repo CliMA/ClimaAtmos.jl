@@ -1,4 +1,4 @@
-job_id: diagnostic_edmfx_aquaplanet_tke
+job_id: diagnostic_edmfx_aquaplanet
 vert_diff: "true" 
 surface_setup: DefaultExchangeCoefficients 
 rad: gray
