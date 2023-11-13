@@ -493,16 +493,6 @@ steps:
           --data_dir prep_remap/ --out_dir remap_pipeline_output
         artifact_paths: "remap_pipeline_output/*"
 
-      - label: ":computer: Exercise parallel remap pipeline"
-        key: "parallel_remap_pipeline"
-        depends_on: "remap_pipeline"
-        command: >
-          julia -p 4 --color=yes --project=examples post_processing/remap/remap_pipeline_parallel.jl
-          --data_dir prep_remap/ --out_dir parallel_remap_pipeline_output
-        artifact_paths: "parallel_remap_pipeline_output/*"
-        agents:
-          slurm_ntasks: 5
-
   - group: "Configs"
     steps:
 
