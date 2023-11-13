@@ -279,19 +279,6 @@ steps:
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64.yml"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
 
-      - label: ":computer: held suarez (ρθ)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhotheta.yml
-
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
-
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir sphere_held_suarez_rhotheta --fig_dir sphere_held_suarez_rhotheta
-          --case_name dry_held_suarez
-        artifact_paths: "sphere_held_suarez_rhotheta/*"
-
       - label: ":computer: held suarez (ρe) hightop"
         key: sphere_held_suarez_rhoe_hightop
         command: >

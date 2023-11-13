@@ -91,9 +91,7 @@ function set_dummy_surface_conditions!(p)
         )
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
-    if atmos.energy_form isa TotalEnergy
-        @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
-    end
+    @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
 end
 
 """
@@ -384,11 +382,7 @@ function atmos_surface_conditions(
     thermo_params = CAP.thermodynamics_params(params)
 
     surface_normal = C3(unit_basis_vector_data(C3, surface_local_geometry))
-    energy_flux = if atmos.energy_form isa PotentialTemperature
-        (; ρ_flux_θ = shf / TD.cp_m(thermo_params, ts) * surface_normal)
-    elseif atmos.energy_form isa TotalEnergy
-        (; ρ_flux_h_tot = (shf + lhf) * surface_normal)
-    end
+    energy_flux = (; ρ_flux_h_tot = (shf + lhf) * surface_normal)
     moisture_flux =
         atmos.moisture_model isa DryModel ? (;) :
         (; ρ_flux_q_tot = evaporation * surface_normal)
@@ -415,16 +409,12 @@ function atmos_surface_conditions(
 end
 
 """
-    surface_conditions_type(moisture_model, energy_form, FT)
+    surface_conditions_type(moisture_model, FT)
 
 Gets the return type of `surface_conditions` without evaluating the function.
 """
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
-    energy_flux_names = if atmos.energy_form isa PotentialTemperature
-        (:ρ_flux_θ,)
-    elseif atmos.energy_form isa TotalEnergy
-        (:ρ_flux_h_tot,)
-    end
+    energy_flux_names = (:ρ_flux_h_tot,)
     moisture_flux_names =
         atmos.moisture_model isa DryModel ? () : (:ρ_flux_q_tot,)
     names = (

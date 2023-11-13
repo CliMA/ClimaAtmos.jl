@@ -229,11 +229,7 @@ end
 
 function radiation_tendency!(Yₜ, Y, p, t, colidx, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
-    if :ρθ in propertynames(Y.c)
-        error("radiation_tendency! not implemented for ρθ")
-    elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
-    end
+    @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ(ᶠradiation_flux[colidx])
     return nothing
 end
 
@@ -263,7 +259,6 @@ function radiation_tendency!(
     radiation_mode::RadiationDYCOMS_RF01,
 )
     @assert !(p.atmos.moisture_model isa DryModel)
-    @assert p.atmos.energy_form isa TotalEnergy
 
     (; params) = p
     (; ᶜspecific, ᶜts) = p.precomputed

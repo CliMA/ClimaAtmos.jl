@@ -138,9 +138,6 @@ forcing:
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
-energy_name:
-  help: "Energy variable name [`rhoe` (default), `rhotheta`]"
-  value: "rhoe"
 dt_save_to_disk:
   help: "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
   value: "Inf"

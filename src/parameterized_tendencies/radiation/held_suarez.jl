@@ -100,11 +100,6 @@ function forcing_tendency!(Yₜ, Y, p, t, colidx, ::HeldSuarezForcing)
         )
 
     @. Yₜ.c.uₕ[colidx] -= (k_f * ᶜheight_factor[colidx]) * Y.c.uₕ[colidx]
-    if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ[colidx] -=
-            ᶜΔρT[colidx] * fast_pow((p_ref_theta / ᶜp[colidx]), κ_d)
-    elseif :ρe_tot in propertynames(Y.c)
-        @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
-    end
+    @. Yₜ.c.ρe_tot[colidx] -= ᶜΔρT[colidx] * cv_d
     return nothing
 end

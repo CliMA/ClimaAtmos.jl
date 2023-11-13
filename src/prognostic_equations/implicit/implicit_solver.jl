@@ -112,8 +112,7 @@ function ImplicitEquationJacobian(
 
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
-    energy_name =
-        MatrixFields.unrolled_findonly(is_in_Y, (@name(c.ρe_tot), @name(c.ρθ)))
+    energy_name = @name(c.ρe_tot)
     tracer_names = (
         @name(c.ρq_tot),
         @name(c.ρq_liq),
@@ -206,7 +205,7 @@ _linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
 function Wfact!(A, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
         # Remove unnecessary values from p to avoid allocations in bycolumn.
-        (; energy_form, rayleigh_sponge) = p.atmos
+        (; rayleigh_sponge) = p.atmos
         p′ = (;
             p.precomputed.ᶜspecific,
             p.precomputed.ᶠu³,
@@ -220,7 +219,7 @@ function Wfact!(A, Y, p, dtγ, t)
             p.scratch.ᶜtemp_scalar,
             p.params,
             p.atmos,
-            (energy_form isa TotalEnergy ? (; p.precomputed.ᶜh_tot) : (;))...,
+            p.precomputed.ᶜh_tot,
             (
                 rayleigh_sponge isa RayleighSponge ?
                 (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
@@ -273,17 +272,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃[colidx]))) +
         DiagonalMatrixRow(adjoint(CT3(ᶜuₕ[colidx]))) ⋅ ᶜinterp_matrix()
 
-    # We can express the pressure as either
-    # ᶜp = p_ref_theta * (ᶜρθ * R_d / p_ref_theta)^(1 / (1 - κ_d)) or
+    # We can express the pressure as
     # ᶜp = R_d * (ᶜρe_tot / cv_d + ᶜρ * (T_tri - (ᶜK + ᶜΦ) / cv_d)) + O(ᶜq_tot).
-    # In the first case, we find that
-    # ∂(ᶜp)/∂(ᶜρ) = 0I,
-    # ∂(ᶜp)/∂(ᶜK) = 0I, and
-    # ∂(ᶜp)/∂(ᶜρθ) =
-    #     DiagonalMatrixRow(
-    #         R_d / (1 - κ_d) * (ᶜρθ * R_d / p_ref_theta)^(κ_d / (1 - κ_d))
-    #     ).
-    # In the second case, we can ignore all O(ᶜq_tot) terms to approximate
+    # we can ignore all O(ᶜq_tot) terms to approximate
     # ∂(ᶜp)/∂(ᶜρ) ≈ DiagonalMatrixRow(R_d * (T_tri - (ᶜK + ᶜΦ) / cv_d)),
     # ∂(ᶜp)/∂(ᶜK) ≈ DiagonalMatrixRow(-R_d * ᶜρ / cv_d), and
     # ∂(ᶜp)/∂(ᶜρe_tot) ≈ DiagonalMatrixRow(R_d / cv_d).
@@ -323,7 +314,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     u³_sign(u³) = sign(u³.u³) # sign of the scalar value stored inside u³
     tracer_info = (
         (@name(c.ρ), @name(ᶜ1), density_upwinding),
-        (@name(c.ρθ), @name(ᶜspecific.θ), energy_upwinding),
         (@name(c.ρe_tot), @name(ᶜh_tot), energy_upwinding),
         (@name(c.ρq_tot), @name(ᶜspecific.q_tot), tracer_upwinding),
         (@name(c.ρq_liq), @name(ᶜspecific.q_liq), tracer_upwinding),
@@ -435,13 +425,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     #         (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
     #         ᶠinterp(ᶜρ)^2
     #     ) ⋅ ᶠinterp_matrix().
-    # If the pressure is computed using potential temperature, then
-    # ∂(ᶠu₃ₜ)/∂(ᶜρθ) =
-    #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) ⋅ ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρθ) =
-    #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅
-    #     ∂(ᶜp)/∂(ᶜρθ) and
-    # ∂(ᶠu₃ₜ)/∂(ᶠu₃) = 0I.
-    # If the pressure is computed using total energy, then
+    # The pressure is computed using total energy, therefore
     # ∂(ᶠu₃ₜ)/∂(ᶜρe_tot) =
     #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) ⋅ ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρe_tot) =
     #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅
@@ -462,63 +446,34 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
     I_u₃ = DiagonalMatrixRow(one_C3xACT3)
-    if MatrixFields.has_field(Y, @name(c.ρθ))
-        ᶜρθ = Y.c.ρθ
-        ∂ᶠu₃_err_∂ᶜρθ = matrix[@name(f.u₃), @name(c.ρθ)]
-        @. ∂ᶠu₃_err_∂ᶜρ[colidx] =
-            dtγ * DiagonalMatrixRow(
+    ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
+    @. ∂ᶠu₃_err_∂ᶜρ[colidx] =
+        dtγ * (
+            DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix() ⋅
+            DiagonalMatrixRow(
+                R_d * (T_tri - (ᶜK[colidx] + ᶜΦ[colidx]) / cv_d),
+            ) +
+            DiagonalMatrixRow(
                 (
                     ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
                     ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
                 ) / abs2(ᶠinterp(ᶜρ[colidx])),
             ) ⋅ ᶠinterp_matrix()
-        @. ∂ᶠu₃_err_∂ᶜρθ[colidx] =
-            dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅
-            ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(
-                R_d / (1 - κ_d) *
-                (ᶜρθ[colidx] * R_d / p_ref_theta)^(κ_d / (1 - κ_d)),
-            )
-        if p.atmos.rayleigh_sponge isa RayleighSponge
-            @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
-                dtγ *
-                DiagonalMatrixRow(-p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,)) -
-                (I_u₃,)
-        else
-            ∂ᶠu₃_err_∂ᶠu₃[colidx] .= (-I_u₃,)
-        end
-    elseif MatrixFields.has_field(Y, @name(c.ρe_tot))
-        ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
-        @. ∂ᶠu₃_err_∂ᶜρ[colidx] =
+        )
+    @. ∂ᶠu₃_err_∂ᶜρe_tot[colidx] =
+        dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix() *
+        R_d / cv_d
+    if p.atmos.rayleigh_sponge isa RayleighSponge
+        @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
             dtγ * (
                 DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix() ⋅
-                DiagonalMatrixRow(
-                    R_d * (T_tri - (ᶜK[colidx] + ᶜΦ[colidx]) / cv_d),
-                ) +
-                DiagonalMatrixRow(
-                    (
-                        ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) -
-                        ᶠinterp(ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-                    ) / abs2(ᶠinterp(ᶜρ[colidx])),
-                ) ⋅ ᶠinterp_matrix()
-            )
-        @. ∂ᶠu₃_err_∂ᶜρe_tot[colidx] =
+                DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅ ∂ᶜK_∂ᶠu₃[colidx] +
+                DiagonalMatrixRow(-p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,))
+            ) - (I_u₃,)
+    else
+        @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
             dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅
-            ᶠgradᵥ_matrix() * R_d / cv_d
-        if p.atmos.rayleigh_sponge isa RayleighSponge
-            @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
-                dtγ * (
-                    DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅
-                    ᶠgradᵥ_matrix() ⋅
-                    DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅
-                    ∂ᶜK_∂ᶠu₃[colidx] + DiagonalMatrixRow(
-                        -p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,),
-                    )
-                ) - (I_u₃,)
-        else
-            @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
-                dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅
-                ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅
-                ∂ᶜK_∂ᶠu₃[colidx] - (I_u₃,)
-        end
+            ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅
+            ∂ᶜK_∂ᶠu₃[colidx] - (I_u₃,)
     end
 end

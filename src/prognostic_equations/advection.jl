@@ -24,12 +24,8 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if :ρθ in propertynames(Y.c)
-        @. Yₜ.c.ρθ -= wdivₕ(Y.c.ρθ * ᶜu)
-    elseif :ρe_tot in propertynames(Y.c)
-        (; ᶜh_tot) = p.precomputed
-        @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
-    end
+    (; ᶜh_tot) = p.precomputed
+    @. Yₜ.c.ρe_tot -= wdivₕ(Y.c.ρ * ᶜh_tot * ᶜu)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n

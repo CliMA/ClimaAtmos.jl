@@ -193,7 +193,7 @@ hourly_average(short_names; output_writer = HDF5Writer()) =
 ########
 function core_default_diagnostics()
     core_diagnostics =
-        ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa"]
+        ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa", "hfes"]
 
     return [
         daily_averages(core_diagnostics...)...,
@@ -201,16 +201,6 @@ function core_default_diagnostics()
         daily_min("ts"),
     ]
 end
-
-###############
-# Energy form #
-###############
-function default_diagnostics(::TotalEnergy)
-    total_energy_diagnostics = ["hfes"]
-
-    return [daily_averages(total_energy_diagnostics...)...]
-end
-
 
 ##################
 # Moisture model #

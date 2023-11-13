@@ -120,8 +120,6 @@ function vertical_diffusion_boundary_layer_tendency!(
         χ_name == :e_tot && continue
         if χ_name == :q_tot
             @. ρ_flux_χ[colidx] = sfc_conditions.ρ_flux_q_tot[colidx]
-        elseif χ_name == :θ
-            @. ρ_flux_χ[colidx] = sfc_conditions.ρ_flux_θ[colidx]
         else
             @. ρ_flux_χ[colidx] = C3(FT(0))
         end

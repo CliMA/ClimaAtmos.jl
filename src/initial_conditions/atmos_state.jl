@@ -57,15 +57,12 @@ atmos_face_variables(ls, atmos_model) = (;
 grid_scale_center_variables(ls, atmos_model) = (;
     ρ = ls.ρ,
     uₕ = C12(ls.velocity, ls.geometry),
-    energy_variables(ls, atmos_model.energy_form)...,
+    energy_variables(ls)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
     precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
 )
 
-# TODO: Rename ρθ to ρθ_liq_ice.
-energy_variables(ls, ::PotentialTemperature) =
-    (; ρθ = ls.ρ * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state))
-energy_variables(ls, ::TotalEnergy) = (;
+energy_variables(ls) = (;
     ρe_tot = ls.ρ * (
         TD.internal_energy(ls.thermo_params, ls.thermo_state) +
         norm_sqr(ls.velocity) / 2 +

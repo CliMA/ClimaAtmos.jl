@@ -98,7 +98,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³[colidx],
             ᶜχ[colidx],
             dt,
-            χ_name == :θ ? energy_upwinding : tracer_upwinding,
+            tracer_upwinding,
         )
     end
 
