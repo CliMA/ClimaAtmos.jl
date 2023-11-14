@@ -21,6 +21,7 @@ import ..NonEquilMoistModel
 
 # precip_model
 import ..Microphysics0Moment
+import ..Microphysics1Moment
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI

@@ -103,7 +103,9 @@ moisture_variables(ls, ::NonEquilMoistModel) = (;
 precip_variables(ls, ::NoPrecipitation, ::PerfStandard) = (;)
 precip_variables(ls, ::Microphysics0Moment, ::PerfStandard) = (;)
 precip_variables(ls, ::Microphysics1Moment, ::PerfStandard) =
-    (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
+    (; ρq_rai = ls.ρ * ls.precip_state.q_rai,
+       ρq_sno = ls.ρ * ls.precip_state.q_sno,
+    )
 precip_variables(ls, _, ::PerfExperimental) =
     (; ρq_rai = zero(eltype(ls)), ρq_sno = zero(eltype(ls)))
 
