@@ -956,24 +956,24 @@ Base.@kwdef struct PrecipitatingColumn <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-qₚ(::Type{FT}, z_min, z_max, val) where {FT} =
+prescribed_prof(::Type{FT}, z_min, z_max, val) where {FT} =
     z -> (z > z_min && z < z_max) ? FT(val) : FT(0)
 
 function (initial_condition::PrecipitatingColumn)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101300.0)
-    θ = FT(273.15+10)
-    q_tot = FT(0.015)
+    qᵣ = prescribed_prof(FT, 800, 2000, 0)
+    qₛ = prescribed_prof(FT, 1500, 5000, 0)
+    #q_tot = prescribed_prof(FT, 0, Inf, 0)
+    #θ = prescribed_prof(FT, 0, Inf, 300)
+    θ = APL.Rico_θ_liq_ice(FT)
+    q_tot = APL.Rico_q_tot(FT)
+    u = prescribed_prof(FT, 0, Inf, 0)
+    v = prescribed_prof(FT, 0, Inf, 0)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-    u = FT(0)
-    v = FT(0)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
-
-        q_rai = qₚ(FT, 800, 2000, 1e-3)(z)
-        q_sno = qₚ(FT, 1500, 5000, 0.5e-3)(z)
-
         return LocalState(;
             params,
             geometry = local_geometry,
@@ -985,7 +985,7 @@ function (initial_condition::PrecipitatingColumn)(params)
             ),
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = nothing,
-            precip_state = (; q_rai = q_rai, q_sno = q_sno),
+            precip_state = PrecipState1M(; q_rai = qᵣ(z), q_sno = qₛ(z)),
         )
     end
     return local_state

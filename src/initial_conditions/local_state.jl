@@ -102,7 +102,7 @@ struct NoPrecipState{FT} <: PrecipState{FT} end
 @inline Base.getproperty(::NoPrecipState{FT}, ::Symbol) where {FT} = FT(0)
 
 """
-    PrecipState1M(; ρq_rai, ρq_sno)
+    PrecipState1M(; q_rai, q_sno)
 
 Stores the values of `ρq_rai` and `ρq_sno` for the `precip_model`.
 If no values are provided, they are set to zero.
