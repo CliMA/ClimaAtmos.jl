@@ -1,5 +1,6 @@
 import FastGaussQuadrature
 import StaticArrays as SA
+import Thermodynamics as TD
 
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
@@ -126,11 +127,11 @@ struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 Base.broadcastable(x::BuoyGradMean) = tuple(x)
 
 """
-    EnvBuoyGrad
+    EnvBuoyGradVars
 
 Variables used in the environmental buoyancy gradient computation.
 """
-Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
+Base.@kwdef struct EnvBuoyGradVars{FT}
     "temperature in the saturated part"
     t_sat::FT
     "vapor specific humidity  in the saturated part"
@@ -145,26 +146,58 @@ Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
     θ_sat::FT
     "liquid ice potential temperature in the saturated part"
     θ_liq_ice_sat::FT
-    "virtual potential temperature gradient in the non saturated part"
-    ∂θv∂z_unsat::FT
-    "total specific humidity gradient in the saturated part"
-    ∂qt∂z_sat::FT
-    "liquid ice potential temperature gradient in the saturated part"
-    ∂θl∂z_sat::FT
     "reference pressure"
     p::FT
     "cloud fraction"
     en_cld_frac::FT
     "density"
     ρ::FT
+    "virtual potential temperature gradient in the non saturated part"
+    ∂θv∂z_unsat::FT
+    "total specific humidity gradient in the saturated part"
+    ∂qt∂z_sat::FT
+    "liquid ice potential temperature gradient in the saturated part"
+    ∂θl∂z_sat::FT
 end
-function EnvBuoyGrad(
-    ::EBG,
-    t_sat::FT,
-    args...,
-) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
-    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
+
+
+function EnvBuoyGradVars(
+    thermo_params,
+    ts::TD.ThermodynamicState,
+    ∂θv∂z_unsat::FT,
+    ∂qt∂z_sat::FT,
+    ∂θl∂z_sat::FT,
+) where {FT}
+    t_sat = TD.air_temperature(thermo_params, ts)
+    qv_sat = TD.vapor_specific_humidity(thermo_params, ts)
+    qt_sat = TD.total_specific_humidity(thermo_params, ts)
+    ql_sat = TD.liquid_specific_humidity(thermo_params, ts)
+    qi_sat = TD.ice_specific_humidity(thermo_params, ts)
+    θ_sat = TD.dry_pottemp(thermo_params, ts)
+    θ_liq_ice_sat = TD.liquid_ice_pottemp(thermo_params, ts)
+    p = TD.air_pressure(thermo_params, ts)
+    en_cld_frac = ifelse(TD.has_condensate(thermo_params, ts), 1, 0)
+    ρ = TD.air_density(thermo_params, ts)
+    return EnvBuoyGradVars{FT}(
+        t_sat,
+        qv_sat,
+        qt_sat,
+        ql_sat,
+        qi_sat,
+        θ_sat,
+        θ_liq_ice_sat,
+        p,
+        en_cld_frac,
+        ρ,
+        ∂θv∂z_unsat,
+        ∂qt∂z_sat,
+        ∂θl∂z_sat,
+    )
 end
+
+Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
+Base.broadcastable(x::EnvBuoyGradVars) = tuple(x)
+
 
 abstract type AbstractEDMF end
 

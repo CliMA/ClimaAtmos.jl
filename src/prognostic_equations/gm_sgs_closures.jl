@@ -33,35 +33,27 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
 
     ᶜlinear_buoygrad = p.scratch.ᶜtemp_scalar
     @. ᶜlinear_buoygrad = buoyancy_gradients(
-        params,
+        BuoyGradMean(),
+        thermo_params,
         p.atmos.moisture_model,
-        EnvBuoyGrad(
-            BuoyGradMean(),
-            TD.air_temperature(thermo_params, ᶜts),           # t_sat
-            TD.vapor_specific_humidity(thermo_params, ᶜts),   # qv_sat
-            TD.total_specific_humidity(thermo_params, ᶜts),   # qt_sat
-            TD.liquid_specific_humidity(thermo_params, ᶜts),  # q_liq
-            TD.ice_specific_humidity(thermo_params, ᶜts),     # q_ice
-            TD.dry_pottemp(thermo_params, ᶜts),               # θ_sat
-            TD.liquid_ice_pottemp(thermo_params, ᶜts),        # θ_liq_ice_sat
+        EnvBuoyGradVars(
+            thermo_params,
+            ᶜts,
             projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),
                 ᶜlg,
-            ),                                               # ∂θv∂z_unsat
+            ),                                                                 # ∂θv∂z_unsat
             projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts))),
                 ᶜlg,
-            ),                                               # ∂qt∂z_sat
+            ),            # ∂qt∂z_sat
             projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),
                 ᶜlg,
-            ),                                               # ∂θl∂z_sat
-            ᶜp,                                              # p
-            ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),# en_cld_frac
-            Y.c.ρ,                                           # ρ
+            ),                                                                 # ∂θl∂z_sat
         ),
     )
 
