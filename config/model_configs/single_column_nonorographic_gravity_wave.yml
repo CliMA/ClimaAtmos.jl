@@ -1,8 +1,8 @@
-dt_save_to_disk: "500secs"
+dt_save_to_disk: "400secs"
 initial_condition: "IsothermalProfile"
 t_end: "1500secs"
 config: "column"
 hyperdiff: "false"
-dt: "500secs"
+dt: "400secs"
 non_orographic_gravity_wave: true
 job_id: "single_column_nonorographic_gravity_wave"
