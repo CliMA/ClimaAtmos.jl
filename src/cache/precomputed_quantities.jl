@@ -71,7 +71,7 @@ function precomputed_quantities(Y, atmos)
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
-            ᶜh_tot⁰ = similar(Y.c, FT),
+            ᶜmse⁰ = similar(Y.c, FT),
             ᶜq_tot⁰ = similar(Y.c, FT),
             ᶜts⁰ = similar(Y.c, TST),
             ᶜρ⁰ = similar(Y.c, FT),

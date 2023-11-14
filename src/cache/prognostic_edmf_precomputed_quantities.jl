@@ -15,16 +15,16 @@ function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜh_tot) = p.precomputed
-    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜh_tot⁰, ᶜq_tot⁰) =
+    (; ᶜp, ᶜh_tot, ᶜK) = p.precomputed
+    (; ᶜtke⁰, ᶜρa⁰, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜts⁰, ᶜρ⁰, ᶜmse⁰, ᶜq_tot⁰) =
         p.precomputed
 
     @. ᶜρa⁰ = ρa⁰(Y.c)
     @. ᶜtke⁰ = divide_by_ρa(Y.c.sgs⁰.ρatke, ᶜρa⁰, 0, Y.c.ρ, turbconv_model)
-    @. ᶜh_tot⁰ = divide_by_ρa(
-        Y.c.ρ * ᶜh_tot - ρah_tot⁺(Y.c.sgsʲs),
+    @. ᶜmse⁰ = divide_by_ρa(
+        Y.c.ρ * (ᶜh_tot - ᶜK) - ρamse⁺(Y.c.sgsʲs),
         ᶜρa⁰,
-        Y.c.ρ * ᶜh_tot,
+        Y.c.ρ * (ᶜh_tot - ᶜK),
         Y.c.ρ,
         turbconv_model,
     )
@@ -37,8 +37,8 @@ function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³
     )
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
-    @. ᶜK⁰ += ᶜtke⁰
-    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜh_tot⁰ - ᶜK⁰ - ᶜΦ, ᶜq_tot⁰)
+    # @. ᶜK⁰ += ᶜtke⁰
+    @. ᶜts⁰ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmse⁰ - ᶜΦ, ᶜq_tot⁰)
     @. ᶜρ⁰ = TD.air_density(thermo_params, ᶜts⁰)
     return nothing
 end
@@ -73,12 +73,11 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜtsʲ = ᶜtsʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
-        ᶜh_totʲ = Y.c.sgsʲs.:($j).h_tot
+        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
-        @. ᶜtsʲ =
-            TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜh_totʲ - ᶜKʲ - ᶜΦ, ᶜq_totʲ)
+        @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
         # EDMFX boundary condition:
@@ -107,7 +106,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         # Based on boundary conditions for updrafts we overwrite
         # the first interior point for EDMFX ᶜh_totʲ...
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
-        ᶜh_totʲ_int_val = Fields.field_values(Fields.level(ᶜh_totʲ, 1))
+        ᶜh_totʲ_int_val = p.scratch.temp_data_level
         @. ᶜh_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
@@ -134,13 +133,15 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         )
 
         # Then overwrite the prognostic variables at first inetrior point.
+        ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
         ᶜKʲ_int_val = Fields.field_values(Fields.level(ᶜKʲ, 1))
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
+        @. ᶜmseʲ_int_val = ᶜh_totʲ_int_val - ᶜKʲ_int_val
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
         @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
             thermo_params,
             ᶜp_int_val,
-            ᶜh_totʲ_int_val - ᶜKʲ_int_val - ᶜΦ_int_val,
+            ᶜmseʲ_int_val - ᶜΦ_int_val,
             ᶜq_totʲ_int_val,
         )
         sgsʲs_ρ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -173,9 +174,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜρ_ref) = p.core
-    (; ᶜspecific, ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶜu⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) =
-        p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length,
         ᶜlinear_buoygrad,

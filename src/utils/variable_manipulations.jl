@@ -188,7 +188,7 @@ mass-flux subdomain states are stored in `gs.sgsʲs`.
 ρa⁺(gs) = mapreduce(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
 
 """
-    ρah_tot⁺(gs)
+    ρah_tot⁺(sgsʲs)
 
 Computes the total mass-flux subdomain area-weighted ρh_tot, assuming that the
 mass-flux subdomain states are stored in `sgsʲs`.
@@ -196,7 +196,15 @@ mass-flux subdomain states are stored in `sgsʲs`.
 ρah_tot⁺(sgsʲs) = mapreduce(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, +, sgsʲs)
 
 """
-    ρaq_tot⁺(gs)
+    ρamse⁺(sgsʲs)
+
+Computes the total mass-flux subdomain area-weighted ρmse, assuming that the
+mass-flux subdomain states are stored in `sgsʲs`.
+"""
+ρamse⁺(sgsʲs) = mapreduce(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, +, sgsʲs)
+
+"""
+    ρaq_tot⁺(sgsʲs)
 
 Computes the total mass-flux subdomain area-weighted ρq_tot, assuming that the
 mass-flux subdomain states are stored in `sgsʲs`.
