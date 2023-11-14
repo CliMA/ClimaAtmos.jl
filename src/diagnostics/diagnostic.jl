@@ -715,7 +715,12 @@ function get_callbacks_from_diagnostics(
                 diag.pre_output_hook!(storage[diag], counters[diag])
 
                 # Write to disk
-                diag.output_writer(storage[diag], diag, integrator)
+                write_field!(
+                    diag.output_writer,
+                    storage[diag],
+                    diag,
+                    integrator,
+                )
 
                 # accumulator[diag] is not defined for non-reductions
                 diag_accumulator = get(accumulators, diag, nothing)
