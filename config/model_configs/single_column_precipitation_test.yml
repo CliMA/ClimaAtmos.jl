@@ -1,13 +1,13 @@
 config: "column"
 initial_condition: "PrecipitatingColumn"
 surface_setup: "DefaultMoninObukhov"
-dz_bottom: 50.0
-z_elem: 100
+z_elem: 200
 z_max: 10000.0
+z_stretch: false
 dt: "10secs"
 t_end: "1500secs"
 dt_save_to_disk: "500secs"
-moist: "equil"
+moist: "nonequil"
 precip_model: "1M"
 vert_diff: "true"
 hyperdiff: "false"

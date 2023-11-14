@@ -963,10 +963,10 @@ function (initial_condition::PrecipitatingColumn)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101300.0)
-    qᵣ = prescribed_prof(FT, 800, 2000, 0)
-    qₛ = prescribed_prof(FT, 1500, 5000, 0)
-    #q_tot = prescribed_prof(FT, 0, Inf, 0)
-    #θ = prescribed_prof(FT, 0, Inf, 300)
+    qᵣ = prescribed_prof(FT, 800, 4000, 1e-6)
+    qₛ = prescribed_prof(FT, 1000, 6000, 2e-6)
+    qₗ = prescribed_prof(FT, 2000, 4000, 2e-5)
+    qᵢ = prescribed_prof(FT, 4000, 6000, 1e-5)
     θ = APL.Rico_θ_liq_ice(FT)
     q_tot = APL.Rico_q_tot(FT)
     u = prescribed_prof(FT, 0, Inf, 0)
@@ -974,15 +974,16 @@ function (initial_condition::PrecipitatingColumn)(params)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
     function local_state(local_geometry)
         (; z) = local_geometry.coordinates
-        return LocalState(;
-            params,
-            geometry = local_geometry,
-            thermo_state = TD.PhaseEquil_pθq(
+        ts = TD.PhaseNonEquil_pθq(
                 thermo_params,
                 p(z),
                 θ(z),
-                q_tot(z),
-            ),
+                TD.PhasePartition(q_tot(z), qₗ(z), qᵢ(z)),
+        )
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts,
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = nothing,
             precip_state = PrecipState1M(; q_rai = qᵣ(z), q_sno = qₛ(z)),
