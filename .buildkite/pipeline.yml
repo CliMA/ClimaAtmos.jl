@@ -592,7 +592,10 @@ steps:
         artifact_paths: "diagnostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 20GB
-      
+
+  - group: "Prognostic EDMFX"
+    steps:
+
       - label: ":genie: Prognostic EDMFX advection test in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -600,9 +603,6 @@ steps:
         artifact_paths: "prognostic_edmfx_adv_test_box/*"
         agents:
           slurm_mem: 20GB
-
-  - group: "Prognostic EDMFX"
-    steps:
 
       - label: ":genie: Prognostic EDMFX GABLS in a box"
         command: >
@@ -757,6 +757,15 @@ steps:
         agents:
           slurm_gpus: 1
         soft_fail: true
+
+      - label: "GPU: Diagnostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $GPU_CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
+        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/*"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20G
 
   - group: "GPU Performance"
     steps:
