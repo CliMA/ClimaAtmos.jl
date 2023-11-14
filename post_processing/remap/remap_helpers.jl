@@ -110,14 +110,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     nc_time = def_time_coord(nc)
     # define variables for the prognostic states
     nc_rho = defVar(nc, "rho", FT, cspace, ("time",))
-    thermo_var = if :ρe_tot in propertynames(Y.c)
-        "e_tot"
-    elseif :ρθ in propertynames(Y.c)
-        "theta"
-    else
-        error("Unfound thermodynamic variable")
-    end
-    nc_thermo = defVar(nc, thermo_var, FT, cspace, ("time",))
+    nc_thermo = defVar(nc, "e_tot", FT, cspace, ("time",))
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
     nc_v = defVar(nc, "v", FT, cspace, ("time",))
     nc_w = defVar(nc, "w", FT, cspace, ("time",))
@@ -199,11 +192,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     # density
     nc_rho[:, 1] = Y.c.ρ
     # thermodynamics
-    if :ρe_tot in propertynames(Y.c)
-        nc_thermo[:, 1] = Y.c.ρe_tot ./ Y.c.ρ
-    elseif :ρθ in propertynames(Y.c)
-        nc_thermo[:, 1] = Y.c.ρθ ./ Y.c.ρ
-    end
+    nc_thermo[:, 1] = Y.c.ρe_tot ./ Y.c.ρ
     # physical horizontal velocity
     uh_phy = Geometry.transform.(tuple(Geometry.UVAxis()), Y.c.uₕ)
     nc_u[:, 1] = uh_phy.components.data.:1
@@ -279,7 +268,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         joinpath(out_dir, first(splitext(basename(filein))) * ".nc")
     dry_variables = [
         "rho",
-        thermo_var,
+        "e_tot",
         "u",
         "v",
         "w",

@@ -6,10 +6,6 @@ struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
 struct NonEquilMoistModel <: AbstractMoistureModel end
 
-abstract type AbstractEnergyFormulation end
-struct PotentialTemperature <: AbstractEnergyFormulation end
-struct TotalEnergy <: AbstractEnergyFormulation end
-
 abstract type AbstractPrecipitationModel end
 struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
@@ -230,7 +226,6 @@ struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 # Define broadcasting for types
 Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
-Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
@@ -323,7 +318,6 @@ Base.@kwdef struct AtmosModel{
     MC,
     PEM,
     MM,
-    EF,
     PM,
     F,
     S,
@@ -350,7 +344,6 @@ Base.@kwdef struct AtmosModel{
     model_config::MC = nothing
     perf_mode::PEM = nothing
     moisture_model::MM = nothing
-    energy_form::EF = nothing
     precip_model::PM = nothing
     forcing_type::F = nothing
     subsidence::S = nothing

@@ -157,19 +157,6 @@ function get_perf_mode(parsed_args)
     end
 end
 
-function get_energy_form(parsed_args, vert_diff)
-    energy_name = parsed_args["energy_name"]
-    @assert energy_name in ("rhoe", "rhotheta")
-    if !isnothing(vert_diff)
-        @assert energy_name == "rhoe"
-    end
-    return if energy_name == "rhoe"
-        TotalEnergy()
-    elseif energy_name == "rhotheta"
-        PotentialTemperature()
-    end
-end
-
 function get_radiation_mode(parsed_args, ::Type{FT}) where {FT}
     idealized_h2o = parsed_args["idealized_h2o"]
     @assert idealized_h2o in (true, false)

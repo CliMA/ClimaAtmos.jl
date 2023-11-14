@@ -257,11 +257,11 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
 """
     remove_energy_var(specific_state)
 
-Creates a copy of `specific_state` with the energy variable (`θ` or `e_tot`)
+Creates a copy of `specific_state` with the energy variable
 removed, where `specific_state` is the result of calling, e.g., `specific_gs`,
 `specific_sgsʲs`, or `specific_sgs⁰`.
 """
 remove_energy_var(specific_state::NamedTuple) =
-    Base.structdiff(specific_state, NamedTuple{(:θ, :e_tot)})
+    Base.structdiff(specific_state, NamedTuple{(:e_tot,)})
 remove_energy_var(specific_state::Tuple) =
     map(remove_energy_var, specific_state)

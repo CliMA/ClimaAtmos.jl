@@ -326,31 +326,26 @@ NVTX.@annotate function compute_diagnostics(integrator)
         turbulence_convection_diagnostic = NamedTuple()
     end
 
-    if p.atmos.energy_form isa TotalEnergy
-        sfc_local_geometry =
-            Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
-        surface_ct3_unit =
-            CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
-        (; ρ_flux_uₕ, ρ_flux_h_tot) = p.precomputed.sfc_conditions
-        sfc_flux_momentum =
-            Geometry.UVVector.(
-                adjoint.(ρ_flux_uₕ ./ Spaces.level(ᶠinterp.(Y.c.ρ), half)) .*
-                surface_ct3_unit
-            )
-        vert_diff_diagnostic = (;
-            sfc_flux_u = sfc_flux_momentum.components.data.:1,
-            sfc_flux_v = sfc_flux_momentum.components.data.:2,
-            sfc_flux_energy = dot.(ρ_flux_h_tot, surface_ct3_unit),
+    sfc_local_geometry =
+        Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
+    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; ρ_flux_uₕ, ρ_flux_h_tot) = p.precomputed.sfc_conditions
+    sfc_flux_momentum =
+        Geometry.UVVector.(
+            adjoint.(ρ_flux_uₕ ./ Spaces.level(ᶠinterp.(Y.c.ρ), half)) .*
+            surface_ct3_unit
         )
-        if :ρq_tot in propertynames(Y.c)
-            (; ρ_flux_q_tot) = p.precomputed.sfc_conditions
-            vert_diff_diagnostic = (;
-                vert_diff_diagnostic...,
-                sfc_evaporation = dot.(ρ_flux_q_tot, surface_ct3_unit),
-            )
-        end
-    else
-        vert_diff_diagnostic = NamedTuple()
+    vert_diff_diagnostic = (;
+        sfc_flux_u = sfc_flux_momentum.components.data.:1,
+        sfc_flux_v = sfc_flux_momentum.components.data.:2,
+        sfc_flux_energy = dot.(ρ_flux_h_tot, surface_ct3_unit),
+    )
+    if :ρq_tot in propertynames(Y.c)
+        (; ρ_flux_q_tot) = p.precomputed.sfc_conditions
+        vert_diff_diagnostic = (;
+            vert_diff_diagnostic...,
+            sfc_evaporation = dot.(ρ_flux_q_tot, surface_ct3_unit),
+        )
     end
 
     if p.atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode

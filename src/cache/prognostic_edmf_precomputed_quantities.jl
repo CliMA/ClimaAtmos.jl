@@ -50,9 +50,8 @@ Updates the draft thermo state and boundary conditions
 precomputed quantities stored in `p` for edmfx.
 """
 function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
-    (; energy_form, moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model) = p.atmos
     #EDMFX BCs only support total energy as state variable
-    @assert energy_form isa TotalEnergy
     @assert !(moisture_model isa DryModel)
 
     FT = Spaces.undertype(axes(Y.c))

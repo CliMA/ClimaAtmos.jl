@@ -7,12 +7,7 @@ import ClimaCoreTempestRemap: def_space_coord
 import ClimaCoreSpectra: power_spectrum_1d, power_spectrum_2d
 import ClimaCore: Geometry, Fields, Spaces
 using LinearAlgebra: norm
-import ClimaAtmos:
-    DryModel,
-    EquilMoistModel,
-    NonEquilMoistModel,
-    PotentialTemperature,
-    TotalEnergy
+import ClimaAtmos: DryModel, EquilMoistModel, NonEquilMoistModel
 
 function process_name(s::AbstractString)
     # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"

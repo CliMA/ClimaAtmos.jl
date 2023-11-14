@@ -418,10 +418,7 @@ add_diagnostic_variable!(
 ###
 # Eastward and northward surface drag component (2d)
 ###
-compute_tau!(_, _, _, _, energy_form::T) where {T} =
-    error_diagnostic_variable("tau", energy_form)
-
-function compute_tau!(out, state, cache, component, energy_form::TotalEnergy)
+function compute_tau!(out, state, cache, component)
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
     surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
@@ -446,10 +443,8 @@ function compute_tau!(out, state, cache, component, energy_form::TotalEnergy)
     return
 end
 
-compute_tauu!(out, state, cache, time) =
-    compute_tau!(out, state, cache, :1, cache.atmos.energy_form)
-compute_tauv!(out, state, cache, time) =
-    compute_tau!(out, state, cache, :2, cache.atmos.energy_form)
+compute_tauu!(out, state, cache, time) = compute_tau!(out, state, cache, :1)
+compute_tauv!(out, state, cache, time) = compute_tau!(out, state, cache, :2)
 
 add_diagnostic_variable!(
     short_name = "tauu",
@@ -472,12 +467,7 @@ add_diagnostic_variable!(
 ###
 # Surface energy flux (2d) - TODO: this may need to be split into sensible and latent heat fluxes
 ###
-compute_hfes!(out, state, cache, time) =
-    compute_hfes!(out, state, cache, time, cache.atmos.energy_form)
-compute_hfes!(_, _, _, _, energy_form::T) where {T} =
-    error_diagnostic_variable("hfes", energy_form)
-
-function compute_hfes!(out, state, cache, time, energy_form::TotalEnergy)
+function compute_hfes!(out, state, cache, time)
     (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
     sfc_local_geometry =
         Fields.level(Fields.local_geometry_field(state.f), Fields.half)
@@ -500,24 +490,10 @@ add_diagnostic_variable!(
 ###
 # Surface evaporation (2d)
 ###
-compute_evspsbl!(out, state, cache, time) = compute_evspsbl!(
-    out,
-    state,
-    cache,
-    time,
-    cache.atmos.moisture_model,
-    cache.atmos.energy_form,
-)
-compute_evspsbl!(
-    _,
-    _,
-    _,
-    _,
-    moisture_model::T1,
-    energy_form::T2,
-) where {T1, T2} = error_diagnostic_variable(
-    "Can only compute surface_evaporation with energy_form = TotalEnergy() and with a moist model",
-)
+compute_evspsbl!(out, state, cache, time) =
+    compute_evspsbl!(out, state, cache, time, cache.atmos.moisture_model)
+compute_evspsbl!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("evspsbl", model)
 
 function compute_evspsbl!(
     out,
@@ -525,7 +501,6 @@ function compute_evspsbl!(
     cache,
     time,
     moisture_model::T,
-    energy_form::TotalEnergy,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
     sfc_local_geometry =

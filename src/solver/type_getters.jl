@@ -44,7 +44,6 @@ function get_atmos(config::AtmosConfig, params)
         moisture_model,
         model_config,
         perf_mode = get_perf_mode(parsed_args),
-        energy_form = get_energy_form(parsed_args, vert_diff),
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
