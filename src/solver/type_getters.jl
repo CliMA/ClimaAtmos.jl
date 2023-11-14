@@ -566,13 +566,17 @@ function get_diagnostics(parsed_args, atmos_model)
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
+    hdf5_writer = CAD.HDF5Writer()
+    netcdf_writer = CAD.NetCDFWriter()
+    writers = (hdf5_writer, netcdf_writer)
+
     # The default writer is HDF5
     ALLOWED_WRITERS = Dict(
-        "nothing" => CAD.HDF5Writer(),
-        "h5" => CAD.HDF5Writer(),
-        "hdf5" => CAD.HDF5Writer(),
-        "nc" => CAD.NetCDFWriter(),
-        "netcdf" => CAD.NetCDFWriter(),
+        "nothing" => hdf5_writer,
+        "h5" => hdf5_writer,
+        "hdf5" => hdf5_writer,
+        "nc" => netcdf_writer,
+        "netcdf" => netcdf_writer,
     )
 
     diagnostics = map(yaml_diagnostics) do yaml_diag
@@ -632,9 +636,16 @@ function get_diagnostics(parsed_args, atmos_model)
     end
 
     if parsed_args["output_default_diagnostics"]
-        return [CAD.default_diagnostics(atmos_model)..., diagnostics...]
+        return [
+            CAD.default_diagnostics(
+                atmos_model;
+                output_writer = netcdf_writer,
+            )...,
+            diagnostics...,
+        ],
+        writers
     else
-        return collect(diagnostics)
+        return collect(diagnostics), writers
     end
 end
 
@@ -778,8 +789,10 @@ function get_integrator(config::AtmosConfig)
 
     # Initialize diagnostics
     s = @timed_str begin
-        diagnostics = get_diagnostics(config.parsed_args, atmos)
+        diagnostics, writers = get_diagnostics(config.parsed_args, atmos)
     end
+    # Add writers to the cache, so that we can close the files in solve_atmos!
+    p = merge(p, (; writers = writers))
     @info "initializing diagnostics: $s"
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
