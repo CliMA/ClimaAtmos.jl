@@ -70,6 +70,9 @@ function solve_atmos!(integrator)
         @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
             (ret_code, catch_backtrace())
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
+    finally
+        # Close all the files opened by the writers
+        map(CAD.close, integrator.p.writers)
     end
 end
 
