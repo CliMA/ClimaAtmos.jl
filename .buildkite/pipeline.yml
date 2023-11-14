@@ -839,6 +839,14 @@ steps:
         agents:
           slurm_mem: 24GB
 
+      - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
+        artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
+        agents:
+          slurm_mem: 24GB
+
       - label: ":fire: Flame graph: perf target (barowave jfnk)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
