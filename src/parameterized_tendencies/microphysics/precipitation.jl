@@ -158,6 +158,8 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
         ᶜSeₜᵖ = similar(Y.c, FT),
         ᶜwᵣ = similar(Y.c, FT),
         ᶜwₛ = similar(Y.c, FT),
+        #ᶠu³ᵣ = similar(Y.f, CT3{FT}),
+        #ᶠu³ₛ = similar(Y.f, CT3{FT}),
     )
 end
 
@@ -197,10 +199,16 @@ function compute_precipitation_cache!(
 
     # compute the precipitation terminal velocity
     @. ᶜwᵣ[colidx] = CM1.terminal_velocity(
-        cmp.pr, cmp.tv.rain, Y.c.ρ[colidx], Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
+            cmp.pr,
+            cmp.tv.rain,
+            Y.c.ρ[colidx],
+            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
     )
     @. ᶜwₛ[colidx] = CM1.terminal_velocity(
-        cmp.ps, cmp.tv.snow, Y.c.ρ[colidx], Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
+            cmp.ps,
+            cmp.tv.snow,
+            Y.c.ρ[colidx],
+            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
     )
 
     # zero out the source terms
@@ -448,11 +456,11 @@ function precipitation_tendency!(
         Y, p, colidx, precip_model, p.atmos.turbconv_model
     )
 
-    @. Yₜ.c.ρ[colidx] += Y.c.ρ[colidx] * ᶜSqₜᵖ[colidx]
-    @. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * ᶜSqₜᵖ[colidx]
-    @. Yₜ.c.ρe_tot[colidx] += Y.c.ρ[colidx] * ᶜSeₜᵖ[colidx]
-    @. Yₜ.c.ρq_rai[colidx] += Y.c.ρ[colidx] * ᶜSqᵣᵖ[colidx]
-    @. Yₜ.c.ρq_sno[colidx] += Y.c.ρ[colidx] * ᶜSqₛᵖ[colidx]
+    #@. Yₜ.c.ρ[colidx] += Y.c.ρ[colidx] * ᶜSqₜᵖ[colidx]
+    #@. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * ᶜSqₜᵖ[colidx]
+    #@. Yₜ.c.ρe_tot[colidx] += Y.c.ρ[colidx] * ᶜSeₜᵖ[colidx]
+    #@. Yₜ.c.ρq_rai[colidx] += Y.c.ρ[colidx] * ᶜSqᵣᵖ[colidx]
+    #@. Yₜ.c.ρq_sno[colidx] += Y.c.ρ[colidx] * ᶜSqₛᵖ[colidx]
 
     return nothing
 end

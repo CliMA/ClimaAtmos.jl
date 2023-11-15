@@ -58,7 +58,7 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; energy_upwinding, tracer_upwinding, density_upwinding) = p.atmos.numerics
-    (; turbconv_model, rayleigh_sponge) = p.atmos
+    (; turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p.simulation
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -97,6 +97,40 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             Y.c.ρ[colidx],
             ᶠu³[colidx],
             ᶜχ[colidx],
+            dt,
+            tracer_upwinding,
+        )
+    end
+
+    if precip_model isa Microphysics1Moment
+        ᶠu³ₚ = p.scratch.ᶠtemp_CT3
+        ᶜqₚ = p.scratch.ᶜtemp_scalar
+        lgf = Fields.local_geometry_field(Y.f)
+
+        @. ᶠu³ₚ[colidx] = ᶠu³[colidx] -
+            ᶠinterp(p.precipitation.ᶜwᵣ[colidx]) *
+            CT3(unit_basis_vector_data(CT3, lgf[colidx]))
+        @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
+        vertical_transport!(
+            Yₜ.c.ρq_rai[colidx],
+            ᶜJ[colidx],
+            Y.c.ρ[colidx],
+            ᶠu³ₚ[colidx],
+            ᶜqₚ[colidx],
+            dt,
+            tracer_upwinding,
+        )
+
+        @. ᶠu³ₚ[colidx] = ᶠu³[colidx] -
+            ᶠinterp(p.precipitation.ᶜwₛ[colidx]) *
+            CT3(unit_basis_vector_data(CT3, lgf[colidx]))
+        @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
+        vertical_transport!(
+            Yₜ.c.ρq_sno[colidx],
+            ᶜJ[colidx],
+            Y.c.ρ[colidx],
+            ᶠu³ₚ[colidx],
+            ᶜqₚ[colidx],
             dt,
             tracer_upwinding,
         )

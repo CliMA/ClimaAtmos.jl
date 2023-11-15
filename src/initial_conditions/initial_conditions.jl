@@ -957,16 +957,17 @@ Base.@kwdef struct PrecipitatingColumn <: InitialCondition
 end
 
 prescribed_prof(::Type{FT}, z_min, z_max, val) where {FT} =
-    z -> (z > z_min && z < z_max) ? FT(val) : FT(0)
+    z -> z < z_max ? FT(val) * exp(-(z - FT(z_min))^2 / 2 / FT(1e3)^2) : FT(0)
+    #z -> (z > z_min && z < z_max) ? FT(val) : FT(0)
 
 function (initial_condition::PrecipitatingColumn)(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101300.0)
-    qᵣ = prescribed_prof(FT, 800, 4000, 1e-6)
-    qₛ = prescribed_prof(FT, 1000, 6000, 2e-6)
-    qₗ = prescribed_prof(FT, 2000, 4000, 2e-5)
-    qᵢ = prescribed_prof(FT, 4000, 6000, 1e-5)
+    qᵣ = prescribed_prof(FT, 2000, 5000, 1e-6)
+    qₛ = prescribed_prof(FT, 2000, 8000, 2e-6)
+    qₗ = prescribed_prof(FT, 4000, 5000, 2e-5)
+    qᵢ = prescribed_prof(FT, 4000, 8000, 1e-5)
     θ = APL.Rico_θ_liq_ice(FT)
     q_tot = APL.Rico_q_tot(FT)
     u = prescribed_prof(FT, 0, Inf, 0)
