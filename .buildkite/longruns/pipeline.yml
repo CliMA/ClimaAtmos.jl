@@ -23,7 +23,7 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
-      
+
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
       - "julia --project=cuda_env -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true);using CUDA; CUDA.precompile_runtime()'"
@@ -55,7 +55,7 @@ steps:
         agents:
           slurm_ntasks: 32
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_bw_rhoe_highres"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
@@ -67,7 +67,7 @@ steps:
         agents:
           slurm_ntasks: 32
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_bw_rhoe_equil_highres"
 
       - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
@@ -80,7 +80,7 @@ steps:
           slurm_ntasks: 32
           slurm_mem_per_cpu: 32GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
@@ -94,7 +94,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"
-      
+
       - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -122,7 +122,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-      
+
       - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -149,6 +149,18 @@ steps:
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation"
 
+      - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution (nz63) hightop (55km) rayleigh sponge(35e3, 10) Float32 (time-varying insolation) + 1-moment microphysics"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_ntasks: 64
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_1M"
+
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution (nz63) hightop (55km) rayleigh sponge(35e3, 10) Float32 (time-varying insolation) + earth topography"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -160,7 +172,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_earth"
-      
+
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -170,7 +182,7 @@ steps:
           slurm_ntasks: 32
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_bw_rhoe_equil_highres_topography_earth"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
@@ -182,7 +194,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_hs_rhoe_equil_highres_topography_earth"
 
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float32 (earth)"
@@ -195,7 +207,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth"
 
   - group: "Low resolution long runs"
@@ -213,7 +225,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
-      
+
 
   - group: "Experimental Long runs"
 
@@ -245,7 +257,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_dyamond"
-  
+
   - group: "AMIP"
 
     steps:
