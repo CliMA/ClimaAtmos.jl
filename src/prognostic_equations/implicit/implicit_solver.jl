@@ -241,7 +241,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; matrix, enthalpy_flag) = A
     (; ᶜspecific, ᶠu³, ᶜK, ᶜp, ∂ᶜK_∂ᶠu₃) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, params) = p
-    (; energy_upwinding, tracer_upwinding, density_upwinding) = p.atmos.numerics
+    (; energy_upwinding, density_upwinding) = p.atmos.numerics
+    (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
     one_ATC3 = CT3(FT(1))'
@@ -320,6 +321,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         (@name(c.ρq_ice), @name(ᶜspecific.q_ice), tracer_upwinding),
         (@name(c.ρq_rai), @name(ᶜspecific.q_rai), tracer_upwinding),
         (@name(c.ρq_sno), @name(ᶜspecific.q_sno), tracer_upwinding),
+        (@name(c.ρq_rai), @name(ᶜspecific.q_rai), precip_upwinding),
+        (@name(c.ρq_sno), @name(ᶜspecific.q_sno), precip_upwinding),
     )
     available_tracer_info =
         MatrixFields.unrolled_filter(tracer_info) do (ρχ_name, _, _)

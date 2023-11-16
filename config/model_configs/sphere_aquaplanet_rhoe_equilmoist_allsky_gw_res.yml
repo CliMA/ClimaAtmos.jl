@@ -11,7 +11,8 @@ dz_bottom: 300.0
 vert_diff: "true"
 idealized_insolation: false
 z_max: 45000.0
-precip_model: "0M"
+precip_model: "1M"
+precip_upwinding: "first_order"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]

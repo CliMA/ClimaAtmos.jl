@@ -946,3 +946,46 @@ function (initial_condition::TRMM_LBA)(params)
     end
     return local_state
 end
+
+"""
+    PrecipitatingColumn
+
+A 1-dimensional precipitating column test
+"""
+struct PrecipitatingColumn <: InitialCondition end
+
+prescribed_prof(::Type{FT}, z_mid, z_max, val) where {FT} =
+    z -> z < z_max ? FT(val) * exp(-(z - FT(z_mid))^2 / 2 / FT(1e3)^2) : FT(0)
+
+function (initial_condition::PrecipitatingColumn)(params)
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    p_0 = FT(101300.0)
+    qᵣ = prescribed_prof(FT, 2000, 5000, 1e-6)
+    qₛ = prescribed_prof(FT, 5000, 8000, 2e-6)
+    qₗ = prescribed_prof(FT, 4000, 5500, 2e-5)
+    qᵢ = prescribed_prof(FT, 6000, 9000, 1e-5)
+    θ = APL.Rico_θ_liq_ice(FT)
+    q_tot = APL.Rico_q_tot(FT)
+    u = prescribed_prof(FT, 0, Inf, 0)
+    v = prescribed_prof(FT, 0, Inf, 0)
+    p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        ts = TD.PhaseNonEquil_pθq(
+            thermo_params,
+            p(z),
+            θ(z),
+            TD.PhasePartition(q_tot(z), qₗ(z), qᵢ(z)),
+        )
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts,
+            velocity = Geometry.UVVector(u(z), v(z)),
+            turbconv_state = nothing,
+            precip_state = PrecipState1M(; q_rai = qᵣ(z), q_sno = qₛ(z)),
+        )
+    end
+    return local_state
+end

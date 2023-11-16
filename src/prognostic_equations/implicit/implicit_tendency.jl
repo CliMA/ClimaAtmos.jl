@@ -23,28 +23,30 @@ end
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 # TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
 # expressions are less convoluted?
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}) =
-    @. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}) =
-    @. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}) =
-    @. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book}) =
-    @. ᶜρχₜ += -(ᶜadvdivᵥ(
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding) =
+    vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -(ᶜdivᵥ(
         ᶠwinterp(ᶜJ, ᶜρ) * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                ᶜχ / dt - ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
             )
         ),
     ))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}) =
-    @. ᶜρχₜ += -(ᶜadvdivᵥ(
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -(ᶜdivᵥ(
         ᶠwinterp(ᶜJ, ᶜρ) * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
                 ᶜχ / dt,
-                ᶜχ / dt - ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
             )
         ),
     ))
@@ -57,8 +59,9 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    (; energy_upwinding, tracer_upwinding, density_upwinding) = p.atmos.numerics
-    (; turbconv_model, rayleigh_sponge) = p.atmos
+    (; energy_upwinding, density_upwinding) = p.atmos.numerics
+    (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
+    (; turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p.simulation
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -99,6 +102,56 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶜχ[colidx],
             dt,
             tracer_upwinding,
+        )
+    end
+
+    if precip_model isa Microphysics1Moment
+        # Advection of precipitation with the mean flow
+        # is done with other tracers above.
+        # Here we add the advection with precipitation terminal velocity
+        # using first order upwind and free outflow bottom boundary condition
+
+        ᶠu³ₚ = p.scratch.ᶠtemp_CT3
+        ᶜqₚ = p.scratch.ᶜtemp_scalar
+        lgf = Fields.local_geometry_field(Y.f)
+        FT = Spaces.undertype(axes(Y.c))
+
+        @. ᶠu³ₚ[colidx] =
+            FT(-1) *
+            ᶠinterp(p.precipitation.ᶜwᵣ[colidx]) *
+            CT3(unit_basis_vector_data(CT3, lgf[colidx]))
+        @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
+
+        ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(FT(0))),
+            bottom = Operators.Extrapolate(),
+        )
+
+        vertical_transport!(
+            Yₜ.c.ρq_rai[colidx],
+            ᶜJ[colidx],
+            Y.c.ρ[colidx],
+            ᶠu³ₚ[colidx],
+            ᶜqₚ[colidx],
+            dt,
+            precip_upwinding,
+            ᶜdivᵥ_ρqₚ,
+        )
+
+        @. ᶠu³ₚ[colidx] =
+            FT(-1) *
+            ᶠinterp(p.precipitation.ᶜwₛ[colidx]) *
+            CT3(unit_basis_vector_data(CT3, lgf[colidx]))
+        @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
+        vertical_transport!(
+            Yₜ.c.ρq_sno[colidx],
+            ᶜJ[colidx],
+            Y.c.ρ[colidx],
+            ᶠu³ₚ[colidx],
+            ᶜqₚ[colidx],
+            dt,
+            precip_upwinding,
+            ᶜdivᵥ_ρqₚ,
         )
     end
 
