@@ -198,6 +198,9 @@ density_upwinding:
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
+precip_upwinding:
+  help: "Precipitation upwinding mode [`none` (default), `first_order` , `third_order`]"
+  value: none
 energy_upwinding:
   help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
@@ -218,6 +221,9 @@ regression_test:
   value: false
 check_conservation:
   help: "Check conservation of mass and energy [`false` (default), `true`]"
+  value: false
+check_precipitation:
+  help: "Sanity checks for 1-moment precipitation [`false` (default), `true`]"
   value: false
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"

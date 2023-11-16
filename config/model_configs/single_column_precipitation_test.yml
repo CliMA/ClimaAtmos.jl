@@ -1,6 +1,6 @@
 config: "column"
 initial_condition: "PrecipitatingColumn"
-surface_setup: "DefaultMoninObukhov"
+surface_setup: "DefaultExchangeCoefficients"
 z_elem: 200
 z_max: 10000.0
 z_stretch: false
@@ -9,11 +9,14 @@ t_end: "1500secs"
 dt_save_to_disk: "500secs"
 moist: "nonequil"
 precip_model: "1M"
+precip_upwinding: "first_order"
 vert_diff: "true"
 hyperdiff: "false"
 rayleigh_sponge: true
 regression_test: false
+check_precipitation: true
 job_id: "single_column_precipitation_test"
+toml: [toml/single_column_precipitation_test.toml]
 diagnostics:
   - short_name: hus
     period: 500secs

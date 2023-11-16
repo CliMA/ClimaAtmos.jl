@@ -123,3 +123,51 @@ if config.parsed_args["check_conservation"]
           (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈
           sum(sol.u[end].c.ρe_tot) rtol = 100 * eps(FT)
 end
+
+if config.parsed_args["check_precipitation"]
+
+    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
+    Yₜ = similar(sol.u[end])
+
+    Yₜ_ρ = similar(Yₜ.c.ρq_rai)
+    Yₜ_ρqₚ = similar(Yₜ.c.ρq_rai)
+    Yₜ_ρqₜ = similar(Yₜ.c.ρq_rai)
+
+    CA.remaining_tendency!(Yₜ, sol.u[end], sol.prob.p, sol.t[end])
+
+    @. Yₜ_ρqₚ = - Yₜ.c.ρq_rai - Yₜ.c.ρq_sno
+    @. Yₜ_ρqₜ = Yₜ.c.ρq_tot
+    @. Yₜ_ρ = Yₜ.c.ρ
+
+    Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
+
+        # no nans
+        @test all(sol.prob.p.precipitation.ᶜwᵣ[colidx] != NaN)
+        @test all(sol.prob.p.precipitation.ᶜwₛ[colidx] != NaN)
+        @test all(Yₜ.c.ρ[colidx] != NaN)
+        @test all(Yₜ.c.ρq_tot[colidx] != NaN)
+        @test all(Yₜ.c.ρe_tot[colidx] != NaN)
+        @test all(Yₜ.c.ρq_rai[colidx] != NaN)
+        @test all(Yₜ.c.ρq_sno[colidx] != NaN)
+
+        # treminal velocity is positive
+        @test minimum(sol.prob.p.precipitation.ᶜwᵣ[colidx]) >= FT(0)
+        @test minimum(sol.prob.p.precipitation.ᶜwₛ[colidx]) >= FT(0)
+
+        # checking for water budget conservation
+        # in the presence of precipitation sinks
+        # (This test only works without surface flux of q_tot)
+        @test all(ClimaCore.isapprox(
+            Yₜ_ρqₜ[colidx],
+            Yₜ_ρqₚ[colidx],
+            rtol = 1e2 * eps(FT)
+        ))
+
+        # mass budget consistency
+        @test all(ClimaCore.isapprox(
+            Yₜ_ρ[colidx],
+            Yₜ_ρqₜ[colidx],
+            rtol = eps(FT)
+        ))
+    end
+end
