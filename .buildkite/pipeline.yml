@@ -612,10 +612,13 @@ steps:
       - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_tke.yml
-        artifact_paths: "diagnostic_edmfx_aquaplanet_tke/*"
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
+        artifact_paths: "diagnostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 20GB
+
+  - group: "Prognostic EDMFX"
+    steps:
 
       - label: ":genie: Prognostic EDMFX advection test in a box"
         command: >
@@ -624,9 +627,6 @@ steps:
         artifact_paths: "prognostic_edmfx_adv_test_box/*"
         agents:
           slurm_mem: 20GB
-
-  - group: "Prognostic EDMFX"
-    steps:
 
       - label: ":genie: Prognostic EDMFX GABLS in a box"
         command: >
@@ -641,7 +641,6 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_box.yml
         artifact_paths: "prognostic_edmfx_bomex_fixtke_box/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 
@@ -650,7 +649,14 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
         artifact_paths: "prognostic_edmfx_bomex_box/*"
-        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMFX Bomex stretched grid in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_box.yml
+        artifact_paths: "prognostic_edmfx_bomex_stretched_box/*"
         agents:
           slurm_mem: 20GB
 
@@ -667,7 +673,6 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
         artifact_paths: "prognostic_edmfx_rico_column/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
 
@@ -676,7 +681,14 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
         artifact_paths: "prognostic_edmfx_trmm_column/*"
-        soft_fail: true
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+        artifact_paths: "prognostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 20GB
 
@@ -770,6 +782,15 @@ steps:
           slurm_gpus: 1
         soft_fail: true
 
+      - label: "GPU: Diagnostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $GPU_CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
+        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/*"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20G
+
   - group: "GPU Performance"
     steps:
 
@@ -848,6 +869,14 @@ steps:
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
         artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
+        agents:
+          slurm_mem: 24GB
+
+      - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
+        artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 24GB
 
