@@ -13,9 +13,6 @@ hyperdiffusion_cache(Y, atmos) =
 hyperdiffusion_cache(Y, hyperdiff::Nothing, _) = (;)
 
 function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
-    do_dss =
-        Spaces.horizontal_space(axes(Y.c)).quadrature_style isa
-        Spaces.Quadratures.GLL
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -43,7 +40,7 @@ function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
         turbconv_model isa DiagnosticEDMFX ? (; ᶜ∇²tke⁰ = similar(Y.c, FT)) :
         (;)
     quantities = (; gs_quantities..., sgs_quantities...)
-    if do_dss
+    if do_dss(Y)
         quantities = (;
             quantities...,
             hyperdiffusion_ghost_buffer = map(
@@ -64,7 +61,6 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss) = p
     (; ᶜp, ᶜspecific) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
@@ -75,7 +71,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
-    if do_dss
+    if do_dss(Y)
         buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
     end
 
@@ -100,7 +96,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if do_dss
+    if do_dss(Y)
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
             for dss_op! in (
                 Spaces.weighted_dss_start!,
@@ -173,12 +169,11 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜspecific) = p.precomputed
-    (; do_dss) = p
     (; ᶜ∇²specific_tracers) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff
     end
-    if do_dss
+    if do_dss(Y)
         buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
     end
 
@@ -193,7 +188,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if do_dss
+    if do_dss(Y)
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
             for dss_op! in (
                 Spaces.weighted_dss_start!,

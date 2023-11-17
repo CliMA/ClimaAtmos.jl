@@ -232,7 +232,7 @@ NVTX.@annotate function compute_diagnostics(integrator)
 
     if eltype(Fields.coordinate_field(axes(Y.c))) <: Geometry.Abstract3DPoint
         ᶜvort = @. Geometry.WVector(curlₕ(Y.c.uₕ))
-        if p.do_dss
+        if do_dss(Y)
             Spaces.weighted_dss!(ᶜvort)
         end
         dycore_diagnostic = (; dycore_diagnostic..., vorticity = ᶜvort)

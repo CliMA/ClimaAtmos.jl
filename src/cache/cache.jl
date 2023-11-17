@@ -1,3 +1,11 @@
+function do_dss(space::Spaces.AbstractSpace)
+    quadrature_style = Spaces.horizontal_space(space).quadrature_style
+    return quadrature_style isa Spaces.Quadratures.GLL
+end
+
+do_dss(Yc::Fields.Field) = do_dss(axes(Yc))
+do_dss(Y::Fields.FieldVector) = do_dss(Y.c)
+
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
@@ -37,11 +45,12 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
     end
     ᶜf = @. CT3(Geometry.WVector(ᶜf))
 
-    quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
-    do_dss = quadrature_style isa Spaces.Quadratures.GLL
     ghost_buffer =
-        !do_dss ? (;) :
-        (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
+        do_dss(Y) ?
+        (;
+            c = Spaces.create_dss_buffer(Y.c),
+            f = Spaces.create_dss_buffer(Y.f),
+        ) : (;)
 
     limiter =
         isnothing(atmos.numerics.limiter) ? nothing :
@@ -98,7 +107,6 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         core,
         sfc_setup,
         params,
-        do_dss,
         precomputed,
         scratch,
         hyperdiff,
