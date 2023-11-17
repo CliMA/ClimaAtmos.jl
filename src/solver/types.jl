@@ -6,10 +6,6 @@ struct DryModel <: AbstractMoistureModel end
 struct EquilMoistModel <: AbstractMoistureModel end
 struct NonEquilMoistModel <: AbstractMoistureModel end
 
-abstract type AbstractEnergyFormulation end
-struct PotentialTemperature <: AbstractEnergyFormulation end
-struct TotalEnergy <: AbstractEnergyFormulation end
-
 abstract type AbstractPrecipitationModel end
 struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
@@ -230,7 +226,6 @@ struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 # Define broadcasting for types
 Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
-Base.broadcastable(x::AbstractEnergyFormulation) = tuple(x)
 Base.broadcastable(x::AbstractPrecipitationModel) = tuple(x)
 Base.broadcastable(x::AbstractForcing) = tuple(x)
 Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
@@ -267,13 +262,22 @@ struct TestDycoreConsistency end
 
 Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
-Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, DE_UP, ED_UP, DYCORE, LIM}
+Base.@kwdef struct AtmosNumerics{
+    EN_UP,
+    TR_UP,
+    DE_UP,
+    ED_UP,
+    ED_SG_UP,
+    DYCORE,
+    LIM,
+}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
     density_upwinding::DE_UP
     edmfx_upwinding::ED_UP
+    edmfx_sgsflux_upwinding::ED_SG_UP
 
     """Add NaNs to certain equations to track down problems"""
     test_dycore_consistency::DYCORE
@@ -314,7 +318,6 @@ Base.@kwdef struct AtmosModel{
     MC,
     PEM,
     MM,
-    EF,
     PM,
     F,
     S,
@@ -341,7 +344,6 @@ Base.@kwdef struct AtmosModel{
     model_config::MC = nothing
     perf_mode::PEM = nothing
     moisture_model::MM = nothing
-    energy_form::EF = nothing
     precip_model::PM = nothing
     forcing_type::F = nothing
     subsidence::S = nothing

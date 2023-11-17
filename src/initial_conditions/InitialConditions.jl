@@ -1,8 +1,6 @@
 module InitialConditions
 
 import ..AtmosModel
-import ..PotentialTemperature
-import ..TotalEnergy
 import ..DryModel
 import ..EquilMoistModel
 import ..NonEquilMoistModel

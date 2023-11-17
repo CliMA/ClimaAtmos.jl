@@ -5,7 +5,7 @@ import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
 
-is_energy_var(symbol) = symbol in (:ρθ, :ρe_tot, :ρaθ, :ρae_tot)
+is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
 is_turbconv_var(symbol) = symbol in (:turbconv, :sgsʲs, :sgs⁰)
 is_tracer_var(symbol) = !(

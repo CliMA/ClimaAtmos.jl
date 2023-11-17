@@ -1,5 +1,4 @@
 dt_save_to_disk: "500secs"
-regression_test: true
 initial_condition: "IsothermalProfile"
 t_end: "1500secs"
 config: "column"

@@ -57,15 +57,12 @@ atmos_face_variables(ls, atmos_model) = (;
 grid_scale_center_variables(ls, atmos_model) = (;
     ρ = ls.ρ,
     uₕ = C12(ls.velocity, ls.geometry),
-    energy_variables(ls, atmos_model.energy_form)...,
+    energy_variables(ls)...,
     moisture_variables(ls, atmos_model.moisture_model)...,
     precip_variables(ls, atmos_model.precip_model, atmos_model.perf_mode)...,
 )
 
-# TODO: Rename ρθ to ρθ_liq_ice.
-energy_variables(ls, ::PotentialTemperature) =
-    (; ρθ = ls.ρ * TD.liquid_ice_pottemp(ls.thermo_params, ls.thermo_state))
-energy_variables(ls, ::TotalEnergy) = (;
+energy_variables(ls) = (;
     ρe_tot = ls.ρ * (
         TD.internal_energy(ls.thermo_params, ls.thermo_state) +
         norm_sqr(ls.velocity) / 2 +
@@ -120,12 +117,11 @@ function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     a_draft = ls.turbconv_state.draft_area
     sgs⁰ = (; ρatke = ls.ρ * (1 - a_draft) * ls.turbconv_state.tke)
     ρa = ls.ρ * a_draft / n
-    h_tot =
+    mse =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
-        norm_sqr(ls.velocity) / 2 +
         CAP.grav(ls.params) * ls.geometry.coordinates.z
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
-    sgsʲs = ntuple(_ -> (; ρa = ρa, h_tot = h_tot, q_tot = q_tot), Val(n))
+    sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
     return (; sgs⁰, sgsʲs)
 end
 

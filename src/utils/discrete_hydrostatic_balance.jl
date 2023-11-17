@@ -49,7 +49,6 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
                 Geometry.UVWVector(Y.c.uₕ) +
                 Geometry.UVWVector(ᶜinterp(Y.f.u₃)),
             ),
-            p.atmos.energy_form,
         ),
     ) # broadcasting doesn't seem to work with kwargs, so define interim ls()
 end

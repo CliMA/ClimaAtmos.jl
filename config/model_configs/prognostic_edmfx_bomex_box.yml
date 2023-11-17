@@ -7,95 +7,24 @@ surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
-edmfx_detr_model: "ConstantArea"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
-prognostic_tke: false
+prognostic_tke: true
 moist: "equil"
 config: "box"
 hyperdiff: "true"
-kappa_4: 1.0e12
-x_max: 1e5
-y_max: 1e5
+kappa_4: 1.0e21
+x_max: 1e8
+y_max: 1e8
 z_max: 3e3
 x_elem: 2
 y_elem: 2
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
-dt: "5secs"
+dt: "10secs"
 t_end: "6hours"
 dt_save_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_bomex_box.toml]
-diagnostics:
-  - short_name: ts
-    period: 10mins
-  - short_name: ta
-    period: 10mins
-  - short_name: thetaa
-    period: 10mins
-  - short_name: ha
-    period: 10mins
-  - short_name: pfull
-    period: 10mins
-  - short_name: rhoa
-    period: 10mins
-  - short_name: ua
-    period: 10mins
-  - short_name: va
-    period: 10mins
-  - short_name: wa
-    period: 10mins
-  - short_name: hur
-    period: 10mins
-  - short_name: hus
-    period: 10mins
-  - short_name: clw
-    period: 10mins
-  - short_name: cli
-    period: 10mins
-  - short_name: hussfc
-    period: 10mins
-  - short_name: evspsbl
-    period: 10mins
-  - short_name: arup
-    period: 10mins
-  - short_name: waup
-    period: 10mins
-  - short_name: taup
-    period: 10mins
-  - short_name: thetaaup
-    period: 10mins
-  - short_name: haup
-    period: 10mins
-  - short_name: husup
-    period: 10mins
-  - short_name: hurup
-    period: 10mins
-  - short_name: clwup
-    period: 10mins
-  - short_name: cliup
-    period: 10mins
-  - short_name: rhoaen
-    period: 10mins
-  - short_name: waen
-    period: 10mins
-  - short_name: taen
-    period: 10mins
-  - short_name: thetaaen
-    period: 10mins
-  - short_name: haen
-    period: 10mins
-  - short_name: husen
-    period: 10mins
-  - short_name: huren
-    period: 10mins
-  - short_name: clwen
-    period: 10mins
-  - short_name: clien
-    period: 10mins
-  - short_name: tke
-    period: 10mins
-  - short_name: lmix
-    period: 10mins

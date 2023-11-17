@@ -37,7 +37,7 @@ function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
             ᶜ∇²tke⁰ = similar(Y.c, FT),
             ᶜ∇²uₕʲs = similar(Y.c, NTuple{n, C12{FT}}),
             ᶜ∇²uᵥʲs = similar(Y.c, NTuple{n, C3{FT}}),
-            ᶜ∇²h_totʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∇²mseʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_totʲs = similar(Y.c, NTuple{n, FT}),
         ) :
         turbconv_model isa DiagnosticEDMFX ? (; ᶜ∇²tke⁰ = similar(Y.c, FT)) :
@@ -69,7 +69,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜρa⁰, ᶜtke⁰) = p.precomputed
-        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²h_totʲs) = p.hyperdiff
+        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if turbconv_model isa DiagnosticEDMFX
         (; ᶜtke⁰) = p.precomputed
@@ -84,11 +84,8 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
         C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
 
-    if :θ in propertynames(ᶜspecific)
-        @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.θ))
-    elseif :e_tot in propertynames(ᶜspecific)
-        @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
-    end
+    @. ᶜ∇²specific_energy = wdivₕ(gradₕ(ᶜspecific.e_tot + ᶜp / Y.c.ρ))
+
     if diffuse_tke
         @. ᶜ∇²tke⁰ = wdivₕ(gradₕ(ᶜtke⁰))
     end
@@ -99,7 +96,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²uʲs.:($$j) =
                 C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
                 C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
-            @. ᶜ∇²h_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).h_tot))
+            @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
         end
     end
 
@@ -131,7 +128,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                         @. ᶜ∇²uʲs.:($$j) =
                             C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
                     end
-                    dss_op!(ᶜ∇²h_totʲs, buffer.ᶜ∇²h_totʲs)
+                    dss_op!(ᶜ∇²mseʲs, buffer.ᶜ∇²mseʲs)
                 end
             end
         end
@@ -144,8 +141,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= κ₄ * C12(ᶜ∇²u)
     @. Yₜ.f.u₃ -= κ₄ * ᶠwinterp(ᶜJ * Y.c.ρ, C3(ᶜ∇²u))
 
-    ᶜρ_energyₜ = :θ in propertynames(ᶜspecific) ? Yₜ.c.ρθ : Yₜ.c.ρe_tot
-    @. ᶜρ_energyₜ -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
+    @. Yₜ.c.ρe_tot -= κ₄ * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
 
     # Sub-grid scale hyperdiffusion continued
     if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
@@ -160,7 +156,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     κ₄ * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥʲs.:($$j))
             end
             # Note: It is more correct to have ρa inside and outside the divergence
-            @. Yₜ.c.sgsʲs.:($$j).h_tot -= κ₄ * wdivₕ(gradₕ(ᶜ∇²h_totʲs.:($$j)))
+            @. Yₜ.c.sgsʲs.:($$j).mse -= κ₄ * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
     end
 

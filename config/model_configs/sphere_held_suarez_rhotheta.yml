@@ -1,7 +1,0 @@
-energy_name: "rhotheta"
-dt_save_to_disk: "10days"
-regression_test: true
-t_end: "20days"
-forcing: "held_suarez"
-dt: "400secs"
-job_id: "sphere_held_suarez_rhotheta"

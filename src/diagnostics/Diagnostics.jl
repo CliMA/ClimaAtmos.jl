@@ -19,9 +19,6 @@ import ..DryModel
 import ..EquilMoistModel
 import ..NonEquilMoistModel
 
-# energy_form
-import ..TotalEnergy
-
 # precip_model
 import ..Microphysics0Moment
 

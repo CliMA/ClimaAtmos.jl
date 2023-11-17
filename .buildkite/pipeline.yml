@@ -134,10 +134,6 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id single_column_nonorographic_gravity_wave
-          --out_dir single_column_nonorographic_gravity_wave
         artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Box Examples"
@@ -226,9 +222,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_baroclinic_wave_rhoe --fig_dir sphere_baroclinic_wave_rhoe
           --case_name dry_baroclinic_wave
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_baroclinic_wave_rhoe --out_dir sphere_baroclinic_wave_rhoe
         artifact_paths: "sphere_baroclinic_wave_rhoe/*"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
@@ -263,45 +256,29 @@ steps:
           --fig_dir sphere_baroclinic_wave_rhoe_equilmoist_expvdiff --case_name aquaplanet
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
 
-      - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/$$JOB_NAME.yml
+      # Add this back when we figure out what to do with SSP and zalesak
+      # - label: ":computer: SSP zalesak tracer & energy upwind baroclinic wave (ρe_tot) equilmoist"
+      #   command: >
+      #     julia --color=yes --project=examples examples/hybrid/driver.jl
+      #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
 
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir $$JOB_NAME
-          --out_dir $$JOB_NAME
+      #     julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
+      #     --data_dir $$JOB_NAME
+      #     --out_dir $$JOB_NAME
 
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir $$JOB_NAME
-          --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
+      #     julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
+      #     --nc_dir $$JOB_NAME
+      #     --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
 
-          julia --color=yes --project=examples regression_tests/test_mse.jl --job_id $$JOB_NAME --out_dir $$JOB_NAME
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_mem: 64GB
-        env:
-          JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
+      #   artifact_paths: "$$JOB_NAME/*"
+      #   agents:
+      #     slurm_mem: 64GB
+      #   env:
+      #     JOB_NAME: "sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist check conservation float64"
         command: "julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64.yml"
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64/*"
-
-      - label: ":computer: held suarez (ρθ)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/sphere_held_suarez_rhotheta.yml
-
-          julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl
-          --data_dir sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
-
-          julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
-          --nc_dir sphere_held_suarez_rhotheta --fig_dir sphere_held_suarez_rhotheta
-          --case_name dry_held_suarez
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_held_suarez_rhotheta --out_dir sphere_held_suarez_rhotheta
-        artifact_paths: "sphere_held_suarez_rhotheta/*"
 
       - label: ":computer: held suarez (ρe) hightop"
         key: sphere_held_suarez_rhoe_hightop
@@ -315,9 +292,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_held_suarez_rhoe_hightop --fig_dir sphere_held_suarez_rhoe_hightop
           --case_name dry_held_suarez
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_held_suarez_rhoe_hightop --out_dir sphere_held_suarez_rhoe_hightop
         artifact_paths: "sphere_held_suarez_rhoe_hightop/*"
 
       - label: ":computer: no lim ARS held suarez (ρe) equilmoist hightop sponge"
@@ -353,10 +327,6 @@ steps:
           julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl
           --nc_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
           --fig_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res --case_name aquaplanet
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
-          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res/*"
         agents:
           slurm_mem: 20GB
@@ -511,16 +481,6 @@ steps:
           --data_dir prep_remap/ --out_dir remap_pipeline_output
         artifact_paths: "remap_pipeline_output/*"
 
-      - label: ":computer: Exercise parallel remap pipeline"
-        key: "parallel_remap_pipeline"
-        depends_on: "remap_pipeline"
-        command: >
-          julia -p 4 --color=yes --project=examples post_processing/remap/remap_pipeline_parallel.jl
-          --data_dir prep_remap/ --out_dir parallel_remap_pipeline_output
-        artifact_paths: "parallel_remap_pipeline_output/*"
-        agents:
-          slurm_ntasks: 5
-
   - group: "Configs"
     steps:
 
@@ -629,11 +589,14 @@ steps:
       - label: ":genie: Diagnostic EDMFX aquaplanet with TKE"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet_tke.yml
-        artifact_paths: "diagnostic_edmfx_aquaplanet_tke/*"
+          --config_file $CONFIG_PATH/diagnostic_edmfx_aquaplanet.yml
+        artifact_paths: "diagnostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 20GB
-      
+
+  - group: "Prognostic EDMFX"
+    steps:
+
       - label: ":genie: Prognostic EDMFX advection test in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -642,9 +605,6 @@ steps:
         agents:
           slurm_mem: 20GB
 
-  - group: "Prognostic EDMFX"
-    steps:
-
       - label: ":genie: Prognostic EDMFX GABLS in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -652,47 +612,28 @@ steps:
         artifact_paths: "prognostic_edmfx_gabls_box/*"
         agents:
           slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX GABLS with TKE in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_tke_box.yml
-        artifact_paths: "prognostic_edmfx_gabls_tke_box/*"
-        agents:
-          slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX GABLS with TKE in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_tke_column.yml
-        artifact_paths: "prognostic_edmfx_gabls_tke_column/*"
-        agents:
-          slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_box.yml
+        artifact_paths: "prognostic_edmfx_bomex_fixtke_box/*"
+        agents:
+          slurm_mem: 20GB
+      
       - label: ":genie: Prognostic EDMFX Bomex in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
         artifact_paths: "prognostic_edmfx_bomex_box/*"
-        soft_fail: true
         agents:
           slurm_mem: 20GB
       
-      - label: ":genie: Prognostic EDMFX Bomex in a column"
+      - label: ":genie: Prognostic EDMFX Bomex stretched grid in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_column/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
-      
-      - label: ":genie: Prognostic EDMFX Bomex with TKE in a column"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_tke_column.yml
-        artifact_paths: "prognostic_edmfx_bomex_tke_column/*"
-        soft_fail: true
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_box.yml
+        artifact_paths: "prognostic_edmfx_bomex_stretched_box/*"
         agents:
           slurm_mem: 20GB
 
@@ -704,21 +645,27 @@ steps:
         agents:
           slurm_mem: 20GB
       
-      - label: ":genie: Prognostic EDMFX Rico in a box"
+      - label: ":genie: Prognostic EDMFX Rico in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_rico_box.yml
-        artifact_paths: "prognostic_edmfx_rico_box/*"
-        soft_fail: true
+          --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
+        artifact_paths: "prognostic_edmfx_rico_column/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX TRMM in a box"
+      - label: ":genie: Prognostic EDMFX TRMM in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_box.yml
-        artifact_paths: "prognostic_edmfx_trmm_box/*"
-        soft_fail: true
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
+        artifact_paths: "prognostic_edmfx_trmm_column/*"
+        agents:
+          slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_aquaplanet.yml
+        artifact_paths: "prognostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 20GB
 
@@ -812,6 +759,15 @@ steps:
           slurm_gpus: 1
         soft_fail: true
 
+      - label: "GPU: Diagnostic EDMFX aquaplanet"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $GPU_CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
+        artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/*"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20G
+
   - group: "GPU Performance"
     steps:
 
@@ -890,6 +846,14 @@ steps:
           julia --color=yes --project=perf perf/flame.jl
           $PERF_CONFIG_PATH/flame_perf_target_diagnostic_edmfx.yml
         artifact_paths: "flame_perf_target_diagnostic_edmfx/*"
+        agents:
+          slurm_mem: 24GB
+
+      - label: ":fire: Flame graph: perf target (prognostic edmfx aquaplanet)"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
+        artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
         agents:
           slurm_mem: 24GB
 

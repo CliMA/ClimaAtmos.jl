@@ -64,7 +64,7 @@ Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
-Aqua = "0.6"
+Aqua = "0.8"
 BlockArrays = "0.16"
 CairoMakie = "0.10"
 ClimaCoreMakie = "0.4"

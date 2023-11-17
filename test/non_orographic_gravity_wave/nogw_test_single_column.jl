@@ -56,10 +56,10 @@ era_data =
 nt = NCDataset(era_data) do ds
     # Dimensions:  longitude × latitude × level × time
     # data at 40N, all longitude, all levels, all time
-    lon = ds["longitude"][:]
-    lat = ds["latitude"][:]
-    lev = ds["level"][:] .* 100
-    time = ds["time"][:]
+    lon = Array(ds["longitude"])
+    lat = Array(ds["latitude"])
+    lev = Array(ds["level"]) .* 100
+    time = Array(ds["time"])
     gZ = ds["z"][:, 5, :, :]
     T = ds["t"][:, 5, :, :]
     u = ds["u"][:, 5, :, :]

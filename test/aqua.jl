@@ -28,8 +28,7 @@ end
     Aqua.test_stale_deps(ClimaAtmos)
     Aqua.test_deps_compat(ClimaAtmos)
     Aqua.test_project_extras(ClimaAtmos)
-    Aqua.test_project_toml_formatting(ClimaAtmos)
-    Aqua.test_piracy(ClimaAtmos)
+    Aqua.test_piracies(ClimaAtmos)
 end
 
 nothing

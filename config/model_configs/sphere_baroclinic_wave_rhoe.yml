@@ -1,5 +1,4 @@
 dt_save_to_disk: "2days"
-regression_test: true
 initial_condition: "DryBaroclinicWave"
 dt: "400secs"
 t_end: "10days"

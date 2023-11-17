@@ -1,8 +1,8 @@
 using Dates: DateTime, @dateformat_str
-using NCDatasets
 using Dierckx
 using ImageFiltering
 using Interpolations
+import NCDatasets
 import ClimaCore: InputOutput, Meshes, Spaces
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -44,7 +44,6 @@ function get_atmos(config::AtmosConfig, params)
         moisture_model,
         model_config,
         perf_mode = get_perf_mode(parsed_args),
-        energy_form = get_energy_form(parsed_args, vert_diff),
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
@@ -89,6 +88,8 @@ function get_numerics(parsed_args)
     tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
     density_upwinding = Val(Symbol(parsed_args["density_upwinding"]))
     edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
+    edmfx_sgsflux_upwinding =
+        Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
 
     limiter =
         parsed_args["apply_limiter"] ? Limiters.QuasiMonotoneLimiter : nothing
@@ -99,6 +100,7 @@ function get_numerics(parsed_args)
         tracer_upwinding,
         density_upwinding,
         edmfx_upwinding,
+        edmfx_sgsflux_upwinding,
         limiter,
         test_dycore_consistency = test_dycore,
         use_reference_state = parsed_args["use_reference_state"],
@@ -129,10 +131,10 @@ function get_spaces(parsed_args, params, comms_ctx)
         warp_function = nothing
     elseif topography == "Earth"
         data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
-        earth_spline = NCDataset(data_path) do data
-            zlevels = data["elevation"][:]
-            lon = data["longitude"][:]
-            lat = data["latitude"][:]
+        earth_spline = NCDatasets.NCDataset(data_path) do data
+            zlevels = Array(data["elevation"])
+            lon = Array(data["longitude"])
+            lat = Array(data["latitude"])
             # Apply Smoothing
             smooth_degree = Int(parsed_args["smoothing_order"])
             esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))

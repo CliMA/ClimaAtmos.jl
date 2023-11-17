@@ -16,8 +16,6 @@ Allocates and returns the precomputed quantities:
     - `ᶜts`: the thermodynamic state on cell centers
     - `ᶜp`: the air pressure on cell centers
     - `sfc_conditions`: the conditions at the surface (at the bottom cell faces)
-
-If the `energy_form` is TotalEnergy, there is an additional quantity:
     - `ᶜh_tot`: the total enthalpy on cell centers
 
 If the `turbconv_model` is EDMFX, there also two SGS versions of every quantity
@@ -36,14 +34,10 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
-    @assert (
-        !(atmos.moisture_model isa DryModel) &&
-        atmos.energy_form isa TotalEnergy
-    ) || !(atmos.turbconv_model isa DiagnosticEDMFX)
-    @assert (
-        !(atmos.moisture_model isa DryModel) &&
-        atmos.energy_form isa TotalEnergy
-    ) || !(atmos.turbconv_model isa PrognosticEDMFX)
+    @assert !(atmos.moisture_model isa DryModel) ||
+            !(atmos.turbconv_model isa DiagnosticEDMFX)
+    @assert !(atmos.moisture_model isa DryModel) ||
+            !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert !(atmos.edmfx_detr_model isa ConstantAreaDetrainment) ||
             !(atmos.turbconv_model isa DiagnosticEDMFX)
     TST = thermo_state_type(atmos.moisture_model, FT)
@@ -56,10 +50,7 @@ function precomputed_quantities(Y, atmos)
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
         ᶜp = similar(Y.c, FT),
-        (
-            atmos.energy_form isa TotalEnergy ?
-            (; ᶜh_tot = similar(Y.c, FT)) : (;)
-        )...,
+        ᶜh_tot = similar(Y.c, FT),
         sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
     advective_sgs_quantities =
@@ -71,7 +62,7 @@ function precomputed_quantities(Y, atmos)
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜK⁰ = similar(Y.c, FT),
-            ᶜh_tot⁰ = similar(Y.c, FT),
+            ᶜmse⁰ = similar(Y.c, FT),
             ᶜq_tot⁰ = similar(Y.c, FT),
             ᶜts⁰ = similar(Y.c, TST),
             ᶜρ⁰ = similar(Y.c, FT),
@@ -252,12 +243,8 @@ function thermo_state(
     return get_ts(ρ, p, θ, e_int, q_tot, q_pt)
 end
 
-function thermo_vars(energy_form, moisture_model, specific, K, Φ)
-    energy_var = if energy_form isa PotentialTemperature
-        (; specific.θ)
-    elseif energy_form isa TotalEnergy
-        (; e_int = specific.e_tot - K - Φ)
-    end
+function thermo_vars(moisture_model, specific, K, Φ)
+    energy_var = (; e_int = specific.e_tot - K - Φ)
     moisture_var = if moisture_model isa DryModel
         (;)
     elseif moisture_model isa EquilMoistModel
@@ -269,19 +256,17 @@ function thermo_vars(energy_form, moisture_model, specific, K, Φ)
     return (; energy_var..., moisture_var...)
 end
 
-ts_gs(thermo_params, energy_form, moisture_model, specific, K, Φ, ρ) =
-    thermo_state(
-        thermo_params;
-        thermo_vars(energy_form, moisture_model, specific, K, Φ)...,
-        ρ,
-    )
+ts_gs(thermo_params, moisture_model, specific, K, Φ, ρ) = thermo_state(
+    thermo_params;
+    thermo_vars(moisture_model, specific, K, Φ)...,
+    ρ,
+)
 
-ts_sgs(thermo_params, energy_form, moisture_model, specific, K, Φ, p) =
-    thermo_state(
-        thermo_params;
-        thermo_vars(energy_form, moisture_model, specific, K, Φ)...,
-        p,
-    )
+ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
+    thermo_params;
+    thermo_vars(moisture_model, specific, K, Φ)...,
+    p,
+)
 
 """
     set_precomputed_quantities!(Y, p, t)
@@ -300,10 +285,10 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
-    (; energy_form, moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
-    thermo_args = (thermo_params, energy_form, moisture_model)
+    thermo_args = (thermo_params, moisture_model)
     (; ᶜΦ) = p.core
     (; ᶜspecific, ᶜu, ᶠu³, ᶜK, ᶜts, ᶜp) = p.precomputed
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
@@ -323,7 +308,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         # quantities of the form ᶜρaχ⁰ / ᶜρ and ᶜρaχʲ / ᶜρ. However, we cannot
         # compute ᶜρ⁰ and ᶜρʲ without first computing ᶜts⁰ and ᶜtsʲ, both of
         # which depend on the value of ᶜp, which in turn depends on ᶜts. Since
-        # ᶜts depends on ᶜK (at least when the energy_form is TotalEnergy), this
+        # ᶜts depends on ᶜK, this
         # means that the amount by which ᶜK needs to be incremented is a
         # function of ᶜK itself. So, unless we run a nonlinear solver here, this
         # circular dependency will prevent us from computing the exact value of
@@ -335,11 +320,8 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
 
-    if energy_form isa TotalEnergy
-        (; ᶜh_tot) = p.precomputed
-        @. ᶜh_tot =
-            TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
-    end
+    (; ᶜh_tot) = p.precomputed
+    @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
 
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, t)

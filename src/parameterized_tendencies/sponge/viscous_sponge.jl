@@ -25,26 +25,11 @@ function viscous_sponge_cache(Y, viscous_sponge::ViscousSponge)
     return (; ᶜβ_viscous, ᶠβ_viscous)
 end
 
-add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t) =
-    add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t, p.atmos.energy_form)
-
-function add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t, ::TotalEnergy)
+function add_viscous_sponge_energy_tendency!(Yₜ, Y, p, t)
     (; ᶜβ_viscous) = p.viscous_sponge
     (; ᶜh_tot) = p.precomputed
     ᶜρ = Y.c.ρ
     @. Yₜ.c.ρe_tot += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(ᶜh_tot))
-end
-
-function add_viscous_sponge_energy_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::PotentialTemperature,
-)
-    (; ᶜβ_viscous) = p.viscous_sponge
-    ᶜρ = Y.c.ρ
-    @. Yₜ.c.ρθ += ᶜβ_viscous * wdivₕ(ᶜρ * gradₕ(Y.c.ρθ / ᶜρ))
 end
 
 function viscous_sponge_tendency!(Yₜ, Y, p, t, ::ViscousSponge)
