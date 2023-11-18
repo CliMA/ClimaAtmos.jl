@@ -20,7 +20,7 @@ precipitation_cache(Y, precip_model::NoPrecipitation) = (;)
 precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 
 #####
-##### 0-Moment without sgs scheme
+##### 0-Moment without sgs scheme or with diagnostic edmf
 #####
 
 function precipitation_cache(Y, precip_model::Microphysics0Moment)
@@ -142,5 +142,63 @@ function precipitation_tendency!(
                 )
         end
     end
+    return nothing
+end
+
+#####
+##### 1-Moment without sgs scheme
+#####
+
+function precipitation_cache(Y, precip_model::Microphysics1Moment)
+    FT = Spaces.undertype(axes(Y.c))
+    return (;
+        ᶜSqₜᵖ = similar(Y.c, FT),
+        ᶜSqᵣᵖ = similar(Y.c, FT),
+        ᶜSqₛᵖ = similar(Y.c, FT),
+        ᶜSeₜᵖ = similar(Y.c, FT),
+        ᶜwᵣ = similar(Y.c, FT),
+        ᶜwₛ = similar(Y.c, FT),
+    )
+end
+
+function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
+    FT = Spaces.undertype(axes(Y.c))
+
+    (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ, ᶜwᵣ, ᶜwₛ) = p.precipitation
+
+    # TODO in the next PR
+    @. ᶜwᵣ[colidx] = FT(0)
+    @. ᶜwₛ[colidx] = FT(0)
+    @. ᶜSqₜᵖ[colidx] = FT(0)
+    @. ᶜSeₜᵖ[colidx] = FT(0)
+    @. ᶜSqᵣᵖ[colidx] = FT(0)
+    @. ᶜSqₛᵖ[colidx] = FT(0)
+end
+
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    precip_model::Microphysics1Moment,
+)
+    FT = Spaces.undertype(axes(Y.c))
+    (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
+
+    compute_precipitation_cache!(
+        Y,
+        p,
+        colidx,
+        precip_model,
+        p.atmos.turbconv_model,
+    )
+
+    @. Yₜ.c.ρ[colidx] += Y.c.ρ[colidx] * ᶜSqₜᵖ[colidx]
+    @. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * ᶜSqₜᵖ[colidx]
+    @. Yₜ.c.ρe_tot[colidx] += Y.c.ρ[colidx] * ᶜSeₜᵖ[colidx]
+    @. Yₜ.c.ρq_rai[colidx] += Y.c.ρ[colidx] * ᶜSqᵣᵖ[colidx]
+    @. Yₜ.c.ρq_sno[colidx] += Y.c.ρ[colidx] * ᶜSqₛᵖ[colidx]
+
     return nothing
 end

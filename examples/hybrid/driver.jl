@@ -36,6 +36,7 @@ include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
 include(
     joinpath(pkgdir(CA), "post_processing", "define_tc_quicklook_profiles.jl"),
 )
+include(joinpath(pkgdir(CA), "post_processing", "plot_single_column_precip.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
@@ -122,4 +123,56 @@ if config.parsed_args["check_conservation"]
     @test sum(sol.u[1].c.ρe_tot) +
           (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈
           sum(sol.u[end].c.ρe_tot) rtol = 100 * eps(FT)
+end
+
+if config.parsed_args["check_precipitation"]
+
+    # plot results of the single column precipitation test
+    plot_single_column_precip(simulation.output_dir, reference_job_id)
+
+    # run some simple tests based on the output
+    FT = Spaces.undertype(axes(sol.u[end].c.ρ))
+    Yₜ = similar(sol.u[end])
+
+    Yₜ_ρ = similar(Yₜ.c.ρq_rai)
+    Yₜ_ρqₚ = similar(Yₜ.c.ρq_rai)
+    Yₜ_ρqₜ = similar(Yₜ.c.ρq_rai)
+
+    CA.remaining_tendency!(Yₜ, sol.u[end], sol.prob.p, sol.t[end])
+
+    @. Yₜ_ρqₚ = -Yₜ.c.ρq_rai - Yₜ.c.ρq_sno
+    @. Yₜ_ρqₜ = Yₜ.c.ρq_tot
+    @. Yₜ_ρ = Yₜ.c.ρ
+
+    Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
+
+        # no nans
+        @assert !any(isnan, Yₜ.c.ρ[colidx])
+        @assert !any(isnan, Yₜ.c.ρq_tot[colidx])
+        @assert !any(isnan, Yₜ.c.ρe_tot[colidx])
+        @assert !any(isnan, Yₜ.c.ρq_rai[colidx])
+        @assert !any(isnan, Yₜ.c.ρq_sno[colidx])
+        @assert !any(isnan, sol.prob.p.precipitation.ᶜwᵣ[colidx])
+        @assert !any(isnan, sol.prob.p.precipitation.ᶜwₛ[colidx])
+
+        # treminal velocity is positive
+        @test minimum(sol.prob.p.precipitation.ᶜwᵣ[colidx]) >= FT(0)
+        @test minimum(sol.prob.p.precipitation.ᶜwₛ[colidx]) >= FT(0)
+
+        # checking for water budget conservation
+        # in the presence of precipitation sinks
+        # (This test only works without surface flux of q_tot)
+        @test all(
+            ClimaCore.isapprox(
+                Yₜ_ρqₜ[colidx],
+                Yₜ_ρqₚ[colidx],
+                rtol = 1e2 * eps(FT),
+            ),
+        )
+
+        # mass budget consistency
+        @test all(
+            ClimaCore.isapprox(Yₜ_ρ[colidx], Yₜ_ρqₜ[colidx], rtol = eps(FT)),
+        )
+    end
 end

@@ -265,6 +265,7 @@ Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 Base.@kwdef struct AtmosNumerics{
     EN_UP,
     TR_UP,
+    PR_UP,
     DE_UP,
     ED_UP,
     ED_SG_UP,
@@ -275,6 +276,7 @@ Base.@kwdef struct AtmosNumerics{
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
+    precip_upwinding::PR_UP
     density_upwinding::DE_UP
     edmfx_upwinding::ED_UP
     edmfx_sgsflux_upwinding::ED_SG_UP
@@ -469,7 +471,7 @@ AtmosConfig(::Nothing; comms_ctx = nothing) = AtmosConfig(Dict(); comms_ctx)
 
 """
     AtmosConfig(config::Dict; comms_ctx = nothing)
-Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of 
+Constructs the AtmosConfig from the Dict passed in. This Dict overrides all of
 the default configurations set in `default_config_dict()`.
 """
 function AtmosConfig(config::Dict; comms_ctx = nothing)

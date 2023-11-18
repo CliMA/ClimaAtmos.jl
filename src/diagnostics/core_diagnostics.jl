@@ -523,7 +523,9 @@ add_diagnostic_variable!(
 )
 
 ###
-# Precipitation (2d) - TODO: change to kg m^-2 s^-1
+# Precipitation (2d)
+# TODO: change to kg m^-2 s^-1
+# TODO: add precipitation flux for the 1-moment microphysics
 ###
 compute_pr!(out, state, cache, time) =
     compute_pr!(out, state, cache, time, cache.atmos.precip_model)
@@ -548,4 +550,69 @@ add_diagnostic_variable!(
     units = "m s^-1",
     comments = "Total precipitation including rain and snow",
     compute! = compute_pr!,
+)
+
+###
+# Precipitation (3d)
+###
+compute_husra!(out, state, cache, time) =
+    compute_husra!(out, state, cache, time, cache.atmos.precip_model)
+compute_husra!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("husra", model)
+
+function compute_husra!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics1Moment,
+)
+    if isnothing(out)
+        return state.c.ρq_rai ./ state.c.ρ
+    else
+        out .= state.c.ρq_rai ./ state.c.ρ
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "husra",
+    long_name = "Mass Fraction of Rain",
+    standard_name = "mass_fraction_of_rain_in_air",
+    units = "kg kg^-1",
+    comments = """
+    This is calculated as the mass of rain water in the grid cell divided by
+    the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
+    """,
+    compute! = compute_husra!,
+)
+
+compute_hussn!(out, state, cache, time) =
+    compute_hussn!(out, state, cache, time, cache.atmos.precip_model)
+compute_hussn!(_, _, _, _, model::T) where {T} =
+    error_diagnostic_variable("hussn", model)
+
+function compute_hussn!(
+    out,
+    state,
+    cache,
+    time,
+    precip_model::Microphysics1Moment,
+)
+    if isnothing(out)
+        return state.c.ρq_sno ./ state.c.ρ
+    else
+        out .= state.c.ρq_sno ./ state.c.ρ
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "hussn",
+    long_name = "Mass Fraction of Snow",
+    standard_name = "mass_fraction_of_snow_in_air",
+    units = "kg kg^-1",
+    comments = """
+    This is calculated as the mass of snow in the grid cell divided by
+    the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
+    """,
+    compute! = compute_hussn!,
 )
