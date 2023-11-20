@@ -194,6 +194,13 @@ function core_default_diagnostics(output_writer)
     core_diagnostics =
         ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa", "hfes"]
     return [
+        # We need to compute the topography at the beginning of the simulation (and only at
+        # the beginning), so we set output_every = 0 (it still called at the first timestep)
+        ScheduledDiagnosticIterations(;
+            variable = get_diagnostic_variable("orog"),
+            output_every = 0,
+            output_writer,
+        ),
         daily_averages(core_diagnostics...; output_writer)...,
         daily_max("ts"; output_writer),
         daily_min("ts"; output_writer),
