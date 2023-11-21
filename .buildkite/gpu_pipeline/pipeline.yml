@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.9.3 cuda/julia-pref openmpi/4.1.5
+  modules: julia/1.9.4 cuda/julia-pref openmpi/4.1.5
 
 env:
   OPENBLAS_NUM_THREADS: 1
@@ -21,7 +21,7 @@ steps:
 
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
-      - julia --project=cuda_env -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true); using CUDA; CUDA.precompile_runtime()'
+      - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime(); CUDA.versioninfo()'
 
       - echo "--- Download artifacts"
       - julia --project=examples artifacts/download_artifacts.jl
