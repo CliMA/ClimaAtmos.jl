@@ -243,6 +243,9 @@ prognostic_tke:
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
   value: "false"
+implicit_diffusion:
+  help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"
+  value: false
 override_τ_precip:
   help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
   value: true

@@ -23,15 +23,16 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
 
-        (; vert_diff) = p.atmos
-        vertical_diffusion_boundary_layer_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            colidx,
-            vert_diff,
-        )
+        if p.atmos.diff_mode == Explicit()
+            vertical_diffusion_boundary_layer_tendency!(
+                Yₜ,
+                Y,
+                p,
+                t,
+                colidx,
+                p.atmos.vert_diff,
+            )
+        end
 
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.radiation_mode)
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)

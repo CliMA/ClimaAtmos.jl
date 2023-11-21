@@ -37,6 +37,9 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
 
+    implicit_diffusion = parsed_args["implicit_diffusion"]
+    @assert implicit_diffusion in (true, false)
+
     model_config = get_model_config(parsed_args)
     vert_diff =
         get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
@@ -68,6 +71,7 @@ function get_atmos(config::AtmosConfig, params)
         ),
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
+        diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
@@ -371,9 +375,16 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
 is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
-function jac_kwargs(ode_algo, Y)
+function jac_kwargs(ode_algo, Y, atmos)
     if is_implicit(ode_algo)
-        A = ImplicitEquationJacobian(Y; transform = use_transform(ode_algo))
+        A = ImplicitEquationJacobian(
+            Y,
+            atmos,
+            atmos.diff_mode == Implicit() ? UseDiffusionDerivative() :
+            IgnoreDiffusionDerivative(),
+            IgnoreEnthalpyDerivative(),
+            use_transform(ode_algo),
+        )
         if use_transform(ode_algo)
             return (; jac_prototype = A, Wfact_t = Wfact!)
         else
@@ -635,7 +646,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         func = if parsed_args["split_ode"]
             implicit_func = SciMLBase.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs(ode_algo, Y)...,
+                jac_kwargs(ode_algo, Y, atmos)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             )
             if is_cts_algo(ode_algo)
