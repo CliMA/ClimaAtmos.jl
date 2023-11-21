@@ -10,13 +10,6 @@ compat = false
 [preferences.CUDA_Runtime_jll]
 version = "local"
 
-[preferences.HDF5_jll]
-libhdf5_path = "libhdf5"
-libhdf5_hl_path = "libhdf5_hl"
-
 [preferences.MPIPreferences]
 _format = "1.0"
-abi = "OpenMPI"
-binary = "system"
-libmpi = "libmpi"
-mpiexec = "mpiexec"
+binary = "MPItrampoline_jll"
