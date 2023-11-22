@@ -547,6 +547,17 @@ function ScheduledDiagnosticIterations(
         sd_time.compute_every == :timestep ? 1 : sd_time.compute_every / Δt
     output_every = sd_time.output_every / Δt
 
+    # When Δt is a Float32, loss of precision might lead to spurious results (e.g., 1. /
+    # 0.1f0 = 9.99999985098839). So, we round to the number of significant digits that we
+    # expect from the float type.
+    #
+    # FIXME: eps(typeof(Δt)) is not the best value to pick the number of significant digits
+    # because it makes sense only for values of order unity.
+    sigdigits = eps(typeof(Δt)) |> log10 |> abs |> round |> Int
+
+    output_every = round(output_every; sigdigits)
+    compute_every = round(compute_every; sigdigits)
+
     isinteger(output_every) || error(
         "output_every ($(sd_time.output_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_short_name)",
     )
