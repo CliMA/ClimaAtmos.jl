@@ -44,12 +44,12 @@ for i in "${!resolutions[@]}"; do
         folder_name="${resolution}_res_Float32"
         mkdir -p "$parent_folder/$folder_name"
         filepath="$parent_folder/$folder_name/$filename"
-            
+
         echo "job_id: sphere_held_suarez_${resolution}_res_rhoe_${nprocs}" > "$filepath"
         echo "forcing: held_suarez" >> "$filepath"
         echo "FLOAT_TYPE: $FT" >> "$filepath"
         echo "tracer_upwinding: none" >> "$filepath"
-            
+
         case "$resolution" in
             "low")
                 echo -e "$low_resolution_lines" >> "$filepath"
@@ -68,7 +68,7 @@ done
 cat << 'EOM'
 agents:
   queue: central
-  modules: julia/1.9.3 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 hdf5/1.12.2-ompi415 nsight-systems/2023.3.1
+  modules: julia/1.9.4 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 nsight-systems/2023.3.1
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -78,6 +78,11 @@ env:
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_CPU_TARGET: 'broadwell;skylake'
   SLURM_KILL_BAD_EXIT: 1
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_CUDA_MEMORY_POOL: none
+  JULIA_MPI_HAS_CUDA: "true"
+  MPITRAMPOLINE_LIB: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/lib64/libmpiwrapper.so"
+  MPITRAMPOLINE_MPIEXEC: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/bin/mpiwrapperexec"
 
 steps:
   - label: "init :computer:"
@@ -209,7 +214,7 @@ cat << EOM
   - wait: ~
     continue_on_failure: true
 
-  - label: ":broom: clean up config files" 
+  - label: ":broom: clean up config files"
     command: "rm -rf $parent_folder"
 
 EOM
