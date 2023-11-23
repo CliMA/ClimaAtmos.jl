@@ -80,7 +80,7 @@ function entrainment(
                 abs(ᶜwʲ) / (ᶜz - z_sfc) * (
                     -4.013288 - 0.000968 * Π₁ + 0.356974 * Π₃ - 0.403124 * Π₄ + 1.503261 * Π₆
                 ),
-                1 / dt,
+                (1 - ᶜaʲ) / max(ᶜaʲ, eps(FT)) / dt,
             ),
         )
 
@@ -115,9 +115,14 @@ function entrainment(
     min_area_limiter =
         min_area_limiter_scale *
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
-    entr = min(
-        entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter,
-        1 / dt,
+    entr = max(
+        0,
+        min(
+            entr_inv_tau +
+            entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) +
+            min_area_limiter,
+            (1 - ᶜaʲ) / max(ᶜaʲ, eps(FT)) / dt,
+        ),
     )
     return entr
 end
@@ -149,9 +154,14 @@ function entrainment(
     min_area_limiter =
         min_area_limiter_scale *
         exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
-    entr = min(
-        entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter,
-        1 / dt,
+    entr = max(
+        0,
+        min(
+            entr_inv_tau +
+            entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) +
+            min_area_limiter,
+            (1 - ᶜaʲ) / max(ᶜaʲ, eps(FT)) / dt,
+        ),
     )
     return entr * FT(2) * hm_limiter(ᶜaʲ)
 end
