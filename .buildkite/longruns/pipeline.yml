@@ -1,7 +1,7 @@
 agents:
   queue: central
   slurm_mem_per_cpu: 8G
-  modules: julia/1.9.3 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 hdf5/1.12.2-ompi415 nsight-systems/2023.3.1
+  modules: julia/1.9.4 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 nsight-systems/2023.3.1
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -9,9 +9,18 @@ env:
   JULIA_NVTX_CALLBACKS: gc
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/cpu"
   JULIA_CPU_TARGET: 'broadwell;skylake'
-  CONFIG_PATH: "config/longrun_configs"
+  CONFIG_PATH: "config/model_configs"
+  GPU_CONFIG_PATH: "config/gpu_configs/"
+  PERF_CONFIG_PATH: "config/perf_configs"
+  MPI_CONFIG_PATH: "config/mpi_configs"
   SLURM_KILL_BAD_EXIT: 1
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_CUDA_MEMORY_POOL: none
+  JULIA_MPI_HAS_CUDA: "true"
+  MPITRAMPOLINE_LIB: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/lib64/libmpiwrapper.so"
+  MPITRAMPOLINE_MPIEXEC: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/bin/mpiwrapperexec"
 
 timeout_in_minutes: 1440
 
@@ -23,7 +32,7 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
-      
+
       - echo "--- Configure CUDA"
       # force the initialization of the CUDA runtime as it is lazily loaded by default
       - "julia --project=cuda_env -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true);using CUDA; CUDA.precompile_runtime()'"
@@ -94,7 +103,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"
-      
+
       - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -122,7 +131,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-      
+
       - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -160,7 +169,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_earth"
-      
+
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -213,7 +222,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
-      
+
 
   - group: "Experimental Long runs"
 

@@ -1,14 +1,21 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.9.3 cuda/julia-pref openmpi/4.1.5
+  modules: julia/1.9.4 cuda/julia-pref openmpi/4.1.5-mpitrampoline
 
 env:
-  OPENBLAS_NUM_THREADS: 1
+  JULIA_CUDA_MEMORY_POOL: none
+  JULIA_MPI_HAS_CUDA: "true"
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  GPU_CONFIG_PATH: "config/gpu_configs/"
+  OPENBLAS_NUM_THREADS: 1
+  OMPI_MCA_opal_warn_on_missing_libcuda: 0
+  SLURM_KILL_BAD_EXIT: 1
   SLURM_GPU_BIND: none # https://github.com/open-mpi/ompi/issues/11949#issuecomment-1737712291
+  CONFIG_PATH: "config/model_configs"
+  GPU_CONFIG_PATH: "config/gpu_configs/"
+  PERF_CONFIG_PATH: "config/perf_configs"
+  MPI_CONFIG_PATH: "config/mpi_configs"
 
 steps:
   - label: "init :GPU:"
