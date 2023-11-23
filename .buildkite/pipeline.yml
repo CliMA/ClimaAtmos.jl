@@ -248,6 +248,8 @@ steps:
           --job_id sphere_baroclinic_wave_rhoe_equilmoist
           --out_dir sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist explicit vertdiff"
         command: >
@@ -318,6 +320,8 @@ steps:
           --job_id sphere_held_suarez_rhoe_equilmoist_hightop_sponge
           --out_dir sphere_held_suarez_rhoe_equilmoist_hightop_sponge
         artifact_paths: "sphere_held_suarez_rhoe_equilmoist_hightop_sponge/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Sphere Examples (Aquaplanet)"
     steps:
@@ -358,6 +362,7 @@ steps:
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/*"
         agents:
           slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Sphere Examples (Topography)"
     steps:
