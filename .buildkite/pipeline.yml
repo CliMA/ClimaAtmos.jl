@@ -28,6 +28,9 @@ steps:
     command:
       - "echo $$JULIA_DEPOT_PATH"
 
+      - echo "--- Remove MPIPreferences"
+      - "rm -f ${JULIA_DEPOT_PATH}/environments/v1.9/LocalPreferences.toml"
+
       - echo "--- Instantiate project"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
