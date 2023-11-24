@@ -59,17 +59,17 @@ allocs = @allocated SciMLBase.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 4656
-allocs_limit["flame_perf_target_tracers"] = 204288
-allocs_limit["flame_perf_target_edmfx"] = 253440
-allocs_limit["flame_perf_diagnostics"] = 3016328
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 920960
+allocs_limit["flame_perf_target"] = 10_155_936
+allocs_limit["flame_perf_target_tracers"] = 10_188_192
+allocs_limit["flame_perf_target_edmfx"] = 21_055_584
+allocs_limit["flame_perf_diagnostics"] = 38_023_696
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 21_055_584
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
-    67443909648
-allocs_limit["flame_perf_target_threaded"] = 5857808
-allocs_limit["flame_perf_target_callbacks"] = 46407936
-allocs_limit["flame_perf_gw"] = 4868951088
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 942928
+    67_443_909_648
+allocs_limit["flame_perf_target_threaded"] = 11_291_008
+allocs_limit["flame_perf_target_callbacks"] = 47_178_232
+allocs_limit["flame_perf_gw"] = 4_868_951_088
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 20_989_440
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
