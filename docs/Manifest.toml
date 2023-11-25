@@ -270,6 +270,7 @@ version = "0.5.6"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "LinearAlgebra", "Memoize", "PkgVersion", "RecursiveArrayTools", "Requires", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "WeakValueDicts"]
+git-tree-sha1 = "5c3809c5da88a3b01b8fe18558f50470fd3c33ed"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.11.0"
 
@@ -1279,9 +1280,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "ba6fe2d8e3648f27cdc29de64fb634a1846ba670"
+git-tree-sha1 = "40ea97b2334725cef9b7f9e2fc2f76b35596807d"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.9.3"
+version = "0.10.0"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
