@@ -28,7 +28,6 @@ docs/site/
 # environment.
 /Manifest.toml
 test/Manifest.toml
-cuda_env/Manifest.toml
 
 # ignore vscode artifacts
 *.vscode
