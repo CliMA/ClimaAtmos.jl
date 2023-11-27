@@ -3,6 +3,7 @@ module RRTMGPInterface
 using RRTMGP
 using ClimaCore: DataLayouts, Spaces, Fields
 import ClimaComms
+using NVTX
 
 # TODO: Move this file to RRTMGP.jl, once the interface has been settled.
 # It will be faster to do interface development in the same repo as experiment
@@ -1036,7 +1037,7 @@ If `extension_nlay > 0`, the set of available fluxes also includes all of the
 aforementioned values prefixed by `extension_`, corresponding to the values at
 cell faces in the extension.
 """
-function update_fluxes!(model)
+NVTX.@annotate function update_fluxes!(model)
     model.implied_values != :none && update_implied_values!(model)
     model.add_isothermal_boundary_layer && update_boundary_layer!(model)
     clip_values!(model)
@@ -1148,20 +1149,25 @@ get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases) = vmr.vmr_h2o
 get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases) =
     view(vmr.vmr, :, :, idx_gases["h2o"])
 
-update_lw_fluxes!(::GrayRadiation, model) =
+NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(model.solver, model.max_threads)
-update_lw_fluxes!(::ClearSkyRadiation, model) = RRTMGP.RTESolver.solve_lw!(
-    model.solver,
-    model.max_threads,
-    model.lookups.lookup_lw,
+NVTX.@annotate update_lw_fluxes!(::ClearSkyRadiation, model) =
+    RRTMGP.RTESolver.solve_lw!(
+        model.solver,
+        model.max_threads,
+        model.lookups.lookup_lw,
+    )
+NVTX.@annotate update_lw_fluxes!(::AllSkyRadiation, model) =
+    RRTMGP.RTESolver.solve_lw!(
+        model.solver,
+        model.max_threads,
+        model.lookups.lookup_lw,
+        model.lookups.lookup_lw_cld,
+    )
+NVTX.@annotate function update_lw_fluxes!(
+    ::AllSkyRadiationWithClearSkyDiagnostics,
+    model,
 )
-update_lw_fluxes!(::AllSkyRadiation, model) = RRTMGP.RTESolver.solve_lw!(
-    model.solver,
-    model.max_threads,
-    model.lookups.lookup_lw,
-    model.lookups.lookup_lw_cld,
-)
-function update_lw_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     RRTMGP.RTESolver.solve_lw!(
         model.solver,
         model.max_threads,
@@ -1178,20 +1184,25 @@ function update_lw_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     )
 end
 
-update_sw_fluxes!(::GrayRadiation, model) =
+NVTX.@annotate update_sw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_sw!(model.solver, model.max_threads)
-update_sw_fluxes!(::ClearSkyRadiation, model) = RRTMGP.RTESolver.solve_sw!(
-    model.solver,
-    model.max_threads,
-    model.lookups.lookup_sw,
+NVTX.@annotate update_sw_fluxes!(::ClearSkyRadiation, model) =
+    RRTMGP.RTESolver.solve_sw!(
+        model.solver,
+        model.max_threads,
+        model.lookups.lookup_sw,
+    )
+NVTX.@annotate update_sw_fluxes!(::AllSkyRadiation, model) =
+    RRTMGP.RTESolver.solve_sw!(
+        model.solver,
+        model.max_threads,
+        model.lookups.lookup_sw,
+        model.lookups.lookup_sw_cld,
+    )
+NVTX.@annotate function update_sw_fluxes!(
+    ::AllSkyRadiationWithClearSkyDiagnostics,
+    model,
 )
-update_sw_fluxes!(::AllSkyRadiation, model) = RRTMGP.RTESolver.solve_sw!(
-    model.solver,
-    model.max_threads,
-    model.lookups.lookup_sw,
-    model.lookups.lookup_sw_cld,
-)
-function update_sw_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     RRTMGP.RTESolver.solve_sw!(
         model.solver,
         model.max_threads,
