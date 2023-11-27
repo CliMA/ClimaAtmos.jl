@@ -55,7 +55,33 @@ const T2 = 290
     )
     sfc_setup = similar(Spaces.level(Y.f, half), typeof(surface_state))
     @. sfc_setup = (surface_state,)
-    p_overwritten = merge(p, (; sfc_setup))
+    p_overwritten = CA.AtmosCache(
+        p.simulation.dt,
+        p.simulation,
+        p.atmos,
+        p.numerics,
+        p.params,
+        p.core,
+        sfc_setup,
+        p.ghost_buffer,
+        p.env_thermo_quad,
+        p.precomputed,
+        p.scratch,
+        p.hyperdiff,
+        p.do_dss,
+        p.rayleigh_sponge,
+        p.viscous_sponge,
+        p.precipitation,
+        p.subsidence,
+        p.large_scale_advection,
+        p.edmf_coriolis,
+        p.forcing,
+        p.non_orographic_gravity_wave,
+        p.orographic_gravity_wave,
+        p.radiation,
+        p.net_energy_flux_toa,
+        p.net_energy_flux_sfc,
+    )
 
     # Test that set_precomputed_quantities! can be used to update the surface
     # temperature to T1 and then to T2.
