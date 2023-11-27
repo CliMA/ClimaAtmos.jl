@@ -30,13 +30,10 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Configure CUDA"
-      # force the initialization of the CUDA runtime as it is lazily loaded by default
-      - "julia --project=cuda_env -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(;verbose=true);using CUDA; CUDA.precompile_runtime()'"
-
       - echo "--- Instantiate"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'""
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
       - "julia --project=examples artifacts/download_artifacts.jl"
 
