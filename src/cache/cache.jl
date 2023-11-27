@@ -1,3 +1,85 @@
+struct AtmosCache{
+    FT <: AbstractFloat,
+    SIM,
+    AM,
+    NUM,
+    CAP,
+    COR,
+    SFC,
+    GHOST,
+    ENV,
+    PREC,
+    SCRA,
+    HYPE,
+    DSS,
+    RS,
+    VS,
+    PR,
+    SUB,
+    LSAD,
+    EDMFCOR,
+    FOR,
+    NONGW,
+    ORGW,
+    RAD,
+    NETFLUXTOA,
+    NETFLUXSFC,
+}
+    """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
+    dt::FT
+
+    """NamedTuple with job_id, output_dir (used in post), and start_date (used for insolation)."""
+    simulation::SIM
+
+    """AtmosModel"""
+    atmos::AM
+
+    """Limiter"""
+    numerics::NUM
+
+    """ClimaAtmosParameters that have to be used"""
+    params::CAP
+
+    """Variables that are used generally, such as ᶜρ_ref, ᶜΦ"""
+    core::COR
+
+    """Used by update_surface_conditions! in set_precomputed_quantities! and coupler"""
+    sfc_setup::SFC
+
+    """Center and face ghost buffers used by DSS"""
+    ghost_buffer::GHOST
+
+    env_thermo_quad::ENV
+
+    """Quantities that are updated with set_precomputed_quantities!"""
+    precomputed::PREC
+
+    """Pre-allocated areas of memory to store temporary values"""
+    scratch::SCRA
+
+    """Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
+       ghost buffers for DSS"""
+    hyperdiff::HYPE
+
+    do_dss::DSS
+
+    """Additional parameters used by the various tendencies"""
+    rayleigh_sponge::RS
+    viscous_sponge::VS
+    precipitation::PR
+    subsidence::SUB
+    large_scale_advection::LSAD
+    edmf_coriolis::EDMFCOR
+    forcing::FOR
+    non_orographic_gravity_wave::NONGW
+    orographic_gravity_wave::ORGW
+    radiation::RAD
+
+    """Net energy flux coming through top of atmosphere and surface"""
+    net_energy_flux_toa::NETFLUXTOA
+    net_energy_flux_sfc::NETFLUXSFC
+end
+
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
@@ -43,14 +125,14 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         !do_dss ? (;) :
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
 
+    net_energy_flux_toa = [Geometry.WVector(FT(0))]
+    net_energy_flux_sfc = [Geometry.WVector(FT(0))]
+
     limiter =
         isnothing(atmos.numerics.limiter) ? nothing :
         atmos.numerics.limiter(similar(Y.c, FT))
 
     numerics = (; limiter)
-
-    net_energy_flux_toa = [Geometry.WVector(FT(0))]
-    net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
     core = (
         ᶜΦ,
@@ -92,16 +174,20 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
 
-    p = (;
+    args = (
+        simulation.dt,
         simulation,
         atmos,
+        numerics,
+        params,
         core,
         sfc_setup,
-        params,
-        do_dss,
+        ghost_buffer,
+        env_thermo_quad,
         precomputed,
         scratch,
         hyperdiff,
+        do_dss,
         rayleigh_sponge,
         viscous_sponge,
         precipitation,
@@ -112,12 +198,9 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,
-        env_thermo_quad,
-        ghost_buffer,
-        dt = simulation.dt,
         net_energy_flux_toa,
         net_energy_flux_sfc,
-        numerics,
     )
-    return p
+
+    return AtmosCache{map(typeof, args)...}(args...)
 end
