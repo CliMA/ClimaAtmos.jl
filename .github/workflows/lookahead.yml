@@ -1,4 +1,9 @@
-name: ci
+name: lookahead
+
+# This action sets up a couple of tests for newer versions of julia and for
+# dependencies more recent than the one in examples so that one can see if there
+# are upcoming problems.
+
 on:
   push:
     tags: '*'
@@ -13,6 +18,7 @@ jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +27,6 @@ jobs:
           - '~1.10.0-rc1'
         os:
           - ubuntu-latest
-          - macOS-latest
         arch:
           - x64
     steps:
@@ -40,10 +45,13 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@v1
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v1
-        with:
-          file: lcov.info
-          token: ${{secrets.CODECOV_TOKEN}}
+      - name: Instantiate test env
+        run: |
+          julia --project=test -e "using Pkg; Pkg.instantiate(); Pkg.develop(path=\".\")"
+      - name: Run test_env.yml
+        continue-on-error: true
+        run: |
+          julia --project=test examples/hybrid/driver.jl --config_file config/model_configs/test_env.yml
+      - name: Run tests
+        run: |
+          julia --project=test test/runtests.jl
