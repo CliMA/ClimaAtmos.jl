@@ -109,10 +109,14 @@ function precomputed_quantities(Y, atmos)
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
         ) : (;)
+    precipitation_quantities =
+        atmos.precip_model isa Microphysics1Moment ?
+        (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
     return (;
         gs_quantities...,
         advective_sgs_quantities...,
         diagnostic_sgs_quantities...,
+        precipitation_quantities...,
     )
 end
 
@@ -285,7 +289,7 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
-    (; moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model, precip_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
@@ -338,6 +342,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+    end
+
+    if precip_model isa Microphysics1Moment
+        set_precipitation_precomputed_quantities!(Y, p, t)
     end
 
     return nothing

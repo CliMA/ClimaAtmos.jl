@@ -118,7 +118,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
         @. ᶠu³ₚ[colidx] =
             FT(-1) *
-            ᶠinterp(p.precipitation.ᶜwᵣ[colidx]) *
+            ᶠinterp(p.precomputed.ᶜwᵣ[colidx]) *
             CT3(unit_basis_vector_data(CT3, lgf[colidx]))
         @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
 
@@ -140,7 +140,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
         @. ᶠu³ₚ[colidx] =
             FT(-1) *
-            ᶠinterp(p.precipitation.ᶜwₛ[colidx]) *
+            ᶠinterp(p.precomputed.ᶜwₛ[colidx]) *
             CT3(unit_basis_vector_data(CT3, lgf[colidx]))
         @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
         vertical_transport!(

@@ -100,13 +100,13 @@ We make use of the following operators
 
 Follows the continuity equation
 ```math
-\frac{\partial}{\partial t} \rho = - \nabla \cdot(\rho \boldsymbol{u}) .
+\frac{\partial}{\partial t} \rho = - \nabla \cdot(\rho \boldsymbol{u}) + \rho \mathcal{S}_{qt}.
 ```
 
 This is discretized using the following
 ```math
 \frac{\partial}{\partial t} \rho
-= - \hat{\mathcal{D}}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right]
+= - \hat{\mathcal{D}}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right] + \rho \mathcal{S}_{qt}
 ```
 
 with the
@@ -139,7 +139,7 @@ This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
 -\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
 ```
-projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overbar{u}}``, the cell-center valued velocity vector. 
+projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overbar{u}}``, the cell-center valued velocity vector.
 ```math
 \nabla_h^2(\boldsymbol{v}) = \nabla_h(\nabla_{h} \cdot \boldsymbol{v}) - \nabla_{h} \times (\nabla_{h} \times \boldsymbol{v}).
 ```
@@ -199,7 +199,7 @@ projected onto the third contravariant direction.
 ### Total energy
 
 ```math
-\frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R),
+\frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R) + \rho \mathcal{S}_{e},
 ```
 which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
 ```math
@@ -236,7 +236,7 @@ is treated implicitly.
 For an arbitrary scalar ``\chi``, the density-weighted scalar ``\rho\chi`` follows the continuity equation
 
 ```math
-\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}).
+\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}) + \rho \mathcal{S}_{\chi}.
 ```
 This is stabilized with the addition of a 4th-order hyperdiffusion term
 ```math
@@ -267,3 +267,111 @@ is treated implicitly.
     - \mathcal{D}^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
     ```
     is treated implicitly.
+
+## Microphysics source terms
+
+Sources from cloud microphysics ``\mathcal{S}`` represent the transfer of mass
+  between the working fluid (dry air, water vapor cloud liquid and cloud ice)
+  and precipitation (rain and snow),
+  as well as the latent heat release due to phase changes.
+
+The scalars ``\rho q_{rai}`` and ``\rho q_{sno}`` are part of the state vector
+  when running simulations with 1-moment microphysics scheme,
+  and represent the specific humidity of liquid and solid precipitation
+  (i.e. rain and snow).
+
+```math
+q_{rai} := \frac{m_{rai}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}\; ,
+\;\;\;\;
+q_{sno} := \frac{m_{sno}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
+```
+
+The different source terms are provided by
+  [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library
+  and are defined as the change of mass of one of the cloud condensate or
+  precipitation species normalised by the mass of the working fluid.
+See the [CloudMicrophysics.jl docs](https://clima.github.io/CloudMicrophysics.jl/dev/)
+  for more details.
+
+!!! todo
+    Throughout the rest of the derivations we are assuming that the volume
+    of the working fluid is constant (not the pressure).
+    This is strange for phase changes and needs more thinking.
+
+### Case 1: Mass of the working fluid is changed
+
+When the phase change is happening within the working fluid
+  (for example condensation from water vapor to liquid water),
+  there is no change to any of the state variables.
+Considering the transition from
+  ``x \rightarrow y`` where ``x`` is either
+   water vapor, cloud liquid water or cloud ice and
+  ``y`` is either rain or snow
+```math
+\mathcal{S}_{x \rightarrow y} := \frac{\frac{dm_x}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
+```
+```math
+\frac{d}{dt} \rho =
+\frac{d}{dt} \rho q_{tot} =
+\rho \mathcal{S}_{x \rightarrow y} =
+- \frac{d}{dt} \rho q_y
+```
+```math
+\frac{d}{dt} \rho e = \rho \mathcal{S}_{x \rightarrow y} (I_{y} + \Phi)
+```
+where ``I_{y}`` is the internal energy of the ``y`` phase.
+This formula applies to the majority of microphysics processes.
+Namely, it is valid for processes where ``T=const`` such as
+  autoconversion and accretion between species of the same phase.
+It is also valid for rain evaporation, deposition/sublimation, and
+  accretion of cloud water and snow in temperatures below freezing
+  (which result in snow).
+
+### Case 2: Phase change outside of the working fluid
+
+For cases where both ``x`` and ``y`` are not part of the working fluid
+  (melting of snow, freezing of rain)
+```math
+\mathcal{S}_{x \rightarrow y} := \frac{\frac{dm_{x}}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
+```
+```math
+\frac{d}{dt} \rho q_{x} =
+- \frac{d}{dt} \rho q_{y} =
+\rho \mathcal{S}_{x \rightarrow y}
+```
+```math
+\frac{d}{dt} \rho = \frac{d}{dt} \rho q_{tot} = 0
+```
+```math
+\frac{d}{dt} \rho e = - \rho \mathcal{S}_{x \rightarrow y} L_{f}
+```
+where ``L_f`` is the latent heat of fusion.
+The sign in the last equation assumes ``x`` stands for rain and ``y`` for snow.
+
+### Additional cases
+
+Accretion of cloud ice by rain results in snow.
+This process combines the effects from the loss of working fluid ``q_{ice}``
+   (described by case 1)
+   and the phase change from rain to snow
+   (described by case 2).
+
+Accretion of cloud liquid by snow in temperatures above freezing results in rain.
+It is assummed that some fraction ``\alpha`` of snow is melted during the process
+  and both cloud liquid and melted snow are turned into rain.
+
+```math
+\mathcal{S}_{acc} := \frac{\frac{dm_{liq}}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice}}
+```
+```math
+\frac{d}{dt} \rho = \frac{d}{dt} \rho q_{tot} = \rho S_{acc}
+```
+```math
+\frac{d}{dt} \rho q_{sno} = \rho \alpha S_{acc}
+```
+```math
+\frac{d}{dt} \rho q_{rai} = - \rho (1 + \alpha) S_{acc}
+```
+```math
+\frac{d}{dt} \rho e = \rho \mathcal{S}_{acc} ((1+\alpha) I_{liq} - \alpha I_{ice} + \Phi)
+```

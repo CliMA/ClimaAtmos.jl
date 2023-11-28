@@ -152,12 +152,12 @@ if config.parsed_args["check_precipitation"]
         @assert !any(isnan, Yₜ.c.ρe_tot[colidx])
         @assert !any(isnan, Yₜ.c.ρq_rai[colidx])
         @assert !any(isnan, Yₜ.c.ρq_sno[colidx])
-        @assert !any(isnan, sol.prob.p.precipitation.ᶜwᵣ[colidx])
-        @assert !any(isnan, sol.prob.p.precipitation.ᶜwₛ[colidx])
+        @assert !any(isnan, sol.prob.p.precomputed.ᶜwᵣ[colidx])
+        @assert !any(isnan, sol.prob.p.precomputed.ᶜwₛ[colidx])
 
         # treminal velocity is positive
-        @test minimum(sol.prob.p.precipitation.ᶜwᵣ[colidx]) >= FT(0)
-        @test minimum(sol.prob.p.precipitation.ᶜwₛ[colidx]) >= FT(0)
+        @test minimum(sol.prob.p.precomputed.ᶜwᵣ[colidx]) >= FT(0)
+        @test minimum(sol.prob.p.precomputed.ᶜwₛ[colidx]) >= FT(0)
 
         # checking for water budget conservation
         # in the presence of precipitation sinks

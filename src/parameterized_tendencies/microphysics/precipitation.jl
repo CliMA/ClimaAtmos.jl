@@ -156,23 +156,264 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
         ᶜSqᵣᵖ = similar(Y.c, FT),
         ᶜSqₛᵖ = similar(Y.c, FT),
         ᶜSeₜᵖ = similar(Y.c, FT),
-        ᶜwᵣ = similar(Y.c, FT),
-        ᶜwₛ = similar(Y.c, FT),
     )
 end
 
 function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     FT = Spaces.undertype(axes(Y.c))
+    (; params) = p
+    (; dt) = p.simulation
+    (; ᶜts) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
+    ᶜz = Fields.coordinate_field(Y.c).z
 
-    (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ, ᶜwᵣ, ᶜwₛ) = p.precipitation
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
 
-    # TODO in the next PR
-    @. ᶜwᵣ[colidx] = FT(0)
-    @. ᶜwₛ[colidx] = FT(0)
+    # get thermodynamics and 1-moment microphysics params
+    cmp = CAP.microphysics_params(params)
+    thp = CAP.thermodynamics_params(params)
+
+    # some helper functions to make the code more readable
+    Iₗ(ts) = TD.internal_energy_liquid(thp, ts)
+    Iᵢ(ts) = TD.internal_energy_ice(thp, ts)
+    qₗ(ts) = TD.PhasePartition(thp, ts).liq
+    qᵢ(ts) = TD.PhasePartition(thp, ts).ice
+    qᵥ(ts) = TD.vapor_specific_humidity(thp, ts)
+    Lf(ts) = TD.latent_heat_fusion(thp, ts)
+    Tₐ(ts) = TD.air_temperature(thp, ts)
+    α(ts) = TD.Parameters.cv_l(thp) / Lf(ts) * (Tₐ(ts) - cmp.ps.T_freeze)
+
+    # zero out the source terms
     @. ᶜSqₜᵖ[colidx] = FT(0)
     @. ᶜSeₜᵖ[colidx] = FT(0)
     @. ᶜSqᵣᵖ[colidx] = FT(0)
     @. ᶜSqₛᵖ[colidx] = FT(0)
+
+    # All the tendencies are individually limited
+    # by the available condensate (q_ / dt).
+
+    # rain autoconversion: q_liq -> q_rain
+    @. ᶜSᵖ[colidx] = min(
+        qₗ(ᶜts[colidx]) / dt,
+        CM1.conv_q_liq_to_q_rai(
+            cmp.pr.acnv1M,
+            qₗ(ᶜts[colidx]),
+            smooth_transition = true,
+        ),
+    )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqᵣᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iₗ(ᶜts[colidx]) + ᶜΦ[colidx])
+
+    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+    @. ᶜSᵖ[colidx] = min(
+        qᵢ(ᶜts[colidx]) / dt,
+        CM1.conv_q_ice_to_q_sno_no_supersat(
+            cmp.ps.acnv1M,
+            qᵢ(ᶜts[colidx]),
+            smooth_transition = true,
+        ),
+    )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iᵢ(ᶜts[colidx]) + ᶜΦ[colidx])
+
+    # accretion: q_liq + q_rain -> q_rain
+    @. ᶜSᵖ[colidx] = min(
+        qₗ(ᶜts[colidx]) / dt,
+        CM1.accretion(
+            cmp.cl,
+            cmp.pr,
+            cmp.tv.rain,
+            cmp.ce,
+            qₗ(ᶜts[colidx]),
+            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+            Y.c.ρ[colidx],
+        ),
+    )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqᵣᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iₗ(ᶜts[colidx]) + ᶜΦ[colidx])
+
+    # accretion: q_ice + q_snow -> q_snow
+    @. ᶜSᵖ[colidx] = min(
+        qᵢ(ᶜts[colidx]) / dt,
+        CM1.accretion(
+            cmp.ci,
+            cmp.ps,
+            cmp.tv.snow,
+            cmp.ce,
+            qᵢ(ᶜts[colidx]),
+            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+            Y.c.ρ[colidx],
+        ),
+    )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iᵢ(ᶜts[colidx]) + ᶜΦ[colidx])
+
+    # accretion: q_liq + q_sno -> q_sno or q_rai
+    # sink of cloud water via accretion cloud water + snow
+    @. ᶜSᵖ[colidx] = min(
+        qₗ(ᶜts[colidx]) / dt,
+        CM1.accretion(
+            cmp.cl,
+            cmp.ps,
+            cmp.tv.snow,
+            cmp.ce,
+            qₗ(ᶜts[colidx]),
+            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+            Y.c.ρ[colidx],
+        ),
+    )
+    # if T < T_freeze cloud droplets freeze to become snow
+    # else the snow melts and both cloud water and snow become rain
+    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+    @. ᶜSᵖ_snow[colidx] = ifelse(
+        Tₐ(ᶜts[colidx]) < cmp.ps.T_freeze,
+        ᶜSᵖ[colidx],
+        FT(-1) * min(
+            ᶜSᵖ[colidx] * α(ᶜts[colidx]),
+            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt,
+        ),
+    )
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ_snow[colidx]
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqᵣᵖ[colidx] += ifelse(
+        Tₐ(ᶜts[colidx]) < cmp.ps.T_freeze,
+        FT(0),
+        ᶜSᵖ[colidx] - ᶜSᵖ_snow[colidx],
+    )
+    @. ᶜSeₜᵖ[colidx] -= ifelse(
+        Tₐ(ᶜts[colidx]) < cmp.ps.T_freeze,
+        ᶜSᵖ[colidx] * (Iᵢ(ᶜts[colidx]) + ᶜΦ[colidx]),
+        ᶜSᵖ[colidx] * (Iₗ(ᶜts[colidx]) + ᶜΦ[colidx]) -
+        ᶜSᵖ_snow[colidx] * (Iₗ(ᶜts[colidx]) - Iᵢ(ᶜts[colidx])),
+    )
+
+    # accretion: q_ice + q_rai -> q_sno
+    @. ᶜSᵖ[colidx] = min(
+        qᵢ(ᶜts[colidx]) / dt,
+        CM1.accretion(
+            cmp.ci,
+            cmp.pr,
+            cmp.tv.rain,
+            cmp.ce,
+            qᵢ(ᶜts[colidx]),
+            Y.c.ρq_rai[colidx],
+            Y.c.ρ[colidx],
+        ),
+    )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iᵢ(ᶜts[colidx]) + ᶜΦ[colidx])
+    # sink of rain via accretion cloud ice - rain
+    @. ᶜSᵖ[colidx] = min(
+        Y.c.ρq_rai[colidx] / Y.c.ρ[colidx] / dt,
+        CM1.accretion_rain_sink(
+            cmp.pr,
+            cmp.ci,
+            cmp.tv.rain,
+            cmp.ce,
+            qᵢ(ᶜts[colidx]),
+            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+            Y.c.ρ[colidx],
+        ),
+    )
+    @. ᶜSqᵣᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] += ᶜSᵖ[colidx] * Lf(ᶜts[colidx])
+
+    # accretion: q_rai + q_sno -> q_rai or q_sno
+    @. ᶜSᵖ[colidx] = ifelse(
+        Tₐ(ᶜts[colidx]) < cmp.ps.T_freeze,
+        min(
+            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx] / dt,
+            CM1.accretion_snow_rain(
+                cmp.ps,
+                cmp.pr,
+                cmp.tv.rain,
+                cmp.tv.snow,
+                cmp.ce,
+                Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+                Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+                Y.c.ρ[colidx],
+            ),
+        ),
+        -min(
+            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt,
+            CM1.accretion_snow_rain(
+                cmp.pr,
+                cmp.ps,
+                cmp.tv.snow,
+                cmp.tv.rain,
+                cmp.ce,
+                Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+                Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+                Y.c.ρ[colidx],
+            ),
+        ),
+    )
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSqᵣᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] += ᶜSᵖ[colidx] * Lf(ᶜts[colidx])
+
+    # evaporation: q_rai -> q_vap
+    @. ᶜSᵖ[colidx] =
+        -min(
+            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx] / dt,
+            -CM1.evaporation_sublimation(
+                cmp.pr,
+                cmp.tv.rain,
+                cmp.aps,
+                thp,
+                TD.PhasePartition(thp, ᶜts[colidx]),
+                Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+                Y.c.ρ[colidx],
+                Tₐ(ᶜts[colidx]),
+            ),
+        )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqᵣᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iₗ(ᶜts[colidx]) + ᶜΦ[colidx])
+
+    # melting: q_sno -> q_rai
+    @. ᶜSᵖ[colidx] = min(
+        Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt,
+        CM1.snow_melt(
+            cmp.ps,
+            cmp.tv.snow,
+            cmp.aps,
+            thp,
+            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+            Y.c.ρ[colidx],
+            Tₐ(ᶜts[colidx]),
+        ),
+    )
+    @. ᶜSqᵣᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSqₛᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * Lf(ᶜts[colidx])
+
+    # deposition/sublimation: q_vap <-> q_sno
+    @. ᶜSᵖ[colidx] = CM1.evaporation_sublimation(
+        cmp.ps,
+        cmp.tv.snow,
+        cmp.aps,
+        thp,
+        TD.PhasePartition(thp, ᶜts[colidx]),
+        Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+        Y.c.ρ[colidx],
+        Tₐ(ᶜts[colidx]),
+    )
+    @. ᶜSᵖ[colidx] = ifelse(
+        ᶜSᵖ[colidx] > FT(0),
+        min(qᵥ(ᶜts[colidx]) / dt, ᶜSᵖ[colidx]),
+        -min(Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt, FT(-1) * ᶜSᵖ[colidx]),
+    )
+    @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
+    @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
+    @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iᵢ(ᶜts[colidx]) + ᶜΦ[colidx])
 end
 
 function precipitation_tendency!(
