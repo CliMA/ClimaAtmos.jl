@@ -684,6 +684,7 @@ function get_callbacks_from_diagnostics(
     storage,
     accumulators,
     counters,
+    output_dir,
 )
     # We have two types of callbacks: to compute and accumulate diagnostics, and to dump
     # them to disk. Note that our callbacks do not contain any branching
@@ -733,6 +734,7 @@ function get_callbacks_from_diagnostics(
                     storage[diag],
                     diag,
                     integrator,
+                    output_dir,
                 )
 
                 # accumulator[diag] is not defined for non-reductions

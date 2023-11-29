@@ -18,7 +18,8 @@ import ClimaComms
 
 config = CA.AtmosConfig()
 
-integrator = CA.get_integrator(config);
+simulation = CA.get_simulation(config)
+(; integrator) = simulation;
 Y₀ = deepcopy(integrator.u);
 @info "Compiling benchmark_step!..."
 CA.benchmark_step!(integrator, Y₀); # compile first

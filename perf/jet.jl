@@ -7,7 +7,8 @@ include("common.jl")
 config_dict = Dict("z_elem" => 63, "dt" => "10secs", "t_end" => "3600secs")
 config = AtmosCoveragePerfConfig(config_dict)
 
-integrator = CA.get_integrator(config)
+simulation = CA.get_simulation(config)
+(; integrator) = simulation
 
 import JET
 

@@ -501,7 +501,13 @@ function NetCDFWriter(;
     )
 end
 
-function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
+function write_field!(
+    writer::NetCDFWriter,
+    field,
+    diagnostic,
+    integrator,
+    output_dir,
+)
 
     var = diagnostic.variable
 
@@ -555,10 +561,7 @@ function write_field!(writer::NetCDFWriter, field, diagnostic, integrator)
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return
 
-    output_path = joinpath(
-        integrator.p.simulation.output_dir,
-        "$(diagnostic.output_short_name).nc",
-    )
+    output_path = joinpath(output_dir, "$(diagnostic.output_short_name).nc")
 
     if !haskey(writer.open_files, output_path)
         # Append or write a new file

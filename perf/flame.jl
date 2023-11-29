@@ -9,7 +9,8 @@ config_file = ARGS[1]
 config_dict = YAML.load_file(config_file)
 config = AtmosCoveragePerfConfig(config_dict)
 job_id = config.parsed_args["job_id"]
-integrator = CA.get_integrator(config)
+simulation = CA.get_simulation(config)
+(; integrator) = simulation
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
 @info "running step"

@@ -98,7 +98,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     end
 
     if !idealized_insolation
-        current_datetime = p.simulation.start_date + Dates.Second(round(Int, t)) # current time
+        current_datetime = p.start_date + Dates.Second(round(Int, t)) # current time
         max_zenith_angle = FT(π) / 2 - eps(FT)
         irradiance = FT(CAP.tot_solar_irrad(params))
         au = FT(CAP.astro_unit(params))
@@ -411,12 +411,11 @@ NVTX.@annotate function compute_diagnostics(integrator)
     return diagnostic
 end
 
-function save_to_disk_func(integrator)
+function save_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
     diagnostic = compute_diagnostics(integrator)
 
-    (; output_dir) = p.simulation
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))
     @info "Saving diagnostics to HDF5 file on day $day second $sec"
@@ -433,9 +432,9 @@ function save_to_disk_func(integrator)
     return nothing
 end
 
-function save_restart_func(integrator)
+function save_restart_func(integrator, output_dir)
     (; t, u, p) = integrator
-    (; output_dir) = p.simulation
+
     Y = u
     day = floor(Int, t / (60 * 60 * 24))
     sec = floor(Int, t % (60 * 60 * 24))

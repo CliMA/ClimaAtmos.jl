@@ -5,10 +5,11 @@ Random.seed!(1234)
 if !(@isdefined config)
     config = CA.AtmosConfig()
 end
-integrator = CA.get_integrator(config)
-sol_res = CA.solve_atmos!(integrator)
+simulation = CA.get_simulation(config)
+(; integrator) = simulation
+sol_res = CA.solve_atmos!(simulation)
 
-(; simulation, atmos, params) = integrator.p
+(; atmos, params) = integrator.p
 (; p) = integrator
 
 import ClimaCore
