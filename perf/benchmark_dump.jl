@@ -16,7 +16,8 @@ steptimes = []
 for h_elem in 8:8:40
     config_dict["h_elem"] = h_elem
     config = CA.AtmosConfig(config_dict)
-    integrator = CA.get_integrator(config)
+    simulation = CA.get_simulation(config)
+    (; integrator) = simulation
     Y₀ = deepcopy(integrator.u)
 
     @info "Compiling benchmark_step for h_elem=$h_elem"

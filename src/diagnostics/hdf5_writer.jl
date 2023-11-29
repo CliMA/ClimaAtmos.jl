@@ -37,14 +37,18 @@ Close all the files open in `writer`. (Currently no-op.)
 """
 close(writer::HDF5Writer) = nothing
 
-function write_field!(writer::HDF5Writer, field, diagnostic, integrator)
+function write_field!(
+    writer::HDF5Writer,
+    field,
+    diagnostic,
+    integrator,
+    output_dir,
+)
     var = diagnostic.variable
     time = integrator.t
 
-    output_path = joinpath(
-        integrator.p.simulation.output_dir,
-        "$(diagnostic.output_short_name)_$(time).h5",
-    )
+    output_path =
+        joinpath(output_dir, "$(diagnostic.output_short_name)_$(time).h5")
 
     comms_ctx = ClimaComms.context(integrator.u.c)
     hdfwriter = InputOutput.HDF5Writer(output_path, comms_ctx)

@@ -36,7 +36,8 @@ const T2 = 290
     # Initialize a model. The value of surface_setup is irrelevant, since it
     # will get overwritten.
     config = CA.AtmosConfig(Dict("initial_condition" => "DryBaroclinicWave"))
-    integrator = CA.get_integrator(config)
+    simulation = CA.get_simulation(config)
+    (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
     FT = eltype(Y)
@@ -56,8 +57,8 @@ const T2 = 290
     sfc_setup = similar(Spaces.level(Y.f, half), typeof(surface_state))
     @. sfc_setup = (surface_state,)
     p_overwritten = CA.AtmosCache(
-        p.simulation.dt,
-        p.simulation,
+        p.dt,
+        p.start_date,
         p.atmos,
         p.numerics,
         p.params,
@@ -106,7 +107,8 @@ end
             "surface_setup" => "PrescribedSurface",
         ),
     )
-    integrator = CA.get_integrator(config)
+    simulation = CA.get_simulation(config)
+    (; integrator) = simulation
     (; p, t) = integrator
     Y = integrator.u
     FT = eltype(Y)
@@ -209,5 +211,5 @@ end
             "turbconv" => "diagnostic_edmfx",
         ),
     )
-    integrator = CA.get_integrator(config)
+    simulation = CA.get_simulation(config)
 end

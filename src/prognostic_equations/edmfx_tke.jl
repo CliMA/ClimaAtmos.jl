@@ -22,7 +22,7 @@ function edmfx_tke_tendency!(
     (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) =
         p.precomputed
     (; ᶜK_u, ᶜK_h) = p.precomputed
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
 
     if use_prognostic_tke(turbconv_model)

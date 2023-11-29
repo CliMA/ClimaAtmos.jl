@@ -45,11 +45,11 @@ indicating one of:
 `try-catch` is used to allow plotting
 results for simulations that have crashed.
 """
-function solve_atmos!(integrator)
-    (; p) = integrator
+function solve_atmos!(simulation)
+    (; integrator, output_writers) = simulation
     (; tspan) = integrator.sol.prob
-    @info "Running" job_id = p.simulation.job_id output_dir =
-        p.simulation.output_dir tspan
+    @info "Running" job_id = simulation.job_id output_dir =
+        simulation.output_dir tspan
     comms_ctx = ClimaComms.context(axes(integrator.u.c))
     SciMLBase.step!(integrator)
     precompile_callbacks(integrator)
@@ -72,7 +72,7 @@ function solve_atmos!(integrator)
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
     finally
         # Close all the files opened by the writers
-        map(CAD.close, integrator.p.writers)
+        foreach(CAD.close, output_writers)
     end
 end
 
@@ -92,7 +92,8 @@ import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
 config = CA.AtmosCoveragePerfConfig();
-integrator = CA.get_integrator(config);
+simulation = CA.get_simulation(config);
+(; integrator) = simulation
 Y₀ = deepcopy(integrator.u);
 CA.benchmark_step!(integrator, Y₀);
 ```

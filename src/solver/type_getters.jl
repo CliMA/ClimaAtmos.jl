@@ -451,9 +451,9 @@ thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
 
-function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
+function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     FT = eltype(params)
-    (; dt) = simulation
+    (; dt, output_dir) = sim_info
 
     callbacks = ()
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
@@ -461,17 +461,22 @@ function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
         callbacks = (
             callbacks...,
             call_every_dt(
-                save_to_disk_func,
+                (integrator) -> save_to_disk_func(integrator, output_dir),
                 dt_save_to_disk;
-                skip_first = simulation.restart,
+                skip_first = sim_info.restart,
             ),
         )
     end
 
     dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
     if !(dt_save_restart == Inf)
-        callbacks =
-            (callbacks..., call_every_dt(save_restart_func, dt_save_restart))
+        callbacks = (
+            callbacks...,
+            call_every_dt(
+                (integrator) -> save_restart_func(integrator, output_dir),
+                dt_save_restart,
+            ),
+        )
     end
 
     if is_distributed(comms_ctx)
@@ -510,7 +515,7 @@ function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
     return callbacks
 end
 
-function get_simulation(config::AtmosConfig)
+function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
@@ -653,8 +658,7 @@ function get_diagnostics(parsed_args, atmos_model, hypsography)
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, simulation) = p
-    (; dt) = simulation
+    (; atmos, dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
     s = @timed_str begin
@@ -734,21 +738,21 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
-function get_integrator(config::AtmosConfig)
+function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
 
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
-    simulation = get_simulation(config)
+    sim_info = get_sim_info(config)
     if config.parsed_args["log_params"]
-        filepath = joinpath(simulation.output_dir, "$(job_id)_parameters.toml")
+        filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
     end
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
     s = @timed_str begin
-        if simulation.restart
+        if sim_info.restart
             (Y, t_start) = get_state_restart(config.comms_ctx)
             spaces = get_spaces_restart(Y)
         else
@@ -765,7 +769,14 @@ function get_integrator(config::AtmosConfig)
     @info "Allocating Y: $s"
 
     s = @timed_str begin
-        p = build_cache(Y, atmos, params, surface_setup, simulation)
+        p = build_cache(
+            Y,
+            atmos,
+            params,
+            surface_setup,
+            sim_info.dt,
+            sim_info.start_date,
+        )
     end
     @info "Allocating cache (p): $s"
 
@@ -782,7 +793,7 @@ function get_integrator(config::AtmosConfig)
     s = @timed_str begin
         callback = get_callbacks(
             config.parsed_args,
-            simulation,
+            sim_info,
             atmos,
             params,
             config.comms_ctx,
@@ -798,16 +809,13 @@ function get_integrator(config::AtmosConfig)
             spaces.center_space.hypsography,
         )
     end
-    # Add writers to the cache, so that we can close the files in solve_atmos!
-    p = merge(p, (; writers = writers))
     @info "initializing diagnostics: $s"
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
     # those periods that depended on the timestep
-    diagnostics_iterations = [
-        CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics
-    ]
+    diagnostics_iterations =
+        [CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for d in diagnostics]
 
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
@@ -822,6 +830,7 @@ function get_integrator(config::AtmosConfig)
             diagnostic_storage,
             diagnostic_accumulators,
             diagnostic_counters,
+            sim_info.output_dir,
         )
     end
     @info "Prepared diagnostic callbacks: $s"
@@ -856,8 +865,7 @@ function get_integrator(config::AtmosConfig)
             SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
-    steps_cycle_non_diag =
-        n_steps_per_cycle_per_cb(all_callbacks, simulation.dt)
+    steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
     steps_cycle_diag =
         n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
     steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])
@@ -865,7 +873,7 @@ function get_integrator(config::AtmosConfig)
     @info "n_steps_per_cycle_per_cb_diagnostic: $steps_cycle_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
-    tspan = (t_start, simulation.t_end)
+    tspan = (t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
             config.parsed_args,
@@ -903,6 +911,7 @@ function get_integrator(config::AtmosConfig)
                         diagnostic_storage[diag],
                         diag,
                         integrator,
+                        sim_info.output_dir,
                     )
                 else
                     # Add to the accumulator
@@ -916,5 +925,12 @@ function get_integrator(config::AtmosConfig)
     end
     @info "Init diagnostics: $s"
 
-    return integrator
+    return AtmosSimulation(
+        sim_info.job_id,
+        sim_info.output_dir,
+        sim_info.start_date,
+        sim_info.t_end,
+        writers,
+        integrator,
+    )
 end

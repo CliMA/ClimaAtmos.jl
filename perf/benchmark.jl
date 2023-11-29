@@ -9,7 +9,8 @@ config_file = ARGS[1]
 config_dict = YAML.load_file(config_file)
 config = AtmosCoveragePerfConfig(config_dict)
 
-integrator = CA.get_integrator(config)
+simulation = CA.get_simulation(config)
+(; integrator) = simulation
 
 (; parsed_args) = config
 
