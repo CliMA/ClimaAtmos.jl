@@ -2000,7 +2000,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "40ea97b2334725cef9b7f9e2fc2f76b35596807d"
+git-tree-sha1 = "26710cb99c35155d1029221ad26d545824871829"
+repo-rev = "sk/reduce_metadata_size_sw"
+repo-url = "https://github.com/CliMA/RRTMGP.jl.git"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
 version = "0.10.0"
 
