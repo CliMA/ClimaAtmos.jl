@@ -14,3 +14,7 @@ z_max: 25000.0
 topography: "Agnesi"
 job_id: "plane_agnesi_mountain_test_uniform"
 toml: [toml/plane_agnesi_mountain_test_uniform.toml]
+netcdf_interpolate_z_over_msl: true
+diagnostics:
+  - short_name: wa
+    period: 4hours

@@ -154,12 +154,6 @@ steps:
           --config_file $CONFIG_PATH/box_hydrostatic_balance_rhoe.yml
         artifact_paths: "box_hydrostatic_balance_rhoe/*"
 
-      - label: ":computer: Bomex box (ρe_tot)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/bomex_box_rhoe.yml
-        artifact_paths: "bomex_box_rhoe/*"
-
       - label: ":computer: 3D density current"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl

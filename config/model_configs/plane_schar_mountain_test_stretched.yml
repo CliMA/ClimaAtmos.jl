@@ -16,3 +16,7 @@ z_max: 25000.0
 topography: "Schar"
 job_id: "plane_schar_mountain_test_stretched"
 toml: [toml/plane_schar_mountain_test_stretched.toml]
+netcdf_interpolate_z_over_msl: true
+diagnostics:
+  - short_name: wa
+    period: 4hours
