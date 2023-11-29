@@ -33,7 +33,7 @@ steps:
       - echo "--- Instantiate"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'""
+      - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
       - "julia --project=examples artifacts/download_artifacts.jl"
 
@@ -58,7 +58,7 @@ steps:
         agents:
           slurm_ntasks: 32
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_bw_rhoe_highres"
 
       - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
@@ -70,7 +70,7 @@ steps:
         agents:
           slurm_ntasks: 32
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_bw_rhoe_equil_highres"
 
       - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
@@ -83,7 +83,7 @@ steps:
           slurm_ntasks: 32
           slurm_mem_per_cpu: 32GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
 
       - label: ":computer: SSP baroclinic wave (ρe_tot) equilmoist high resolution centered diff"
@@ -173,7 +173,7 @@ steps:
           slurm_ntasks: 32
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_bw_rhoe_equil_highres_topography_earth"
 
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
@@ -185,7 +185,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_hs_rhoe_equil_highres_topography_earth"
 
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float32 (earth)"
@@ -198,7 +198,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-        env: 
+        env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth"
 
   - group: "Low resolution long runs"
@@ -248,7 +248,7 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_dyamond"
-  
+
   - group: "AMIP"
 
     steps:

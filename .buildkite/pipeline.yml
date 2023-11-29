@@ -761,6 +761,7 @@ steps:
         artifact_paths: "central_gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
         agents:
           slurm_gpus: 1
+          slurm_mem: 16G
 
       - label: "GPU: gpu_aquaplanet_dyamond"
         command:
