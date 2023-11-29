@@ -605,15 +605,15 @@ function get_diagnostics(parsed_args, atmos_model, hypsography)
             writer = ALLOWED_WRITERS[writer_ext]
         end
 
-        name = get(yaml_diag, "name", nothing)
+        output_name = get(yaml_diag, "output_name", nothing)
 
         haskey(yaml_diag, "period") ||
             error("period keyword required for diagnostics")
 
         period_seconds = time_to_seconds(yaml_diag["period"])
 
-        if isnothing(name)
-            name = CAD.descriptive_short_name(
+        if isnothing(output_name)
+            output_name = CAD.descriptive_short_name(
                 CAD.get_diagnostic_variable(yaml_diag["short_name"]),
                 period_seconds,
                 reduction_time_func,
@@ -634,7 +634,7 @@ function get_diagnostics(parsed_args, atmos_model, hypsography)
             reduction_time_func = reduction_time_func,
             pre_output_hook! = pre_output_hook!,
             output_writer = writer,
-            output_short_name = name,
+            output_short_name = output_name,
         )
     end
 
