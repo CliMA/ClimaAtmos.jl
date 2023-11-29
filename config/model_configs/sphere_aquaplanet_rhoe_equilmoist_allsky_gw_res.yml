@@ -1,11 +1,11 @@
 rad: "allskywithclear"
-dt_save_to_disk: "18hours"
+dt_save_to_disk: "1days"
 rayleigh_sponge: true
 orographic_gravity_wave: "gfdl_restart"
 z_elem: 25
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
-t_end: "18hours"
+t_end: "1days"
 non_orographic_gravity_wave: true
 dz_bottom: 300.0
 vert_diff: "true"
@@ -16,3 +16,4 @@ precip_upwinding: "first_order"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+netcdf_interpolate_z_over_msl: true

@@ -7,3 +7,14 @@ dt: "450secs"
 FLOAT_TYPE: "Float64"
 job_id: "sphere_baroclinic_wave_rhoe_equilmoist_conservation_ft64"
 rad: "clearsky"
+diagnostics:
+  - short_name: pfull
+    period: 1days
+  - short_name: wa
+    period: 1days
+  - short_name: va
+    period: 1days
+  - short_name: rv
+    period: 1days
+  - short_name: hus
+    period: 1days

@@ -4,3 +4,8 @@ hyperdiff: "false"
 dt: "20secs"
 perturb_initstate: false
 job_id: "box_hydrostatic_balance_rhoe"
+diagnostics:
+  - short_name: wa
+    period: 1days
+  - short_name: ua
+    period: 1days

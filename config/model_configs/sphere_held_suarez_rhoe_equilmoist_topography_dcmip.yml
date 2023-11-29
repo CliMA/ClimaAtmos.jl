@@ -10,3 +10,4 @@ precip_model: "0M"
 topography: "DCMIP200"
 job_id: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip"
 moist: "equil"
+netcdf_interpolate_z_over_msl: true

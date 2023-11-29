@@ -14,3 +14,6 @@ config: "box"
 kappa_4: 1.0e7
 z_max: 6400.0
 job_id: "box_density_current_test"
+diagnostics:
+  - short_name: thetaa
+    period: 10secs
