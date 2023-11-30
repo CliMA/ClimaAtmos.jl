@@ -512,6 +512,10 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end
 
+    dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+    callbacks =
+        (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+
     return callbacks
 end
 

@@ -248,19 +248,6 @@ function mixing_length(
         l_N = l_z
     end
 
-    # compute l_smag - the Smagorinsky length scale.
-    # TODO: This should be added to ClimaParameters
-    c_smag = CAP.c_smag(params)
-    N_eff = sqrt(max(ᶜlinear_buoygrad, 0))
-    if N_eff > 0.0
-        l_smag =
-            c_smag *
-            ᶜdz *
-            max(0, 1 - N_eff^2 / ᶜPr / (2 * ᶜstrain_rate_norm))^(1 / 4)
-    else
-        l_smag = c_smag * ᶜdz
-    end
-
     # add limiters
     l = SA.SVector(
         (l_N < eps(FT) || l_N > l_z) ? l_z : l_N,

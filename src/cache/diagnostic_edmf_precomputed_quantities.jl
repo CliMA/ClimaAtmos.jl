@@ -449,7 +449,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                     nh_pressure³ʲ_data_prev_halflevel
                 )
 
-            # get u³ʲ to calculate divergence term for detrainment, 
+            # get u³ʲ to calculate divergence term for detrainment,
             # u³ʲ will be clipped later after we get area fraction
             minimum_value = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
@@ -717,6 +717,8 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
             TD.air_temperature(thermo_params, ᶜts),                           # t_sat
             TD.vapor_specific_humidity(thermo_params, ᶜts),                   # qv_sat
             q_tot,                                                            # qt_sat
+            TD.liquid_specific_humidity(thermo_params, ᶜts),
+            TD.ice_specific_humidity(thermo_params, ᶜts),
             TD.dry_pottemp(thermo_params, ᶜts),                               # θ_sat
             TD.liquid_ice_pottemp(thermo_params, ᶜts),                        # θ_liq_ice_sat
             projected_vector_data(

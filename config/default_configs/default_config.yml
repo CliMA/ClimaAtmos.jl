@@ -93,6 +93,9 @@ idealized_clouds:
 idealized_insolation:
   help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
   value: true
+dt_cloud_fraction:
+  help: "Time between calling cloud fraction update"
+  value: "3hours"
 
 
 config:

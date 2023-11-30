@@ -240,6 +240,8 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             TD.air_temperature(thermo_params, ᶜts⁰),                           # t_sat
             TD.vapor_specific_humidity(thermo_params, ᶜts⁰),                   # qv_sat
             ᶜq_tot⁰,                                                           # qt_sat
+            TD.liquid_specific_humidity(thermo_params, ᶜts⁰),
+            TD.ice_specific_humidity(thermo_params, ᶜts⁰),
             TD.dry_pottemp(thermo_params, ᶜts⁰),                               # θ_sat
             TD.liquid_ice_pottemp(thermo_params, ᶜts⁰),                        # θ_liq_ice_sat
             projected_vector_data(

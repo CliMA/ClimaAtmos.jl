@@ -210,6 +210,21 @@ add_diagnostic_variable!(
     end,
 )
 
+###
+# Cloud fraction (3d)
+###
+add_diagnostic_variable!(
+    short_name = "cl",
+    long_name = "Cloud fraction",
+    units = "%",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
+        else
+            out .= cache.precomputed.ᶜcloud_fraction .* 100
+        end
+    end,
+)
 
 ###
 # Relative humidity (3d)
