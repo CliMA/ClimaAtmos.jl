@@ -296,11 +296,19 @@ function get_state_restart(comms_ctx)
     return (Y, t_start)
 end
 
-function get_initial_condition(parsed_args)
-    if parsed_args["initial_condition"] in [
+function get_initial_condition(parsed_args, params)
+    ic = parsed_args["initial_condition"]
+    thermo_params = CAP.thermodynamics_params(params)
+    grav = CAP.grav(params)
+    if ic == "DecayingProfile"
+        return ICs.DecayingProfile(
+            grav,
+            thermo_params,
+            parsed_args["perturb_initstate"],
+        )
+    elseif parsed_args["initial_condition"] in [
         "DryBaroclinicWave",
         "MoistBaroclinicWave",
-        "DecayingProfile",
         "MoistBaroclinicWaveWithEDMF",
         "MoistAdiabaticProfileEDMFX",
     ]
@@ -721,7 +729,7 @@ end
 
 function get_integrator(config::AtmosConfig)
     params = create_parameter_set(config)
-
+    thermo_params = CAP.thermodynamics_params(params)
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
     simulation = get_simulation(config)
@@ -729,7 +737,7 @@ function get_integrator(config::AtmosConfig)
         filepath = joinpath(simulation.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
     end
-    initial_condition = get_initial_condition(config.parsed_args)
+    initial_condition = get_initial_condition(config.parsed_args, params)
     surface_setup = get_surface_setup(config.parsed_args)
 
     s = @timed_str begin
@@ -739,7 +747,7 @@ function get_integrator(config::AtmosConfig)
         else
             spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
             Y = ICs.atmos_state(
-                initial_condition(params),
+                initial_condition,
                 atmos,
                 spaces.center_space,
                 spaces.face_space,

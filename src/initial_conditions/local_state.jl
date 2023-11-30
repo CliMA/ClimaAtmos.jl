@@ -23,7 +23,6 @@ are set to 0.
 """
 struct LocalState{
     FT,
-    P <: CAP.ClimaAtmosParameters{FT},
     G <: Geometry.LocalGeometry{<:Any, <:Any, FT},
     TS <: TD.ThermodynamicState{FT},
     V <: Geometry.LocalVector{FT},
@@ -31,8 +30,8 @@ struct LocalState{
     PS <: PrecipState{FT},
     TP,
 }
-    params::P
     geometry::G
+    grav::FT
     thermo_state::TS
     velocity::V
     turbconv_state::TC
@@ -44,23 +43,24 @@ struct LocalState{
 end
 
 function LocalState(;
-    params,
     geometry,
+    grav,
+    thermo_params,
     thermo_state,
     velocity = nothing,
     turbconv_state = nothing,
     precip_state = nothing,
 )
-    FT = eltype(params)
+    FT = typeof(grav)
     return LocalState(
-        params,
         geometry,
+        grav,
         thermo_state,
         isnothing(velocity) ? Geometry.UVVector(FT(0), FT(0)) : velocity,
         isnothing(turbconv_state) ? NoTurbconvState{FT}() : turbconv_state,
         isnothing(precip_state) ? NoPrecipState{FT}() : precip_state,
-        CAP.thermodynamics_params(params),
-        TD.air_density(CAP.thermodynamics_params(params), thermo_state),
+        thermo_params,
+        TD.air_density(thermo_params, thermo_state),
     )
 end
 
