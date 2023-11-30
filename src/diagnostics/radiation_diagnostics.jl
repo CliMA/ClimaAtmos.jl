@@ -17,15 +17,14 @@ function compute_rsd!(
     time,
     radiation_mode::T,
 ) where {T <: RRTMGPI.AbstractRRTMGPMode}
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_sw_flux_dn),
+            cache.radiation.radiation_model.face_sw_flux_dn,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_sw_flux_dn),
+            cache.radiation.radiation_model.face_sw_flux_dn,
             axes(state.f),
         )
     end
@@ -55,15 +54,14 @@ function compute_rsu!(
     time,
     radiation_mode::T,
 ) where {T <: RRTMGPI.AbstractRRTMGPMode}
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_sw_flux_up),
+            cache.radiation.radiation_model.face_sw_flux_up,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_sw_flux_up),
+            cache.radiation.radiation_model.face_sw_flux_up,
             axes(state.f),
         )
     end
@@ -93,15 +91,14 @@ function compute_rld!(
     time,
     radiation_mode::T,
 ) where {T <: RRTMGPI.AbstractRRTMGPMode}
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_lw_flux_dn),
+            cache.radiation.radiation_model.face_lw_flux_dn,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_lw_flux_dn),
+            cache.radiation.radiation_model.face_lw_flux_dn,
             axes(state.f),
         )
     end
@@ -131,15 +128,14 @@ function compute_rlu!(
     time,
     radiation_mode::T,
 ) where {T <: RRTMGPI.AbstractRRTMGPMode}
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_lw_flux_up),
+            cache.radiation.radiation_model.face_lw_flux_up,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_lw_flux_up),
+            cache.radiation.radiation_model.face_lw_flux_up,
             axes(state.f),
         )
     end
@@ -169,15 +165,14 @@ function compute_rsdcs!(
     time,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
 )
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_sw_flux_dn),
+            cache.radiation.radiation_model.face_clear_sw_flux_dn,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_sw_flux_dn),
+            cache.radiation.radiation_model.face_clear_sw_flux_dn,
             axes(state.f),
         )
     end
@@ -207,15 +202,14 @@ function compute_rsucs!(
     time,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
 )
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_sw_flux_up),
+            cache.radiation.radiation_model.face_clear_sw_flux_up,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_sw_flux_up),
+            cache.radiation.radiation_model.face_clear_sw_flux_up,
             axes(state.f),
         )
     end
@@ -245,15 +239,14 @@ function compute_rldcs!(
     time,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
 )
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_lw_flux_dn),
+            cache.radiation.radiation_model.face_clear_lw_flux_dn,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_lw_flux_dn),
+            cache.radiation.radiation_model.face_clear_lw_flux_dn,
             axes(state.f),
         )
     end
@@ -283,15 +276,14 @@ function compute_rlucs!(
     time,
     radiation_mode::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
 )
-    FT = eltype(state)
     if isnothing(out)
         return RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_lw_flux_up),
+            cache.radiation.radiation_model.face_clear_lw_flux_up,
             axes(state.f),
         )
     else
         out .= RRTMGPI.array2field(
-            FT.(cache.radiation.radiation_model.face_clear_lw_flux_up),
+            cache.radiation.radiation_model.face_clear_lw_flux_up,
             axes(state.f),
         )
     end
