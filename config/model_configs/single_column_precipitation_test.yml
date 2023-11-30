@@ -11,6 +11,8 @@ moist: "nonequil"
 precip_model: "1M"
 precip_upwinding: "first_order"
 hyperdiff: "false"
+implicit_diffusion: true
+vert_diff: "true"
 regression_test: false
 check_precipitation: true
 job_id: "single_column_precipitation_test"

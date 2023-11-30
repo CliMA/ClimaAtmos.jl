@@ -252,6 +252,10 @@ function Wfact!(A, Y, p, dtγ, t)
             p.precomputed.ᶠu³,
             p.precomputed.ᶜK,
             p.precomputed.ᶜp,
+            (
+                p.atmos.precip_model isa Microphysics1Moment ?
+                (; p.precomputed.ᶜwᵣ, p.precomputed.ᶜwₛ) : (;)
+            )...,
             p.precomputed.ᶜh_tot,
             (
                 use_derivative(A.diffusion_flag) ?
@@ -371,8 +375,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         (@name(c.ρq_ice), @name(ᶜspecific.q_ice), tracer_upwinding),
         (@name(c.ρq_rai), @name(ᶜspecific.q_rai), tracer_upwinding),
         (@name(c.ρq_sno), @name(ᶜspecific.q_sno), tracer_upwinding),
-        (@name(c.ρq_rai), @name(ᶜspecific.q_rai), precip_upwinding),
-        (@name(c.ρq_sno), @name(ᶜspecific.q_sno), precip_upwinding),
     )
     MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, χ_name, upwinding)
         MatrixFields.has_field(Y, ρχ_name) || return
@@ -582,6 +584,70 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                     ᶠinterp(ᶜρ_χ[colidx]) * ᶠinterp(ᶜK_χ[colidx]),
                 ) ⋅ ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(s_χ / ᶜρ_χ[colidx]) -
                 (I,)
+        end
+    end
+
+    # We can express the implicit precipitation tendency for scalars as
+    # ᶜρχₜ = -(ᶜdivᵥ_ρqₚ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu³ₚ, ᶜχ))).
+    # This means that
+    # ∂(ᶜρχₜ)/∂(ᶜρχ) =
+    #     -(ᶜdivᵥ_ρqₚ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ (
+    #         ∂(ᶠupwind(ᶠu³ₚ, ᶜχ))/∂(ᶠu³ₚ) ⋅ ∂(ᶠu³ₚ)/∂(ᶜρχ) +
+    #         ᶠupwind_matrix(ᶠu³ₚ) ⋅ ∂(ᶜχ)/∂(ᶜρχ)
+    #     ).
+    # In general, ∂(ᶜχ)/∂(ᶜρχ) = DiagonalMatrixRow(1 / ᶜρ), except for the case
+    # ∂(ᶠu³ₚ)/∂(ᶜρχ) = 0 approximating as zero for now
+    if use_derivative(diffusion_flag) &&
+       p.atmos.precip_model isa Microphysics1Moment
+
+        #TODO - do we need any of those
+        # - it's a little bit more work for ρ
+        # - for energy remember about rescaling by dh/dρe
+        # - should work out of the box for the rest
+
+        scalar_info = (
+            #(@name(c.ρ), density_upwinding, nothing),
+            #(@name(c.ρe_tot), energy_upwinding, nothing),
+            #(@name(c.ρq_tot), tracer_upwinding, nothing),
+            #(@name(c.ρq_liq), tracer_upwinding, nothing),
+            #(@name(c.ρq_ice), tracer_upwinding, nothing),
+            #(@name(c.ρq_rai), tracer_upwinding, nothing),
+            #(@name(c.ρq_sno), tracer_upwinding, nothing),
+            (@name(c.ρq_rai), precip_upwinding, p.ᶜwᵣ),
+            (@name(c.ρq_sno), precip_upwinding, p.ᶜwₛ),
+        )
+
+        MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, upwinding, ᶜw)
+            MatrixFields.has_field(Y, ρχ_name) || return
+
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+
+            is_third_order = upwinding == Val(:third_order)
+            ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+            ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+
+            if isnothing(ᶜw)
+                @. ∂ᶜρχ_err_∂ᶜρχ[colidx] -=
+                    dtγ * ᶜadvdivᵥ_matrix() ⋅
+                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅
+                    ᶠupwind_matrix(ᶠu³[colidx]) ⋅
+                    DiagonalMatrixRow(1 / ᶜρ[colidx])
+            else
+                ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
+                    top = Operators.SetValue(C3(FT(0))),
+                    bottom = Operators.SetDivergence(FT(0)),
+                )
+                ᶜdivᵥ_ρqₚ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ_ρqₚ)
+                lgf = Fields.local_geometry_field(Y.f)
+
+                @. ∂ᶜρχ_err_∂ᶜρχ[colidx] -=
+                    dtγ * ᶜdivᵥ_ρqₚ_matrix() ⋅
+                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅
+                    ᶠupwind_matrix(
+                        -(ᶠinterp(ᶜw[colidx])) *
+                        CT3(unit_basis_vector_data(CT3, lgf[colidx])),
+                    ) ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx])
+            end
         end
     end
 end
