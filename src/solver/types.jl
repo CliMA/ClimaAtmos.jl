@@ -262,6 +262,10 @@ struct TestDycoreConsistency end
 
 Base.broadcastable(x::AbstractPerformanceMode) = tuple(x)
 
+abstract type AbstractTimesteppingMode end
+struct Explicit <: AbstractTimesteppingMode end
+struct Implicit <: AbstractTimesteppingMode end
+
 Base.@kwdef struct AtmosNumerics{
     EN_UP,
     TR_UP,
@@ -337,6 +341,7 @@ Base.@kwdef struct AtmosModel{
     OGW,
     HD,
     VD,
+    DM,
     VS,
     RS,
     ST,
@@ -363,6 +368,7 @@ Base.@kwdef struct AtmosModel{
     orographic_gravity_wave::OGW = nothing
     hyperdiff::HD = nothing
     vert_diff::VD = nothing
+    diff_mode::DM = nothing
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing

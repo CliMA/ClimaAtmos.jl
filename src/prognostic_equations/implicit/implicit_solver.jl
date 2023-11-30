@@ -2,25 +2,23 @@ import LinearAlgebra: I, Adjoint, ldiv!
 import ClimaCore.MatrixFields: @name
 using ClimaCore.MatrixFields
 
+abstract type DiffusionDerivativeFlag end
+struct UseDiffusionDerivative <: DiffusionDerivativeFlag end
+struct IgnoreDiffusionDerivative <: DiffusionDerivativeFlag end
+use_derivative(flag::DiffusionDerivativeFlag) = flag == UseDiffusionDerivative()
+
 abstract type EnthalpyDerivativeFlag end
-struct IgnoreEnthalpyDerivative <: EnthalpyDerivativeFlag end
 struct UseEnthalpyDerivative <: EnthalpyDerivativeFlag end
-use_enthalpy_derivative(::IgnoreEnthalpyDerivative, _) = false
-use_enthalpy_derivative(::UseEnthalpyDerivative, name) = name == @name(c.ρe_tot)
+struct IgnoreEnthalpyDerivative <: EnthalpyDerivativeFlag end
+use_derivative(flag::EnthalpyDerivativeFlag) = flag == UseEnthalpyDerivative()
 
 """
-    ImplicitEquationJacobian(Y; [enthalpy_flag], [transform])
+    ImplicitEquationJacobian(Y, atmos, diffusion_flag, enthalpy_flag, transform_flag)
 
 A wrapper for the matrix ``∂E/∂Y``, where ``E(Y)`` is the "error" of the
-implicit step with the state ``Y`` (see below for more details on this). The
-`enthalpy_flag`, which can be set to either `UseEnthalpyDerivative()` or
-`IgnoreEnthalpyDerivative()`, specifies whether the derivative of total enthalpy
-with respect to vertical velocity should be computed or approximated as 0. The
-`transform` flag, which can be set to `true` or `false`, specifies whether or
-not the error should be transformed from ``E(Y)`` to ``E(Y)/Δt``, which is
-required for non-Rosenbrock timestepping schemes from OrdinaryDiffEq.jl. The
-default values for these flags are `IgnoreEnthalpyDerivative()` and `false`,
-respectively.
+implicit step with the state ``Y``.
+
+# Background
 
 When we use an implicit or split implicit-explicit (IMEX) timestepping scheme,
 we end up with a nonlinear equation of the form ``E(Y) = 0``, where
@@ -72,10 +70,27 @@ steps is repeated, i.e., ``ΔY[1]`` is computed and used to update ``Y`` to
 when the error ``E(Y)`` is sufficiently close to 0 (according to the convergence
 condition passed to Newton's method), or when the maximum number of iterations
 is reached.
+
+# Arguments
+
+- `Y::FieldVector`: the state of the simulation
+- `atmos::AtmosModel`: the model configuration
+- `diffusion_flag::DiffusionDerivativeFlag`: whether the derivative of the
+  diffusion tendency with respect to the quantities being diffused should be
+  computed or approximated as 0; must be either `UseDiffusionDerivative()` or
+  `IgnoreDiffusionDerivative()` instead of a `Bool` to ensure type-stability
+- `enthalpy_flag::EnthalpyDerivativeFlag`: whether the derivative of total
+  enthalpy with respect to vertical velocity should be computed or approximated
+  as 0; must be either `UseEnthalpyDerivative()` or `IgnoreEnthalpyDerivative()`
+  instead of a `Bool` to ensure type-stability
+- `transform_flag::Bool`: whether the error should be transformed from ``E(Y)``
+  to ``E(Y)/Δt``, which is required for non-Rosenbrock timestepping schemes from
+  OrdinaryDiffEq.jl
 """
 struct ImplicitEquationJacobian{
     M <: MatrixFields.FieldMatrix,
     S <: MatrixFields.FieldMatrixSolver,
+    D <: DiffusionDerivativeFlag,
     E <: EnthalpyDerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
@@ -86,7 +101,8 @@ struct ImplicitEquationJacobian{
     # solves the linear equation E'(Y) * ΔY = E(Y) for ΔY
     solver::S
 
-    # whether to compute ∂(ᶜh_tot)/∂(ᶠu₃) or to approximate it as 0
+    # flags that determine how E'(Y) is approximated
+    diffusion_flag::D
     enthalpy_flag::E
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
@@ -94,25 +110,27 @@ struct ImplicitEquationJacobian{
     temp_x::T
 
     # required by OrdinaryDiffEq.jl to run non-Rosenbrock timestepping schemes
-    transform::Bool
+    transform_flag::Bool
     dtγ_ref::R
 end
 
 function ImplicitEquationJacobian(
-    Y;
-    enthalpy_flag = IgnoreEnthalpyDerivative(),
-    transform = false,
+    Y,
+    atmos,
+    diffusion_flag,
+    enthalpy_flag,
+    transform_flag,
 )
     FT = Spaces.undertype(axes(Y.c))
     one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
-    Bidiagonal_C3 = BidiagonalMatrixRow{C3{FT}}
-    Bidiagonal_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    Quaddiagonal_ACT3 = QuaddiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    Tridiagonal_C3xACT3 = TridiagonalMatrixRow{typeof(one_C3xACT3)}
+    TridiagonalRow = TridiagonalMatrixRow{FT}
+    BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
+    BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
+    QuaddiagonalRow_ACT3 = QuaddiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
+    TridiagonalRow_C3xACT3 = TridiagonalMatrixRow{typeof(one_C3xACT3)}
 
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
-    energy_name = @name(c.ρe_tot)
     tracer_names = (
         @name(c.ρq_tot),
         @name(c.ρq_liq),
@@ -135,33 +153,51 @@ function ImplicitEquationJacobian(
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
     matrix = MatrixFields.FieldMatrix(
         (@name(c.ρ), @name(c.ρ)) => FT(-1) * I,
-        (@name(c.uₕ), @name(c.uₕ)) => FT(-1) * I,
+        MatrixFields.unrolled_map(
+            name ->
+                (name, name) =>
+                    use_derivative(diffusion_flag) ?
+                    similar(Y.c, TridiagonalRow) : FT(-1) * I,
+            (@name(c.ρe_tot), available_tracer_names...),
+        )...,
+        (@name(c.uₕ), @name(c.uₕ)) =>
+            use_derivative(diffusion_flag) &&
+            diffuse_momentum(atmos.vert_diff) ?
+            similar(Y.c, TridiagonalRow) : FT(-1) * I,
         MatrixFields.unrolled_map(
             name -> (name, name) => FT(-1) * I,
-            (energy_name, available_tracer_names..., other_available_names...),
+            other_available_names,
         )...,
-        (@name(c.ρ), @name(f.u₃)) => similar(Y.c, Bidiagonal_ACT3),
-        (energy_name, @name(f.u₃)) =>
-            use_enthalpy_derivative(enthalpy_flag, energy_name) ?
-            similar(Y.c, Quaddiagonal_ACT3) : similar(Y.c, Bidiagonal_ACT3),
+        (@name(c.ρ), @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
+        (@name(c.ρe_tot), @name(f.u₃)) =>
+            use_derivative(enthalpy_flag) ?
+            similar(Y.c, QuaddiagonalRow_ACT3) :
+            similar(Y.c, BidiagonalRow_ACT3),
         MatrixFields.unrolled_map(
-            name -> (name, @name(f.u₃)) => similar(Y.c, Bidiagonal_ACT3),
+            name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
             available_tracer_names,
         )...,
-        (@name(f.u₃), @name(c.ρ)) => similar(Y.f, Bidiagonal_C3),
-        (@name(f.u₃), energy_name) => similar(Y.f, Bidiagonal_C3),
-        (@name(f.u₃), @name(f.u₃)) => similar(Y.f, Tridiagonal_C3xACT3),
+        (@name(f.u₃), @name(c.ρ)) => similar(Y.f, BidiagonalRow_C3),
+        (@name(f.u₃), @name(c.ρe_tot)) => similar(Y.f, BidiagonalRow_C3),
+        (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
-    alg = MatrixFields.SchurComplementSolve(@name(f))
+    alg =
+        use_derivative(diffusion_flag) ?
+        MatrixFields.ApproximateBlockArrowheadIterativeSolve(@name(c)) :
+        MatrixFields.BlockArrowheadSolve(@name(c))
+
+    # By default, the ApproximateBlockArrowheadIterativeSolve takes 1 iteration
+    # and approximates the A[c, c] block with a MainDiagonalPreconditioner.
 
     return ImplicitEquationJacobian(
         matrix,
         MatrixFields.FieldMatrixSolver(alg, matrix, Y),
+        diffusion_flag,
         enthalpy_flag,
         similar(Y),
         similar(Y),
-        transform,
+        transform_flag,
         Ref{FT}(),
     )
 end
@@ -178,7 +214,7 @@ function ldiv!(
     b::Fields.FieldVector,
 )
     MatrixFields.field_matrix_solve!(A.solver, x, A.matrix, b)
-    if A.transform
+    if A.transform_flag
         @. x *= A.dtγ_ref[]
     end
 end
@@ -217,6 +253,7 @@ function Wfact!(A, Y, p, dtγ, t)
             p.core.ᶜρ_ref,
             p.core.ᶜp_ref,
             p.scratch.ᶜtemp_scalar,
+            p.scratch.ᶠtemp_scalar,
             p.params,
             p.atmos,
             p.precomputed.ᶜh_tot,
@@ -238,7 +275,7 @@ function Wfact!(A, Y, p, dtγ, t)
 end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
-    (; matrix, enthalpy_flag) = A
+    (; matrix, diffusion_flag, enthalpy_flag) = A
     (; ᶜspecific, ᶠu³, ᶜK, ᶜp, ∂ᶜK_∂ᶠu₃) = p
     (; ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, params) = p
     (; energy_upwinding, density_upwinding) = p.atmos.numerics
@@ -250,8 +287,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     one_CT3xACT3 = CT3(FT(1)) * CT3(FT(1))'
     R_d = FT(CAP.R_d(params))
     cv_d = FT(CAP.cv_d(params))
-    κ_d = FT(CAP.kappa_d(params))
-    p_ref_theta = FT(CAP.p_ref_theta(params))
     T_tri = FT(CAP.T_triple(params))
 
     ᶜρ = Y.c.ρ
@@ -280,9 +315,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     # ∂(ᶜp)/∂(ᶜK) ≈ DiagonalMatrixRow(-R_d * ᶜρ / cv_d), and
     # ∂(ᶜp)/∂(ᶜρe_tot) ≈ DiagonalMatrixRow(R_d / cv_d).
 
-    # We can express the implicit tendency for tracers (and density) as either
+    # We can express the implicit advection tendency for scalars as either
     # ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ))) or
     # ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu³, ᶜχ))).
+    # The implicit advection tendency for density is computed with ᶜχ = 1.
     # This means that either
     # ∂(ᶜρχₜ)/∂(ᶠu₃) =
     #     -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ (
@@ -313,7 +349,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     #     ∂((ᶜρe_tot + ᶜp) / ᶜρ)/∂(ᶜK) ⋅ ∂(ᶜK)/∂(ᶠu₃) =
     #     ∂(ᶜp)/∂(ᶜK) * DiagonalMatrixRow(1 / ᶜρ) ⋅ ∂(ᶜK)/∂(ᶠu₃).
     u³_sign(u³) = sign(u³.u³) # sign of the scalar value stored inside u³
-    tracer_info = (
+    scalar_info = (
         (@name(c.ρ), @name(ᶜ1), density_upwinding),
         (@name(c.ρe_tot), @name(ᶜh_tot), energy_upwinding),
         (@name(c.ρq_tot), @name(ᶜspecific.q_tot), tracer_upwinding),
@@ -324,13 +360,8 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         (@name(c.ρq_rai), @name(ᶜspecific.q_rai), precip_upwinding),
         (@name(c.ρq_sno), @name(ᶜspecific.q_sno), precip_upwinding),
     )
-    available_tracer_info =
-        MatrixFields.unrolled_filter(tracer_info) do (ρχ_name, _, _)
-            MatrixFields.has_field(Y, ρχ_name)
-        end
-    MatrixFields.unrolled_foreach(
-        available_tracer_info,
-    ) do (ρχ_name, χ_name, upwinding)
+    MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, χ_name, upwinding)
+        MatrixFields.has_field(Y, ρχ_name) || return
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
 
         ᶜχ = if χ_name == @name(ᶜ1)
@@ -341,7 +372,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         end
 
         if upwinding == Val(:none)
-            if use_enthalpy_derivative(enthalpy_flag, ρχ_name)
+            if use_derivative(enthalpy_flag) && ρχ_name == @name(c.ρe_tot)
                 @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
                     dtγ * -(ᶜadvdivᵥ_matrix()) ⋅
                     DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅ (
@@ -378,7 +409,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                 bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
             ) # Need to wrap ᶠupwind_matrix in this for the same reason.
 
-            if use_enthalpy_derivative(enthalpy_flag, ρχ_name)
+            if use_derivative(enthalpy_flag) && ρχ_name == @name(c.ρe_tot)
                 @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
                     dtγ * -(ᶜadvdivᵥ_matrix()) ⋅
                     DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅ (
@@ -478,5 +509,66 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅
             ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅
             ∂ᶜK_∂ᶠu₃[colidx] - (I_u₃,)
+    end
+
+    # We can express the implicit diffusion tendency for scalars and horizontal
+    # velocity as
+    # ᶜρχₜ = ᶜadvdivᵥ(ᶠρK_E * ᶠgradᵥ(ᶜχ)) and
+    # ᶜuₕₜ = ᶜadvdivᵥ(ᶠρK_E * ᶠgradᵥ(ᶜuₕ)) / ᶜρ.
+    # The implicit diffusion tendency for density is the sum of the ᶜρχₜ's, but
+    # we approximate the derivative of this sum with respect to ᶜρ as 0.
+    # This means that
+    # ∂(ᶜρχₜ)/∂(ᶜρχ) =
+    #     ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_E) ⋅ ᶠgradᵥ_matrix() ⋅
+    #     ∂(ᶜχ)/∂(ᶜρχ) and
+    # ∂(ᶜuₕₜ)/∂(ᶜuₕ) =
+    #     DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜadvdivᵥ_matrix() ⋅
+    #     DiagonalMatrixRow(ᶠρK_E) ⋅ ᶠgradᵥ_matrix().
+    # In general, ∂(ᶜχ)/∂(ᶜρχ) = DiagonalMatrixRow(1 / ᶜρ), except for the case
+    # ∂(ᶜh_tot)/∂(ᶜρe_tot) =
+    #     ∂((ᶜρe_tot + ᶜp) / ᶜρ)/∂(ᶜρe_tot) =
+    #     (I + ∂(ᶜp)/∂(ᶜρe_tot)) ⋅ DiagonalMatrixRow(1 / ᶜρ) ≈
+    #     DiagonalMatrixRow((1 + R_d / cv_d) / ᶜρ).
+    if use_derivative(diffusion_flag)
+        (; C_E) = p.atmos.vert_diff
+        ᶠp = ᶠρK_E = p.ᶠtemp_scalar
+        interior_uₕ = Fields.level(Y.c.uₕ, 1)
+        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
+        @. ᶠp[colidx] = ᶠinterp(ᶜp[colidx])
+        @. ᶠρK_E[colidx] =
+            ᶠinterp(Y.c.ρ[colidx]) * eddy_diffusivity_coefficient(
+                C_E,
+                norm(interior_uₕ[colidx]),
+                ᶜΔz_surface[colidx] / 2,
+                ᶠp[colidx],
+            )
+
+        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot[colidx] =
+            dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_E[colidx]) ⋅
+            ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow((1 + R_d / cv_d) / ᶜρ[colidx]) -
+            (I,)
+
+        tracer_names = (
+            @name(c.ρq_tot),
+            @name(c.ρq_liq),
+            @name(c.ρq_ice),
+            @name(c.ρq_rai),
+            @name(c.ρq_sno),
+        )
+        MatrixFields.unrolled_foreach(tracer_names) do ρχ_name
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ[colidx] =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_E[colidx]) ⋅
+                ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx]) - (I,)
+        end
+
+        if diffuse_momentum(p.atmos.vert_diff)
+            ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
+            @. ∂ᶜuₕ_err_∂ᶜuₕ[colidx] =
+                dtγ * DiagonalMatrixRow(1 / ᶜρ[colidx]) ⋅ ᶜadvdivᵥ_matrix() ⋅
+                DiagonalMatrixRow(ᶠρK_E[colidx]) ⋅ ᶠgradᵥ_matrix() - (I,)
+        end
     end
 end
