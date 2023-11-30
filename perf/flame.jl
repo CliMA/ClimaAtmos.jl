@@ -92,7 +92,9 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    @test allocs ≤ allocs_limit[job_id] * buffer
+    @test 0.5 * allocs_limit[job_id] * buffer <=
+          allocs ≤
+          allocs_limit[job_id] * buffer
 end
 
 import ClimaComms
