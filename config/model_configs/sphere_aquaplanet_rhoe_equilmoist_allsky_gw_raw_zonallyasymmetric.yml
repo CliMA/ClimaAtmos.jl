@@ -5,7 +5,7 @@ orographic_gravity_wave: "raw_topo"
 z_elem: 25
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
-t_end: "18hours"
+t_end: "1days"
 non_orographic_gravity_wave: true
 dz_bottom: 300.0
 vert_diff: "true"
