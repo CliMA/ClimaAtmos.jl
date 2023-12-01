@@ -63,13 +63,13 @@ allocs_limit["flame_perf_target"] = 4656
 allocs_limit["flame_perf_target_tracers"] = 204288
 allocs_limit["flame_perf_target_edmfx"] = 253440
 allocs_limit["flame_perf_diagnostics"] = 3016328
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 920960
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 893504
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     67443909648
 allocs_limit["flame_perf_target_threaded"] = 5857808
 allocs_limit["flame_perf_target_callbacks"] = 46407936
 allocs_limit["flame_perf_gw"] = 4868951088
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 942928
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 898768
 
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"

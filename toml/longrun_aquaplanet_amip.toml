@@ -8,6 +8,11 @@ alias = "zd_rayleigh"
 value = 35000.0
 type = "float"
 
+[precipitation_timescale]
+alias = "τ_precip"
+value = 100
+type = "float"
+
 [entr_tau]
 alias = "entr_tau"
 value = 0.001

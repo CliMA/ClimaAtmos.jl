@@ -1,5 +1,4 @@
 job_id: diagnostic_edmfx_aquaplanet
-vert_diff: "true" 
 surface_setup: DefaultExchangeCoefficients 
 rad: gray
 turbconv: diagnostic_edmfx 
@@ -12,7 +11,8 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil 
 precip_model: 0M
+override_τ_precip: false
 dt: 10secs 
 t_end: 1hours 
 dt_save_to_disk: 600secs
-toml: [toml/diagnostic_edmfx_box.toml]
+toml: [toml/diagnostic_edmfx_trmm_box.toml]
