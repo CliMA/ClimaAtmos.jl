@@ -419,9 +419,7 @@ add_diagnostic_variable!(
 # Eastward and northward surface drag component (2d)
 ###
 function compute_tau!(out, state, cache, component)
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(state.f), Fields.half)
-    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; surface_ct3_unit) = cache.core
     (; ρ_flux_uₕ) = cache.precomputed.sfc_conditions
 
     if isnothing(out)
@@ -469,9 +467,7 @@ add_diagnostic_variable!(
 ###
 function compute_hfes!(out, state, cache, time)
     (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(state.f), Fields.half)
-    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; surface_ct3_unit) = cache.core
     if isnothing(out)
         return dot.(ρ_flux_h_tot, surface_ct3_unit)
     else
@@ -503,9 +499,7 @@ function compute_evspsbl!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(state.f), Fields.half)
-    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; surface_ct3_unit) = cache.core
 
     if isnothing(out)
         return dot.(ρ_flux_q_tot, surface_ct3_unit)

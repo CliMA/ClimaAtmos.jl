@@ -134,6 +134,9 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
 
     numerics = (; limiter)
 
+    sfc_local_geometry =
+        Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
+
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
@@ -142,6 +145,10 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
         ᶜT = similar(Y.c, FT),
         ᶜf,
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
+        # Used by diagnostics such as hfres, evspblw
+        surface_ct3_unit = CT3.(
+            unit_basis_vector_data.(CT3, sfc_local_geometry)
+        ),
     )
 
     sfc_setup = surface_setup(params)
