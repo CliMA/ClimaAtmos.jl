@@ -18,6 +18,14 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
                 colidx,
                 p.atmos.vert_diff,
             )
+            edmfx_sgs_diffusive_flux_tendency!(
+                Yₜ,
+                Y,
+                p,
+                t,
+                colidx,
+                p.atmos.turbconv_model,
+            )
         end
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)

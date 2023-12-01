@@ -169,15 +169,17 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     (; sfc_conditions) = p.precomputed
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
-    (; ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰) = p.precomputed
+    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_diffusive_flux
-        # energy
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_h[colidx])
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar
+        @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_u[colidx])
 
+        # energy
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]),
@@ -185,7 +187,16 @@ function edmfx_sgs_diffusive_flux_tendency!(
         @. Yₜ.c.ρe_tot[colidx] -= ᶜdivᵥ_ρe_tot(
             -(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜmse⁰[colidx] + ᶜK⁰[colidx])),
         )
-
+        if use_prognostic_tke(turbconv_model)
+            # turbulent transport (diffusive flux)
+            # boundary condition for the diffusive flux
+            ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(ρatke_flux[colidx]),
+            )
+            @. Yₜ.c.sgs⁰.ρatke[colidx] -=
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
+        end
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
@@ -202,8 +213,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         # momentum
-        ᶠρaK_u = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_u[colidx])
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu⁰[colidx])
         @. Yₜ.c.uₕ[colidx] -= C12(
@@ -234,21 +243,34 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     FT = Spaces.undertype(axes(Y.c))
     (; sfc_conditions) = p.precomputed
-    (; ᶜu, ᶜh_tot, ᶜspecific) = p.precomputed
-    (; ᶜK_u, ᶜK_h) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜtke⁰) = p.precomputed
+    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
     if p.atmos.edmfx_sgs_diffusive_flux
-        # energy
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_h[colidx])
+        ᶠρaK_u = p.scratch.ᶠtemp_scalar
+        @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
 
+        # energy
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(sfc_conditions.ρ_flux_h_tot[colidx]),
         )
         @. Yₜ.c.ρe_tot[colidx] -=
             ᶜdivᵥ_ρe_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜh_tot[colidx])))
+
+        if use_prognostic_tke(turbconv_model)
+            # turbulent transport (diffusive flux)
+            # boundary condition for the diffusive flux
+            ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                bottom = Operators.SetValue(ρatke_flux[colidx]),
+            )
+            @. Yₜ.c.sgs⁰.ρatke[colidx] -=
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
+        end
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -267,8 +289,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         # momentum
-        ᶠρaK_u = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_u[colidx] = ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(ᶜK_u[colidx])
         ᶠstrain_rate = p.scratch.ᶠtemp_UVWxUVW
         compute_strain_rate_face!(ᶠstrain_rate[colidx], ᶜu[colidx])
         @. Yₜ.c.uₕ[colidx] -= C12(

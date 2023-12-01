@@ -21,22 +21,11 @@ function edmfx_tke_tendency!(
     (; ᶜentrʲs, ᶜdetrʲs, ᶠu³ʲs) = p.precomputed
     (; ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad, ᶜtke⁰, ᶜmixing_length) =
         p.precomputed
-    (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
+    (; ᶜK_u, ᶜK_h) = p.precomputed
     (; dt) = p.simulation
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
-    ᶠgradᵥ = Operators.GradientC2F()
 
-    ᶠρaK_u = p.scratch.ᶠtemp_scalar
     if use_prognostic_tke(turbconv_model)
-        # turbulent transport (diffusive flux)
-        @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_u[colidx])
-        # boundary condition for the diffusive flux
-        ᶜdivᵥ_ρatke = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(ρatke_flux[colidx]),
-        )
-        @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-            ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
         # shear production
         @. Yₜ.c.sgs⁰.ρatke[colidx] +=
             2 * ᶜρa⁰[colidx] * ᶜK_u[colidx] * ᶜstrain_rate_norm[colidx]

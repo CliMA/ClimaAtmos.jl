@@ -1,4 +1,3 @@
-
 job_id: "diagnostic_edmfx_bomex_box"
 initial_condition: "Bomex" 
 subsidence: "Bomex" 
@@ -6,6 +5,8 @@ edmf_coriolis: "Bomex"
 ls_adv: "Bomex" 
 surface_setup: "Bomex"
 turbconv: "diagnostic_edmfx" 
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 prognostic_tke: true
 edmfx_upwinding: "first_order" 
 edmfx_entr_model: "Generalized" 
@@ -24,7 +25,7 @@ y_elem: 2
 z_elem: 60 
 z_max: 3e3 
 z_stretch: false
-dt: "50secs" 
+dt: "200secs" 
 t_end: "6hours" 
 dt_save_to_disk: "10mins"
 toml: [toml/diagnostic_edmfx_box.toml]

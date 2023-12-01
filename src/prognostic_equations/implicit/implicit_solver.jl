@@ -13,7 +13,7 @@ struct IgnoreEnthalpyDerivative <: EnthalpyDerivativeFlag end
 use_derivative(flag::EnthalpyDerivativeFlag) = flag == UseEnthalpyDerivative()
 
 """
-    ImplicitEquationJacobian(Y, atmos, diffusion_flag, enthalpy_flag, transform_flag)
+    ImplicitEquationJacobian(Y, atmos, diffusion_flag, enthalpy_flag, transform_flag, approximate_solve_iters)
 
 A wrapper for the matrix ``∂E/∂Y``, where ``E(Y)`` is the "error" of the
 implicit step with the state ``Y``.
@@ -86,6 +86,8 @@ is reached.
 - `transform_flag::Bool`: whether the error should be transformed from ``E(Y)``
   to ``E(Y)/Δt``, which is required for non-Rosenbrock timestepping schemes from
   OrdinaryDiffEq.jl
+- `approximate_solve_iters::Int`: number of iterations to take for the
+  approximate linear solve required by `UseDiffusionDerivative()`
 """
 struct ImplicitEquationJacobian{
     M <: MatrixFields.FieldMatrix,
@@ -120,6 +122,7 @@ function ImplicitEquationJacobian(
     diffusion_flag,
     enthalpy_flag,
     transform_flag,
+    approximate_solve_iters,
 )
     FT = Spaces.undertype(axes(Y.c))
     one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
@@ -137,10 +140,10 @@ function ImplicitEquationJacobian(
         @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
+        @name(c.sgs⁰.ρatke),
     )
     available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
     other_names = (
-        @name(c.sgs⁰.ρatke),
         @name(c.sgsʲs),
         @name(f.sgsʲs),
         @name(c.turbconv),
@@ -185,8 +188,10 @@ function ImplicitEquationJacobian(
 
     alg =
         use_derivative(diffusion_flag) ?
-        MatrixFields.ApproximateBlockArrowheadIterativeSolve(@name(c)) :
-        MatrixFields.BlockArrowheadSolve(@name(c))
+        MatrixFields.ApproximateBlockArrowheadIterativeSolve(
+            @name(c);
+            n_iters = approximate_solve_iters,
+        ) : MatrixFields.BlockArrowheadSolve(@name(c))
 
     # By default, the ApproximateBlockArrowheadIterativeSolve takes 1 iteration
     # and approximates the A[c, c] block with a MainDiagonalPreconditioner.
@@ -242,7 +247,6 @@ _linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
 function Wfact!(A, Y, p, dtγ, t)
     NVTX.@range "Wfact!" color = colorant"green" begin
         # Remove unnecessary values from p to avoid allocations in bycolumn.
-        (; rayleigh_sponge) = p.atmos
         p′ = (;
             p.precomputed.ᶜspecific,
             p.precomputed.ᶠu³,
@@ -252,6 +256,11 @@ function Wfact!(A, Y, p, dtγ, t)
             (
                 use_derivative(A.diffusion_flag) ?
                 (; p.precomputed.ᶜK_u, p.precomputed.ᶜK_h) : (;)
+            )...,
+            (
+                use_derivative(A.diffusion_flag) &&
+                p.atmos.turbconv_model isa PrognosticEDMFX ?
+                (; p.precomputed.ᶜρa⁰) : (;)
             )...,
             p.core.∂ᶜK_∂ᶠu₃,
             p.core.ᶜΦ,
@@ -263,7 +272,7 @@ function Wfact!(A, Y, p, dtγ, t)
             p.params,
             p.atmos,
             (
-                rayleigh_sponge isa RayleighSponge ?
+                p.atmos.rayleigh_sponge isa RayleighSponge ?
                 (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
             )...,
         )
@@ -444,6 +453,12 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         end
     end
 
+    # TODO: Move the vertical advection of ρatke into the implicit tendency.
+    if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
+        ∂ᶜρatke_err_∂ᶠu₃ = matrix[@name(c.sgs⁰.ρatke), @name(f.u₃)]
+        ∂ᶜρatke_err_∂ᶠu₃[colidx] .= (zero(eltype(∂ᶜρatke_err_∂ᶠu₃)),)
+    end
+
     # We can express the implicit tendency for vertical velocity as
     # ᶠu₃ₜ =
     #     -(ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(ᶜρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
@@ -549,27 +564,24 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                 ) ⋅ ᶠgradᵥ_matrix() - (I,)
         end
 
-        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot[colidx] =
-            dtγ * ᶜadvdivᵥ_matrix() ⋅
-            DiagonalMatrixRow(ᶠinterp(ᶜρ[colidx]) * ᶠinterp(p.ᶜK_h[colidx])) ⋅
-            ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow((1 + R_d / cv_d) / ᶜρ[colidx]) -
-            (I,)
-
-        tracer_names = (
-            @name(c.ρq_tot),
-            @name(c.ρq_liq),
-            @name(c.ρq_ice),
-            @name(c.ρq_rai),
-            @name(c.ρq_sno),
+        ᶜρ⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
+        scalar_info = (
+            (@name(c.ρe_tot), ᶜρ, p.ᶜK_h, 1 + R_d / cv_d),
+            (@name(c.ρq_tot), ᶜρ, p.ᶜK_h, 1),
+            (@name(c.ρq_liq), ᶜρ, p.ᶜK_h, 1),
+            (@name(c.ρq_ice), ᶜρ, p.ᶜK_h, 1),
+            (@name(c.ρq_rai), ᶜρ, p.ᶜK_h, 1),
+            (@name(c.ρq_sno), ᶜρ, p.ᶜK_h, 1),
+            (@name(c.sgs⁰.ρatke), ᶜρ⁰, p.ᶜK_u, 1),
         )
-        MatrixFields.unrolled_foreach(tracer_names) do ρχ_name
+        MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, ᶜρ_χ, ᶜK_χ, s_χ)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρχ[colidx] =
                 dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
-                    ᶠinterp(ᶜρ[colidx]) * ᶠinterp(p.ᶜK_h[colidx]),
-                ) ⋅ ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx]) - (I,)
+                    ᶠinterp(ᶜρ_χ[colidx]) * ᶠinterp(ᶜK_χ[colidx]),
+                ) ⋅ ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(s_χ / ᶜρ_χ[colidx]) -
+                (I,)
         end
     end
 end
