@@ -54,7 +54,7 @@ Compute the specific kinetic energy at cell centers, storing in `κ` from
 individual velocity components:
 κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))
 - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
-    cell centers, and 
+    cell centers, and
 - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
 """
 function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Field)
@@ -148,7 +148,7 @@ projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
 
 """
     get_physical_w(u, local_geometry)
-    
+
 Return physical vertical velocity - a projection of full velocity vector
 onto the vertical axis.
 """
@@ -299,3 +299,19 @@ end
 struct AllNothing end
 const all_nothing = AllNothing()
 Base.getproperty(::AllNothing, ::Symbol) = nothing
+
+"""
+    horizontal_integral_at_boundary(f::Fields.Field, lev)
+
+Compute the horizontal integral of a 2d or 3d `Fields.Field` `f` at a given vertical level
+index `lev`. The underlying vertical space of the 2d field is required to be `FaceFiniteDifferenceSpace`.
+"""
+function horizontal_integral_at_boundary(f::Fields.Field, lev)
+    @assert axes(f) isa Spaces.FaceExtrudedFiniteDifferenceSpace
+    horizontal_integral_at_boundary(Spaces.level(f, lev))
+end
+
+function horizontal_integral_at_boundary(f::Fields.Field)
+    @assert axes(f) isa Spaces.SpectralElementSpace2D
+    sum(f ./ Fields.dz_field(axes(f)) .* 2) # TODO: is there a way to ensure this is derived from face z? The 2d topology doesn't contain this info
+end

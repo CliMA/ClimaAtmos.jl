@@ -98,6 +98,7 @@ end
 
 # Forwarding CloudMicrophysics parameters
 ρ_cloud_liq(ps::ACAP) = ps.water_params.ρw
+ρ_cloud_ice(ps::ACAP) = ps.water_params.ρi
 
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =
