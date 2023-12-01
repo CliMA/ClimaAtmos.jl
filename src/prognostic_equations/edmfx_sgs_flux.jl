@@ -188,14 +188,17 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(
                     sfc_conditions.ρ_flux_q_tot[colidx],
                 ),
             )
-            @. Yₜ.c.ρq_tot[colidx] -=
+            @. ᶜρχₜ_diffusion[colidx] =
                 ᶜdivᵥ_ρq_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜq_tot⁰[colidx])))
+            @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
+            @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
         end
 
         # momentum
@@ -249,15 +252,18 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(
                     sfc_conditions.ρ_flux_q_tot[colidx],
                 ),
             )
-            @. Yₜ.c.ρq_tot[colidx] -= ᶜdivᵥ_ρq_tot(
+            @. ᶜρχₜ_diffusion[colidx] = ᶜdivᵥ_ρq_tot(
                 -(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜspecific.q_tot[colidx])),
             )
+            @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
+            @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
         end
 
         # momentum
