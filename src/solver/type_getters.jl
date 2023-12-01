@@ -925,6 +925,21 @@ function get_simulation(config::AtmosConfig)
     end
     @info "Init diagnostics: $s"
 
+    if config.parsed_args["warn_allocations_diagnostics"]
+        for diag in diagnostics_iterations
+            # We write over the storage space we have already prepared (and filled) before
+            allocs = @allocated diag.variable.compute!(
+                diagnostic_storage[diag],
+                integrator.u,
+                integrator.p,
+                integrator.t,
+            )
+            if allocs > 10 * 1024
+                @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"
+            end
+        end
+    end
+
     return AtmosSimulation(
         sim_info.job_id,
         sim_info.output_dir,
