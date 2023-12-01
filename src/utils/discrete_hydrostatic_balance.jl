@@ -38,7 +38,7 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
     end
     ᶜlocal_geometry = Fields.local_geometry_field(Y.c)
     ls(params, thermo_state, geometry, velocity) =
-        ICs.LocalState(; params, thermo_state, geometry, velocity)
+        ICs.LocalState(; grav = CAP.grav(params), thermo_params = CAP.thermodynamics_params(params), thermo_state, geometry, velocity)
     @. Y.c = merge(
         Y.c,
         ICs.energy_variables(

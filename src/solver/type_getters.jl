@@ -297,22 +297,21 @@ function get_state_restart(comms_ctx)
 end
 
 function get_initial_condition(parsed_args, params)
-    ic = parsed_args["initial_condition"]
+    ic = getproperty(ICs, Symbol(parsed_args["initial_condition"]))
     thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
-    if ic == "DecayingProfile"
-        return ICs.DecayingProfile(
+    if parsed_args["initial_condition"] in
+       ["DecayingProfile", "MoistAdiabaticProfileEDMFX"]
+        return ic(grav, thermo_params, parsed_args["perturb_initstate"])
+    elseif parsed_args["initial_condition"] in
+           ["MoistBaroclinicWave", "DryBaroclinicWave", "MoistBaroclinicWaveWithEDMF"]
+        return ic(
             grav,
             thermo_params,
-            parsed_args["perturb_initstate"],
-        )
-    elseif parsed_args["initial_condition"] in [
-        "DryBaroclinicWave",
-        "MoistBaroclinicWave",
-        "MoistBaroclinicWaveWithEDMF",
-        "MoistAdiabaticProfileEDMFX",
-    ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+            CAP.R_d(params),
+            CAP.MSLP(params),
+            CAP.Omega(params),
+            CAP.planet_radius(params),
             parsed_args["perturb_initstate"],
         )
     elseif parsed_args["initial_condition"] in [
@@ -327,19 +326,32 @@ function get_initial_condition(parsed_args, params)
         "DYCOMS_RF02",
         "Rico",
         "TRMM_LBA",
-    ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-            parsed_args["prognostic_tke"],
-        )
-    elseif parsed_args["initial_condition"] in [
-        "IsothermalProfile",
-        "AgnesiHProfile",
-        "DryDensityCurrentProfile",
-        "RisingThermalBubbleProfile",
-        "ScharProfile",
         "PrecipitatingColumn",
     ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+        return ic(grav, thermo_params, parsed_args["prognostic_tke"])
+    elseif parsed_args["initial_condition"] in [
+        "RisingThermalBubbleProfile",
+        "DryDensityCurrentProfile",
+        "ScharProfile",
+    ]
+        return ic(
+            grav,
+            thermo_params,
+            CAP.cp_d(params),
+            CAP.p_ref_theta(params),
+            CAP.R_d(params),
+            parsed_args["perturb_initstate"],
+        )
+    elseif parsed_args["initial_condition"] == "AgnesiHProfile"
+        return ic(
+            grav,
+            thermo_params,
+            CAP.cp_d(params),
+            CAP.p_ref_theta(params),
+            CAP.R_d(params),
+        )
+    elseif parsed_args["initial_condition"] == "IsothermalProfile"
+        return ic(grav, thermo_params, CAP.R_d(params), CAP.MSLP(params))
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",

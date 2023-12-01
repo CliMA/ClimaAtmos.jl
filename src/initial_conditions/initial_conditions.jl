@@ -92,27 +92,18 @@ end
 
 An `InitialCondition` with a uniform temperature profile.
 """
-Base.@kwdef struct IsothermalProfile{T} <: InitialCondition
-    temperature::T = 300
-end
-
-function (initial_condition::IsothermalProfile)(params)
-    (; temperature) = initial_condition
+function IsothermalProfile(grav, thermo_params, R_d, MSLP)
     function local_state(local_geometry)
-        FT = eltype(params)
-        R_d = CAP.R_d(params)
-        MSLP = CAP.MSLP(params)
-        grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
-        T = FT(temperature)
-
+        FT = eltype(thermo_params)
+        temperature = FT(300)
         (; z) = local_geometry.coordinates
-        p = MSLP * exp(-z * grav / (R_d * T))
+        p = MSLP * exp(-z * grav / (R_d * temperature))
 
         return LocalState(;
-            params,
             geometry = local_geometry,
-            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            grav,
+            thermo_params,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, temperature),
         )
     end
     return local_state
@@ -152,21 +143,120 @@ function DecayingProfile(grav, thermo_params, perturb = true)
 end
 
 """
+    AgnesiHProfile(; perturb = false)
+
+An `InitialCondition` with a decaying temperature profile
+"""
+function AgnesiHProfile(grav, thermo_params, cp_d, p_0, R_d, perturb = false)
+    function local_state(local_geometry)
+        FT = eltype(thermo_params)
+        (; x, z) = local_geometry.coordinates
+        # auxiliary quantities
+        T_bar = FT(250)
+        buoy_freq = grav / sqrt(cp_d * T_bar)
+        π_exn = exp(-grav * z / cp_d / T_bar)
+        p = p_0 * π_exn^(cp_d / R_d) # pressure
+        ρ = p / R_d / T_bar # density
+        velocity = @. Geometry.UVVector(FT(20), FT(0))
+        return LocalState(;
+            geometry = local_geometry,
+            grav,
+            thermo_params,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T_bar),
+            velocity = velocity,
+        )
+    end
+    return local_state
+end
+
+"""
+    ScharProfile(; perturb = false)
+
+An `InitialCondition` with a prescribed Brunt-Vaisala Frequency
+"""
+function ScharProfile(g, thermo_params, cp_d, p₀, R_d, perturb = false)
+    function local_state(local_geometry)
+        FT = eltype(thermo_params)
+        (; x, z) = local_geometry.coordinates
+        θ₀ = FT(280.0)
+        buoy_freq = FT(0.01)
+        θ = θ₀ * exp(buoy_freq^2 * z / g)
+        π_exner =
+            1 +
+            g^2 / (cp_d * θ₀ * buoy_freq^2) * (exp(-buoy_freq^2 * z / g) - 1)
+        T = π_exner * θ # temperature
+        ρ = p₀ / (R_d * T) * (π_exner)^(cp_d / R_d)
+        p = ρ * R_d * T
+        velocity = Geometry.UVVector(FT(10), FT(0))
+
+        return LocalState(;
+            geometry = local_geometry,
+            grav = g,
+            thermo_params,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+            velocity = velocity,
+        )
+    end
+    return local_state
+end
+
+"""
+    DryDensityCurrentProfile(; perturb = false)
+
+An `InitialCondition` with an isothermal background profile, with a negatively
+buoyant bubble, and with an optional
+perturbation to the temperature.
+"""
+function DryDensityCurrentProfile(grav, thermo_params, cp_d, p_0, R_d, perturb = false)
+    function local_state(local_geometry)
+        FT = eltype(thermo_params)
+        ndims = length(propertynames(local_geometry.coordinates))
+        (; x, z) = local_geometry.coordinates
+        x_c = FT(25600)
+        x_r = FT(4000)
+        z_c = FT(2000)
+        z_r = FT(2000)
+        r_c = FT(1)
+        θ_b = FT(300)
+        θ_c = FT(-15)
+
+        # auxiliary quantities
+        r² = FT(0)
+        r² += ((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2
+        if ndims == 3
+            (; y) = local_geometry.coordinates
+            y_r = FT(2000)
+            y_c = FT(3200)
+            r² += ((y - y_c) / y_r)^2
+        end
+        θ_p =
+            sqrt(r²) < r_c ? FT(1 / 2) * θ_c * (FT(1) + cospi(sqrt(r²) / r_c)) :
+            FT(0) # potential temperature perturbation
+        θ = θ_b + θ_p # potential temperature
+        π_exn = FT(1) - grav * z / cp_d / θ # exner function
+        T = π_exn * θ # temperature
+        p = p_0 * π_exn^(cp_d / R_d) # pressure
+        ρ = p / R_d / T # density
+
+        return LocalState(;
+            geometry = local_geometry,
+            grav,
+            thermo_params,
+            thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
+        )
+    end
+    return local_state
+end
+
+"""
     RisingThermalBubbleProfile(; perturb = false)
 
 An `InitialCondition` with an isothermal background profile, with a positively
 buoyant bubble, and with an optional perturbation to the temperature.
 """
-Base.@kwdef struct RisingThermalBubbleProfile <: InitialCondition
-    perturb::Bool = false
-end
-
-function (initial_condition::RisingThermalBubbleProfile)(params)
-    (; perturb) = initial_condition
+function RisingThermalBubbleProfile(grav, thermo_params, cp_d, p_0, R_d, perturb = false)
     function local_state(local_geometry)
-        FT = eltype(params)
-        grav = CAP.grav(params)
-        thermo_params = CAP.thermodynamics_params(params)
+        FT = eltype(thermo_params)
         ndims = length(propertynames(local_geometry.coordinates))
         (; x, z) = local_geometry.coordinates
         x_c = FT(500)
@@ -176,12 +266,6 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         r_c = FT(1)
         θ_b = FT(300)
         θ_c = FT(0.5)
-        cp_d = CAP.cp_d(params)
-        cv_d = CAP.cv_d(params)
-        p_0 = CAP.p_ref_theta(params)
-        R_d = CAP.R_d(params)
-        T_0 = CAP.T_0(params)
-
         # auxiliary quantities
         r² = FT(0)
         r² += ((x - x_c) / x_r)^2 + ((z - z_c) / z_r)^2
@@ -201,8 +285,9 @@ function (initial_condition::RisingThermalBubbleProfile)(params)
         ρ = p / R_d / T # density
 
         return LocalState(;
-            params,
             geometry = local_geometry,
+            grav,
+            thermo_params,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
         )
     end
@@ -213,13 +298,8 @@ end
 ## Baroclinic Wave
 ##
 
-function baroclinic_wave_values(z, ϕ, λ, params, perturb)
-    FT = eltype(params)
-    R_d = CAP.R_d(params)
-    MSLP = CAP.MSLP(params)
-    grav = CAP.grav(params)
-    Ω = CAP.Omega(params)
-    R = CAP.planet_radius(params)
+function baroclinic_wave_values(z, ϕ, λ, R_d, MSLP, grav, Omega, R, perturb)
+    FT = typeof(R_d)
 
     # Constants from paper
     k = 3
@@ -252,7 +332,7 @@ function baroclinic_wave_values(z, ϕ, λ, params, perturb)
 
     # Horizontal velocity
     U = grav * k / R * τ_int_2 * T_v * (cosd(ϕ)^(k - 1) - cosd(ϕ)^(k + 1))
-    u = -Ω * R * cosd(ϕ) + sqrt((Ω * R * cosd(ϕ))^2 + R * cosd(ϕ) * U)
+    u = -Omega * R * cosd(ϕ) + sqrt((Omega * R * cosd(ϕ))^2 + R * cosd(ϕ) * U)
     v = FT(0)
     if perturb
         F_z = (1 - 3 * (z / z_t)^2 + 2 * (z / z_t)^3) * (z ≤ z_t)
@@ -279,10 +359,18 @@ function baroclinic_wave_values(z, ϕ, λ, params, perturb)
     return (; T_v, p, u, v)
 end
 
-function moist_baroclinic_wave_values(z, ϕ, λ, params, perturb)
-    FT = eltype(params)
-    MSLP = CAP.MSLP(params)
-
+function moist_baroclinic_wave_values(
+    z,
+    ϕ,
+    λ,
+    R_d,
+    MSLP,
+    grav,
+    Omega,
+    planet_radius,
+    perturb,
+)
+    FT = typeof(MSLP)
     # Constants from paper
     p_w = FT(3.4e4)
     p_t = FT(1e4)
@@ -291,7 +379,17 @@ function moist_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     ϕ_w = FT(40)
     ε = FT(0.608)
 
-    (; T_v, p, u, v) = baroclinic_wave_values(z, ϕ, λ, params, perturb)
+    (; T_v, p, u, v) = baroclinic_wave_values(
+        z,
+        ϕ,
+        λ,
+        R_d,
+        MSLP,
+        grav,
+        Omega,
+        planet_radius,
+        perturb,
+    )
     q_tot =
         (p <= p_t) ? q_t : q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
     T = T_v / (1 + ε * q_tot) # This is the formula used in the paper.
@@ -308,19 +406,14 @@ end
 An `InitialCondition` with a dry baroclinic wave, and with an optional
 perturbation to the horizontal velocity.
 """
-Base.@kwdef struct DryBaroclinicWave <: InitialCondition
-    perturb::Bool = true
-end
-
-function (initial_condition::DryBaroclinicWave)(params)
-    (; perturb) = initial_condition
+function DryBaroclinicWave(grav, thermo_params, R_d, MSLP, Omega, R, perturb = true)
     function local_state(local_geometry)
-        thermo_params = CAP.thermodynamics_params(params)
         (; z, lat, long) = local_geometry.coordinates
-        (; p, T_v, u, v) = baroclinic_wave_values(z, lat, long, params, perturb)
+        (; p, T_v, u, v) = baroclinic_wave_values(z, lat, long, R_d, MSLP, grav, Omega, R, perturb)
         return LocalState(;
-            params,
             geometry = local_geometry,
+            grav,
+            thermo_params,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T_v),
             velocity = Geometry.UVVector(u, v),
         )
@@ -334,20 +427,15 @@ end
 An `InitialCondition` with a moist baroclinic wave, and with an optional
 perturbation to the horizontal velocity.
 """
-Base.@kwdef struct MoistBaroclinicWave <: InitialCondition
-    perturb::Bool = true
-end
-
-function (initial_condition::MoistBaroclinicWave)(params)
-    (; perturb) = initial_condition
+function MoistBaroclinicWave(grav, thermo_params, R_d, MSLP, Omega, R, perturb = true)
     function local_state(local_geometry)
-        thermo_params = CAP.thermodynamics_params(params)
         (; z, lat, long) = local_geometry.coordinates
         (; p, T, q_tot, u, v) =
-            moist_baroclinic_wave_values(z, lat, long, params, perturb)
+            moist_baroclinic_wave_values(z, lat, long, R_d, MSLP, grav, Omega, R, perturb)
         return LocalState(;
-            params,
             geometry = local_geometry,
+            grav,
+            thermo_params,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
             velocity = Geometry.UVVector(u, v),
         )
@@ -361,21 +449,16 @@ end
 The same `InitialCondition` as `MoistBaroclinicWave`, except with an initial TKE
 of 0 and an initial draft area fraction of 0.2.
 """
-Base.@kwdef struct MoistBaroclinicWaveWithEDMF <: InitialCondition
-    perturb::Bool = true
-end
-
-function (initial_condition::MoistBaroclinicWaveWithEDMF)(params)
-    (; perturb) = initial_condition
+function MoistBaroclinicWaveWithEDMF(grav, thermo_params, R_d, MSLP, Omega, R, perturb = true)
     function local_state(local_geometry)
-        FT = eltype(params)
-        thermo_params = CAP.thermodynamics_params(params)
+        FT = eltype(thermo_params)
         (; z, lat, long) = local_geometry.coordinates
         (; p, T, q_tot, u, v) =
-            moist_baroclinic_wave_values(z, lat, long, params, perturb)
+            moist_baroclinic_wave_values(z, lat, long, R_d, MSLP, grav, Omega, R, perturb)
         return LocalState(;
-            params,
             geometry = local_geometry,
+            grav,
+            thermo_params,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
             velocity = Geometry.UVVector(u, v),
             turbconv_state = EDMFState(; tke = FT(0), draft_area = FT(0.2)),
@@ -393,21 +476,15 @@ end
 An `InitialCondition` with a moist adiabatic temperature profile, and with an optional
 perturbation to the temperature.
 """
-Base.@kwdef struct MoistAdiabaticProfileEDMFX <: InitialCondition
-    perturb::Bool = false
-end
-
 draft_area(::Type{FT}) where {FT} =
     z -> z < 0.7e4 ? FT(0.5) * exp(-(z - FT(4e3))^2 / 2 / FT(1e3)^2) : FT(0)
 
 edmfx_q_tot(::Type{FT}) where {FT} =
     z -> z < 0.7e4 ? FT(1e-3) * exp(-(z - FT(4e3))^2 / 2 / FT(1e3)^2) : FT(0)
 
-function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
-    (; perturb) = initial_condition
+function MoistAdiabaticProfileEDMFX(grav, thermo_params, perturb = true)
+    FT = eltype(thermo_params)
     function local_state(local_geometry)
-        FT = eltype(params)
-        thermo_params = CAP.thermodynamics_params(params)
         temp_profile = DryAdiabaticProfile{FT}(thermo_params, FT(330), FT(200))
 
         (; z) = local_geometry.coordinates
@@ -419,8 +496,9 @@ function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
         q_tot = edmfx_q_tot(FT)(z)
 
         return LocalState(;
-            params,
             geometry = local_geometry,
+            grav,
+            thermo_params,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
             turbconv_state = EDMFState(;
                 tke = FT(0),
@@ -508,7 +586,7 @@ for IC in (:Nieuwstadt, :GABLS)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     u_func_name = Symbol(IC, :_u)
     tke_func_name = Symbol(IC, :_tke_prescribed)
-    @eval function (initial_condition::$IC)(params)
+    @eval function $IC(params)
         (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
@@ -543,7 +621,7 @@ Base.@kwdef struct GATE_III <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-function (initial_condition::GATE_III)(params)
+function GATE_III(params)
     (; prognostic_tke) = initial_condition
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -616,7 +694,7 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
     q_tot_func_name = Symbol(IC, :_q_tot)
     u_func_name = Symbol(IC, :_u)
     tke_func_name = Symbol(IC, :_tke_prescribed)
-    @eval function (initial_condition::$IC)(params)
+    @eval function $IC(params)
         (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
@@ -677,7 +755,7 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
     u_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_u0 : :_u)
     v_func_name = Symbol(IC, IC == :Dycoms_RF01 ? :_v0 : :_v)
     tke_func_name = Symbol(IC, :_tke_prescribed)
-    @eval function (initial_condition::$IC_Type)(params)
+    @eval function $IC_Type(params)
         (; prognostic_tke) = initial_condition
         FT = eltype(params)
         thermo_params = CAP.thermodynamics_params(params)
@@ -720,7 +798,7 @@ Base.@kwdef struct Rico <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-function (initial_condition::Rico)(params)
+function Rico(params)
     (; prognostic_tke) = initial_condition
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -760,7 +838,7 @@ Base.@kwdef struct TRMM_LBA <: InitialCondition
     prognostic_tke::Bool = false
 end
 
-function (initial_condition::TRMM_LBA)(params)
+function TRMM_LBA(params)
     (; prognostic_tke) = initial_condition
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
@@ -818,7 +896,7 @@ struct PrecipitatingColumn <: InitialCondition end
 prescribed_prof(::Type{FT}, z_mid, z_max, val) where {FT} =
     z -> z < z_max ? FT(val) * exp(-(z - FT(z_mid))^2 / 2 / FT(1e3)^2) : FT(0)
 
-function (initial_condition::PrecipitatingColumn)(params)
+function PrecipitatingColumn(params)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     p_0 = FT(101300.0)
