@@ -1,5 +1,4 @@
 job_id: gpu_diagnostic_edmfx_aquaplanet
-vert_diff: "true" 
 surface_setup: DefaultExchangeCoefficients 
 rad: gray
 turbconv: diagnostic_edmfx 

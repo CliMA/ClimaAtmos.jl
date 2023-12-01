@@ -1,7 +1,7 @@
 job_id: flame_perf_target_prognostic_edmfx_aquaplanet
-vert_diff: "true" 
 surface_setup: DefaultExchangeCoefficients 
 rad: gray
+vert_diff: "false"
 turbconv: prognostic_edmfx 
 prognostic_tke: true
 edmfx_upwinding: first_order 
