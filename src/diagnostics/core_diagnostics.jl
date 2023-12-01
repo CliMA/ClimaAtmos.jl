@@ -74,9 +74,9 @@ add_diagnostic_variable!(
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.UVector.(cache.precomputed.ᶜu).components.data.:1)
+            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
         else
-            out .= Geometry.UVector.(cache.precomputed.ᶜu).components.data.:1
+            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶜu))
         end
     end,
 )
@@ -92,9 +92,9 @@ add_diagnostic_variable!(
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.VVector.(cache.precomputed.ᶜu).components.data.:1)
+            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
         else
-            out .= Geometry.VVector.(cache.precomputed.ᶜu).components.data.:1
+            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶜu))
         end
     end,
 )
@@ -113,9 +113,9 @@ add_diagnostic_variable!(
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.WVector.(cache.precomputed.ᶜu).components.data.:1)
+            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu)))
         else
-            out .= Geometry.WVector.(cache.precomputed.ᶜu).components.data.:1
+            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
         end
     end,
 )
@@ -199,7 +199,7 @@ add_diagnostic_variable!(
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
-        vort = @. Geometry.WVector(curlₕ(state.c.uₕ)).components.data.:1
+        vort = @. w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
         if isnothing(out)
