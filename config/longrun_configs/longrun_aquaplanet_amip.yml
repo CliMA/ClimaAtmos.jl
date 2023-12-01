@@ -6,6 +6,7 @@ dz_top: 3000.0
 kappa_4: 1e16
 moist: "equil" 
 precip_model: "0M" 
+override_τ_precip: false
 rad: "allskywithclear" 
 idealized_insolation: false
 dt_rad: "1hours"
