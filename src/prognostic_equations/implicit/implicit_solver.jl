@@ -161,9 +161,10 @@ function ImplicitEquationJacobian(
             (@name(c.ρe_tot), available_tracer_names...),
         )...,
         (@name(c.uₕ), @name(c.uₕ)) =>
-            use_derivative(diffusion_flag) &&
-            diffuse_momentum(atmos.vert_diff) ?
-            similar(Y.c, TridiagonalRow) : FT(-1) * I,
+            use_derivative(diffusion_flag) && (
+                !isnothing(atmos.turbconv_model) ||
+                diffuse_momentum(atmos.vert_diff)
+            ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
         MatrixFields.unrolled_map(
             name -> (name, name) => FT(-1) * I,
             other_available_names,
@@ -247,6 +248,11 @@ function Wfact!(A, Y, p, dtγ, t)
             p.precomputed.ᶠu³,
             p.precomputed.ᶜK,
             p.precomputed.ᶜp,
+            p.precomputed.ᶜh_tot,
+            (
+                use_derivative(A.diffusion_flag) ?
+                (; p.precomputed.ᶜK_u, p.precomputed.ᶜK_h) : (;)
+            )...,
             p.core.∂ᶜK_∂ᶠu₃,
             p.core.ᶜΦ,
             p.core.ᶠgradᵥ_ᶜΦ,
@@ -256,7 +262,6 @@ function Wfact!(A, Y, p, dtγ, t)
             p.scratch.ᶠtemp_scalar,
             p.params,
             p.atmos,
-            p.precomputed.ᶜh_tot,
             (
                 rayleigh_sponge isa RayleighSponge ?
                 (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
@@ -511,41 +516,43 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             ∂ᶜK_∂ᶠu₃[colidx] - (I_u₃,)
     end
 
-    # We can express the implicit diffusion tendency for scalars and horizontal
-    # velocity as
-    # ᶜρχₜ = ᶜadvdivᵥ(ᶠρK_E * ᶠgradᵥ(ᶜχ)) and
-    # ᶜuₕₜ = ᶜadvdivᵥ(ᶠρK_E * ᶠgradᵥ(ᶜuₕ)) / ᶜρ.
+    # We can express the implicit diffusion tendency for horizontal velocity and
+    # scalars as
+    # ᶜuₕₜ = ᶜadvdivᵥ(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u) * ᶠgradᵥ(ᶜuₕ)) / ᶜρ and
+    # ᶜρχₜ = ᶜadvdivᵥ(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ)).
+    # The implicit diffusion tendency for horizontal velocity actually uses
+    # 2 * ᶠstrain_rate instead of ᶠgradᵥ(ᶜuₕ), but these are roughly equivalent.
     # The implicit diffusion tendency for density is the sum of the ᶜρχₜ's, but
     # we approximate the derivative of this sum with respect to ᶜρ as 0.
     # This means that
-    # ∂(ᶜρχₜ)/∂(ᶜρχ) =
-    #     ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_E) ⋅ ᶠgradᵥ_matrix() ⋅
-    #     ∂(ᶜχ)/∂(ᶜρχ) and
     # ∂(ᶜuₕₜ)/∂(ᶜuₕ) =
     #     DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜadvdivᵥ_matrix() ⋅
-    #     DiagonalMatrixRow(ᶠρK_E) ⋅ ᶠgradᵥ_matrix().
+    #     DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix() and
+    # ∂(ᶜρχₜ)/∂(ᶜρχ) =
+    #     ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
+    #     ᶠgradᵥ_matrix() ⋅ ∂(ᶜχ)/∂(ᶜρχ).
     # In general, ∂(ᶜχ)/∂(ᶜρχ) = DiagonalMatrixRow(1 / ᶜρ), except for the case
     # ∂(ᶜh_tot)/∂(ᶜρe_tot) =
     #     ∂((ᶜρe_tot + ᶜp) / ᶜρ)/∂(ᶜρe_tot) =
     #     (I + ∂(ᶜp)/∂(ᶜρe_tot)) ⋅ DiagonalMatrixRow(1 / ᶜρ) ≈
     #     DiagonalMatrixRow((1 + R_d / cv_d) / ᶜρ).
     if use_derivative(diffusion_flag)
-        (; C_E) = p.atmos.vert_diff
-        ᶠp = ᶠρK_E = p.ᶠtemp_scalar
-        interior_uₕ = Fields.level(Y.c.uₕ, 1)
-        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
-        @. ᶠp[colidx] = ᶠinterp(ᶜp[colidx])
-        @. ᶠρK_E[colidx] =
-            ᶠinterp(Y.c.ρ[colidx]) * eddy_diffusivity_coefficient(
-                C_E,
-                norm(interior_uₕ[colidx]),
-                ᶜΔz_surface[colidx] / 2,
-                ᶠp[colidx],
-            )
+        if (
+            !isnothing(p.atmos.turbconv_model) ||
+            diffuse_momentum(p.atmos.vert_diff)
+        )
+            ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
+            @. ∂ᶜuₕ_err_∂ᶜuₕ[colidx] =
+                dtγ * DiagonalMatrixRow(1 / ᶜρ[colidx]) ⋅ ᶜadvdivᵥ_matrix() ⋅
+                DiagonalMatrixRow(
+                    ᶠinterp(ᶜρ[colidx]) * ᶠinterp(p.ᶜK_u[colidx]),
+                ) ⋅ ᶠgradᵥ_matrix() - (I,)
+        end
 
         ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot[colidx] =
-            dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_E[colidx]) ⋅
+            dtγ * ᶜadvdivᵥ_matrix() ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜρ[colidx]) * ᶠinterp(p.ᶜK_h[colidx])) ⋅
             ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow((1 + R_d / cv_d) / ᶜρ[colidx]) -
             (I,)
 
@@ -560,15 +567,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             MatrixFields.has_field(Y, ρχ_name) || return
             ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
             @. ∂ᶜρχ_err_∂ᶜρχ[colidx] =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠρK_E[colidx]) ⋅
-                ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx]) - (I,)
-        end
-
-        if diffuse_momentum(p.atmos.vert_diff)
-            ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
-            @. ∂ᶜuₕ_err_∂ᶜuₕ[colidx] =
-                dtγ * DiagonalMatrixRow(1 / ᶜρ[colidx]) ⋅ ᶜadvdivᵥ_matrix() ⋅
-                DiagonalMatrixRow(ᶠρK_E[colidx]) ⋅ ᶠgradᵥ_matrix() - (I,)
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
+                    ᶠinterp(ᶜρ[colidx]) * ᶠinterp(p.ᶜK_h[colidx]),
+                ) ⋅ ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx]) - (I,)
         end
     end
 end

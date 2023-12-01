@@ -40,6 +40,7 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert !(atmos.edmfx_detr_model isa ConstantAreaDetrainment) ||
             !(atmos.turbconv_model isa DiagnosticEDMFX)
+    @assert isnothing(atmos.turbconv_model) || isnothing(atmos.vert_diff)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -109,6 +110,12 @@ function precomputed_quantities(Y, atmos)
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
         ) : (;)
+    vert_diff_quantities = if atmos.vert_diff isa VerticalDiffusion
+        ᶜK_h = similar(Y.c, FT)
+        (; ᶜK_u = ᶜK_h, ᶜK_h) # ᶜK_u aliases ᶜK_h because they are always equal.
+    else
+        (;)
+    end
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
         (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
@@ -116,6 +123,7 @@ function precomputed_quantities(Y, atmos)
         gs_quantities...,
         advective_sgs_quantities...,
         diagnostic_sgs_quantities...,
+        vert_diff_quantities...,
         precipitation_quantities...,
     )
 end
@@ -272,6 +280,13 @@ ts_sgs(thermo_params, moisture_model, specific, K, Φ, p) = thermo_state(
     p,
 )
 
+function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
+    p_pbl = 85000
+    p_strato = 10000
+    K_E = C_E * norm_v_a * z_a
+    return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
+end
+
 """
     set_precomputed_quantities!(Y, p, t)
 
@@ -289,7 +304,7 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
-    (; moisture_model, turbconv_model, precip_model) = p.atmos
+    (; moisture_model, turbconv_model, vert_diff, precip_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
@@ -342,6 +357,18 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+    end
+
+    if vert_diff isa VerticalDiffusion
+        (; ᶜK_h) = p.precomputed
+        interior_uₕ = Fields.level(Y.c.uₕ, 1)
+        ᶜΔz_surface = Fields.Δz_field(interior_uₕ)
+        @. ᶜK_h = eddy_diffusivity_coefficient(
+            p.atmos.vert_diff.C_E,
+            norm(interior_uₕ),
+            ᶜΔz_surface / 2,
+            ᶜp,
+        )
     end
 
     if precip_model isa Microphysics1Moment
