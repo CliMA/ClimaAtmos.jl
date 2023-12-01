@@ -300,7 +300,9 @@ function get_initial_condition(parsed_args, params)
     ic = getproperty(ICs, Symbol(parsed_args["initial_condition"]))
     thermo_params = CAP.thermodynamics_params(params)
     grav = CAP.grav(params)
-    if parsed_args["initial_condition"] in
+    if parsed_args["initial_condition"] == "PrecipitatingColumn"
+        return ic(grav, thermo_params)
+    elseif parsed_args["initial_condition"] in
        ["DecayingProfile", "MoistAdiabaticProfileEDMFX"]
         return ic(grav, thermo_params, parsed_args["perturb_initstate"])
     elseif parsed_args["initial_condition"] in
@@ -326,7 +328,6 @@ function get_initial_condition(parsed_args, params)
         "DYCOMS_RF02",
         "Rico",
         "TRMM_LBA",
-        "PrecipitatingColumn",
     ]
         return ic(grav, thermo_params, parsed_args["prognostic_tke"])
     elseif parsed_args["initial_condition"] in [

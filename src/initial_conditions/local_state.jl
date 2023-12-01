@@ -51,7 +51,7 @@ function LocalState(;
     turbconv_state = nothing,
     precip_state = nothing,
 )
-    FT = typeof(grav)
+    FT = eltype(thermo_params)
     return LocalState(
         geometry,
         grav,

@@ -896,9 +896,8 @@ struct PrecipitatingColumn <: InitialCondition end
 prescribed_prof(::Type{FT}, z_mid, z_max, val) where {FT} =
     z -> z < z_max ? FT(val) * exp(-(z - FT(z_mid))^2 / 2 / FT(1e3)^2) : FT(0)
 
-function PrecipitatingColumn(params)
-    FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
+function PrecipitatingColumn(grav, thermo_params)
+    FT = eltype(thermo_params)
     p_0 = FT(101300.0)
     qᵣ = prescribed_prof(FT, 2000, 5000, 1e-6)
     qₛ = prescribed_prof(FT, 5000, 8000, 2e-6)
@@ -918,8 +917,9 @@ function PrecipitatingColumn(params)
             TD.PhasePartition(q_tot(z), qₗ(z), qᵢ(z)),
         )
         return LocalState(;
-            params,
             geometry = local_geometry,
+            grav,
+            thermo_params,
             thermo_state = ts,
             velocity = Geometry.UVVector(u(z), v(z)),
             turbconv_state = nothing,
