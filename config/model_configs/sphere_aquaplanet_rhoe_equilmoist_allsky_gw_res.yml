@@ -1,11 +1,11 @@
 rad: "allskywithclear"
-dt_save_to_disk: "18hours"
+dt_save_to_disk: "15hours"
 rayleigh_sponge: true
 orographic_gravity_wave: "gfdl_restart"
 z_elem: 25
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
-t_end: "18hours"
+t_end: "15hours"
 non_orographic_gravity_wave: true
 dz_bottom: 300.0
 vert_diff: "true"
