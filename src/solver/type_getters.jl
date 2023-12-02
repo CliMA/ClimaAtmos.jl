@@ -375,7 +375,7 @@ additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
 is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
 is_cts_algo(::CTS.DistributedODEAlgorithm) = true
 
-function jac_kwargs(ode_algo, Y, atmos)
+function jac_kwargs(ode_algo, Y, atmos, parsed_args)
     if is_implicit(ode_algo)
         A = ImplicitEquationJacobian(
             Y,
@@ -384,6 +384,7 @@ function jac_kwargs(ode_algo, Y, atmos)
             IgnoreDiffusionDerivative(),
             IgnoreEnthalpyDerivative(),
             use_transform(ode_algo),
+            parsed_args["approximate_linear_solve_iters"],
         )
         if use_transform(ode_algo)
             return (; jac_prototype = A, Wfact_t = Wfact!)
@@ -646,7 +647,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
         func = if parsed_args["split_ode"]
             implicit_func = SciMLBase.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs(ode_algo, Y, atmos)...,
+                jac_kwargs(ode_algo, Y, atmos, parsed_args)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             )
             if is_cts_algo(ode_algo)

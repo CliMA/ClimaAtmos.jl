@@ -32,19 +32,19 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 colidx,
                 p.atmos.vert_diff,
             )
+            edmfx_sgs_diffusive_flux_tendency!(
+                Yₜ,
+                Y,
+                p,
+                t,
+                colidx,
+                p.atmos.turbconv_model,
+            )
         end
 
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.radiation_mode)
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_sgs_mass_flux_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            colidx,
-            p.atmos.turbconv_model,
-        )
-        edmfx_sgs_diffusive_flux_tendency!(
             Yₜ,
             Y,
             p,
