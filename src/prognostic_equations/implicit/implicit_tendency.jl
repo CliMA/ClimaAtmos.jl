@@ -142,7 +142,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
 
         ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.Extrapolate(),
+            bottom = Operators.SetDivergence(FT(0)),
         )
 
         vertical_transport!(
