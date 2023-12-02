@@ -1,6 +1,6 @@
 [precipitation_timescale]
 alias = "τ_precip"
-value = 100
+value = 600
 type = "float"
 
 [entr_tau]
