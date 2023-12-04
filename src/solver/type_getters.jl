@@ -455,7 +455,12 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     FT = eltype(params)
     (; dt, output_dir) = sim_info
 
-    callbacks = ()
+    callbacks = (
+        call_every_n_steps(
+            (integrator) -> print_walltime_estimate(integrator);
+            skip_first = true,
+        ),
+    )
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
     if !(dt_save_to_disk == Inf)
         callbacks = (
@@ -759,6 +764,7 @@ function get_simulation(config::AtmosConfig)
         if sim_info.restart
             (Y, t_start) = get_state_restart(config.comms_ctx)
             spaces = get_spaces_restart(Y)
+            @warn "Progress estimates do not support restarted simulations"
         else
             spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
             Y = ICs.atmos_state(
@@ -779,6 +785,7 @@ function get_simulation(config::AtmosConfig)
             params,
             surface_setup,
             sim_info.dt,
+            sim_info.t_end,
             sim_info.start_date,
         )
     end

@@ -434,6 +434,94 @@ function save_restart_func(integrator, output_dir)
     return nothing
 end
 
+Base.@kwdef mutable struct WallTimeEstimate
+    """Number of calls to the callback"""
+    n_calls::Int = 0
+    """Int indicating next time the callback will print to the log"""
+    n_next::Int = 1
+    """Wall time of previous call to update `WallTimeEstimate`"""
+    t_wall_last::Float64 = -1
+    """Sum of elapsed walltime over calls to `step!`"""
+    ∑Δt_wall::Float64 = 0
+    """Fixed increment to increase n_next by after 5% completion"""
+    n_fixed_increment::Float64 = -1
+end
+import Dates
+function print_walltime_estimate(integrator)
+    (; walltime_estimate, dt, t_end) = integrator.p
+    wte = walltime_estimate
+
+    # Notes on `ready_to_report`
+    #   - The very first call (when `n_calls == 0`), there's no elapsed
+    #     times to report (and this is called during initialization,
+    #     before `step!` has been called).
+    #   - The second call (`n_calls == 1`) is after `step!` is called
+    #     for the first time, but we don't want to report this since it
+    #     includes compilation time.
+    #   - Calls after that (`n_calls > 1`) exclude compilation and provide
+    #     the best wall time estimates
+
+    ready_to_report = wte.n_calls > 1
+    if ready_to_report
+        # We need to account for skipping cost of `Δt_wall` when `n_calls == 1`:
+        factor = wte.n_calls == 2 ? 2 : 1
+        Δt_wall = factor * (time() - wte.t_wall_last)
+    else
+        wte.n_calls == 1 && @info "Progress: Completed first step"
+        Δt_wall = Float64(0)
+        wte.n_next = wte.n_calls + 1
+    end
+    wte.∑Δt_wall += Δt_wall
+    wte.t_wall_last = time()
+
+    if wte.n_calls == wte.n_next && ready_to_report
+        t = integrator.t
+        n_steps_total = ceil(Int, t_end / dt)
+        n_steps = ceil(Int, t / dt)
+        wall_time_ave_per_step = wte.∑Δt_wall / n_steps
+        wall_time_ave_per_step_str = time_and_units_str(wall_time_ave_per_step)
+        percent_complete = round(t / t_end * 100; digits = 1)
+        n_steps_remaining = n_steps_total - n_steps
+        wall_time_remaining = wall_time_ave_per_step * n_steps_remaining
+        wall_time_remaining_str = time_and_units_str(wall_time_remaining)
+        wall_time_total =
+            time_and_units_str(wall_time_ave_per_step * n_steps_total)
+        wall_time_spent = time_and_units_str(wte.∑Δt_wall)
+        simulation_time = time_and_units_str(Float64(t))
+        sypd = round(
+            simulated_years_per_day(
+                EfficiencyStats((zero(t), t), wte.∑Δt_wall),
+            );
+            digits = 3,
+        )
+        estimated_finish_date =
+            Dates.now() + compound_period(wall_time_remaining, Dates.Second)
+        @info "Progress" simulation_time = simulation_time n_steps_completed =
+            n_steps wall_time_per_step = wall_time_ave_per_step_str wall_time_total =
+            wall_time_total wall_time_remaining = wall_time_remaining_str wall_time_spent =
+            wall_time_spent percent_complete = "$percent_complete%" sypd = sypd date_now =
+            Dates.now() estimated_finish_date = estimated_finish_date
+
+        # the first fixed increment is equivalent to
+        # doubling (which puts us at 10%), so we check
+        # if we're below 5%.
+        if percent_complete < 5
+            # doubling factor (to reduce log noise)
+            wte.n_next *= 2
+        else
+            if wte.n_fixed_increment == -1
+                wte.n_fixed_increment = wte.n_next
+            end
+            # increase by fixed increment after 10%
+            # completion to maintain logs after 50%.
+            wte.n_next += wte.n_fixed_increment
+        end
+    end
+    wte.n_calls += 1
+
+    return nothing
+end
+
 function gc_func(integrator)
     num_pre = Base.gc_num()
     alloc_since_last = (num_pre.allocd + num_pre.deferred_alloc) / 2^20
