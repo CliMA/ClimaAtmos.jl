@@ -47,7 +47,7 @@ function edmfx_tke_tendency!(
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             ᶜρa⁰[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) / max(
                 ᶜmixing_length[colidx],
-                c_d * dt * sqrt(max(ᶜtke⁰[colidx], eps(FT))),
+                c_d * dt * sqrt(max(ᶜtke⁰[colidx], FT(eps(FT)))),
             )
     end
 
