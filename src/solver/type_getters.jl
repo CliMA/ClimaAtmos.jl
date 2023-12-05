@@ -949,3 +949,12 @@ function get_simulation(config::AtmosConfig)
         integrator,
     )
 end
+
+# Compatibility with old get_integrator
+function get_integrator(config::AtmosConfig)
+    Base.depwarn(
+        "get_integrator is deprecated, use get_simulation instead",
+        :get_integrator,
+    )
+    return get_simulation(config).integrator
+end
