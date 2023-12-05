@@ -891,33 +891,28 @@ function get_simulation(config::AtmosConfig)
     s = @timed_str begin
         for diag in diagnostics_iterations
             variable = diag.variable
-            try
-                # The first time we call compute! we use its return value. All
-                # the subsequent times (in the callbacks), we will write the
-                # result in place
-                diagnostic_storage[diag] = variable.compute!(
-                    nothing,
-                    integrator.u,
-                    integrator.p,
-                    integrator.t,
+            # The first time we call compute! we use its return value. All
+            # the subsequent times (in the callbacks), we will write the
+            # result in place
+            diagnostic_storage[diag] = variable.compute!(
+                nothing,
+                integrator.u,
+                integrator.p,
+                integrator.t,
+            )
+            diagnostic_counters[diag] = 1
+            # If it is not a reduction, call the output writer as well
+            if isnothing(diag.reduction_time_func)
+                CAD.write_field!(
+                    diag.output_writer,
+                    diagnostic_storage[diag],
+                    diag,
+                    integrator,
+                    sim_info.output_dir,
                 )
-                diagnostic_counters[diag] = 1
-                # If it is not a reduction, call the output writer as well
-                if isnothing(diag.reduction_time_func)
-                    CAD.write_field!(
-                        diag.output_writer,
-                        diagnostic_storage[diag],
-                        diag,
-                        integrator,
-                        sim_info.output_dir,
-                    )
-                else
-                    # Add to the accumulator
-                    diagnostic_accumulators[diag] =
-                        copy(diagnostic_storage[diag])
-                end
-            catch e
-                error("Could not compute diagnostic $(variable.long_name): $e")
+            else
+                # Add to the accumulator
+                diagnostic_accumulators[diag] = copy(diagnostic_storage[diag])
             end
         end
     end
