@@ -257,10 +257,6 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
     @. ᶜ∇Φ³ = CT3(ᶜgradᵥ(ᶠinterp(ᶜΦ)))
     @. ᶜ∇Φ³ += CT3(gradₕ(ᶜΦ))
 
-    ρaʲu³ʲ_data = p.scratch.temp_data_level
-    u³ʲ_datau³ʲ_data = p.scratch.temp_data_level_2
-    ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.scratch.temp_data_level_3
-
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
     buoyancy_flux_sfc_halflevel = Fields.field_values(buoyancy_flux)
@@ -372,32 +368,6 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 p.atmos.edmfx_entr_model,
             )
 
-            @. detrʲ_prev_level = detrainment(
-                params,
-                z_prev_level,
-                z_sfc_halflevel,
-                p_prev_level,
-                ρ_prev_level,
-                buoyancy_flux_sfc_halflevel,
-                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-                get_physical_w(
-                    u³ʲ_prev_halflevel,
-                    local_geometry_prev_halflevel,
-                ),
-                TD.relative_humidity(thermo_params, tsʲ_prev_level),
-                ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
-                get_physical_w(
-                    u³_prev_halflevel,
-                    local_geometry_prev_halflevel,
-                ),
-                TD.relative_humidity(thermo_params, ts_prev_level),
-                FT(0),
-                FT(0), # ᶜentr, not implemented
-                FT(0), # ᶜvert_div, not implemented
-                dt,
-                p.atmos.edmfx_detr_model,
-            )
-
             # TODO: use updraft top instead of scale height
             @. nh_pressureʲ_prev_level = ᶠupdraft_nh_pressure(
                 params,
@@ -424,20 +394,8 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 q_totʲ_prev_level,
                 tsʲ_prev_level,
             )
-            @. ρaʲu³ʲ_data =
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_halflevel.J *
-                    ρaʲ_prev_level *
-                    u³ʲ_data_prev_halflevel
-                )
 
-            @. ρaʲu³ʲ_data +=
-                (1 / local_geometry_halflevel.J) * (
-                    local_geometry_prev_level.J *
-                    ρaʲ_prev_level *
-                    (entrʲ_prev_level - detrʲ_prev_level + S_q_totʲ_prev_level)
-                )
-
+            u³ʲ_datau³ʲ_data = p.scratch.temp_data_level
             # Using constant exponents in broadcasts allocate, so we use
             # local_geometry_halflevel.J * local_geometry_halflevel.J instead.
             # See ClimaCore.jl issue #1126.
@@ -491,7 +449,71 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                     nh_pressureʲ_data_prev_level
                 )
 
+            # get u³ʲ to calculate divergence term for detrainment, 
+            # u³ʲ will be clipped later after we get area fraction
             minimum_value = FT(1e-6)
+            @. u³ʲ_halflevel = ifelse(
+                ((
+                    u³ʲ_datau³ʲ_data <
+                    (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
+                )),
+                u³_halflevel,
+                CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
+            )
+
+            u³ʲ_data_halflevel = u³ʲ_halflevel.components.data.:1
+            vert_div_level = p.scratch.temp_data_level_2
+            @. vert_div_level =
+                (
+                    local_geometry_halflevel.J * u³ʲ_data_halflevel * ρ_level -
+                    local_geometry_prev_level.J *
+                    u³ʲ_data_prev_halflevel *
+                    ρ_prev_level
+                ) / local_geometry_level.J / ρ_level
+
+            @. detrʲ_prev_level = detrainment(
+                params,
+                z_prev_level,
+                z_sfc_halflevel,
+                p_prev_level,
+                ρ_prev_level,
+                buoyancy_flux_sfc_halflevel,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                get_physical_w(
+                    u³ʲ_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                TD.relative_humidity(thermo_params, tsʲ_prev_level),
+                ᶜphysical_buoyancy(params, ρ_prev_level, ρʲ_prev_level),
+                get_physical_w(
+                    u³_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                TD.relative_humidity(thermo_params, ts_prev_level),
+                FT(0),
+                entrʲ_prev_level,
+                vert_div_level,
+                dt,
+                p.atmos.edmfx_detr_model,
+            )
+
+            ρaʲu³ʲ_data = p.scratch.temp_data_level_2
+            ρaʲu³ʲ_datah_tot = ρaʲu³ʲ_dataq_tot = p.scratch.temp_data_level_3
+
+            @. ρaʲu³ʲ_data =
+                (1 / local_geometry_halflevel.J) * (
+                    local_geometry_prev_halflevel.J *
+                    ρaʲ_prev_level *
+                    u³ʲ_data_prev_halflevel
+                )
+
+            @. ρaʲu³ʲ_data +=
+                (1 / local_geometry_halflevel.J) * (
+                    local_geometry_prev_level.J *
+                    ρaʲ_prev_level *
+                    (entrʲ_prev_level - detrʲ_prev_level + S_q_totʲ_prev_level)
+                )
+
             @. u³ʲ_halflevel = ifelse(
                 (
                     (

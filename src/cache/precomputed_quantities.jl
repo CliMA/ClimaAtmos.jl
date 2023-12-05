@@ -38,8 +38,6 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa DiagnosticEDMFX)
     @assert !(atmos.moisture_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
-    @assert !(atmos.edmfx_detr_model isa ConstantAreaDetrainment) ||
-            !(atmos.turbconv_model isa DiagnosticEDMFX)
     @assert isnothing(atmos.turbconv_model) || isnothing(atmos.vert_diff)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)

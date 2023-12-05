@@ -29,7 +29,7 @@ z_elem: 30
 z_max: 16400
 dz_bottom: 50
 dz_top: 2000
-dt: 600secs
+dt: 300secs
 t_end: 6hours
 dt_save_to_disk: 10mins
 FLOAT_TYPE: "Float64"
