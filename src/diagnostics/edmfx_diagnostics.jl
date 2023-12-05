@@ -97,11 +97,9 @@ function compute_waup!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(
-            Geometry.WVector.(cache.precomputed.ᶜuʲs.:1).components.data.:1,
-        )
+        return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜuʲs.:1)))
     else
-        out .= Geometry.WVector.(cache.precomputed.ᶜuʲs.:1).components.data.:1
+        out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜuʲs.:1))
     end
 end
 
@@ -507,9 +505,9 @@ function compute_waen!(
     turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
 )
     if isnothing(out)
-        return copy(Geometry.WVector.(cache.precomputed.ᶜu⁰).components.data.:1)
+        return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu⁰)))
     else
-        out .= Geometry.WVector.(cache.precomputed.ᶜu⁰).components.data.:1
+        out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu⁰))
     end
 end
 

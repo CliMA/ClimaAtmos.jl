@@ -1,6 +1,6 @@
 struct AtmosCache{
     FT <: AbstractFloat,
-    SIM,
+    SD,
     AM,
     NUM,
     CAP,
@@ -28,8 +28,8 @@ struct AtmosCache{
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
 
-    """NamedTuple with job_id, output_dir (used in post), and start_date (used for insolation)."""
-    simulation::SIM
+    """Start date (used for insolation)."""
+    start_date::SD
 
     """AtmosModel"""
     atmos::AM
@@ -92,7 +92,7 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, simulation)
+function build_cache(Y, atmos, params, surface_setup, dt, start_date)
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -134,6 +134,9 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
 
     numerics = (; limiter)
 
+    sfc_local_geometry =
+        Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
+
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
@@ -142,6 +145,10 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
         ᶜT = similar(Y.c, FT),
         ᶜf,
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
+        # Used by diagnostics such as hfres, evspblw
+        surface_ct3_unit = CT3.(
+            unit_basis_vector_data.(CT3, sfc_local_geometry)
+        ),
     )
 
     sfc_setup = surface_setup(params)
@@ -150,7 +157,7 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments =
-        (; atmos, core, params, sfc_setup, precomputed, scratch, simulation)
+        (; atmos, core, params, sfc_setup, precomputed, scratch, dt)
 
     # Coupler compatibility
     isnothing(precomputing_arguments.sfc_setup) &&
@@ -175,8 +182,8 @@ function build_cache(Y, atmos, params, surface_setup, simulation)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
 
     args = (
-        simulation.dt,
-        simulation,
+        dt,
+        start_date,
         atmos,
         numerics,
         params,

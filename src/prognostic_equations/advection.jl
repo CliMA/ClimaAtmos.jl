@@ -72,7 +72,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; params) = p
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶜf, ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed

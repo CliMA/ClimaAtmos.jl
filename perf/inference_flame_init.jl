@@ -3,10 +3,12 @@ Random.seed!(1234)
 import ClimaAtmos as CA
 config = CA.AtmosCoveragePerfConfig()
 # To revive, define `args_integrator(::AtmosConfig)` and use that here
-integrator = CA.get_integrator(config)
+simulation = CA.get_simulation(config)
+(; integrator) = simulation
 
 function do_work!(integrator_args, integrator_kwargs)
-    integrator = get_integrator(integrator_args, integrator_kwargs)
+    simulation = get_simulation(integrator_args, integrator_kwargs)
+    return simulation.integrator
 end
 
 # This file needs some additional packages,

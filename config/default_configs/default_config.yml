@@ -257,4 +257,10 @@ log_params:
   value: false
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
+  value: true
+netcdf_interpolate_z_over_msl:
+  help: "Interpolate diagnostics in the NetCDF files in such a way that `z` is the elevation from the sea level (as opposed to the elevation from the surface)"
+  value: false
+warn_allocations_diagnostics:
+  help: "When true, a dry-run for all the diagnostics is perform to check whether the functions allocate additional memory (which reduces performances)"
   value: false

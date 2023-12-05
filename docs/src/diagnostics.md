@@ -28,7 +28,7 @@ identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
 output file.
 
-The default `writer` is HDF5. If `writer` is `nc` or `netcdf`, the output is
+The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
 
@@ -90,7 +90,8 @@ and time, or can be the result of a reduction in a period that is defined by
 More specifically, a `ScheduledDiagnostic` contains the following pieces of data
 
 - `variable`: The diagnostic variable that has to be computed and output.
-- `output_every`: Frequency of how often to save the results to disk.
+- `output_every`: Frequency of how often to save the results to disk. If
+  `output_every` is non-positive, only output at the first time step.
 - `output_writer`: Function that controls out to save the computed diagnostic
   variable to disk.
 - `reduction_time_func`: If not `nothing`, the `ScheduledDiagnostic` receives an
@@ -173,6 +174,17 @@ specific simulation being run (and its timestep).
 Given a timestep `dt`, a `ScheduledDiagnosticIterations` can be obtained from a
 `ScheduledDiagnosticTime` `sd` simply by calling
 ``ScheduledDiagnosticIterations(sd, dt)`.
+
+## The NetCDF output
+
+The NetCDF writer in `ClimaAtmos` saves different diagnostics to different files
+in the same output folder. Files are named after a combination of the diagnostic
+variable `short_name`, and the details of the temporal reduction. Inside each
+NetCDF file, there is only one diagnostic variable, along with the various
+dimensions (e.g., `lat`, `lon`, and `z`). For simulations with topography, the
+variable `z` is no longer a simple vector `z[k]`, but it is a full
+multidimensional array `z[i, j, k]` which defines the elevation on the sea level
+of the point of indices `[i, j, k]`.
 
 ## I want to add a new diagnostic variable
 

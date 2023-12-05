@@ -116,7 +116,7 @@ function descriptive_long_name(
             minutes > 0 && (period *= "$(minutes) Minute(s)")
             seconds > 0 && (period *= "$(seconds) Second(s)")
 
-            period_str = period * red
+            period_str = period
         else
             period_str = "$(output_every) Iterations"
         end

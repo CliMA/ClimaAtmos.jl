@@ -249,7 +249,8 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
 
     - `variable`: The diagnostic variable that has to be computed and output.
 
-    - `output_every`: Save the results to disk every `output_every` iterations.
+    - `output_every`: Save the results to disk every `output_every` iterations. If `output_every`
+                      is non-positive, only output at the first time step.
 
     - `output_writer`: Function that controls out to save the computed diagnostic variable to
                        disk. `output_writer` has to take three arguments: the value that has to
@@ -325,7 +326,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
 
         # We provide an inner constructor to enforce some constraints
 
-        output_every % compute_every == 0 || error(
+        (output_every <= 0 || output_every % compute_every == 0) || error(
             "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_short_name)",
         )
 
@@ -401,7 +402,8 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
 
     - `variable`: The diagnostic variable that has to be computed and output.
 
-    - `output_every`: Save the results to disk every `output_every` seconds.
+    - `output_every`: Save the results to disk every `output_every` seconds. If `output_every`
+                      is non-positive, only output at the first time step.
 
     - `output_writer`: Function that controls out to save the computed diagnostic variable to
                        disk. `output_writer` has to take three arguments: the value that has to
@@ -483,7 +485,7 @@ struct ScheduledDiagnosticTime{T1, T2, OW, F1, F2, PO}
         # compute_every could be a Symbol (:timestep). We process this that when we process
         # the list of diagnostics
         if !isa(compute_every, Symbol)
-            output_every % compute_every == 0 || error(
+            (output_every <= 0 || output_every % compute_every == 0) || error(
                 "output_every ($output_every) should be multiple of compute_every ($compute_every) for diagnostic $(output_short_name)",
             )
         end
@@ -544,6 +546,17 @@ function ScheduledDiagnosticIterations(
     compute_every =
         sd_time.compute_every == :timestep ? 1 : sd_time.compute_every / Δt
     output_every = sd_time.output_every / Δt
+
+    # When Δt is a Float32, loss of precision might lead to spurious results (e.g., 1. /
+    # 0.1f0 = 9.99999985098839). So, we round to the number of significant digits that we
+    # expect from the float type.
+    #
+    # FIXME: eps(typeof(Δt)) is not the best value to pick the number of significant digits
+    # because it makes sense only for values of order unity.
+    sigdigits = eps(typeof(Δt)) |> log10 |> abs |> round |> Int
+
+    output_every = round(output_every; sigdigits)
+    compute_every = round(compute_every; sigdigits)
 
     isinteger(output_every) || error(
         "output_every ($(sd_time.output_every)) should be multiple of the timestep ($Δt) for diagnostic $(sd_time.output_short_name)",
@@ -671,6 +684,7 @@ function get_callbacks_from_diagnostics(
     storage,
     accumulators,
     counters,
+    output_dir,
 )
     # We have two types of callbacks: to compute and accumulate diagnostics, and to dump
     # them to disk. Note that our callbacks do not contain any branching
@@ -715,7 +729,13 @@ function get_callbacks_from_diagnostics(
                 diag.pre_output_hook!(storage[diag], counters[diag])
 
                 # Write to disk
-                diag.output_writer(storage[diag], diag, integrator)
+                write_field!(
+                    diag.output_writer,
+                    storage[diag],
+                    diag,
+                    integrator,
+                    output_dir,
+                )
 
                 # accumulator[diag] is not defined for non-reductions
                 diag_accumulator = get(accumulators, diag, nothing)

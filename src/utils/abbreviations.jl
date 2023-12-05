@@ -77,3 +77,8 @@ const ᶠinterp_matrix = MatrixFields.operator_matrix(ᶠinterp)
 const ᶠgradᵥ_matrix = MatrixFields.operator_matrix(ᶠgradᵥ)
 const ᶠupwind1_matrix = MatrixFields.operator_matrix(ᶠupwind1)
 const ᶠupwind3_matrix = MatrixFields.operator_matrix(ᶠupwind3)
+
+# Helper functions to extract components of vectors
+u_component(u::Geometry.LocalVector) = u.u
+v_component(u::Geometry.LocalVector) = u.v
+w_component(u::Geometry.LocalVector) = u.w

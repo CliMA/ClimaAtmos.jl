@@ -9,7 +9,8 @@ config_file = ARGS[1]
 config_dict = YAML.load_file(config_file)
 config = AtmosCoveragePerfConfig(config_dict)
 job_id = config.parsed_args["job_id"]
-integrator = CA.get_integrator(config)
+simulation = CA.get_simulation(config)
+(; integrator) = simulation
 
 # The callbacks flame graph is very expensive, so only do 2 steps.
 @info "running step"
@@ -35,18 +36,17 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 4656
-allocs_limit["flame_perf_target_tracers"] = 204288
-allocs_limit["flame_perf_target_edmfx"] = 253440
-allocs_limit["flame_perf_diagnostics"] = 3016328
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 893504
+allocs_limit["flame_perf_target"] = 145_184
+allocs_limit["flame_perf_target_tracers"] = 177_440
+allocs_limit["flame_perf_target_edmfx"] = 7_005_552
+allocs_limit["flame_perf_diagnostics"] = 25_356_928
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_309_104
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
-    67443909648
-allocs_limit["flame_perf_target_threaded"] = 5857808
-allocs_limit["flame_perf_target_callbacks"] = 46407936
-allocs_limit["flame_perf_gw"] = 4868951088
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 898768
-
+    4_018_252_656
+allocs_limit["flame_perf_target_threaded"] = 1_276_864
+allocs_limit["flame_perf_target_callbacks"] = 37_277_112
+allocs_limit["flame_perf_gw"] = 3_226_427_872
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 1_241_872
 
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
@@ -84,7 +84,6 @@ allocs = @allocated SciMLBase.step!(integrator)
 @timev SciMLBase.step!(integrator)
 @info "`allocs ($job_id)`: $(allocs)"
 
-
 if allocs < allocs_limit[job_id] * buffer
     @info "TODO: lower `allocs_limit[$job_id]` to: $(allocs)"
 end
@@ -93,7 +92,9 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    @test allocs ≤ allocs_limit[job_id] * buffer
+    @test 0.5 * allocs_limit[job_id] * buffer <=
+          allocs ≤
+          allocs_limit[job_id] * buffer
 end
 
 import ClimaComms

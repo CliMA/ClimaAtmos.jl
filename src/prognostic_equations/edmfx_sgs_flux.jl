@@ -18,7 +18,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
     if p.atmos.edmfx_sgs_mass_flux
@@ -107,7 +107,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p.precomputed
-    (; dt) = p.simulation
+    (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
     if p.atmos.edmfx_sgs_mass_flux

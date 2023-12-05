@@ -451,9 +451,9 @@ thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
 
-function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
+function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     FT = eltype(params)
-    (; dt) = simulation
+    (; dt, output_dir) = sim_info
 
     callbacks = ()
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
@@ -461,17 +461,22 @@ function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
         callbacks = (
             callbacks...,
             call_every_dt(
-                save_to_disk_func,
+                (integrator) -> save_to_disk_func(integrator, output_dir),
                 dt_save_to_disk;
-                skip_first = simulation.restart,
+                skip_first = sim_info.restart,
             ),
         )
     end
 
     dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
     if !(dt_save_restart == Inf)
-        callbacks =
-            (callbacks..., call_every_dt(save_restart_func, dt_save_restart))
+        callbacks = (
+            callbacks...,
+            call_every_dt(
+                (integrator) -> save_restart_func(integrator, output_dir),
+                dt_save_restart,
+            ),
+        )
     end
 
     if is_distributed(comms_ctx)
@@ -510,7 +515,7 @@ function get_callbacks(parsed_args, simulation, atmos, params, comms_ctx)
     return callbacks
 end
 
-function get_simulation(config::AtmosConfig)
+function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
 
@@ -543,7 +548,7 @@ function get_simulation(config::AtmosConfig)
     return sim
 end
 
-function get_diagnostics(parsed_args, atmos_model)
+function get_diagnostics(parsed_args, atmos_model, hypsography)
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -566,13 +571,20 @@ function get_diagnostics(parsed_args, atmos_model)
         "average" => ((+), CAD.average_pre_output_hook!),
     )
 
+    hdf5_writer = CAD.HDF5Writer()
+    netcdf_writer = CAD.NetCDFWriter(;
+        hypsography,
+        interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
+    )
+    writers = (hdf5_writer, netcdf_writer)
+
     # The default writer is HDF5
     ALLOWED_WRITERS = Dict(
-        "nothing" => CAD.HDF5Writer(),
-        "h5" => CAD.HDF5Writer(),
-        "hdf5" => CAD.HDF5Writer(),
-        "nc" => CAD.NetCDFWriter(),
-        "netcdf" => CAD.NetCDFWriter(),
+        "nothing" => netcdf_writer,
+        "h5" => hdf5_writer,
+        "hdf5" => hdf5_writer,
+        "nc" => netcdf_writer,
+        "netcdf" => netcdf_writer,
     )
 
     diagnostics = map(yaml_diagnostics) do yaml_diag
@@ -598,15 +610,15 @@ function get_diagnostics(parsed_args, atmos_model)
             writer = ALLOWED_WRITERS[writer_ext]
         end
 
-        name = get(yaml_diag, "name", nothing)
+        output_name = get(yaml_diag, "output_name", nothing)
 
         haskey(yaml_diag, "period") ||
             error("period keyword required for diagnostics")
 
         period_seconds = time_to_seconds(yaml_diag["period"])
 
-        if isnothing(name)
-            name = CAD.descriptive_short_name(
+        if isnothing(output_name)
+            output_name = CAD.descriptive_short_name(
                 CAD.get_diagnostic_variable(yaml_diag["short_name"]),
                 period_seconds,
                 reduction_time_func,
@@ -627,20 +639,26 @@ function get_diagnostics(parsed_args, atmos_model)
             reduction_time_func = reduction_time_func,
             pre_output_hook! = pre_output_hook!,
             output_writer = writer,
-            output_short_name = name,
+            output_short_name = output_name,
         )
     end
 
     if parsed_args["output_default_diagnostics"]
-        return [CAD.default_diagnostics(atmos_model)..., diagnostics...]
+        return [
+            CAD.default_diagnostics(
+                atmos_model;
+                output_writer = netcdf_writer,
+            )...,
+            diagnostics...,
+        ],
+        writers
     else
-        return collect(diagnostics)
+        return collect(diagnostics), writers
     end
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, simulation) = p
-    (; dt) = simulation
+    (; atmos, dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
     s = @timed_str begin
@@ -720,21 +738,21 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
-function get_integrator(config::AtmosConfig)
+function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
 
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
-    simulation = get_simulation(config)
+    sim_info = get_sim_info(config)
     if config.parsed_args["log_params"]
-        filepath = joinpath(simulation.output_dir, "$(job_id)_parameters.toml")
+        filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
     end
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
     s = @timed_str begin
-        if simulation.restart
+        if sim_info.restart
             (Y, t_start) = get_state_restart(config.comms_ctx)
             spaces = get_spaces_restart(Y)
         else
@@ -751,7 +769,14 @@ function get_integrator(config::AtmosConfig)
     @info "Allocating Y: $s"
 
     s = @timed_str begin
-        p = build_cache(Y, atmos, params, surface_setup, simulation)
+        p = build_cache(
+            Y,
+            atmos,
+            params,
+            surface_setup,
+            sim_info.dt,
+            sim_info.start_date,
+        )
     end
     @info "Allocating cache (p): $s"
 
@@ -768,7 +793,7 @@ function get_integrator(config::AtmosConfig)
     s = @timed_str begin
         callback = get_callbacks(
             config.parsed_args,
-            simulation,
+            sim_info,
             atmos,
             params,
             config.comms_ctx,
@@ -778,16 +803,19 @@ function get_integrator(config::AtmosConfig)
 
     # Initialize diagnostics
     s = @timed_str begin
-        diagnostics = get_diagnostics(config.parsed_args, atmos)
+        diagnostics, writers = get_diagnostics(
+            config.parsed_args,
+            atmos,
+            spaces.center_space.hypsography,
+        )
     end
     @info "initializing diagnostics: $s"
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
     # those periods that depended on the timestep
-    diagnostics_iterations = [
-        CAD.ScheduledDiagnosticIterations(d, simulation.dt) for d in diagnostics
-    ]
+    diagnostics_iterations =
+        [CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for d in diagnostics]
 
     # For diagnostics that perform reductions, the storage is used for the values computed
     # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
@@ -802,6 +830,7 @@ function get_integrator(config::AtmosConfig)
             diagnostic_storage,
             diagnostic_accumulators,
             diagnostic_counters,
+            sim_info.output_dir,
         )
     end
     @info "Prepared diagnostic callbacks: $s"
@@ -811,12 +840,13 @@ function get_integrator(config::AtmosConfig)
     # reason, we only add one callback to the integrator, and this function takes care of
     # executing the other callbacks. This single function is orchestrate_diagnostics
 
-    function orchestrate_diagnostics(integrator)
-        diagnostics_to_be_run =
-            filter(d -> integrator.step % d.cbf.n == 0, diagnostics_functions)
-
-        for diag_func in diagnostics_to_be_run
-            diag_func.f!(integrator)
+    orchestrate_diagnostics = let diagnostics_functions = diagnostics_functions
+        integrator -> begin
+            for d in diagnostics_functions
+                if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
+                    d.f!(integrator)
+                end
+            end
         end
     end
 
@@ -835,8 +865,7 @@ function get_integrator(config::AtmosConfig)
             SciMLBase.CallbackSet(continuous_callbacks, discrete_callbacks)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
-    steps_cycle_non_diag =
-        n_steps_per_cycle_per_cb(all_callbacks, simulation.dt)
+    steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
     steps_cycle_diag =
         n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
     steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])
@@ -844,7 +873,7 @@ function get_integrator(config::AtmosConfig)
     @info "n_steps_per_cycle_per_cb_diagnostic: $steps_cycle_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
-    tspan = (t_start, simulation.t_end)
+    tspan = (t_start, sim_info.t_end)
     s = @timed_str begin
         integrator_args, integrator_kwargs = args_integrator(
             config.parsed_args,
@@ -877,7 +906,13 @@ function get_integrator(config::AtmosConfig)
                 diagnostic_counters[diag] = 1
                 # If it is not a reduction, call the output writer as well
                 if isnothing(diag.reduction_time_func)
-                    diag.output_writer(diagnostic_storage[diag], diag, integrator)
+                    CAD.write_field!(
+                        diag.output_writer,
+                        diagnostic_storage[diag],
+                        diag,
+                        integrator,
+                        sim_info.output_dir,
+                    )
                 else
                     # Add to the accumulator
                     diagnostic_accumulators[diag] =
@@ -890,5 +925,27 @@ function get_integrator(config::AtmosConfig)
     end
     @info "Init diagnostics: $s"
 
-    return integrator
+    if config.parsed_args["warn_allocations_diagnostics"]
+        for diag in diagnostics_iterations
+            # We write over the storage space we have already prepared (and filled) before
+            allocs = @allocated diag.variable.compute!(
+                diagnostic_storage[diag],
+                integrator.u,
+                integrator.p,
+                integrator.t,
+            )
+            if allocs > 10 * 1024
+                @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"
+            end
+        end
+    end
+
+    return AtmosSimulation(
+        sim_info.job_id,
+        sim_info.output_dir,
+        sim_info.start_date,
+        sim_info.t_end,
+        writers,
+        integrator,
+    )
 end

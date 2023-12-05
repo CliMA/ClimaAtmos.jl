@@ -74,9 +74,9 @@ add_diagnostic_variable!(
     comments = "Eastward (zonal) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.UVector.(cache.precomputed.ᶜu).components.data.:1)
+            return copy(u_component.(Geometry.UVector.(cache.precomputed.ᶜu)))
         else
-            out .= Geometry.UVector.(cache.precomputed.ᶜu).components.data.:1
+            out .= u_component.(Geometry.UVector.(cache.precomputed.ᶜu))
         end
     end,
 )
@@ -92,9 +92,9 @@ add_diagnostic_variable!(
     comments = "Northward (meridional) wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.VVector.(cache.precomputed.ᶜu).components.data.:1)
+            return copy(v_component.(Geometry.VVector.(cache.precomputed.ᶜu)))
         else
-            out .= Geometry.VVector.(cache.precomputed.ᶜu).components.data.:1
+            out .= v_component.(Geometry.VVector.(cache.precomputed.ᶜu))
         end
     end,
 )
@@ -113,9 +113,9 @@ add_diagnostic_variable!(
     comments = "Vertical wind component",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(Geometry.WVector.(cache.precomputed.ᶜu).components.data.:1)
+            return copy(w_component.(Geometry.WVector.(cache.precomputed.ᶜu)))
         else
-            out .= Geometry.WVector.(cache.precomputed.ᶜu).components.data.:1
+            out .= w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
         end
     end,
 )
@@ -199,7 +199,7 @@ add_diagnostic_variable!(
     units = "s^-1",
     comments = "Vertical component of relative vorticity",
     compute! = (out, state, cache, time) -> begin
-        vort = @. Geometry.WVector(curlₕ(state.c.uₕ)).components.data.:1
+        vort = @. w_component.(Geometry.WVector.(cache.precomputed.ᶜu))
         # We need to ensure smoothness, so we call DSS
         Spaces.weighted_dss!(vort)
         if isnothing(out)
@@ -419,9 +419,7 @@ add_diagnostic_variable!(
 # Eastward and northward surface drag component (2d)
 ###
 function compute_tau!(out, state, cache, component)
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(state.f), Fields.half)
-    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; surface_ct3_unit) = cache.core
     (; ρ_flux_uₕ) = cache.precomputed.sfc_conditions
 
     if isnothing(out)
@@ -469,9 +467,7 @@ add_diagnostic_variable!(
 ###
 function compute_hfes!(out, state, cache, time)
     (; ρ_flux_h_tot) = cache.precomputed.sfc_conditions
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(state.f), Fields.half)
-    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; surface_ct3_unit) = cache.core
     if isnothing(out)
         return dot.(ρ_flux_h_tot, surface_ct3_unit)
     else
@@ -503,9 +499,7 @@ function compute_evspsbl!(
     moisture_model::T,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     (; ρ_flux_q_tot) = cache.precomputed.sfc_conditions
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(state.f), Fields.half)
-    surface_ct3_unit = CT3.(unit_basis_vector_data.(CT3, sfc_local_geometry))
+    (; surface_ct3_unit) = cache.core
 
     if isnothing(out)
         return dot.(ρ_flux_q_tot, surface_ct3_unit)
@@ -615,4 +609,38 @@ add_diagnostic_variable!(
     the mass of air (dry air + water vapor + cloud condensate) in the grid cells.
     """,
     compute! = compute_hussn!,
+)
+
+###
+# Topography
+###
+compute_orog!(out, state, cache, time) =
+    compute_orog!(out, state, cache, time, axes(state.c).grid.hypsography)
+
+function compute_orog!(out, state, cache, time, hypsography::Grids.Flat)
+    # When we have a Flat topography, we just have to return a field of zeros
+    if isnothing(out)
+        return zeros(Spaces.horizontal_space(axes(state.c.ρ)))
+    else
+        # There's shouldn't be much point in this branch, but let's leave it here for
+        # consistency
+        out .= zeros(Spaces.horizontal_space(axes(state.c.ρ)))
+    end
+end
+
+function compute_orog!(out, state, cache, time, hypsography)
+    if isnothing(out)
+        return hypsography.surface
+    else
+        out .= hypsography.surface
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "orog",
+    long_name = "Surface Altitude",
+    standard_name = "surface_altitude",
+    units = "m",
+    comments = "Elevation of the horizontal coordinates",
+    compute! = compute_orog!,
 )
