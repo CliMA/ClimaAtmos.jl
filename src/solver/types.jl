@@ -44,6 +44,11 @@ Base.@kwdef struct ViscousSponge{FT} <: AbstractSponge
     κ₂::FT
 end
 
+abstract type AbstractEddyViscosityModel end
+Base.@kwdef struct SmagorinskyLilly{FT} <: AbstractEddyViscosityModel
+    Cs::FT = 0.2
+end
+
 Base.@kwdef struct RayleighSponge{FT} <: AbstractSponge
     zd::FT
     α_uₕ::FT
@@ -343,6 +348,7 @@ Base.@kwdef struct AtmosModel{
     VD,
     DM,
     VS,
+    SL, 
     RS,
     ST,
     SM,
@@ -370,6 +376,7 @@ Base.@kwdef struct AtmosModel{
     vert_diff::VD = nothing
     diff_mode::DM = nothing
     viscous_sponge::VS = nothing
+    smagorinsky_lilly::SL = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing

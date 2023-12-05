@@ -3,8 +3,7 @@ initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
 dt: "0.1secs"
-t_end: "10.0secs"
-discrete_hydrostatic_balance: true
+t_end: "300.0secs"
 y_max: 6400.0
 y_elem: 15
 z_stretch: false
@@ -14,6 +13,12 @@ config: "box"
 kappa_4: 1.0e7
 z_max: 6400.0
 job_id: "box_density_current_test"
+smagorinsky_lilly: true
+c_smag: 0.2
 diagnostics:
   - short_name: thetaa
+    period: 10secs
+  - short_name: ua
+    period: 10secs
+  - short_name: wa
     period: 10secs

@@ -73,6 +73,7 @@ function get_atmos(config::AtmosConfig, params)
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
+        smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),

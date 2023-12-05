@@ -189,6 +189,10 @@ perf_summary:
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
   value: false
+smagorinsky_lilly:
+  value: false
+c_smag: 
+  value: 0.2
 job_id:
   help: "Uniquely identifying string for a particular job"
   value: ~
