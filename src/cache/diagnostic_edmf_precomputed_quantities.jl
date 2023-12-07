@@ -245,7 +245,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         ᶜρʲs,
         ᶜentrʲs,
         ᶜdetrʲs,
-        ᶜnh_pressureʲs,
+        ᶠnh_pressure³ʲs,
         ᶜS_q_totʲs,
         ᶜS_e_totʲs_helper,
     ) = p.precomputed
@@ -312,7 +312,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
             ᶜq_totʲ = ᶜq_totʲs.:($j)
             ᶜentrʲ = ᶜentrʲs.:($j)
             ᶜdetrʲ = ᶜdetrʲs.:($j)
-            ᶜnh_pressureʲ = ᶜnh_pressureʲs.:($j)
+            ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
             ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
             ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
 
@@ -336,8 +336,8 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
             tsʲ_prev_level = Fields.field_values(Fields.level(ᶜtsʲ, i - 1))
             entrʲ_prev_level = Fields.field_values(Fields.level(ᶜentrʲ, i - 1))
             detrʲ_prev_level = Fields.field_values(Fields.level(ᶜdetrʲ, i - 1))
-            nh_pressureʲ_prev_level =
-                Fields.field_values(Fields.level(ᶜnh_pressureʲ, i - 1))
+            nh_pressure³ʲ_prev_halflevel =
+                Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i - 1 - half))
             scale_height =
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
             S_q_totʲ_prev_level =
@@ -369,7 +369,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
             )
 
             # TODO: use updraft top instead of scale height
-            @. nh_pressureʲ_prev_level = ᶠupdraft_nh_pressure(
+            @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
                 params,
                 p.atmos.edmfx_nh_pressure,
                 local_geometry_prev_halflevel,
@@ -380,8 +380,8 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 scale_height,
             )
 
-            nh_pressureʲ_data_prev_level =
-                nh_pressureʲ_prev_level.components.data.:1
+            nh_pressure³ʲ_data_prev_halflevel =
+                nh_pressure³ʲ_prev_halflevel.components.data.:1
 
             # Updraft q_tot sources from precipitation formation
             # To be applied in updraft continuity, moisture and energy
@@ -446,7 +446,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                     local_geometry_prev_level.J *
                     local_geometry_prev_level.J *
                     2 *
-                    nh_pressureʲ_data_prev_level
+                    nh_pressure³ʲ_data_prev_halflevel
                 )
 
             # get u³ʲ to calculate divergence term for detrainment, 
@@ -644,7 +644,7 @@ Updates the top boundary condition of precomputed quantities stored in `p` for d
 function set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs, ᶜS_q_totʲs, ᶜS_e_totʲs_helper) = p.precomputed
-    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs) = p.precomputed
+    (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³ʲs) = p.precomputed
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
@@ -652,9 +652,9 @@ function set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
     @. u³⁰_halflevel = CT3(0)
 
     for j in 1:n
-        ᶠu³ʲ = ᶠu³ʲs.:($j)
         ᶜuʲ = ᶜuʲs.:($j)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
+        ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
         ᶜentrʲ = ᶜentrʲs.:($j)
         ᶜdetrʲ = ᶜdetrʲs.:($j)
         ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
@@ -662,6 +662,12 @@ function set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
 
         u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
+        nh_pressure³ʲ_halflevel =
+            Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i_top - half))
+        @. nh_pressure³ʲ_halflevel = CT3(0)
+        nh_pressure³ʲ_halflevel =
+            Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i_top + half))
+        @. nh_pressure³ʲ_halflevel = CT3(0)
 
         entrʲ_level = Fields.field_values(Fields.level(ᶜentrʲ, i_top))
         detrʲ_level = Fields.field_values(Fields.level(ᶜdetrʲ, i_top))

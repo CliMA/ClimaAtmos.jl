@@ -78,6 +78,7 @@ function precomputed_quantities(Y, atmos)
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
+            ᶠnh_pressure₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
         ) : (;)
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
@@ -92,7 +93,7 @@ function precomputed_quantities(Y, atmos)
             ᶜq_totʲs = similar(Y.c, NTuple{n, FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜnh_pressureʲs = similar(Y.c, NTuple{n, CT3{FT}}),
+            ᶠnh_pressure³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
             ᶜS_q_tot⁰ = similar(Y.c, FT),
             ᶜS_e_totʲs_helper = similar(Y.c, NTuple{n, FT}),
