@@ -1,4 +1,4 @@
-job_id: prognostic_edmfx_trmm_column
+job_id: prognostic_edmfx_trmm_box
 initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
