@@ -1,6 +1,8 @@
 import ClimaAtmos as CA
 import Random
 Random.seed!(1234)
+import CUDA
+CUDA.allowscalar(false)
 
 if !(@isdefined config)
     config = CA.AtmosConfig()
