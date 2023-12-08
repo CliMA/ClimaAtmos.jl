@@ -296,15 +296,24 @@ function get_state_restart(comms_ctx)
     return (Y, t_start)
 end
 
-function get_initial_condition(parsed_args)
-    if parsed_args["initial_condition"] in [
-        "DryBaroclinicWave",
-        "MoistBaroclinicWave",
-        "DecayingProfile",
-        "MoistBaroclinicWaveWithEDMF",
-        "MoistAdiabaticProfileEDMFX",
-    ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+function get_initial_condition(parsed_args, params)
+    ic = getproperty(ICs, Symbol(parsed_args["initial_condition"]))
+    thermo_params = CAP.thermodynamics_params(params)
+    grav = CAP.grav(params)
+    if parsed_args["initial_condition"] == "PrecipitatingColumn"
+        return ic(grav, thermo_params)
+    elseif parsed_args["initial_condition"] in
+       ["DecayingProfile", "MoistAdiabaticProfileEDMFX"]
+        return ic(grav, thermo_params, parsed_args["perturb_initstate"])
+    elseif parsed_args["initial_condition"] in
+           ["MoistBaroclinicWave", "DryBaroclinicWave", "MoistBaroclinicWaveWithEDMF"]
+        return ic(
+            grav,
+            thermo_params,
+            CAP.R_d(params),
+            CAP.MSLP(params),
+            CAP.Omega(params),
+            CAP.planet_radius(params),
             parsed_args["perturb_initstate"],
         )
     elseif parsed_args["initial_condition"] in [
@@ -320,18 +329,30 @@ function get_initial_condition(parsed_args)
         "Rico",
         "TRMM_LBA",
     ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
-            parsed_args["prognostic_tke"],
-        )
+        return ic(grav, thermo_params, parsed_args["prognostic_tke"])
     elseif parsed_args["initial_condition"] in [
-        "IsothermalProfile",
-        "AgnesiHProfile",
-        "DryDensityCurrentProfile",
         "RisingThermalBubbleProfile",
+        "DryDensityCurrentProfile",
         "ScharProfile",
-        "PrecipitatingColumn",
     ]
-        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+        return ic(
+            grav,
+            thermo_params,
+            CAP.cp_d(params),
+            CAP.p_ref_theta(params),
+            CAP.R_d(params),
+            parsed_args["perturb_initstate"],
+        )
+    elseif parsed_args["initial_condition"] == "AgnesiHProfile"
+        return ic(
+            grav,
+            thermo_params,
+            CAP.cp_d(params),
+            CAP.p_ref_theta(params),
+            CAP.R_d(params),
+        )
+    elseif parsed_args["initial_condition"] == "IsothermalProfile"
+        return ic(grav, thermo_params, CAP.R_d(params), CAP.MSLP(params))
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -740,7 +761,7 @@ end
 
 function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
-
+    thermo_params = CAP.thermodynamics_params(params)
     atmos = get_atmos(config, params)
     numerics = get_numerics(config.parsed_args)
     sim_info = get_sim_info(config)
@@ -748,7 +769,7 @@ function get_simulation(config::AtmosConfig)
         filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
     end
-    initial_condition = get_initial_condition(config.parsed_args)
+    initial_condition = get_initial_condition(config.parsed_args, params)
     surface_setup = get_surface_setup(config.parsed_args)
 
     s = @timed_str begin
@@ -758,7 +779,7 @@ function get_simulation(config::AtmosConfig)
         else
             spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
             Y = ICs.atmos_state(
-                initial_condition(params),
+                initial_condition,
                 atmos,
                 spaces.center_space,
                 spaces.face_space,

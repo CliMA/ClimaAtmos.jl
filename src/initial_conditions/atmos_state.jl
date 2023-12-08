@@ -66,7 +66,7 @@ energy_variables(ls) = (;
     ρe_tot = ls.ρ * (
         TD.internal_energy(ls.thermo_params, ls.thermo_state) +
         norm_sqr(ls.velocity) / 2 +
-        CAP.grav(ls.params) * ls.geometry.coordinates.z
+        ls.grav * ls.geometry.coordinates.z
     )
 )
 
@@ -121,7 +121,7 @@ function turbconv_center_variables(ls, turbconv_model::PrognosticEDMFX, gs_vars)
     ρa = ls.ρ * a_draft / n
     mse =
         TD.specific_enthalpy(ls.thermo_params, ls.thermo_state) +
-        CAP.grav(ls.params) * ls.geometry.coordinates.z
+        ls.grav * ls.geometry.coordinates.z
     q_tot = TD.total_specific_humidity(ls.thermo_params, ls.thermo_state)
     sgsʲs = ntuple(_ -> (; ρa = ρa, mse = mse, q_tot = q_tot), Val(n))
     return (; sgs⁰, sgsʲs)
