@@ -23,7 +23,7 @@ y_elem: 2
 z_elem: 30 
 z_max: 1500 
 z_stretch: false
-dt: 40secs 
+dt: 20secs 
 t_end: 4hours 
 dt_save_to_disk: 10mins
 toml: [toml/diagnostic_edmfx_box.toml]

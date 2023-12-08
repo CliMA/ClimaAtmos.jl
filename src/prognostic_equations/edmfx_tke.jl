@@ -24,6 +24,21 @@ function edmfx_tke_tendency!(
     (; ᶜK_u, ᶜK_h) = p.precomputed
     (; dt) = p
     ᶜρa⁰ = turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶜρa⁰ : Y.c.ρ
+    nh_pressure3ʲs =
+        turbconv_model isa PrognosticEDMFX ? p.precomputed.ᶠnh_pressure₃ʲs :
+        p.precomputed.ᶠnh_pressure³ʲs
+    ᶜtke_press = p.scratch.ᶜtemp_scalar[colidx]
+    @. ᶜtke_press = 0
+    for j in 1:n
+        ᶜρaʲ_colidx =
+            turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa[colidx] :
+            p.precomputed.ᶜρaʲs.:($j)[colidx]
+        @. ᶜtke_press +=
+            ᶜρaʲ_colidx *
+            adjoint(ᶜinterp.(ᶠu³ʲs.:($$j)[colidx] - ᶠu³⁰[colidx])) *
+            ᶜinterp(C3(nh_pressure3ʲs.:($$j)[colidx]))
+    end
+
 
     if use_prognostic_tke(turbconv_model)
         # shear production
@@ -43,6 +58,7 @@ function edmfx_tke_tendency!(
                 )
         end
         # pressure work
+        @. Yₜ.c.sgs⁰.ρatke[colidx] += ᶜtke_press[colidx]
         # dissipation
         @. Yₜ.c.sgs⁰.ρatke[colidx] -=
             ᶜρa⁰[colidx] * c_d * max(ᶜtke⁰[colidx], 0)^(FT(3) / 2) / max(

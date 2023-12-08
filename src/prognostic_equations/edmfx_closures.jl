@@ -108,7 +108,7 @@ function edmfx_nh_pressure_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; params) = p
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜρʲs, ᶠu₃⁰) = p.precomputed
+    (; ᶜρʲs, ᶠnh_pressure₃ʲs, ᶠu₃⁰) = p.precomputed
     FT = eltype(Y)
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -131,7 +131,7 @@ function edmfx_nh_pressure_tendency!(
         end
         updraft_top = updraft_top - z_sfc[colidx][]
 
-        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠupdraft_nh_pressure(
+        @. ᶠnh_pressure₃ʲs.:($$j)[colidx] = ᶠupdraft_nh_pressure(
             params,
             p.atmos.edmfx_nh_pressure,
             ᶠlg[colidx],
@@ -144,6 +144,8 @@ function edmfx_nh_pressure_tendency!(
             ᶠu₃⁰[colidx],
             updraft_top,
         )
+
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠnh_pressure₃ʲs.:($$j)[colidx]
     end
 end
 

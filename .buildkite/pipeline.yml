@@ -580,7 +580,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_dycoms_rf01_explicit_box.yml
-        artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicitbox/*"
+        artifact_paths: "diagnostic_edmfx_dycoms_rf01_explicit_box/*"
         agents:
           slurm_mem: 20GB
 
