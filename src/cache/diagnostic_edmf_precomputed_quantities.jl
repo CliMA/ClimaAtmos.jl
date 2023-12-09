@@ -229,6 +229,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z
+    ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
     (; ᶜΦ, ᶜρ_ref) = p.core
@@ -295,6 +296,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         ts_prev_level = Fields.field_values(Fields.level(ᶜts, i - 1))
         p_prev_level = Fields.field_values(Fields.level(ᶜp, i - 1))
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
+        dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
         local_geometry_prev_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i - 1),
@@ -364,9 +366,28 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 FT(0),
-                dt,
                 p.atmos.edmfx_entr_model,
             )
+
+            # We don't have an upper limit to entrainment for the first level 
+            # (calculated at i=2), as the vertical at the first level is zero
+            if i == 2
+                @. entrʲ_prev_level = limit_entrainment(
+                    entrʲ_prev_level,
+                    draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                    dt,
+                )
+            else
+                @. entrʲ_prev_level = limit_entrainment(
+                    entrʲ_prev_level,
+                    draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                    get_physical_w(
+                        u³ʲ_prev_halflevel,
+                        local_geometry_prev_halflevel,
+                    ),
+                    dz_prev_level,
+                )
+            end
 
             # TODO: use updraft top instead of scale height
             @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
@@ -493,8 +514,13 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 FT(0),
                 entrʲ_prev_level,
                 vert_div_level,
-                dt,
                 p.atmos.edmfx_detr_model,
+            )
+
+            @. detrʲ_prev_level = limit_detrainment(
+                detrʲ_prev_level,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                dt,
             )
 
             ρaʲu³ʲ_data = p.scratch.temp_data_level_2
