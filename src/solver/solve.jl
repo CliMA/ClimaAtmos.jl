@@ -76,6 +76,27 @@ function solve_atmos!(simulation)
     end
 end
 
+import DiffEqBase
+import ClimaTimeSteppers as CTS
+# Hijack ClimaTimeSteppers solve, to inject try-catch
+function DiffEqBase.solve!(integrator::CTS.DistributedODEIntegrator)
+    (; u, t, p, callback, step, stepstop, tstops, sol) = integrator
+    success = true
+    while !isempty(tstops) && step != stepstop
+        try
+            CTS.__step!(integrator)
+        catch
+            if rerun_and_debug(u, p, t)
+                debug_plot(u, p, t)
+            end
+            success = false
+        end
+        success || break
+    end
+    DiffEqBase.finalize!(callback, u, t, integrator)
+    return sol
+end
+
 """
     benchmark_step!(integrator)
 

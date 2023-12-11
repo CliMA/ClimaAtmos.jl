@@ -198,3 +198,55 @@ fill_with_nans!(p) =
     fill_with_nans!(p, p.atmos.numerics.test_dycore_consistency)
 fill_with_nans!(p, ::Nothing) = nothing
 fill_with_nans!(p, ::TestDycoreConsistency) = fill_with_nans_generic!(p)
+
+
+import ClimaCore.Fields as Fields
+
+function find_column(f::Fields.Field, cond)::Fields.ColumnIndex
+    _colidx = Fields.ColumnIndex((-1,), -1))
+    Fields.bycolumn(axes(f)) do colidx
+        if cond(f[colidx])
+            _colidx = colidx
+        end
+    end
+    found = _colidx.h ≠ -1
+    return (_colidx, found)
+end
+find_level(f::Fields.Field, cond, ::Spaces.CenterExtrudedFiniteDifferenceSpace) =
+    find_level(f, cond, 1:Fields.nlevels(axes(field)))
+find_level(f::Fields.Field, cond, ::Spaces.FaceExtrudedFiniteDifferenceSpace) =
+    find_level(f, cond, PlusHalf(0):Fields.nlevels(axes(field)))
+function find_level(f::Fields.Field, cond, R)
+    L = -1
+    for lev in R
+        flev = Spaces.level(f, lev)
+        if cond(flev)
+            L = lev
+        end
+    end
+    found = L ≠ -1
+    return (L, found)
+end
+
+function debug_plot(Y, p, t, Yₜ = nothing)
+    @info "Debug plotting at time $t"
+    for prop_chain in Fields.property_chains(Y)
+        var = Fields.single_field(Y, prop_chain)
+        (col, found) = find_column(var, x->any(parent(x) .== maximum(var)))
+        if found
+            @info "Found maximum for variable $prop_chain"
+            Plots.plot(var, level=7, size=(600,450), clim=(-0.01, 0.01))
+        end
+    end
+end
+
+struct DebugCrash{T}
+    tends::T
+    dict::Dict{String,Fields.Field}
+end
+DebugCrash(Y) = DebugCrash(Y, Dict())
+Base.getindex(x::DebugCrash, i) = Base.getindex(x.dict, i)
+
+dbt = DebugCrash(similar(Y))
+
+dbt["u₃","-ᶠω¹²×ᶜu+ᶜK"] = @. - ᶠω¹² × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
