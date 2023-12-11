@@ -27,6 +27,7 @@ makedocs(;
         "Contributor Guide" => "contributor_guide.md",
         "Equations" => "equations.md",
         "EDMF Equations" => "edmf_equations.md",
+        "Jacobian Derivations" => "jacobian_derivations.md",
         "Diagnostics" => "diagnostics.md",
         "Available Diagnostics" => "available_diagnostics.md",
         "Diagnostic EDMF Equations" => "diagnostic_edmf_equations.md",
