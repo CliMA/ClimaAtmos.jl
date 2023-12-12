@@ -596,6 +596,7 @@ function write_field!(
             ("time", dim_names...),
             deflatelevel = writer.compression_level,
         )
+        v.attrib["short_name"] = var.short_name
         v.attrib["long_name"] = diagnostic.output_long_name
         v.attrib["short_name"] = var.short_name
         v.attrib["units"] = var.units
