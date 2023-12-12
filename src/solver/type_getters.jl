@@ -379,12 +379,9 @@ function jac_kwargs(ode_algo, Y, atmos, parsed_args)
     if is_implicit(ode_algo)
         A = ImplicitEquationJacobian(
             Y,
-            atmos,
-            atmos.diff_mode == Implicit() ? UseDiffusionDerivative() :
-            IgnoreDiffusionDerivative(),
-            IgnoreEnthalpyDerivative(),
-            use_transform(ode_algo),
-            parsed_args["approximate_linear_solve_iters"],
+            atmos;
+            approximate_solve_iters = parsed_args["approximate_linear_solve_iters"],
+            transform_flag = use_transform(ode_algo),
         )
         if use_transform(ode_algo)
             return (; jac_prototype = A, Wfact_t = Wfact!)

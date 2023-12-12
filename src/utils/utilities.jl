@@ -127,6 +127,61 @@ function g³³_field(field)
 end
 
 """
+    g³³(gⁱʲ)
+
+Extracts the `g³³` sub-tensor from the `gⁱʲ` tensor.
+"""
+g³³(gⁱʲ) = Geometry.AxisTensor(
+    (Geometry.Contravariant3Axis(), Geometry.Contravariant3Axis()),
+    Geometry.components(gⁱʲ)[end],
+)
+
+
+"""
+    g³ʰ(gⁱʲ)
+
+Extracts the `g³ʰ` sub-tensor from the `gⁱʲ` tensor.
+"""
+function g³ʰ(gⁱʲ)
+    full_CT_axis = axes(gⁱʲ)[1]
+    CTh_axis = if full_CT_axis == Geometry.Contravariant123Axis()
+        Geometry.Contravariant12Axis()
+    elseif full_CT_axis == Geometry.Contravariant13Axis()
+        Geometry.Contravariant1Axis()
+    elseif full_CT_axis == Geometry.Contravariant23Axis()
+        Geometry.Contravariant2Axis()
+    else
+        error("$full_CT_axis is missing either vertical or horizontal sub-axes")
+    end
+    N = length(full_CT_axis)
+    return Geometry.AxisTensor(
+        (Geometry.Contravariant3Axis(), CTh_axis),
+        view(Geometry.components(gⁱʲ), N:N, 1:(N - 1)),
+    )
+end
+
+"""
+    CTh_vector_type(space)
+
+Extracts the (abstract) horizontal contravariant vector type from the given
+`AbstractSpace`.
+"""
+function CTh_vector_type(space)
+    full_CT_axis = axes(eltype(Fields.local_geometry_field(space).gⁱʲ))[1]
+    return if full_CT_axis == Geometry.Contravariant123Axis()
+        Geometry.Contravariant12Vector
+    elseif full_CT_axis == Geometry.Contravariant13Axis()
+        Geometry.Contravariant1Vector
+    elseif full_CT_axis == Geometry.Contravariant23Axis()
+        Geometry.Contravariant2Vector
+    else
+        error("$full_CT_axis is missing either vertical or horizontal sub-axes")
+    end
+end
+
+has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
+
+"""
     unit_basis_vector_data(type, local_geometry)
 
 The component of the vector of the specified type with length 1 in physical units.

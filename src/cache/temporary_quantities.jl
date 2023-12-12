@@ -9,6 +9,7 @@ function temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     FT = Spaces.undertype(center_space)
+    CTh = CTh_vector_type(Y.c)
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
@@ -50,5 +51,15 @@ function temporary_quantities(Y, atmos)
         ), # ᶠstrain_rate
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
+        # Implicit solver cache:
+        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CTh{FT}}}),
+        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
+        ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
+        ᶜadvection_matrix = similar(
+            Y.c,
+            BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
+        ),
+        ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
     )
 end

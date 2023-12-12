@@ -155,7 +155,6 @@ function build_cache(Y, atmos, params, surface_setup, dt, t_end, start_date)
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
         ᶜf,
-        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
