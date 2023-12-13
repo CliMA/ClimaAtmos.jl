@@ -1,9 +1,10 @@
 h_elem: 30
 initial_condition: "DryBaroclinicWave"
-t_end: "1days"
+t_end: "600secs"
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 dt: "150secs"
 dt_save_to_sol: "Inf"
+hyperdiff: "false"
 job_id: "target_gpu_implicit_baroclinic_wave"
