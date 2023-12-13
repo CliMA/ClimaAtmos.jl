@@ -72,6 +72,7 @@ ClimaCoreVTK = "0.7"
 CloudMicrophysics = "0.15"
 ForwardDiff = "0.10"
 Glob = "1"
+HDF5_jll = "1.14"
 JET = "0.7, 0.8"
 JSON = "0.21"
 NCRegressionTests = "0.2"
@@ -87,3 +88,4 @@ julia = "1.7"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
+HDF5_jll = "0234f1f7-429e-5d53-9886-15a909be8d59"

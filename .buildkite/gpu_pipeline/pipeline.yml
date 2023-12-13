@@ -1,7 +1,7 @@
 agents:
   queue: clima
   slurm_mem: 8G
-  modules: julia/1.9.4 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2023.3.1
+  modules: julia/1.9.4 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2023.4.1
 
 env:
   JULIA_CUDA_MEMORY_POOL: none
@@ -16,6 +16,7 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs/"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
+  CLIMAATMOS_GC_NSTEPS: 10
 
 steps:
   - label: "init :GPU:"
@@ -32,6 +33,7 @@ steps:
 
     agents:
       slurm_gpus: 1
+      slurm_cpus_per_task: 8
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50
@@ -46,47 +48,65 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave/*"
         agents:
           slurm_gpus: 1
-          slurm_time: 23:00:00
+          slurm_cpus_per_task: 4
 
       - label: "gpu_aquaplanet_dyamond"
         command:
           - mkdir -p gpu_aquaplanet_dyamond
-          - > 
-            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/report
+          - >
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
         artifact_paths: "gpu_aquaplanet_dyamond/*"
         agents:
           slurm_gpus: 1
+          slurm_cpus_per_task: 4
 
       - label: "moist Held-Suarez"
         key: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
         command: 
           - mkdir -p gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
           - >
-            nsys profile --trace=nvtx,cuda --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
         artifact_paths: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
         agents:
           slurm_gpus: 1
+          slurm_cpus_per_task: 4
+
+      - label: "moist Held-Suarez - 4 gpus"
+        key: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process"
+        command:
+          - mkdir -p gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process
+          - >
+            srun --cpu-bind=cores
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process/report-%q{PMI_RANK}
+            julia --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process.yml
+        artifact_paths: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 4
 
       - label: "dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
-            srun
-            nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
+            srun --cpu-bind=cores
+            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
         agents:
           slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
           slurm_ntasks: 4
