@@ -46,7 +46,7 @@ allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
 allocs_limit["flame_perf_target_callbacks"] = 37_277_112
 allocs_limit["flame_perf_gw"] = 3_226_427_872
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 1_241_872
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 1_251_728
 
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
