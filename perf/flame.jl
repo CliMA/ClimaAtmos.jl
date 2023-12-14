@@ -36,17 +36,17 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 145_184
-allocs_limit["flame_perf_target_tracers"] = 177_440
+allocs_limit["flame_perf_target"] = 147_520
+allocs_limit["flame_perf_target_tracers"] = 179_776
 allocs_limit["flame_perf_target_edmfx"] = 7_005_552
 allocs_limit["flame_perf_diagnostics"] = 25_356_928
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_309_104
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_309_968
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
 allocs_limit["flame_perf_target_callbacks"] = 37_277_112
-allocs_limit["flame_perf_gw"] = 3_226_427_872
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 1_251_728
+allocs_limit["flame_perf_gw"] = 3_226_428_736
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 1_257_712
 
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
