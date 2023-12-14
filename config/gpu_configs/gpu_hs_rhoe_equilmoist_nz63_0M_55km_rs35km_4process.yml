@@ -1,6 +1,6 @@
 dt_save_to_disk: "10days"
 dt: "100secs"
-t_end: "400secs"
+t_end: "800secs"
 h_elem: 30
 z_elem: 63
 dz_bottom: 30.0
