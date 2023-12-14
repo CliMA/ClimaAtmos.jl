@@ -7,7 +7,7 @@ struct AtmosCache{
     COR,
     SFC,
     GHOST,
-    ENV,
+    SGQ,
     PREC,
     SCRA,
     HYPE,
@@ -49,7 +49,8 @@ struct AtmosCache{
     """Center and face ghost buffers used by DSS"""
     ghost_buffer::GHOST
 
-    env_thermo_quad::ENV
+    """Struct with sub-grid sampling quadrature"""
+    SG_quad::SGQ
 
     """Quantities that are updated with set_precomputed_quantities!"""
     precomputed::PREC
@@ -153,11 +154,11 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
 
     sfc_setup = surface_setup(params)
     scratch = temporary_quantities(Y, atmos)
-    env_thermo_quad = SGSQuadrature(FT)
+    SG_quad = SGSQuadrature(FT)
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments =
-        (; atmos, core, params, sfc_setup, precomputed, scratch, dt)
+        (; atmos, core, params, sfc_setup, precomputed, scratch, dt, SG_quad)
 
     # Coupler compatibility
     isnothing(precomputing_arguments.sfc_setup) &&
@@ -190,7 +191,7 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
         core,
         sfc_setup,
         ghost_buffer,
-        env_thermo_quad,
+        SG_quad,
         precomputed,
         scratch,
         hyperdiff,

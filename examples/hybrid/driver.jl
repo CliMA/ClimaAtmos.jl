@@ -175,5 +175,10 @@ if config.parsed_args["check_precipitation"]
         @test all(
             ClimaCore.isapprox(Yₜ_ρ[colidx], Yₜ_ρqₜ[colidx], rtol = eps(FT)),
         )
+
+        # cloud fraction diagnostics
+        @assert !any(isnan, sol.prob.p.precomputed.ᶜcloud_fraction[colidx])
+        @test minimum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) >= FT(0)
+        @test maximum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) <= FT(1)
     end
 end

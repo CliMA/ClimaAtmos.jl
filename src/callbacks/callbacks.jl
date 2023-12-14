@@ -37,6 +37,12 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
+function cloud_fraction_model_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    set_cloud_fraction!(Y, p, p.atmos.moisture_model)
+end
+
 NVTX.@annotate function rrtmgp_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -174,7 +180,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 end
 
 function common_diagnostics(p, ᶜu, ᶜts)
-    (; env_thermo_quad, params) = p
+    (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     ᶜρ = TD.air_density.(thermo_params, ᶜts)
     diagnostics = (;
@@ -186,6 +192,7 @@ function common_diagnostics(p, ᶜu, ᶜts)
         specific_enthalpy = TD.specific_enthalpy.(thermo_params, ᶜts),
         buoyancy = CAP.grav(p.params) .* (p.core.ᶜρ_ref .- ᶜρ) ./ ᶜρ,
         density = TD.air_density.(thermo_params, ᶜts),
+        cloud_fraction_gm = p.precomputed.ᶜcloud_fraction,
     )
     if !(p.atmos.moisture_model isa DryModel)
         diagnostics = (;
@@ -195,12 +202,6 @@ function common_diagnostics(p, ᶜu, ᶜts)
             q_ice = TD.ice_specific_humidity.(thermo_params, ᶜts),
             q_tot = TD.total_specific_humidity.(thermo_params, ᶜts),
             relative_humidity = TD.relative_humidity.(thermo_params, ᶜts),
-            cloud_fraction_gm = get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                p.precomputed.ᶜp,
-                ᶜts,
-            ),
         )
     end
     return diagnostics
@@ -211,13 +212,15 @@ end
 add_prefix(diagnostics::NamedTuple{names}, prefix) where {names} =
     NamedTuple{Symbol.(prefix, names)}(values(diagnostics))
 
-cloud_fraction(thermo_params, ts, area::FT) where {FT} =
+# TODO - temporary crutch untill we move this to the new diagnostics
+# and start using quadratures in EDMFX
+draft_cloud_fraction(thermo_params, ts, area::FT) where {FT} =
     TD.has_condensate(thermo_params, ts) && area > 1e-3 ? FT(1) : FT(0)
 
 NVTX.@annotate function compute_diagnostics(integrator)
     (; t, u, p) = integrator
     Y = u
-    (; params, env_thermo_quad) = p
+    (; params) = p
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -270,58 +273,40 @@ NVTX.@annotate function compute_diagnostics(integrator)
         env_diagnostics = (;
             common_diagnostics(p, ᶜu⁰, ᶜts⁰)...,
             area = ᶜa⁰,
-            cloud_fraction = get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                ᶜp,
-                ᶜts⁰,
-            ),
+            cloud_fraction = draft_cloud_fraction.(thermo_params, ᶜts⁰, ᶜa⁰),
             tke = ᶜtke⁰,
             mixing_length = ᶜmixing_length,
         )
         draft_diagnostics = (;
             common_diagnostics(p, ᶜu⁺, ᶜts⁺)...,
             area = ᶜa⁺,
-            cloud_fraction = cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
+            cloud_fraction = draft_cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
             cloud_fraction = ᶜa⁰ .*
-                             get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                ᶜp,
-                ᶜts⁰,
-            ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
+                             draft_cloud_fraction.(thermo_params, ᶜts⁰, ᶜa⁰) .+ ᶜa⁺ .*
+                             draft_cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
     elseif p.atmos.turbconv_model isa DiagnosticEDMFX
         (; ᶜtke⁰, ᶜmixing_length) = p.precomputed
         (; ᶜu⁺, ᶜts⁺, ᶜa⁺) = output_diagnostic_sgs_quantities(Y, p, t)
         env_diagnostics = (;
-            cloud_fraction = get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                ᶜp,
-                ᶜts,
-            ),
+            cloud_fraction = draft_cloud_fraction.(thermo_params, ᶜts, FT(1)),
             tke = ᶜtke⁰,
             mixing_length = ᶜmixing_length,
         )
         draft_diagnostics = (;
             common_diagnostics(p, ᶜu⁺, ᶜts⁺)...,
             area = ᶜa⁺,
-            cloud_fraction = cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
+            cloud_fraction = draft_cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
         turbulence_convection_diagnostic = (;
             add_prefix(env_diagnostics, :env_)...,
             add_prefix(draft_diagnostics, :draft_)...,
-            cloud_fraction = get_cloud_fraction.(
-                thermo_params,
-                env_thermo_quad,
-                ᶜp,
-                ᶜts,
-            ) .+ ᶜa⁺ .* cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
+            cloud_fraction = draft_cloud_fraction.(thermo_params, ᶜts, FT(1)) .+ ᶜa⁺ .*
+                             draft_cloud_fraction.(thermo_params, ᶜts⁺, ᶜa⁺),
         )
     else
         turbulence_convection_diagnostic = NamedTuple()

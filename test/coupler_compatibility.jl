@@ -65,7 +65,7 @@ const T2 = 290
         p.core,
         sfc_setup,
         p.ghost_buffer,
-        p.env_thermo_quad,
+        p.SG_quad,
         p.precomputed,
         p.scratch,
         p.hyperdiff,

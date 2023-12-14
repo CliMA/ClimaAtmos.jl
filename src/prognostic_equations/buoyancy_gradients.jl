@@ -38,12 +38,34 @@ function buoyancy_gradients(
                 bg_model.qt_sat,
             )
         elseif moisture_model isa NonEquilMoistModel
+            TD.PhaseNonEquil_pθq(
+                thermo_params,
+                bg_model.p,
+                bg_model.θ_liq_ice_sat,
+                TD.PhasePartition(
+                    bg_model.qt_sat,
+                    bg_model.ql_sat,
+                    bg_model.qi_sat,
+                ),
+            )
+        else
             error("Unsupported moisture model")
         end
 
-        phase_part = TD.PhasePartition(thermo_params, ts_sat)
+        phase_part =
+            if moisture_model isa DryModel || moisture_model isa EquilMoistModel
+                TD.PhasePartition(thermo_params, ts_sat)
+            elseif moisture_model isa NonEquilMoistModel
+                TD.PhasePartition(
+                    bg_model.qt_sat,
+                    bg_model.ql_sat,
+                    bg_model.qi_sat,
+                )
+            end
+
         lh = TD.latent_heat_liq_ice(thermo_params, phase_part)
         cp_m = TD.cp_m(thermo_params, ts_sat)
+        # TODO - double check if this is assuming liquid only?
         ∂b∂θl_sat = (
             ∂b∂θv * (
                 1 +

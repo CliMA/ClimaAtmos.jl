@@ -4,7 +4,7 @@
 #
 # In addition to the metadata (names, comments, ...), the most important step in adding a
 # new DiagnosticVariable is defining its compute! function. `compute!` has to take four
-# arguments: (out, state, cache, time), and as to write the diagnostic in place into the
+# arguments: (out, state, cache, time), and has to write the diagnostic in place into the
 # `out` variable.
 #
 # Often, it is possible to compute certain diagnostics only for specific models (e.g.,
@@ -210,6 +210,40 @@ add_diagnostic_variable!(
     end,
 )
 
+###
+# Cloud fraction (3d)
+###
+add_diagnostic_variable!(
+    short_name = "cl",
+    long_name = "Cloud fraction",
+    units = "%",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
+        else
+            out .= cache.precomputed.ᶜcloud_fraction .* 100
+        end
+    end,
+)
+
+###
+# Grid mean mixing length (3d)
+###
+function compute_mixlgm!(out, state, cache, time)
+    if isnothing(out)
+        out = similar(state.c.ρ)
+    end
+    compute_gm_mixing_length!(out, state, cache)
+end
+
+add_diagnostic_variable!(
+    short_name = "mixlgm",
+    long_name = "Grid mean mixing length",
+    standard_name = "grid_mean_mixing_length",
+    units = "m",
+    comments = "Smagorinsky length scale, to be used as an approximation of mixing length in simulations without EDMF SGS model",
+    compute! = compute_mixlgm!,
+)
 
 ###
 # Relative humidity (3d)

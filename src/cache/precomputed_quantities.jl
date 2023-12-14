@@ -52,6 +52,7 @@ function precomputed_quantities(Y, atmos)
         ᶜh_tot = similar(Y.c, FT),
         sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
+    cloud_diagnostics = (; ᶜcloud_fraction = similar(Y.c, FT),)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
@@ -124,6 +125,7 @@ function precomputed_quantities(Y, atmos)
         diagnostic_sgs_quantities...,
         vert_diff_quantities...,
         precipitation_quantities...,
+        cloud_diagnostics...,
     )
 end
 
@@ -373,6 +375,9 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     if precip_model isa Microphysics1Moment
         set_precipitation_precomputed_quantities!(Y, p, t)
     end
+
+    # TODO
+    #set_cloud_fraction!(Y, p, moisture_model)
 
     return nothing
 end

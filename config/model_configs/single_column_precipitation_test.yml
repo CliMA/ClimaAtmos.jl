@@ -7,6 +7,7 @@ z_stretch: false
 dt: "10secs"
 t_end: "1500secs"
 dt_save_to_disk: "500secs"
+dt_cloud_fraction: "60secs"
 moist: "nonequil"
 precip_model: "1M"
 precip_upwinding: "first_order"

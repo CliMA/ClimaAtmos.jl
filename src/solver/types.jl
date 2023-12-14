@@ -121,6 +121,10 @@ Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
     qv_sat::FT
     "total specific humidity in the saturated part"
     qt_sat::FT
+    "liquid specific humidity in the saturated part"
+    ql_sat::FT
+    "ice specific humidity in the saturated part"
+    qi_sat::FT
     "potential temperature in the saturated part"
     θ_sat::FT
     "liquid ice potential temperature in the saturated part"
@@ -190,9 +194,9 @@ abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
 struct GaussianQuad <: AbstractQuadratureType end
 
-abstract type AbstractEnvThermo end
-struct SGSMean <: AbstractEnvThermo end
-struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
+abstract type AbstractSGSamplingType end
+struct SGSMean <: AbstractSGSamplingType end
+struct SGSQuadrature{N, QT, A, W} <: AbstractSGSamplingType
     quadrature_type::QT
     a::A
     w::W
@@ -218,7 +222,7 @@ struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
     end
 end
 quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N
+quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
 
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
@@ -232,7 +236,7 @@ Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
-Base.broadcastable(x::AbstractEnvThermo) = tuple(x)
+Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
