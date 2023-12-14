@@ -18,28 +18,23 @@ end
     - Pr - Prandtl number
     - ϵ_st - strain rate norm
 """
-function compute_smagorinsky_length_scale(c_smag, N_eff, dz, Pr, ϵ_st)
+function smagorinsky_length_scale(c_smag, N_eff, dz, Pr, ϵ_st)
     FT = eltype(c_smag)
-    #return N_eff > FT(0) && N_eff < sqrt(2 * Pr * ϵ_st) ?
     return N_eff > FT(0) ?
-           c_smag * dz * max(0, (1 - N_eff^2 / Pr / 2 / ϵ_st))^(1 / 4) :
+           c_smag *
+           dz *
+           max(0, 1 - N_eff^2 / Pr / 2 / max(ϵ_st, eps(FT)))^(1 / 4) :
            c_smag * dz
 end
 
-"""
-   Compute the grid scale cloud fraction based on sub-grid scale properties
-"""
-function set_cloud_fraction!(Y, p, ::DryModel)
-    @. p.precomputed.ᶜcloud_fraction = 0
-end
-function set_cloud_fraction!(Y, p, ::Union{EquilMoistModel, NonEquilMoistModel})
-    (; SG_quad, params) = p
+function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
 
     FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶜp, ᶠu³, ᶜcloud_fraction) = p.precomputed
+    (; ᶜts, ᶜp, ᶠu³) = p.precomputed
     (; obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜlinear_buoygrad = p.scratch.ᶜtemp_scalar
@@ -78,26 +73,40 @@ function set_cloud_fraction!(Y, p, ::Union{EquilMoistModel, NonEquilMoistModel})
 
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     compute_strain_rate_center!(ᶜstrain_rate, ᶠu)
 
-    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar
-    @. ᶜprandtl_nvec = turbulent_prandtl_number(
-        params,
-        obukhov_length,
-        ᶜlinear_buoygrad,
-        norm_sqr(ᶜstrain_rate),
-    )
-
-    ᶜl_smag = p.scratch.ᶜtemp_scalar_2
-    @. ᶜl_smag = compute_smagorinsky_length_scale(
+    @. ᶜmixing_length = smagorinsky_length_scale(
         CAP.c_smag(params),
         sqrt(max(ᶜlinear_buoygrad, 0)),   #N_eff
         ᶜdz,
-        ᶜprandtl_nvec,
+        turbulent_prandtl_number(
+            params,
+            obukhov_length,
+            ᶜlinear_buoygrad,
+            norm_sqr(ᶜstrain_rate),
+        ),
         norm_sqr(ᶜstrain_rate),
     )
+end
+
+"""
+   Compute the grid scale cloud fraction based on sub-grid scale properties
+"""
+function set_cloud_fraction!(Y, p, ::DryModel)
+    @. p.precomputed.ᶜcloud_fraction = 0
+end
+function set_cloud_fraction!(Y, p, ::Union{EquilMoistModel, NonEquilMoistModel})
+    (; SG_quad, params) = p
+
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜts, ᶜp, ᶜcloud_fraction) = p.precomputed
+
+    # temp_scalar is already in use inside the compute_gm_mixing_length
+    # this is not a great pattern, but I don't have a more elegant idea
+    ᶜl_smag = p.scratch.ᶜtemp_scalar_2
+    compute_gm_mixing_length!(ᶜl_smag, Y, p)
 
     coeff = FT(2.1) # TODO - move to parameters
     @. ᶜcloud_fraction = quad_loop(
