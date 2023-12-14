@@ -102,35 +102,32 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            for dss_op! in (
-                Spaces.weighted_dss_start!,
-                Spaces.weighted_dss_internal!,
-                Spaces.weighted_dss_ghost!,
+            # DSS on Grid scale quantities
+            # Need to split the DSS computation here, because our DSS
+            # operations do not accept Covariant123Vector types
+            Spaces.weighted_dss!(
+                ᶜ∇²u => buffer.ᶜ∇²u,
+                ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
+                (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
             )
-                # DSS on Grid scale quantities
+            if turbconv_model isa PrognosticEDMFX
                 # Need to split the DSS computation here, because our DSS
                 # operations do not accept Covariant123Vector types
-                dss_op!(ᶜ∇²u, buffer.ᶜ∇²u)
-                dss_op!(ᶜ∇²specific_energy, buffer.ᶜ∇²specific_energy)
-                if diffuse_tke
-                    dss_op!(ᶜ∇²tke⁰, buffer.ᶜ∇²tke⁰)
+                for j in 1:n
+                    @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
+                    @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
                 end
-                if turbconv_model isa PrognosticEDMFX
-                    # Need to split the DSS computation here, because our DSS
-                    # operations do not accept Covariant123Vector types
-                    for j in 1:n
-                        @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
-                        @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
-                    end
-                    dss_op!(ᶜ∇²uₕʲs, buffer.ᶜ∇²uₕʲs)
-                    dss_op!(ᶜ∇²uᵥʲs, buffer.ᶜ∇²uᵥʲs)
-                    for j in 1:n
-                        @. ᶜ∇²uʲs.:($$j) =
-                            C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
-                    end
-                    dss_op!(ᶜ∇²mseʲs, buffer.ᶜ∇²mseʲs)
+                Spaces.weighted_dss!(
+                    ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
+                    ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
+                    ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
+                )
+                for j in 1:n
+                    @. ᶜ∇²uʲs.:($$j) =
+                        C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
                 end
             end
+
         end
     end
 
@@ -195,15 +192,13 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if do_dss
         NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            for dss_op! in (
-                Spaces.weighted_dss_start!,
-                Spaces.weighted_dss_internal!,
-                Spaces.weighted_dss_ghost!,
-            )
-                dss_op!(ᶜ∇²specific_tracers, buffer.ᶜ∇²specific_tracers)
-                if turbconv_model isa PrognosticEDMFX
-                    dss_op!(ᶜ∇²q_totʲs, buffer.ᶜ∇²q_totʲs)
-                end
+            if !isempty(propertynames(ᶜ∇²specific_tracers))
+                Spaces.weighted_dss!(
+                    ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,
+                )
+            end
+            if turbconv_model isa PrognosticEDMFX
+                Spaces.weighted_dss!(ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs)
             end
         end
     end

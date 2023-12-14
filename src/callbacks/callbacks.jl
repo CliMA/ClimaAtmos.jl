@@ -450,11 +450,10 @@ function save_restart_func(integrator, output_dir)
 end
 
 function gc_func(integrator)
-    full = true # whether to do a full GC
     num_pre = Base.gc_num()
     alloc_since_last = (num_pre.allocd + num_pre.deferred_alloc) / 2^20
     live_pre = Base.gc_live_bytes() / 2^20
-    GC.gc(full)
+    GC.gc(false)
     live_post = Base.gc_live_bytes() / 2^20
     num_post = Base.gc_num()
     gc_time = (num_post.total_time - num_pre.total_time) / 10^9 # count in ns
