@@ -270,6 +270,8 @@ abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
 struct Implicit <: AbstractTimesteppingMode end
 
+struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
+
 Base.@kwdef struct AtmosNumerics{
     EN_UP,
     TR_UP,

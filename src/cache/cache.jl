@@ -129,9 +129,11 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
-    limiter =
-        isnothing(atmos.numerics.limiter) ? nothing :
-        atmos.numerics.limiter(similar(Y.c, FT))
+    limiter = if isnothing(atmos.numerics.limiter)
+        nothing
+    elseif atmos.numerics.limiter isa QuasiMonotoneLimiter
+        Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
+    end
 
     numerics = (; limiter)
 
