@@ -1,18 +1,37 @@
-rad: "allskywithclear"
-dt_save_to_disk: "15hours"
-rayleigh_sponge: true
-orographic_gravity_wave: "gfdl_restart"
 z_elem: 25
-dt: "400secs"
-surface_setup: "DefaultMoninObukhov"
-t_end: "15hours"
-non_orographic_gravity_wave: true
-dz_bottom: 300.0
-vert_diff: "true"
-idealized_insolation: false
 z_max: 45000.0
+dz_bottom: 300.0
+dt: "400secs"
+t_end: "24hours"
+dt_save_to_disk: "24hours"
+vert_diff: "true"
+moist: "equil"
 precip_model: "1M"
 precip_upwinding: "first_order"
+rad: "allskywithclear"
+idealized_insolation: false
+rayleigh_sponge: true
+non_orographic_gravity_wave: true
+orographic_gravity_wave: "gfdl_restart"
+surface_setup: "DefaultMoninObukhov"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
-moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+diagnostics:
+  - short_name: cl
+    period: 6hours
+  - short_name: cli
+    period: 6hours
+  - short_name: clw
+    period: 6hours
+  - short_name: husra
+    period: 6hours
+  - short_name: hussn
+    period: 6hours
+  - short_name: ta
+    period: 6hours
+  - short_name: hus
+    period: 6hours
+  - short_name: hur
+    period: 6hours
+  - short_name: mixlgm
+    period: 6hours

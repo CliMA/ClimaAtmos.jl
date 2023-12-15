@@ -184,6 +184,8 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     Tₐ(ts) = TD.air_temperature(thp, ts)
     α(ts) = TD.Parameters.cv_l(thp) / Lf(ts) * (Tₐ(ts) - cmp.ps.T_freeze)
 
+    qₚ(ρqₚ, ρ) = max(FT(0), ρqₚ / ρ)
+
     # zero out the source terms
     @. ᶜSqₜᵖ[colidx] = FT(0)
     @. ᶜSeₜᵖ[colidx] = FT(0)
@@ -228,7 +230,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
             cmp.tv.rain,
             cmp.ce,
             qₗ(ᶜts[colidx]),
-            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+            qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]),
             Y.c.ρ[colidx],
         ),
     )
@@ -245,7 +247,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
             cmp.tv.snow,
             cmp.ce,
             qᵢ(ᶜts[colidx]),
-            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+            qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]),
             Y.c.ρ[colidx],
         ),
     )
@@ -263,7 +265,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
             cmp.tv.snow,
             cmp.ce,
             qₗ(ᶜts[colidx]),
-            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+            qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]),
             Y.c.ρ[colidx],
         ),
     )
@@ -275,7 +277,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
         ᶜSᵖ[colidx],
         FT(-1) * min(
             ᶜSᵖ[colidx] * α(ᶜts[colidx]),
-            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt,
+            qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]) / dt,
         ),
     )
     @. ᶜSqₛᵖ[colidx] += ᶜSᵖ_snow[colidx]
@@ -301,7 +303,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
             cmp.tv.rain,
             cmp.ce,
             qᵢ(ᶜts[colidx]),
-            Y.c.ρq_rai[colidx],
+            qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]),
             Y.c.ρ[colidx],
         ),
     )
@@ -310,14 +312,14 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     @. ᶜSeₜᵖ[colidx] -= ᶜSᵖ[colidx] * (Iᵢ(ᶜts[colidx]) + ᶜΦ[colidx])
     # sink of rain via accretion cloud ice - rain
     @. ᶜSᵖ[colidx] = min(
-        Y.c.ρq_rai[colidx] / Y.c.ρ[colidx] / dt,
+        qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]) / dt,
         CM1.accretion_rain_sink(
             cmp.pr,
             cmp.ci,
             cmp.tv.rain,
             cmp.ce,
             qᵢ(ᶜts[colidx]),
-            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+            qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]),
             Y.c.ρ[colidx],
         ),
     )
@@ -329,28 +331,28 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     @. ᶜSᵖ[colidx] = ifelse(
         Tₐ(ᶜts[colidx]) < cmp.ps.T_freeze,
         min(
-            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx] / dt,
+            qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]) / dt,
             CM1.accretion_snow_rain(
                 cmp.ps,
                 cmp.pr,
                 cmp.tv.rain,
                 cmp.tv.snow,
                 cmp.ce,
-                Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
-                Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+                qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]),
+                qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]),
                 Y.c.ρ[colidx],
             ),
         ),
         -min(
-            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt,
+            qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]) / dt,
             CM1.accretion_snow_rain(
                 cmp.pr,
                 cmp.ps,
                 cmp.tv.snow,
                 cmp.tv.rain,
                 cmp.ce,
-                Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
-                Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+                qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]),
+                qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]),
                 Y.c.ρ[colidx],
             ),
         ),
@@ -362,14 +364,14 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     # evaporation: q_rai -> q_vap
     @. ᶜSᵖ[colidx] =
         -min(
-            Y.c.ρq_rai[colidx] / Y.c.ρ[colidx] / dt,
+            qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]) / dt,
             -CM1.evaporation_sublimation(
                 cmp.pr,
                 cmp.tv.rain,
                 cmp.aps,
                 thp,
                 TD.PhasePartition(thp, ᶜts[colidx]),
-                Y.c.ρq_rai[colidx] / Y.c.ρ[colidx],
+                qₚ(Y.c.ρq_rai[colidx], Y.c.ρ[colidx]),
                 Y.c.ρ[colidx],
                 Tₐ(ᶜts[colidx]),
             ),
@@ -380,13 +382,13 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
 
     # melting: q_sno -> q_rai
     @. ᶜSᵖ[colidx] = min(
-        Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt,
+        qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]) / dt,
         CM1.snow_melt(
             cmp.ps,
             cmp.tv.snow,
             cmp.aps,
             thp,
-            Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+            qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]),
             Y.c.ρ[colidx],
             Tₐ(ᶜts[colidx]),
         ),
@@ -402,14 +404,14 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
         cmp.aps,
         thp,
         TD.PhasePartition(thp, ᶜts[colidx]),
-        Y.c.ρq_sno[colidx] / Y.c.ρ[colidx],
+        qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]),
         Y.c.ρ[colidx],
         Tₐ(ᶜts[colidx]),
     )
     @. ᶜSᵖ[colidx] = ifelse(
         ᶜSᵖ[colidx] > FT(0),
         min(qᵥ(ᶜts[colidx]) / dt, ᶜSᵖ[colidx]),
-        -min(Y.c.ρq_sno[colidx] / Y.c.ρ[colidx] / dt, FT(-1) * ᶜSᵖ[colidx]),
+        -min(qₚ(Y.c.ρq_sno[colidx], Y.c.ρ[colidx]) / dt, FT(-1) * ᶜSᵖ[colidx]),
     )
     @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
     @. ᶜSqₛᵖ[colidx] += ᶜSᵖ[colidx]
