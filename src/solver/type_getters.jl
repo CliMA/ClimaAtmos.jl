@@ -78,6 +78,7 @@ function get_atmos(config::AtmosConfig, params)
         surface_model = get_surface_model(parsed_args),
         numerics = get_numerics(parsed_args),
     )
+    @assert !@any_reltype(atmos, (UnionAll,))
 
     @info "AtmosModel: \n$(summary(atmos))"
     return atmos
