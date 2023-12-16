@@ -210,6 +210,66 @@ function prettytime(t)
     return @sprintf("%.3f %s", value, units)
 end
 
+import Dates
+
+time_per_time(::Type{P}, ::Type{P}) where {P} = 1
+#=
+    define_time_per_times(periods)
+
+Evals `time_per_time(::Type{<:Dates.Period},::Type{<:Dates.Period})`
+for `Nanosecond, Microsecond, Millisecond, Second, Minute, Hour, Day, Week`
+in a triangular fashion-- `time_per_time` provides the conversion factor
+(e.g., `Nanosecond`s per `Second`) and all larger periods (but not smaller ones).
+=#
+function define_time_per_times(periods)
+    for i in eachindex(periods)
+        T, n = periods[i]
+        N = Int64(1)
+        for j in (i - 1):-1:firstindex(periods) # less-precise periods
+            Tc, nc = periods[j]
+            N *= nc
+            @eval time_per_time(::Type{Dates.$T}, ::Type{Dates.$Tc}) = $N
+        end
+    end
+end
+
+# From Dates
+define_time_per_times([
+    (:Week, 7),
+    (:Day, 24),
+    (:Hour, 60),
+    (:Minute, 60),
+    (:Second, 1000),
+    (:Millisecond, 1000),
+    (:Microsecond, 1000),
+    (:Nanosecond, 1),
+])
+
+"""
+    time_and_units_str(x::Real)
+
+Returns a truncated string of time and units,
+given a time `x` in Seconds.
+"""
+time_and_units_str(x::Real) =
+    trunc_time(string(compound_period(x, Dates.Second)))
+
+"""
+    compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
+
+A canonicalized `Dates.CompoundPeriod` given a real value
+`x`, and its units via the period type `T`.
+"""
+function compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
+    nf = time_per_time(Dates.Nanosecond, T)
+    return Dates.canonicalize(
+        Dates.CompoundPeriod(Dates.Nanosecond(ceil(x * nf))),
+    )
+end
+
+trunc_time(s::String) = count(',', s) > 1 ? join(split(s, ",")[1:2], ",") : s
+
+
 function prettymemory(b)
     if b < 1024
         return string(b, " bytes")
