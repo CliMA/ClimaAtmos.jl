@@ -12,7 +12,7 @@ edmfx_sgs_diffusive_flux: true
 moist: equil 
 precip_model: 0M
 override_τ_precip: false
-dt: 10secs 
+dt: 50secs 
 t_end: 1hours 
 dt_save_to_disk: 600secs
 toml: [toml/diagnostic_edmfx_trmm_box.toml]
