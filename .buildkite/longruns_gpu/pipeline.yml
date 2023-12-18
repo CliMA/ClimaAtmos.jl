@@ -1,0 +1,95 @@
+agents:
+  queue: clima
+  slurm_mem: 8G
+  modules: julia/1.9.4 cuda/julia-pref openmpi/4.1.5-mpitrampoline nsight-systems/2023.4.1
+
+env:
+  JULIA_CUDA_MEMORY_POOL: none
+  JULIA_MPI_HAS_CUDA: "true"
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  OPENBLAS_NUM_THREADS: 1
+  OMPI_MCA_opal_warn_on_missing_libcuda: 0
+  SLURM_KILL_BAD_EXIT: 1
+  SLURM_GPU_BIND: none # https://github.com/open-mpi/ompi/issues/11949#issuecomment-1737712291
+  CONFIG_PATH: "config/longrun_configs"
+  CLIMAATMOS_GC_NSTEPS: 10
+
+timeout_in_minutes: 1440
+
+steps:
+  - label: "init :GPU:"
+    key: "init_gpu_env"
+    command:
+      - echo "--- Instantiate examples"
+      - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=examples -e 'using Pkg; Pkg.precompile()'
+      - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
+      - julia --project=examples -e 'using Pkg; Pkg.status()'
+
+      - echo "--- Download artifacts"
+      - julia --project=examples artifacts/download_artifacts.jl
+
+    agents:
+      slurm_gpus: 1
+      slurm_cpus_per_task: 8
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+      JULIA_MAX_NUM_PRECOMPILE_FILES: 50
+
+  - wait
+
+  - group: "Targeted resolution AMIP long runs"
+    steps:
+
+      - label: ":computer: baroclinic wave (ρe_tot) high resolution"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name dry_baroclinic_wave
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_bw_rhoe_highres"
+
+      - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_bw_rhoe_equil_highres"
+
+      - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge (35km), helem_16 np_3"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name dry_held_suarez
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_hs_rhoe_dry_nz63_55km_rs35km"
+
+      - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge (35km), helem_16 np_3"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
