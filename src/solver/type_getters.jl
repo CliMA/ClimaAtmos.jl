@@ -78,6 +78,7 @@ function get_atmos(config::AtmosConfig, params)
         surface_model = get_surface_model(parsed_args),
         numerics = get_numerics(parsed_args),
     )
+    @assert !@any_reltype(atmos, (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
     return atmos
@@ -96,8 +97,7 @@ function get_numerics(parsed_args)
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
 
-    limiter =
-        parsed_args["apply_limiter"] ? Limiters.QuasiMonotoneLimiter : nothing
+    limiter = parsed_args["apply_limiter"] ? CA.QuasiMonotoneLimiter() : nothing
 
     # wrap each upwinding mode in a Val for dispatch
     numerics = AtmosNumerics(;
