@@ -67,6 +67,8 @@ function solve_atmos!(simulation)
             return AtmosSolveResults(sol, :success, walltime)
         end
     catch ret_code
+        CA.save_restart_func(integrator, simulation.output_dir)
+        CA.save_to_disk_func(integrator, simulation.output_dir)
         @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
             (ret_code, catch_backtrace())
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
