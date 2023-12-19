@@ -15,7 +15,8 @@ prognostic_tke: true
 moist: "equil"
 config: "box"
 hyperdiff: "true"
-kappa_4: 1.0e12
+kappa_4_vorticity: 1.0e12
+kappa_4_tracer: 1.0e12
 x_max: 1e5
 y_max: 1e5
 z_max: 3e3

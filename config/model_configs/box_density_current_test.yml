@@ -11,7 +11,8 @@ z_stretch: false
 x_elem: 45
 ode_algo: "SSP33ShuOsher"
 config: "box"
-kappa_4: 1.0e7
+kappa_4_vorticity: 1.0e7
+kappa_4_tracer: 1.0e7
 z_max: 6400.0
 job_id: "box_density_current_test"
 diagnostics:

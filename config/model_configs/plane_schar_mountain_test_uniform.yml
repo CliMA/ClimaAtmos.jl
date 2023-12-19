@@ -10,7 +10,8 @@ x_elem: 100
 use_reference_state: false
 ode_algo: "SSP33ShuOsher"
 config: "plane"
-kappa_4: 5.0e7
+kappa_4_vorticity: 5.0e7
+kappa_4_tracer: 5.0e7
 z_max: 25000.0
 topography: "Schar"
 job_id: "plane_schar_mountain_test_uniform"

@@ -6,7 +6,8 @@ tracer_upwinding: zalesak
 t_end: "100days"
 dz_bottom: 30.0
 h_elem: 16
-kappa_4: 1.0e16
+kappa_4_vorticity: 1.0e16
+kappa_4_tracer: 1.0e16
 energy_upwinding: zalesak
 precip_model: "0M"
 job_id: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"

@@ -69,9 +69,9 @@ for nprocs in ${process_counts[@]}; do
     job_id="comparison_sphere_held_suarez_${res}_res_rhoe_$nprocs"
 
 if [[ "$res" == "low" ]]; then
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4 2e17"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 10days --dt 400secs --z_elem 10 --h_elem 4 --kappa_4_vorticity 2e17 --kappa_4_tracer 2e17"
 else
-    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 24 --kappa_4 5e14"
+    command="julia --color=yes --project=examples examples/hybrid/driver.jl --job_id $job_id --forcing held_suarez --FLOAT_TYPE $FT --tracer_upwinding none --t_end 1days --dt 50secs --z_elem 45 --h_elem 24 --kappa_4_vorticity 5e14 --kappa_4_tracer 5e14"
 fi
 
 if [[ "$profiling" == "enable" ]]; then
