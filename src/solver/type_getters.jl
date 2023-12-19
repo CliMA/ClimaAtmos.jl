@@ -455,12 +455,16 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     FT = eltype(params)
     (; dt, output_dir) = sim_info
 
-    callbacks = (
-        call_every_n_steps(
-            (integrator) -> print_walltime_estimate(integrator);
-            skip_first = true,
-        ),
-    )
+    callbacks = ()
+    if !sim_info.restart
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                (integrator) -> print_walltime_estimate(integrator);
+                skip_first = true,
+            ),
+        )
+    end
     dt_save_to_disk = time_to_seconds(parsed_args["dt_save_to_disk"])
     if !(dt_save_to_disk == Inf)
         callbacks = (
