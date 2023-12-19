@@ -27,7 +27,8 @@ struct PrognosticSurfaceTemperature <: AbstractSurfaceTemperature end
 
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
-    κ₄::FT
+    κ₄_vorticity::FT
+    κ₄_tracer::FT
     divergence_damping_factor::FT
 end
 

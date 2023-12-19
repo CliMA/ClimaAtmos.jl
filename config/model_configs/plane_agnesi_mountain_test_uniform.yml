@@ -9,7 +9,8 @@ z_stretch: false
 x_elem: 80
 use_reference_state: false
 config: "plane"
-kappa_4: 1.0e6
+kappa_4_vorticity: 1.0e6
+kappa_4_tracer: 1.0e6
 z_max: 25000.0
 topography: "Agnesi"
 job_id: "plane_agnesi_mountain_test_uniform"

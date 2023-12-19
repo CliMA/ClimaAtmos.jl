@@ -18,7 +18,8 @@ precip_model: "0M"
 override_τ_precip: false
 config: box
 hyperdiff: "true"
-kappa_4: 1e21
+kappa_4_vorticity: 1e21
+kappa_4_tracer: 1e21
 x_max: 1e8
 y_max: 1e8
 x_elem: 2

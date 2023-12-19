@@ -3,7 +3,8 @@ dt_save_to_disk: "10days"
 h_elem: 16
 initial_condition: "DryBaroclinicWave"
 t_end: "100days"
-kappa_4: 1.0e16
+kappa_4_vorticity: 1.0e16
+kappa_4_tracer: 1.0e16
 z_elem: 45
 dt: "400secs"
 job_id: "longrun_bw_rhoe_highres"

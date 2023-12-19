@@ -30,8 +30,11 @@ z_elem:
 z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
-kappa_4:
-  help: "Hyperdiffusion parameter"
+kappa_4_vorticity:
+  help: "Hyperdiffusion parameter for vorticity"
+  value: 2.0e17
+kappa_4_tracer:
+  help: "Hyperdiffusion parameter for tracer"
   value: 2.0e17
 # Topography
 topography:

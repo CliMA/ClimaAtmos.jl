@@ -3,7 +3,8 @@ z_max: 55000.0
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
-kappa_4: 1e14
+kappa_4_vorticity: 1e14
+kappa_4_tracer: 1e14
 moist: "equil" 
 precip_model: "0M" 
 rad: "allskywithclear" 
