@@ -40,7 +40,11 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     κ₄_tracer = FT(parsed_args["kappa_4_tracer"])
     divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
     return if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
-        ClimaHyperdiffusion(; κ₄_vorticity, κ₄_tracer, divergence_damping_factor)
+        ClimaHyperdiffusion(;
+            κ₄_vorticity,
+            κ₄_tracer,
+            divergence_damping_factor,
+        )
     elseif hyperdiff_name in ("none", "false", false)
         nothing
     else

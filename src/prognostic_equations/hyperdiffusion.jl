@@ -153,7 +153,8 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     κ₄_vorticity * ᶠwinterp(ᶜJ * Y.c.ρ, ᶜ∇²uᵥʲs.:($$j))
             end
             # Note: It is more correct to have ρa inside and outside the divergence
-            @. Yₜ.c.sgsʲs.:($$j).mse -= κ₄_tracer * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
+            @. Yₜ.c.sgsʲs.:($$j).mse -=
+                κ₄_tracer * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
     end
 
@@ -215,8 +216,10 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                κ₄_tracer * wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -= κ₄_tracer * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+                κ₄_tracer *
+                wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
+                κ₄_tracer * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
     end
     return nothing
