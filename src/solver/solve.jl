@@ -1,4 +1,5 @@
 import ClimaTimeSteppers as CTS
+import Base.Sys: maxrss
 
 struct EfficiencyStats{TS <: Tuple, WT}
     tspan::TS
@@ -74,6 +75,10 @@ function solve_atmos!(simulation)
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
     finally
         # Close all the files opened by the writers
+
+        maxrss_str = prettymemory(maxrss())
+        @info "Memory currently used by the process (RSS): $maxrss_str"
+
         foreach(CAD.close, output_writers)
     end
 end
