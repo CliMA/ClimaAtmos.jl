@@ -477,17 +477,6 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
         )
     end
 
-    dt_save_restart = time_to_seconds(parsed_args["dt_save_restart"])
-    if !(dt_save_restart == Inf)
-        callbacks = (
-            callbacks...,
-            call_every_dt(
-                (integrator) -> save_restart_func(integrator, output_dir),
-                dt_save_restart,
-            ),
-        )
-    end
-
     if is_distributed(comms_ctx)
         callbacks = (
             callbacks...,

@@ -460,7 +460,7 @@ steps:
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
-          RESTART_FILE: "mpi_make_restart/restart/day5.0.hdf5"
+          RESTART_FILE: "mpi_make_restart/day5.0.hdf5"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G

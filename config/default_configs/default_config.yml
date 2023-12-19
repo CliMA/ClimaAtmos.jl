@@ -147,9 +147,6 @@ test_dycore_consistency:
 dt_save_to_disk:
   help: "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
   value: "Inf"
-dt_save_restart:
-  help: "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
-  value: "Inf"
 dt_save_to_sol:
   help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
   value: "1days"
