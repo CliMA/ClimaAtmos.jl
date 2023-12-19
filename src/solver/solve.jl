@@ -77,7 +77,7 @@ function solve_atmos!(simulation)
         # Close all the files opened by the writers
 
         maxrss_str = prettymemory(maxrss())
-        @info "Memory currently used by the process (RSS): $maxrss_str"
+        @info "Memory currently used (after solve!) by the process (RSS): $maxrss_str"
 
         foreach(CAD.close, output_writers)
     end
