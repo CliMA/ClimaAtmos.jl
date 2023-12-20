@@ -141,7 +141,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # Sub-grid scale hyperdiffusion continued
     if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
-        @. Yₜ.c.sgs⁰.ρatke -= κ₄_tracer * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
+        @. Yₜ.c.sgs⁰.ρatke -= κ₄_vorticity * wdivₕ(ᶜρa⁰ * gradₕ(ᶜ∇²tke⁰))
     end
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -158,7 +158,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 
     if turbconv_model isa DiagnosticEDMFX && diffuse_tke
-        @. Yₜ.c.sgs⁰.ρatke -= κ₄_tracer * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
+        @. Yₜ.c.sgs⁰.ρatke -= κ₄_vorticity * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
     end
 end
 
