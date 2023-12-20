@@ -100,7 +100,7 @@ dz_bottom = 300.0
 dz_top = 5000.0
 radius = 6.371229e6
 
-quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 

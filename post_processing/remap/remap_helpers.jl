@@ -1,5 +1,5 @@
 import ClimaCoreTempestRemap
-import ClimaCore: Spaces, Fields
+import ClimaCore: Spaces, Fields, Quadratures
 import ClimaComms
 import ClimaAtmos: SurfaceConditions, CT3
 import ClimaCore.Utilities: half
@@ -29,9 +29,8 @@ function create_weightfile(
 )
     # space info to generate nc raw data
     hspace = cspace.horizontal_space
-    Nq = Spaces.Quadratures.degrees_of_freedom(
-        cspace.horizontal_space.quadrature_style,
-    )
+    Nq =
+        Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style)
     # create a temporary dir for intermediate data
     mktempdir() do tmp
         mkpath(tmp)

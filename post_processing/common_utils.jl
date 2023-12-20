@@ -1,4 +1,4 @@
-import ClimaCore: Spaces, Topologies
+import ClimaCore: Spaces, Topologies, Quadratures
 import JLD2
 
 function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
@@ -8,7 +8,7 @@ function export_scaling_file(sol, output_dir, walltime, comms_ctx, nprocs)
         center_space = axes(Y.c)
         horz_space = Spaces.horizontal_space(center_space)
         horz_topology = horz_space.topology
-        Nq = Spaces.Quadratures.degrees_of_freedom(horz_space.quadrature_style)
+        Nq = Quadratures.degrees_of_freedom(horz_space.quadrature_style)
         nlocalelems = Topologies.nlocalelems(horz_topology)
         ncols_per_process = nlocalelems * Nq * Nq
         scaling_file =
