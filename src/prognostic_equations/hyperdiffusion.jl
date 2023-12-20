@@ -14,8 +14,7 @@ hyperdiffusion_cache(Y, hyperdiff::Nothing, _) = (;)
 
 function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
     do_dss =
-        Spaces.horizontal_space(axes(Y.c)).quadrature_style isa
-        Spaces.Quadratures.GLL
+        Spaces.horizontal_space(axes(Y.c)).quadrature_style isa Quadratures.GLL
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
 

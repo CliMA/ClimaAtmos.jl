@@ -3,7 +3,7 @@ using Dierckx
 using ImageFiltering
 using Interpolations
 import NCDatasets
-import ClimaCore: InputOutput, Meshes, Spaces
+import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
 import LinearAlgebra
@@ -160,7 +160,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     radius = CAP.planet_radius(params)
     center_space, face_space = if parsed_args["config"] == "sphere"
         nh_poly = parsed_args["nh_poly"]
-        quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+        quad = Quadratures.GLL{nh_poly + 1}()
         horizontal_mesh = cubed_sphere_mesh(; radius, h_elem)
         h_space =
             make_horizontal_space(horizontal_mesh, quad, comms_ctx, bubble)
@@ -185,7 +185,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         @warn "perturb_initstate flag is ignored for single column configuration"
         FT = eltype(params)
         Δx = FT(1) # Note: This value shouldn't matter, since we only have 1 column.
-        quad = Spaces.Quadratures.GL{1}()
+        quad = Quadratures.GL{1}()
         horizontal_mesh = periodic_rectangle_mesh(;
             x_max = Δx,
             y_max = Δx,
@@ -207,7 +207,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
-        quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+        quad = Quadratures.GLL{nh_poly + 1}()
         x_elem = Int(parsed_args["x_elem"])
         x_max = FT(parsed_args["x_max"])
         y_elem = Int(parsed_args["y_elem"])
@@ -235,7 +235,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     elseif parsed_args["config"] == "plane"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
-        quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+        quad = Quadratures.GLL{nh_poly + 1}()
         x_elem = Int(parsed_args["x_elem"])
         x_max = FT(parsed_args["x_max"])
         horizontal_mesh =
@@ -259,7 +259,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     ndofs_total = ncols * z_elem
     hspace = Spaces.horizontal_space(center_space)
     quad_style = Spaces.quadrature_style(hspace)
-    Nq = Spaces.Quadratures.degrees_of_freedom(quad_style)
+    Nq = Quadratures.degrees_of_freedom(quad_style)
 
     @info "Resolution stats: " Nq h_elem z_elem ncols ndofs_total
     return (;

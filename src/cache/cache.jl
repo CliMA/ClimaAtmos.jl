@@ -129,7 +129,7 @@ function build_cache(Y, atmos, params, surface_setup, dt, t_end, start_date)
     ᶜf = @. CT3(Geometry.WVector(ᶜf))
 
     quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
-    do_dss = quadrature_style isa Spaces.Quadratures.GLL
+    do_dss = quadrature_style isa Quadratures.GLL
     ghost_buffer =
         !do_dss ? (;) :
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
