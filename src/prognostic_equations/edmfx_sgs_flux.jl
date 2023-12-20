@@ -103,6 +103,8 @@ function edmfx_sgs_mass_flux_tendency!(
     turbconv_model::DiagnosticEDMFX,
 )
 
+    turbconv_params = CAP.turbconv_params(p.params)
+    a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
@@ -126,7 +128,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 min(
                     min(
                         draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx]),
-                        FT(0.3),
+                        a_max,
                     ),
                     FT(0.02) / max(
                         Geometry.WVector(
@@ -161,7 +163,7 @@ function edmfx_sgs_mass_flux_tendency!(
                                 ᶜρaʲs.:($$j)[colidx],
                                 ᶜρʲs.:($$j)[colidx],
                             ),
-                            FT(0.3),
+                            a_max,
                         ),
                         FT(0.02) / max(
                             Geometry.WVector(
