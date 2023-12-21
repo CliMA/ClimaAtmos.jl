@@ -50,11 +50,14 @@ function edmfx_tke_tendency!(
         # entrainment and detraiment
         # using ᶜu⁰ and local geometry results in allocation
         for j in 1:n
+            ᶜρaʲ_colidx =
+                turbconv_model isa PrognosticEDMFX ?
+                Y.c.sgsʲs.:($j).ρa[colidx] : p.precomputed.ᶜρaʲs.:($j)[colidx]
             @. Yₜ.c.sgs⁰.ρatke[colidx] +=
-                ᶜρa⁰[colidx] * (
-                    ᶜentrʲs.:($$j)[colidx] * 1 / 2 * norm_sqr(
+                ᶜρaʲ_colidx * (
+                    ᶜdetrʲs.:($$j)[colidx] * 1 / 2 * norm_sqr(
                         ᶜinterp(ᶠu³⁰[colidx]) - ᶜinterp(ᶠu³ʲs.:($$j)[colidx]),
-                    ) - ᶜdetrʲs.:($$j)[colidx] * ᶜtke⁰[colidx]
+                    ) - ᶜentrʲs.:($$j)[colidx] * ᶜtke⁰[colidx]
                 )
         end
         # pressure work
