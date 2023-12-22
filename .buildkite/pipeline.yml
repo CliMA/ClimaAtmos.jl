@@ -36,12 +36,6 @@ steps:
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
-      - echo "--- Instantiate test"
-      - "julia --project=test -e 'using Pkg; Pkg.develop(path = \".\")'"
-      - "julia --project=test -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
-      - "julia --project=test -e 'using Pkg; Pkg.precompile()'"
-      - "julia --project=test -e 'using Pkg; Pkg.status()'"
-
       - echo "--- Instantiate examples"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
@@ -511,15 +505,6 @@ steps:
           julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/test_io.yml
         artifact_paths: "test_io/*"
-
-      - label: ":computer: Use test env with latest deps"
-        command: >
-          julia --color=yes --project=test examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/test_env.yml
-        artifact_paths: "test_env/*"
-        soft_fail: true
-        agents:
-          slurm_mem: 20GB
 
       - label: ":computer: MPI io test"
         command: >
