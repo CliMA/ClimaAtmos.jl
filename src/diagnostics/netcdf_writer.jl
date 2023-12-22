@@ -517,11 +517,6 @@ function write_field!(
 
     var = diagnostic.variable
 
-    # If we have a face-valued field, we interpolate it to the centers
-    if axes(field) isa Spaces.FaceExtrudedFiniteDifferenceSpace
-        field = ᶜinterp.(field)
-    end
-
     space = axes(field)
     FT = Spaces.undertype(space)
 
