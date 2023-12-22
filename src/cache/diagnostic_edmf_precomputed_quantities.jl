@@ -631,6 +631,42 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
             )
 
+            # set updraft to grid-mean if vertical velocity is too small
+            if i > 2
+                @. ρaʲ_level = ifelse(
+                    (
+                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
+                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
+                    ),
+                    0,
+                    ρaʲ_level,
+                )
+                @. u³ʲ_halflevel = ifelse(
+                    (
+                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
+                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
+                    ),
+                    u³_halflevel,
+                    u³ʲ_halflevel,
+                )
+                @. h_totʲ_level = ifelse(
+                    (
+                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
+                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
+                    ),
+                    h_tot_level,
+                    h_totʲ_level,
+                )
+                @. q_totʲ_level = ifelse(
+                    (
+                        u³ʲ_data_prev_halflevel * u³ʲ_data_prev_halflevel <
+                        ∇Φ³_data_prev_level * (ρʲ_prev_level - ρ_prev_level) / ρʲ_prev_level
+                    ),
+                    q_tot_level,
+                    q_totʲ_level,
+                )
+            end
+
             set_diagnostic_edmfx_draft_quantities_level!(
                 thermo_params,
                 Kʲ_level,
