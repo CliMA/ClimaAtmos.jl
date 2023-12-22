@@ -45,6 +45,19 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
             κ₄_tracer,
             divergence_damping_factor,
         )
+    elseif hyperdiff_name in ("CAM_SE",)
+        # To match hyperviscosity coefficients in:
+        #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
+        #    for equation A18 and A19
+        Ne = parsed_args["h_elem"]
+        κ₄_vorticity = FT(0.15 * (30 / Ne * 1.1 * 10^5)^3) # ν_vort
+        κ₄_tracer = FT(0.75 * (30 / Ne * 1.1 * 10^5)^3) # ν_q
+        divergence_damping_factor = FT(5)
+        ClimaHyperdiffusion(;
+            κ₄_vorticity,
+            κ₄_tracer,
+            divergence_damping_factor,
+        )
     elseif hyperdiff_name in ("none", "false", false)
         nothing
     else
