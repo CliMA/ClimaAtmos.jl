@@ -371,13 +371,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
 
             # We don't have an upper limit to entrainment for the first level 
             # (calculated at i=2), as the vertical at the first level is zero
-            if i == 2
-                @. entrʲ_prev_level = limit_entrainment(
-                    entrʲ_prev_level,
-                    draft_area(ρaʲ_prev_level, ρʲ_prev_level),
-                    dt,
-                )
-            else
+            if i > 2
                 @. entrʲ_prev_level = limit_entrainment(
                     entrʲ_prev_level,
                     draft_area(ρaʲ_prev_level, ρʲ_prev_level),
@@ -388,6 +382,11 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                     dz_prev_level,
                 )
             end
+            @. entrʲ_prev_level = limit_entrainment(
+                entrʲ_prev_level,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                dt,
+            )
 
             # TODO: use updraft top instead of scale height
             @. nh_pressure³ʲ_prev_halflevel = ᶠupdraft_nh_pressure(
@@ -517,6 +516,15 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 p.atmos.edmfx_detr_model,
             )
 
+            @. detrʲ_prev_level = limit_detrainment(
+                detrʲ_prev_level,
+                draft_area(ρaʲ_prev_level, ρʲ_prev_level),
+                get_physical_w(
+                    u³ʲ_prev_halflevel,
+                    local_geometry_prev_halflevel,
+                ),
+                dz_prev_level,
+            )
             @. detrʲ_prev_level = limit_detrainment(
                 detrʲ_prev_level,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
