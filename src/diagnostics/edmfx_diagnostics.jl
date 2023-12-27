@@ -794,35 +794,6 @@ add_diagnostic_variable!(
 )
 
 ###
-# Environment mixing length (3d)
-###
-compute_lmix!(out, state, cache, time) =
-    compute_lmix!(out, state, cache, time, cache.atmos.turbconv_model)
-compute_lmix!(_, _, _, _, turbconv_model::T) where {T} =
-    error_diagnostic_variable("lmix", turbconv_model)
-
-function compute_lmix!(
-    out,
-    state,
-    cache,
-    time,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
-)
-    if isnothing(out)
-        return copy(cache.precomputed.ᶜmixing_length)
-    else
-        out .= cache.precomputed.ᶜmixing_length
-    end
-end
-
-add_diagnostic_variable!(
-    short_name = "lmix",
-    long_name = "Environment Mixing Length",
-    units = "m",
-    compute! = compute_lmix!,
-)
-
-###
 # Environment turbulent kinetic energy (3d)
 ###
 compute_tke!(out, state, cache, time) =

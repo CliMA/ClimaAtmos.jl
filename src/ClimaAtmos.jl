@@ -75,6 +75,7 @@ include(
     ),
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
+include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
 include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
 include(joinpath("prognostic_equations", "buoyancy_gradients.jl"))
 include(joinpath("prognostic_equations", "edmfx_closures.jl"))

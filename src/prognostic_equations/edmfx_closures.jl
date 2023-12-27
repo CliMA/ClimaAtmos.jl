@@ -218,10 +218,13 @@ function mixing_length(
     # kz scale (surface layer)
     if obukhov_length < 0.0 #unstable
         l_W =
-            vkc * (ᶜz - z_sfc) / (sqrt(sfc_tke / ustar / ustar) * c_m) *
+            vkc * (ᶜz - z_sfc) /
+            max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT)) *
             min((1 - 100 * (ᶜz - z_sfc) / obukhov_length)^FT(0.2), 1 / vkc)
     else # neutral or stable
-        l_W = vkc * (ᶜz - z_sfc) / (sqrt(sfc_tke / ustar / ustar) * c_m)
+        l_W =
+            vkc * (ᶜz - z_sfc) /
+            max(sqrt(sfc_tke / ustar / ustar) * c_m, eps(FT))
     end
 
     # compute l_TKE - the production-dissipation balanced length scale
@@ -248,15 +251,26 @@ function mixing_length(
         l_N = l_z
     end
 
+    # compute l_smag - smagorinsky length scale
+    l_smag = smagorinsky_lilly_length(
+        CAP.c_smag(params),
+        N_eff,
+        ᶜdz,
+        ᶜPr,
+        ᶜstrain_rate_norm,
+    )
+
     # add limiters
     l = SA.SVector(
-        (l_N < eps(FT) || l_N > l_z) ? l_z : l_N,
-        (l_TKE < eps(FT) || l_TKE > l_z) ? l_z : l_TKE,
-        (l_W < eps(FT) || l_W > l_z) ? l_z : l_W,
+        l_N > l_z ? l_z : l_N,
+        l_TKE > l_z ? l_z : l_TKE,
+        l_W > l_z ? l_z : l_W,
     )
     # get soft minimum
-    # TODO: limit it with l_smag
-    return lamb_smooth_minimum(l, smin_ub, smin_rm)
+    l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
+    l_limited = max(l_smag, min(l_smin, l_z))
+
+    return l_limited
 end
 
 """

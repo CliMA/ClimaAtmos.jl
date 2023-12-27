@@ -227,22 +227,23 @@ add_diagnostic_variable!(
 )
 
 ###
-# Grid mean mixing length (3d)
+# Mixing length (3d)
 ###
-function compute_mixlgm!(out, state, cache, time)
-    if isnothing(out)
-        out = similar(state.c.ρ)
-    end
-    compute_gm_mixing_length!(out, state, cache)
-end
-
 add_diagnostic_variable!(
-    short_name = "mixlgm",
-    long_name = "Grid mean mixing length",
-    standard_name = "grid_mean_mixing_length",
+    short_name = "lmix",
+    long_name = "Environment Mixing Length",
     units = "m",
-    comments = "Smagorinsky length scale, to be used as an approximation of mixing length in simulations without EDMF SGS model",
-    compute! = compute_mixlgm!,
+    comments = """
+    Calculated as smagorinsky length scale without EDMF SGS model,
+    or from mixing length closure with EDMF SGS model.
+    """,
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜmixing_length)
+        else
+            out .= cache.precomputed.ᶜmixing_length
+        end
+    end,
 )
 
 ###
