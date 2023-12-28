@@ -30,6 +30,7 @@ import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 using ClimaCoreMakie, CairoMakie
+include(joinpath(pkgdir(CA), "src/utils", "utilities.jl"))
 include(joinpath(pkgdir(CA), "post_processing", "common_utils.jl"))
 
 include(joinpath(pkgdir(CA), "post_processing", "contours_and_profiles.jl"))
@@ -120,10 +121,42 @@ end
 
 if config.parsed_args["check_conservation"]
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
-    @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
-    @test sum(sol.u[1].c.ρe_tot) +
-          (p.net_energy_flux_sfc[][] - p.net_energy_flux_toa[][]) ≈
-          sum(sol.u[end].c.ρe_tot) rtol = 100 * eps(FT)
+
+    # energy
+    energy_total = sum(sol.u[end].c.ρe_tot)
+    energy_atmos_change = sum(sol.u[end].c.ρe_tot) - sum(sol.u[1].c.ρe_tot)
+    sfc = p.atmos.surface_model
+    if sfc isa CA.PrognosticSurfaceTemperature
+        sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
+        energy_total +=
+            horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
+        energy_surface_change =
+            horizontal_integral_at_boundary(
+                sol.u[end].sfc.T .- sol.u[1].sfc.T,
+            ) * sfc_cρh
+    else
+        energy_surface_change = -p.net_energy_flux_sfc[][]
+    end
+    energy_radiation_input = -p.net_energy_flux_toa[][]
+    @test (energy_atmos_change + energy_surface_change) / energy_total ≈
+          energy_radiation_input / energy_total atol = 5 * sqrt(eps(FT))
+
+    if p.atmos.moisture_model isa DryModel
+        # density
+        @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
+    else
+        if sfc isa CA.PrognosticSurfaceTemperature
+            # water
+            water_total = sum(sol.u[end].c.ρq_tot)
+            water_atmos_change =
+                sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
+            water_surface_change = horizontal_integral_at_boundary(
+                sol.u[end].sfc.water .- sol.u[1].sfc.water,
+            )
+            @test (water_atmos_change + water_surface_change) / water_total ≈ 0 atol =
+                100 * sqrt(eps(FT))
+        end
+    end
 end
 
 if config.parsed_args["check_precipitation"]

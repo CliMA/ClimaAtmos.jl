@@ -1,0 +1,15 @@
+FLOAT_TYPE: "Float32"
+dt_save_to_disk: "10days"
+t_end: "100days"
+moist: "equil"
+precip_model: "0M"
+surface_setup: "DefaultMoninObukhov"
+vert_diff: "true"
+rad: "clearsky"
+idealized_insolation: false
+dt_rad: "1hours"
+prognostic_surface: "PrognosticSurfaceTemperature"
+check_conservation: true
+bubble: false
+job_id: "longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean"
+

@@ -8,6 +8,7 @@ import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
+import ClimaCore.Utilities: half
 
 precipitation_cache(Y, atmos::AtmosModel) =
     precipitation_cache(Y, atmos.precip_model)
@@ -29,8 +30,12 @@ function precipitation_cache(Y, precip_model::Microphysics0Moment)
         ᶜS_ρq_tot = similar(Y.c, FT),
         ᶜ3d_rain = similar(Y.c, FT),
         ᶜ3d_snow = similar(Y.c, FT),
-        col_integrated_rain = similar(Fields.level(Y.c.ρ, 1), FT),
-        col_integrated_snow = similar(Fields.level(Y.c.ρ, 1), FT),
+        col_integrated_rain = zeros(
+            axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+        ),
+        col_integrated_snow = zeros(
+            axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+        ),
     )
 end
 
@@ -114,7 +119,7 @@ function precipitation_tendency!(
     @. col_integrated_rain[colidx] =
         col_integrated_rain[colidx] / CAP.ρ_cloud_liq(params)
     @. col_integrated_snow[colidx] =
-        col_integrated_snow[colidx] / CAP.ρ_cloud_liq(params)
+        col_integrated_snow[colidx] / CAP.ρ_cloud_ice(params)
 
     if :ρe_tot in propertynames(Y.c)
         #TODO - this is a hack right now. But it will be easier to clean up

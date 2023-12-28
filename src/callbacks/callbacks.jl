@@ -16,23 +16,21 @@ import ClimaCore.Fields: ColumnField
 
 include("callback_helpers.jl")
 
-horizontal_integral_at_boundary(f, lev) = sum(
-    Spaces.level(f, lev) ./ Fields.dz_field(axes(Spaces.level(f, lev))) .* 2,
-)
-
 function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
-    if !isnothing(p.radiation)
-        Δt = integrator.dt
+    Δt = integrator.dt
+    if !isnothing(p.atmos.radiation_mode)
         (; ᶠradiation_flux) = p.radiation
         (; net_energy_flux_toa, net_energy_flux_sfc) = p
         nlevels = Spaces.nlevels(axes(Y.c))
         net_energy_flux_toa[] +=
             horizontal_integral_at_boundary(ᶠradiation_flux, nlevels + half) *
             Δt
-        net_energy_flux_sfc[] +=
-            horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+        if p.atmos.surface_model isa PrescribedSurfaceTemperature
+            net_energy_flux_sfc[] +=
+                horizontal_integral_at_boundary(ᶠradiation_flux, half) * Δt
+        end
     end
     return nothing
 end
