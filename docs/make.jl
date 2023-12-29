@@ -35,6 +35,7 @@ makedocs(;
         "REPL scripts" => "repl_scripts.md",
         "Configuration" => "config.md",
         "Parameters" => "parameters.md",
+        "Longruns" => "longruns.md",
         "API" => "api.md",
         "References" => "references.md",
     ],
