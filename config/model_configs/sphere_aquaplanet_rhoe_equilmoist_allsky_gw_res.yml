@@ -33,5 +33,5 @@ diagnostics:
     period: 6hours
   - short_name: hur
     period: 6hours
-  - short_name: mixlgm
+  - short_name: lmix
     period: 6hours
