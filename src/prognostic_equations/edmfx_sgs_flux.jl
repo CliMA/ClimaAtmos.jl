@@ -106,7 +106,7 @@ function edmfx_sgs_mass_flux_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
 
@@ -117,7 +117,7 @@ function edmfx_sgs_mass_flux_tendency!(
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
             @. ᶜa_scalar_colidx =
-                (ᶜh_totʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
+                (ᶜmseʲs.:($$j)[colidx] + ᶜKʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
                 draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],

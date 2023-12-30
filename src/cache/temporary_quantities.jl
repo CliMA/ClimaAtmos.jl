@@ -22,6 +22,7 @@ function temporary_quantities(Y, atmos)
         temp_data_level_3 = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_datah_tot
+        ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
