@@ -346,10 +346,11 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         SurfaceConditions.update_surface_conditions!(Y, p, t)
     end
 
-    if isnothing(turbconv_model)
-        (; ᶜmixing_length) = p.precomputed
-        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
-    end
+    # TODO: It is too slow to calculate mixing length at every timestep
+    # if isnothing(turbconv_model)
+    #     (; ᶜmixing_length) = p.precomputed
+    #     compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+    # end
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)

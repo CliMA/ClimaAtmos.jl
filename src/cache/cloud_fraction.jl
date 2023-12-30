@@ -22,6 +22,10 @@ function set_cloud_fraction!(Y, p, ::Union{EquilMoistModel, NonEquilMoistModel})
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜts, ᶜp, ᶜmixing_length, ᶜcloud_fraction) = p.precomputed
+    (; turbconv_model) = p.atmos
+    if isnothing(turbconv_model)
+        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+    end
 
     coeff = FT(2.1) # TODO - move to parameters
     @. ᶜcloud_fraction = quad_loop(
