@@ -3,11 +3,6 @@
 Here is a brief description of the buildkite longrun jobs.
 ## GPU longruns
 ```
-longrun_sphere_hydrostatic_balance_rhoe
-
-Solid body rotation. Test if the dry dycore can maintain the no flow steady state.
-```
-```
 longrun_bw_rhoe_highres
 
 Dry baroclinic wave. Test the dry dycore initial value problem.
@@ -29,6 +24,11 @@ Moist Held Suarez. Test the moist dycore with an equilibrium state with sources 
 ```
 
 ## CPU longruns
+```
+longrun_sphere_hydrostatic_balance_rhoe
+
+Solid body rotation. Test if the dry dycore can maintain the no flow steady state.
+```
 ```
 longrun_zalesak_tracer_energy_bw_rhoe_equil_highres
 
