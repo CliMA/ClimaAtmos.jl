@@ -65,6 +65,41 @@ steps:
       - label: ":computer: Ensure mse tables are reset when necessary"
         command: "julia --color=yes --project=examples regression_tests/test_reset.jl"
 
+  - group: "Radiation"
+    steps:
+
+      - label: ":computer: single column radiative equilibrium gray"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
+        artifact_paths: "single_column_radiative_equilibrium_gray/*"
+
+      - label: ":computer: single column radiative equilibrium clearsky"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
+        artifact_paths: "single_column_radiative_equilibrium_clearsky/*"
+
+      - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
+        artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/*"
+
+      - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
+        artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/*"
+
+  - group: "Precipitation"
+    steps:
+      - label: ":umbrella: 1-moment precipitation sanity test single column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/single_column_precipitation_test.yml
+        artifact_paths: "single_column_precipitation_test/*"
+
   - group: "Gravity wave"
     steps:
 
@@ -91,14 +126,12 @@ steps:
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
         command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
-
-  - group: "Precipitation"
-    steps:
-      - label: ":umbrella: 1-moment precipitation sanity test single column"
+      
+      - label: ":computer: single column non-orographic gravity wave parameterization"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_precipitation_test.yml
-        artifact_paths: "single_column_precipitation_test/*"
+          --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
+        artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Column Examples"
     steps:
@@ -108,36 +141,6 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/single_column_hydrostatic_balance_ft64.yml
         artifact_paths: "single_column_hydrostatic_balance_ft64/*"
-
-      - label: ":computer: single column radiative equilibrium gray"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_gray.yml
-        artifact_paths: "single_column_radiative_equilibrium_gray/*"
-
-      - label: ":computer: single column radiative equilibrium clearsky"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky.yml
-        artifact_paths: "single_column_radiative_equilibrium_clearsky/*"
-
-      - label: ":computer: single column radiative equilibrium clearsky prognostic surface temperature"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.yml
-        artifact_paths: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp/*"
-
-      - label: ":computer: single column radiative equilibrium allsky idealized clouds varying insolation"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_radiative_equilibrium_allsky_idealized_clouds.yml
-        artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/*"
-
-      - label: ":computer: single column non-orographic gravity wave parameterization"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
 
   - group: "Box Examples"
     steps:
@@ -152,7 +155,7 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/box_density_current_test.yml
-        artifact_paths: box_density_current_test/*"
+        artifact_paths: "box_density_current_test/*"
 
   - group: "Plane Examples"
     steps:
