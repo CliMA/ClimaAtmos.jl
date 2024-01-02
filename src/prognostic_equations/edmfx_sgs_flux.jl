@@ -109,6 +109,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    FT = eltype(Y)
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
@@ -116,9 +117,24 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜa_scalar_colidx = p.scratch.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+            # @. ᶜa_scalar_colidx =
+            #     (ᶜmseʲs.:($$j)[colidx] + ᶜKʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
+            #     draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+            # TODO: remove this filter when mass flux is treated implicitly
             @. ᶜa_scalar_colidx =
                 (ᶜmseʲs.:($$j)[colidx] + ᶜKʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
-                draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+                min(
+                    min(
+                        draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx]),
+                        1,
+                    ),
+                    FT(0.02) / max(
+                        Geometry.WVector(
+                            ᶜinterp(ᶠu³_diff_colidx),
+                        ).components.data.:1,
+                        eps(FT),
+                    ),
+                )
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -134,9 +150,26 @@ function edmfx_sgs_mass_flux_tendency!(
             # specific humidity
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+                # @. ᶜa_scalar_colidx =
+                #     (ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]) *
+                #     draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+                # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar_colidx =
-                    (ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]) *
-                    draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+                    (ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]) * min(
+                        min(
+                            draft_area(
+                                ᶜρaʲs.:($$j)[colidx],
+                                ᶜρʲs.:($$j)[colidx],
+                            ),
+                            1,
+                        ),
+                        FT(0.02) / max(
+                            Geometry.WVector(
+                                ᶜinterp(ᶠu³_diff_colidx),
+                            ).components.data.:1,
+                            eps(FT),
+                        ),
+                    )
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
