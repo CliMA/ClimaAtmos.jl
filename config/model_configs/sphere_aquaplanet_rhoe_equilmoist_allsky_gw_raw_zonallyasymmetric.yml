@@ -1,5 +1,5 @@
 rad: "allskywithclear"
-dt_save_to_disk: "1days"
+dt_save_state_to_disk: "1days"
 rayleigh_sponge: true
 orographic_gravity_wave: "raw_topo"
 z_elem: 25

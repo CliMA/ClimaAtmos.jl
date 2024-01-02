@@ -3,7 +3,7 @@ z_max: 45000.0
 dz_bottom: 300.0
 dt: "400secs"
 t_end: "24hours"
-dt_save_to_disk: "24hours"
+dt_save_state_to_disk: "24hours"
 vert_diff: "true"
 moist: "equil"
 precip_model: "1M"

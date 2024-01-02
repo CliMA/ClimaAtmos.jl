@@ -177,7 +177,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
-function save_to_disk_func(integrator, output_dir)
+function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 
@@ -192,9 +192,6 @@ function save_to_disk_func(integrator, output_dir)
     Base.close(hdfwriter)
     return nothing
 end
-
-save_restart_func(integrator, output_dir) =
-    save_to_disk_func(integrator, joinpath(output_dir, "restart"))
 
 Base.@kwdef mutable struct WallTimeEstimate
     """Number of calls to the callback"""

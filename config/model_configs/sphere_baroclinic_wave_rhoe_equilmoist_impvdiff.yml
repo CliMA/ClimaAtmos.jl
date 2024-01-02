@@ -2,7 +2,7 @@ precip_model: "0M"
 vert_diff: "true"
 z_elem: 20
 dz_bottom: 100
-dt_save_to_disk: "6days"
+dt_save_state_to_disk: "6days"
 initial_condition: "MoistBaroclinicWave"
 implicit_diffusion: true
 max_newton_iters_ode: 2

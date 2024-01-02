@@ -1,5 +1,5 @@
 rad: "clearsky"
-dt_save_to_disk: "10days"
+dt_save_state_to_disk: "10days"
 rayleigh_sponge: true
 topo_smoothing: true
 z_elem: 45
