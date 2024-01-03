@@ -53,6 +53,8 @@ function set_discrete_hydrostatic_balanced_state!(Y, p)
     ) # broadcasting doesn't seem to work with kwargs, so define interim ls()
 end
 
+u₃_component(u::Geometry.AxisTensor) = u.u₃
+
 """
     set_discrete_hydrostatic_balanced_pressure!(ᶜp, ᶠgradᵥ_ᶜp, ᶜρ, ᶠgradᵥ_ᶜΦ, p1, colidx)
 Construct discrete hydrostatic balanced pressure `ᶜp` from density `ᶜρ`,
@@ -80,8 +82,12 @@ function set_discrete_hydrostatic_balanced_pressure!(
     @. ᶠgradᵥ_ᶜp[colidx] = -(ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(ᶜρ[colidx]))
     ᶜp_data = Fields.field_values(ᶜp[colidx])
     ᶠgradᵥ_ᶜp_data = Fields.field_values(ᶠgradᵥ_ᶜp[colidx])
-    ᶜp_data[1] = p1
-    for i in 2:Spaces.nlevels(axes(ᶜp))
-        ᶜp_data[i] = ᶜp_data[i - 1] + ᶠgradᵥ_ᶜp_data[i].u₃
+    ᶜp_data_lev₋₁ = Spaces.level(ᶜp_data, 1)
+    @. ᶜp_data_lev₋₁ = p1
+    @inbounds for i in 2:Spaces.nlevels(axes(ᶜp))
+        ᶜp_data_lev = Spaces.level(ᶜp_data, i)
+        ᶜp_data_lev₋₁ = Spaces.level(ᶜp_data, i - 1)
+        u₃_data_lev = Spaces.level(ᶠgradᵥ_ᶜp_data, i)
+        @. ᶜp_data_lev = ᶜp_data_lev₋₁ + u₃_component(u₃_data_lev)
     end
 end
