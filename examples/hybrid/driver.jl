@@ -30,7 +30,6 @@ import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 using ClimaCoreMakie, CairoMakie
-include(joinpath(pkgdir(CA), "src/utils", "utilities.jl"))
 include(joinpath(pkgdir(CA), "post_processing", "common_utils.jl"))
 
 include(joinpath(pkgdir(CA), "post_processing", "contours_and_profiles.jl"))
@@ -129,9 +128,9 @@ if config.parsed_args["check_conservation"]
     if sfc isa CA.PrognosticSurfaceTemperature
         sfc_cρh = sfc.ρ_ocean * sfc.cp_ocean * sfc.depth_ocean
         energy_total +=
-            horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
+            CA.horizontal_integral_at_boundary(sol.u[end].sfc.T .* sfc_cρh)
         energy_surface_change =
-            horizontal_integral_at_boundary(
+            CA.horizontal_integral_at_boundary(
                 sol.u[end].sfc.T .- sol.u[1].sfc.T,
             ) * sfc_cρh
     else
@@ -150,7 +149,7 @@ if config.parsed_args["check_conservation"]
             water_total = sum(sol.u[end].c.ρq_tot)
             water_atmos_change =
                 sum(sol.u[end].c.ρq_tot) - sum(sol.u[1].c.ρq_tot)
-            water_surface_change = horizontal_integral_at_boundary(
+            water_surface_change = CA.horizontal_integral_at_boundary(
                 sol.u[end].sfc.water .- sol.u[1].sfc.water,
             )
             @test (water_atmos_change + water_surface_change) / water_total ≈ 0 atol =
