@@ -53,6 +53,7 @@ steps:
           - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
         artifact_paths: "$$JOB_NAME/*"
         agents:
+          slurm_gpus: 1
           slurm_ntasks: 32
           slurm_time: 24:00:00
         env:
