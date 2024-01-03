@@ -10,7 +10,7 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
-  JULIA_CPU_TARGET: 'broadwell;skylake'
+  JULIA_CPU_TARGET: 'broadwell;skylake;icelake;cascadelake;epyc'
   CONFIG_PATH: "config/model_configs"
   GPU_CONFIG_PATH: "config/gpu_configs/"
   PERF_CONFIG_PATH: "config/perf_configs"
