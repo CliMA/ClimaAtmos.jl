@@ -13,6 +13,11 @@ if !(@isdefined config)
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
+if CA.get_run_mode(integrator) isa CA.AutoDebugRun
+    include(joinpath(pkgdir(CA), "post_processing", "auto_debug_plots.jl"))
+    CA.get_run_mode(integrator).auto_plot =
+        integrator -> auto_debug_plots(integrator)
+end
 sol_res = CA.solve_atmos!(simulation)
 
 (; atmos, params) = integrator.p

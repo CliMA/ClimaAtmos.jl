@@ -17,10 +17,30 @@ function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
     )
 end
 
-function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
+export_state(::ProductionRun, t) = false
+
+function call_every_dt(
+    f!,
+    dt,
+    run_mode;
+    skip_first = false,
+    call_at_end = false,
+)
+    next_t = Ref{typeof(dt)}()
+    condition = (u, t, integrator) -> t >= next_t[] || export_state(run_mode, t)
+    call_every_dt(f!, dt; next_t, skip_first, call_at_end, condition)
+end
+
+function call_every_dt(
+    f!,
+    dt;
+    next_t = Ref{typeof(dt)}(),
+    skip_first = false,
+    call_at_end = false,
+    condition = (u, t, integrator) -> t >= next_t[],
+)
     cb! = AtmosCallback(f!, EveryΔt(dt))
     @assert dt ≠ Inf "Adding callback that never gets called!"
-    next_t = Ref{typeof(dt)}()
     affect! = function (integrator)
         cb!(integrator)
 
@@ -32,7 +52,7 @@ function call_every_dt(f!, dt; skip_first = false, call_at_end = false)
         end
     end
     return SciMLBase.DiscreteCallback(
-        (u, t, integrator) -> t >= next_t[],
+        condition,
         affect!;
         initialize = (cb, u, t, integrator) -> begin
             skip_first || cb!(integrator)

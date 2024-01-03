@@ -406,6 +406,12 @@ steps:
           --config_file $CONFIG_PATH/test_io.yml
         artifact_paths: "test_io/*"
 
+      - label: ":computer: Test auto-debug"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/test_auto_debug.yml
+        artifact_paths: "test_auto_debug/*"
+
       - label: ":computer: MPI io test"
         command: >
           srun julia --color=yes --project=examples examples/hybrid/driver.jl

@@ -447,7 +447,7 @@ thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
 
-function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
+function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx, p)
     FT = eltype(params)
     (; dt, output_dir) = sim_info
 
@@ -477,7 +477,8 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
             call_every_dt(
                 (integrator) ->
                     save_state_to_disk_func(integrator, output_dir),
-                dt_save_state_to_disk;
+                dt_save_state_to_disk,
+                p.run_mode;
                 skip_first = sim_info.restart,
             ),
         )
@@ -523,10 +524,7 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     return callbacks
 end
 
-function get_sim_info(config::AtmosConfig)
-    (; parsed_args) = config
-    FT = eltype(config)
-
+function job_id_and_output_dir(parsed_args)
     job_id = if isnothing(parsed_args["job_id"])
         job_id_from_config(parsed_args)
     else
@@ -535,6 +533,14 @@ function get_sim_info(config::AtmosConfig)
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
     output_dir = isnothing(out_dir) ? default_output : out_dir
+    return (; job_id, output_dir)
+end
+
+function get_sim_info(config::AtmosConfig)
+    (; parsed_args) = config
+    FT = eltype(config)
+
+    (; job_id, output_dir) = job_id_and_output_dir(parsed_args)
     mkpath(output_dir)
 
     sim = (;
@@ -544,6 +550,11 @@ function get_sim_info(config::AtmosConfig)
         dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
         t_end = FT(time_to_seconds(parsed_args["t_end"])),
+        run_mode = parsed_args["run_mode"],
+        simulate_crash = parsed_args["simulate_crash"],
+        dt_save_state_to_disk = time_to_seconds(
+            parsed_args["dt_save_state_to_disk"],
+        ),
     )
     n_steps = floor(Int, sim.t_end / sim.dt)
     @info(
@@ -762,7 +773,7 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
-function get_simulation(config::AtmosConfig)
+function get_simulation(config::AtmosConfig; run_mode = ProductionRun())
     params = create_parameter_set(config)
     atmos = get_atmos(config, params)
 
@@ -820,6 +831,7 @@ function get_simulation(config::AtmosConfig)
             atmos,
             params,
             config.comms_ctx,
+            p,
         )
     end
     @info "get_callbacks: $s"

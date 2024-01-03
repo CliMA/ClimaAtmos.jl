@@ -118,6 +118,7 @@ include(joinpath("solver", "model_getters.jl")) # high-level (using parsed_args)
 include(joinpath("solver", "type_getters.jl"))
 include(joinpath("solver", "yaml_helper.jl"))
 include(joinpath("solver", "solve.jl"))
+include(joinpath("solver", "auto_debug.jl"))
 
 include(joinpath("parameters", "create_parameters.jl"))
 

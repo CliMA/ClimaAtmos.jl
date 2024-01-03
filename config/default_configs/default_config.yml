@@ -262,3 +262,9 @@ netcdf_output_at_levels:
 warn_allocations_diagnostics:
   help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
   value: false
+run_mode:
+  help: "[Productionrun,AutoDebugRun]"
+  value: "ProductionRun"
+simulate_crash:
+  help: "Bool used in AutoDebugRun to simulate a crashed simulation (for testing)"
+  value: false

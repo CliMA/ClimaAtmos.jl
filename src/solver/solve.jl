@@ -16,13 +16,32 @@ walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=second
 function timed_solve!(integrator)
     walltime = @elapsed begin
         s = @timed_str begin
-            sol = SciMLBase.solve!(integrator)
+            solve_run_mode!(integrator, get_run_mode(integrator))
         end
     end
     @info "solve!: $s"
     es = EfficiencyStats(integrator.sol.prob.tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"
-    return (sol, walltime)
+    return (integrator.sol, walltime)
+end
+
+# TODO: is finalize! defined in SciMLBase? or only DiffEqBase?
+finalize!(integrator) = DiffEqBase.finalize!(
+    integrator.callback,
+    integrator.u,
+    integrator.t,
+    integrator,
+)
+
+get_run_mode(integrator) = integrator.p.run_mode
+
+function solve_run_mode!(integrator, ::ProductionRun)
+    @assert !integrator.advance_to_tstop "Unsupported ClimaAtmos option"
+    while !isempty(integrator.tstops) && integrator.step != integrator.stepstop
+        SciMLBase.step!(integrator)
+    end
+    finalize!(integrator)
+    return integrator.sol
 end
 
 struct AtmosSolveResults{S, RT, WT}

@@ -563,3 +563,12 @@ function AtmosConfig(config::Dict; comms_ctx = nothing)
     PA = typeof(config)
     return AtmosConfig{FT, TD, PA, C}(toml_dict, config, comms_ctx)
 end
+
+abstract type AbstractRunMode end
+
+"""
+    ProductionRun
+
+A singleton type to dispatch for solving in production mode.
+"""
+struct ProductionRun <: AbstractRunMode end

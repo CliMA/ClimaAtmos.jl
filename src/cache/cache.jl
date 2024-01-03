@@ -27,6 +27,7 @@ struct AtmosCache{
     NETFLUXTOA,
     NETFLUXSFC,
     OD,
+    RM,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
@@ -91,6 +92,9 @@ struct AtmosCache{
 
     """Directory output."""
     output_dir::OD
+
+    """Run mode [production, autodebug]."""
+    run_mode::RM
 end
 
 # Functions on which the model depends:
@@ -106,7 +110,17 @@ end
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
 function build_cache(Y, atmos, params, surface_setup, sim_info)
-    (; dt, t_end, start_date, output_dir) = sim_info
+    (; dt, t_end, start_date, output_dir, dt_save_state_to_disk) = sim_info
+
+    run_mode = if sim_info.run_mode == "ProductionRun"
+        ProductionRun()
+    elseif sim_info.run_mode == "AutoDebugRun"
+        AutoDebugRun(;
+            simulate_crash = sim_info.simulate_crash,
+            dt_save_state_to_disk,
+            output_dir,
+        )
+    end
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -225,6 +239,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
         net_energy_flux_toa,
         net_energy_flux_sfc,
         output_dir,
+        run_mode,
     )
 
     return AtmosCache{map(typeof, args)...}(args...)
