@@ -45,8 +45,6 @@ steps:
       - label: ":computer: baroclinic wave (ρe_tot) high resolution"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name dry_baroclinic_wave
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_gpus: 1
@@ -58,8 +56,6 @@ steps:
       - label: ":computer: no lim ARS baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_gpus: 1
@@ -71,8 +67,6 @@ steps:
       - label: ":computer: held-suarez, dry, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name dry_held_suarez
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_gpus: 1
@@ -84,8 +78,6 @@ steps:
       - label: ":computer: held-suarez, equilmoist, high-topped (55km), high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_gpus: 1

@@ -35,3 +35,30 @@ diagnostics:
     period: 6hours
   - short_name: lmix
     period: 6hours
+  - short_name: ua
+    reduction_time: average
+    period: 12hours
+  - short_name: ta
+    reduction_time: average
+    period: 12hours
+  - short_name: hus
+    reduction_time: average
+    period: 12hours
+  - short_name: hfes
+    reduction_time: average
+    period: 12hours
+  - short_name: evspsbl
+    reduction_time: average
+    period: 12hours
+  - short_name: rsd
+    reduction_time: average
+    period: 12hours
+  - short_name: rsu
+    reduction_time: average
+    period: 12hours
+  - short_name: rld
+    reduction_time: average
+    period: 12hours
+  - short_name: rlu
+    reduction_time: average
+    period: 12hours

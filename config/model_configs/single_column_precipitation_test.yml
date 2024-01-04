@@ -21,22 +21,15 @@ toml: [toml/single_column_precipitation_test.toml]
 diagnostics:
   - short_name: hus
     period: 500secs
-    writer: h5
   - short_name: clw
     period: 500secs
-    writer: h5
   - short_name: cli
     period: 500secs
-    writer: h5
   - short_name: husra
     period: 500secs
-    writer: h5
   - short_name: hussn
     period: 500secs
-    writer: h5
   - short_name: ta
     period: 500secs
-    writer: h5
   - short_name: wa
     period: 500secs
-    writer: h5

@@ -64,8 +64,6 @@ steps:
       - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 32
@@ -78,7 +76,6 @@ steps:
         command:
           - "srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml"
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name moist_baroclinic_wave
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 32
@@ -89,8 +86,6 @@ steps:
       - label: ":computer: aquaplanet, equilmoist, high-topped (55km), gray-radiation, vertdiff, high-sponge (35km), helem_16 np_3"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
         artifact_paths: "$$JOB_NAME/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
@@ -103,8 +98,6 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution (nz63) hightop (55km) rayleigh sponge(35e3, 10)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64
@@ -142,8 +135,6 @@ steps:
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution (nz63) hightop (55km) rayleigh sponge(35e3, 10) + earth topography"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64
@@ -177,7 +168,6 @@ steps:
       - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 32
@@ -189,7 +179,6 @@ steps:
       - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64
@@ -201,8 +190,6 @@ steps:
       - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float32 (earth)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
-          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64
@@ -218,7 +205,6 @@ steps:
       - label: ":computer: aquaplanet dyamond"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64
@@ -234,7 +220,6 @@ steps:
       - label: ":computer: aquaplanet amip"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_ntasks: 64

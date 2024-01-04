@@ -70,7 +70,7 @@ steps:
 
       - label: "moist Held-Suarez"
         key: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
-        command: 
+        command:
           - mkdir -p gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
           - >
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
