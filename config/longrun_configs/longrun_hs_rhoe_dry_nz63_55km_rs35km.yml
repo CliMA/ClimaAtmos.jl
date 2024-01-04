@@ -1,6 +1,6 @@
 dz_bottom: 30.0
 dz_top: 3000.0
-dt_save_to_disk: "10days"
+dt_save_state_to_disk: "10days"
 t_end: "300days"
 h_elem: 16
 z_elem: 63

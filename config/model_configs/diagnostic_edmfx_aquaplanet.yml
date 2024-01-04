@@ -14,5 +14,5 @@ precip_model: 0M
 override_τ_precip: false
 dt: 50secs 
 t_end: 1hours 
-dt_save_to_disk: 600secs
+dt_save_state_to_disk: 600secs
 toml: [toml/diagnostic_edmfx_trmm_box.toml]

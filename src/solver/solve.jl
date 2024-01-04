@@ -70,10 +70,9 @@ function solve_atmos!(simulation)
     catch ret_code
         if !CA.is_distributed(comms_ctx)
             # We can only save when not distributed because we don't have a way to sync the
-            # MPI processes (maybe just one MPI rank crashes, leading to a hanginging
+            # MPI processes (maybe just one MPI rank crashes, leading to a hanging
             # simulation)
-            CA.save_restart_func(integrator, simulation.output_dir)
-            CA.save_to_disk_func(integrator, simulation.output_dir)
+            CA.save_state_to_disk_func(integrator, simulation.output_dir)
         end
         @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
             (ret_code, catch_backtrace())

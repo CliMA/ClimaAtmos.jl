@@ -1,5 +1,5 @@
 topography: "DCMIP200"
-dt_save_to_disk: "3days"
+dt_save_state_to_disk: "3days"
 rayleigh_sponge: true
 topo_smoothing: true
 use_reference_state: false

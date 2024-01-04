@@ -1,5 +1,5 @@
 dz_bottom: 300.0
-dt_save_to_disk: "4days"
+dt_save_state_to_disk: "4days"
 t_end: "8days"
 forcing: "held_suarez"
 dt: "400secs"

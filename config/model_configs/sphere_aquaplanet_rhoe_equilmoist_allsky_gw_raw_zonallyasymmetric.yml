@@ -1,5 +1,5 @@
 rad: "allskywithclear"
-dt_save_to_disk: "1days"
+dt_save_state_to_disk: "1days"
 rayleigh_sponge: true
 orographic_gravity_wave: "raw_topo"
 z_elem: 25
@@ -18,3 +18,31 @@ job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"
 moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
 netcdf_interpolate_z_over_msl: true
+diagnostics:
+  - short_name: ua
+    reduction_time: average
+    period: 12hours
+  - short_name: ta
+    reduction_time: average
+    period: 12hours
+  - short_name: hus
+    reduction_time: average
+    period: 12hours
+  - short_name: hfes
+    reduction_time: average
+    period: 12hours
+  - short_name: evspsbl
+    reduction_time: average
+    period: 12hours
+  - short_name: rsd
+    reduction_time: average
+    period: 12hours
+  - short_name: rsu
+    reduction_time: average
+    period: 12hours
+  - short_name: rld
+    reduction_time: average
+    period: 12hours
+  - short_name: rlu
+    reduction_time: average
+    period: 12hours

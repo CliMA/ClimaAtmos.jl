@@ -1,6 +1,6 @@
 rad: ~
 apply_limiter: false
-dt_save_to_disk: "10secs"
+dt_save_state_to_disk: "10secs"
 precip_model: ~
 turbconv: "edmf"
 post_process: false

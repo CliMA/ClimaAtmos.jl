@@ -2,7 +2,7 @@ precip_model: "0M"
 vert_diff: "true"
 z_elem: 20
 dz_bottom: 100
-dt_save_to_disk: "6hours"
+dt_save_state_to_disk: "6hours"
 initial_condition: "MoistBaroclinicWave"
 dt: "20secs"
 t_end: "6hours"

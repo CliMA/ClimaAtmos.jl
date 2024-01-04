@@ -32,6 +32,6 @@ dz_bottom: 50
 dz_top: 2000
 dt: 300secs
 t_end: 6hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/diagnostic_edmfx_trmm_box.toml]

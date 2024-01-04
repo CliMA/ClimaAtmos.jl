@@ -22,5 +22,5 @@ z_stretch: false
 perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
-dt_save_to_disk: "10mins"
+dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_box.toml]

@@ -21,7 +21,7 @@ edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
-dt_save_to_disk: "3hours"
+dt_save_state_to_disk: "3hours"
 dt: "5secs" 
 t_end: "1days"
 FLOAT_TYPE: "Float32"

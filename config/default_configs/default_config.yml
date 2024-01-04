@@ -144,11 +144,8 @@ forcing:
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
-dt_save_to_disk:
-  help: "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
-  value: "Inf"
-dt_save_restart:
-  help: "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+dt_save_state_to_disk:
+  help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
   value: "Inf"
 dt_save_to_sol:
   help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"

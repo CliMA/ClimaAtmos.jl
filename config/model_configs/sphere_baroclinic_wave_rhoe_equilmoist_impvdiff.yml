@@ -2,7 +2,7 @@ precip_model: "0M"
 vert_diff: "true"
 z_elem: 20
 dz_bottom: 100
-dt_save_to_disk: "6days"
+dt_save_state_to_disk: "6days"
 initial_condition: "MoistBaroclinicWave"
 implicit_diffusion: true
 max_newton_iters_ode: 2
@@ -11,3 +11,18 @@ t_end: "6days"
 job_id: "sphere_baroclinic_wave_rhoe_equilmoist_impvdiff"
 moist: "equil"
 toml: [toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml]
+diagnostics:
+  - short_name: pfull
+    period: 12hours
+  - short_name: rv
+    period: 12hours
+  - short_name: wa
+    period: 12hours
+  - short_name: va
+    period: 12hours
+  - short_name: pfull
+    period: 12hours
+  - short_name: ta
+    period: 12hours
+  - short_name: hus
+    period: 12hours

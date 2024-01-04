@@ -1,5 +1,5 @@
 FLOAT_TYPE: "Float32"
-dt_save_to_disk: "10days"
+dt_save_state_to_disk: "10days"
 t_end: "100days"
 moist: "equil"
 precip_model: "0M"

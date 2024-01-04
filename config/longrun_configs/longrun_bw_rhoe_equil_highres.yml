@@ -1,4 +1,4 @@
-dt_save_to_disk: "10days"
+dt_save_state_to_disk: "10days"
 initial_condition: "MoistBaroclinicWave"
 z_elem: 45
 dt: "300secs"

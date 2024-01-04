@@ -1,5 +1,5 @@
 topography: "DCMIP200"
-dt_save_to_disk: "6days"
+dt_save_state_to_disk: "6days"
 rayleigh_sponge: true
 topo_smoothing: true
 initial_condition: "DryBaroclinicWave"

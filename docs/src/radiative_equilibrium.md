@@ -23,7 +23,7 @@ dz_top: 10000
 t_end: "654days" 
 dt: "3hours" 
 dt_save_to_sol: "30hours" 
-dt_save_to_disk: "100days" 
+dt_save_state_to_disk: "100days" 
 prognostic_surface: "true" 
 job_id: "single_column_radiative_equilibrium_clearsky_prognostic_surface_temp"
 ```

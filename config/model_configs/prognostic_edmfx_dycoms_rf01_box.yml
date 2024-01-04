@@ -27,5 +27,5 @@ z_elem: 30
 z_stretch: false
 dt: 10secs
 t_end: 4hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_dycoms_rf01_box.toml]

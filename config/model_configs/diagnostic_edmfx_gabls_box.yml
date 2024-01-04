@@ -26,5 +26,5 @@ z_max: 400
 z_stretch: false
 dt: 200secs
 t_end: 9hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx_box.toml]

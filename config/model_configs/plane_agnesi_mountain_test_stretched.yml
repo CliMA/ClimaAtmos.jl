@@ -1,4 +1,4 @@
-dt_save_to_disk: "3600secs"
+dt_save_state_to_disk: "3600secs"
 rayleigh_sponge: true
 initial_condition: "AgnesiHProfile"
 x_max: 240000.0

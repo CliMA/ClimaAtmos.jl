@@ -78,7 +78,6 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
         ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded()),
     )
     Y = InputOutput.read_field(reader, "Y")
-    diag = InputOutput.read_field(reader, "diagnostics")
     t_now = InputOutput.HDF5.read_attribute(reader.file, "time")
 
     remap_tmpsubdir = if @isdefined pmap
@@ -113,76 +112,6 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     nc_u = defVar(nc, "u", FT, cspace, ("time",))
     nc_v = defVar(nc, "v", FT, cspace, ("time",))
     nc_w = defVar(nc, "w", FT, cspace, ("time",))
-    # define variables for the diagnostic states
-    nc_pres = defVar(nc, "pressure", FT, cspace, ("time",))
-    nc_T = defVar(nc, "temperature", FT, cspace, ("time",))
-    nc_θ = defVar(nc, "potential_temperature", FT, cspace, ("time",))
-    nc_K = defVar(nc, "kinetic_energy", FT, cspace, ("time",))
-    nc_vort = defVar(nc, "vorticity", FT, cspace, ("time",))
-    nc_T_sfc = defVar(nc, "sfc_temperature", FT, hspace, ("time",))
-    nc_z_sfc = defVar(nc, "sfc_elevation", FT, hspace, ("time",))
-    nc_qt_sfc = defVar(nc, "sfc_qt", FT, hspace, ("time",))
-    # define moist variables
-    if :ρq_tot in propertynames(Y.c)
-        nc_qt = defVar(nc, "qt", FT, cspace, ("time",))
-        nc_RH = defVar(nc, "RH", FT, cspace, ("time",))
-        nc_cloudliq = defVar(nc, "cloud_liquid", FT, cspace, ("time",))
-        nc_cloudice = defVar(nc, "cloud_ice", FT, cspace, ("time",))
-        nc_watervapor = defVar(nc, "water_vapor", FT, cspace, ("time",))
-        nc_cloudfrac_gm = defVar(nc, "cloud_fraction_gm", FT, cspace, ("time",))
-    end
-    # define precip variables
-    if :precipitation_removal in propertynames(diag)
-        nc_precipitation_removal =
-            defVar(nc, "precipitation_removal", FT, cspace, ("time",))
-        nc_column_integrated_rain =
-            defVar(nc, "column_integrated_rain", FT, hspace, ("time",))
-        nc_column_integrated_snow =
-            defVar(nc, "column_integrated_snow", FT, hspace, ("time",))
-    end
-    # define surface flux variables
-    if :sfc_flux_energy in propertynames(diag)
-        nc_sfc_flux_energy =
-            defVar(nc, "sfc_flux_energy", FT, hspace, ("time",))
-        nc_sfc_flux_u = defVar(nc, "sfc_flux_u", FT, hspace, ("time",))
-        nc_sfc_flux_v = defVar(nc, "sfc_flux_v", FT, hspace, ("time",))
-        if :sfc_evaporation in propertynames(diag)
-            nc_sfc_evaporation =
-                defVar(nc, "sfc_evaporation", FT, hspace, ("time",))
-        end
-    end
-    # define radiative flux variables
-    if :lw_flux_down in propertynames(diag)
-        nc_lw_flux_down = defVar(nc, "lw_flux_down", FT, fspace, ("time",))
-        nc_lw_flux_up = defVar(nc, "lw_flux_up", FT, fspace, ("time",))
-        nc_sw_flux_down = defVar(nc, "sw_flux_down", FT, fspace, ("time",))
-        nc_sw_flux_up = defVar(nc, "sw_flux_up", FT, fspace, ("time",))
-    end
-    if :clear_lw_flux_down in propertynames(diag)
-        nc_clear_lw_flux_down =
-            defVar(nc, "clear_lw_flux_down", FT, fspace, ("time",))
-        nc_clear_lw_flux_up =
-            defVar(nc, "clear_lw_flux_up", FT, fspace, ("time",))
-        nc_clear_sw_flux_down =
-            defVar(nc, "clear_sw_flux_down", FT, fspace, ("time",))
-        nc_clear_sw_flux_up =
-            defVar(nc, "clear_sw_flux_up", FT, fspace, ("time",))
-    end
-    if :draft_q_tot in propertynames(diag)
-        nc_draft_qt = defVar(nc, "draft_qt", FT, cspace, ("time",))
-        nc_draft_RH = defVar(nc, "draft_RH", FT, cspace, ("time",))
-        nc_draft_cloudliq =
-            defVar(nc, "draft_cloud_liquid", FT, cspace, ("time",))
-        nc_draft_cloudice = defVar(nc, "draft_cloud_ice", FT, cspace, ("time",))
-        nc_draft_watervapor =
-            defVar(nc, "draft_water_vapor", FT, cspace, ("time",))
-        nc_draft_cloudfrac =
-            defVar(nc, "draft_cloud_fraction", FT, cspace, ("time",))
-        nc_draft_area = defVar(nc, "draft_area_fraction", FT, cspace, ("time",))
-        nc_cloudfrac = defVar(nc, "cloud_fraction", FT, cspace, ("time",))
-        nc_tke = defVar(nc, "tke", FT, cspace, ("time",))
-        nc_mixing_length = defVar(nc, "mixing_length", FT, cspace, ("time",))
-    end
 
     # time
     nc_time[1] = t_now
@@ -192,6 +121,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     nc_rho[:, 1] = Y.c.ρ
     # thermodynamics
     nc_thermo[:, 1] = Y.c.ρe_tot ./ Y.c.ρ
+
     # physical horizontal velocity
     uh_phy = Geometry.transform.(tuple(Geometry.UVAxis()), Y.c.uₕ)
     nc_u[:, 1] = uh_phy.components.data.:1
@@ -200,157 +130,20 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     ᶠw = Geometry.WVector.(Y.f.u₃)
     ᶜw = ᶜinterp.(ᶠw)
     nc_w[:, 1] = ᶜw
-    # diagnostic variables
-    nc_pres[:, 1] = diag.pressure
-    nc_T[:, 1] = diag.temperature
-    nc_θ[:, 1] = diag.potential_temperature
-    nc_K[:, 1] = diag.kinetic_energy
-    nc_vort[:, 1] = diag.vorticity
-    nc_T_sfc[:, 1] = diag.sfc_temperature
-    nc_z_sfc[:, 1] = Fields.level(Fields.coordinate_field(Y.f.u₃).z, half)
-    nc_qt_sfc[:, 1] = diag.sfc_qt
 
-    if :ρq_tot in propertynames(Y.c)
-        nc_qt[:, 1] = Y.c.ρq_tot ./ Y.c.ρ
-        nc_RH[:, 1] = diag.relative_humidity
-        nc_cloudliq[:, 1] = diag.q_liq
-        nc_cloudice[:, 1] = diag.q_ice
-        nc_watervapor[:, 1] = diag.q_vap
-        nc_cloudfrac_gm[:, 1] = diag.cloud_fraction_gm
-    end
-
-    if :precipitation_removal in propertynames(diag)
-        nc_precipitation_removal[:, 1] = diag.precipitation_removal
-        nc_column_integrated_rain[:, 1] = diag.column_integrated_rain
-        nc_column_integrated_snow[:, 1] = diag.column_integrated_snow
-    end
-
-    if :sfc_flux_energy in propertynames(diag)
-        nc_sfc_flux_energy[:, 1] = diag.sfc_flux_energy
-        nc_sfc_flux_u[:, 1] = diag.sfc_flux_u
-        nc_sfc_flux_v[:, 1] = diag.sfc_flux_v
-        if :sfc_evaporation in propertynames(diag)
-            nc_sfc_evaporation[:, 1] = diag.sfc_evaporation
-        end
-    end
-
-    if :lw_flux_down in propertynames(diag)
-        nc_lw_flux_down[:, 1] = diag.lw_flux_down
-        nc_lw_flux_up[:, 1] = diag.lw_flux_up
-        nc_sw_flux_down[:, 1] = diag.sw_flux_down
-        nc_sw_flux_up[:, 1] = diag.sw_flux_up
-    end
-
-    if :clear_lw_flux_down in propertynames(diag)
-        nc_clear_lw_flux_down[:, 1] = diag.clear_lw_flux_down
-        nc_clear_lw_flux_up[:, 1] = diag.clear_lw_flux_up
-        nc_clear_sw_flux_down[:, 1] = diag.clear_sw_flux_down
-        nc_clear_sw_flux_up[:, 1] = diag.clear_sw_flux_up
-    end
-
-    if :draft_q_tot in propertynames(diag)
-        nc_draft_qt[:, 1] = diag.draft_q_tot
-        nc_draft_RH[:, 1] = diag.draft_relative_humidity
-        nc_draft_cloudliq[:, 1] = diag.draft_q_liq
-        nc_draft_cloudice[:, 1] = diag.draft_q_ice
-        nc_draft_watervapor[:, 1] = diag.draft_q_vap
-        nc_draft_cloudfrac[:, 1] = diag.draft_cloud_fraction
-        nc_draft_area[:, 1] = diag.draft_area
-        nc_cloudfrac[:, 1] = diag.cloud_fraction
-        nc_tke[:, 1] = diag.env_tke
-        nc_mixing_length[:, 1] = diag.env_mixing_length
-    end
     close(nc)
-
 
     datafile_latlon =
         joinpath(out_dir, first(splitext(basename(filein))) * ".nc")
-    dry_variables = [
-        "rho",
-        "e_tot",
-        "u",
-        "v",
-        "w",
-        "pressure",
-        "temperature",
-        "potential_temperature",
-        "kinetic_energy",
-        "vorticity",
-        "sfc_temperature",
-        "sfc_elevation",
-        "sfc_qt",
-    ]
+    dry_variables = ["rho", "e_tot", "u", "v", "w"]
+
     if :ρq_tot in propertynames(Y.c)
-        moist_variables = [
-            "qt",
-            "RH",
-            "cloud_ice",
-            "cloud_liquid",
-            "water_vapor",
-            "cloud_fraction_gm",
-        ]
+        moist_variables = ["qt"]
     else
         moist_variables = String[]
     end
-    if :precipitation_removal in propertynames(diag)
-        precip_variables = [
-            "precipitation_removal",
-            "column_integrated_rain",
-            "column_integrated_snow",
-        ]
-    else
-        precip_variables = String[]
-    end
-    if :sfc_flux_energy in propertynames(diag)
-        sfc_flux_variables = ["sfc_flux_energy", "sfc_flux_u", "sfc_flux_v"]
-        if :sfc_evaporation in propertynames(diag)
-            sfc_flux_variables = [sfc_flux_variables..., "sfc_evaporation"]
-        end
-    else
-        sfc_flux_variables = String[]
-    end
-    if :lw_flux_down in propertynames(diag)
-        rad_flux_variables =
-            ["lw_flux_down", "lw_flux_up", "sw_flux_down", "sw_flux_up"]
-    else
-        rad_flux_variables = String[]
-    end
-    if :clear_lw_flux_down in propertynames(diag)
-        rad_flux_clear_variables = [
-            "clear_lw_flux_down",
-            "clear_lw_flux_up",
-            "clear_sw_flux_down",
-            "clear_sw_flux_up",
-        ]
-    else
-        rad_flux_clear_variables = String[]
-    end
-    if :draft_q_tot in propertynames(diag)
-        edmf_variables = [
-            "draft_qt",
-            "draft_RH",
-            "draft_cloud_ice",
-            "draft_cloud_liquid",
-            "draft_water_vapor",
-            "draft_cloud_fraction",
-            "draft_area_fraction",
-            "cloud_fraction",
-            "tke",
-            "mixing_length",
-        ]
-    else
-        edmf_variables = String[]
-    end
 
-    netcdf_variables = vcat(
-        dry_variables,
-        moist_variables,
-        precip_variables,
-        sfc_flux_variables,
-        rad_flux_variables,
-        rad_flux_clear_variables,
-        edmf_variables,
-    )
+    netcdf_variables = vcat(dry_variables, moist_variables)
     apply_remap(datafile_latlon, datafile_cc, weightfile, netcdf_variables)
     rm(datafile_cc)
 end

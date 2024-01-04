@@ -1,4 +1,4 @@
-dt_save_to_disk: "8days"
+dt_save_state_to_disk: "8days"
 use_reference_state: false
 t_end: "8days"
 discrete_hydrostatic_balance: true

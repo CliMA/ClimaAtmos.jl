@@ -13,10 +13,10 @@ value = 0
 type = "float"
 alias = "y_elem"
 
-[dt_save_to_disk]
+[dt_save_state_to_disk]
 value = "5mins"
 type = "string"
-alias = "dt_save_to_disk"
+alias = "dt_save_state_to_disk"
 
 [dt]
 value = "10secs"

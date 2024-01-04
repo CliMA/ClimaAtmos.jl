@@ -13,6 +13,7 @@ sol_res = CA.solve_atmos!(simulation)
 (; p) = integrator
 
 import ClimaCore
+import ClimaCore: Topologies, Quadratures, Spaces
 import ClimaAtmos.InitialConditions as ICs
 using Statistics: mean
 import ClimaAtmos.Parameters as CAP
@@ -26,29 +27,16 @@ using NCDatasets
 using ClimaTimeSteppers
 import JSON
 using Test
+import Tar
+import Base.Filesystem: rm
 import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
 using ClimaCoreMakie, CairoMakie
-include(joinpath(pkgdir(CA), "post_processing", "common_utils.jl"))
-
-include(joinpath(pkgdir(CA), "post_processing", "contours_and_profiles.jl"))
-include(joinpath(pkgdir(CA), "post_processing", "post_processing_funcs.jl"))
-include(
-    joinpath(pkgdir(CA), "post_processing", "define_tc_quicklook_profiles.jl"),
-)
-include(joinpath(pkgdir(CA), "post_processing", "plot_single_column_precip.jl"))
+include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
-
-is_edmfx =
-    atmos.turbconv_model isa CA.PrognosticEDMFX ||
-    atmos.turbconv_model isa CA.DiagnosticEDMFX
-if is_edmfx && config.parsed_args["post_process"]
-    contours_and_profiles(simulation.output_dir, reference_job_id)
-    zip_and_cleanup_output(simulation.output_dir, "hdf5files.zip")
-end
 
 if sol_res.ret_code == :simulation_crashed
     error(
@@ -60,31 +48,50 @@ end
 @assert last(sol.t) == simulation.t_end
 CA.verify_callbacks(sol.t)
 
-if CA.is_distributed(config.comms_ctx)
-    export_scaling_file(
-        sol,
+if ClimaComms.iamroot(config.comms_ctx)
+    @info "Plotting"
+    make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
+    @info "Plotting done"
+
+    @info "Creating tarballs"
+    Tar.create(
+        f -> endswith(f, ".nc"),
         simulation.output_dir,
-        walltime,
-        config.comms_ctx,
-        ClimaComms.nprocs(config.comms_ctx),
+        joinpath(simulation.output_dir, "nc_files.tar"),
     )
+    Tar.create(
+        f -> endswith(f, r"hdf5|h5"),
+        simulation.output_dir,
+        joinpath(simulation.output_dir, "hdf5_files.tar"),
+    )
+
+    foreach(readdir(simulation.output_dir)) do f
+        endswith(f, r"nc|hdf5|h5") && rm(joinpath(simulation.output_dir, f))
+    end
+    @info "Tarballs created"
 end
 
-if !CA.is_distributed(config.comms_ctx) &&
-   config.parsed_args["post_process"] &&
-   !is_edmfx &&
-   !(atmos.model_config isa CA.SphericalModel)
-    ENV["GKSwstype"] = "nul" # avoid displaying plots
-    if is_column_without_edmfx(config.parsed_args)
-        custom_postprocessing(sol, simulation.output_dir, p)
-    elseif is_solid_body(config.parsed_args)
-        postprocessing(sol, simulation.output_dir, config.parsed_args["fps"])
-    elseif atmos.model_config isa CA.BoxModel
-        postprocessing_box(sol, simulation.output_dir)
-    elseif atmos.model_config isa CA.PlaneModel
-        postprocessing_plane(sol, simulation.output_dir, p)
-    else
-        error("Uncaught case")
+if CA.is_distributed(config.comms_ctx)
+    nprocs = ClimaComms.nprocs(config.comms_ctx)
+    comms_ctx = config.comms_ctx
+    output_dir = simulation.output_dir
+    # replace sol.u on the root processor with the global sol.u
+    if ClimaComms.iamroot(comms_ctx)
+        Y = sol.u[1]
+        center_space = axes(Y.c)
+        horz_space = Spaces.horizontal_space(center_space)
+        horz_topology = horz_space.topology
+        Nq = Quadratures.degrees_of_freedom(horz_space.quadrature_style)
+        nlocalelems = Topologies.nlocalelems(horz_topology)
+        ncols_per_process = nlocalelems * Nq * Nq
+        scaling_file =
+            joinpath(output_dir, "scaling_data_$(nprocs)_processes.jld2")
+        @info(
+            "Writing scaling data",
+            "walltime (seconds)" = walltime,
+            scaling_file
+        )
+        JLD2.jldsave(scaling_file; nprocs, ncols_per_process, walltime)
     end
 end
 
@@ -140,7 +147,7 @@ if config.parsed_args["check_conservation"]
     @test (energy_atmos_change + energy_surface_change) / energy_total ≈
           energy_radiation_input / energy_total atol = 5 * sqrt(eps(FT))
 
-    if p.atmos.moisture_model isa DryModel
+    if p.atmos.moisture_model isa CA.DryModel
         # density
         @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
     else
@@ -159,10 +166,6 @@ if config.parsed_args["check_conservation"]
 end
 
 if config.parsed_args["check_precipitation"]
-
-    # plot results of the single column precipitation test
-    plot_single_column_precip(simulation.output_dir, reference_job_id)
-
     # run some simple tests based on the output
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
     Yₜ = similar(sol.u[end])
@@ -177,7 +180,7 @@ if config.parsed_args["check_precipitation"]
     @. Yₜ_ρqₜ = Yₜ.c.ρq_tot
     @. Yₜ_ρ = Yₜ.c.ρ
 
-    Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
+    ClimaCore.Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
 
         # no nans
         @assert !any(isnan, Yₜ.c.ρ[colidx])

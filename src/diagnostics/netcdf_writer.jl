@@ -138,11 +138,17 @@ function target_coordinates(
     S <:
     Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
 }
+    # Logarithmically spaced with base e
+
     num_points_z = num_points[]
     FT = Spaces.undertype(space)
     vert_domain = space.topology.mesh.domain
-    z_min, z_max = vert_domain.coord_min.z, vert_domain.coord_max.z
-    return collect(range(FT(z_min), FT(z_max), num_points_z))
+    z_min, z_max = FT(vert_domain.coord_min.z), FT(vert_domain.coord_max.z)
+    # We are creating a log-space here, so we have to ensure that z_min > 0.
+    # If z_min = 0, we set the the first point to be at altitude of 100
+    log_z_min = z_min ≈ 0 ? FT(2) : log(z_min)
+    log_z_max = log(z_max)
+    return collect(exp.(range(log_z_min, log_z_max, num_points_z)))
 end
 
 # Column
@@ -461,7 +467,7 @@ Keyword arguments
 """
 function NetCDFWriter(;
     hypsography,
-    num_points = (180, 80, 10),
+    num_points = (90, 40, 50),
     interpolate_z_over_msl = false,
     compression_level = 9,
 )
@@ -510,11 +516,6 @@ function write_field!(
 )
 
     var = diagnostic.variable
-
-    # If we have a face-valued field, we interpolate it to the centers
-    if axes(field) isa Spaces.FaceExtrudedFiniteDifferenceSpace
-        field = ᶜinterp.(field)
-    end
 
     space = axes(field)
     FT = Spaces.undertype(space)
@@ -596,6 +597,7 @@ function write_field!(
             ("time", dim_names...),
             deflatelevel = writer.compression_level,
         )
+        v.attrib["short_name"] = var.short_name
         v.attrib["long_name"] = diagnostic.output_long_name
         v.attrib["short_name"] = var.short_name
         v.attrib["units"] = var.units
