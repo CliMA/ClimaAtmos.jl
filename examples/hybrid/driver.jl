@@ -45,7 +45,11 @@ if sol_res.ret_code == :simulation_crashed
 end
 # Simulation did not crash
 (; sol, walltime) = sol_res
-@assert last(sol.t) == simulation.t_end
+
+# we gracefully exited, so we won't have reached t_end
+if !CA.exit_step_loop(simulation.graceful_exit)
+    @assert last(sol.t) == simulation.t_end
+end
 CA.verify_callbacks(sol.t)
 
 if ClimaComms.iamroot(config.comms_ctx)

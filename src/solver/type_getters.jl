@@ -943,6 +943,7 @@ function get_simulation(config::AtmosConfig)
             end
         end
     end
+    graceful_exit = GracefulExit(; path = sim_info.output_dir)
 
     return AtmosSimulation(
         sim_info.job_id,
@@ -951,6 +952,7 @@ function get_simulation(config::AtmosConfig)
         sim_info.t_end,
         writers,
         integrator,
+        graceful_exit,
     )
 end
 

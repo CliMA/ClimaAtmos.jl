@@ -4,6 +4,7 @@ struct AtmosSimulation{
     S2 <: AbstractString,
     OW,
     OD,
+    GE,
 }
     job_id::S1
     output_dir::S2
@@ -11,4 +12,5 @@ struct AtmosSimulation{
     t_end::FT
     output_writers::OW
     integrator::OD
+    graceful_exit::GE
 end

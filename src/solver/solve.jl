@@ -6,6 +6,23 @@ struct EfficiencyStats{TS <: Tuple, WT}
     walltime::WT
 end
 
+mutable struct GracefulExit
+    path::String
+    function GracefulExit(; path)
+        mkpath(path)
+        file = joinpath(path, "graceful_exit.dat")
+        open(file, "w") do io
+            println(io, "#      To gracefully exit job associated")
+            println(io, "#      with the output path:")
+            println(io, "#           $path")
+            println(io, "#      please change the following number from")
+            println(io, "#      0 (continue running) to 1 (gracefully exit)")
+            println(io, "0")
+        end
+        return new(path)
+    end
+end
+
 simulated_years_per_day(es::EfficiencyStats) =
     simulated_years(es) / walltime_in_days(es)
 
@@ -13,16 +30,54 @@ simulated_years(es::EfficiencyStats) =
     (es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
 walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
 
-function timed_solve!(integrator)
+function timed_solve!(integrator, graceful_exit::GracefulExit)
     walltime = @elapsed begin
         s = @timed_str begin
-            sol = SciMLBase.solve!(integrator)
+            _solve!(integrator, graceful_exit)
         end
     end
     @info "solve!: $s"
     es = EfficiencyStats(integrator.sol.prob.tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"
-    return (sol, walltime)
+    return (integrator.sol, walltime)
+end
+
+finalize!(integrator) = DiffEqBase.finalize!(
+    integrator.callback,
+    integrator.u,
+    integrator.t,
+    integrator,
+)
+
+function exit_step_loop(ge::GracefulExit)
+    lines = readlines(joinpath(ge.path, "graceful_exit.dat"))
+    exit_loop = 0
+    for line in lines
+        startswith(line, "#") && continue
+        try
+            exit_loop = parse(Int, line)
+        catch
+            # Let's re-set the file, in
+            # case it was incorrectly edited.
+            GracefulExit(; path = ge.path)
+        end
+        break
+    end
+    return exit_loop == 1
+end
+
+
+
+function _solve!(integrator, graceful_exit::GracefulExit)
+    # TODO: remove assertion if upstream packages don't fail
+    @assert !integrator.advance_to_tstop "Unsupported ClimaAtmos option. call step! instead of solve!"
+    while !isempty(integrator.tstops) &&
+              integrator.step != integrator.stepstop &&
+              !exit_step_loop(graceful_exit)
+        SciMLBase.step!(integrator)
+    end
+    finalize!(integrator)
+    return integrator.sol
 end
 
 struct AtmosSolveResults{S, RT, WT}
@@ -46,11 +101,10 @@ indicating one of:
 `try-catch` is used to allow plotting
 results for simulations that have crashed.
 """
-function solve_atmos!(simulation)
-    (; integrator, output_writers) = simulation
+function solve_atmos!(simulation::AtmosSimulation)
+    (; integrator, output_writers, output_dir, graceful_exit) = simulation
     (; tspan) = integrator.sol.prob
-    @info "Running" job_id = simulation.job_id output_dir =
-        simulation.output_dir tspan
+    @info "Running" job_id = simulation.job_id output_dir = output_dir tspan
     comms_ctx = ClimaComms.context(axes(integrator.u.c))
     SciMLBase.step!(integrator)
     precompile_callbacks(integrator)
@@ -59,12 +113,12 @@ function solve_atmos!(simulation)
         if CA.is_distributed(comms_ctx)
             # GC.enable(false) # disabling GC causes a memory leak
             ClimaComms.barrier(comms_ctx)
-            (sol, walltime) = timed_solve!(integrator)
+            (sol, walltime) = timed_solve!(integrator, graceful_exit)
             ClimaComms.barrier(comms_ctx)
             GC.enable(true)
             return AtmosSolveResults(sol, :success, walltime)
         else
-            (sol, walltime) = timed_solve!(integrator)
+            (sol, walltime) = timed_solve!(integrator, graceful_exit)
             return AtmosSolveResults(sol, :success, walltime)
         end
     catch ret_code
