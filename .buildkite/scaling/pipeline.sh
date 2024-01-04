@@ -79,7 +79,7 @@ env:
   JULIA_NVTX_CALLBACKS: gc
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_CPU_TARGET: 'broadwell;skylake'
+  JULIA_CPU_TARGET: 'broadwell;skylake;icelake;cascadelake;epyc'
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_CUDA_MEMORY_POOL: none
