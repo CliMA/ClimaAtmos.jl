@@ -12,4 +12,3 @@ prognostic_surface: "PrognosticSurfaceTemperature"
 check_conservation: true
 bubble: false
 job_id: "longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean"
-

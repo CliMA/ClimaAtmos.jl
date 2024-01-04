@@ -45,13 +45,13 @@ steps:
 
   - wait
 
-  - group: "Targeted resolution AMIP long runs"
+  - group: "Targeted AMIP resolution long runs"
 
     steps:
 
       - label: ":computer: hydrostatic balance (ρe_tot)"
         command:
-          - julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
           - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
           - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name dry_held_suarez
         artifact_paths: "$$JOB_NAME/*"
@@ -137,7 +137,7 @@ steps:
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
         env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean"
+          JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_slabocean"
 
       - label: ":computer: aquaplanet (ρe_tot) equilmoist clearsky high resolution (nz63) hightop (55km) rayleigh sponge(35e3, 10) + earth topography"
         command:
@@ -152,7 +152,25 @@ steps:
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_earth"
 
-  - group: "Experimental Long runs"
+  - group: "Low resolution long runs"
+
+    steps:
+
+      - label: ":computer: aquaplanet slab ocean (ρe_tot) equilmoist clearsky low resolution + time-varying insolation"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          - julia --color=yes --project=examples post_processing/remap/remap_pipeline.jl --data_dir $$JOB_NAME --out_dir $$JOB_NAME
+          - julia --color=yes --project=examples post_processing/plot/plot_pipeline.jl --nc_dir $$JOB_NAME --fig_dir $$JOB_NAME --case_name aquaplanet
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_ntasks: 8
+          slurm_mem_per_cpu: 16GB
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean"
+
+
+  - group: "Experimental long runs"
 
     steps:
 
