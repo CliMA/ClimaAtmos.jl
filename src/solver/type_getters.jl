@@ -462,6 +462,14 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
             ),
         )
     end
+    callbacks = (
+        callbacks...,
+        call_every_n_steps(
+            (integrator) -> maybe_graceful_exit(integrator);
+            skip_first = true,
+        ),
+    )
+
     dt_save_state_to_disk =
         time_to_seconds(parsed_args["dt_save_state_to_disk"])
     if !(dt_save_state_to_disk == Inf)
@@ -792,15 +800,7 @@ function get_simulation(config::AtmosConfig)
     end
 
     s = @timed_str begin
-        p = build_cache(
-            Y,
-            atmos,
-            params,
-            surface_setup,
-            sim_info.dt,
-            sim_info.t_end,
-            sim_info.start_date,
-        )
+        p = build_cache(Y, atmos, params, surface_setup, sim_info)
     end
     @info "Allocating cache (p): $s"
 

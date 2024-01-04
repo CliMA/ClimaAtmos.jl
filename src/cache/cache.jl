@@ -26,6 +26,7 @@ struct AtmosCache{
     RAD,
     NETFLUXTOA,
     NETFLUXSFC,
+    OD,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
@@ -87,6 +88,9 @@ struct AtmosCache{
     """Net energy flux coming through top of atmosphere and surface"""
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
+
+    """Directory output."""
+    output_dir::OD
 end
 
 # Functions on which the model depends:
@@ -101,7 +105,8 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, dt, t_end, start_date)
+function build_cache(Y, atmos, params, surface_setup, sim_info)
+    (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -219,6 +224,7 @@ function build_cache(Y, atmos, params, surface_setup, dt, t_end, start_date)
         radiation,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        output_dir,
     )
 
     return AtmosCache{map(typeof, args)...}(args...)
