@@ -14,6 +14,11 @@ end
    Compute the grid scale cloud fraction based on sub-grid scale properties
 """
 function set_cloud_fraction!(Y, p, ::DryModel)
+    (; ᶜmixing_length) = p.precomputed
+    (; turbconv_model) = p.atmos
+    if isnothing(turbconv_model)
+        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+    end
     @. p.precomputed.ᶜcloud_fraction = 0
 end
 function set_cloud_fraction!(Y, p, ::Union{EquilMoistModel, NonEquilMoistModel})

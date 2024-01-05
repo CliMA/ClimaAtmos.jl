@@ -70,19 +70,13 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     compute_strain_rate_center!(ᶜstrain_rate, ᶠu)
 
-    turbconv_params = CAP.turbconv_params(params)
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
-    # TODO: Fix the broadcasting error in turbulent_prandtl_number for XZPoint
-    if eltype(Fields.coordinate_field(obukhov_length)) <: Geometry.XZPoint
-        @. ᶜprandtl_nvec = CAP.Prandtl_number_0(turbconv_params)
-    else
-        @. ᶜprandtl_nvec = turbulent_prandtl_number(
-            params,
-            obukhov_length,
-            ᶜlinear_buoygrad,
-            norm_sqr(ᶜstrain_rate),
-        )
-    end
+    @. ᶜprandtl_nvec = turbulent_prandtl_number(
+        params,
+        obukhov_length,
+        ᶜlinear_buoygrad,
+        norm_sqr(ᶜstrain_rate),
+    )
 
     @. ᶜmixing_length = smagorinsky_lilly_length(
         CAP.c_smag(params),
