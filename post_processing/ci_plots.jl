@@ -6,6 +6,8 @@ import ClimaAnalysis: SimDir, slice_time, slice
 using Poppler_jll: pdfunite
 import Base.Filesystem
 
+const days = 86400
+
 # Return the last common directory across several files
 function common_dirname(files::Vector{T}) where {T <: AbstractString}
     # Split the path of each file into a vector of strings
@@ -229,7 +231,6 @@ end
 DryBaroWavePlots = Union{
     Val{:sphere_baroclinic_wave_rhoe},
     Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    Val{:longrun_bw_rhoe_highres},
 }
 
 function make_plots(::DryBaroWavePlots, simulation_path)
@@ -237,6 +238,15 @@ function make_plots(::DryBaroWavePlots, simulation_path)
     short_names = ["pfull", "va", "wa", "rv"]
     vars = [get(simdir; short_name) for short_name in short_names]
     make_plots_generic(simulation_path, vars, z = 3000, time = LAST_SNAP)
+end
+
+function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
+    simdir = SimDir(simulation_path)
+    short_names = ["pfull", "va", "wa", "rv"]
+    vars = [
+        get(simdir; short_name, reduction, period) for short_name in short_names
+    ]
+    make_plots_generic(simulation_path, vars, z = 3000, time = 10days)
 end
 
 function make_plots(
@@ -255,7 +265,6 @@ MoistBaroWavePlots = Union{
     Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
     Val{:longrun_ssp_bw_rhoe_equil_highres},
     Val{:longrun_bw_rhoe_equil_highres_topography_earth},
-    Val{:longrun_bw_rhoe_equil_highres},
 }
 
 function make_plots(::MoistBaroWavePlots, simulation_path)
@@ -265,6 +274,19 @@ function make_plots(::MoistBaroWavePlots, simulation_path)
 
     var1sliced = slice(var1, z = BOTTOM_LVL)
     var2 = get(simdir; short_name = "hus") |> ClimaAnalysis.average_lon
+
+    make_plots_generic(simulation_path, [var1sliced, var2], time = LAST_SNAP)
+end
+
+function make_plots(::Val{:longrun_bw_rhoe_equil_highres}, simulation_path)
+    simdir = SimDir(simulation_path)
+
+    var1 = get(simdir; short_name = "ta", reduction = "average", period = "1d")
+
+    var1sliced = slice(var1, z = BOTTOM_LVL)
+    var2 =
+        get(simdir; short_name = "hus", reduction = "average", period = "1d") |>
+        ClimaAnalysis.average_lon
 
     make_plots_generic(simulation_path, [var1sliced, var2], time = LAST_SNAP)
 end
@@ -365,7 +387,6 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_amip},
-    Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
 }
 
 function make_plots(::AquaplanetPlots, simulation_path)
@@ -395,6 +416,38 @@ function make_plots(::AquaplanetPlots, simulation_path)
         output_name = "summary_sfc",
     )
 end
+
+function make_plots(
+    ::Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
+    simulation_path,
+)
+    simdir = SimDir(simulation_path)
+
+    reduction = "average"
+    period = "1d"
+    short_names_3D = ["ua", "ta", "hus"]
+    short_names_sfc = ["hfes", "evspsbl"]
+    vars_3D = [
+        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
+    ]
+    vars_sfc = [
+        get(simdir; short_name, reduction, period) for
+        short_name in short_names_sfc
+    ]
+    make_plots_generic(
+        simulation_path,
+        vars_3D,
+        time = LAST_SNAP,
+        more_kwargs = YLOGSCALE,
+    )
+    make_plots_generic(
+        simulation_path,
+        vars_sfc,
+        time = LAST_SNAP,
+        output_name = "summary_sfc",
+    )
+end
+
 
 function make_plots(
     ::Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
