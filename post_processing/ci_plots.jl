@@ -237,7 +237,16 @@ function make_plots(::DryBaroWavePlots, simulation_path)
     simdir = SimDir(simulation_path)
     short_names = ["pfull", "va", "wa", "rv"]
     vars = [get(simdir; short_name) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 3000, time = LAST_SNAP)
+    make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
+end
+
+function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
+    simdir = SimDir(simulation_path)
+    short_names = ["pfull", "va", "wa", "rv"]
+    vars = [
+        get(simdir; short_name, reduction, period) for short_name in short_names
+    ]
+    make_plots_generic(simulation_path, vars, z = 1500, time = 10days)
 end
 
 function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
@@ -256,7 +265,7 @@ function make_plots(
     simdir = SimDir(simulation_path)
     short_names = ["pfull", "va", "wa", "rv", "hus"]
     vars = [get(simdir; short_name) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 3000, time = LAST_SNAP)
+    make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
 end
 
 MoistBaroWavePlots = Union{
