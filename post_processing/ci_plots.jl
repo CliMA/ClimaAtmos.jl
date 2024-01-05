@@ -17,7 +17,7 @@ function common_dirname(files::Vector{T}) where {T <: AbstractString}
     return joinpath(split_files[1][1:last_common_dir]...)
 end
 
-# From https://github.com/scheidan/PDFmerger.jl/blob/main/src/PDFmerger.jl
+# Based off https://github.com/scheidan/PDFmerger.jl/blob/main/src/PDFmerger.jl
 # Licensed under MIT license
 import Base.Filesystem
 using Poppler_jll: pdfunite, pdfinfo, pdfseparate
@@ -26,7 +26,10 @@ function merge_pdfs(
     destination::AbstractString = joinpath(common_dirname(files), "merged.pdf");
     cleanup::Bool = false,
 ) where {T <: AbstractString}
-    if destination ∈ files
+    # Filter files to be only files that exist
+    files = filter(Filesystem.isfile, files)
+
+    if destination in files
         # rename existing file
         Filesystem.mv(destination, destination * "_x_")
         files[files .== destination] .= destination * "_x_"
