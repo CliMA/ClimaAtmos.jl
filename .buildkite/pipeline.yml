@@ -715,6 +715,7 @@ steps:
           --config_file $PERF_CONFIG_PATH/gpu_implicit_barowave_moist.yml
         artifact_paths: "gpu_implicit_barowave_moist/*"
         agents:
+          slurm_mem: 16G
           slurm_gpus: 1
 
       - label: "Perf: CPU implicit baro wave"
