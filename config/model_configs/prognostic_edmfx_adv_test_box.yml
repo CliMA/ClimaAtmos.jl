@@ -7,10 +7,8 @@ edmfx_upwinding: "first_order"
 config: "box"
 moist: "equil"
 hyperdiff: "true"
-kappa_4_vorticity: 1e8
-kappa_4_tracer: 1e8
-x_max: 1e4
-y_max: 1e4
+x_max: 1e8
+y_max: 1e8
 z_max: 5.5e4
 x_elem: 2
 y_elem: 2

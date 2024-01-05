@@ -34,15 +34,17 @@ function get_sfc_temperature_form(parsed_args)
     end
 end
 
-function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
+function get_hyperdiffusion_model(parsed_args, spaces, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
-    κ₄_vorticity = FT(parsed_args["kappa_4_vorticity"])
-    κ₄_tracer = FT(parsed_args["kappa_4_tracer"])
+    h_space = Spaces.horizontal_space(spaces.center_space)
+    h_length_scale = Spaces.node_horizontal_length_scale(h_space) # mean nodal distance
+    κ₄_vorticity = FT(parsed_args["kappa_4_vorticity"]) * h_length_scale^3
+    κ₄_scalar = FT(parsed_args["kappa_4_scalar"]) * h_length_scale^3
     divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
     return if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
         ClimaHyperdiffusion(;
             κ₄_vorticity,
-            κ₄_tracer,
+            κ₄_scalar,
             divergence_damping_factor,
         )
     elseif hyperdiff_name in ("CAM_SE",)
@@ -51,11 +53,11 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         #    for equation A18 and A19
         Ne = parsed_args["h_elem"]
         κ₄_vorticity = FT(0.15 * (30 / Ne * 1.1 * 10^5)^3) # ν_vort
-        κ₄_tracer = FT(0.75 * (30 / Ne * 1.1 * 10^5)^3) # ν_q
+        κ₄_scalar = FT(0.75 * (30 / Ne * 1.1 * 10^5)^3) # ν_q
         divergence_damping_factor = FT(5)
         ClimaHyperdiffusion(;
             κ₄_vorticity,
-            κ₄_tracer,
+            κ₄_scalar,
             divergence_damping_factor,
         )
     elseif hyperdiff_name in ("none", "false", false)

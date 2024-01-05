@@ -58,7 +58,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
-    (; κ₄_vorticity, κ₄_tracer, divergence_damping_factor) = hyperdiff
+    (; κ₄_vorticity, κ₄_scalar, divergence_damping_factor) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -137,7 +137,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= κ₄_vorticity * C12(ᶜ∇²u)
     @. Yₜ.f.u₃ -= κ₄_vorticity * ᶠwinterp(ᶜJ * Y.c.ρ, C3(ᶜ∇²u))
 
-    @. Yₜ.c.ρe_tot -= κ₄_tracer * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
+    @. Yₜ.c.ρe_tot -= κ₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²specific_energy))
 
     # Sub-grid scale hyperdiffusion continued
     if (turbconv_model isa PrognosticEDMFX) && diffuse_tke
@@ -153,7 +153,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
             end
             # Note: It is more correct to have ρa inside and outside the divergence
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                κ₄_tracer * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
+                κ₄_scalar * wdivₕ(gradₕ(ᶜ∇²mseʲs.:($$j)))
         end
     end
 
@@ -166,7 +166,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
-    (; κ₄_tracer) = hyperdiff
+    (; κ₄_scalar) = hyperdiff
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜspecific) = p.precomputed
@@ -209,16 +209,16 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # TODO: Figure out why caching the duplicated tendencies in ᶜtemp_scalar
     # triggers allocations.
     for (ᶜρχₜ, ᶜ∇²χ, _) in matching_subfields(Yₜ.c, ᶜ∇²specific_tracers)
-        @. ᶜρχₜ -= κ₄_tracer * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
-        @. Yₜ.c.ρ -= κ₄_tracer * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+        @. ᶜρχₜ -= κ₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
+        @. Yₜ.c.ρ -= κ₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -=
-                κ₄_tracer *
+                κ₄_scalar *
                 wdivₕ(Y.c.sgsʲs.:($$j).ρa * gradₕ(ᶜ∇²q_totʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                κ₄_tracer * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
+                κ₄_scalar * wdivₕ(gradₕ(ᶜ∇²q_totʲs.:($$j)))
         end
     end
     return nothing

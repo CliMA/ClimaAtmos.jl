@@ -15,8 +15,6 @@ edmfx_sgs_diffusive_flux: true
 moist: equil
 config: box 
 hyperdiff: "true" 
-kappa_4_vorticity: 1e21
-kappa_4_tracer: 1e21
 x_max: 1e8 
 y_max: 1e8 
 x_elem: 2 

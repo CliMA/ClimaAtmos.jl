@@ -37,7 +37,7 @@ end
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
     κ₄_vorticity::FT
-    κ₄_tracer::FT
+    κ₄_scalar::FT
     divergence_damping_factor::FT
 end
 
