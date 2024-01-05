@@ -3,6 +3,9 @@ import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
 import ClimaAnalysis: SimDir, slice_time, slice
 
+using Poppler_jll: pdfunite
+import Base.Filesystem
+
 # Return the last common directory across several files
 function common_dirname(files::Vector{T}) where {T <: AbstractString}
     # Split the path of each file into a vector of strings
@@ -16,62 +19,6 @@ function common_dirname(files::Vector{T}) where {T <: AbstractString}
         ) - 1
     return joinpath(split_files[1][1:last_common_dir]...)
 end
-
-# Based off https://github.com/scheidan/PDFmerger.jl/blob/main/src/PDFmerger.jl
-# Licensed under MIT license
-import Base.Filesystem
-using Poppler_jll: pdfunite, pdfinfo, pdfseparate
-function merge_pdfs(
-    files::Vector{T},
-    destination::AbstractString = joinpath(common_dirname(files), "merged.pdf");
-    cleanup::Bool = false,
-) where {T <: AbstractString}
-    # Filter files to be only files that exist
-    files = filter(Filesystem.isfile, files)
-
-    if destination in files
-        # rename existing file
-        Filesystem.mv(destination, destination * "_x_")
-        files[files .== destination] .= destination * "_x_"
-    end
-
-    # Merge large number of files iteratively, because there
-    # is a (OS dependent) limit how many files 'pdfunit' can handle at once.
-    # See: https://gitlab.freedesktop.org/poppler/poppler/-/issues/334
-    filemax = 200
-
-    k = 1
-    for files_part in Base.Iterators.partition(files, filemax)
-        if k == 1
-            outfile_tmp2 = "_temp_destination_$k"
-
-            pdfunite() do unite
-                run(`$unite $files_part $outfile_tmp2`)
-            end
-        else
-            outfile_tmp1 = "_temp_destination_$(k-1)"
-            outfile_tmp2 = "_temp_destination_$k"
-
-            pdfunite() do unite
-                run(`$unite $outfile_tmp1 $files_part $outfile_tmp2`)
-            end
-        end
-        k += 1
-    end
-
-    # rename last file
-    Filesystem.mv("_temp_destination_$(k-1)", destination, force = true)
-
-    # remove temp files
-    Filesystem.rm(destination * "_x_", force = true)
-    Filesystem.rm.("_temp_destination_$(i)" for i in 1:(k - 2); force = true)
-    if cleanup
-        Filesystem.rm.(files, force = true)
-    end
-
-    destination
-end
-
 
 function make_plots(sim, simulation_path)
     @warn "No plot found for $sim"
@@ -132,12 +79,14 @@ function make_plots_generic(
         end
     end
 
-    merge_pdfs(
-        summary_files,
-        joinpath(output_path, "$output_name.pdf"),
-        cleanup = true,
-    )
+    output_file = joinpath(output_path, "$(output_name).pdf")
 
+    pdfunite() do unite
+        run(Cmd([unite, summary_files..., output_file]))
+    end
+
+    # Cleanup
+    Filesystem.rm.(summary_files, force = true)
 end
 
 ColumnPlots = Union{
