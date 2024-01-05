@@ -552,7 +552,7 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function get_diagnostics(parsed_args, atmos_model, hypsography)
+function get_diagnostics(parsed_args, atmos_model, spaces)
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -577,8 +577,9 @@ function get_diagnostics(parsed_args, atmos_model, hypsography)
 
     hdf5_writer = CAD.HDF5Writer()
     netcdf_writer = CAD.NetCDFWriter(;
-        hypsography,
+        spaces,
         interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
+        disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
     )
     writers = (hdf5_writer, netcdf_writer)
 
@@ -814,11 +815,8 @@ function get_simulation(config::AtmosConfig)
 
     # Initialize diagnostics
     s = @timed_str begin
-        diagnostics, writers = get_diagnostics(
-            config.parsed_args,
-            atmos,
-            spaces.center_space.hypsography,
-        )
+        diagnostics, writers =
+            get_diagnostics(config.parsed_args, atmos, spaces)
     end
     @info "initializing diagnostics: $s"
 

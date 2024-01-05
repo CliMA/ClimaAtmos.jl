@@ -108,7 +108,8 @@ end
 """
     add_space_coordinates_maybe!(nc::NCDatasets.NCDataset,
                                  space::Spaces.AbstractSpace,
-                                 num_points)
+                                 num_points;
+                                 names)
 
 Add dimensions relevant to the `space` to the given `nc` NetCDF file. The range is
 automatically determined and the number of points is set with `num_points`, which has to be
@@ -117,6 +118,8 @@ a cubed sphere, 2 for a surface, 1 for a column.
 
 The function returns an array with the names of the relevant dimensions. (We want arrays
 because we want to preserve the order to match the one in num_points).
+
+In some cases, the names are adjustable passing the keyword `names`.
 """
 function add_space_coordinates_maybe! end
 
@@ -155,23 +158,24 @@ end
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
-    num_points_z,
+    num_points_z;
+    names = ("z",),
 )
-    name = "z"
+    name, _... = names
     zpts = target_coordinates(space, num_points_z)
-    add_dimension_maybe!(nc, "z", zpts, units = "m")
+    add_dimension_maybe!(nc, name, zpts, units = "m", axis = "Z")
     return [name]
 end
 
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.AbstractSpectralElementSpace,
-    num_points,
+    num_points;
 ) = add_space_coordinates_maybe!(
     nc,
     space,
     num_points,
-    Meshes.domain(space.topology),
+    Meshes.domain(space.topology);
 )
 
 
@@ -230,12 +234,13 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.SpectralElementSpace2D,
     num_points,
-    ::Domains.RectangleDomain,
+    ::Domains.RectangleDomain;
+    names = ("x", "y"),
 )
-    xname, yname = ("x", "y")
+    xname, yname = names
     xpts, ypts = target_coordinates(space, num_points)
-    add_dimension_maybe!(nc, "x", xpts; units = "m")
-    add_dimension_maybe!(nc, "y", ypts; units = "m")
+    add_dimension_maybe!(nc, "x", xpts; units = "m", axis = "X")
+    add_dimension_maybe!(nc, "y", ypts; units = "m", axis = "Y")
     return [xname, yname]
 end
 
@@ -244,11 +249,12 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.SpectralElementSpace1D,
     num_points,
-    ::Domains.IntervalDomain,
+    ::Domains.IntervalDomain;
+    names = ("x",),
 )
-    xname = "x"
+    xname, _... = names
     xpts = target_coordinates(space, num_points)
-    add_dimension_maybe!(nc, "x", xpts; units = "m")
+    add_dimension_maybe!(nc, "x", xpts; units = "m", axis = "X")
     return [xname]
 end
 
@@ -257,12 +263,13 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.SpectralElementSpace2D,
     num_points,
-    ::Domains.SphereDomain,
+    ::Domains.SphereDomain;
+    names = ("lon", "lat"),
 )
-    longname, latname = ("lon", "lat")
+    longname, latname = names
     longpts, latpts = target_coordinates(space, num_points)
-    add_dimension_maybe!(nc, "lon", longpts; units = "degrees_east")
-    add_dimension_maybe!(nc, "lat", latpts; units = "degrees_north")
+    add_dimension_maybe!(nc, "lon", longpts; units = "degrees_east", axis = "X")
+    add_dimension_maybe!(nc, "lat", latpts; units = "degrees_north", axis = "Y")
     return [longname, latname]
 end
 
@@ -273,6 +280,7 @@ function add_space_coordinates_maybe!(
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
     interpolated_surface = nothing,
+    disable_vertical_interpolation = false,
 )
 
     hdims_names = vdims_names = []
@@ -295,25 +303,35 @@ function add_space_coordinates_maybe!(
         vdims_names =
             add_space_coordinates_maybe!(nc, vertical_space, num_points_vertic)
     else
-        vdims_names = add_space_coordinates_maybe!(
-            nc,
-            vertical_space,
-            num_points_vertic,
-            interpolated_surface;
-            depending_on_dimensions = hdims_names,
-        )
+        if disable_vertical_interpolation
+            vdims_names = add_space_coordinates_maybe!(
+                nc,
+                vertical_space,
+                num_points_vertic,
+                names = ("z_reference",),
+            )
+        else
+            vdims_names = add_space_coordinates_maybe!(
+                nc,
+                vertical_space,
+                num_points_vertic,
+                interpolated_surface;
+                depending_on_dimensions = hdims_names,
+            )
+        end
     end
 
     return (hdims_names..., vdims_names...)
 end
 
-# Ignore the interpolated_surface keyword in the general case (we only case about the
-# specialized one for extruded spaces)
+# Ignore the interpolated_surface/disable_vertical_interpolation keywords in the general
+# case (we only case about the specialized one for extruded spaces)
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space,
     num_points;
     interpolated_surface = nothing,
+    disable_vertical_interpolation = false,
 ) = add_space_coordinates_maybe!(nc::NCDatasets.NCDataset, space, num_points)
 
 # Elevation with topography
@@ -432,6 +450,12 @@ struct NetCDFWriter{T, TS}
 
     # Whether to treat z as altitude over the surface or the sea level or over the surface
     interpolate_z_over_msl::Bool
+
+    # Do not interpolate on the z direction, instead evaluate on the levels.
+    # This is incompatible with interpolate_z_over_msl when topography is present.
+    # When disable_vertical_interpolation is true, the num_points on the vertical direction
+    # is ignored.
+    disable_vertical_interpolation::Bool
 end
 
 """
@@ -461,27 +485,42 @@ Keyword arguments
                             be altitude from the surface (in meters). `z` becomes a
                             multidimensional array that returns the altitude for the given
                             horizontal coordinates.
+- `disable_vertical_interpolation`: Do not interpolate on the z direction, instead evaluate
+                                    at on levels. This is incompatible with
+                                    interpolate_z_over_msl when topography is present. When
+                                    disable_vertical_interpolation is true, the num_points
+                                    on the vertical direction is ignored.
 - `compression_level`: How much to compress the output NetCDF file (0 is no compression, 9
   is maximum compression).
 
 """
 function NetCDFWriter(;
-    hypsography,
+    spaces,
     num_points = (90, 40, 50),
     interpolate_z_over_msl = false,
+    disable_vertical_interpolation = false,
     compression_level = 9,
 )
+    space = spaces.center_space
+    hypsography = space.hypsography
 
-    # We have to deal with the pesky topography. This is a little annoying to deal with
-    # because it couples the horizontal and the vertical dimensions, so it doesn't fit the
-    # common paradigm for all the other dimensions. Moreover, with topography, we need need
-    # to perform an interpolation for the surface.
+    # When we are interpolating on the vertical direction, we have to deal with the pesky
+    # topography. This is a little annoying to deal with because it couples the horizontal
+    # and the vertical dimensions, so it doesn't fit the common paradigm for all the other
+    # dimensions. Moreover, with topography, we need to perform an interpolation for the
+    # surface.
 
     # We have to deal with the surface only if we are not interpolating the topography and
     # if our topography is non-trivial
     if hypsography isa Grids.Flat || interpolate_z_over_msl
         interpolated_surface = nothing
     elseif hypsography isa Hypsography.LinearAdaption
+        disable_vertical_interpolation &&
+            interpolate_z_over_msl &&
+            error(
+                "Cannot disable vertical interpolation and interpolate over MSL at the same time",
+            )
+
         horizontal_space = axes(hypsography.surface)
         hpts = target_coordinates(horizontal_space, num_points)
         hcoords = hcoords_from_horizontal_space(
@@ -497,6 +536,22 @@ function NetCDFWriter(;
         error("Cannot process hysography $hypsography")
     end
 
+    if disable_vertical_interpolation
+        # It is a little tricky to override the number of vertical points because we don't
+        # know if the vertical direction is the 2nd (as in a plane) or 3rd index (as in a
+        # box or sphere). To set this value, we check if we are on a plane or not
+
+        # TODO: Get the number of dimensions directly from the space
+        num_horiz_dimensions =
+            Spaces.horizontal_space(space) isa Spaces.SpectralElementSpace1D ?
+            1 : 2
+
+        num_vpts = Meshes.nelements(Grids.vertical_topology(space).mesh)
+
+        @warn "Disabling vertical interpolation, the provided number of points is ignored (using $num_vpts)"
+        num_points = Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
+    end
+
     return NetCDFWriter{typeof(num_points), typeof(interpolated_surface)}(
         Dict(),
         num_points,
@@ -504,6 +559,7 @@ function NetCDFWriter(;
         interpolated_surface,
         Dict(),
         interpolate_z_over_msl,
+        disable_vertical_interpolation,
     )
 end
 
@@ -534,6 +590,12 @@ function write_field!(
 
     # TODO: Expand this once we support spatial reductions
     if !haskey(writer.remappers, var.short_name)
+
+        # hpts, vpts are ranges of numbers
+        # hcoords, zcoords are ranges of Geometry.Points
+
+        zcoords = []
+
         if is_horizontal_space
             hpts = target_coordinates(space, writer.num_points)
             vpts = []
@@ -541,13 +603,25 @@ function write_field!(
             hpts, vpts = target_coordinates(space, writer.num_points)
         end
 
-        # zcoords is going to be empty for a 2D horizontal slice
-        zcoords = [Geometry.ZPoint(p) for p in vpts]
         hcoords = hcoords_from_horizontal_space(
             horizontal_space,
             Meshes.domain(horizontal_space.topology),
             hpts,
         )
+
+        # When we disable vertical_interpolation, we override the vertical points with
+        # the reference values for the vertical space.
+        if writer.disable_vertical_interpolation && !is_horizontal_space
+            # We need Array(parent()) because we want an array of values, not a DataLayout
+            # of Points
+            vpts = Array(
+                parent(
+                    space.grid.vertical_grid.center_local_geometry.coordinates,
+                ),
+            )
+        end
+
+        zcoords = [Geometry.ZPoint(p) for p in vpts]
 
         writer.remappers[var.short_name] = Remapper(hcoords, zcoords, space)
     end
@@ -581,6 +655,7 @@ function write_field!(
         space,
         writer.num_points;
         writer.interpolated_surface,
+        writer.disable_vertical_interpolation,
     )
 
     if haskey(nc, "$(var.short_name)")
