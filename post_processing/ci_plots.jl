@@ -3,6 +3,11 @@ import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
 import ClimaAnalysis: SimDir, slice_time, slice
 
+using Poppler_jll: pdfunite
+import Base.Filesystem
+
+const days = 86400
+
 # Return the last common directory across several files
 function common_dirname(files::Vector{T}) where {T <: AbstractString}
     # Split the path of each file into a vector of strings
@@ -16,62 +21,6 @@ function common_dirname(files::Vector{T}) where {T <: AbstractString}
         ) - 1
     return joinpath(split_files[1][1:last_common_dir]...)
 end
-
-# Based off https://github.com/scheidan/PDFmerger.jl/blob/main/src/PDFmerger.jl
-# Licensed under MIT license
-import Base.Filesystem
-using Poppler_jll: pdfunite, pdfinfo, pdfseparate
-function merge_pdfs(
-    files::Vector{T},
-    destination::AbstractString = joinpath(common_dirname(files), "merged.pdf");
-    cleanup::Bool = false,
-) where {T <: AbstractString}
-    # Filter files to be only files that exist
-    files = filter(Filesystem.isfile, files)
-
-    if destination in files
-        # rename existing file
-        Filesystem.mv(destination, destination * "_x_")
-        files[files .== destination] .= destination * "_x_"
-    end
-
-    # Merge large number of files iteratively, because there
-    # is a (OS dependent) limit how many files 'pdfunit' can handle at once.
-    # See: https://gitlab.freedesktop.org/poppler/poppler/-/issues/334
-    filemax = 200
-
-    k = 1
-    for files_part in Base.Iterators.partition(files, filemax)
-        if k == 1
-            outfile_tmp2 = "_temp_destination_$k"
-
-            pdfunite() do unite
-                run(`$unite $files_part $outfile_tmp2`)
-            end
-        else
-            outfile_tmp1 = "_temp_destination_$(k-1)"
-            outfile_tmp2 = "_temp_destination_$k"
-
-            pdfunite() do unite
-                run(`$unite $outfile_tmp1 $files_part $outfile_tmp2`)
-            end
-        end
-        k += 1
-    end
-
-    # rename last file
-    Filesystem.mv("_temp_destination_$(k-1)", destination, force = true)
-
-    # remove temp files
-    Filesystem.rm(destination * "_x_", force = true)
-    Filesystem.rm.("_temp_destination_$(i)" for i in 1:(k - 2); force = true)
-    if cleanup
-        Filesystem.rm.(files, force = true)
-    end
-
-    destination
-end
-
 
 function make_plots(sim, simulation_path)
     @warn "No plot found for $sim"
@@ -132,12 +81,14 @@ function make_plots_generic(
         end
     end
 
-    merge_pdfs(
-        summary_files,
-        joinpath(output_path, "$output_name.pdf"),
-        cleanup = true,
-    )
+    output_file = joinpath(output_path, "$(output_name).pdf")
 
+    pdfunite() do unite
+        run(Cmd([unite, summary_files..., output_file]))
+    end
+
+    # Cleanup
+    Filesystem.rm.(summary_files, force = true)
 end
 
 ColumnPlots = Union{
@@ -280,14 +231,31 @@ end
 DryBaroWavePlots = Union{
     Val{:sphere_baroclinic_wave_rhoe},
     Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    Val{:longrun_bw_rhoe_highres},
 }
 
 function make_plots(::DryBaroWavePlots, simulation_path)
     simdir = SimDir(simulation_path)
     short_names = ["pfull", "va", "wa", "rv"]
     vars = [get(simdir; short_name) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 3000, time = LAST_SNAP)
+    make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
+end
+
+function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
+    simdir = SimDir(simulation_path)
+    short_names = ["pfull", "va", "wa", "rv"]
+    vars = [
+        get(simdir; short_name, reduction, period) for short_name in short_names
+    ]
+    make_plots_generic(simulation_path, vars, z = 1500, time = 10days)
+end
+
+function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
+    simdir = SimDir(simulation_path)
+    short_names = ["pfull", "va", "wa", "rv"]
+    vars = [
+        get(simdir; short_name, reduction, period) for short_name in short_names
+    ]
+    make_plots_generic(simulation_path, vars, z = 3000, time = 10days)
 end
 
 function make_plots(
@@ -297,7 +265,7 @@ function make_plots(
     simdir = SimDir(simulation_path)
     short_names = ["pfull", "va", "wa", "rv", "hus"]
     vars = [get(simdir; short_name) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 3000, time = LAST_SNAP)
+    make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
 end
 
 MoistBaroWavePlots = Union{
@@ -306,7 +274,6 @@ MoistBaroWavePlots = Union{
     Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
     Val{:longrun_ssp_bw_rhoe_equil_highres},
     Val{:longrun_bw_rhoe_equil_highres_topography_earth},
-    Val{:longrun_bw_rhoe_equil_highres},
 }
 
 function make_plots(::MoistBaroWavePlots, simulation_path)
@@ -316,6 +283,19 @@ function make_plots(::MoistBaroWavePlots, simulation_path)
 
     var1sliced = slice(var1, z = BOTTOM_LVL)
     var2 = get(simdir; short_name = "hus") |> ClimaAnalysis.average_lon
+
+    make_plots_generic(simulation_path, [var1sliced, var2], time = LAST_SNAP)
+end
+
+function make_plots(::Val{:longrun_bw_rhoe_equil_highres}, simulation_path)
+    simdir = SimDir(simulation_path)
+
+    var1 = get(simdir; short_name = "ta", reduction = "average", period = "1d")
+
+    var1sliced = slice(var1, z = BOTTOM_LVL)
+    var2 =
+        get(simdir; short_name = "hus", reduction = "average", period = "1d") |>
+        ClimaAnalysis.average_lon
 
     make_plots_generic(simulation_path, [var1sliced, var2], time = LAST_SNAP)
 end
@@ -416,7 +396,6 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_amip},
-    Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
 }
 
 function make_plots(::AquaplanetPlots, simulation_path)
@@ -446,6 +425,38 @@ function make_plots(::AquaplanetPlots, simulation_path)
         output_name = "summary_sfc",
     )
 end
+
+function make_plots(
+    ::Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
+    simulation_path,
+)
+    simdir = SimDir(simulation_path)
+
+    reduction = "average"
+    period = "1d"
+    short_names_3D = ["ua", "ta", "hus"]
+    short_names_sfc = ["hfes", "evspsbl"]
+    vars_3D = [
+        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
+    ]
+    vars_sfc = [
+        get(simdir; short_name, reduction, period) for
+        short_name in short_names_sfc
+    ]
+    make_plots_generic(
+        simulation_path,
+        vars_3D,
+        time = LAST_SNAP,
+        more_kwargs = YLOGSCALE,
+    )
+    make_plots_generic(
+        simulation_path,
+        vars_sfc,
+        time = LAST_SNAP,
+        output_name = "summary_sfc",
+    )
+end
+
 
 function make_plots(
     ::Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},

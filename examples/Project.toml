@@ -67,6 +67,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [compat]
 BlockArrays = "0.16"
 CairoMakie = "0.10, 0.11"
+ClimaAnalysis = "0.2.1"
 ClimaCoreMakie = "0.3, 0.4"
 ClimaCorePlots = "0.2"
 ClimaCoreSpectra = "0.1"
