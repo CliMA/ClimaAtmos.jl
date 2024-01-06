@@ -8,8 +8,6 @@ t_end: "100days"
 dz_bottom: 30.0
 h_elem: 16
 use_reference_state: false
-kappa_4_vorticity: 2.0e16
-kappa_4_tracer: 2.0e16
 precip_model: "0M"
 topography: "Earth"
 job_id: "longrun_bw_rhoe_equil_highres_topography_earth"

@@ -31,11 +31,11 @@ z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
 kappa_4_vorticity:
-  help: "Hyperdiffusion parameter for vorticity"
-  value: 2.0e17
-kappa_4_tracer:
-  help: "Hyperdiffusion parameter for tracer"
-  value: 2.0e17
+  help: "Hyperdiffusion coefficient for vorticity (m s-1)"
+  value: 1.5
+kappa_4_scalar:
+  help: "Hyperdiffusion coefficient for scalar (m s-1)"
+  value: 1.5
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"

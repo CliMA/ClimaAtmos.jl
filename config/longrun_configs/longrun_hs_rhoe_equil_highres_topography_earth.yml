@@ -8,8 +8,8 @@ dz_bottom: 30.0
 vert_diff: "true"
 h_elem: 16
 use_reference_state: false
-kappa_4_vorticity: 3.0e16
-kappa_4_tracer: 3.0e16
+kappa_4_vorticity: 4.0
+kappa_4_scalar: 4.0
 forcing: "held_suarez"
 precip_model: "0M"
 topography: "Earth"

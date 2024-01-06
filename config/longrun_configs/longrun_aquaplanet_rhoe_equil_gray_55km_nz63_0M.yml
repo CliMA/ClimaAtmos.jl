@@ -8,8 +8,6 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 vert_diff: "true" 
-kappa_4_vorticity: 2e16
-kappa_4_tracer: 2e16
 surface_setup: "DefaultExchangeCoefficients" 
 moist: "equil" 
 rad: "gray" 

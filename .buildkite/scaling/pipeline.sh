@@ -16,26 +16,20 @@ low_resolution_lines=\
 "t_end: 10days
 dt: 400secs
 z_elem: 10
-h_elem: 6
-kappa_4_vorticity: 2e17
-kappa_4_tracer: 2e17"
+h_elem: 6"
 
 medium_resolution_lines=\
 "t_end: 4days
 dt: 150secs
 z_elem: 45
 dz_bottom: 30
-h_elem: 16
-kappa_4_vorticity: 1e16
-kappa_4_tracer: 1e16"
+h_elem: 16"
 
 high_resolution_lines=\
 "t_end: 1days
 dt: 50secs
 z_elem: 45
-h_elem: 30
-kappa_4_vorticity: 5e14
-kappa_4_tracer: 5e14"
+h_elem: 30"
 
 # Create configuration files for each resolution
 for i in "${!resolutions[@]}"; do

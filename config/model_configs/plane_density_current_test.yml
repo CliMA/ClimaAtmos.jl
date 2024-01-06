@@ -8,8 +8,8 @@ discrete_hydrostatic_balance: true
 z_stretch: false
 x_elem: 80
 config: "plane"
-kappa_4_vorticity: 1.0e7
-kappa_4_tracer: 1.0e7
+kappa_4_vorticity: 0.6
+kappa_4_scalar: 0.6
 z_max: 6400.0
 job_id: "plane_density_current_test"
 diagnostics:

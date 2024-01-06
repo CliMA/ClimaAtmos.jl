@@ -5,8 +5,6 @@ t_end: "300days"
 h_elem: 16
 z_elem: 63
 z_max: 55000.0
-kappa_4_vorticity: 1.0e16
-kappa_4_tracer: 1.0e16
 forcing: "held_suarez"
 dt: "300secs"
 rayleigh_sponge: true

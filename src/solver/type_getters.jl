@@ -11,7 +11,7 @@ import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DECB
 
-function get_atmos(config::AtmosConfig, params)
+function get_atmos(config::AtmosConfig, params, spaces)
     (; turbconv_params) = params
     (; parsed_args) = config
     FT = eltype(config)
@@ -69,7 +69,7 @@ function get_atmos(config::AtmosConfig, params)
             parsed_args,
             FT,
         ),
-        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
+        hyperdiff = get_hyperdiffusion_model(parsed_args, spaces, FT),
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
@@ -745,9 +745,19 @@ end
 function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
 
-    atmos = get_atmos(config, params)
-    numerics = get_numerics(config.parsed_args)
     sim_info = get_sim_info(config)
+    if sim_info.restart
+        s = @timed_str begin
+            (Y, t_start) = get_state_restart(config.comms_ctx)
+            spaces = get_spaces_restart(Y)
+            @warn "Progress estimates do not support restarted simulations"
+        end
+        @info "Allocating Y: $s"
+    else
+        spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+    end
+
+    atmos = get_atmos(config, params, spaces)
     if config.parsed_args["log_params"]
         filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
@@ -755,13 +765,8 @@ function get_simulation(config::AtmosConfig)
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
-    s = @timed_str begin
-        if sim_info.restart
-            (Y, t_start) = get_state_restart(config.comms_ctx)
-            spaces = get_spaces_restart(Y)
-            @warn "Progress estimates do not support restarted simulations"
-        else
-            spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
+    if !sim_info.restart
+        s = @timed_str begin
             Y = ICs.atmos_state(
                 initial_condition(params),
                 atmos,
@@ -770,8 +775,8 @@ function get_simulation(config::AtmosConfig)
             )
             t_start = Spaces.undertype(axes(Y.c))(0)
         end
+        @info "Allocating Y: $s"
     end
-    @info "Allocating Y: $s"
 
     s = @timed_str begin
         p = build_cache(

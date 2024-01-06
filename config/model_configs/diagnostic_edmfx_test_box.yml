@@ -10,8 +10,6 @@ turbconv: "diagnostic_edmfx"
 x_elem: 2
 dz_bottom: 30.0
 config: "box"
-kappa_4_vorticity: 1.0e8
-kappa_4_tracer: 1.0e8
 job_id: "diagnostic_edmfx_test_box"
 moist: "equil"
 toml: [toml/diagnostic_edmfx_box.toml]
