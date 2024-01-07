@@ -232,9 +232,9 @@ end
 # Radiation mode #
 ##################
 function default_diagnostics(::RRTMGPI.AbstractRRTMGPMode; output_writer)
-    allsky_diagnostics = ["rsd", "rsu", "rld", "rlu"]
+    rad_diagnostics = ["rsd", "rsu", "rld", "rlu"]
 
-    return [daily_averages(allsky_diagnostics...; output_writer)...]
+    return [daily_averages(rad_diagnostics...; output_writer)...]
 end
 
 
@@ -242,9 +242,10 @@ function default_diagnostics(
     ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics;
     output_writer,
 )
-    clear_diagnostics = ["rsdcs", "rsucs", "rldcs", "rlucs"]
+    rad_diagnostics =
+        ["rsd", "rsu", "rld", "rlu", "rsdcs", "rsucs", "rldcs", "rlucs"]
 
-    return [daily_averages(clear_diagnostics...; output_writer)...]
+    return [daily_averages(rad_diagnostics...; output_writer)...]
 end
 
 ##################

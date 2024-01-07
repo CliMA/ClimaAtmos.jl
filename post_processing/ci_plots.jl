@@ -293,6 +293,7 @@ DryHeldSuarezPlots = Union{
     Val{:sphere_held_suarez_rhoe_hightop},
     Val{:longrun_sphere_hydrostatic_balance_rhoe},
     Val{:longrun_hs_rhoe_dry_nz63_55km_rs35km},
+    Val{:sphere_held_suarez_rhoe_topography_dcmip},
 }
 
 function make_plots(::DryHeldSuarezPlots, simulation_path)
@@ -314,6 +315,7 @@ MoistHeldSuarezPlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
     Val{:sphere_held_suarez_rhoe_equilmoist_topography_dcmip},
+    Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
     Val{:longrun_hs_rhoe_equil_highres_topography_earth},
 }
 
@@ -344,40 +346,9 @@ function make_plots(::MoistHeldSuarezPlots, simulation_path)
 end
 
 function make_plots(
-    ::Val{:sphere_held_suarez_rhoe_topography_dcmip},
+    ::Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
     simulation_path,
 )
-    simdir = SimDir(simulation_path)
-
-    short_names_3D, reduction, period = ["ua", "ta"], "average", "1d"
-    short_names_sfc = ["hfes"]
-    vars_3D = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
-    ]
-    vars_sfc = [
-        get(simdir; short_name, reduction, period) for
-        short_name in short_names_sfc
-    ]
-    make_plots_generic(
-        simulation_path,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
-    )
-    make_plots_generic(
-        simulation_path,
-        vars_sfc,
-        time = LAST_SNAP,
-        output_name = "summary_sfc",
-    )
-end
-
-AquaplanetPlots = Union{
-    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
-    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
-}
-
-function make_plots(::AquaplanetPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
     reduction = "average"
@@ -405,38 +376,8 @@ function make_plots(::AquaplanetPlots, simulation_path)
     )
 end
 
-function make_plots(
-    ::Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
-    simulation_path,
-)
-    simdir = SimDir(simulation_path)
-
-    reduction = "average"
-    period = "1d"
-    short_names_3D = ["ua", "ta", "hus"]
-    short_names_sfc = ["hfes", "evspsbl"]
-    vars_3D = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
-    ]
-    vars_sfc = [
-        get(simdir; short_name, reduction, period) for
-        short_name in short_names_sfc
-    ]
-    make_plots_generic(
-        simulation_path,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
-    )
-    make_plots_generic(
-        simulation_path,
-        vars_sfc,
-        time = LAST_SNAP,
-        output_name = "summary_sfc",
-    )
-end
-
-LongAquaplanetPlots = Union{
+AquaplanetPlots = Union{
+    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M},
     Val{:longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky},
@@ -456,7 +397,7 @@ LongAquaplanetPlots = Union{
     Val{:longrun_aquaplanet_amip},
 }
 
-function make_plots(::LongAquaplanetPlots, simulation_path)
+function make_plots(::AquaplanetPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
     reduction = "average"
