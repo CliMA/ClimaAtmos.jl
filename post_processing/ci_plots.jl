@@ -243,19 +243,8 @@ end
 function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
     simdir = SimDir(simulation_path)
     short_names = ["pfull", "va", "wa", "rv"]
-    vars = [
-        get(simdir; short_name, reduction, period) for short_name in short_names
-    ]
+    vars = [get(simdir; short_name) for short_name in short_names]
     make_plots_generic(simulation_path, vars, z = 1500, time = 10days)
-end
-
-function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
-    simdir = SimDir(simulation_path)
-    short_names = ["pfull", "va", "wa", "rv"]
-    vars = [
-        get(simdir; short_name, reduction, period) for short_name in short_names
-    ]
-    make_plots_generic(simulation_path, vars, z = 3000, time = 10days)
 end
 
 function make_plots(
@@ -268,36 +257,36 @@ function make_plots(
     make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
 end
 
-MoistBaroWavePlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist_expvdiff},
-    Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
+function make_plots(
+    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_expvdiff},
+    simulation_path,
+)
+    simdir = SimDir(simulation_path)
+    short_names = ["ta", "hus"]
+    vars = [
+        get(simdir; short_name) |> ClimaAnalysis.average_lon for
+        short_name in short_names
+    ]
+    make_plots_generic(
+        simulation_path,
+        vars,
+        time = LAST_SNAP,
+        more_kwargs = YLOGSCALE,
+    )
+end
+
+LongMoistBaroWavePlots = Union{
+    Val{:longrun_bw_rhoe_equil_highres},
     Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
     Val{:longrun_ssp_bw_rhoe_equil_highres},
     Val{:longrun_bw_rhoe_equil_highres_topography_earth},
 }
 
-function make_plots(::MoistBaroWavePlots, simulation_path)
+function make_plots(::LongMoistBaroWavePlots, simulation_path)
     simdir = SimDir(simulation_path)
-
-    var1 = get(simdir; short_name = "ta")
-
-    var1sliced = slice(var1, z = BOTTOM_LVL)
-    var2 = get(simdir; short_name = "hus") |> ClimaAnalysis.average_lon
-
-    make_plots_generic(simulation_path, [var1sliced, var2], time = LAST_SNAP)
-end
-
-function make_plots(::Val{:longrun_bw_rhoe_equil_highres}, simulation_path)
-    simdir = SimDir(simulation_path)
-
-    var1 = get(simdir; short_name = "ta", reduction = "average", period = "1d")
-
-    var1sliced = slice(var1, z = BOTTOM_LVL)
-    var2 =
-        get(simdir; short_name = "hus", reduction = "average", period = "1d") |>
-        ClimaAnalysis.average_lon
-
-    make_plots_generic(simulation_path, [var1sliced, var2], time = LAST_SNAP)
+    short_names = ["pfull", "va", "wa", "rv", "hus"]
+    vars = [get(simdir; short_name) for short_name in short_names]
+    make_plots_generic(simulation_path, vars, z = 1500, time = 10days)
 end
 
 DryHeldSuarezPlots = Union{
@@ -322,6 +311,7 @@ function make_plots(::DryHeldSuarezPlots, simulation_path)
 end
 
 MoistHeldSuarezPlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
     Val{:sphere_held_suarez_rhoe_equilmoist_topography_dcmip},
     Val{:longrun_hs_rhoe_equil_highres_topography_earth},
@@ -385,17 +375,6 @@ end
 AquaplanetPlots = Union{
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
-    Val{:longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M},
-    Val{
-        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation,
-    },
-    Val{
-        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_earth,
-    },
-    Val{:longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth},
-    Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
-    Val{:longrun_aquaplanet_dyamond},
-    Val{:longrun_aquaplanet_amip},
 }
 
 function make_plots(::AquaplanetPlots, simulation_path)
@@ -457,11 +436,27 @@ function make_plots(
     )
 end
 
+LongAquaplanetPlots = Union{
+    Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
+    Val{:longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M},
+    Val{:longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky},
+    Val{
+        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation,
+    },
+    Val{
+        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_slabocean,
+    },
+    Val{
+        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_earth,
+    },
+    Val{:longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth},
+    Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
+    Val{:longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean},
+    Val{:longrun_aquaplanet_dyamond},
+    Val{:longrun_aquaplanet_amip},
+}
 
-function make_plots(
-    ::Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
-    simulation_path,
-)
+function make_plots(::LongAquaplanetPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
     reduction = "average"
@@ -489,6 +484,7 @@ function make_plots(
     )
 end
 
+
 EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_gabls_box},
     Val{:diagnostic_edmfx_bomex_box},
@@ -508,7 +504,6 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
 }
-
 
 function make_plots(::EDMFBoxPlots, simulation_path)
     simdir = SimDir(simulation_path)

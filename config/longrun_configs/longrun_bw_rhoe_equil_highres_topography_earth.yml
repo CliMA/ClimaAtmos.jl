@@ -12,3 +12,14 @@ precip_model: "0M"
 topography: "Earth"
 job_id: "longrun_bw_rhoe_equil_highres_topography_earth"
 moist: "equil"
+diagnostics:
+  - short_name: pfull
+    period: 1days
+  - short_name: wa
+    period: 1days
+  - short_name: va
+    period: 1days
+  - short_name: rv
+    period: 1days
+  - short_name: hus
+    period: 1days
