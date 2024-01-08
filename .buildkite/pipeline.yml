@@ -784,6 +784,14 @@ steps:
         artifact_paths: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
         agents:
           slurm_mem: 40GB
+      
+      - label: ":fire: Flame graph: perf target (frierson diffusion)"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          $PERF_CONFIG_PATH/flame_perf_target_frierson.yml
+        artifact_paths: "flame_perf_target_frierson/*"
+        agents:
+          slurm_mem: 48GB
 
       - label: ":fire: Flame graph: perf target (Threaded)"
         command: >

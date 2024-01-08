@@ -13,6 +13,15 @@ function temporary_quantities(Y, atmos)
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
+        ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
+        ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
+        temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_field_level_3 = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_data = Fields.field_values(Fields.Field(FT, center_space)),
+        temp_data_face_level = Fields.field_values(
+            Fields.level(Fields.Field(FT, face_space), half),
+        ), # ρaʲu³ʲ_data
         temp_data_level = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_data
