@@ -587,6 +587,7 @@ steps:
           --config_file $PERF_CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
         artifact_paths: "gpu_implicit_barowave_ref/*"
         agents:
+          slurm_mem: 16G
           slurm_gpus: 1
 
       - label: "GPU: compare BW with CPU"
