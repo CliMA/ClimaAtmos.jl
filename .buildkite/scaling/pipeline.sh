@@ -9,6 +9,7 @@ profiling=disable
 exclusive=true
 mpi_impl="openmpi"
 
+
 parent_folder=scaling_configs
 mkdir -p "$parent_folder"
 
