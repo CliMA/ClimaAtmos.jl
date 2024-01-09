@@ -592,61 +592,76 @@ function get_diagnostics(parsed_args, atmos_model, spaces)
         "netcdf" => netcdf_writer,
     )
 
-    diagnostics = map(yaml_diagnostics) do yaml_diag
-        # Return "nothing" if "reduction_time" is not in the YAML block
-        #
-        # We also normalize everything to lowercase, so that can accept "max" but
-        # also "Max"
-        reduction_time_yaml =
-            lowercase(get(yaml_diag, "reduction_time", "nothing"))
-
-        if !haskey(ALLOWED_REDUCTIONS, reduction_time_yaml)
-            error("reduction $reduction_time_yaml not implemented")
-        else
-            reduction_time_func, pre_output_hook! =
-                ALLOWED_REDUCTIONS[reduction_time_yaml]
-        end
-
-        writer_ext = lowercase(get(yaml_diag, "writer", "nothing"))
-
-        if !haskey(ALLOWED_WRITERS, writer_ext)
-            error("writer $writer_ext not implemented")
-        else
-            writer = ALLOWED_WRITERS[writer_ext]
-        end
-
+    diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
+        short_names = yaml_diag["short_name"]
         output_name = get(yaml_diag, "output_name", nothing)
 
-        haskey(yaml_diag, "period") ||
-            error("period keyword required for diagnostics")
+        if short_names isa Vector
+            isnothing(output_name) || error(
+                "Diagnostics: cannot have multiple short_names while specifying output_name",
+            )
+        else
+            short_names = [short_names]
+        end
 
-        period_seconds = time_to_seconds(yaml_diag["period"])
+        ret_value = map(short_names) do short_name
+            # Return "nothing" if "reduction_time" is not in the YAML block
+            #
+            # We also normalize everything to lowercase, so that can accept "max" but
+            # also "Max"
+            reduction_time_yaml =
+                lowercase(get(yaml_diag, "reduction_time", "nothing"))
 
-        if isnothing(output_name)
-            output_name = CAD.descriptive_short_name(
-                CAD.get_diagnostic_variable(yaml_diag["short_name"]),
-                period_seconds,
-                reduction_time_func,
-                pre_output_hook!,
+            if !haskey(ALLOWED_REDUCTIONS, reduction_time_yaml)
+                error("reduction $reduction_time_yaml not implemented")
+            else
+                reduction_time_func, pre_output_hook! =
+                    ALLOWED_REDUCTIONS[reduction_time_yaml]
+            end
+
+            writer_ext = lowercase(get(yaml_diag, "writer", "nothing"))
+
+            if !haskey(ALLOWED_WRITERS, writer_ext)
+                error("writer $writer_ext not implemented")
+            else
+                writer = ALLOWED_WRITERS[writer_ext]
+            end
+
+            haskey(yaml_diag, "period") ||
+                error("period keyword required for diagnostics")
+
+            period_seconds = time_to_seconds(yaml_diag["period"])
+
+            if isnothing(output_name)
+                output_short_name = CAD.descriptive_short_name(
+                    CAD.get_diagnostic_variable(short_name),
+                    period_seconds,
+                    reduction_time_func,
+                    pre_output_hook!,
+                )
+            end
+
+            if isnothing(reduction_time_func)
+                compute_every = period_seconds
+            else
+                compute_every = :timestep
+            end
+
+            return CAD.ScheduledDiagnosticTime(
+                variable = CAD.get_diagnostic_variable(short_name),
+                output_every = period_seconds,
+                compute_every = compute_every,
+                reduction_time_func = reduction_time_func,
+                pre_output_hook! = pre_output_hook!,
+                output_writer = writer,
+                output_short_name = output_short_name,
             )
         end
-
-        if isnothing(reduction_time_func)
-            compute_every = period_seconds
-        else
-            compute_every = :timestep
-        end
-
-        return CAD.ScheduledDiagnosticTime(
-            variable = CAD.get_diagnostic_variable(yaml_diag["short_name"]),
-            output_every = period_seconds,
-            compute_every = compute_every,
-            reduction_time_func = reduction_time_func,
-            pre_output_hook! = pre_output_hook!,
-            output_writer = writer,
-            output_short_name = output_name,
-        )
+        return ret_value
     end
+
+    # Flatten the array of arrays of diagnostics
+    diagnostics = vcat(diagnostics_ragged...)
 
     if parsed_args["output_default_diagnostics"]
         return [
@@ -819,6 +834,13 @@ function get_simulation(config::AtmosConfig)
             get_diagnostics(config.parsed_args, atmos, spaces)
     end
     @info "initializing diagnostics: $s"
+
+    length(diagnostics) > 0 && @info "Computing diagnostics:"
+
+    for diag in diagnostics
+        writer = nameof(typeof(diag.output_writer))
+        @info "- $(diag.output_short_name) ($writer)"
+    end
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
