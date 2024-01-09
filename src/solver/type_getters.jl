@@ -835,6 +835,11 @@ function get_simulation(config::AtmosConfig)
     diagnostic_counters = Dict()
 
     # NOTE: The diagnostics_callbacks are not called at the initial timestep
+    length(diagnostics) > 0 && @info "Computing diagnostics (output every):"
+    for diag in diagnostics
+        @info "- $(diag.variable.short_name) ($(diag.output_every) s)"
+    end
+
     s = @timed_str begin
         diagnostics_functions = CAD.get_callbacks_from_diagnostics(
             diagnostics_iterations,

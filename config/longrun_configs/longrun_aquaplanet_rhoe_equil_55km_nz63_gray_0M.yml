@@ -7,7 +7,9 @@ rayleigh_sponge: true
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
-vert_diff: "true" 
+vert_diff: "FriersonDiffusion" 
+implicit_diffusion: true
+max_newton_iters_ode: 2
 surface_setup: "DefaultExchangeCoefficients" 
 moist: "equil" 
 rad: "gray" 

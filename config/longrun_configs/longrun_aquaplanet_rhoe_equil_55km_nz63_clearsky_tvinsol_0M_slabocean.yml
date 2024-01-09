@@ -11,7 +11,9 @@ rayleigh_sponge: true
 moist: "equil"
 precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "true"
+vert_diff: "FriersonDiffusion"
+implicit_diffusion: true
+max_newton_iters_ode: 2
 rad: "clearsky"
 idealized_insolation: false
 dt_rad: "1hours"
