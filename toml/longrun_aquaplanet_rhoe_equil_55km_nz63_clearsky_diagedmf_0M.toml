@@ -10,7 +10,7 @@ type = "float"
 
 [entr_tau]
 alias = "entr_tau"
-value = 0.001
+value = 0.002
 type = "float"
 
 [entr_coeff]
@@ -26,6 +26,11 @@ type = "float"
 [detr_buoy_coeff]
 alias = "detr_buoy_coeff"
 value = 0.12
+type = "float"
+
+[detr_vertdiv_coeff]
+alias = "detr_vertdiv_coeff"
+value = 0
 type = "float"
 
 [min_area_limiter_scale]

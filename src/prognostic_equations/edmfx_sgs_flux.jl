@@ -126,7 +126,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 min(
                     min(
                         draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx]),
-                        1,
+                        FT(0.3),
                     ),
                     FT(0.02) / max(
                         Geometry.WVector(
@@ -161,7 +161,7 @@ function edmfx_sgs_mass_flux_tendency!(
                                 ᶜρaʲs.:($$j)[colidx],
                                 ᶜρʲs.:($$j)[colidx],
                             ),
-                            1,
+                            FT(0.3),
                         ),
                         FT(0.02) / max(
                             Geometry.WVector(
