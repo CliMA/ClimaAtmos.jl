@@ -292,7 +292,7 @@ end
 DryHeldSuarezPlots = Union{
     Val{:sphere_held_suarez_rhoe_hightop},
     Val{:longrun_sphere_hydrostatic_balance_rhoe},
-    Val{:longrun_hs_rhoe_dry_nz63_55km_rs35km},
+    Val{:longrun_hs_rhoe_dry_55km_nz63},
     Val{:sphere_held_suarez_rhoe_topography_dcmip},
 }
 
@@ -315,7 +315,7 @@ MoistHeldSuarezPlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
     Val{:sphere_held_suarez_rhoe_equilmoist_topography_dcmip},
-    Val{:longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km},
+    Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
     Val{:longrun_hs_rhoe_equil_highres_topography_earth},
 }
 
@@ -379,20 +379,13 @@ end
 AquaplanetPlots = Union{
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
-    Val{:longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M},
-    Val{:longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky},
-    Val{
-        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation,
-    },
-    Val{
-        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_slabocean,
-    },
-    Val{
-        :longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation_earth,
-    },
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
-    Val{:longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean},
+    Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_amip},
 }
