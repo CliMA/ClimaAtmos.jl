@@ -34,34 +34,33 @@ function get_sfc_temperature_form(parsed_args)
     end
 end
 
-function get_hyperdiffusion_model(parsed_args, spaces, ::Type{FT}) where {FT}
+function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
-    h_space = Spaces.horizontal_space(spaces.center_space)
-    h_length_scale = Spaces.node_horizontal_length_scale(h_space) # mean nodal distance
-    κ₄_vorticity = FT(parsed_args["kappa_4_vorticity"]) * h_length_scale^3
-    κ₄_scalar = FT(parsed_args["kappa_4_scalar"]) * h_length_scale^3
-    divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
-    return if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
-        ClimaHyperdiffusion(;
-            κ₄_vorticity,
-            κ₄_scalar,
+    if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
+        ν₄_vorticity_coeff =
+            FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
+        ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
+        divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
+        return ClimaHyperdiffusion(;
+            ν₄_vorticity_coeff,
+            ν₄_scalar_coeff,
             divergence_damping_factor,
         )
     elseif hyperdiff_name in ("CAM_SE",)
         # To match hyperviscosity coefficients in:
         #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
         #    for equation A18 and A19
-        Ne = parsed_args["h_elem"]
-        κ₄_vorticity = FT(0.15 * (30 / Ne * 1.1 * 10^5)^3) # ν_vort
-        κ₄_scalar = FT(0.75 * (30 / Ne * 1.1 * 10^5)^3) # ν_q
+        # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
+        ν₄_vorticity_coeff = FT(0.150 * 1.238)
+        ν₄_scalar_coeff = FT(0.751 * 1.238)
         divergence_damping_factor = FT(5)
-        ClimaHyperdiffusion(;
-            κ₄_vorticity,
-            κ₄_scalar,
+        return ClimaHyperdiffusion(;
+            ν₄_vorticity_coeff,
+            ν₄_scalar_coeff,
             divergence_damping_factor,
         )
     elseif hyperdiff_name in ("none", "false", false)
-        nothing
+        return nothing
     else
         error("Uncaught hyperdiffusion model type.")
     end

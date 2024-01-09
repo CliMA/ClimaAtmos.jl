@@ -10,8 +10,8 @@ z_max: 55000.0
 rayleigh_sponge: true
 topography: "Earth"
 topo_smoothing: true
-kappa_4_vorticity: 4.0
-kappa_4_scalar: 4.0
+vorticity_hyperdiffusion_coefficient: 4.0
+scalar_hyperdiffusion_coefficient: 4.0
 moist: "equil"
 precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
