@@ -141,17 +141,24 @@ function target_coordinates(
     S <:
     Union{Spaces.CenterFiniteDifferenceSpace, Spaces.FaceFiniteDifferenceSpace},
 }
-    # Logarithmically spaced with base e
+    # Exponentially spaced with base e
+    #
+    # We mimic something that looks like pressure levels
+    #
+    # p ~ p₀ exp(-z/H)
+    #
+    # We assume H to be 7000, which is a good scale height for the Earth atmosphere
+    H_EARTH = 7000
 
     num_points_z = num_points[]
     FT = Spaces.undertype(space)
     vert_domain = space.topology.mesh.domain
     z_min, z_max = FT(vert_domain.coord_min.z), FT(vert_domain.coord_max.z)
-    # We are creating a log-space here, so we have to ensure that z_min > 0.
-    # If z_min = 0, we set the the first point to be at altitude of 100
-    log_z_min = z_min ≈ 0 ? FT(2) : log(z_min)
-    log_z_max = log(z_max)
-    return collect(exp.(range(log_z_min, log_z_max, num_points_z)))
+    # We floor z_min to avoid having to deal with the singular value z = 0.
+    z_min = max(z_min, 100)
+    exp_z_min = exp(-z_min / H_EARTH)
+    exp_z_max = exp(-z_max / H_EARTH)
+    return collect(-H_EARTH * log.(range(exp_z_min, exp_z_max, num_points_z)))
 end
 
 # Column

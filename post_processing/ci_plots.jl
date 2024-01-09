@@ -1,4 +1,5 @@
 import CairoMakie
+import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
 import ClimaAnalysis: SimDir, slice_time, slice
@@ -33,10 +34,27 @@ const LAST_SNAP = LARGE_NUM
 const FIRST_SNAP = -LARGE_NUM
 const BOTTOM_LVL = -LARGE_NUM
 const TOP_LVL = LARGE_NUM
+const H_EARTH = 7000
 # Shorthand for logscale on y axis and to move the dimension to the y axis on line plots
 # (because they are columns)
-const YLOGSCALE =
-    Dict(:axis => ClimaAnalysis.Utils.kwargs(yscale = log10, dim_on_y = true))
+Plvl(y) = -H_EARTH * log(y)
+Makie.inverse_transform(::typeof(Plvl)) = (y) -> exp(-y / H_EARTH)
+Makie.defaultlimits(::typeof(Plvl)) = (0.0000001, 1)
+Makie.defined_interval(::typeof(Plvl)) = Makie.OpenInterval(0.0, Inf)
+function Makie.get_tickvalues(yticks::Int, yscale::typeof(Plvl), ymin, ymax)
+    exp_func = Makie.inverse_transform(yscale)
+    exp_z_min, exp_z_max = exp_func(ymin), exp_func(ymax)
+    return Plvl.(range(exp_z_min, exp_z_max, yticks))
+end
+
+YLOGSCALE = Dict(
+    :axis => ClimaAnalysis.Utils.kwargs(
+        dim_on_y = true,
+        yscale = Plvl,
+        yticks = 7,
+        ytickformat = "{:.3e}",
+    ),
+)
 
 function make_plots_generic(
     output_path,
