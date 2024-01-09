@@ -1,0 +1,14 @@
+vert_diff: "FriersonDiffusion"
+max_newton_iters_ode: 2
+use_krylov_method: true
+use_dynamic_krylov_rtol: false
+krylov_rtol: 0.99
+precip_model: "0M"
+z_elem: 20
+dz_bottom: 100
+dt_save_state_to_disk: "12hours"
+initial_condition: "MoistBaroclinicWave"
+dt: "40secs"
+t_end: "12hours"
+job_id: "flame_perf_target_frierson"
+moist: "equil"
