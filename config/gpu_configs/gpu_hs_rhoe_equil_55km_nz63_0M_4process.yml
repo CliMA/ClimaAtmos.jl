@@ -11,5 +11,5 @@ moist: "equil"
 precip_model: "0M"
 rayleigh_sponge: true
 forcing: "held_suarez"
-job_id: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
-toml: [toml/longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.toml]
+job_id: "gpu_hs_rhoe_equil_55km_nz63_0M"
+toml: [toml/longrun_hs_rhoe_equil_55km_nz63_0M.toml]

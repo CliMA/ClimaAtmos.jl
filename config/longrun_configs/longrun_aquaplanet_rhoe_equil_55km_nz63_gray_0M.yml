@@ -13,4 +13,4 @@ moist: "equil"
 rad: "gray" 
 precip_model: "0M" 
 job_id: "longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M" 
-toml: [toml/longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M.toml]
+toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M.toml]

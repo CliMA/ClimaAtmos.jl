@@ -13,12 +13,12 @@ longrun_bw_rhoe_equil_highres
 Moist baroclinic wave. Test the moist dycore initial value problem.
 ```
 ```
-longrun_hs_rhoe_dry_nz63_55km_rs35km
+longrun_hs_rhoe_dry_55km_nz63
 
 Dry Held Suarez. Test the dry dycore with an equilibrium state with sources and sinks.
 ```
 ```
-longrun_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
+longrun_hs_rhoe_equil_55km_nz63_0M
 
 Moist Held Suarez. Test the moist dycore with an equilibrium state with sources and sinks.
 ```
@@ -40,25 +40,18 @@ longrun_ssp_bw_rhoe_equil_highres
 Moist baroclinic wave with the SSP timestepper.
 ```
 ```
-longrun_aquaplanet_rhoe_equil_gray_55km_nz63_0M
+longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M
 
 Aquaplanet with idealized insolation, gray radiation, and 0-moment microphysics.
 ```
 ```
-longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M
 
 Aquaplanet with idealized insolation, clear-sky radiation, and 0-moment microphysics.
 Use this job to test new physical components.
 ```
 ```
-longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_tvinsolation
-
-Aquaplanet with time-varying insolation, clear-sky radiation, and 0-moment microphysics.
-Test if the time-varying insolation yields reasonable results.
-This is not very physical with time-varying insolation but fixed SST. Will be removed soon.
-```
-```
-longrun_aquaplanet_rhoe_equilmoist_0M_clearsky_tvinsolation_slabocean
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean
 
 Aquaplanet with slab ocean with time-varying insolation, clear-sky radiation, 
 and 0-moment microphysics.
@@ -66,7 +59,7 @@ Test if the coupled system conserves energy and water.
 Test if the time-varying insolation yields reasonable results.
 ```
 ```
-longrun_aquaplanet_rhoe_equilmoist_nz63_0M_55km_rs35km_clearsky_earth
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth
 
 Aquaplanet with idealized insolation, clear-sky radiation, 0-moment microphysics, and
 Earth topography. Use this job to test topography related features.

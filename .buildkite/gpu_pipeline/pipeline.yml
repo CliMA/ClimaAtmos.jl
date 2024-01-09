@@ -69,28 +69,28 @@ steps:
           slurm_cpus_per_task: 4
 
       - label: "moist Held-Suarez"
-        key: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km"
+        key: "gpu_hs_rhoe_equil_55km_nz63_0M"
         command:
-          - mkdir -p gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km
+          - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km.yml
-        artifact_paths: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km/*"
+            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
+        artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/*"
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
 
       - label: "moist Held-Suarez - 4 gpus"
-        key: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process"
+        key: "gpu_hs_rhoe_equil_55km_nz63_0M_4process"
         command:
-          - mkdir -p gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process
+          - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
             srun --cpu-bind=cores
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process/report-%q{PMI_RANK}
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/report-%q{PMI_RANK}
             julia --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process.yml
-        artifact_paths: "gpu_hs_rhoe_equilmoist_nz63_0M_55km_rs35km_4process/*"
+            --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
+        artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
