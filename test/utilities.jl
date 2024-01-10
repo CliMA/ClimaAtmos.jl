@@ -1,4 +1,6 @@
 using Test
+using Random
+Random.seed!(1234)
 import ClimaAtmos as CA
 
 @testset "sort_hdf5_files" begin
@@ -11,4 +13,20 @@ import ClimaAtmos as CA
     fns = filenames.(t)
     sort!(fns)
     @test CA.sort_files_by_time(fns) == filenames.(t_sorted)
+end
+
+@testset "gaussian_smooth" begin
+
+    # No smooth on constant
+    @test CA.gaussian_smooth(3.0 * ones(132, 157)) ≈ 3.0 * ones(132, 157)
+
+    randy = rand(123, 145)
+
+    smoothed = CA.gaussian_smooth(randy)
+
+    # min
+    @test extrema(randy)[1] <= smoothed[1]
+
+    # max
+    @test extrema(randy)[2] >= smoothed[2]
 end
