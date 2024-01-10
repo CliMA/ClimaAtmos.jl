@@ -5,4 +5,23 @@ rad: "clearsky"
 precip_model: "0M"
 job_id: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky"
 dt: "400secs"
-t_end: "4days"
+t_end: "6hours"
+diagnostics:
+  - short_name: ts
+    period: 1hours
+    writer: h5
+  - short_name: pfull
+    period: 1hours
+    writer: h5
+  - short_name: wa
+    period: 1hours
+    writer: h5
+  - short_name: va
+    period: 1hours
+    writer: h5
+  - short_name: rv
+    period: 1hours
+    writer: h5
+  - short_name: hus
+    period: 1hours
+    writer: h5
