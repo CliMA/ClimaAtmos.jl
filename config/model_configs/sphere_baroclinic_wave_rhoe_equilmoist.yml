@@ -2,25 +2,26 @@ precip_model: "0M"
 dt_save_state_to_disk: "2days"
 regression_test: true
 initial_condition: "MoistBaroclinicWave"
-dt: "450secs"
+dt: "400secs"
+t_end: "6hours"
 job_id: "sphere_baroclinic_wave_rhoe_equilmoist"
 moist: "equil"
 diagnostics:
   - short_name: ts
-    period: 1days
+    period: 1hours
     writer: h5
   - short_name: pfull
-    period: 1days
+    period: 1hours
     writer: h5
   - short_name: wa
-    period: 1days
+    period: 1hours
     writer: h5
   - short_name: va
-    period: 1days
+    period: 1hours
     writer: h5
   - short_name: rv
-    period: 1days
+    period: 1hours
     writer: h5
   - short_name: hus
-    period: 1days
+    period: 1hours
     writer: h5
