@@ -6,7 +6,7 @@ agents:
 env:
   JULIA_CUDA_MEMORY_POOL: none
   JULIA_MPI_HAS_CUDA: "true"
-  JULIA_NVTX_CALLBACKS: gc
+  JULIA_NVTX_CALLBACKS: "gc,inference"
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   OPENBLAS_NUM_THREADS: 1
   OMPI_MCA_opal_warn_on_missing_libcuda: 0

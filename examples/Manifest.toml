@@ -1634,7 +1634,9 @@ version = "4.5.1"
 
 [[deps.NVTX]]
 deps = ["Colors", "JuliaNVTXCallbacks_jll", "Libdl", "NVTX_jll"]
-git-tree-sha1 = "8bc9ce4233be3c63f8dcd78ccaf1b63a9c0baa34"
+git-tree-sha1 = "e556d7712cd5bb4abb8db92a810384717fc0c0e0"
+repo-rev = "sb/inference_hook"
+repo-url = "https://github.com/JuliaGPU/NVTX.jl.git"
 uuid = "5da4648a-3479-48b8-97b9-01cb529c0a1f"
 version = "0.3.3"
 
