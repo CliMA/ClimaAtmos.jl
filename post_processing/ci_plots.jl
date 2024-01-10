@@ -381,6 +381,8 @@ AquaplanetPlots = Union{
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth},

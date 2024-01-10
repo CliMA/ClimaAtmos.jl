@@ -368,7 +368,10 @@ function edmfx_entr_detr_tendency!(
 end
 
 limit_entrainment(entr::FT, a, dt) where {FT} =
-    max(min(entr, (1 - a) / max(a, eps(FT)) / dt), 0)
-limit_entrainment(entr, a, w, dz) = max(min(entr, w / dz), 0)
-limit_detrainment(detr, a, dt) = max(min(detr, 1 / dt), 0)
-limit_detrainment(detr, a, w, dz) = max(min(detr, w / dz), 0)
+    max(min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt), 0)
+limit_entrainment(entr::FT, a, w, dz) where {FT} =
+    max(min(entr, FT(0.9) * w / dz), 0)
+limit_detrainment(detr::FT, a, dt) where {FT} =
+    max(min(detr, FT(0.9) * 1 / dt), 0)
+limit_detrainment(detr::FT, a, w, dz) where {FT} =
+    max(min(detr, FT(0.9) * w / dz), 0)
