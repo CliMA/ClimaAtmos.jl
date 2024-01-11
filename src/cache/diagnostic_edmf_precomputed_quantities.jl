@@ -90,7 +90,7 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜΦ) = p.core
-    (; ᶜp, ᶠu³, ᶜh_tot) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length, buoyancy_flux, ρ_flux_h_tot, ρ_flux_q_tot) =
         p.precomputed.sfc_conditions
@@ -103,6 +103,7 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
     uₕ_int_level = Fields.field_values(Fields.level(Y.c.uₕ, 1))
     u³_int_halflevel = Fields.field_values(Fields.level(ᶠu³, half))
     h_tot_int_level = Fields.field_values(Fields.level(ᶜh_tot, 1))
+    K_int_level = Fields.field_values(Fields.level(ᶜK, 1))
     q_tot_int_level = Fields.field_values(Fields.level(q_tot, 1))
 
     p_int_level = Fields.field_values(Fields.level(ᶜp, 1))
@@ -145,11 +146,10 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
             Geometry.WVector($(FT(0)), local_geometry_int_halflevel),
             local_geometry_int_halflevel,
         )
-        h_totʲ_int_level = p.scratch.temp_data_level
-        @. h_totʲ_int_level = sgs_scalar_first_interior_bc(
+        @. mseʲ_int_level = sgs_scalar_first_interior_bc(
             z_int_level - z_sfc_halflevel,
             ρ_int_level,
-            h_tot_int_level,
+            h_tot_int_level - K_int_level,
             buoyancy_flux_sfc_halflevel,
             ρ_flux_h_tot_sfc_halflevel,
             ustar_sfc_halflevel,
@@ -174,7 +174,6 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
             local_geometry_int_level,
             local_geometry_int_halflevel,
         )
-        @. mseʲ_int_level = h_totʲ_int_level - Kʲ_int_level
         set_diagnostic_edmfx_draft_quantities_level!(
             thermo_params,
             tsʲ_int_level,
@@ -184,7 +183,6 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
             p_int_level,
             Φ_int_level,
         )
-
         @. ρaʲ_int_level = ρʲ_int_level * turbconv_model.a_int
     end
 
@@ -204,6 +202,7 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
         local_geometry_int_halflevel,
         turbconv_model,
     )
+
     return nothing
 end
 
@@ -359,7 +358,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
             )
 
             # We don't have an upper limit to entrainment for the first level 
-            # (calculated at i=2), as the vertical at the first level is zero
+            # (calculated at i=2), as the vertical velocity at the first level is zero
             if i > 2
                 @. entrʲ_prev_level = limit_entrainment(
                     entrʲ_prev_level,
@@ -462,10 +461,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
             # u³ʲ will be clipped later after we get area fraction
             minimum_value = FT(1e-6)
             @. u³ʲ_halflevel = ifelse(
-                ((
-                    u³ʲ_datau³ʲ_data <
-                    (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                )),
+                ((u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT))),
                 u³_halflevel,
                 CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
             )
@@ -539,20 +535,14 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
 
             @. u³ʲ_halflevel = ifelse(
                 (
-                    (
-                        u³ʲ_datau³ʲ_data <
-                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
+                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 u³_halflevel,
                 CT3(sqrt(max(0, u³ʲ_datau³ʲ_data))),
             )
             @. ρaʲ_level = ifelse(
                 (
-                    (
-                        u³ʲ_datau³ʲ_data <
-                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
+                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 0,
                 ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
@@ -591,10 +581,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 )
             @. mseʲ_level = ifelse(
                 (
-                    (
-                        u³ʲ_datau³ʲ_data <
-                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
+                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 h_tot_level - K_level,
                 ρaʲu³ʲ_datamse / ρaʲu³ʲ_data,
@@ -619,10 +606,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 )
             @. q_totʲ_level = ifelse(
                 (
-                    (
-                        u³ʲ_datau³ʲ_data <
-                        (minimum_value / (∂x³∂ξ³_level * ∂x³∂ξ³_level))
-                    ) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
+                    (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
                 ),
                 q_tot_level,
                 ρaʲu³ʲ_dataq_tot / ρaʲu³ʲ_data,
