@@ -8,7 +8,6 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
     Fields.bycolumn(axes(Y.c)) do colidx
-        implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         if p.atmos.diff_mode == Implicit()
             vertical_diffusion_boundary_layer_tendency!(
                 Yₜ,
