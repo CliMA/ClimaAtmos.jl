@@ -17,6 +17,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
+        implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, p.atmos.rayleigh_sponge)
         forcing_tendency!(Yₜ, Y, p, t, colidx, p.atmos.forcing_type)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
