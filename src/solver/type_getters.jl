@@ -11,7 +11,7 @@ import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DECB
 
-function get_atmos(config::AtmosConfig, params, spaces)
+function get_atmos(config::AtmosConfig, params)
     (; turbconv_params) = params
     (; parsed_args) = config
     FT = eltype(config)
@@ -69,7 +69,7 @@ function get_atmos(config::AtmosConfig, params, spaces)
             parsed_args,
             FT,
         ),
-        hyperdiff = get_hyperdiffusion_model(parsed_args, spaces, FT),
+        hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
@@ -744,6 +744,7 @@ end
 
 function get_simulation(config::AtmosConfig)
     params = create_parameter_set(config)
+    atmos = get_atmos(config, params)
 
     sim_info = get_sim_info(config)
     if sim_info.restart
@@ -757,7 +758,6 @@ function get_simulation(config::AtmosConfig)
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
 
-    atmos = get_atmos(config, params, spaces)
     if config.parsed_args["log_params"]
         filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
         CP.log_parameter_information(config.toml_dict, filepath)
