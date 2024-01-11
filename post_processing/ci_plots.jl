@@ -370,7 +370,7 @@ function make_plots(
     simdir = SimDir(simulation_path)
 
     reduction = "average"
-    period = "12.0h"
+    period = "12h"
     short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
     short_names_sfc = ["hfes", "evspsbl"]
     vars_3D = [
