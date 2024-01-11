@@ -1,4 +1,4 @@
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "Inf"
 dt: "100secs"
 t_end: "1days"
 h_elem: 30

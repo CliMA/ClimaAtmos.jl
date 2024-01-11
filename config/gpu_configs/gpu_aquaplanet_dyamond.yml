@@ -11,7 +11,7 @@ dt_rad: "1hours"
 vert_diff: "true" 
 surface_setup: "DefaultMoninObukhov" 
 rayleigh_sponge: true
-dt_save_state_to_disk: "3hours"
+dt_save_state_to_disk: "Inf"
 dt: "50secs" 
 t_end: "1days"
 FLOAT_TYPE: "Float32"

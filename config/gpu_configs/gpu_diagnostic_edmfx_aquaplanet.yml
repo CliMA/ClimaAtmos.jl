@@ -13,5 +13,5 @@ moist: equil
 precip_model: 0M
 dt: 10secs 
 t_end: 1hours 
-dt_save_state_to_disk: 600secs
+dt_save_state_to_disk: "Inf"
 toml: [toml/diagnostic_edmfx_box.toml]
