@@ -301,3 +301,38 @@ function gc_func(integrator)
     )
     return nothing
 end
+
+"""
+    maybe_graceful_exit(integrator)
+
+This callback is called after every timestep
+to allow users to gracefully exit a running
+simulation. To do so, users can navigate to
+and open `{output_dir}/graceful_exit.dat`, change
+the file contents from 0 to 1, and the running
+simulation will gracefully exit with the integrator.
+
+!!! note
+    This may not be reliable for MPI jobs.
+"""
+function maybe_graceful_exit(integrator)
+    output_dir = integrator.p.output_dir
+    file = joinpath(output_dir, "graceful_exit.dat")
+    if isfile(file)
+        open(file, "r") do io
+            while !eof(io)
+                try
+                    code = parse(Int, read(io, Char))
+                    return code != 0
+                catch
+                    open(io -> print(io, 0), file, "w")
+                    return false
+                end
+            end
+            return false
+        end
+    else
+        ispath(output_dir) || mkpath(output_dir)
+        open(io -> print(io, 0), file, "w")
+    end
+end
