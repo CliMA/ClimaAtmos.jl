@@ -264,6 +264,9 @@ output_default_diagnostics:
 netcdf_interpolate_z_over_msl:
   help: "Interpolate diagnostics in the NetCDF files in such a way that `z` is the elevation from the sea level (as opposed to the elevation from the surface)"
   value: false
+netcdf_output_at_levels:
+  help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. This is incompatible with netcdf_interpolate_z_over_msl when topography is present."
+  value: false
 warn_allocations_diagnostics:
-  help: "When true, a dry-run for all the diagnostics is perform to check whether the functions allocate additional memory (which reduces performances)"
+  help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
   value: false

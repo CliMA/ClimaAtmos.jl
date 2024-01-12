@@ -51,6 +51,12 @@ function descriptive_short_name(
             hours, rem_seconds = divrem(rem_seconds, 60 * 60)
             minutes, seconds = divrem(rem_seconds, 60)
 
+            # At this point, days, hours, minutes, seconds have to be integers.
+            # Let us force them to be such so that we can have a consistent string output.
+
+            days, hours, minutes, seconds =
+                map(Int, (days, hours, minutes, seconds))
+
             days > 0 && (period *= "$(days)d_")
             hours > 0 && (period *= "$(hours)h_")
             minutes > 0 && (period *= "$(minutes)m_")
