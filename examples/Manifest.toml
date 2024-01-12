@@ -274,9 +274,9 @@ version = "0.2.2"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra"]
-git-tree-sha1 = "2118cb2765f8197b08e5958cdd17c165427425ee"
+git-tree-sha1 = "c1deebd76f7a443d527fc0430d5758b8b2112ed8"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.19.0"
+version = "1.19.1"
 weakdeps = ["SparseArrays"]
 
     [deps.ChainRulesCore.extensions]
@@ -432,9 +432,9 @@ version = "0.3.0"
 
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
-git-tree-sha1 = "ed2ebb1ff7550226ddb584ba8352facf8d9ffb22"
+git-tree-sha1 = "75bd5b6fc5089df449b5d35fa501c846c9b6549b"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.11.0"
+version = "4.12.0"
 weakdeps = ["Dates", "LinearAlgebra"]
 
     [deps.Compat.extensions]
@@ -1639,9 +1639,7 @@ version = "4.5.1"
 
 [[deps.NVTX]]
 deps = ["Colors", "JuliaNVTXCallbacks_jll", "Libdl", "NVTX_jll"]
-git-tree-sha1 = "2d56aab48156ab4353abe8b4f167a070159dcda7"
-repo-rev = "sb/inference_hook"
-repo-url = "https://github.com/JuliaGPU/NVTX.jl.git"
+git-tree-sha1 = "53046f0483375e3ed78e49190f1154fa0a4083a1"
 uuid = "5da4648a-3479-48b8-97b9-01cb529c0a1f"
 version = "0.3.4"
 
@@ -2010,9 +2008,9 @@ version = "6.5.3+1"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
-git-tree-sha1 = "9ebcd48c498668c7fa0e97a9cae873fbee7bfee1"
+git-tree-sha1 = "d2fd909b9579af2931fe709e8261a4feb4659bde"
 uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
-version = "2.9.1"
+version = "2.9.3"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -2327,9 +2325,9 @@ weakdeps = ["OffsetArrays", "StaticArrays"]
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "4e17a790909b17f7bf1496e3aec138cf01b60b3b"
+git-tree-sha1 = "f68dd04d131d9a8a8eb836173ee8f105c360b0c5"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.0"
+version = "1.9.1"
 weakdeps = ["ChainRulesCore", "Statistics"]
 
     [deps.StaticArrays.extensions]
