@@ -702,4 +702,7 @@ function write_field!(
     elseif length(dim_names) == 1
         v[time_index, :] = interpolated_field
     end
+
+    # Write data to disk
+    NCDatasets.sync(writer.open_files[output_path])
 end

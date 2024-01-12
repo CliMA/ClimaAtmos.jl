@@ -1,5 +1,5 @@
 dt_save_state_to_disk: "10days"
-dt: "150secs" 
+dt: "150secs"
 t_end: "300days"
 h_elem: 16
 z_max: 55000.0
@@ -7,12 +7,12 @@ rayleigh_sponge: true
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
-vert_diff: "FriersonDiffusion" 
+vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 max_newton_iters_ode: 2
-surface_setup: "DefaultExchangeCoefficients" 
-moist: "equil" 
-rad: "gray" 
-precip_model: "0M" 
-job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M.yml" 
+surface_setup: "DefaultExchangeCoefficients"
+moist: "equil"
+rad: "gray"
+precip_model: "0M"
+job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M.toml]
