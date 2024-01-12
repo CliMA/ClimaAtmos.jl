@@ -140,9 +140,10 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             CT3(unit_basis_vector_data(CT3, lgf[colidx]))
         @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
 
+        # TODO: Add support for SetDivergence to DivergenceF2C.
         ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetDivergence(FT(0)),
+            # bottom = Operators.SetDivergence(FT(0)),
         )
 
         vertical_transport!(
