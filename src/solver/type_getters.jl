@@ -834,9 +834,14 @@ function get_simulation(config::AtmosConfig)
 
     length(diagnostics) > 0 && @info "Computing diagnostics:"
 
-    for diag in diagnostics
-        writer = nameof(typeof(diag.output_writer))
-        @info "- $(diag.output_short_name) ($writer)"
+    for writer in writers
+        writer_str = nameof(typeof(writer))
+        diags_with_writer =
+            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
+        diags_outputs = [
+            getproperty(diag, :output_short_name) for diag in diags_with_writer
+        ]
+        @info "$writer_str: $diags_outputs"
     end
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
