@@ -1,6 +1,5 @@
 using Dates: DateTime, @dateformat_str
 using Dierckx
-using ImageFiltering
 using Interpolations
 import NCDatasets
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
@@ -143,7 +142,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             lat = Array(data["latitude"])
             # Apply Smoothing
             smooth_degree = Int(parsed_args["smoothing_order"])
-            esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
+            esmth = CA.gaussian_smooth(zlevels, smooth_degree)
             linear_interpolation(
                 (lon, lat),
                 esmth,

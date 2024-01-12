@@ -8,7 +8,6 @@ import CLIMAParameters as CP
 import ClimaComms
 using ClimaCoreTempestRemap
 
-using ImageFiltering
 using Interpolations
 
 using Plots
@@ -81,7 +80,7 @@ earth_spline = NCDataset(data_path) do data
     lat = Array(data["latitude"])
     # Apply Smoothing
     smooth_degree = 15
-    esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
+    esmth = CA.gaussian_smooth(zlevels, smooth_degree)
     linear_interpolation(
         (lon, lat),
         zlevels,
