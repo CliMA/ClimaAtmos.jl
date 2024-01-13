@@ -72,7 +72,7 @@ is reached.
 - `Y::FieldVector`: the state of the simulation
 - `atmos::AtmosModel`: the model configuration
 - `approximate_solve_iters::Int`: number of iterations to take for the
-  approximate linear solve required by `UseDiffusionDerivative()`
+  approximate linear solve required when `diffusion_flag = UseDerivative()`
 - `diffusion_flag::DerivativeFlag`: whether the derivative of the
   diffusion tendency with respect to the quantities being diffused should be
   computed or approximated as 0; must be either `UseDerivative()` or
@@ -215,28 +215,28 @@ function ImplicitEquationJacobian(
         diffusion_blocks...,
     )
 
-    names₁ = (
-        @name(c.ρ),
-        @name(c.ρe_tot),
-        available_tracer_names...,
-        other_available_names...,
-    ) # Everything in Y except for ᶜuₕ and ᶠu₃.
+    tracer_and_other_names =
+        (available_tracer_names..., other_available_names...)
+    non_velocity_names =
+        (@name(c.ρ), @name(c.ρe_tot), tracer_and_other_names...)
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
     alg = if use_derivative(diffusion_flag)
-        alg₁ = MatrixFields.StationaryIterativeSolve(;
-            P_alg = MatrixFields.BlockDiagonalPreconditioner(),
-            n_iters = approximate_solve_iters,
-        )
+        alg₁ = MatrixFields.BlockLowerTriangularSolve(
+            @name(c.ρ);
+            alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                tracer_and_other_names...,
+            ),
+        ) # Solve for ᶜρ, then for tracers and others, and then for ᶜρe_tot.
         MatrixFields.ApproximateBlockArrowheadIterativeSolve(
-            names₁...;
+            non_velocity_names...;
             alg₁,
             alg₂,
             P_alg₁ = MatrixFields.MainDiagonalPreconditioner(),
             n_iters = approximate_solve_iters,
         )
     else
-        MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
+        MatrixFields.BlockArrowheadSolve(non_velocity_names...; alg₂)
     end
 
     return ImplicitEquationJacobian(
