@@ -49,7 +49,7 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave/report --force-overwrite
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave/*"
@@ -61,7 +61,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond/report --force-overwrite
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
         artifact_paths: "gpu_aquaplanet_dyamond/*"
@@ -74,7 +74,7 @@ steps:
         command:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/report
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M/report --force-overwrite
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/*"
@@ -88,7 +88,7 @@ steps:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
             srun --cpu-bind=cores
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/report-%q{PMI_RANK}
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/report-%q{PMI_RANK} --force-overwrite
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/*"
@@ -103,7 +103,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=cores
-            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
+            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK} --force-overwrite
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
