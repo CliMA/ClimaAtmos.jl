@@ -7,4 +7,3 @@ t_end: "2hours"
 job_id: "test_io"
 dt_save_to_sol: "1hours"
 dt_save_state_to_disk: "1hours"
-post_process: false
