@@ -10,17 +10,5 @@ job_id: "sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"
 moist: "equil"
 toml: [toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml]
 diagnostics:
-  - short_name: pfull
-    period: 6hours
-  - short_name: rv
-    period: 6hours
-  - short_name: ua
-    period: 6hours
-  - short_name: va
-    period: 6hours
-  - short_name: wa
-    period: 6hours
-  - short_name: ta
-    period: 6hours
-  - short_name: hus
+  - short_name: [pfull, rv, ua, va, wa, ta, hus]
     period: 6hours

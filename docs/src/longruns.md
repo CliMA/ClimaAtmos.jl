@@ -22,6 +22,12 @@ longrun_hs_rhoe_equil_55km_nz63_0M
 
 Moist Held Suarez. Test the moist dycore with an equilibrium state with sources and sinks.
 ```
+```
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M
+
+Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf
+and 0-moment microphysics.
+```
 
 ## CPU longruns
 ```
@@ -51,15 +57,9 @@ Aquaplanet with idealized insolation, clear-sky radiation, and 0-moment microphy
 Use this job to test new physical components.
 ```
 ```
-longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M
 
 Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf (diffusion only)
-and 0-moment microphysics.
-```
-```
-longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M
-
-Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf
 and 0-moment microphysics.
 ```
 ```

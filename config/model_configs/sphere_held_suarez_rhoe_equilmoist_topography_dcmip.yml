@@ -12,17 +12,5 @@ job_id: "sphere_held_suarez_rhoe_equilmoist_topography_dcmip"
 moist: "equil"
 netcdf_interpolate_z_over_msl: true
 diagnostics:
-  - short_name: cl
-    period: 3hours
-  - short_name: cli
-    period: 3hours
-  - short_name: clw
-    period: 3hours
-  - short_name: ta
-    period: 3hours
-  - short_name: hus
-    period: 3hours
-  - short_name: hur
-    period: 3hours
-  - short_name: lmix
+  - short_name: [cl, cli, clw, ta, hus, hur, lmix]
     period: 3hours
