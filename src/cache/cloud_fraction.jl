@@ -13,7 +13,7 @@ end
 """
    Compute the grid scale cloud fraction based on sub-grid scale properties
 """
-function set_cloud_fraction!(Y, p, ::DryModel)
+function set_cloud_fraction!(Y, p, ::DryModel, _)
     (; ᶜmixing_length) = p.precomputed
     (; turbconv_model) = p.atmos
     if isnothing(turbconv_model)
@@ -21,7 +21,27 @@ function set_cloud_fraction!(Y, p, ::DryModel)
     end
     @. p.precomputed.ᶜcloud_fraction = 0
 end
-function set_cloud_fraction!(Y, p, ::Union{EquilMoistModel, NonEquilMoistModel})
+function set_cloud_fraction!(
+    Y,
+    p,
+    ::Union{EquilMoistModel, NonEquilMoistModel},
+    ::GridScaleCloud,
+)
+    (; params) = p
+    (; turbconv_model) = p.atmos
+    (; ᶜts, ᶜmixing_length, ᶜcloud_fraction) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    if isnothing(turbconv_model)
+        compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+    end
+    @. ᶜcloud_fraction = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0)
+end
+function set_cloud_fraction!(
+    Y,
+    p,
+    ::Union{EquilMoistModel, NonEquilMoistModel},
+    ::QuadratureCloud,
+)
     (; SG_quad, params) = p
 
     FT = eltype(params)

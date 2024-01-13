@@ -183,6 +183,9 @@ apply_limiter:
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~
+cloud_model:
+  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
+  value: "quadrature"
 perf_mode:
   help: "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
   value: "PerfStandard"

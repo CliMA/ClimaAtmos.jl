@@ -16,6 +16,7 @@ function get_atmos(config::AtmosConfig, params)
     FT = eltype(config)
     moisture_model = get_moisture_model(parsed_args)
     precip_model = get_precipitation_model(parsed_args)
+    cloud_model = get_cloud_model(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
 
@@ -57,6 +58,7 @@ function get_atmos(config::AtmosConfig, params)
         edmfx_sgs_diffusive_flux,
         edmfx_nh_pressure,
         precip_model,
+        cloud_model,
         forcing_type,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(

@@ -242,6 +242,17 @@ function get_precipitation_model(parsed_args)
     end
 end
 
+function get_cloud_model(parsed_args)
+    cloud_model = parsed_args["cloud_model"]
+    return if cloud_model == "grid_scale"
+        GridScaleCloud()
+    elseif cloud_model == "quadrature"
+        QuadratureCloud()
+    else
+        error("Invalid cloud_model $(cloud_model)")
+    end
+end
+
 function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
