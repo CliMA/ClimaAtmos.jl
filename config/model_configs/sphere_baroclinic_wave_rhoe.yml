@@ -4,11 +4,8 @@ dt: "400secs"
 t_end: "10days"
 job_id: "sphere_baroclinic_wave_rhoe"
 diagnostics:
-  - short_name: pfull
+  - short_name: [pfull, wa, va, rv]
     period: 1days
-  - short_name: wa
+  - short_name: [pfull, wa, va, rv]
     period: 1days
-  - short_name: va
-    period: 1days
-  - short_name: rv
-    period: 1days
+    writer: h5

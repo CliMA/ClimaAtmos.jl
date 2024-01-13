@@ -28,6 +28,15 @@ identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
 output file.
 
+For multiple diagnostics with the same specs, it is also possible to directly
+pass a vector of `short_names`, as in
+```
+diagnostics:
+  - short_name: [rhoa, ua, ta]
+    reduction_time: average
+    period: 12hours
+```
+
 The default `writer` is NetCDF. If `writer` is `nc` or `netcdf`, the output is
 remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.

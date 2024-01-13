@@ -61,7 +61,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
     thermo_params = CAP.thermodynamics_params(params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
@@ -105,11 +105,12 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         # Based on boundary conditions for updrafts we overwrite
         # the first interior point for EDMFX ᶜh_totʲ...
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
-        ᶜh_totʲ_int_val = p.scratch.temp_data_level
-        @. ᶜh_totʲ_int_val = sgs_scalar_first_interior_bc(
+        ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
+        ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
+        @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
-            ᶜh_tot_int_val,
+            ᶜh_tot_int_val - ᶜK_int_val,
             buoyancy_flux_val,
             ρ_flux_h_tot_val,
             ustar_val,
@@ -132,10 +133,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         )
 
         # Then overwrite the prognostic variables at first inetrior point.
-        ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
-        ᶜKʲ_int_val = Fields.field_values(Fields.level(ᶜKʲ, 1))
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
-        @. ᶜmseʲ_int_val = ᶜh_totʲ_int_val - ᶜKʲ_int_val
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
         @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
             thermo_params,

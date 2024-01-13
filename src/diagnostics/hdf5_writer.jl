@@ -60,12 +60,9 @@ function write_field!(
         "standard_variable_name" => var.standard_name,
     )
 
-    # TODO: Use directly InputOutput functions
-    InputOutput.HDF5.h5writeattr(
-        hdfwriter.file.filename,
-        "fields/$(diagnostic.output_short_name)",
-        attributes,
-    )
+    for (k, v) in attributes
+        InputOutput.HDF5.write_attribute(hdfwriter.file, k, v)
+    end
 
     Base.close(hdfwriter)
     return nothing

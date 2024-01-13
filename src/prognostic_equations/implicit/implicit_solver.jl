@@ -2,18 +2,14 @@ import LinearAlgebra: I, Adjoint, ldiv!
 import ClimaCore.MatrixFields: @name
 using ClimaCore.MatrixFields
 
-abstract type DiffusionDerivativeFlag end
-struct UseDiffusionDerivative <: DiffusionDerivativeFlag end
-struct IgnoreDiffusionDerivative <: DiffusionDerivativeFlag end
-use_derivative(flag::DiffusionDerivativeFlag) = flag == UseDiffusionDerivative()
-
-abstract type EnthalpyDerivativeFlag end
-struct UseEnthalpyDerivative <: EnthalpyDerivativeFlag end
-struct IgnoreEnthalpyDerivative <: EnthalpyDerivativeFlag end
-use_derivative(flag::EnthalpyDerivativeFlag) = flag == UseEnthalpyDerivative()
+abstract type DerivativeFlag end
+struct UseDerivative <: DerivativeFlag end
+struct IgnoreDerivative <: DerivativeFlag end
+use_derivative(::UseDerivative) = true
+use_derivative(::IgnoreDerivative) = false
 
 """
-    ImplicitEquationJacobian(Y, atmos, diffusion_flag, enthalpy_flag, transform_flag, approximate_solve_iters)
+    ImplicitEquationJacobian(Y, atmos; approximate_solve_iters, diffusion_flag, topography_flag, transform_flag)
 
 A wrapper for the matrix ``∂E/∂Y``, where ``E(Y)`` is the "error" of the
 implicit step with the state ``Y``.
@@ -75,25 +71,25 @@ is reached.
 
 - `Y::FieldVector`: the state of the simulation
 - `atmos::AtmosModel`: the model configuration
-- `diffusion_flag::DiffusionDerivativeFlag`: whether the derivative of the
+- `approximate_solve_iters::Int`: number of iterations to take for the
+  approximate linear solve required by `UseDiffusionDerivative()`
+- `diffusion_flag::DerivativeFlag`: whether the derivative of the
   diffusion tendency with respect to the quantities being diffused should be
-  computed or approximated as 0; must be either `UseDiffusionDerivative()` or
-  `IgnoreDiffusionDerivative()` instead of a `Bool` to ensure type-stability
-- `enthalpy_flag::EnthalpyDerivativeFlag`: whether the derivative of total
-  enthalpy with respect to vertical velocity should be computed or approximated
-  as 0; must be either `UseEnthalpyDerivative()` or `IgnoreEnthalpyDerivative()`
-  instead of a `Bool` to ensure type-stability
+  computed or approximated as 0; must be either `UseDerivative()` or
+  `Ignoreerivative()` instead of a `Bool` to ensure type-stability
+- `topography_flag::DerivativeFlag`: whether the derivative of vertical
+  contravariant velocity with respect to horizontal covariant velocity should be
+  computed or approximated as 0; must be either `UseDerivative()` or
+  `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
 - `transform_flag::Bool`: whether the error should be transformed from ``E(Y)``
   to ``E(Y)/Δt``, which is required for non-Rosenbrock timestepping schemes from
   OrdinaryDiffEq.jl
-- `approximate_solve_iters::Int`: number of iterations to take for the
-  approximate linear solve required by `UseDiffusionDerivative()`
 """
 struct ImplicitEquationJacobian{
     M <: MatrixFields.FieldMatrix,
     S <: MatrixFields.FieldMatrixSolver,
-    D <: DiffusionDerivativeFlag,
-    E <: EnthalpyDerivativeFlag,
+    F1 <: DerivativeFlag,
+    F2 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -104,8 +100,8 @@ struct ImplicitEquationJacobian{
     solver::S
 
     # flags that determine how E'(Y) is approximated
-    diffusion_flag::D
-    enthalpy_flag::E
+    diffusion_flag::F1
+    topography_flag::F2
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
     temp_b::T
@@ -118,21 +114,29 @@ end
 
 function ImplicitEquationJacobian(
     Y,
-    atmos,
-    diffusion_flag,
-    enthalpy_flag,
-    transform_flag,
-    approximate_solve_iters,
+    atmos;
+    approximate_solve_iters = 1,
+    diffusion_flag = atmos.diff_mode == Implicit() ? UseDerivative() :
+                     IgnoreDerivative(),
+    topography_flag = has_topography(axes(Y.c)) ? UseDerivative() :
+                      IgnoreDerivative(),
+    transform_flag = false,
 )
     FT = Spaces.undertype(axes(Y.c))
-    one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
+    CTh = CTh_vector_type(axes(Y.c))
+
     TridiagonalRow = TridiagonalMatrixRow{FT}
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
+    TridiagonalRow_ACTh = TridiagonalMatrixRow{Adjoint{FT, CTh{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    QuaddiagonalRow_ACT3 = QuaddiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
-    TridiagonalRow_C3xACT3 = TridiagonalMatrixRow{typeof(one_C3xACT3)}
+    BidiagonalRow_C3xACTh =
+        BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CTh{FT})')}
+    TridiagonalRow_C3xACT3 =
+        TridiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
 
     is_in_Y(name) = MatrixFields.has_field(Y, name)
+
+    ρq_tot_if_available = is_in_Y(@name(c.ρq_tot)) ? (@name(c.ρq_tot),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -154,53 +158,92 @@ function ImplicitEquationJacobian(
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
-    matrix = MatrixFields.FieldMatrix(
-        (@name(c.ρ), @name(c.ρ)) => FT(-1) * I,
-        MatrixFields.unrolled_map(
-            name ->
-                (name, name) =>
-                    use_derivative(diffusion_flag) ?
-                    similar(Y.c, TridiagonalRow) : FT(-1) * I,
-            (@name(c.ρe_tot), available_tracer_names...),
+    identity_blocks = MatrixFields.unrolled_map(
+        name -> (name, name) => FT(-1) * I,
+        (@name(c.ρ), other_available_names...),
+    )
+
+    advection_blocks = (
+        (
+            use_derivative(topography_flag) ?
+            MatrixFields.unrolled_map(
+                name ->
+                    (name, @name(c.uₕ)) =>
+                        similar(Y.c, TridiagonalRow_ACTh),
+                (@name(c.ρ), @name(c.ρe_tot), available_tracer_names...),
+            ) : ()
         )...,
-        (@name(c.uₕ), @name(c.uₕ)) =>
-            use_derivative(diffusion_flag) && (
-                !isnothing(atmos.turbconv_model) ||
-                diffuse_momentum(atmos.vert_diff)
-            ) ? similar(Y.c, TridiagonalRow) : FT(-1) * I,
-        MatrixFields.unrolled_map(
-            name -> (name, name) => FT(-1) * I,
-            other_available_names,
-        )...,
-        (@name(c.ρ), @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
-        (@name(c.ρe_tot), @name(f.u₃)) =>
-            use_derivative(enthalpy_flag) ?
-            similar(Y.c, QuaddiagonalRow_ACT3) :
-            similar(Y.c, BidiagonalRow_ACT3),
         MatrixFields.unrolled_map(
             name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
-            available_tracer_names,
+            (@name(c.ρ), @name(c.ρe_tot), available_tracer_names...),
         )...,
-        (@name(f.u₃), @name(c.ρ)) => similar(Y.f, BidiagonalRow_C3),
-        (@name(f.u₃), @name(c.ρe_tot)) => similar(Y.f, BidiagonalRow_C3),
+        MatrixFields.unrolled_map(
+            name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
+            (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...),
+        )...,
+        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
-    alg =
-        use_derivative(diffusion_flag) ?
-        MatrixFields.ApproximateBlockArrowheadIterativeSolve(
-            @name(c);
-            n_iters = approximate_solve_iters,
-        ) : MatrixFields.BlockArrowheadSolve(@name(c))
+    diffusion_blocks = if use_derivative(diffusion_flag)
+        (
+            MatrixFields.unrolled_map(
+                name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
+                (@name(c.ρe_tot), available_tracer_names...),
+            )...,
+            MatrixFields.unrolled_map(
+                name -> (name, name) => similar(Y.c, TridiagonalRow),
+                (@name(c.ρe_tot), available_tracer_names...),
+            )...,
+            (@name(c.ρe_tot), @name(c.ρq_tot)) =>
+                similar(Y.c, TridiagonalRow),
+            (@name(c.uₕ), @name(c.uₕ)) =>
+                !isnothing(atmos.turbconv_model) ||
+                    diffuse_momentum(atmos.vert_diff) ?
+                similar(Y.c, TridiagonalRow) : FT(-1) * I,
+        )
+    else
+        MatrixFields.unrolled_map(
+            name -> (name, name) => FT(-1) * I,
+            (@name(c.ρe_tot), available_tracer_names..., @name(c.uₕ)),
+        )
+    end
 
-    # By default, the ApproximateBlockArrowheadIterativeSolve takes 1 iteration
-    # and approximates the A[c, c] block with a MainDiagonalPreconditioner.
+    matrix = MatrixFields.FieldMatrix(
+        identity_blocks...,
+        advection_blocks...,
+        diffusion_blocks...,
+    )
+
+    names₁ = (
+        @name(c.ρ),
+        @name(c.ρe_tot),
+        available_tracer_names...,
+        other_available_names...,
+    ) # Everything in Y except for ᶜuₕ and ᶠu₃.
+
+    alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
+    alg = if use_derivative(diffusion_flag)
+        alg₁ = MatrixFields.StationaryIterativeSolve(;
+            P_alg = MatrixFields.BlockDiagonalPreconditioner(),
+            n_iters = approximate_solve_iters,
+        )
+        MatrixFields.ApproximateBlockArrowheadIterativeSolve(
+            names₁...;
+            alg₁,
+            alg₂,
+            P_alg₁ = MatrixFields.MainDiagonalPreconditioner(),
+            n_iters = approximate_solve_iters,
+        )
+    else
+        MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
+    end
 
     return ImplicitEquationJacobian(
         matrix,
         MatrixFields.FieldMatrixSolver(alg, matrix, Y),
         diffusion_flag,
-        enthalpy_flag,
+        topography_flag,
         similar(Y),
         similar(Y),
         transform_flag,
@@ -251,6 +294,7 @@ function Wfact!(A, Y, p, dtγ, t)
             p.precomputed.ᶜspecific,
             p.precomputed.ᶠu³,
             p.precomputed.ᶜK,
+            p.precomputed.ᶜts,
             p.precomputed.ᶜp,
             (
                 p.atmos.precip_model isa Microphysics1Moment ?
@@ -263,16 +307,25 @@ function Wfact!(A, Y, p, dtγ, t)
             )...,
             (
                 use_derivative(A.diffusion_flag) &&
+                p.atmos.turbconv_model isa AbstractEDMF ?
+                (; p.precomputed.ᶜtke⁰) : (;)
+            )...,
+            (
+                use_derivative(A.diffusion_flag) &&
                 p.atmos.turbconv_model isa PrognosticEDMFX ?
                 (; p.precomputed.ᶜρa⁰) : (;)
             )...,
-            p.core.∂ᶜK_∂ᶠu₃,
             p.core.ᶜΦ,
             p.core.ᶠgradᵥ_ᶜΦ,
             p.core.ᶜρ_ref,
             p.core.ᶜp_ref,
             p.scratch.ᶜtemp_scalar,
-            p.scratch.ᶠtemp_scalar,
+            p.scratch.∂ᶜK_∂ᶜuₕ,
+            p.scratch.∂ᶜK_∂ᶠu₃,
+            p.scratch.ᶠp_grad_matrix,
+            p.scratch.ᶜadvection_matrix,
+            p.scratch.ᶜdiffusion_h_matrix,
+            p.scratch.ᶜdiffusion_u_matrix,
             p.params,
             p.atmos,
             (
@@ -293,82 +346,68 @@ function Wfact!(A, Y, p, dtγ, t)
 end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
-    (; matrix, diffusion_flag, enthalpy_flag) = A
-    (; ᶜspecific, ᶠu³, ᶜK, ᶜp, ∂ᶜK_∂ᶠu₃) = p
-    (; ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref, params) = p
+    (; matrix, diffusion_flag, topography_flag) = A
+    (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
+    (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p
+    (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
     (; energy_upwinding, density_upwinding) = p.atmos.numerics
     (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
-    one_ATC3 = CT3(FT(1))'
+    CTh = CTh_vector_type(axes(Y.c))
     one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
-    one_CT3xACT3 = CT3(FT(1)) * CT3(FT(1))'
-    R_d = FT(CAP.R_d(params))
+
     cv_d = FT(CAP.cv_d(params))
+    Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_tri = FT(CAP.T_triple(params))
+    e_int_v0 = T_tri * Δcv_v - FT(CAP.e_int_v0(params))
+    thermo_params = CAP.thermodynamics_params(params)
 
     ᶜρ = Y.c.ρ
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠg³³ = g³³_field(Y.f)
+    ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
+    ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
 
-    # We can express the kinetic energy as
-    # ᶜK =
-    #     adjoint(CT12(ᶜuₕ)) * ᶜuₕ / 2 +
-    #     ᶜinterp(adjoint(CT3(ᶠu₃)) * ᶠu₃) / 2 +
-    #     adjoint(CT3(ᶜuₕ)) * ᶜinterp(ᶠu₃).
-    # This means that
-    # ∂(ᶜK)/∂(ᶠu₃) =
-    #     ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
-    #     DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix().
+    ᶜkappa_m = p.ᶜtemp_scalar
+    @. ᶜkappa_m[colidx] =
+        TD.gas_constant_air(thermo_params, ᶜts[colidx]) /
+        TD.cv_m(thermo_params, ᶜts[colidx])
+
+    if use_derivative(topography_flag)
+        @. ∂ᶜK_∂ᶜuₕ[colidx] = DiagonalMatrixRow(
+            adjoint(CTh(ᶜuₕ[colidx])) +
+            adjoint(ᶜinterp(ᶠu₃[colidx])) * g³ʰ(ᶜgⁱʲ[colidx]),
+        )
+    else
+        @. ∂ᶜK_∂ᶜuₕ[colidx] = DiagonalMatrixRow(adjoint(CTh(ᶜuₕ[colidx])))
+    end
     @. ∂ᶜK_∂ᶠu₃[colidx] =
         ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃[colidx]))) +
         DiagonalMatrixRow(adjoint(CT3(ᶜuₕ[colidx]))) ⋅ ᶜinterp_matrix()
 
-    # We can express the pressure as
-    # ᶜp = R_d * (ᶜρe_tot / cv_d + ᶜρ * (T_tri - (ᶜK + ᶜΦ) / cv_d)) + O(ᶜq_tot).
-    # we can ignore all O(ᶜq_tot) terms to approximate
-    # ∂(ᶜp)/∂(ᶜρ) ≈ DiagonalMatrixRow(R_d * (T_tri - (ᶜK + ᶜΦ) / cv_d)),
-    # ∂(ᶜp)/∂(ᶜK) ≈ DiagonalMatrixRow(-R_d * ᶜρ / cv_d), and
-    # ∂(ᶜp)/∂(ᶜρe_tot) ≈ DiagonalMatrixRow(R_d / cv_d).
+    @. ᶠp_grad_matrix[colidx] =
+        DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix()
 
-    # We can express the implicit advection tendency for scalars as either
-    # ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ))) or
-    # ᶜρχₜ = -(ᶜadvdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu³, ᶜχ))).
-    # The implicit advection tendency for density is computed with ᶜχ = 1.
-    # This means that either
-    # ∂(ᶜρχₜ)/∂(ᶠu₃) =
-    #     -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ (
-    #         ∂(ᶠu³)/∂(ᶠu₃) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) +
-    #         DiagonalMatrixRow(ᶠu³) ⋅ ᶠinterp_matrix() ⋅ ∂(ᶜχ)/∂(ᶠu₃)
-    #     ) or
-    # ∂(ᶜρχₜ)/∂(ᶠu₃) =
-    #     -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ (
-    #         ∂(ᶠupwind(ᶠu³, ᶜχ))/∂(ᶠu³) ⋅ ∂(ᶠu³)/∂(ᶠu₃) +
-    #         ᶠupwind_matrix(ᶠu³) ⋅ ∂(ᶜχ)/∂(ᶠu₃)
-    #     ).
-    # For simplicity, we approximate the value of ∂(ᶜρχₜ)/∂(ᶠu₃) for FCT (both
-    # Boris-Book and Zalesak) using the value for first-order upwinding.
-    # In addition, we have that
-    # ∂(ᶠu³)/∂(ᶠu₃) = DiagonalMatrixRow(ᶠg³³ * one_CT3xACT3) and
-    # ∂(ᶠupwind(ᶠu³, ᶜχ))/∂(ᶠu³) =
-    #     DiagonalMatrixRow(
-    #         u³_sign(ᶠu³) * ᶠupwind(CT3(u³_sign(ᶠu³)), ᶜχ) * (one_AC3,)
-    #     ).
-    # Since one_AC3 * one_CT3xACT3 = one_ACT3, we can simplify the product of
-    # these derivatives to
-    # ∂(ᶠupwind(ᶠu³, ᶜχ))/∂(ᶠu³) ⋅ ∂(ᶠu³)/∂(ᶠu₃) =
-    #     DiagonalMatrixRow(
-    #         u³_sign(ᶠu³) * ᶠupwind(CT3(u³_sign(ᶠu³)), ᶜχ) * ᶠg³³ * (one_ATC3,)
-    #     ).
-    # In general, ∂(ᶜχ)/∂(ᶠu₃) = 0I, except for the case
-    # ∂(ᶜh_tot)/∂(ᶠu₃) =
-    #     ∂((ᶜρe_tot + ᶜp) / ᶜρ)/∂(ᶜK) ⋅ ∂(ᶜK)/∂(ᶠu₃) =
-    #     ∂(ᶜp)/∂(ᶜK) * DiagonalMatrixRow(1 / ᶜρ) ⋅ ∂(ᶜK)/∂(ᶠu₃).
-    u³_sign(u³) = sign(u³.u³) # sign of the scalar value stored inside u³
-    scalar_info = (
-        (@name(c.ρ), @name(ᶜ1), density_upwinding),
+    @. ᶜadvection_matrix[colidx] =
+        -(ᶜadvdivᵥ_matrix()) ⋅
+        DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]))
+
+    @assert density_upwinding == Val(:none)
+    if use_derivative(topography_flag)
+        ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
+        @. ∂ᶜρ_err_∂ᶜuₕ[colidx] =
+            dtγ * ᶜadvection_matrix[colidx] ⋅
+            ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
+            DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
+    end
+    ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
+    @. ∂ᶜρ_err_∂ᶠu₃[colidx] =
+        dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ[colidx]))
+
+    ᶠu³_data = ᶠu³.components.data.:1
+    tracer_info = (
         (@name(c.ρe_tot), @name(ᶜh_tot), energy_upwinding),
         (@name(c.ρq_tot), @name(ᶜspecific.q_tot), tracer_upwinding),
         (@name(c.ρq_liq), @name(ᶜspecific.q_liq), tracer_upwinding),
@@ -376,138 +415,62 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         (@name(c.ρq_rai), @name(ᶜspecific.q_rai), tracer_upwinding),
         (@name(c.ρq_sno), @name(ᶜspecific.q_sno), tracer_upwinding),
     )
-    MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, χ_name, upwinding)
+    MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name, upwinding)
         MatrixFields.has_field(Y, ρχ_name) || return
-        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
-
-        ᶜχ = if χ_name == @name(ᶜ1)
-            @. p.ᶜtemp_scalar[colidx] = 1
-            p.ᶜtemp_scalar
-        else
-            MatrixFields.get_field(p, χ_name)
+        ᶜχ = MatrixFields.get_field(p, χ_name)
+        if use_derivative(topography_flag)
+            ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
         end
-
+        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
         if upwinding == Val(:none)
-            if use_derivative(enthalpy_flag) && ρχ_name == @name(c.ρe_tot)
-                @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅
-                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅ (
-                        DiagonalMatrixRow(
-                            ᶠg³³[colidx] *
-                            (one_CT3xACT3,) *
-                            ᶠinterp(ᶜχ[colidx]),
-                        ) +
-                        DiagonalMatrixRow(ᶠu³[colidx]) ⋅ ᶠinterp_matrix() ⋅
-                        ∂ᶜK_∂ᶠu₃[colidx] * (-R_d / cv_d)
-                    )
-            else
-                @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                        ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]) *
-                        ᶠg³³[colidx] *
-                        (one_CT3xACT3,) *
-                        ᶠinterp(ᶜχ[colidx]),
-                    )
-            end
+            use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ[colidx] =
+                dtγ * ᶜadvection_matrix[colidx] ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx])) ⋅
+                ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
+                DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
+            @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
+                dtγ * ᶜadvection_matrix[colidx] ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx]) * g³³(ᶠgⁱʲ[colidx]))
         else
-            is_third_order = upwinding == Val(:third_order)
-            ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
-            ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
-            UpwindMatrixRowType =
-                is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
-
+            ᶠupwind = upwinding == Val(:third_order) ? ᶠupwind3 : ᶠupwind1
             ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
                 top = Operators.SetValue(zero(CT3{FT})),
                 bottom = Operators.SetValue(zero(CT3{FT})),
-            ) # Need to wrap ᶠupwind in this to give it well-defined boundaries.
-            ᶠset_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
-                top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
-                bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
-            ) # Need to wrap ᶠupwind_matrix in this for the same reason.
-
-            if use_derivative(enthalpy_flag) && ρχ_name == @name(c.ρe_tot)
-                @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅
-                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅ (
-                        DiagonalMatrixRow(
-                            u³_sign(ᶠu³[colidx]) *
-                            ᶠset_upwind_bcs(
-                                ᶠupwind(CT3(u³_sign(ᶠu³[colidx])), ᶜχ[colidx]),
-                            ) *
-                            ᶠg³³[colidx] *
-                            (one_ATC3,),
-                        ) +
-                        ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³[colidx])) ⋅
-                        ∂ᶜK_∂ᶠu₃[colidx] * (-R_d / cv_d)
-                    )
-            else
-                @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
-                    dtγ * -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                        ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]) *
-                        u³_sign(ᶠu³[colidx]) *
-                        ᶠset_upwind_bcs(
-                            ᶠupwind(CT3(u³_sign(ᶠu³[colidx])), ᶜχ[colidx]),
-                        ) *
-                        ᶠg³³[colidx] *
-                        (one_ATC3,),
-                    )
-            end
+            ) # Need to wrap ᶠupwind in this for well-defined boundaries.
+            use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ[colidx] =
+                dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(CT3(sign(ᶠu³_data[colidx])), ᶜχ[colidx]),
+                    ) * adjoint(C3(sign(ᶠu³_data[colidx]))),
+                ) ⋅ ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
+                DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
+            @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
+                dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(
+                    ᶠset_upwind_bcs(
+                        ᶠupwind(CT3(sign(ᶠu³_data[colidx])), ᶜχ[colidx]),
+                    ) *
+                    adjoint(C3(sign(ᶠu³_data[colidx]))) *
+                    g³³(ᶠgⁱʲ[colidx]),
+                )
         end
     end
 
     # TODO: Move the vertical advection of ρatke into the implicit tendency.
     if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
+        if use_derivative(topography_flag)
+            ∂ᶜρatke_err_∂ᶜuₕ = matrix[@name(c.sgs⁰.ρatke), @name(c.uₕ)]
+            ∂ᶜρatke_err_∂ᶜuₕ[colidx] .= (zero(eltype(∂ᶜρatke_err_∂ᶜuₕ)),)
+        end
         ∂ᶜρatke_err_∂ᶠu₃ = matrix[@name(c.sgs⁰.ρatke), @name(f.u₃)]
         ∂ᶜρatke_err_∂ᶠu₃[colidx] .= (zero(eltype(∂ᶜρatke_err_∂ᶠu₃)),)
     end
 
-    # We can express the implicit tendency for vertical velocity as
-    # ᶠu₃ₜ =
-    #     -(ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(ᶜρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
-    #     ᶠinterp(ᶜρ).
-    # The derivative of this expression with respect to density is
-    # ∂(ᶠu₃ₜ)/∂(ᶜρ) =
-    #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) ⋅ ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρ) +
-    #     ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ - ᶜρ_ref)) ⋅ ∂(ᶠinterp(ᶜρ - ᶜρ_ref))/∂(ᶜρ) +
-    #     ∂(ᶠu₃ₜ)/∂(ᶠinterp(ᶜρ)) ⋅ ∂(ᶠinterp(ᶜρ))/∂(ᶜρ) =
-    #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅ ∂(ᶜp)/∂(ᶜρ) +
-    #     DiagonalMatrixRow(-(ᶠgradᵥ_ᶜΦ) / ᶠinterp(ᶜρ)) ⋅ ᶠinterp_matrix() +
-    #     DiagonalMatrixRow(
-    #         (ᶠgradᵥ(ᶜp - ᶜp_ref) + ᶠinterp(ᶜρ - ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
-    #         ᶠinterp(ᶜρ)^2
-    #     ) ⋅ ᶠinterp_matrix() =
-    #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅ ∂(ᶜp)/∂(ᶜρ) +
-    #     DiagonalMatrixRow(
-    #         (ᶠgradᵥ(ᶜp - ᶜp_ref) - ᶠinterp(ᶜρ_ref) * ᶠgradᵥ_ᶜΦ) /
-    #         ᶠinterp(ᶜρ)^2
-    #     ) ⋅ ᶠinterp_matrix().
-    # The pressure is computed using total energy, therefore
-    # ∂(ᶠu₃ₜ)/∂(ᶜρe_tot) =
-    #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) ⋅ ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶜρe_tot) =
-    #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅
-    #     ∂(ᶜp)/∂(ᶜρe_tot) and
-    # ∂(ᶠu₃ₜ)/∂(ᶠu₃) =
-    #     ∂(ᶠu₃ₜ)/∂(ᶠgradᵥ(ᶜp - ᶜp_ref)) ⋅ ∂(ᶠgradᵥ(ᶜp - ᶜp_ref))/∂(ᶠu₃) =
-    #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅ ∂(ᶜp)/∂(ᶠu₃) =
-    #     DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix() ⋅ ∂(ᶜp)/∂(ᶜK) ⋅
-    #     ∂(ᶜK)/∂(ᶠu₃).
-    # In addition, we sometimes have the Rayleigh sponge tendency modification
-    # ᶠu₃ₜ += -p.ᶠβ_rayleigh_w * ᶠu₃,
-    # which translates to
-    # ∂(ᶠu₃ₜ)/∂(ᶠu₃) += DiagonalMatrixRow(-p.ᶠβ_rayleigh_w).
-    # Note: Because ∂(u₃)/∂(u₃) is actually the C3 identity tensor (which we
-    # denote by one_C3xACT3), rather than the scalar 1, we need to replace I
-    # with I_u₃ = DiagonalMatrixRow(one_C3xACT3). We cannot use I * one_C3xACT3
-    # because UniformScaling only supports Numbers as scale factors.
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
-    ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
-    I_u₃ = DiagonalMatrixRow(one_C3xACT3)
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
     @. ∂ᶠu₃_err_∂ᶜρ[colidx] =
         dtγ * (
-            DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix() ⋅
-            DiagonalMatrixRow(
-                R_d * (T_tri - (ᶜK[colidx] + ᶜΦ[colidx]) / cv_d),
+            ᶠp_grad_matrix[colidx] ⋅ DiagonalMatrixRow(
+                ᶜkappa_m[colidx] * (T_tri * cv_d - ᶜK[colidx] - ᶜΦ[colidx]),
             ) +
             DiagonalMatrixRow(
                 (
@@ -517,137 +480,157 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             ) ⋅ ᶠinterp_matrix()
         )
     @. ∂ᶠu₃_err_∂ᶜρe_tot[colidx] =
-        dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix() *
-        R_d / cv_d
+        dtγ * ᶠp_grad_matrix[colidx] ⋅ DiagonalMatrixRow(ᶜkappa_m[colidx])
+    if MatrixFields.has_field(Y, @name(c.ρq_tot))
+        ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
+        @. ∂ᶠu₃_err_∂ᶜρq_tot[colidx] =
+            dtγ * ᶠp_grad_matrix[colidx] ⋅
+            DiagonalMatrixRow(ᶜkappa_m[colidx] * e_int_v0)
+    end
+
+    ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
+    ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
+    I_u₃ = DiagonalMatrixRow(one_C3xACT3)
+    @. ∂ᶠu₃_err_∂ᶜuₕ[colidx] =
+        dtγ * ᶠp_grad_matrix[colidx] ⋅
+        DiagonalMatrixRow(-(ᶜkappa_m[colidx]) * ᶜρ[colidx]) ⋅ ∂ᶜK_∂ᶜuₕ[colidx]
     if p.atmos.rayleigh_sponge isa RayleighSponge
         @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
             dtγ * (
-                DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅ ᶠgradᵥ_matrix() ⋅
-                DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅ ∂ᶜK_∂ᶠu₃[colidx] +
+                ᶠp_grad_matrix[colidx] ⋅
+                DiagonalMatrixRow(-(ᶜkappa_m[colidx]) * ᶜρ[colidx]) ⋅
+                ∂ᶜK_∂ᶠu₃[colidx] +
                 DiagonalMatrixRow(-p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,))
             ) - (I_u₃,)
     else
         @. ∂ᶠu₃_err_∂ᶠu₃[colidx] =
-            dtγ * DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ[colidx])) ⋅
-            ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(-R_d * ᶜρ[colidx] / cv_d) ⋅
+            dtγ * ᶠp_grad_matrix[colidx] ⋅
+            DiagonalMatrixRow(-(ᶜkappa_m[colidx]) * ᶜρ[colidx]) ⋅
             ∂ᶜK_∂ᶠu₃[colidx] - (I_u₃,)
     end
 
-    # We can express the implicit diffusion tendency for horizontal velocity and
-    # scalars as
-    # ᶜuₕₜ = ᶜadvdivᵥ(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u) * ᶠgradᵥ(ᶜuₕ)) / ᶜρ and
-    # ᶜρχₜ = ᶜadvdivᵥ(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜχ)).
-    # The implicit diffusion tendency for horizontal velocity actually uses
-    # 2 * ᶠstrain_rate instead of ᶠgradᵥ(ᶜuₕ), but these are roughly equivalent.
-    # The implicit diffusion tendency for density is the sum of the ᶜρχₜ's, but
-    # we approximate the derivative of this sum with respect to ᶜρ as 0.
-    # This means that
-    # ∂(ᶜuₕₜ)/∂(ᶜuₕ) =
-    #     DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜadvdivᵥ_matrix() ⋅
-    #     DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix() and
-    # ∂(ᶜρχₜ)/∂(ᶜρχ) =
-    #     ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅
-    #     ᶠgradᵥ_matrix() ⋅ ∂(ᶜχ)/∂(ᶜρχ).
-    # In general, ∂(ᶜχ)/∂(ᶜρχ) = DiagonalMatrixRow(1 / ᶜρ), except for the case
-    # ∂(ᶜh_tot)/∂(ᶜρe_tot) =
-    #     ∂((ᶜρe_tot + ᶜp) / ᶜρ)/∂(ᶜρe_tot) =
-    #     (I + ∂(ᶜp)/∂(ᶜρe_tot)) ⋅ DiagonalMatrixRow(1 / ᶜρ) ≈
-    #     DiagonalMatrixRow((1 + R_d / cv_d) / ᶜρ).
     if use_derivative(diffusion_flag)
+        (; ᶜK_h, ᶜK_u) = p
+        @. ᶜdiffusion_h_matrix[colidx] =
+            ᶜadvdivᵥ_matrix() ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜρ[colidx]) * ᶠinterp(ᶜK_h[colidx])) ⋅
+            ᶠgradᵥ_matrix()
+        if (
+            MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke)) ||
+            !isnothing(p.atmos.turbconv_model) ||
+            diffuse_momentum(p.atmos.vert_diff)
+        )
+            @. ᶜdiffusion_u_matrix[colidx] =
+                ᶜadvdivᵥ_matrix() ⋅
+                DiagonalMatrixRow(ᶠinterp(ᶜρ[colidx]) * ᶠinterp(ᶜK_u[colidx])) ⋅
+                ᶠgradᵥ_matrix()
+        end
+
+        ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
+        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+        @. ∂ᶜρe_tot_err_∂ᶜρ[colidx] =
+            dtγ * ᶜdiffusion_h_matrix[colidx] ⋅ DiagonalMatrixRow(
+                (
+                    -(1 + ᶜkappa_m[colidx]) * ᶜspecific.e_tot[colidx] -
+                    ᶜkappa_m[colidx] * e_int_v0 * ᶜspecific.q_tot[colidx]
+                ) / ᶜρ[colidx],
+            )
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot[colidx] =
+            dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+            DiagonalMatrixRow((1 + ᶜkappa_m[colidx]) / ᶜρ[colidx]) - (I,)
+        if MatrixFields.has_field(Y, @name(c.ρq_tot))
+            ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+            @. ∂ᶜρe_tot_err_∂ᶜρq_tot[colidx] =
+                dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+                DiagonalMatrixRow(ᶜkappa_m[colidx] * e_int_v0 / ᶜρ[colidx])
+        end
+
+        tracer_info = (
+            (@name(c.ρq_tot), @name(q_tot)),
+            (@name(c.ρq_liq), @name(q_liq)),
+            (@name(c.ρq_ice), @name(q_ice)),
+            (@name(c.ρq_rai), @name(q_rai)),
+            (@name(c.ρq_sno), @name(q_sno)),
+        )
+        MatrixFields.unrolled_foreach(tracer_info) do (ρq_name, q_name)
+            MatrixFields.has_field(Y, ρq_name) || return
+            ᶜq = MatrixFields.get_field(ᶜspecific, q_name)
+            ∂ᶜρq_err_∂ᶜρ = matrix[ρq_name, @name(c.ρ)]
+            ∂ᶜρq_err_∂ᶜρq = matrix[ρq_name, ρq_name]
+            @. ∂ᶜρq_err_∂ᶜρ[colidx] =
+                dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+                DiagonalMatrixRow(-(ᶜq[colidx]) / ᶜρ[colidx])
+            @. ∂ᶜρq_err_∂ᶜρq[colidx] =
+                dtγ * ᶜdiffusion_h_matrix[colidx] ⋅
+                DiagonalMatrixRow(1 / ᶜρ[colidx]) - (I,)
+        end
+
+        if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
+            (; ᶜtke⁰) = p
+            ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
+            ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
+            ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
+                matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
+            @. ∂ᶜρatke⁰_err_∂ᶜρ[colidx] =
+                dtγ * ᶜdiffusion_u_matrix[colidx] ⋅
+                DiagonalMatrixRow(-(ᶜtke⁰[colidx]) / ᶜρa⁰[colidx])
+            @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰[colidx] =
+                dtγ * ᶜdiffusion_u_matrix[colidx] ⋅
+                DiagonalMatrixRow(1 / ᶜρa⁰[colidx]) - (I,)
+        end
+
         if (
             !isnothing(p.atmos.turbconv_model) ||
             diffuse_momentum(p.atmos.vert_diff)
         )
             ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
             @. ∂ᶜuₕ_err_∂ᶜuₕ[colidx] =
-                dtγ * DiagonalMatrixRow(1 / ᶜρ[colidx]) ⋅ ᶜadvdivᵥ_matrix() ⋅
-                DiagonalMatrixRow(
-                    ᶠinterp(ᶜρ[colidx]) * ᶠinterp(p.ᶜK_u[colidx]),
-                ) ⋅ ᶠgradᵥ_matrix() - (I,)
+                dtγ * DiagonalMatrixRow(1 / ᶜρ[colidx]) ⋅
+                ᶜdiffusion_u_matrix[colidx] - (I,)
         end
 
-        ᶜρ⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
-        scalar_info = (
-            (@name(c.ρe_tot), ᶜρ, p.ᶜK_h, 1 + R_d / cv_d),
-            (@name(c.ρq_tot), ᶜρ, p.ᶜK_h, 1),
-            (@name(c.ρq_liq), ᶜρ, p.ᶜK_h, 1),
-            (@name(c.ρq_ice), ᶜρ, p.ᶜK_h, 1),
-            (@name(c.ρq_rai), ᶜρ, p.ᶜK_h, 1),
-            (@name(c.ρq_sno), ᶜρ, p.ᶜK_h, 1),
-            (@name(c.sgs⁰.ρatke), ᶜρ⁰, p.ᶜK_u, 1),
+        # TODO: Add support for SetDivergence to DivergenceF2C.
+        ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(FT(0))),
+            # bottom = Operators.SetDivergence(FT(0)),
         )
-        MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, ᶜρ_χ, ᶜK_χ, s_χ)
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ[colidx] =
-                dtγ * ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
-                    ᶠinterp(ᶜρ_χ[colidx]) * ᶠinterp(ᶜK_χ[colidx]),
-                ) ⋅ ᶠgradᵥ_matrix() ⋅ DiagonalMatrixRow(s_χ / ᶜρ_χ[colidx]) -
-                (I,)
-        end
-    end
+        ᶜdivᵥ_ρqₚ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ_ρqₚ)
 
-    # We can express the implicit precipitation tendency for scalars as
-    # ᶜρχₜ = -(ᶜdivᵥ_ρqₚ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind(ᶠu³ₚ, ᶜχ))).
-    # This means that
-    # ∂(ᶜρχₜ)/∂(ᶜρχ) =
-    #     -(ᶜdivᵥ_ρqₚ_matrix()) ⋅ DiagonalMatrixRow(ᶠwinterp(ᶜJ, ᶜρ)) ⋅ (
-    #         ∂(ᶠupwind(ᶠu³ₚ, ᶜχ))/∂(ᶠu³ₚ) ⋅ ∂(ᶠu³ₚ)/∂(ᶜρχ) +
-    #         ᶠupwind_matrix(ᶠu³ₚ) ⋅ ∂(ᶜχ)/∂(ᶜρχ)
-    #     ).
-    # In general, ∂(ᶜχ)/∂(ᶜρχ) = DiagonalMatrixRow(1 / ᶜρ), except for the case
-    # ∂(ᶠu³ₚ)/∂(ᶜρχ) = 0 approximating as zero for now
-    if use_derivative(diffusion_flag) &&
-       p.atmos.precip_model isa Microphysics1Moment
+        ᶜprecip_advection_matrix = ᶜadvection_matrix
+        @. ᶜprecip_advection_matrix[colidx] =
+            -(ᶜdivᵥ_ρqₚ_matrix()) ⋅
+            DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]))
 
-        #TODO - do we need any of those
-        # - it's a little bit more work for ρ
-        # - for energy remember about rescaling by dh/dρe
-        # - should work out of the box for the rest
-
-        scalar_info = (
-            #(@name(c.ρ), density_upwinding, nothing),
-            #(@name(c.ρe_tot), energy_upwinding, nothing),
-            #(@name(c.ρq_tot), tracer_upwinding, nothing),
-            #(@name(c.ρq_liq), tracer_upwinding, nothing),
-            #(@name(c.ρq_ice), tracer_upwinding, nothing),
-            #(@name(c.ρq_rai), tracer_upwinding, nothing),
-            #(@name(c.ρq_sno), tracer_upwinding, nothing),
-            (@name(c.ρq_rai), precip_upwinding, p.ᶜwᵣ),
-            (@name(c.ρq_sno), precip_upwinding, p.ᶜwₛ),
+        precip_info = (
+            (@name(c.ρq_rai), @name(ᶜwᵣ), precip_upwinding),
+            (@name(c.ρq_sno), @name(ᶜwₛ), precip_upwinding),
         )
+        MatrixFields.unrolled_foreach(
+            precip_info,
+        ) do (ρqₚ_name, wₚ_name, upwinding)
+            MatrixFields.has_field(Y, ρqₚ_name) || return
+            ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
+            ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
+            ᶠlg = Fields.local_geometry_field(Y.f)
 
-        MatrixFields.unrolled_foreach(scalar_info) do (ρχ_name, upwinding, ᶜw)
-            MatrixFields.has_field(Y, ρχ_name) || return
-
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
-
+            @assert upwinding != Val(:none)
             is_third_order = upwinding == Val(:third_order)
-            ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+            UpwindMatrixRowType =
+                is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
             ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+            ᶠset_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
+                top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
+                bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
+            ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
 
-            if isnothing(ᶜw)
-                @. ∂ᶜρχ_err_∂ᶜρχ[colidx] -=
-                    dtγ * ᶜadvdivᵥ_matrix() ⋅
-                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅
-                    ᶠupwind_matrix(ᶠu³[colidx]) ⋅
-                    DiagonalMatrixRow(1 / ᶜρ[colidx])
-            else
-                ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
-                    top = Operators.SetValue(C3(FT(0))),
-                    bottom = Operators.SetDivergence(FT(0)),
-                )
-                ᶜdivᵥ_ρqₚ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ_ρqₚ)
-                lgf = Fields.local_geometry_field(Y.f)
-
-                @. ∂ᶜρχ_err_∂ᶜρχ[colidx] -=
-                    dtγ * ᶜdivᵥ_ρqₚ_matrix() ⋅
-                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])) ⋅
+            @. ∂ᶜρqₚ_err_∂ᶜρqₚ[colidx] +=
+                dtγ * ᶜprecip_advection_matrix[colidx] ⋅
+                ᶠset_upwind_matrix_bcs(
                     ᶠupwind_matrix(
-                        -(ᶠinterp(ᶜw[colidx])) *
-                        CT3(unit_basis_vector_data(CT3, lgf[colidx])),
-                    ) ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx])
-            end
+                        ᶠinterp(-(ᶜwₚ[colidx])) *
+                        CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])),
+                    ),
+                ) ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx])
         end
     end
 end

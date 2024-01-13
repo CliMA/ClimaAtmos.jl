@@ -30,10 +30,10 @@ z_elem:
 z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
-kappa_4_vorticity:
+vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
   value: 1.5
-kappa_4_scalar:
+scalar_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for scalar (m s-1)"
   value: 1.5
 # Topography
@@ -264,6 +264,9 @@ output_default_diagnostics:
 netcdf_interpolate_z_over_msl:
   help: "Interpolate diagnostics in the NetCDF files in such a way that `z` is the elevation from the sea level (as opposed to the elevation from the surface)"
   value: false
+netcdf_output_at_levels:
+  help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. This is incompatible with netcdf_interpolate_z_over_msl when topography is present."
+  value: false
 warn_allocations_diagnostics:
-  help: "When true, a dry-run for all the diagnostics is perform to check whether the functions allocate additional memory (which reduces performances)"
+  help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
   value: false

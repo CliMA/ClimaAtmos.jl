@@ -127,6 +127,61 @@ function g³³_field(field)
 end
 
 """
+    g³³(gⁱʲ)
+
+Extracts the `g³³` sub-tensor from the `gⁱʲ` tensor.
+"""
+g³³(gⁱʲ) = Geometry.AxisTensor(
+    (Geometry.Contravariant3Axis(), Geometry.Contravariant3Axis()),
+    Geometry.components(gⁱʲ)[end],
+)
+
+
+"""
+    g³ʰ(gⁱʲ)
+
+Extracts the `g³ʰ` sub-tensor from the `gⁱʲ` tensor.
+"""
+function g³ʰ(gⁱʲ)
+    full_CT_axis = axes(gⁱʲ)[1]
+    CTh_axis = if full_CT_axis == Geometry.Contravariant123Axis()
+        Geometry.Contravariant12Axis()
+    elseif full_CT_axis == Geometry.Contravariant13Axis()
+        Geometry.Contravariant1Axis()
+    elseif full_CT_axis == Geometry.Contravariant23Axis()
+        Geometry.Contravariant2Axis()
+    else
+        error("$full_CT_axis is missing either vertical or horizontal sub-axes")
+    end
+    N = length(full_CT_axis)
+    return Geometry.AxisTensor(
+        (Geometry.Contravariant3Axis(), CTh_axis),
+        view(Geometry.components(gⁱʲ), N:N, 1:(N - 1)),
+    )
+end
+
+"""
+    CTh_vector_type(space)
+
+Extracts the (abstract) horizontal contravariant vector type from the given
+`AbstractSpace`.
+"""
+function CTh_vector_type(space)
+    full_CT_axis = axes(eltype(Fields.local_geometry_field(space).gⁱʲ))[1]
+    return if full_CT_axis == Geometry.Contravariant123Axis()
+        Geometry.Contravariant12Vector
+    elseif full_CT_axis == Geometry.Contravariant13Axis()
+        Geometry.Contravariant1Vector
+    elseif full_CT_axis == Geometry.Contravariant23Axis()
+        Geometry.Contravariant2Vector
+    else
+        error("$full_CT_axis is missing either vertical or horizontal sub-axes")
+    end
+end
+
+has_topography(space) = Spaces.grid(space).hypsography != Spaces.Grids.Flat()
+
+"""
     unit_basis_vector_data(type, local_geometry)
 
 The component of the vector of the specified type with length 1 in physical units.
@@ -314,4 +369,56 @@ end
 function horizontal_integral_at_boundary(f::Fields.Field)
     @assert axes(f) isa Spaces.SpectralElementSpace2D
     sum(f ./ Fields.dz_field(axes(f)) .* 2) # TODO: is there a way to ensure this is derived from face z? The 2d topology doesn't contain this info
+end
+
+"""
+    gaussian_smooth(arr, sigma = 1)
+
+Smooth the given 2D array by applying a Gaussian blur.
+
+Edges are not properly smoothed out: the edge value is extended to infinity.
+"""
+function gaussian_smooth(arr::AbstractArray, sigma::Int = 1)
+    n1, n2 = size(arr)
+
+    # We assume that the Gaussian goes to zero at 10 sigma and ignore contributions outside of that window
+    window = Int(ceil(10 * sigma))
+
+    # Prepare the 2D Gaussian kernel
+    gauss = [
+        exp.(-(x .^ 2 .+ y .^ 2) / (2 * sigma^2)) for
+        x in range(-window, window), y in range(-window, window)
+    ]
+
+    # Normalize it
+    gauss = gauss / sum(gauss)
+
+    smoothed_arr = zeros(size(arr))
+
+    # 2D convolution
+    for i in 1:n1
+        for j in 1:n2
+            # For each point, we "look left and right (up and down)" within our window
+            for wx in (-window):window
+                for wy in (-window):window
+                    # For values at the edge, we keep using the edge value
+                    k = clamp(i + wx, 1, n1)
+                    l = clamp(j + wy, 1, n2)
+
+                    # gauss has size 2window + 1, so its midpoint (when the gaussian is max)
+                    # is at 1 + window
+                    #
+                    # Eg, for window of 3, wx will go through the values -3, -2, 1, 0, 1, 2, 3,
+                    # and the midpoint is 4 (= 1 + window)
+                    mid_gauss_idx = 1 + window
+
+                    smoothed_arr[i, j] +=
+                        arr[k, l] *
+                        gauss[mid_gauss_idx + wx, mid_gauss_idx + wy]
+                end
+            end
+        end
+    end
+
+    return smoothed_arr
 end

@@ -92,7 +92,7 @@ for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 # Thermodynamics derived parameters
-for var in [:molmass_ratio, :R_d, :R_v, :cp_d, :cv_v, :cv_l, :cv_d]
+for var in [:molmass_ratio, :R_d, :R_v, :e_int_v0, :cp_d, :cv_v, :cv_l, :cv_d]
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 
