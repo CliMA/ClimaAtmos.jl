@@ -27,96 +27,9 @@ job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
 output_default_diagnostics: false
 diagnostics:
-  - short_name: ts
+  - short_name: [ts, ta, theta, ha, pfull, rho, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, rsd, rsu, rld, rlu, rsdcs, rsucs, rldcs, rlucs]
     reduction_time: average
     period: 1days
-  - short_name: ta
-    reduction_time: average
-    period: 1days
-  - short_name: thetaa
-    reduction_time: average
-    period: 1days
-  - short_name: ha
-    reduction_time: average
-    period: 1days
-  - short_name: pfull
-    reduction_time: average
-    period: 1days
-  - short_name: rhoa
-    reduction_time: average
-    period: 1days
-  - short_name: ua
-    reduction_time: average
-    period: 1days
-  - short_name: va
-    reduction_time: average
-    period: 1days
-  - short_name: wa
-    reduction_time: average
-    period: 1days
-  - short_name: hfes
-    reduction_time: average
-    period: 1days
-  - short_name: hur
-    reduction_time: average
-    period: 1days
-  - short_name: hus
-    reduction_time: average
-    period: 1days
-  - short_name: clw
-    reduction_time: average
-    period: 1days
-  - short_name: cli
-    reduction_time: average
-    period: 1days
-  - short_name: evspsbl
-    reduction_time: average
-    period: 1days
-  - short_name: rsd
-    reduction_time: average
-    period: 1days
-  - short_name: rsu
-    reduction_time: average
-    period: 1days
-  - short_name: rld
-    reduction_time: average
-    period: 1days
-  - short_name: rlu
-    reduction_time: average
-    period: 1days
-  - short_name: arup
-    reduction_time: average
-    period: 1days
-  - short_name: waup
-    reduction_time: average
-    period: 1days
-  - short_name: taup
-    reduction_time: average
-    period: 1days
-  - short_name: thetaaup
-    reduction_time: average
-    period: 1days
-  - short_name: haup
-    reduction_time: average
-    period: 1days
-  - short_name: husup
-    reduction_time: average
-    period: 1days
-  - short_name: hurup
-    reduction_time: average
-    period: 1days
-  - short_name: clwup
-    reduction_time: average
-    period: 1days
-  - short_name: cliup
-    reduction_time: average
-    period: 1days
-  - short_name: waen
-    reduction_time: average
-    period: 1days
-  - short_name: tke
-    reduction_time: average
-    period: 1days
-  - short_name: lmix
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
     period: 1days

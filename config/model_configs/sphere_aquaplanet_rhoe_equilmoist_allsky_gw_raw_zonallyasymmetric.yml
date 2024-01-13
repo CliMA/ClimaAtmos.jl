@@ -19,30 +19,6 @@ moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
 netcdf_interpolate_z_over_msl: true
 diagnostics:
-  - short_name: ua
-    reduction_time: average
-    period: 12hours
-  - short_name: ta
-    reduction_time: average
-    period: 12hours
-  - short_name: hus
-    reduction_time: average
-    period: 12hours
-  - short_name: hfes
-    reduction_time: average
-    period: 12hours
-  - short_name: evspsbl
-    reduction_time: average
-    period: 12hours
-  - short_name: rsd
-    reduction_time: average
-    period: 12hours
-  - short_name: rsu
-    reduction_time: average
-    period: 12hours
-  - short_name: rld
-    reduction_time: average
-    period: 12hours
-  - short_name: rlu
+  - short_name: [ua, ta, hus, hfes, evspsbl, rsd, rsu, rld, rlu]
     reduction_time: average
     period: 12hours
