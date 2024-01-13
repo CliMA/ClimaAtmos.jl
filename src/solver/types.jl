@@ -11,6 +11,10 @@ struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
 struct Microphysics1Moment <: AbstractPrecipitationModel end
 
+abstract type AbstractCloudModel end
+struct GridScaleCloud <: AbstractCloudModel end
+struct QuadratureCloud <: AbstractCloudModel end
+
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
 struct SphericalModel <: AbstractModelConfig end
@@ -343,6 +347,7 @@ Base.@kwdef struct AtmosModel{
     PEM,
     MM,
     PM,
+    CM,
     F,
     S,
     RM,
@@ -370,6 +375,7 @@ Base.@kwdef struct AtmosModel{
     perf_mode::PEM = nothing
     moisture_model::MM = nothing
     precip_model::PM = nothing
+    cloud_model::CM = nothing
     forcing_type::F = nothing
     subsidence::S = nothing
     radiation_mode::RM = nothing

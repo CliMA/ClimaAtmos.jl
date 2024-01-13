@@ -5,6 +5,7 @@ dz_bottom: 30.0
 dz_top: 3000.0
 moist: "equil" 
 precip_model: "0M" 
+cloud_model: "grid_scale"
 rad: "allskywithclear" 
 idealized_insolation: false
 dt_rad: "1hours"
