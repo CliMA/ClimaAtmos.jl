@@ -214,7 +214,7 @@ function default_diagnostics(
     ::T;
     output_writer,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
-    moist_diagnostics = ["hur", "hus", "cl", "clw", "cli", "hussfc", "evspsbl"]
+    moist_diagnostics = ["hur", "hus", "clw", "cli", "hussfc", "evspsbl"]
 
     return [daily_averages(moist_diagnostics...; output_writer)...]
 end
