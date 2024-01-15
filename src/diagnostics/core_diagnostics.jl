@@ -219,9 +219,9 @@ add_diagnostic_variable!(
     units = "%",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
+            return copy(cache.precomputed.ᶜcloud_fraction)
         else
-            out .= cache.precomputed.ᶜcloud_fraction .* 100
+            out .= cache.precomputed.ᶜcloud_fraction
         end
     end,
 )
