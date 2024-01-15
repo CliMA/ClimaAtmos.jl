@@ -48,15 +48,15 @@ steps:
 
     steps:
 
-      - label: ":computer: hydrostatic balance (ρe_tot)"
-        command:
-          - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
+      # - label: ":computer: hydrostatic balance (ρe_tot)"
+      #   command:
+      #     - srun julia --color=yes --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+      #   artifact_paths: "$$JOB_NAME/*"
+      #   agents:
+      #     slurm_ntasks: 32
+      #     slurm_time: 24:00:00
+      #   env:
+      #     JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
 
       # TODO: uncomment when zalesak works
       # - label: ":computer: lim ARS zalesak baroclinic wave (ρe_tot) equilmoist high resolution"
@@ -152,69 +152,69 @@ steps:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"
 
 
-  - group: "Experimental long runs"
+  # - group: "Experimental long runs"
 
-    steps:
+  #   steps:
 
-      - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 32
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_bw_rhoe_equil_highres_topography_earth"
+  #     - label: ":computer: baroclinic wave (ρe_tot) equilmoist high resolution topography (earth)"
+  #       command:
+  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+  #       artifact_paths: "$$JOB_NAME/*"
+  #       agents:
+  #         slurm_ntasks: 32
+  #         slurm_mem_per_cpu: 16GB
+  #         slurm_time: 24:00:00
+  #       env:
+  #         JOB_NAME: "longrun_bw_rhoe_equil_highres_topography_earth"
 
-      - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_hs_rhoe_equil_highres_topography_earth"
+  #     - label: ":computer: held suarez (ρe_tot) equilmoist high resolution topography (earth)"
+  #       command:
+  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+  #       artifact_paths: "$$JOB_NAME/*"
+  #       agents:
+  #         slurm_ntasks: 64
+  #         slurm_mem_per_cpu: 16GB
+  #         slurm_time: 24:00:00
+  #       env:
+  #         JOB_NAME: "longrun_hs_rhoe_equil_highres_topography_earth"
 
-      - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float32 (earth)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth"
+  #     - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float32 (earth)"
+  #       command:
+  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+  #       artifact_paths: "$$JOB_NAME/*"
+  #       agents:
+  #         slurm_ntasks: 64
+  #         slurm_mem_per_cpu: 16GB
+  #         slurm_time: 24:00:00
+  #       env:
+  #         JOB_NAME: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth"
 
-  - group: "DYAMOND"
+  # - group: "DYAMOND"
 
-    steps:
+  #   steps:
 
-      - label: ":computer: aquaplanet dyamond"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 32GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_dyamond"
+  #     - label: ":computer: aquaplanet dyamond"
+  #       command:
+  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+  #       artifact_paths: "$$JOB_NAME/*"
+  #       agents:
+  #         slurm_ntasks: 64
+  #         slurm_mem_per_cpu: 32GB
+  #         slurm_time: 24:00:00
+  #       env:
+  #         JOB_NAME: "longrun_aquaplanet_dyamond"
 
-  - group: "AMIP"
+  # - group: "AMIP"
 
-    steps:
+  #   steps:
 
-      - label: ":computer: aquaplanet amip"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 20GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_amip"
+  #     - label: ":computer: aquaplanet amip"
+  #       command:
+  #         - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+  #       artifact_paths: "$$JOB_NAME/*"
+  #       agents:
+  #         slurm_ntasks: 64
+  #         slurm_mem_per_cpu: 20GB
+  #         slurm_time: 24:00:00
+  #       env:
+  #         JOB_NAME: "longrun_aquaplanet_amip"
