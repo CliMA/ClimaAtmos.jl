@@ -1,7 +1,9 @@
 job_id: diagnostic_edmfx_aquaplanet
-surface_setup: DefaultExchangeCoefficients 
-rad: gray
+surface_setup: DefaultMoninObukhov
+rad: clearsky
 turbconv: diagnostic_edmfx 
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 prognostic_tke: true
 edmfx_upwinding: first_order 
 edmfx_entr_model: "Generalized" 
@@ -12,7 +14,7 @@ edmfx_sgs_diffusive_flux: true
 moist: equil 
 precip_model: 0M
 override_τ_precip: false
-dt: 50secs 
+dt: 100secs 
 t_end: 1hours 
 dt_save_state_to_disk: 600secs
 toml: [toml/diagnostic_edmfx_trmm_box.toml]

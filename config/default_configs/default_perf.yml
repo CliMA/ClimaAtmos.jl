@@ -5,6 +5,8 @@ dt: "1secs"
 surface_setup: "DefaultExchangeCoefficients"
 t_end: "10secs"
 vert_diff: "true"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 h_elem: 12
 forcing: "held_suarez"
 precip_model: "0M"

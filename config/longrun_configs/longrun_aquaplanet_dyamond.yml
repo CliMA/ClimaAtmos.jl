@@ -15,6 +15,5 @@ rayleigh_sponge: true
 dt_save_state_to_disk: "3hours"
 dt: "50secs" 
 t_end: "1days"
-FLOAT_TYPE: "Float32"
 job_id: "longrun_aquaplanet_dyamond" 
 toml: [toml/longrun_aquaplanet_dyamond.toml]

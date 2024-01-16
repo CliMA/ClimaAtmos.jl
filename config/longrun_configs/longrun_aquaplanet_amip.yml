@@ -11,6 +11,8 @@ idealized_insolation: false
 dt_rad: "1hours"
 surface_setup: "DefaultMoninObukhov" 
 turbconv: "diagnostic_edmfx" 
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 prognostic_tke: true
 edmfx_upwinding: "first_order" 
 edmfx_entr_model: "Generalized" 
@@ -20,9 +22,8 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 rayleigh_sponge: true
 dt_save_state_to_disk: "1days"
-dt: "50secs" 
-t_end: "10days"
-FLOAT_TYPE: "Float32"
+dt: "100secs" 
+t_end: "30days"
 job_id: "longrun_aquaplanet_amip" 
 toml: [toml/longrun_aquaplanet_amip.toml]
 output_default_diagnostics: false
