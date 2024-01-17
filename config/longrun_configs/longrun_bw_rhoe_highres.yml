@@ -8,3 +8,4 @@ dt: "400secs"
 job_id: "longrun_bw_rhoe_highres"
 diagnostics:
   - short_name: [pfull, wa, va, rv]
+    period: 1days
