@@ -195,8 +195,13 @@ function ImplicitEquationJacobian(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
                 (@name(c.ρe_tot), available_tracer_names...),
             )...,
-            (@name(c.ρe_tot), @name(c.ρq_tot)) =>
-                similar(Y.c, TridiagonalRow),
+            (
+                is_in_Y(@name(c.ρq_tot)) ?
+                (
+                    (@name(c.ρe_tot), @name(c.ρq_tot)) =>
+                        similar(Y.c, TridiagonalRow),
+                ) : ()
+            )...,
             (@name(c.uₕ), @name(c.uₕ)) =>
                 !isnothing(atmos.turbconv_model) ||
                     diffuse_momentum(atmos.vert_diff) ?
@@ -224,10 +229,12 @@ function ImplicitEquationJacobian(
     alg = if use_derivative(diffusion_flag)
         alg₁ = MatrixFields.BlockLowerTriangularSolve(
             @name(c.ρ);
-            alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                tracer_and_other_names...,
-            ),
-        ) # Solve for ᶜρ, then for tracers and others, and then for ᶜρe_tot.
+            alg₂ = if is_in_Y(@name(c.ρq_tot))
+                MatrixFields.BlockLowerTriangularSolve(tracer_and_other_names...)
+            else
+                MatrixFields.BlockDiagonalSolve()
+            end,
+        )
         MatrixFields.ApproximateBlockArrowheadIterativeSolve(
             non_velocity_names...;
             alg₁,
