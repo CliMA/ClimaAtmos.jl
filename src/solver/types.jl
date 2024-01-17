@@ -511,14 +511,6 @@ function AtmosConfig(config::Dict; comms_ctx = nothing)
         FT;
         override_file = CP.merge_toml_files(config["toml"]),
     )
-    # TODO: is there a better way? We need a better
-    #       mechanism on the ClimaCore side.
-    if config["trunc_stack_traces"]
-        @eval Main begin
-            import ClimaCore
-            ClimaCore.Fields.truncate_printing_field_types() = true
-        end
-    end
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CPUMultiThreaded
