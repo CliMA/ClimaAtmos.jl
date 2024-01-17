@@ -174,6 +174,28 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         )
     end
 
+    if use_prognostic_tke(turbconv_model)
+        (; edmfx_upwinding) = p.atmos.numerics
+        (; ᶜtke⁰, ᶠu³⁰) = p.precomputed
+        ᶜatke⁰ = if turbconv_model isa PrognosticEDMFX
+            (; ᶜρa⁰, ᶜρ⁰) = p.precomputed
+            @. p.scratch.ᶜtemp_scalar[colidx] =
+                draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx]) * ᶜtke⁰[colidx]
+            p.scratch.ᶜtemp_scalar
+        else
+            ᶜtke⁰
+        end
+        vertical_transport!(
+            Yₜ.c.sgs⁰.ρatke[colidx],
+            ᶜJ[colidx],
+            ᶜρ⁰[colidx],
+            ᶠu³⁰[colidx],
+            ᶜatke⁰[colidx],
+            dt,
+            edmfx_upwinding,
+        )
+    end
+
     @. Yₜ.f.u₃[colidx] +=
         -(
             ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +

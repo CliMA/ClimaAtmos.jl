@@ -74,20 +74,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; params) = p
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf, ᶜΦ) = p.core
+    (; ᶜf) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
-    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
-    (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
-    (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
-    ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
-    ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
-    ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
+    (; ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
-    FT = Spaces.undertype(axes(Y.c))
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -167,21 +162,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 Yₜ.c.sgsʲs.:($j).q_tot[colidx],
                 ᶠu³ʲs.:($j)[colidx],
                 Y.c.sgsʲs.:($j).q_tot[colidx],
-                edmfx_upwinding,
-            )
-        end
-
-        # TODO: Move this to implicit_vertical_advection_tendency!.
-        if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-            @. ᶜa_scalar[colidx] =
-                ᶜtke⁰[colidx] * draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
-            vertical_transport!(
-                Yₜ.c.sgs⁰.ρatke[colidx],
-                ᶜJ[colidx],
-                ᶜρ⁰[colidx],
-                ᶠu³⁰[colidx],
-                ᶜa_scalar[colidx],
-                dt,
                 edmfx_upwinding,
             )
         end
