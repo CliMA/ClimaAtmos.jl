@@ -160,6 +160,14 @@ Base.@kwdef struct EnvBuoyGradVars{FT}
     ∂θl∂z_sat::FT
 end
 
+function EnvBuoyGradVars(
+    thermo_params,
+    ts::TD.ThermodynamicState,
+    ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat,
+)
+    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat
+    return EnvBuoyGradVars(thermo_params, ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat)
+end
 
 function EnvBuoyGradVars(
     thermo_params,
