@@ -165,47 +165,34 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         # using first order upwind and free outflow bottom boundary condition
 
         ᶠu³ₚ = p.scratch.ᶠtemp_CT3
-        ᶜqₚ = p.scratch.ᶜtemp_scalar
-        lgf = Fields.local_geometry_field(Y.f)
-        FT = Spaces.undertype(axes(Y.c))
+        ᶠlg = Fields.local_geometry_field(Y.f)
 
         @. ᶠu³ₚ[colidx] =
-            FT(-1) *
-            ᶠinterp(p.precomputed.ᶜwᵣ[colidx]) *
-            CT3(unit_basis_vector_data(CT3, lgf[colidx]))
-        @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
-
-        # TODO: Add support for SetDivergence to DivergenceF2C.
-        ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            # bottom = Operators.SetDivergence(FT(0)),
-        )
-
+            ᶠinterp(-p.precomputed.ᶜwᵣ[colidx]) *
+            CT3(unit_basis_vector_data(CT3, ᶠlg[colidx]))
         vertical_transport!(
             Yₜ.c.ρq_rai[colidx],
             ᶜJ[colidx],
             Y.c.ρ[colidx],
             ᶠu³ₚ[colidx],
-            ᶜqₚ[colidx],
+            ᶜspecific.q_rai[colidx],
             dt,
             precip_upwinding,
-            ᶜdivᵥ_ρqₚ,
+            ᶜprecipdivᵥ,
         )
 
         @. ᶠu³ₚ[colidx] =
-            FT(-1) *
-            ᶠinterp(p.precomputed.ᶜwₛ[colidx]) *
-            CT3(unit_basis_vector_data(CT3, lgf[colidx]))
-        @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
+            ᶠinterp(-p.precomputed.ᶜwₛ[colidx]) *
+            CT3(unit_basis_vector_data(CT3, ᶠlg[colidx]))
         vertical_transport!(
             Yₜ.c.ρq_sno[colidx],
             ᶜJ[colidx],
             Y.c.ρ[colidx],
             ᶠu³ₚ[colidx],
-            ᶜqₚ[colidx],
+            ᶜspecific.q_sno[colidx],
             dt,
             precip_upwinding,
-            ᶜdivᵥ_ρqₚ,
+            ᶜprecipdivᵥ,
         )
     end
 

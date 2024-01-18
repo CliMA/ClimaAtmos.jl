@@ -609,16 +609,9 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                 ᶜdiffusion_u_matrix[colidx] - (I,)
         end
 
-        # TODO: Add support for SetDivergence to DivergenceF2C.
-        ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            # bottom = Operators.SetDivergence(FT(0)),
-        )
-        ᶜdivᵥ_ρqₚ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ_ρqₚ)
-
         ᶜprecip_advection_matrix = ᶜadvection_matrix
         @. ᶜprecip_advection_matrix[colidx] =
-            -(ᶜdivᵥ_ρqₚ_matrix()) ⋅
+            -(ᶜprecipdivᵥ_matrix()) ⋅
             DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]))
 
         precip_info = (
