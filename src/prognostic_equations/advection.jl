@@ -80,6 +80,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
+    (; energy_upwinding, tracer_upwinding, precip_upwinding) = p.atmos.numerics
+    (; rayleigh_sponge, precip_model) = p.atmos
+    (; ᶜspecific) = p.precomputed
+
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
@@ -110,6 +114,101 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶠΦ = p.scratch.ᶠtemp_scalar
     @. ᶠΦ = CAP.grav(params) * ᶠz
+
+    Fields.bycolumn(axes(Y.c)) do colidx
+        if :ρe_tot in propertynames(Yₜ.c)
+            (; ᶜh_tot) = p.precomputed
+            for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
+                energy_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    Yₜ.c.ρe_tot[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜh_tot[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+            χ_name == :e_tot && continue
+            for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
+                tracer_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    ᶜρχₜ[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜχ[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+
+        if precip_model isa Microphysics1Moment
+            # Advection of precipitation with the mean flow
+            # is done with other tracers above.
+            # Here we add the advection with precipitation terminal velocity
+            # using first order upwind and free outflow bottom boundary condition
+
+            ᶠu³ₚ = p.scratch.ᶠtemp_CT3
+            ᶜqₚ = p.scratch.ᶜtemp_scalar
+            lgf = Fields.local_geometry_field(Y.f)
+            FT = Spaces.undertype(axes(Y.c))
+
+            @. ᶠu³ₚ[colidx] =
+                FT(-1) *
+                ᶠinterp(p.precomputed.ᶜwᵣ[colidx]) *
+                CT3(unit_basis_vector_data(CT3, lgf[colidx]))
+            @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
+
+            # TODO: Add support for SetDivergence to DivergenceF2C.
+            ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
+                top = Operators.SetValue(C3(FT(0))),
+                # bottom = Operators.SetDivergence(FT(0)),
+            )
+
+            for (coeff, upwinding) in ((1, precip_upwinding), (-1, Val(:none)))
+                precip_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    Yₜ.c.ρq_rai[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³ₚ[colidx],
+                    ᶜqₚ[colidx],
+                    dt,
+                    upwinding,
+                    ᶜdivᵥ_ρqₚ,
+                )
+            end
+
+            @. ᶠu³ₚ[colidx] =
+                FT(-1) *
+                ᶠinterp(p.precomputed.ᶜwₛ[colidx]) *
+                CT3(unit_basis_vector_data(CT3, lgf[colidx]))
+            @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
+            for (coeff, upwinding) in ((1, precip_upwinding), (-1, Val(:none)))
+                precip_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    Yₜ.c.ρq_sno[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³ₚ[colidx],
+                    ᶜqₚ[colidx],
+                    dt,
+                    upwinding,
+                    ᶜdivᵥ_ρqₚ,
+                )
+            end
+        end
+    end
+
 
     Fields.bycolumn(axes(Y.c)) do colidx
         @. Yₜ.c.uₕ[colidx] -=

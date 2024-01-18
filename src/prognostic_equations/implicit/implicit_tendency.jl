@@ -41,16 +41,49 @@ end
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 # TODO: Can we rewrite ᶠfct_boris_book and ᶠfct_zalesak so that their broadcast
 # expressions are less convoluted?
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding) =
-    vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -(ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_book}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -(ᶜdivᵥ(
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val, ᶜdivᵥ) =
+    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜdivᵥ)
+vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val) =
+    vertical_transport!(1, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
+vertical_transport!(coeff::Int, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding::Val) =
+    vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, upwinding, ᶜadvdivᵥ)
+
+vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none}, ᶜdivᵥ) =
+    @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠu³ * ᶠinterp(ᶜχ)))
+vertical_transport!(
+    coeff,
+    ᶜρχₜ,
+    ᶜJ,
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
+    ::Val{:first_order},
+    ᶜdivᵥ,
+) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)))
+vertical_transport!(
+    coeff,
+    ᶜρχₜ,
+    ᶜJ,
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
+    ::Val{:third_order},
+    ᶜdivᵥ,
+) = @. ᶜρχₜ += -coeff * (ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind3(ᶠu³, ᶜχ)))
+vertical_transport!(
+    coeff,
+    ᶜρχₜ,
+    ᶜJ,
+    ᶜρ,
+    ᶠu³,
+    ᶜχ,
+    dt,
+    ::Val{:boris_book},
+    ᶜdivᵥ,
+) = @. ᶜρχₜ +=
+    -coeff * (ᶜdivᵥ(
         ᶠwinterp(ᶜJ, ᶜρ) * (
             ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_boris_book(
                 ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
@@ -58,16 +91,17 @@ vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:boris_boo
             )
         ),
     ))
-vertical_transport!(ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}, ᶜdivᵥ) =
-    @. ᶜρχₜ += -(ᶜdivᵥ(
-        ᶠwinterp(ᶜJ, ᶜρ) * (
-            ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
-                ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
-                ᶜχ / dt,
-                ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
-            )
-        ),
-    ))
+vertical_transport!(coeff, ᶜρχₜ, ᶜJ, ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:zalesak}, ᶜdivᵥ) =
+    @. ᶜρχₜ +=
+        -coeff * (ᶜdivᵥ(
+            ᶠwinterp(ᶜJ, ᶜρ) * (
+                ᶠupwind1(ᶠu³, ᶜχ) + ᶠfct_zalesak(
+                    ᶠupwind3(ᶠu³, ᶜχ) - ᶠupwind1(ᶠu³, ᶜχ),
+                    ᶜχ / dt,
+                    ᶜχ / dt - ᶜdivᵥ(ᶠwinterp(ᶜJ, ᶜρ) * ᶠupwind1(ᶠu³, ᶜχ)) / ᶜρ,
+                )
+            ),
+        ))
 
 vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:none}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
@@ -77,8 +111,6 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    (; energy_upwinding) = p.atmos.numerics
-    (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
     (; turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
@@ -86,7 +118,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
     (; ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
-    @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) * ᶠu³[colidx])
+    @. Yₜ.c.ρ[colidx] -=
+        ᶜdivᵥ(ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) * ᶠu³[colidx])
 
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p.precomputed
@@ -97,7 +130,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³[colidx],
             ᶜh_tot[colidx],
             dt,
-            energy_upwinding,
+            Val(:none),
         )
     end
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
@@ -109,7 +142,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³[colidx],
             ᶜχ[colidx],
             dt,
-            tracer_upwinding,
+            Val(:none),
         )
     end
 
@@ -143,7 +176,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³ₚ[colidx],
             ᶜqₚ[colidx],
             dt,
-            precip_upwinding,
+            Val(:none),
             ᶜdivᵥ_ρqₚ,
         )
 
@@ -159,7 +192,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³ₚ[colidx],
             ᶜqₚ[colidx],
             dt,
-            precip_upwinding,
+            Val(:none),
             ᶜdivᵥ_ρqₚ,
         )
     end
