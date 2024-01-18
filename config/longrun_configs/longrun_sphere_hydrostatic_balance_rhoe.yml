@@ -2,8 +2,8 @@ h_elem: 16
 z_elem: 45
 dz_bottom: 30.0
 dt: "400secs"
-perturb_initstate: false 
-discrete_hydrostatic_balance: true 
-t_end: "800days" 
-dt_save_state_to_disk: "10days" 
+perturb_initstate: false
+discrete_hydrostatic_balance: true
+t_end: "800days"
+dt_save_state_to_disk: "10days"
 job_id: "longrun_sphere_hydrostatic_balance_rhoe"

@@ -27,9 +27,9 @@ precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 function precipitation_cache(Y, precip_model::Microphysics0Moment)
     FT = Spaces.undertype(axes(Y.c))
     return (;
-        ᶜS_ρq_tot = similar(Y.c, FT),
-        ᶜ3d_rain = similar(Y.c, FT),
-        ᶜ3d_snow = similar(Y.c, FT),
+        ᶜS_ρq_tot = zeros(axes(Y.c)),
+        ᶜ3d_rain = zeros(axes(Y.c)),
+        ᶜ3d_snow = zeros(axes(Y.c)),
         col_integrated_rain = zeros(
             axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
         ),
@@ -111,6 +111,8 @@ function precipitation_tendency!(
         col_integrated_rain,
         col_integrated_snow,
     ) = p.precipitation
+    col_precip_energy =
+        p.conservation_check.col_integrated_precip_energy_tendency
 
     thermo_params = CAP.thermodynamics_params(params)
     compute_precipitation_cache!(Y, p, colidx, precip_model, turbconv_model)
@@ -133,11 +135,6 @@ function precipitation_tendency!(
         col_integrated_snow[colidx],
         ᶜ3d_snow[colidx],
     )
-
-    @. col_integrated_rain[colidx] =
-        col_integrated_rain[colidx] / CAP.ρ_cloud_liq(params)
-    @. col_integrated_snow[colidx] =
-        col_integrated_snow[colidx] / CAP.ρ_cloud_ice(params)
 
     if :ρe_tot in propertynames(Y.c)
         #TODO - this is a hack right now. But it will be easier to clean up
@@ -163,6 +160,17 @@ function precipitation_tendency!(
                     ᶜts[colidx],
                     ᶜΦ[colidx],
                 )
+            if p.atmos.surface_model isa PrognosticSurfaceTemperature
+                Operators.column_integral_definite!(
+                    col_precip_energy[colidx],
+                    @. ᶜS_ρq_tot[colidx] *
+                       e_tot_0M_precipitation_sources_helper(
+                        thermo_params,
+                        ᶜts[colidx],
+                        ᶜΦ[colidx],
+                    )
+                )
+            end
         end
     end
     return nothing

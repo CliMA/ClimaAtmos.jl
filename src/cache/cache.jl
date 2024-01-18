@@ -26,6 +26,7 @@ struct AtmosCache{
     RAD,
     NETFLUXTOA,
     NETFLUXSFC,
+    CONSCHECK,
     OD,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
@@ -89,6 +90,9 @@ struct AtmosCache{
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
 
+    """Conservation check for prognostic surface temperature"""
+    conservation_check::CONSCHECK
+
     """Directory output."""
     output_dir::OD
 end
@@ -141,6 +145,14 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
 
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
+
+    conservation_check =
+        atmos.surface_model isa PrognosticSurfaceTemperature ?
+        (;
+            col_integrated_precip_energy_tendency = zeros(
+                axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+            )
+        ) : (; col_integrated_precip_energy_tendency = (;))
 
     limiter = if isnothing(atmos.numerics.limiter)
         nothing
@@ -224,6 +236,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
         radiation,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        conservation_check,
         output_dir,
     )
 
