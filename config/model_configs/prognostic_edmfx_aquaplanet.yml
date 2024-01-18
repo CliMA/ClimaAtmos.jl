@@ -1,6 +1,6 @@
 job_id: prognostic_edmfx_aquaplanet
-surface_setup: DefaultExchangeCoefficients 
-rad: gray
+surface_setup: DefaultMoninObukhov 
+rad: clearsky
 turbconv: prognostic_edmfx 
 prognostic_tke: true
 edmfx_upwinding: first_order 
@@ -15,3 +15,11 @@ dt: 10secs
 t_end: 1hours 
 dt_save_state_to_disk: 600secs
 toml: [toml/prognostic_edmfx_box.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, rsd, rsu, rld, rlu]
+    reduction_time: average
+    period: 1hours
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    reduction_time: average
+    period: 1hours

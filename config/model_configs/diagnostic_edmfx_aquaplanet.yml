@@ -15,6 +15,15 @@ moist: equil
 precip_model: 0M
 override_τ_precip: false
 dt: 100secs 
-t_end: 1hours 
-dt_save_state_to_disk: 600secs
+t_end: 12hours 
+dt_save_state_to_disk: 12hours
+regression_test: true
 toml: [toml/diagnostic_edmfx_trmm_box.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, rsd, rsu, rld, rlu]
+    reduction_time: average
+    period: 1hours
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    reduction_time: average
+    period: 1hours

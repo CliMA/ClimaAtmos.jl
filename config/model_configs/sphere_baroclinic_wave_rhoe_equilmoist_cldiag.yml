@@ -1,0 +1,10 @@
+precip_model: "0M"
+dt_save_state_to_disk: "2days"
+initial_condition: "MoistBaroclinicWave"
+dt: "450secs"
+dt_cloud_fraction: "450secs"
+job_id: "sphere_baroclinic_wave_rhoe_equilmoist_cldiag"
+moist: "equil"
+diagnostics:
+  - short_name: [pfull, wa, va, rv, hus]
+    period: 1days

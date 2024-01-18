@@ -447,7 +447,6 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_rico_box},
     Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
-    Val{:diagnostic_edmfx_aquaplanet_tke},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
     Val{:prognostic_edmfx_adv_test_box},
     Val{:prognostic_edmfx_gabls_box},
@@ -485,7 +484,7 @@ function make_plots(::EDMFSpherePlots, simulation_path)
 
     short_names = ["ua", "wa", "thetaa", "taup", "haup", "waup", "tke", "arup"]
     reduction = "average"
-    period = "10m"
+    period = "1h"
     vars = [
         get(simdir; short_name, reduction, period) for short_name in short_names
     ]

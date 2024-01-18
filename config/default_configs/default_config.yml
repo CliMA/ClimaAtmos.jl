@@ -99,8 +99,6 @@ idealized_insolation:
 dt_cloud_fraction:
   help: "Time between calling cloud fraction update"
   value: "3hours"
-
-
 config:
   help: "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
   value: "sphere"

@@ -21,10 +21,11 @@ function perform_regression_tests(
     ds_filename_computed = joinpath(output_dir, "prog_state.nc")
 
     function process_name(s::AbstractString)
-        # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1"
+        # "c_ρ", "c_ρe", "c_uₕ_1", "c_uₕ_2", "f_w_1", "c_sgs⁰_ρatke"
         s = replace(s, "components_data_" => "")
         s = replace(s, "ₕ" => "_h")
         s = replace(s, "ρ" => "rho")
+        s = replace(s, "⁰" => "_0")
         return s
     end
     varname(pc::Tuple) = process_name(join(pc, "_"))
