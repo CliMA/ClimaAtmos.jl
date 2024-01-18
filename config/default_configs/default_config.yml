@@ -190,9 +190,6 @@ viscous_sponge:
 job_id:
   help: "Uniquely identifying string for a particular job"
   value: ~
-density_upwinding:
-  help: "Density upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
-  value: none
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
