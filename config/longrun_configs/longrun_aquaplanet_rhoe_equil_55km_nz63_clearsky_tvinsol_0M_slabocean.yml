@@ -12,7 +12,7 @@ precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
-max_newton_iters_ode: 2
+approximate_linear_solve_iters: 2
 rad: "clearsky"
 idealized_insolation: false
 dt_rad: "1hours"
