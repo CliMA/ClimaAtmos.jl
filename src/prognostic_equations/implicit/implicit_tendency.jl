@@ -77,7 +77,7 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    (; energy_upwinding, density_upwinding) = p.atmos.numerics
+    (; energy_upwinding) = p.atmos.numerics
     (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
     (; turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
@@ -86,17 +86,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
     (; ᶜspecific, ᶠu³, ᶜp) = p.precomputed
 
-    ᶜ1 = p.scratch.ᶜtemp_scalar
-    @. ᶜ1[colidx] = one(Y.c.ρ[colidx])
-    vertical_transport!(
-        Yₜ.c.ρ[colidx],
-        ᶜJ[colidx],
-        Y.c.ρ[colidx],
-        ᶠu³[colidx],
-        ᶜ1[colidx],
-        dt,
-        density_upwinding,
-    )
+    @. Yₜ.c.ρ[colidx] -= ᶜdivᵥ(ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) * ᶠu³[colidx])
 
     if :ρe_tot in propertynames(Yₜ.c)
         (; ᶜh_tot) = p.precomputed

@@ -357,7 +357,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p
     (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
-    (; energy_upwinding, density_upwinding) = p.atmos.numerics
+    (; energy_upwinding) = p.atmos.numerics
     (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
@@ -401,7 +401,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         -(ᶜadvdivᵥ_matrix()) ⋅
         DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]))
 
-    @assert density_upwinding == Val(:none)
     if use_derivative(topography_flag)
         ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
         @. ∂ᶜρ_err_∂ᶜuₕ[colidx] =
