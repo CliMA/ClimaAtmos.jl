@@ -239,17 +239,12 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
     # First order approximation: Use environmental mean fields.
     @. ᶜlinear_buoygrad = buoyancy_gradients(
-        params,
+        BuoyGradMean(),
+        thermo_params,
         moisture_model,
-        EnvBuoyGrad(
-            BuoyGradMean(),
-            TD.air_temperature(thermo_params, ᶜts⁰),                           # t_sat
-            TD.vapor_specific_humidity(thermo_params, ᶜts⁰),                   # qv_sat
-            ᶜq_tot⁰,                                                           # qt_sat
-            TD.liquid_specific_humidity(thermo_params, ᶜts⁰),
-            TD.ice_specific_humidity(thermo_params, ᶜts⁰),
-            TD.dry_pottemp(thermo_params, ᶜts⁰),                               # θ_sat
-            TD.liquid_ice_pottemp(thermo_params, ᶜts⁰),                        # θ_liq_ice_sat
+        EnvBuoyGradVars(
+            thermo_params,
+            ᶜts⁰,
             projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),
@@ -261,9 +256,6 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))),
                 ᶜlg,
             ),                                                                 # ∂θl∂z_sat
-            ᶜp,                                                                # p
-            ifelse(TD.has_condensate(thermo_params, ᶜts⁰), 1, 0),              # en_cld_frac
-            ᶜρ⁰,                                                               # ρ
         ),
     )
 

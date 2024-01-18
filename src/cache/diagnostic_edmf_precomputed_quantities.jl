@@ -759,17 +759,12 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
 
     @. ᶜlinear_buoygrad = buoyancy_gradients(
-        params,
+        BuoyGradMean(),
+        thermo_params,
         moisture_model,
-        EnvBuoyGrad(
-            BuoyGradMean(),
-            TD.air_temperature(thermo_params, ᶜts),                           # t_sat
-            TD.vapor_specific_humidity(thermo_params, ᶜts),                   # qv_sat
-            q_tot,                                                            # qt_sat
-            TD.liquid_specific_humidity(thermo_params, ᶜts),
-            TD.ice_specific_humidity(thermo_params, ᶜts),
-            TD.dry_pottemp(thermo_params, ᶜts),                               # θ_sat
-            TD.liquid_ice_pottemp(thermo_params, ᶜts),                        # θ_liq_ice_sat
+        EnvBuoyGradVars(
+            thermo_params,
+            ᶜts,
             projected_vector_data(
                 C3,
                 ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),
@@ -781,9 +776,6 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
                 ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),
                 ᶜlg,
             ),                                                                 # ∂θl∂z_sat
-            ᶜp,                                                                # p
-            ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),               # en_cld_frac
-            Y.c.ρ,                                                             # ρ
         ),
     )
 

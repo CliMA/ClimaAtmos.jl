@@ -1,26 +1,29 @@
+import Thermodynamics.Parameters as TDP
 """
     buoyancy_gradients(
-        params,
+        ::AbstractEnvBuoyGradClosure,
+        thermo_params,
         moisture_model,
-        bg_model::EnvBuoyGrad{FT, EBG}
-    ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+        bg_model::EnvBuoyGradVars,
+    )
 
 Returns the vertical buoyancy gradients in the environment, as well as in its dry and cloudy volume fractions.
-The dispatch on EnvBuoyGrad type is performed at the EnvBuoyGrad construction time, and the analytical solutions
+The dispatch on EnvBuoyGradVars type is performed at the EnvBuoyGradVars construction time, and the analytical solutions
 used here are consistent for both mean fields and conditional fields obtained from assumed distributions
 over the conserved thermodynamic variables.
 """
 function buoyancy_gradients(
-    params,
+    ebgc::AbstractEnvBuoyGradClosure,
+    thermo_params,
     moisture_model,
-    bg_model::EnvBuoyGrad{FT, EBG},
-) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+    bg_model::EnvBuoyGradVars,
+)
+    FT = eltype(bg_model)
 
-    thermo_params = CAP.thermodynamics_params(params)
-    g = CAP.grav(params)
-    molmass_ratio = CAP.molmass_ratio(params)
-    R_d = CAP.R_d(params)
-    R_v = CAP.R_v(params)
+    g = TDP.grav(thermo_params)
+    molmass_ratio = TDP.molmass_ratio(thermo_params)
+    R_d = TDP.R_d(thermo_params)
+    R_v = TDP.R_v(thermo_params)
 
     phase_part = TD.PhasePartition(FT(0), FT(0), FT(0)) # assuming R_d = R_m
     Π = TD.exner_given_pressure(thermo_params, bg_model.p, phase_part)
@@ -85,27 +88,35 @@ function buoyancy_gradients(
         ∂b∂qt_sat = FT(0)
     end
 
-    ∂b∂z = buoyancy_gradient_chain_rule(bg_model, ∂b∂θv, ∂b∂θl_sat, ∂b∂qt_sat)
+    ∂b∂z = buoyancy_gradient_chain_rule(
+        ebgc,
+        bg_model,
+        ∂b∂θv,
+        ∂b∂θl_sat,
+        ∂b∂qt_sat,
+    )
     return ∂b∂z
 end
 
 """
     buoyancy_gradient_chain_rule(
-        bg_model::EnvBuoyGrad{FT, EBG},
+        ::AbstractEnvBuoyGradClosure,
+        bg_model::EnvBuoyGradVars{FT, EBG},
         ∂b∂θv::FT,
         ∂b∂θl_sat::FT,
         ∂b∂qt_sat::FT,
-    ) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+    ) where {FT <: Real}
 
 Returns the vertical buoyancy gradients in the environment, as well as in its dry and cloudy volume fractions,
 from the partial derivatives with respect to thermodynamic variables in dry and cloudy volumes.
 """
 function buoyancy_gradient_chain_rule(
-    bg_model::EnvBuoyGrad{FT, EBG},
+    ::AbstractEnvBuoyGradClosure,
+    bg_model::EnvBuoyGradVars{FT},
     ∂b∂θv::FT,
     ∂b∂θl_sat::FT,
     ∂b∂qt_sat::FT,
-) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
+) where {FT <: Real}
     if bg_model.en_cld_frac > FT(0)
         ∂b∂z_θl_sat = ∂b∂θl_sat * bg_model.∂θl∂z_sat
         ∂b∂z_qt_sat = ∂b∂qt_sat * bg_model.∂qt∂z_sat
