@@ -171,9 +171,6 @@ perturb_initstate:
 discrete_hydrostatic_balance:
   help: "Set the initial state to discrete hydrostatic balance"
   value: false
-trunc_stack_traces:
-  help: "Set to `true` to truncate printing of ClimaCore `Field`s"
-  value: true
 apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
