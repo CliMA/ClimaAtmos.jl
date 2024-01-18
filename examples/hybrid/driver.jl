@@ -1,5 +1,5 @@
 # When Julia 1.10+ is used interactively, stacktraces contain reduced type information to make them shorter.
-# On the other hand, the full type information is printed when julia is not run interactively. 
+# On the other hand, the full type information is printed when julia is not run interactively.
 # Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
@@ -58,29 +58,7 @@ if !isempty(integrator.tstops)
 end
 CA.verify_callbacks(sol.t)
 
-if ClimaComms.iamroot(config.comms_ctx)
-    @info "Plotting"
-    make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
-    @info "Plotting done"
-
-    @info "Creating tarballs"
-    Tar.create(
-        f -> endswith(f, ".nc"),
-        simulation.output_dir,
-        joinpath(simulation.output_dir, "nc_files.tar"),
-    )
-    Tar.create(
-        f -> endswith(f, r"hdf5|h5"),
-        simulation.output_dir,
-        joinpath(simulation.output_dir, "hdf5_files.tar"),
-    )
-
-    foreach(readdir(simulation.output_dir)) do f
-        endswith(f, r"nc|hdf5|h5") && rm(joinpath(simulation.output_dir, f))
-    end
-    @info "Tarballs created"
-end
-
+# Scaling check
 if CA.is_distributed(config.comms_ctx)
     nprocs = ClimaComms.nprocs(config.comms_ctx)
     comms_ctx = config.comms_ctx
@@ -105,6 +83,7 @@ if CA.is_distributed(config.comms_ctx)
     end
 end
 
+# Check if selected output has changed from the previous recorded output (bit-wise comparison)
 include(joinpath(@__DIR__, "..", "..", "regression_tests", "mse_tables.jl"))
 if config.parsed_args["regression_test"]
     # Test results against main branch
@@ -135,7 +114,9 @@ end
 @info "Callback verification, n_expected_calls: $(CA.n_expected_calls(integrator))"
 @info "Callback verification, n_measured_calls: $(CA.n_measured_calls(integrator))"
 
+# Conservation checks
 if config.parsed_args["check_conservation"]
+    @info "Checking conservation"
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
 
     # energy
@@ -154,8 +135,14 @@ if config.parsed_args["check_conservation"]
         energy_surface_change = -p.net_energy_flux_sfc[][]
     end
     energy_radiation_input = -p.net_energy_flux_toa[][]
-    @test (energy_atmos_change + energy_surface_change) / energy_total ≈
-          energy_radiation_input / energy_total atol = 5 * sqrt(eps(FT))
+
+    energy_net =
+        abs(
+            energy_atmos_change + energy_surface_change -
+            energy_radiation_input,
+        ) / energy_total
+    @info "    Net energy change: $energy_net"
+    @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
 
     if p.atmos.moisture_model isa CA.DryModel
         # density
@@ -169,12 +156,16 @@ if config.parsed_args["check_conservation"]
             water_surface_change = CA.horizontal_integral_at_boundary(
                 sol.u[end].sfc.water .- sol.u[1].sfc.water,
             )
-            @test (water_atmos_change + water_surface_change) / water_total ≈ 0 atol =
-                100 * sqrt(eps(FT))
+
+            water_net =
+                abs(water_atmos_change + water_surface_change) / water_total
+            @info "    Net water change: $water_net"
+            @test water_net ≈ 0 atol = 100 * sqrt(eps(FT))
         end
     end
 end
 
+# Precipitation characteristic checks
 if config.parsed_args["check_precipitation"]
     # run some simple tests based on the output
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
@@ -226,4 +217,28 @@ if config.parsed_args["check_precipitation"]
         @test minimum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) >= FT(0)
         @test maximum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) <= FT(1)
     end
+end
+
+# Visualize the solution
+if ClimaComms.iamroot(config.comms_ctx)
+    @info "Plotting"
+    make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
+    @info "Plotting done"
+
+    @info "Creating tarballs"
+    Tar.create(
+        f -> endswith(f, ".nc"),
+        simulation.output_dir,
+        joinpath(simulation.output_dir, "nc_files.tar"),
+    )
+    Tar.create(
+        f -> endswith(f, r"hdf5|h5"),
+        simulation.output_dir,
+        joinpath(simulation.output_dir, "hdf5_files.tar"),
+    )
+
+    foreach(readdir(simulation.output_dir)) do f
+        endswith(f, r"nc|hdf5|h5") && rm(joinpath(simulation.output_dir, f))
+    end
+    @info "Tarballs created"
 end
