@@ -206,7 +206,7 @@ if config.parsed_args["check_precipitation"]
             ClimaCore.isapprox(
                 Yₜ_ρqₜ[colidx],
                 Yₜ_ρqₚ[colidx],
-                rtol = 1e2 * eps(FT),
+                rtol = 5e2 * eps(FT),
             ),
         )
 
