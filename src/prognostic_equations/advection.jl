@@ -149,35 +149,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             end
         end
 
-        if precip_model isa Microphysics1Moment
-            # Advection of precipitation with the mean flow
-            # is done with other tracers above.
-            # Here we add the advection with precipitation terminal velocity
-            # using first order upwind and free outflow bottom boundary condition
-
-            ᶠu³ₚ = p.scratch.ᶠtemp_CT3
-            ᶜqₚ = p.scratch.ᶜtemp_scalar
-            lgf = Fields.local_geometry_field(Y.f)
-            FT = Spaces.undertype(axes(Y.c))
-
-            @. ᶠu³ₚ[colidx] =
-                FT(-1) *
-                ᶠinterp(p.precomputed.ᶜwᵣ[colidx]) *
-                CT3(unit_basis_vector_data(CT3, lgf[colidx]))
-            @. ᶜqₚ[colidx] = Y.c.ρq_rai[colidx] / Y.c.ρ[colidx]
-
-            # TODO: Add support for SetDivergence to DivergenceF2C.
-            ᶜdivᵥ_ρqₚ = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                # bottom = Operators.SetDivergence(FT(0)),
-            )
-
-            @. ᶠu³ₚ[colidx] =
-                FT(-1) *
-                ᶠinterp(p.precomputed.ᶜwₛ[colidx]) *
-                CT3(unit_basis_vector_data(CT3, lgf[colidx]))
-            @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
-        end
     end
 
 
