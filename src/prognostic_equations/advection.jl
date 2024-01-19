@@ -80,7 +80,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
-    (; energy_upwinding, tracer_upwinding, precip_upwinding) = p.atmos.numerics
+    (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; rayleigh_sponge, precip_model) = p.atmos
     (; ᶜspecific) = p.precomputed
 
@@ -172,40 +172,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 # bottom = Operators.SetDivergence(FT(0)),
             )
 
-            for (coeff, upwinding) in ((1, precip_upwinding), (-1, Val(:none)))
-                precip_upwinding isa Val{:none} && continue
-                vertical_transport!(
-                    coeff,
-                    Yₜ.c.ρq_rai[colidx],
-                    ᶜJ[colidx],
-                    Y.c.ρ[colidx],
-                    ᶠu³ₚ[colidx],
-                    ᶜqₚ[colidx],
-                    dt,
-                    upwinding,
-                    ᶜdivᵥ_ρqₚ,
-                )
-            end
-
             @. ᶠu³ₚ[colidx] =
                 FT(-1) *
                 ᶠinterp(p.precomputed.ᶜwₛ[colidx]) *
                 CT3(unit_basis_vector_data(CT3, lgf[colidx]))
             @. ᶜqₚ[colidx] = Y.c.ρq_sno[colidx] / Y.c.ρ[colidx]
-            for (coeff, upwinding) in ((1, precip_upwinding), (-1, Val(:none)))
-                precip_upwinding isa Val{:none} && continue
-                vertical_transport!(
-                    coeff,
-                    Yₜ.c.ρq_sno[colidx],
-                    ᶜJ[colidx],
-                    Y.c.ρ[colidx],
-                    ᶠu³ₚ[colidx],
-                    ᶜqₚ[colidx],
-                    dt,
-                    upwinding,
-                    ᶜdivᵥ_ρqₚ,
-                )
-            end
         end
     end
 

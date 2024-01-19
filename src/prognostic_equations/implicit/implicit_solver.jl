@@ -357,8 +357,10 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p
     (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
-    (; energy_upwinding) = p.atmos.numerics
-    (; tracer_upwinding, precip_upwinding) = p.atmos.numerics
+    # use CD2 for implicit, upwinding correction goes in explicit part
+    energy_upwinding = Val(:none)
+    tracer_upwinding = Val(:none)
+    (; precip_upwinding) = p.atmos.numerics # precipitation is always upwinded (rain always falls)
 
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
@@ -619,7 +621,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
             ᶠlg = Fields.local_geometry_field(Y.f)
 
-            @assert upwinding != Val(:none)
             is_third_order = upwinding == Val(:third_order)
             UpwindMatrixRowType =
                 is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow

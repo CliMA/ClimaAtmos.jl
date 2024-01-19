@@ -125,6 +125,10 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
     (; ᶜspecific, ᶠu³, ᶜp) = p.precomputed
+    # use CD2 for implicit, upwinding correction goes in explicit part
+    energy_upwinding = Val(:none)
+    tracer_upwinding = Val(:none)
+    (; precip_upwinding) = p.atmos.numerics # precipitation is always upwinded (rain always falls)
 
     @. Yₜ.c.ρ[colidx] -=
         ᶜdivᵥ(ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) * ᶠu³[colidx])
@@ -138,7 +142,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³[colidx],
             ᶜh_tot[colidx],
             dt,
-            Val(:none),
+            energy_upwinding,
         )
     end
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
@@ -150,7 +154,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³[colidx],
             ᶜχ[colidx],
             dt,
-            Val(:none),
+            tracer_upwinding,
         )
     end
 
@@ -184,7 +188,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³ₚ[colidx],
             ᶜqₚ[colidx],
             dt,
-            Val(:none),
+            precip_upwinding,
             ᶜdivᵥ_ρqₚ,
         )
 
@@ -200,7 +204,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
             ᶠu³ₚ[colidx],
             ᶜqₚ[colidx],
             dt,
-            Val(:none),
+            precip_upwinding,
             ᶜdivᵥ_ρqₚ,
         )
     end
