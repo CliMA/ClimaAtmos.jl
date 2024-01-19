@@ -5,7 +5,15 @@ import ClimaComms
 import LinearAlgebra: dot
 
 import ClimaCore:
-    Fields, Geometry, InputOutput, Meshes, Spaces, Operators, Domains, Grids
+    Fields,
+    Geometry,
+    InputOutput,
+    Meshes,
+    Spaces,
+    Operators,
+    Domains,
+    Grids,
+    Hypsography
 import ClimaCore.Utilities: half
 import Thermodynamics as TD
 

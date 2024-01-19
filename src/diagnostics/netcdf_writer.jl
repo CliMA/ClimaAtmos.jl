@@ -290,7 +290,8 @@ function add_space_coordinates_maybe!(
             nc,
             vertical_space,
             num_points_vertic,
-            interpolated_surface;
+            interpolated_surface,
+            space.hypsography;
             names = ("z_reference",),
             depending_on_dimensions = hdims_names,
         )
@@ -321,14 +322,14 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
     num_points,
-    interpolated_surface;
+    interpolated_surface,
+    adaption;
     names = ("z_reference",),
     depending_on_dimensions,
 )
     num_points_z = num_points
     name, _... = names
 
-    # Implement the LinearAdaption hypsography
     reference_altitudes = target_coordinates(space, num_points_z)
 
     add_dimension_maybe!(nc, name, reference_altitudes; units = "m", axis = "Z")
@@ -339,10 +340,14 @@ function add_space_coordinates_maybe!(
     desired_shape = (size(interpolated_surface)..., num_points_z)
     zpts = zeros(eltype(interpolated_surface), desired_shape)
 
+    # Loop over the surface
     for i in CartesianIndices(interpolated_surface)
         z_surface = interpolated_surface[i]
-        @. zpts[i, :] +=
-            reference_altitudes + (1 .- reference_altitudes / z_top) * z_surface
+        zpts[i, :] .= [
+            z_surface +
+            Hypsography.ref_z_to_physical_z(adaption, z, z_surface, z_top)
+            for z in reference_altitudes
+        ]
     end
 
     # We also have to add an extra variable with the physical altitudes
