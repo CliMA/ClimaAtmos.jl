@@ -765,17 +765,13 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
         EnvBuoyGradVars(
             thermo_params,
             ᶜts,
-            projected_vector_data(
+            projected_vector_buoy_grad_vars(
                 C3,
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),
+                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),    # ∂θv∂z_unsat
+                ᶜgradᵥ(ᶠinterp(q_tot)),                                     # ∂qt∂z_sat
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))), # ∂θl∂z_sat
                 ᶜlg,
-            ),                                                                 # ∂θv∂z_unsat
-            projected_vector_data(C3, ᶜgradᵥ(ᶠinterp(q_tot)), ᶜlg),            # ∂qt∂z_sat
-            projected_vector_data(
-                C3,
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),
-                ᶜlg,
-            ),                                                                 # ∂θl∂z_sat
+            ),
         ),
     )
 
