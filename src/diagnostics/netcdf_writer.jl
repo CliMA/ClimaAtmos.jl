@@ -22,28 +22,18 @@
     add_dimension_maybe!(nc::NCDatasets.NCDataset,
                          name::String,
                          points;
-                         depending_on_dimensions = (),
                          kwargs...)
 
 
 Add dimension identified by `name` in the given `nc` file and fill it with the given
 `points`. If the dimension already exists, check if it is consistent with the new one.
 Optionally, add all the keyword arguments as attributes.
-
-`depending_on_dimensions` identifies the dimensions upon which the current one depends on
-(excluding itself). In pretty much all cases, the dimensions depend only on themselves
-(e.g., `lat` is a variable only defined on the latitudes.), and `depending_on_dimensions`
-should be an empty tuple. The only case in which this is not what happens is with `z` with
-topography. With topography, the altitude will depend on the spatial coordinates. So,
-`depending_on_dimensions` might be `("lon", "lat)`, or similar.
-
 """
 
 function add_dimension_maybe!(
     nc::NCDatasets.NCDataset,
     name::String,
     points;
-    depending_on_dimensions = (),
     kwargs...,
 )
     FT = eltype(points)
@@ -54,27 +44,14 @@ function add_dimension_maybe!(
             error("Incompatible $name dimension already exists")
         end
     else
-        # `points` is a 1-3D array. It is a 1D vector in pretty much all the cases except
-        # when we have topography. If we have topography, `points` will be 2D or 3D,
-        # depending if we have a plane or box/sphere. In all these cases, we can always
-        # assume that the new dimension that we want to add has length of the last dimension
-        # of points. This is because it is the only dimension if points is 1D, and it is the
-        # altitude z if points is 2D/3D.
-
         NCDatasets.defDim(nc, name, size(points)[end])
 
-        dim =
-            NCDatasets.defVar(nc, name, FT, (depending_on_dimensions..., name))
+        dim = NCDatasets.defVar(nc, name, FT, (name,))
         for (k, v) in kwargs
             dim.attrib[String(k)] = v
         end
 
-        if length(size(points)) == 1
-            dim[:] = points
-        else
-            # We have topography
-            dim[:, :, :] = points
-        end
+        dim[:] = points
     end
     return nothing
 end
@@ -287,7 +264,6 @@ function add_space_coordinates_maybe!(
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
     interpolated_surface = nothing,
-    disable_vertical_interpolation = false,
 )
 
     hdims_names = vdims_names = []
@@ -310,22 +286,14 @@ function add_space_coordinates_maybe!(
         vdims_names =
             add_space_coordinates_maybe!(nc, vertical_space, num_points_vertic)
     else
-        if disable_vertical_interpolation
-            vdims_names = add_space_coordinates_maybe!(
-                nc,
-                vertical_space,
-                num_points_vertic,
-                names = ("z_reference",),
-            )
-        else
-            vdims_names = add_space_coordinates_maybe!(
-                nc,
-                vertical_space,
-                num_points_vertic,
-                interpolated_surface;
-                depending_on_dimensions = hdims_names,
-            )
-        end
+        vdims_names = add_space_coordinates_maybe!(
+            nc,
+            vertical_space,
+            num_points_vertic,
+            interpolated_surface;
+            names = ("z_reference",),
+            depending_on_dimensions = hdims_names,
+        )
     end
 
     return (hdims_names..., vdims_names...)
@@ -342,18 +310,29 @@ add_space_coordinates_maybe!(
 ) = add_space_coordinates_maybe!(nc::NCDatasets.NCDataset, space, num_points)
 
 # Elevation with topography
+
+# `depending_on_dimensions` identifies the dimensions upon which the current one depends on
+# (excluding itself). In pretty much all cases, the dimensions depend only on themselves
+# (e.g., `lat` is a variable only defined on the latitudes.), and `depending_on_dimensions`
+# should be an empty tuple. The only case in which this is not what happens is with `z` with
+# topography. With topography, the altitude will depend on the spatial coordinates. So,
+# `depending_on_dimensions` might be `("lon", "lat)`, or similar.
 function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
     num_points,
     interpolated_surface;
+    names = ("z_reference",),
     depending_on_dimensions,
 )
     num_points_z = num_points
-    name = "z"
+    name, _... = names
 
     # Implement the LinearAdaption hypsography
     reference_altitudes = target_coordinates(space, num_points_z)
+
+    add_dimension_maybe!(nc, name, reference_altitudes; units = "m", axis = "Z")
+
     z_top = space.topology.mesh.domain.coord_max.z
 
     # Prepare output array
@@ -366,7 +345,20 @@ function add_space_coordinates_maybe!(
             reference_altitudes + (1 .- reference_altitudes / z_top) * z_surface
     end
 
-    add_dimension_maybe!(nc, name, zpts; depending_on_dimensions, units = "m")
+    # We also have to add an extra variable with the physical altitudes
+    physical_name = "z_physical"
+    if !haskey(nc, physical_name)
+        FT = eltype(zpts)
+        dim = NCDatasets.defVar(
+            nc,
+            physical_name,
+            FT,
+            (depending_on_dimensions..., name),
+        )
+        dim.attrib["units"] = "m"
+        dim[:, :, :] = zpts
+    end
+
     return [name]
 end
 
@@ -521,13 +513,7 @@ function NetCDFWriter(;
     # if our topography is non-trivial
     if hypsography isa Grids.Flat || interpolate_z_over_msl
         interpolated_surface = nothing
-    elseif hypsography isa Hypsography.LinearAdaption
-        disable_vertical_interpolation &&
-            interpolate_z_over_msl &&
-            error(
-                "Cannot disable vertical interpolation and interpolate over MSL at the same time",
-            )
-
+    else
         horizontal_space = axes(hypsography.surface)
         hpts = target_coordinates(horizontal_space, num_points)
         hcoords = hcoords_from_horizontal_space(
@@ -539,8 +525,6 @@ function NetCDFWriter(;
         remapper = Remapper(hcoords, vcoords, horizontal_space)
         interpolated_surface =
             interpolate(remapper, hypsography.surface, physical_z = false)
-    else
-        error("Cannot process hysography $hypsography")
     end
 
     if disable_vertical_interpolation
@@ -662,7 +646,6 @@ function write_field!(
         space,
         writer.num_points;
         writer.interpolated_surface,
-        writer.disable_vertical_interpolation,
     )
 
     if haskey(nc, "$(var.short_name)")
