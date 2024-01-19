@@ -190,10 +190,23 @@ The NetCDF writer in `ClimaAtmos` saves different diagnostics to different files
 in the same output folder. Files are named after a combination of the diagnostic
 variable `short_name`, and the details of the temporal reduction. Inside each
 NetCDF file, there is only one diagnostic variable, along with the various
-dimensions (e.g., `lat`, `lon`, and `z`). For simulations with topography, the
-variable `z` is no longer a simple vector `z[k]`, but it is a full
-multidimensional array `z[i, j, k]` which defines the elevation on the sea level
-of the point of indices `[i, j, k]`.
+dimensions (e.g., `lat`, `lon`, and `z`/`z_reference`).
+
+### Simulations with topography
+
+There two cases when simulations have topography depending on how they are run.
+
+1. `netcdf_interpolate_z_over_msl` is set to `true`. In this case, the
+   diagnostic variable is interpolated over physical altitudes computed from the
+   mean sea level. Point below the surface are filled with `NaN`s. In the NetCDF
+   output, the altitude variable is a simple one dimensional array. This is
+   identical to the case with no topography
+2. `netcdf_interpolate_z_over_msl` is set to `false`. In this case, a new 1D
+   dimension is defined `z_reference`. This dimension does not have direct
+   physical meaning but can be assumed to be the "z" axis. Along with dimension,
+   a new variable `z` is saved to the NetCDF file. In this case, `z` is a
+   multidimensional array (in general 3D). `z[i, j, k]` which defines the
+   elevation on the sea level of the point of indices `[i, j, k]`.
 
 ## I want to add a new diagnostic variable
 
