@@ -167,17 +167,6 @@ steps:
         env:
           JOB_NAME: "longrun_hs_rhoe_equil_highres_topography_earth"
 
-      - label: ":computer: no lim ARS aquaplanet (ρe_tot) equilmoist high resolution clearsky radiation Float32 (earth)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth"
-
   - group: "DYAMOND"
 
     steps:
