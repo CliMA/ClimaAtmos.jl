@@ -7,7 +7,6 @@ t_end: "6days"
 use_reference_state: false
 dt: "200secs"
 job_id: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs"
-netcdf_interpolate_z_over_msl: true
 diagnostics:
   - short_name: [pfull, wa, va, rv]
     period: 1days

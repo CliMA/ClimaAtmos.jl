@@ -313,16 +313,28 @@ function make_plots(
     )
 end
 
-DryBaroWavePlots = Union{
-    Val{:sphere_baroclinic_wave_rhoe},
-    Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-}
+DryBaroWavePlots = Union{Val{:sphere_baroclinic_wave_rhoe}}
 
 function make_plots(::DryBaroWavePlots, simulation_path)
     simdir = SimDir(simulation_path)
     short_names = ["pfull", "va", "wa", "rv"]
     vars = [get(simdir; short_name) for short_name in short_names]
     make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
+end
+
+function make_plots(
+    ::Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
+    simulation_path,
+)
+    simdir = SimDir(simulation_path)
+    short_names = ["pfull", "va", "wa", "rv"]
+    vars = [get(simdir; short_name) for short_name in short_names]
+    make_plots_generic(
+        simulation_path,
+        vars,
+        z_reference = 1500,
+        time = LAST_SNAP,
+    )
 end
 
 function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
