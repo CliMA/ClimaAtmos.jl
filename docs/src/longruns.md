@@ -23,9 +23,20 @@ longrun_hs_rhoe_equil_55km_nz63_0M
 Moist Held Suarez. Test the moist dycore with an equilibrium state with sources and sinks.
 ```
 ```
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M
+
+Aquaplanet with idealized insolation, clear-sky radiation, and 0-moment microphysics.
+Use this job to test new physical components.
+```
+```
 longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M
 
 Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf
+and 0-moment microphysics.
+```
+longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M
+
+Aquaplanet with idealized insolation, all-sky radiation, diagnostic edmf
 and 0-moment microphysics.
 ```
 
@@ -49,12 +60,6 @@ Moist baroclinic wave with the SSP timestepper.
 longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M
 
 Aquaplanet with idealized insolation, gray radiation, and 0-moment microphysics.
-```
-```
-longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M
-
-Aquaplanet with idealized insolation, clear-sky radiation, and 0-moment microphysics.
-Use this job to test new physical components.
 ```
 ```
 longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M
