@@ -91,18 +91,7 @@ steps:
           slurm_ntasks: 64
           slurm_mem_per_cpu: 16GB
           slurm_time: 24:00:00
-
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M"
-      
+    
       - label: ":computer: aquaplanet equilmoist clearsky radiation + diagnostic edmf diffusion only + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
