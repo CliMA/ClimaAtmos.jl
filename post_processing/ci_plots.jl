@@ -216,47 +216,48 @@ end
 function make_plots(::Val{:single_column_precipitation_test}, simulation_path)
     simdir = SimDir(simulation_path)
     short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
-    hus, clw, cli, husra, hussn, ta = [
+    vars = [
         slice(get(simdir; short_name), x = 0.0, y = 0.0) for
         short_name in short_names
     ]
 
-    z_units = hus.dim_attributes["z"]["units"]
-    z = hus.dims["z"]
-
-    hus_units = hus.attributes["units"]
-    clw_units = clw.attributes["units"]
-    cli_units = cli.attributes["units"]
-    husra_units = husra.attributes["units"]
-    hussn_units = hussn.attributes["units"]
-    ta_units = ta.attributes["units"]
-
+    # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
+    # CairoMakie to add the additional lines.
     fig = CairoMakie.Figure(resolution = (1200, 600))
-    ax1 = CairoMakie.Axis(
-        fig[1, 1],
-        ylabel = "z [$z_units]",
-        xlabel = "hus [$hus_units]",
-    )
-    ax4 = CairoMakie.Axis(
-        fig[2, 1],
-        ylabel = "z [$z_units]",
-        xlabel = "ta [$ta_units]",
-    )
-    ax2 = CairoMakie.Axis(fig[1, 2], xlabel = "q_liq [$clw_units]")
-    ax3 = CairoMakie.Axis(fig[1, 3], xlabel = "q_ice [$cli_units]")
-    ax5 = CairoMakie.Axis(fig[2, 2], xlabel = "q_rai [$husra_units]")
-    ax6 = CairoMakie.Axis(fig[2, 3], xlabel = "q_sno [$hussn_units]")
 
-    col = Dict(0 => :navy, 500 => :blue2, 1000 => :royalblue, 1500 => :skyblue1)
+    p_loc = [1, 1]
+
+    axes = map(vars) do var
+        viz.plot!(
+            fig,
+            var;
+            time = 0.0,
+            p_loc,
+            more_kwargs = Dict(
+                :plot => ClimaAnalysis.Utils.kwargs(color = :navy),
+                :axis => ClimaAnalysis.Utils.kwargs(dim_on_y = true, title = ""),
+            ),
+        )
+
+        # Make a grid of plots
+        p_loc[2] += 1
+        p_loc[2] > 3 && (p_loc[1] += 1; p_loc[2] = 1)
+        return CairoMakie.current_axis()
+    end
+
+    col = Dict(500 => :blue2, 1000 => :royalblue, 1500 => :skyblue1)
 
     for (time, color) in col
-        CairoMakie.lines!(ax1, slice(hus; time).data, z, color = color)
-        CairoMakie.lines!(ax2, slice(clw; time).data, z, color = color)
-        CairoMakie.lines!(ax3, slice(cli; time).data, z, color = color)
-        CairoMakie.lines!(ax4, slice(ta; time).data, z, color = color)
-        CairoMakie.lines!(ax5, slice(husra; time).data, z, color = color)
-        CairoMakie.lines!(ax6, slice(hussn; time).data, z, color = color)
+        for (i, var) in enumerate(vars)
+            CairoMakie.lines!(
+                axes[i],
+                slice(var; time).data,
+                var.dims["z"],
+                color = color,
+            )
+        end
     end
+
     file_path = joinpath(simulation_path, "summary.pdf")
     CairoMakie.save(file_path, fig)
 end
