@@ -3,6 +3,7 @@ import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
 import ClimaAnalysis: SimDir, slice_time, slice
+import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
 
@@ -50,7 +51,7 @@ function Makie.get_tickvalues(yticks::Int, yscale::typeof(Plvl), ymin, ymax)
 end
 
 YLOGSCALE = Dict(
-    :axis => ClimaAnalysis.Utils.kwargs(
+    :axis => ca_kwargs(
         dim_on_y = true,
         yscale = Plvl,
         yticks = 7,
@@ -123,7 +124,7 @@ function make_spectra_generic(
     output_path,
     vars,
     args...;
-    slicing_kwargs = ClimaAnalysis.Utils.kwargs(),
+    slicing_kwargs = ca_kwargs(),
     output_name = "spectra",
     kwargs...,
 )
@@ -234,8 +235,8 @@ function make_plots(::Val{:single_column_precipitation_test}, simulation_path)
             time = 0.0,
             p_loc,
             more_kwargs = Dict(
-                :plot => ClimaAnalysis.Utils.kwargs(color = :navy),
-                :axis => ClimaAnalysis.Utils.kwargs(dim_on_y = true, title = ""),
+                :plot => ca_kwargs(color = :navy),
+                :axis => ca_kwargs(dim_on_y = true, title = ""),
             ),
         )
 
