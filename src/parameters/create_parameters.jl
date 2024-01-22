@@ -1,99 +1,126 @@
 import CLIMAParameters as CP
-import RRTMGP.Parameters as RP
-import SurfaceFluxes as SF
+import RRTMGP.Parameters.RRTMGPParameters
+import SurfaceFluxes.Parameters.SurfaceFluxesParameters
 import SurfaceFluxes.UniversalFunctions as UF
-import Insolation.Parameters as IP
-import Thermodynamics as TD
+import Insolation.Parameters.InsolationParameters
+import Thermodynamics.Parameters.ThermodynamicsParameters
 import CloudMicrophysics as CM
 
-function create_parameter_set(config::AtmosConfig)
-    # Helper function that creates a parameter struct. If a struct has nested
-    # parameter structs, they must be passed to subparam_structs as a NamedTuple.
-    function create_parameter_struct(param_struct; subparam_structs = (;))
-        aliases = string.(fieldnames(param_struct))
-        aliases = setdiff(aliases, string.(propertynames(subparam_structs)))
-        pairs = CP.get_parameter_values!(toml_dict, aliases)
-        return param_struct{FT, typeof.(values(subparam_structs))...}(;
-            pairs...,
-            subparam_structs...,
-        )
-    end
+function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
+    name_map = (;
+        :min_area_limiter_scale => :min_area_limiter_scale,
+        :max_area_limiter_scale => :max_area_limiter_scale,
+        :mixing_length_tke_surf_scale => :tke_surf_scale,
+        :mixing_length_diss_coeff => :tke_diss_coeff,
+        :detr_buoy_coeff => :detr_buoy_coeff,
+        :EDMF_max_area => :max_area,
+        :mixing_length_smin_rm => :smin_rm,
+        :entr_coeff => :entr_coeff,
+        :mixing_length_Ri_crit => :Ri_crit,
+        :detr_coeff => :detr_coeff,
+        :EDMF_surface_area => :surface_area,
+        :minimum_updraft_top => :min_updraft_top,
+        :mixing_length_eddy_viscosity_coefficient => :tke_ed_coeff,
+        :mixing_length_smin_ub => :smin_ub,
+        :EDMF_min_area => :min_area,
+        :detr_vertdiv_coeff => :detr_vertdiv_coeff,
+        :max_area_limiter_power => :max_area_limiter_power,
+        :min_area_limiter_power => :min_area_limiter_power,
+        :pressure_normalmode_drag_coeff => :pressure_normalmode_drag_coeff,
+        :mixing_length_Prandtl_number_scale => :Prandtl_number_scale,
+        :mixing_length_Prandtl_number_0 => :Prandtl_number_0,
+        :mixing_length_static_stab_coeff => :static_stab_coeff,
+        :pressure_normalmode_buoy_coeff1 =>
+            :pressure_normalmode_buoy_coeff1,
+        :detr_inv_tau => :detr_tau,
+        :entr_inv_tau => :entr_tau,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    FT = CP.float_type(toml_dict)
+    CAP.TurbulenceConvectionParameters{FT}(; parameters...)
+end
 
+function create_parameter_set(config::AtmosConfig)
     (; toml_dict, parsed_args) = config
     FT = CP.float_type(toml_dict)
 
-    # EDMF parameters
-    turbconv_params =
-        create_parameter_struct(CAP.TurbulenceConvectionParameters)
-    # Thermodynamics.jl parameters
-    thermo_params =
-        create_parameter_struct(TD.Parameters.ThermodynamicsParameters)
-    # Radiation parameters
-    rrtmgp_params = create_parameter_struct(RP.RRTMGPParameters)
-    # Insolation.jl parameters
-    insolation_params = create_parameter_struct(IP.InsolationParameters)
-    # Water properties parameters (from CloudMicrophysics.jl)
+    turbconv_params = TurbulenceConvectionParameters(toml_dict)
+    TCP = typeof(turbconv_params)
+
+    thermodynamics_params = ThermodynamicsParameters(toml_dict)
+    TP = typeof(thermodynamics_params)
+
+    rrtmgp_params = RRTMGPParameters(toml_dict)
+    RP = typeof(rrtmgp_params)
+
+    insolation_params = InsolationParameters(toml_dict)
+    IP = typeof(insolation_params)
+
     water_params = CM.Parameters.WaterProperties(FT, toml_dict)
+    WP = typeof(water_params)
+
+    surface_fluxes_params =
+        SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
+    SFP = typeof(surface_fluxes_params)
 
     # Microphysics scheme parameters (from CloudMicrophysics.jl)
     # TODO - repeating the logic from solver/model_getters.jl...
     if parsed_args["override_τ_precip"]
-        toml_dict["τ_precip"]["value"] =
+        toml_dict["precipitation_timescale"]["value"] =
             FT(CA.time_to_seconds(parsed_args["dt"]))
     end
     precip_model = parsed_args["precip_model"]
-    microphys_params = if precip_model == nothing || precip_model == "nothing"
-        nothing
-    elseif precip_model == "0M"
-        CM.Parameters.Parameters0M(FT, toml_dict)
-    elseif precip_model == "1M"
-        (;
-            cl = CM.Parameters.CloudLiquid(FT, toml_dict),
-            ci = CM.Parameters.CloudIce(FT, toml_dict),
-            pr = CM.Parameters.Rain(FT, toml_dict),
-            ps = CM.Parameters.Snow(FT, toml_dict),
-            ce = CM.Parameters.CollisionEff(FT, toml_dict),
-            tv = CM.Parameters.Blk1MVelType(FT, toml_dict),
-            aps = CM.Parameters.AirProperties(FT, toml_dict),
-        )
-    else
-        error("Invalid precip_model $(precip_model)")
-    end
+    microphysics_params =
+        if precip_model == nothing || precip_model == "nothing"
+            nothing
+        elseif precip_model == "0M"
+            CM.Parameters.Parameters0M(FT, toml_dict)
+        elseif precip_model == "1M"
+            (;
+                cl = CM.Parameters.CloudLiquid(FT, toml_dict),
+                ci = CM.Parameters.CloudIce(FT, toml_dict),
+                pr = CM.Parameters.Rain(FT, toml_dict),
+                ps = CM.Parameters.Snow(FT, toml_dict),
+                ce = CM.Parameters.CollisionEff(FT, toml_dict),
+                tv = CM.Parameters.Blk1MVelType(FT, toml_dict),
+                aps = CM.Parameters.AirProperties(FT, toml_dict),
+            )
+        else
+            error("Invalid precip_model $(precip_model)")
+        end
+    MPP = typeof(microphysics_params)
 
-    # SurfaceFluxes.jl parameters
-    aliases = [
-        "Pr_0_Businger",
-        "a_m_Businger",
-        "a_h_Businger",
-        "ζ_a_Businger",
-        "γ_Businger",
-    ]
-    pairs = CP.get_parameter_values!(toml_dict, aliases, "UniversalFunctions")
-    pairs = (; pairs...) # convert to NamedTuple
-    pairs = (;
-        Pr_0 = pairs.Pr_0_Businger,
-        a_m = pairs.a_m_Businger,
-        a_h = pairs.a_h_Businger,
-        ζ_a = pairs.ζ_a_Businger,
-        γ = pairs.γ_Businger,
+    name_map = (;
+        :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
+        :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
+        :angular_velocity_planet_rotation => :Omega,
+        :equator_pole_temperature_gradient_dry => :ΔT_y_dry,
+        :held_suarez_T_equator_wet => :T_equator_wet,
+        :zd_rayleigh => :zd_rayleigh,
+        :zd_viscous => :zd_viscous,
+        :planet_radius => :planet_radius,
+        :potential_temp_vertical_gradient => :Δθ_z,
+        :C_E => :C_E,
+        :C_H => :C_H,
+        :c_smag => :c_smag,
+        :alpha_rayleigh_w => :alpha_rayleigh_w,
+        :alpha_rayleigh_uh => :alpha_rayleigh_uh,
+        :astronomical_unit => :astro_unit,
+        :held_suarez_T_equator_dry => :T_equator_dry,
+        :drag_layer_vertical_extent => :σ_b,
+        :kappa_2_sponge => :kappa_2_sponge,
+        :held_suarez_minimum_temperature => :T_min_hs,
     )
-    ufp = UF.BusingerParams{FT}(; pairs...)
-    surf_flux_params = create_parameter_struct(
-        SF.Parameters.SurfaceFluxesParameters;
-        subparam_structs = (; ufp, thermo_params),
-    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 
-    # Create the big ClimaAtmos parameters struct
-    return create_parameter_struct(
-        CAP.ClimaAtmosParameters;
-        subparam_structs = (;
-            thermodynamics_params = thermo_params,
-            rrtmgp_params,
-            insolation_params,
-            microphysics_params = microphys_params,
-            water_params,
-            surface_fluxes_params = surf_flux_params,
-            turbconv_params,
-        ),
+    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;
+        parameters...,
+        thermodynamics_params,
+        rrtmgp_params,
+        insolation_params,
+        microphysics_params,
+        water_params,
+        surface_fluxes_params,
+        turbconv_params,
     )
 end

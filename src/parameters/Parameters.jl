@@ -41,7 +41,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     min_area_limiter_power::FT
     max_area_limiter_scale::FT
     max_area_limiter_power::FT
-    updraft_number::Int
 end
 
 Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP} <:
