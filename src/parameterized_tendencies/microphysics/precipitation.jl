@@ -74,6 +74,24 @@ function compute_precipitation_cache!(
     end
 end
 
+function compute_precipitation_cache!(
+    Y,
+    p,
+    colidx,
+    ::Microphysics0Moment,
+    ::PrognosticEDMFX,
+)
+    (; ᶜS_q_tot⁰, ᶜS_q_totʲs, ᶜρa⁰) = p.precomputed
+    (; ᶜS_ρq_tot) = p.precipitation
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+
+    @. ᶜS_ρq_tot[colidx] = ᶜS_q_tot⁰[colidx] * ᶜρa⁰[colidx]
+    for j in 1:n
+        @. ᶜS_ρq_tot[colidx] +=
+            ᶜS_q_totʲs.:($$j)[colidx] * Y.c.sgsʲs.:($$j).ρa[colidx]
+    end
+end
+
 function precipitation_tendency!(
     Yₜ,
     Y,
