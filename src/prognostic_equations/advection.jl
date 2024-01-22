@@ -80,6 +80,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
+    (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; rayleigh_sponge, precip_model) = p.atmos
+    (; ᶜspecific) = p.precomputed
+
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
@@ -110,6 +114,43 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠz = Fields.coordinate_field(Y.f).z
     ᶠΦ = p.scratch.ᶠtemp_scalar
     @. ᶠΦ = CAP.grav(params) * ᶠz
+
+    Fields.bycolumn(axes(Y.c)) do colidx
+        if :ρe_tot in propertynames(Yₜ.c)
+            (; ᶜh_tot) = p.precomputed
+            for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
+                energy_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    Yₜ.c.ρe_tot[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜh_tot[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+            χ_name == :e_tot && continue
+            for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
+                tracer_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    ᶜρχₜ[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜχ[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+
+    end
+
 
     Fields.bycolumn(axes(Y.c)) do colidx
         @. Yₜ.c.uₕ[colidx] -=
