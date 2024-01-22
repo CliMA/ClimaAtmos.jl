@@ -188,9 +188,9 @@ version = "0.1.2"
 
 [[deps.CLIMAParameters]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "a085251dfe4b0f732fe2b65d5354e6af91a8e931"
+git-tree-sha1 = "7c45e066cd04afc7e29e229045506f5a9afb8970"
 uuid = "6eacf6c3-8458-43b9-ae03-caf5306d3d53"
-version = "0.7.26"
+version = "0.8.1"
 
 [[deps.CPUSummary]]
 deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]
@@ -358,9 +358,9 @@ version = "0.1.12"
 
 [[deps.CloudMicrophysics]]
 deps = ["CLIMAParameters", "DocStringExtensions", "ForwardDiff", "RootSolvers", "SpecialFunctions", "Thermodynamics"]
-git-tree-sha1 = "a6993c57af74e2e0f2191b556178cc8d8c0df9d6"
+git-tree-sha1 = "0c0be34fad945b95fd3c94cca9003bacae990ccf"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.15.1"
+version = "0.15.2"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
@@ -2390,9 +2390,9 @@ version = "0.3.4"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "ConstructionBase", "DataAPI", "GPUArraysCore", "StaticArraysCore", "Tables"]
-git-tree-sha1 = "0a3db38e4cce3c54fe7a71f831cd7b6194a54213"
+git-tree-sha1 = "1b0b1205a56dc288b71b1961d48e351520702e24"
 uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
-version = "0.6.16"
+version = "0.6.17"
 
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
@@ -2404,10 +2404,14 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.2.1+1"
 
 [[deps.SurfaceFluxes]]
-deps = ["CLIMAParameters", "DocStringExtensions", "RootSolvers", "Thermodynamics"]
-git-tree-sha1 = "a167924897731ee57ef0197bb19357bfc2d007bc"
+deps = ["DocStringExtensions", "RootSolvers", "Thermodynamics"]
+git-tree-sha1 = "261f66ff71cacf70c789e0289023bb6998c59eb9"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.8.1"
+version = "0.9.0"
+weakdeps = ["CLIMAParameters"]
+
+    [deps.SurfaceFluxes.extensions]
+    CreateParametersExt = "CLIMAParameters"
 
 [[deps.SymbolicIndexingInterface]]
 git-tree-sha1 = "74502f408d99fc217a9d7cd901d9ffe45af892b1"
@@ -2469,9 +2473,15 @@ version = "1.0.1"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "2de4b5ccc71baf3578959928c295a2fa13105db7"
+git-tree-sha1 = "43f9e2e5395779b2055a7d61defb148394fc22ff"
+repo-rev = "ck/inline_everything"
+repo-url = "https://github.com/CliMA/Thermodynamics.jl.git"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.11.2"
+version = "0.11.3"
+weakdeps = ["CLIMAParameters"]
+
+    [deps.Thermodynamics.extensions]
+    CreateParametersExt = "CLIMAParameters"
 
 [[deps.ThreadingUtilities]]
 deps = ["ManualMemory"]
