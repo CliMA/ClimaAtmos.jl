@@ -113,14 +113,14 @@ function make_plots_generic(
 end
 
 """
-    make_spectra_generic
+    make_spectra_generic_2d
 
 Use ClimaCoreSpectra to compute and plot spectra for the given `vars`.
 
 Extra arguments are passed to `ClimaAnalysis.slice`
 
 """
-function make_spectra_generic(
+function make_spectra_generic_2d(
     output_path,
     vars,
     args...;
@@ -151,6 +151,67 @@ function make_spectra_generic(
             X = collect(0:1:(mesh_info.num_fourier))
             Y = collect(0:1:(mesh_info.num_spherical))
             Z = spectrum_data[:, :, 1]
+
+            dims = Dict("num_fourier" => X, "num_spherical" => Y)
+            dim_attributes = Dict(
+                "num_fourier" => Dict("units" => ""),
+                "num_spherical" => Dict("units" => ""),
+            )
+
+            attributes = Dict(
+                "short_name" => "log fft_" * var.attributes["short_name"],
+                "long_name" => "Spectrum of " * var.attributes["long_name"],
+                "units" => "",
+            )
+            path = nothing
+
+            return ClimaAnalysis.OutputVar(
+                attributes,
+                dims,
+                dim_attributes,
+                log.(Z),
+                path,
+            )
+        end |> collect
+
+    make_plots_generic(output_path, spectra, args...; output_name, kwargs...)
+end
+
+"""
+    make_spectra_generic_1d
+
+Use ClimaCoreSpectra to compute and plot spectra for the given `vars`.
+
+Extra arguments are passed to `ClimaAnalysis.slice`
+
+"""
+function make_spectra_generic_1d(
+    output_path,
+    vars,
+    args...;
+    slicing_kwargs = ca_kwargs(),
+    output_name = "spectra",
+    kwargs...,
+)
+    sliced_vars = [slice(var; slicing_kwargs...) for var in vars]
+
+    any([length(var.dims) != 2 for var in sliced_vars]) && error("Only 2D spectra are supported")
+
+    # Prepare ClimaAnalysis.OutputVar
+    spectra =
+        map(sliced_vars) do var
+            # power_spectrum_2d seems to work only when the two dimensions have precisely one
+            # twice as many points as the other
+            FT = eltype(var.data)
+            mass_weight = ones(FT, 1)
+            dim1, dim2 = var.index2dim[1:2]
+            spectrum_data, wave_numbers = power_spectrum_1d(FT, var.data, FT(0), var.dims["long"], var.dims["lat"], mass_weight)
+
+            # From ClimaCoreSpectra/examples
+            X = wave_numbers[:, 16, 1]
+            Y = wave_numbers[:, 16, 1]
+            xlims =(0,180),
+
 
             dims = Dict("num_fourier" => X, "num_spherical" => Y)
             dim_attributes = Dict(
