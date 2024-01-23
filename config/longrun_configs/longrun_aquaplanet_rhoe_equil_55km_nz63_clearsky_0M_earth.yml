@@ -2,7 +2,7 @@ FLOAT_TYPE: "Float32"
 dt_save_state_to_disk: "10days"
 dt_save_to_sol: "10days"
 dt: "100secs"
-t_end: "300days"
+t_end: "600days"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
