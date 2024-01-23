@@ -3,6 +3,9 @@
 # Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
+using ThreadPinning
+pinthreads(:affinitymask)
+
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
 import Random

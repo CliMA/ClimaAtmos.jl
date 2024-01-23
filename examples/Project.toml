@@ -62,6 +62,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
+ThreadPinning = "811555cd-349b-4f26-b7bc-1f208b848042"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]

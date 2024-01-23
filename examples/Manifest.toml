@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "9f81176e38b8045a54f2ad5c8891f255e16c2488"
+project_hash = "5711beae713b035314953911de8b8538f115c97f"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -2472,6 +2472,12 @@ deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
 git-tree-sha1 = "2de4b5ccc71baf3578959928c295a2fa13105db7"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 version = "0.11.2"
+
+[[deps.ThreadPinning]]
+deps = ["DelimitedFiles", "DocStringExtensions", "Libdl", "LinearAlgebra", "PrecompileTools", "Preferences", "Random"]
+git-tree-sha1 = "dc353cc69e14920176982d4fd646cf108d386344"
+uuid = "811555cd-349b-4f26-b7bc-1f208b848042"
+version = "0.7.17"
 
 [[deps.ThreadingUtilities]]
 deps = ["ManualMemory"]
