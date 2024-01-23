@@ -1,7 +1,7 @@
 FLOAT_TYPE: "Float32"
 dt_save_state_to_disk: "10days"
 dt_save_to_sol: "10days"
-dt: "150secs"
+dt: "100secs"
 t_end: "150days"
 h_elem: 16
 z_elem: 63
@@ -11,8 +11,8 @@ z_max: 55000.0
 rayleigh_sponge: true
 topography: "Earth"
 topo_smoothing: true
-kappa_4_vorticity: 3.0
-kappa_4_scalar: 6.0
+kappa_4_vorticity: 4.0
+kappa_4_scalar: 4.0
 divergence_damping_factor: 4.0
 moist: "equil"
 precip_model: "0M"
