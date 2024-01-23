@@ -1,10 +1,9 @@
-[alpha_rayleigh_w]
-alias = "alpha_rayleigh_w"
-value = 10.0
-type = "float"
-
 [zd_rayleigh]
 alias = "zd_rayleigh"
 value = 35000.0
 type = "float"
 
+[alpha_rayleigh_uh]
+alias = "alpha_rayleigh_uh"
+value = 0.0
+type = "float"
