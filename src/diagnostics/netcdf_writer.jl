@@ -495,7 +495,7 @@ Keyword arguments
 """
 function NetCDFWriter(;
     spaces,
-    num_points = (80, 40, 50),
+    num_points = (180, 90, 50),
     interpolate_z_over_msl = false,
     disable_vertical_interpolation = false,
     compression_level = 9,
