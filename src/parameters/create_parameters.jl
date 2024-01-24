@@ -79,9 +79,13 @@ function create_parameter_set(config::AtmosConfig)
     if parsed_args["override_τ_precip"]
         toml_dict["precipitation_timescale"]["value"] =
             FT(CA.time_to_seconds(parsed_args["dt"]))
-        # Needed because CloudMicrophysics doesn't log parameters
-        CP.get_parameter_values(toml_dict, "precipitation_timescale", "CloudMicrophysics")
     end
+    # Force logging because CloudMicrophysics doesn't
+    CP.get_parameter_values(
+        toml_dict,
+        "precipitation_timescale",
+        "CloudMicrophysics",
+    )
     precip_model = parsed_args["precip_model"]
     microphysics_params =
         if precip_model == nothing || precip_model == "nothing"
