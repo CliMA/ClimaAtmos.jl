@@ -1,59 +1,47 @@
 [EDMF_surface_area]
-alias = "surface_area"
 value = 0.1
 type = "float"
 
 [EDMF_min_area]
-alias = "min_area"
 value = 1.0e-5
 type = "float" 
 
 [EDMF_max_area]
-alias = "max_area"
 value = 0.7
 type = "float"
 
 [entr_inv_tau]
-alias = "entr_tau"
 value = 0
 type = "float"
 
 [entr_coeff]
-alias = "entr_coeff"
 value = 0.1
 type = "float"
 
 [min_area_limiter_scale]
-alias = "min_area_limiter_scale"
 value = 0.001
 type = "float"
 
 [min_area_limiter_power]
-alias = "min_area_limiter_power"
 value = 10
 type = "float"
 
 [detr_inv_tau]
-alias = "detr_tau"
 value = 0
 type = "float"
 
 [detr_coeff]
-alias = "detr_coeff"
 value = 2e-3
 type = "float"
 
 [detr_buoy_coeff]
-alias = "detr_buoy_coeff"
 value = 0.3
 type = "float"
 
 [detr_vertdiv_coeff]
-alias = "detr_vertdiv_coeff"
 value = 0.6
 type = "float"
 
 [max_area_limiter_scale]
-alias = "max_area_limiter_scale"
 value = 0.01
 type = "float"

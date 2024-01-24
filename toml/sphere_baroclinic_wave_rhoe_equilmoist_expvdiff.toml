@@ -1,10 +1,8 @@
 [C_H]
-alias = "C_H"
 value = 0.0
 type = "float"
 
 [C_E]
-alias = "C_E"
 value = 1
 type = "float"
 

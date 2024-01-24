@@ -50,7 +50,18 @@ function create_parameter_set(config::AtmosConfig)
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
     TP = typeof(thermodynamics_params)
 
-    rrtmgp_params = RRTMGPParameters(toml_dict)
+    # TODO: update to the RRTMGP package extension
+    rrtmgp_name_map = (;
+        :gravitational_acceleration => :grav,
+        :molar_mass_dry_air => :molmass_dryair,
+        :molar_mass_water => :molmass_water,
+        :gas_constant => :gas_constant,
+        :adiabatic_exponent_dry_air => :kappa_d,
+        :stefan_boltzmann_constant => :Stefan,
+        :avogadro_constant => :avogad,
+    )
+    parameters = CP.get_parameter_values(toml_dict, rrtmgp_name_map, "RRTMGP")
+    rrtmgp_params = RRTMGPParameters{FT}(; parameters...)
     RP = typeof(rrtmgp_params)
 
     insolation_params = InsolationParameters(toml_dict)
@@ -68,6 +79,8 @@ function create_parameter_set(config::AtmosConfig)
     if parsed_args["override_τ_precip"]
         toml_dict["precipitation_timescale"]["value"] =
             FT(CA.time_to_seconds(parsed_args["dt"]))
+        # Needed because CloudMicrophysics doesn't log parameters
+        CP.get_parameter_values(toml_dict, "precipitation_timescale", "CloudMicrophysics")
     end
     precip_model = parsed_args["precip_model"]
     microphysics_params =
@@ -112,8 +125,6 @@ function create_parameter_set(config::AtmosConfig)
         :held_suarez_minimum_temperature => :T_min_hs,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-
-    CP.log_parameter_information(config.toml_dict, "params_$FT"; strict=true)
     return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;
         parameters...,
         thermodynamics_params,
