@@ -1,4 +1,4 @@
-[entr_tau]
+[entr_inv_tau]
 alias = "entr_tau"
 value = 0.002
 type = "float"
@@ -8,7 +8,7 @@ alias = "entr_coeff"
 value = 0
 type = "float"
 
-[detr_tau]
+[detr_inv_tau]
 alias = "detr_tau"
 value = 0
 type = "float"

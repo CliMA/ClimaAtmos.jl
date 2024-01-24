@@ -113,6 +113,7 @@ function create_parameter_set(config::AtmosConfig)
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 
+    CP.log_parameter_information(config.toml_dict, "params_$FT"; strict=true)
     return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;
         parameters...,
         thermodynamics_params,
