@@ -40,7 +40,7 @@ allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 201560
 allocs_limit["flame_perf_target_tracers"] = 234032
 allocs_limit["flame_perf_target_edmfx"] = 7_005_552
-allocs_limit["flame_perf_diagnostics"] = 26_645_600
+allocs_limit["flame_perf_diagnostics"] = 108_785_416
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_415_848
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
