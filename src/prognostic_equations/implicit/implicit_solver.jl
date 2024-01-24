@@ -137,6 +137,8 @@ function ImplicitEquationJacobian(
     is_in_Y(name) = MatrixFields.has_field(Y, name)
 
     ρq_tot_if_available = is_in_Y(@name(c.ρq_tot)) ? (@name(c.ρq_tot),) : ()
+    ρatke_if_available =
+        is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -144,16 +146,9 @@ function ImplicitEquationJacobian(
         @name(c.ρq_ice),
         @name(c.ρq_rai),
         @name(c.ρq_sno),
-        @name(c.sgs⁰.ρatke),
     )
     available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
-    other_names = (
-        @name(c.sgsʲs),
-        @name(f.sgsʲs),
-        @name(c.turbconv),
-        @name(f.turbconv),
-        @name(sfc),
-    )
+    other_names = (@name(c.sgsʲs), @name(f.sgsʲs), @name(sfc))
     other_available_names = MatrixFields.unrolled_filter(is_in_Y, other_names)
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
@@ -185,15 +180,17 @@ function ImplicitEquationJacobian(
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
     )
 
+    diffused_scalar_names =
+        (@name(c.ρe_tot), available_tracer_names..., ρatke_if_available...)
     diffusion_blocks = if use_derivative(diffusion_flag)
         (
             MatrixFields.unrolled_map(
                 name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
-                (@name(c.ρe_tot), available_tracer_names...),
+                diffused_scalar_names,
             )...,
             MatrixFields.unrolled_map(
                 name -> (name, name) => similar(Y.c, TridiagonalRow),
-                (@name(c.ρe_tot), available_tracer_names...),
+                diffused_scalar_names,
             )...,
             (
                 is_in_Y(@name(c.ρq_tot)) ?
@@ -210,7 +207,7 @@ function ImplicitEquationJacobian(
     else
         MatrixFields.unrolled_map(
             name -> (name, name) => FT(-1) * I,
-            (@name(c.ρe_tot), available_tracer_names..., @name(c.uₕ)),
+            (diffused_scalar_names..., @name(c.uₕ)),
         )
     end
 
@@ -220,30 +217,31 @@ function ImplicitEquationJacobian(
         diffusion_blocks...,
     )
 
-    tracer_and_other_names =
-        (available_tracer_names..., other_available_names...)
-    non_velocity_names =
-        (@name(c.ρ), @name(c.ρe_tot), tracer_and_other_names...)
+    names₁_group₁ = (@name(c.ρ), other_available_names...)
+    names₁_group₂ = (available_tracer_names..., ρatke_if_available...)
+    names₁_group₃ = (@name(c.ρe_tot),)
+    names₁ = (names₁_group₁..., names₁_group₂..., names₁_group₃...)
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
     alg = if use_derivative(diffusion_flag)
+        alg₁_subalg₂ =
+            is_in_Y(@name(c.ρq_tot)) ?
+            (;
+                alg₂ = MatrixFields.BlockLowerTriangularSolve(names₁_group₂...)
+            ) : (;)
         alg₁ = MatrixFields.BlockLowerTriangularSolve(
-            @name(c.ρ);
-            alg₂ = if is_in_Y(@name(c.ρq_tot))
-                MatrixFields.BlockLowerTriangularSolve(tracer_and_other_names...)
-            else
-                MatrixFields.BlockDiagonalSolve()
-            end,
+            names₁_group₁...;
+            alg₁_subalg₂...,
         )
         MatrixFields.ApproximateBlockArrowheadIterativeSolve(
-            non_velocity_names...;
+            names₁...;
             alg₁,
             alg₂,
             P_alg₁ = MatrixFields.MainDiagonalPreconditioner(),
             n_iters = approximate_solve_iters,
         )
     else
-        MatrixFields.BlockArrowheadSolve(non_velocity_names...; alg₂)
+        MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
     end
 
     return ImplicitEquationJacobian(
@@ -315,7 +313,7 @@ function Wfact!(A, Y, p, dtγ, t)
             (
                 use_derivative(A.diffusion_flag) &&
                 p.atmos.turbconv_model isa AbstractEDMF ?
-                (; p.precomputed.ᶜtke⁰) : (;)
+                (; p.precomputed.ᶜtke⁰, p.precomputed.ᶜmixing_length) : (;)
             )...,
             (
                 use_derivative(A.diffusion_flag) &&
@@ -333,6 +331,7 @@ function Wfact!(A, Y, p, dtγ, t)
             p.scratch.ᶜadvection_matrix,
             p.scratch.ᶜdiffusion_h_matrix,
             p.scratch.ᶜdiffusion_u_matrix,
+            p.dt,
             p.params,
             p.atmos,
             (
@@ -463,16 +462,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         end
     end
 
-    # TODO: Move the vertical advection of ρatke into the implicit tendency.
-    if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
-        if use_derivative(topography_flag)
-            ∂ᶜρatke_err_∂ᶜuₕ = matrix[@name(c.sgs⁰.ρatke), @name(c.uₕ)]
-            ∂ᶜρatke_err_∂ᶜuₕ[colidx] .= (zero(eltype(∂ᶜρatke_err_∂ᶜuₕ)),)
-        end
-        ∂ᶜρatke_err_∂ᶠu₃ = matrix[@name(c.sgs⁰.ρatke), @name(f.u₃)]
-        ∂ᶜρatke_err_∂ᶠu₃[colidx] .= (zero(eltype(∂ᶜρatke_err_∂ᶠu₃)),)
-    end
-
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
     ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
     @. ∂ᶠu₃_err_∂ᶜρ[colidx] =
@@ -574,17 +563,40 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
         end
 
         if MatrixFields.has_field(Y, @name(c.sgs⁰.ρatke))
-            (; ᶜtke⁰) = p
+            turbconv_params = CAP.turbconv_params(params)
+            c_d = CAP.tke_diss_coeff(turbconv_params)
+            (; ᶜtke⁰, ᶜmixing_length, dt) = p
             ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
+            ᶜρatke⁰ = Y.c.sgs⁰.ρatke
+
+            dissipation_rate(tke⁰, mixing_length) =
+                tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) : 1 / dt
+            ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
+                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) : 0
+
+            ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
+            @. ᶜdissipation_matrix_diagonal[colidx] =
+                ᶜρatke⁰[colidx] *
+                ∂dissipation_rate_∂tke⁰(ᶜtke⁰[colidx], ᶜmixing_length[colidx])
+
             ∂ᶜρatke⁰_err_∂ᶜρ = matrix[@name(c.sgs⁰.ρatke), @name(c.ρ)]
             ∂ᶜρatke⁰_err_∂ᶜρatke⁰ =
                 matrix[@name(c.sgs⁰.ρatke), @name(c.sgs⁰.ρatke)]
             @. ∂ᶜρatke⁰_err_∂ᶜρ[colidx] =
-                dtγ * ᶜdiffusion_u_matrix[colidx] ⋅
-                DiagonalMatrixRow(-(ᶜtke⁰[colidx]) / ᶜρa⁰[colidx])
+                dtγ * (
+                    ᶜdiffusion_u_matrix[colidx] -
+                    DiagonalMatrixRow(ᶜdissipation_matrix_diagonal[colidx])
+                ) ⋅ DiagonalMatrixRow(-(ᶜtke⁰[colidx]) / ᶜρa⁰[colidx])
             @. ∂ᶜρatke⁰_err_∂ᶜρatke⁰[colidx] =
-                dtγ * ᶜdiffusion_u_matrix[colidx] ⋅
-                DiagonalMatrixRow(1 / ᶜρa⁰[colidx]) - (I,)
+                dtγ * (
+                    (
+                        ᶜdiffusion_u_matrix[colidx] -
+                        DiagonalMatrixRow(ᶜdissipation_matrix_diagonal[colidx])
+                    ) ⋅ DiagonalMatrixRow(1 / ᶜρa⁰[colidx]) -
+                    DiagonalMatrixRow(
+                        dissipation_rate(ᶜtke⁰[colidx], ᶜmixing_length[colidx]),
+                    )
+                ) - (I,)
         end
 
         if (
