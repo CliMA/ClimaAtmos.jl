@@ -786,9 +786,6 @@ function get_simulation(config::AtmosConfig)
         param_filepath,
         strict = true,
     )
-    if ClimaComms.iamroot(config.comms_ctx) && !config.parsed_args["log_params"]
-        rm(param_filepath)
-    end
 
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
