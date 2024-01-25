@@ -94,7 +94,7 @@ steps:
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
-          slurm_ntasks: 2
+          slurm_ntasks: 4
 
       - label: "dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
@@ -109,4 +109,4 @@ steps:
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
-          slurm_ntasks: 2
+          slurm_ntasks: 4
