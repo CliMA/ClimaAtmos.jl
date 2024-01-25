@@ -272,15 +272,6 @@ function get_spaces(parsed_args, params, comms_ctx)
     )
 end
 
-# get_state(simulation, parsed_args, spaces, params, atmos)
-function get_state(simulation, args...)
-    if simulation.restart
-        return get_state_restart(comms_ctx)
-    else
-        return get_state_fresh_start(args...)
-    end
-end
-
 function get_spaces_restart(Y)
     center_space = axes(Y.c)
     face_space = axes(Y.f)
