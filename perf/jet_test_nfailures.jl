@@ -34,7 +34,7 @@ using Test
     # inference. By increasing this counter, we acknowledge that
     # we have introduced an inference failure. We hope to drive
     # this number down to 0.
-    n_allowed_failures = 680
+    n_allowed_failures = 94
     @show n
     @test n ≤ n_allowed_failures
     if n < n_allowed_failures
