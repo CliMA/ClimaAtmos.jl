@@ -3,14 +3,25 @@ import SciMLBase
 ##### Callback helpers
 #####
 
-function call_every_n_steps(f!, n = 1; skip_first = false, call_at_end = false)
-    previous_step = Ref(0)
+function call_every_n_steps(
+    f!,
+    n = 1;
+    skip_first = false,
+    call_at_end = false,
+    condition = nothing,
+)
     @assert n ≠ Inf "Adding callback that never gets called!"
-    cb! = AtmosCallback(f!, EveryNSteps(n))
-    return SciMLBase.DiscreteCallback(
+    cond = if isnothing(condition)
+        previous_step = Ref(0)
         (u, t, integrator) ->
             (previous_step[] += 1) % n == 0 ||
-                (call_at_end && t == integrator.sol.prob.tspan[2]),
+                (call_at_end && t == integrator.sol.prob.tspan[2])
+    else
+        condition
+    end
+    cb! = AtmosCallback(f!, EveryNSteps(n))
+    return SciMLBase.DiscreteCallback(
+        cond,
         cb!;
         initialize = (cb, u, t, integrator) -> skip_first || cb!(integrator),
         save_positions = (false, false),

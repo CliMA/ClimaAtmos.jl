@@ -455,8 +455,10 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     callbacks = (
         callbacks...,
         call_every_n_steps(
-            (integrator) -> maybe_graceful_exit(integrator);
+            terminate!;
             skip_first = true,
+            condition = (u, t, integrator) ->
+                maybe_graceful_exit(integrator),
         ),
     )
 
@@ -914,6 +916,7 @@ function get_simulation(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
+    reset_graceful_exit(sim_info.output_dir)
 
     s = @timed_str begin
         for diag in diagnostics_iterations
