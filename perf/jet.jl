@@ -1,3 +1,4 @@
+redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
