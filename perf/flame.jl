@@ -1,3 +1,4 @@
+redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -49,6 +50,7 @@ allocs_limit["flame_perf_target_threaded"] = 1_276_864
 allocs_limit["flame_perf_target_callbacks"] = 386_584
 allocs_limit["flame_perf_gw"] = 3_268_961_856
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 445_664
+allocs_limit["flame_gpu_implicit_barowave_moist"] = 4169216
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of

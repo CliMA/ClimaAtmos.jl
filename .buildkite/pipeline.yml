@@ -796,7 +796,7 @@ steps:
         artifact_paths: "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff/*"
         agents:
           slurm_mem: 40GB
-      
+
       - label: ":fire: Flame graph: perf target (frierson diffusion)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
@@ -837,6 +837,15 @@ steps:
         artifact_paths: "flame_perf_diagnostics/*"
         agents:
           slurm_mem: 24GB
+
+      - label: ":fire: Flame graph: gpu job"
+        command: >
+          julia --color=yes --project=perf perf/flame.jl
+          $PERF_CONFIG_PATH/flame_gpu_implicit_barowave_moist.yml
+        artifact_paths: "flame_gpu_implicit_barowave_moist/*"
+        agents:
+          slurm_mem: 48GB
+          slurm_gpus: 1
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"
