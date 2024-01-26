@@ -489,6 +489,7 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_amip},
+    Val{:dt_ARS_nolim_FCT_100secs},
 }
 
 function make_plots(::AquaplanetPlots, simulation_path)
