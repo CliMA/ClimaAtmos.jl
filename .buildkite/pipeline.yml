@@ -405,6 +405,8 @@ steps:
           julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/test_io.yml
         artifact_paths: "test_io/*"
+        agents:
+          slurm_cpus_per_task: 8
 
       - label: ":computer: MPI io test"
         command: >
@@ -657,15 +659,16 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
-            srun
+            srun --cpu-bind=threads --cpus-per-task=4
             nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
         agents:
           slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_mem: 32G
 
