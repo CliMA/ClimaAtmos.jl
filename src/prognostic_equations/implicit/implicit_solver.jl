@@ -158,6 +158,7 @@ function ImplicitEquationJacobian(
         (@name(c.ρ), other_available_names...),
     )
 
+    active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
     advection_blocks = (
         (
             use_derivative(topography_flag) ?
@@ -165,16 +166,16 @@ function ImplicitEquationJacobian(
                 name ->
                     (name, @name(c.uₕ)) =>
                         similar(Y.c, TridiagonalRow_ACTh),
-                (@name(c.ρ), @name(c.ρe_tot), available_tracer_names...),
+                active_scalar_names,
             ) : ()
         )...,
         MatrixFields.unrolled_map(
             name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
-            (@name(c.ρ), @name(c.ρe_tot), available_tracer_names...),
+            active_scalar_names,
         )...,
         MatrixFields.unrolled_map(
             name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
-            (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...),
+            active_scalar_names,
         )...,
         (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACTh),
         (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
@@ -297,7 +298,6 @@ function Wfact!(A, Y, p, dtγ, t)
         # Remove unnecessary values from p to avoid allocations in bycolumn.
         p′ = (;
             p.precomputed.ᶜspecific,
-            p.precomputed.ᶠu³,
             p.precomputed.ᶜK,
             p.precomputed.ᶜts,
             p.precomputed.ᶜp,
@@ -353,13 +353,10 @@ end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; matrix, diffusion_flag, topography_flag) = A
-    (; ᶜspecific, ᶠu³, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
+    (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p
     (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
-    # use CD2 for implicit, upwinding correction goes in explicit part
-    energy_upwinding = Val(:none)
-    tracer_upwinding = Val(:none)
-    (; precip_upwinding) = p.atmos.numerics # precipitation is always upwinded (rain always falls)
+    (; precip_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
@@ -413,53 +410,25 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     @. ∂ᶜρ_err_∂ᶠu₃[colidx] =
         dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ[colidx]))
 
-    ᶠu³_data = ᶠu³.components.data.:1
     tracer_info = (
-        (@name(c.ρe_tot), @name(ᶜh_tot), energy_upwinding),
-        (@name(c.ρq_tot), @name(ᶜspecific.q_tot), tracer_upwinding),
-        (@name(c.ρq_liq), @name(ᶜspecific.q_liq), tracer_upwinding),
-        (@name(c.ρq_ice), @name(ᶜspecific.q_ice), tracer_upwinding),
-        (@name(c.ρq_rai), @name(ᶜspecific.q_rai), tracer_upwinding),
-        (@name(c.ρq_sno), @name(ᶜspecific.q_sno), tracer_upwinding),
+        (@name(c.ρe_tot), @name(ᶜh_tot)),
+        (@name(c.ρq_tot), @name(ᶜspecific.q_tot)),
     )
-    MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name, upwinding)
+    MatrixFields.unrolled_foreach(tracer_info) do (ρχ_name, χ_name)
         MatrixFields.has_field(Y, ρχ_name) || return
         ᶜχ = MatrixFields.get_field(p, χ_name)
         if use_derivative(topography_flag)
             ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
         end
         ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
-        if upwinding == Val(:none)
-            use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ[colidx] =
-                dtγ * ᶜadvection_matrix[colidx] ⋅
-                DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx])) ⋅
-                ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
-                DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
-            @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
-                dtγ * ᶜadvection_matrix[colidx] ⋅
-                DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx]) * g³³(ᶠgⁱʲ[colidx]))
-        else
-            ᶠupwind = upwinding == Val(:third_order) ? ᶠupwind3 : ᶠupwind1
-            ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
-                top = Operators.SetValue(zero(CT3{FT})),
-                bottom = Operators.SetValue(zero(CT3{FT})),
-            ) # Need to wrap ᶠupwind in this for well-defined boundaries.
-            use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ[colidx] =
-                dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(CT3(sign(ᶠu³_data[colidx])), ᶜχ[colidx]),
-                    ) * adjoint(C3(sign(ᶠu³_data[colidx]))),
-                ) ⋅ ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
-                DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
-            @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
-                dtγ * ᶜadvection_matrix[colidx] ⋅ DiagonalMatrixRow(
-                    ᶠset_upwind_bcs(
-                        ᶠupwind(CT3(sign(ᶠu³_data[colidx])), ᶜχ[colidx]),
-                    ) *
-                    adjoint(C3(sign(ᶠu³_data[colidx]))) *
-                    g³³(ᶠgⁱʲ[colidx]),
-                )
-        end
+        use_derivative(topography_flag) && @. ∂ᶜρχ_err_∂ᶜuₕ[colidx] =
+            dtγ * ᶜadvection_matrix[colidx] ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx])) ⋅
+            ᶠwinterp_matrix(ᶜJ[colidx] * ᶜρ[colidx]) ⋅
+            DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ[colidx]))
+        @. ∂ᶜρχ_err_∂ᶠu₃[colidx] =
+            dtγ * ᶜadvection_matrix[colidx] ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜχ[colidx]) * g³³(ᶠgⁱʲ[colidx]))
     end
 
     ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
