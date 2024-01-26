@@ -405,6 +405,8 @@ steps:
           julia --color=yes --project=examples --threads=8 examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/test_io.yml
         artifact_paths: "test_io/*"
+        agents:
+          slurm_cpus_per_task: 8
 
       - label: ":computer: MPI io test"
         command: >
