@@ -196,3 +196,14 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_amip"
+
+
+  - group: "Numerics"
+    steps:
+
+      - label: "ARS_nolim_FCT, dt=100secs"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl --config_file config/dt_sweep_configs/ARS_nolim_FCT/dt_100secs.yml
+        artifact_paths: "dt_ARS_nolim_FCT_100secs/*"
+        agents:
+          slurm_time: 24:00:00
