@@ -447,26 +447,38 @@ function make_plots(
     simdir = SimDir(simulation_path)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
-    short_names_sfc = ["hfes", "evspsbl"]
+    short_names_3D = ["ua", "ta", "hus"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
+    ]
     available_periods = ClimaAnalysis.available_periods(
         simdir;
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
-    elseif "12h" in available_periods
-        period = "12h"
+    elseif "1h" in available_periods
+        period = "1h"
     end
     vars_3D = [
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
     ]
-    vars_sfc = [
+    vars_2D = [
         get(simdir; short_name, reduction, period) for
-        short_name in short_names_sfc
+        short_name in short_names_2D
     ]
     make_plots_generic(
         simulation_path,
@@ -476,67 +488,15 @@ function make_plots(
     )
     make_plots_generic(
         simulation_path,
-        vars_sfc,
+        vars_2D,
         time = LAST_SNAP,
-        output_name = "summary_sfc",
-    )
-end
-
-function make_plots(
-    ::Union{
-        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
-        Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
-        Val{
-            :longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean,
-        },
-    },
-    simulation_path,
-)
-    simdir = SimDir(simulation_path)
-
-
-    reduction = "average"
-    period = "10d"
-    short_names_3D = [
-        "ta",
-        "thetaa",
-        "rhoa",
-        "ua",
-        "va",
-        "wa",
-        "hur",
-        "hus",
-        "clw",
-        "cli",
-        "rsd",
-        "rsu",
-        "rld",
-        "rlu",
-    ]
-    short_names_sfc = ["hfes", "evspsbl", "ts"]
-    vars_3D = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
-    ]
-    vars_sfc = [
-        get(simdir; short_name, reduction, period) for
-        short_name in short_names_sfc
-    ]
-    make_plots_generic(
-        simulation_path,
-        vars_3D,
-        time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
-    )
-    make_plots_generic(
-        simulation_path,
-        vars_sfc,
-        time = LAST_SNAP,
-        output_name = "summary_sfc",
+        output_name = "summary_2D",
     )
 end
 
 AquaplanetPlots = Union{
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
+    Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
@@ -544,7 +504,8 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_earth},
-    Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
+    Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_amip},
 }
@@ -553,25 +514,37 @@ function make_plots(::AquaplanetPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
-    short_names_sfc = ["hfes", "evspsbl"]
+    short_names_3D = ["ua", "ta", "hus"]
+    short_names_2D = [
+        "rsdt",
+        "rsds",
+        "rsut",
+        "rsus",
+        "rlds",
+        "rlut",
+        "rlus",
+        "hfes",
+        "evspsbl",
+    ]
     available_periods = ClimaAnalysis.available_periods(
         simdir;
         short_name = short_names_3D[1],
         reduction,
     )
-    if "10d" in available_periods
+    if "30d" in available_periods
+        period = "30d"
+    elseif "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
-    elseif "12h" in available_periods
-        period = "12h"
+    elseif "1h" in available_periods
+        period = "1h"
     end
     vars_3D = [
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
     ]
-    vars_sfc =
-        [get(simdir; short_name, reduction) for short_name in short_names_sfc]
+    vars_2D =
+        [get(simdir; short_name, reduction) for short_name in short_names_2D]
     make_plots_generic(
         simulation_path,
         vars_3D,
@@ -580,9 +553,9 @@ function make_plots(::AquaplanetPlots, simulation_path)
     )
     make_plots_generic(
         simulation_path,
-        vars_sfc,
+        vars_2D,
         time = LAST_SNAP,
-        output_name = "summary_sfc",
+        output_name = "summary_2D",
     )
 end
 

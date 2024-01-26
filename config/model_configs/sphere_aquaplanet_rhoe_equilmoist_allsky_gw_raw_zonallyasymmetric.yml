@@ -19,7 +19,3 @@ job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"
 moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
 netcdf_interpolate_z_over_msl: true
-diagnostics:
-  - short_name: [ua, ta, hus, hfes, evspsbl, rsd, rsu, rld, rlu]
-    reduction_time: average
-    period: 12hours

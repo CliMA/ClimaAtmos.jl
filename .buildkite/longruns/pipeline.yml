@@ -140,11 +140,6 @@ steps:
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"
 
-
-  - group: "Experimental long runs"
-
-    steps:
-
   - group: "DYAMOND"
 
     steps:

@@ -958,8 +958,16 @@ function get_simulation(config::AtmosConfig)
                     )
                 else
                     # Add to the accumulator
+
+                    # We use similar + .= instead of copy because CUDA 5.2 does
+                    # not supported nested wrappers with view(reshape(view))
+                    # objects. See discussion in
+                    # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
+                    # https://github.com/JuliaGPU/Adapt.jl/issues/21
                     diagnostic_accumulators[diag] =
-                        copy(diagnostic_storage[diag])
+                        similar(diagnostic_storage[diag])
+                    diagnostic_accumulators[diag] .=
+                        diagnostic_storage[diag]
                 end
             catch e
                 error("Could not compute diagnostic $(variable.long_name): $e")
