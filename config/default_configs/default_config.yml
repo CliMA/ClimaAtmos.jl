@@ -259,3 +259,6 @@ netcdf_output_at_levels:
 warn_allocations_diagnostics:
   help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
   value: false
+log_progress:
+  help: "Log simulation progress, including wall-time estimates"
+  value: true
