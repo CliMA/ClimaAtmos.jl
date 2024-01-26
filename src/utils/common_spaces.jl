@@ -1,4 +1,5 @@
-using ClimaCore: Geometry, Domains, Meshes, Topologies, Spaces, Hypsography
+using ClimaCore:
+    Geometry, Domains, Meshes, Topologies, Spaces, Grids, Hypsography
 using ClimaComms
 
 function periodic_line_mesh(; x_max, x_elem)
@@ -80,7 +81,10 @@ function make_hybrid_spaces(
     z_stretch;
     surface_warp = nothing,
     topo_smoothing = false,
+    deep = true, # should be an option
 )
+    # TODO: change this to make_hybrid_grid
+    h_grid = Spaces.grid(h_space)
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
         Geometry.ZPoint(z_max);
@@ -88,24 +92,24 @@ function make_hybrid_spaces(
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
-    if surface_warp == nothing
-        device = ClimaComms.device(h_space)
-        comms_ctx = ClimaComms.SingletonCommsContext(device)
-        z_topology = Topologies.IntervalTopology(comms_ctx, z_mesh)
-        z_space = Spaces.CenterFiniteDifferenceSpace(z_topology)
-        center_space = Spaces.ExtrudedFiniteDifferenceSpace(h_space, z_space)
-        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(center_space)
+    device = ClimaComms.device(h_space)
+    z_topology = Topologies.IntervalTopology(
+        ClimaComms.SingletonCommsContext(device),
+        z_mesh,
+    )
+    z_grid = Grids.FiniteDifferenceGrid(z_topology)
+    if isnothing(surface_warp)
+        hypsography = Hypsography.Flat()
     else
         z_surface = surface_warp(Fields.coordinate_field(h_space))
-        topo_smoothing ? Hypsography.diffuse_surface_elevation!(z_surface) :
-        nothing
-        z_face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
-        face_space = Spaces.ExtrudedFiniteDifferenceSpace(
-            h_space,
-            z_face_space,
-            Hypsography.LinearAdaption(z_surface),
-        )
-        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(face_space)
+        if topo_smoothing
+            Hypsography.diffuse_surface_elevation!(z_surface)
+        end
+        hypsography = Hypsography.LinearAdaption(z_surface)
     end
+    grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
+    # TODO: return the grid
+    center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
+    face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
     return center_space, face_space
 end

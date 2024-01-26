@@ -74,7 +74,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; params) = p
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf, ᶜΦ) = p.core
+    (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
@@ -153,15 +153,28 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
 
     Fields.bycolumn(axes(Y.c)) do colidx
-        @. Yₜ.c.uₕ[colidx] -=
-            ᶜinterp(
-                ᶠω¹²[colidx] ×
-                (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
-            ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
-            (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
-        @. Yₜ.f.u₃[colidx] -=
-            ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
-
+        if isnothing(ᶠf¹²)
+            # shallow atmosphere
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(
+                    ᶠω¹²[colidx] ×
+                    (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+                ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+                (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+            @. Yₜ.f.u₃[colidx] -=
+                ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
+        else
+            # deep atmosphere
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(
+                    (ᶠf¹²[colidx] + ᶠω¹²[colidx]) ×
+                    (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+                ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+                (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+            @. Yₜ.f.u₃[colidx] -=
+                (ᶠf¹²[colidx] + ᶠω¹²[colidx]) × ᶠinterp(CT12(ᶜu[colidx])) +
+                ᶠgradᵥ(ᶜK[colidx])
+        end
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
