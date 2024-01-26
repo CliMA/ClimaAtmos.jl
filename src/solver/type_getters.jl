@@ -443,7 +443,8 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     (; dt, output_dir) = sim_info
 
     callbacks = ()
-    if !sim_info.restart
+    if parsed_args["log_progress"] && !sim_info.restart
+        @info "Progress logging enabled."
         callbacks = (
             callbacks...,
             call_every_n_steps(
