@@ -358,11 +358,11 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
             (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
 
     return if turbconv == "prognostic_edmfx"
-        N = turbconv_params.updraft_number
+        N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         PrognosticEDMFX{N, TKE}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
-        N = turbconv_params.updraft_number
+        N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         DiagnosticEDMFX{N, TKE}(FT(0.1), turbconv_params.min_area)
     else

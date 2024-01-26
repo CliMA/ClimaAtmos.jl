@@ -1,10 +1,8 @@
 [EDMF_surface_area]
-alias = "surface_area"
 value = 0
 type = "float"
 
 [EDMF_min_area]
-alias = "min_area"
 value = 1.0e-3
 type = "float"
 description = "Minimum area fraction per updraft. Parameter not described in the literature."

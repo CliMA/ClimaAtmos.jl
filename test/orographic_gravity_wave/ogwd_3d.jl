@@ -211,10 +211,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 (; ᶜdTdz) = p.orographic_gravity_wave
 
 # pre-compute thermal vars
-aliases = string.(fieldnames(TD.Parameters.ThermodynamicsParameters))
-toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
-pairs = CP.get_parameter_values!(toml_dict, aliases, "Thermodynamics")
-thermo_params = TD.Parameters.ThermodynamicsParameters{FT}(; pairs...)
+thermo_params = TD.Parameters.ThermodynamicsParameters(FT)
 
 ᶜT = gfdl_ca_temp
 ᶜp = gfdl_ca_p

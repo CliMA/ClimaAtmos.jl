@@ -1,5 +1,4 @@
 [alpha_rayleigh_w]
-alias = "alpha_rayleigh_w"
 value = 0.1
 type = "float"
 

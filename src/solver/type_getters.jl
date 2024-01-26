@@ -769,10 +769,15 @@ function get_simulation(config::AtmosConfig)
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
 
-    if config.parsed_args["log_params"]
-        filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
-        CP.log_parameter_information(config.toml_dict, filepath)
-    end
+    # Check that all set parameters have been used
+    param_filepath =
+        joinpath(sim_info.output_dir, "$(sim_info.job_id)_parameters.toml")
+    CP.log_parameter_information(
+        config.toml_dict,
+        param_filepath,
+        strict = true,
+    )
+
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 

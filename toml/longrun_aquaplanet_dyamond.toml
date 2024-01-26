@@ -1,5 +1,4 @@
 [zd_rayleigh]
-alias = "zd_rayleigh"
 value = 35000.0
 type = "float"
 

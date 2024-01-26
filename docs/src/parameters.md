@@ -5,7 +5,6 @@ Parameters in ClimaAtmos.jl are handled by [CLIMAParameters.jl](https://github.c
 First, create a TOML file with the parameters you want to add/override. Here is the basic format for a single parameter:
 ```
 [descriptive name]
-alias = "<short name>"
 value = <value>
 type = "<type>"
 ```
@@ -14,7 +13,6 @@ The possible types are: `bool`, `float`, `integer`, or `string`.
 #### Basic example for gravitational acceleration:
 ```
 [gravitational_acceleration]
-alias = "grav"
 value = 9.81
 type = "float"
 ```
