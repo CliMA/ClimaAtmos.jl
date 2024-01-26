@@ -86,7 +86,7 @@ steps:
         command:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
-            srun --cpu-bind=cores
+            srun --cpu-bind=cores --cpus-per-task=4
             nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
@@ -101,7 +101,7 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
-            srun --cpu-bind=cores
+            srun --cpu-bind=cores --cpus-per-task=4
             nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
