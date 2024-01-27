@@ -543,8 +543,8 @@ function make_plots(::EDMFBoxPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
     short_names = ["ua", "wa", "thetaa", "taup", "haup", "waup", "tke", "arup"]
-    reduction = "average"
-    period = "10m"
+    reduction = "inst"
+    period = "30m"
     vars = [
         get(simdir; short_name, reduction, period) for short_name in short_names
     ]
