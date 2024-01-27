@@ -96,6 +96,8 @@ function vertical_diffusion_boundary_layer_tendency!(
             ),
         )
         @. ᶜρχₜ[colidx] -= ᶜρχₜ_diffusion[colidx]
-        @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+        if !(χ_name in (:q_rai, :q_sno))
+            @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+        end
     end
 end
