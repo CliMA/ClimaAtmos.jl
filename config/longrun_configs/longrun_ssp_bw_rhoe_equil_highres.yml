@@ -11,6 +11,7 @@ precip_model: "0M"
 job_id: "longrun_ssp_bw_rhoe_equil_highres"
 moist: "equil"
 apply_limiter: true
+output_default_diagnostics: false
 diagnostics:
-  - short_name: [pfull, wa, va, rv, hus]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, pr]
     period: 1days

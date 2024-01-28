@@ -1,9 +1,9 @@
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "30days"
 rayleigh_sponge: true
 topo_smoothing: true
 z_elem: 45
 dt: "100secs"
-t_end: "400days"
+t_end: "300days"
 dz_bottom: 30.0
 vert_diff: "true"
 h_elem: 16
@@ -15,3 +15,8 @@ precip_model: "0M"
 topography: "Earth"
 job_id: "longrun_hs_rhoe_equil_highres_topography_earth"
 moist: "equil"
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    reduction_time: average
+    period: 30days

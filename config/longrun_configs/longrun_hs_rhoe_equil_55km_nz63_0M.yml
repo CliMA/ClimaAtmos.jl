@@ -1,4 +1,4 @@
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "30days"
 dt: "150secs"
 t_end: "300days"
 h_elem: 16
@@ -13,3 +13,8 @@ rayleigh_sponge: true
 forcing: "held_suarez"
 job_id: "longrun_hs_rhoe_equil_55km_nz63_0M"
 toml: [toml/longrun_hs_rhoe_equil_55km_nz63_0M.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, hussfc, evspsbl, pr]
+    reduction_time: average
+    period: 30days

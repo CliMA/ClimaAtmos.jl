@@ -27,9 +27,9 @@ job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
 output_default_diagnostics: false
 diagnostics:
-  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, hussfc, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
     reduction_time: average
-    period: 1days
+    period: 10days
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
     reduction_time: average
-    period: 1days
+    period: 10days

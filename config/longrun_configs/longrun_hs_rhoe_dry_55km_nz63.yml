@@ -1,6 +1,6 @@
 dz_bottom: 30.0
 dz_top: 3000.0
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "30days"
 t_end: "300days"
 h_elem: 16
 z_elem: 63
@@ -10,3 +10,8 @@ dt: "300secs"
 rayleigh_sponge: true
 job_id: "longrun_hs_rhoe_dry_55km_nz63"
 toml: [toml/longrun_hs_rhoe_dry_55km_nz63.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa]
+    reduction_time: average
+    period: 30days

@@ -1,6 +1,6 @@
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "30days"
 dt: "40secs"
-t_end: "200days"
+t_end: "180days"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
@@ -19,3 +19,11 @@ rad: "clearsky"
 dt_rad: "6hours"
 job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, hussfc, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
+    reduction_time: average
+    period: 30days
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    reduction_time: average
+    period: 30days
