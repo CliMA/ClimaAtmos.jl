@@ -501,8 +501,10 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
 
     dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
 
-    callbacks =
-        (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+    if dt_cf > 0
+        callbacks =
+            (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+    end
 
     if parsed_args["log_progress"] && !sim_info.restart
         @info "Progress logging enabled."
