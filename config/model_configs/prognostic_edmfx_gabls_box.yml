@@ -20,8 +20,8 @@ x_elem: 2
 y_elem: 2
 z_elem: 8
 z_stretch: false
-dt: "5secs"
+dt: "100secs"
 t_end: "9hours"
-dt_save_state_to_disk: "10mins"
+dt_save_state_to_disk: "30mins"
 perturb_initstate: false
 toml: [toml/prognostic_edmfx_box.toml]
