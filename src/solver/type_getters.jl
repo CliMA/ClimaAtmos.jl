@@ -830,63 +830,79 @@ function get_simulation(config::AtmosConfig)
     end
     @info "initializing diagnostics: $s"
 
-    length(diagnostics) > 0 && @info "Computing diagnostics:"
+    diagnostic_callbacks = tuple()
 
-    for writer in writers
-        writer_str = nameof(typeof(writer))
-        diags_with_writer =
-            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
-        diags_outputs = [
-            getproperty(diag, :output_short_name) for diag in diags_with_writer
+    if length(diagnostics) > 0
+        @info "Computing diagnostics:"
+
+        for writer in writers
+            writer_str = nameof(typeof(writer))
+            diags_with_writer = filter(
+                (x) -> getproperty(x, :output_writer) == writer,
+                diagnostics,
+            )
+            diags_outputs = [
+                getproperty(diag, :output_short_name) for
+                diag in diags_with_writer
+            ]
+            @info "$writer_str: $diags_outputs"
+        end
+
+        # First, we convert all the ScheduledDiagnosticTime into
+        # ScheduledDiagnosticIteration, ensuring that there is consistency in the timestep
+        # and the periods and translating those periods that depended on the timestep
+        diagnostics_iterations = [
+            CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for
+            d in diagnostics
         ]
-        @info "$writer_str: $diags_outputs"
-    end
 
-    # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
-    # ensuring that there is consistency in the timestep and the periods and translating
-    # those periods that depended on the timestep
-    diagnostics_iterations =
-        [CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for d in diagnostics]
+        # For diagnostics that perform reductions, the storage is used for the values
+        # computed at each call. Reductions also save the accumulated value in
+        # diagnostic_accumulators.
+        diagnostic_storage = Dict()
+        diagnostic_accumulators = Dict()
+        diagnostic_counters = Dict()
 
-    # For diagnostics that perform reductions, the storage is used for the values computed
-    # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
-    diagnostic_storage = Dict()
-    diagnostic_accumulators = Dict()
-    diagnostic_counters = Dict()
+        s = @timed_str begin
+            diagnostics_functions = CAD.get_callbacks_from_diagnostics(
+                diagnostics_iterations,
+                diagnostic_storage,
+                diagnostic_accumulators,
+                diagnostic_counters,
+                sim_info.output_dir,
+            )
+        end
+        @info "Prepared diagnostic callbacks: $s"
 
-    s = @timed_str begin
-        diagnostics_functions = CAD.get_callbacks_from_diagnostics(
-            diagnostics_iterations,
-            diagnostic_storage,
-            diagnostic_accumulators,
-            diagnostic_counters,
-            sim_info.output_dir,
-        )
-    end
-    @info "Prepared diagnostic callbacks: $s"
+        diagnostic_callbacks = tuple()
 
-    # It would be nice to just pass the callbacks to the integrator. However, this leads to
-    # a significant increase in compile time for reasons that are not known. For this
-    # reason, we only add one callback to the integrator, and this function takes care of
-    # executing the other callbacks. This single function is orchestrate_diagnostics
+        # It would be nice to just pass the callbacks to the integrator. However, this
+        # leads to a significant increase in compile time for reasons that are not
+        # known. For this reason, we only add one callback to the integrator, and this
+        # function takes care of executing the other callbacks. This single function is
+        # orchestrate_diagnostics
 
-    function orchestrate_diagnostics(integrator)
-        for d in diagnostics_functions
-            if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
-                d.f!(integrator)
+        function orchestrate_diagnostics(integrator)
+            for d in diagnostics_functions
+                if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
+                    d.f!(integrator)
+                end
             end
         end
-    end
 
-    diagnostic_callbacks =
-        call_every_n_steps(orchestrate_diagnostics, skip_first = true)
+        diagnostic_callbacks = tuple(
+            call_every_n_steps(orchestrate_diagnostics, skip_first = true),
+        )
+    else
+        @info "No diagnostic found"
+    end
 
     # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
     # and continuous. This is not hard, but can introduce significant latency. However, all
     # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
     # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., diagnostic_callbacks)
+    discrete_callbacks = (callback..., diagnostic_callbacks...)
 
     s = @timed_str begin
         all_callbacks =
