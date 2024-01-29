@@ -71,7 +71,7 @@ and 0-moment microphysics.
 ```
 longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean
 
-Aquaplanet with slab ocean with time-varying insolation, clear-sky radiation, 
+Aquaplanet with slab ocean with time-varying insolation, clear-sky radiation,
 and 0-moment microphysics.
 Test if the coupled system conserves energy and water.
 Test if the time-varying insolation yields reasonable results.
@@ -81,6 +81,12 @@ longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth
 
 Aquaplanet with idealized insolation, clear-sky radiation, 0-moment microphysics, and
 Earth topography. Use this job to test topography related features.
+```
+```
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_1M
+
+Aquaplanet with idealized insolation, clear-sky radiation, 1-moment microphysics.
+Use this job to test 1-moment microphysics related features.
 ```
 ```
 longrun_bw_rhoe_equil_highres_topography_earth
