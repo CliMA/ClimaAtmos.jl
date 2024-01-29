@@ -311,7 +311,7 @@ version = "0.5.6"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-path = "../../ClimaCore.jl"
+git-tree-sha1 = "541bf25a8adc3c7ddf8d45a96149964f5cfbb074"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.11.9"
 weakdeps = ["Krylov"]
@@ -1189,7 +1189,7 @@ version = "1.0.0"
 
 [[deps.JET]]
 deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
-git-tree-sha1 = "d97aef0e21447c9851be047fe13b894f56beb3c1"
+git-tree-sha1 = "4d0627e640f066055ef6f24333220a857a99fc8e"
 repo-rev = "ck/depth_limited_type_printing"
 repo-url = "https://github.com/charleskawczynski/JET.jl"
 uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"

@@ -8,8 +8,6 @@ end; include("perf/jet.jl")
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(true)))
 import ClimaCore
 import ClimaCore.Fields
-ClimaCore.Fields.truncate_printing_field_types() = true
-ClimaCore.MatrixFields.truncate_printing_field_types() = true
 if !("--config_file" in ARGS)
     push!(ARGS, "--config_file")
     push!(ARGS, "config/default_configs/default_perf.yml")
@@ -32,7 +30,10 @@ end
 import JET
 
 import SciMLBase
+import HDF5, CUDA, NCDatasets
+@info "About to call step! for the first time..."
 SciMLBase.step!(integrator) # Make sure no errors
+@info "Finished first call to step!, about to JET..."
 JET.@test_opt ignored_modules = (HDF5,CUDA,NCDatasets) SciMLBase.step!(integrator)
 
 # (; u, p, t) = integrator;
