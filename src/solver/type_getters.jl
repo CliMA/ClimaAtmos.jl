@@ -442,19 +442,8 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     FT = eltype(params)
     (; dt, output_dir) = sim_info
 
-    callbacks = ()
-    if parsed_args["log_progress"] && !sim_info.restart
-        @info "Progress logging enabled."
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                (integrator) -> print_walltime_estimate(integrator);
-                skip_first = true,
-            ),
-        )
-    end
+    # Greceful exit
     callbacks = (
-        callbacks...,
         call_every_n_steps(
             terminate!;
             skip_first = true,
@@ -511,8 +500,20 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     end
 
     dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+
     callbacks =
         (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+
+    if parsed_args["log_progress"] && !sim_info.restart
+        @info "Progress logging enabled."
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                (integrator) -> print_walltime_estimate(integrator);
+                skip_first = true,
+            ),
+        )
+    end
 
     return callbacks
 end
@@ -902,7 +903,7 @@ function get_simulation(config::AtmosConfig)
     # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
     # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., diagnostic_callbacks...)
+    discrete_callbacks = (diagnostic_callbacks..., callback...)
 
     s = @timed_str begin
         all_callbacks =
