@@ -11,6 +11,7 @@ z_max: 55000.0
 rayleigh_sponge: true
 topography: "Earth"
 topo_smoothing: true
+smoothing_order: 1
 kappa_4_vorticity: 1.0
 kappa_4_scalar: 4.0
 divergence_damping_factor: 4.0
@@ -19,7 +20,7 @@ precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
-max_newton_iters_ode: 2
+approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
 job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
