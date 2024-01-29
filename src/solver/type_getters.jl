@@ -773,12 +773,13 @@ function get_simulation(config::AtmosConfig)
     end
 
     # Check that all set parameters have been used
+    # Strict logging temporarily disabled for compatibility with CloudMicrophysics overrides
     param_filepath =
         joinpath(sim_info.output_dir, "$(sim_info.job_id)_parameters.toml")
     CP.log_parameter_information(
         config.toml_dict,
         param_filepath,
-        strict = true,
+        # strict = true,
     )
 
     initial_condition = get_initial_condition(config.parsed_args)
