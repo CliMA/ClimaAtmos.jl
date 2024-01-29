@@ -256,6 +256,9 @@ netcdf_interpolate_z_over_msl:
 netcdf_output_at_levels:
   help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. This is incompatible with netcdf_interpolate_z_over_msl when topography is present."
   value: false
+netcdf_interpolation_num_points:
+  help: "Override the number of interpolation point for the NetCDF output. This configuration has to be a list of integers, e.g. [180, 90, 10]."
+  value: ~
 warn_allocations_diagnostics:
   help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
   value: false
