@@ -1,10 +1,13 @@
 # This script assumes that `integrator` is defined.
 import JET
-import HDF5
+import HDF5, NCDatasets, CUDA
 # Suggested in: https://github.com/aviatesk/JET.jl/issues/455
 macro n_failures(ex)
     return :(
-        let result = JET.@report_opt ignored_modules = (HDF5,) $(ex)
+        let result =
+                JET.@report_opt ignored_modules = (HDF5, CUDA, NCDatasets) $(
+                    ex
+                )
             length(JET.get_reports(result.analyzer, result.result))
         end
     )

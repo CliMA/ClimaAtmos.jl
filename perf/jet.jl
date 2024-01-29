@@ -1,5 +1,6 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
+import HDF5, NCDatasets, CUDA
 Random.seed!(1234)
 import ClimaAtmos as CA
 
@@ -15,4 +16,6 @@ import JET
 
 import SciMLBase
 SciMLBase.step!(integrator) # Make sure no errors
-JET.@test_opt SciMLBase.step!(integrator)
+JET.@test_opt ignored_modules = (HDF5, CUDA, NCDatasets) SciMLBase.step!(
+    integrator,
+)

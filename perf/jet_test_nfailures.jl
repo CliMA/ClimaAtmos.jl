@@ -17,11 +17,14 @@ import JET
 import SciMLBase
 SciMLBase.step!(integrator) # Make sure no errors
 
-import HDF5
+import HDF5, NCDatasets, CUDA
 # Suggested in: https://github.com/aviatesk/JET.jl/issues/455
 macro n_failures(ex)
     return :(
-        let result = JET.@report_opt ignored_modules = (HDF5,) $(ex)
+        let result =
+                JET.@report_opt ignored_modules = (HDF5, NCDatasets, CUDA) $(
+                    ex
+                )
             length(JET.get_reports(result.analyzer, result.result))
         end
     )
@@ -35,7 +38,7 @@ using Test
     # inference. By increasing this counter, we acknowledge that
     # we have introduced an inference failure. We hope to drive
     # this number down to 0.
-    n_allowed_failures = 94
+    n_allowed_failures = 42
     @show n
     @test n ≤ n_allowed_failures
     if n < n_allowed_failures
