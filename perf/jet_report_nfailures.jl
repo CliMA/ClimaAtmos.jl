@@ -1,5 +1,4 @@
 # This script assumes that `integrator` is defined.
-
 import JET
 import HDF5
 # Suggested in: https://github.com/aviatesk/JET.jl/issues/455

@@ -1189,7 +1189,9 @@ version = "1.0.0"
 
 [[deps.JET]]
 deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
-path = "../../../clones/forks/JET.jl"
+git-tree-sha1 = "d97aef0e21447c9851be047fe13b894f56beb3c1"
+repo-rev = "ck/depth_limited_type_printing"
+repo-url = "https://github.com/charleskawczynski/JET.jl"
 uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 version = "0.8.26"
 
