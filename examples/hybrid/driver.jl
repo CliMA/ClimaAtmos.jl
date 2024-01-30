@@ -1,15 +1,31 @@
 # When Julia 1.10+ is used interactively, stacktraces contain reduced type information to make them shorter.
-# On the other hand, the full type information is printed when julia is not run interactively. 
+# On the other hand, the full type information is printed when julia is not run interactively.
 # Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
 # so we force abbreviated stacktraces even in non-interactive runs.
 # (See also Base.type_limited_string_from_context())
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import ClimaAtmos as CA
+import ClimaComms
 import Random
+import Base.Filesystem: rm, mv
+import Dates
 Random.seed!(1234)
 
 if !(@isdefined config)
     config = CA.AtmosConfig()
+end
+output_dir = CA.get_output_dir(config)
+if ispath(output_dir)
+    if ClimaComms.iamroot(config.comms_ctx)
+        formatted_date = Dates.format(Dates.now(), "yyyymmdd_HHMM")
+        move_to = joinpath(
+            dirname(output_dir),
+            "$(basename(output_dir))_$formatted_date",
+        )
+        @warn "output_dir $output_dir found. Moving it to $move_to"
+        mv(output_dir, move_to)
+    end
+    ClimaComms.barrier(config.comms_ctx)
 end
 simulation = CA.get_simulation(config)
 (; integrator) = simulation
@@ -24,7 +40,6 @@ import ClimaAtmos.InitialConditions as ICs
 using Statistics: mean
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
-import ClimaComms
 using SciMLBase
 using PrettyTables
 import DiffEqCallbacks as DECB
@@ -34,7 +49,6 @@ using ClimaTimeSteppers
 import JSON
 using Test
 import Tar
-import Base.Filesystem: rm
 import OrderedCollections
 using ClimaCoreTempestRemap
 using ClimaCorePlots, Plots
