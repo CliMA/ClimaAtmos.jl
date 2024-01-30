@@ -1189,7 +1189,7 @@ version = "1.0.0"
 
 [[deps.JET]]
 deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
-git-tree-sha1 = "4d0627e640f066055ef6f24333220a857a99fc8e"
+git-tree-sha1 = "9e06b00471c26e8b73d1acae629006a1f720de46"
 repo-rev = "ck/depth_limited_type_printing"
 repo-url = "https://github.com/charleskawczynski/JET.jl"
 uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"

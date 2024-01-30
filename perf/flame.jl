@@ -33,6 +33,7 @@ Profile.clear()
 ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 
 import SciMLBase
+import HDF5, CUDA, NCDatasets
 import JET
 JET.@test_opt ignored_modules = (HDF5,CUDA,NCDatasets) SciMLBase.step!(integrator)
 
