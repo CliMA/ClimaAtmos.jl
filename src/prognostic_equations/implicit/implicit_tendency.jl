@@ -10,6 +10,14 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Fields.bycolumn(axes(Y.c)) do colidx
         implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         if p.atmos.diff_mode == Implicit()
+            edmfx_sgs_vertical_advection_tendency!(
+                Yₜ,
+                Y,
+                p,
+                t,
+                colidx,
+                p.atmos.turbconv_model,
+            )
             vertical_diffusion_boundary_layer_tendency!(
                 Yₜ,
                 Y,

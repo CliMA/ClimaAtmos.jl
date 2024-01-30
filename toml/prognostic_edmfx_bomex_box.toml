@@ -11,7 +11,7 @@ value = 0.7
 value = 0.0002
 
 [entr_coeff]
-value = 0.2
+value = 0.3
 
 [min_area_limiter_scale]
 value = 0
