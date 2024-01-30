@@ -1,5 +1,5 @@
 dt_save_state_to_disk: "10days"
-dt: "40secs"
+dt: "100secs"
 t_end: "200days"
 h_elem: 16
 z_elem: 63
@@ -14,7 +14,9 @@ scalar_hyperdiffusion_coefficient: 4.0
 moist: "equil"
 precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
-vert_diff: "true"
+vert_diff: "FriersonDiffusion"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
 job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
