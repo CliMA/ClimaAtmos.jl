@@ -44,16 +44,14 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::PrognosticSurfaceTemperatur
 
         # ENERGY (correction due to precipitation removal)
         pet = p.conservation_check.col_integrated_precip_energy_tendency
-        earth_area = CA.horizontal_integral_at_boundary(zeros(axes(pet)) .+ 1)
-        if p.atmos.precip_model isa Microphysics0Moment
-            # correction distributed over all surface average
-            @. Yₜ.sfc.T -=
-                sum(pet) / (ρ_ocean * cp_ocean * depth_ocean) / earth_area
-        end
+        # earth_area = CA.horizontal_integral_at_boundary(zeros(axes(pet)) .+ 1)
+        # if p.atmos.precip_model isa Microphysics0Moment
+        #     # correction distributed over all surface average
+        #     @. Yₜ.sfc.T -=
+        #         sum(pet) / (ρ_ocean * cp_ocean * depth_ocean) / earth_area
+        # end
 
-        # @. Yₜ.sfc.T -=
-        #     p.conservation_check.col_integrated_precip_energy_tendency /
-        #     (ρ_ocean * cp_ocean * depth_ocean)
+        @. Yₜ.sfc.T -= pet / (ρ_ocean * cp_ocean * depth_ocean)
 
         # WATER
         # turbulent surface fluxes: water (evaporation)

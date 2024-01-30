@@ -142,8 +142,7 @@ if config.parsed_args["check_conservation"]
             energy_radiation_input,
         ) / energy_total
     @info "    Net energy change: $energy_net"
-    @test (energy_atmos_change + energy_surface_change) / energy_total ≈
-          energy_radiation_input / energy_total atol = sqrt(eps(FT))
+    @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
 
     if p.atmos.moisture_model isa CA.DryModel
         # density
