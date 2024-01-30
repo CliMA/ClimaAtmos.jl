@@ -114,6 +114,7 @@ function precipitation_tendency!(
     ) = p.precipitation
     # col_integrated_precip_energy_tendency =
     #     p.conservation_check.col_integrated_precip_energy_tendency
+    (; col_integrated_precip_energy_tendency,) = p.conservation_check
 
     thermo_params = CAP.thermodynamics_params(params)
     compute_precipitation_cache!(Y, p, colidx, precip_model, turbconv_model)
