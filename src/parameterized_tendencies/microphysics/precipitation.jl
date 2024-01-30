@@ -110,10 +110,7 @@ function precipitation_tendency!(
         ᶜS_ρq_tot,
         col_integrated_rain,
         col_integrated_snow,
-        col_integrated_precip_energy_tendency,
     ) = p.precipitation
-    # col_integrated_precip_energy_tendency =
-    #     p.conservation_check.col_integrated_precip_energy_tendency
     (; col_integrated_precip_energy_tendency,) = p.conservation_check
 
     thermo_params = CAP.thermodynamics_params(params)
@@ -162,17 +159,14 @@ function precipitation_tendency!(
                     ᶜts[colidx],
                     ᶜΦ[colidx],
                 )
-            if !(p.atmos.precip_model isa NoPrecipitation)
-                Operators.column_integral_definite!(
-                    col_integrated_precip_energy_tendency[colidx],
-                    @. ᶜS_ρq_tot[colidx] *
-                       e_tot_0M_precipitation_sources_helper(
-                        thermo_params,
-                        ᶜts[colidx],
-                        ᶜΦ[colidx],
-                    )
+            Operators.column_integral_definite!(
+                col_integrated_precip_energy_tendency[colidx],
+                @. ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
+                    thermo_params,
+                    ᶜts[colidx],
+                    ᶜΦ[colidx],
                 )
-            end
+            )
         end
     end
     return nothing
