@@ -74,12 +74,16 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; params) = p
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf, ᶜΦ) = p.core
+    (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
+    (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; rayleigh_sponge, precip_model) = p.atmos
+    (; ᶜspecific) = p.precomputed
+
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
     ᶜρ⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρ⁰ : Y.c.ρ) : nothing
     ᶜtke⁰ = advect_tke ? p.precomputed.ᶜtke⁰ : nothing
@@ -112,15 +116,65 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     @. ᶠΦ = CAP.grav(params) * ᶠz
 
     Fields.bycolumn(axes(Y.c)) do colidx
-        @. Yₜ.c.uₕ[colidx] -=
-            ᶜinterp(
-                ᶠω¹²[colidx] ×
-                (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
-            ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
-            (ᶜf[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
-        @. Yₜ.f.u₃[colidx] -=
-            ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
+        if :ρe_tot in propertynames(Yₜ.c)
+            (; ᶜh_tot) = p.precomputed
+            for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
+                energy_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    Yₜ.c.ρe_tot[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜh_tot[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
+        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+            χ_name == :e_tot && continue
+            for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
+                tracer_upwinding isa Val{:none} && continue
+                vertical_transport!(
+                    coeff,
+                    ᶜρχₜ[colidx],
+                    ᶜJ[colidx],
+                    Y.c.ρ[colidx],
+                    ᶠu³[colidx],
+                    ᶜχ[colidx],
+                    dt,
+                    upwinding,
+                )
+            end
+        end
 
+    end
+
+
+    Fields.bycolumn(axes(Y.c)) do colidx
+        if isnothing(ᶠf¹²)
+            # shallow atmosphere
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(
+                    ᶠω¹²[colidx] ×
+                    (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+                ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+                (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+            @. Yₜ.f.u₃[colidx] -=
+                ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
+        else
+            # deep atmosphere
+            @. Yₜ.c.uₕ[colidx] -=
+                ᶜinterp(
+                    (ᶠf¹²[colidx] + ᶠω¹²[colidx]) ×
+                    (ᶠinterp(Y.c.ρ[colidx] * ᶜJ[colidx]) * ᶠu³[colidx]),
+                ) / (Y.c.ρ[colidx] * ᶜJ[colidx]) +
+                (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
+            @. Yₜ.f.u₃[colidx] -=
+                (ᶠf¹²[colidx] + ᶠω¹²[colidx]) × ᶠinterp(CT12(ᶜu[colidx])) +
+                ᶠgradᵥ(ᶜK[colidx])
+        end
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +

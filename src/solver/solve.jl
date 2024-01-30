@@ -1,6 +1,12 @@
 import ClimaTimeSteppers as CTS
 import Base.Sys: maxrss
 
+# Empty integrator.tstops to stop time-marching.
+function terminate!(integrator::CTS.DistributedODEIntegrator)
+    @info "Gracefully exiting simulation."
+    empty!(integrator.tstops.valtree)
+end
+
 struct EfficiencyStats{TS <: Tuple, WT}
     tspan::TS
     walltime::WT

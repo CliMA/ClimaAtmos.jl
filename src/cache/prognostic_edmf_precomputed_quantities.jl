@@ -161,12 +161,13 @@ Updates the precomputed quantities stored in `p` for edmfx closures.
 """
 function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
-    (; moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model, precip_model) = p.atmos
     @assert !(moisture_model isa DryModel)
 
     (; params) = p
     (; dt) = p
     thermo_params = CAP.thermodynamics_params(params)
+    microphys_params = CAP.microphysics_params(params)
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -181,6 +182,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ρatke_flux,
     ) = p.precomputed
     (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜS_q_totʲs, ᶜS_q_tot⁰) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -190,6 +192,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     for j in 1:n
+        # entrainment/detrainment
         @. ᶜentrʲs.:($$j) = entrainment(
             params,
             ᶜz,
@@ -235,7 +238,25 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
+        # precipitation
+        @. ᶜS_q_totʲs.:($$j) = q_tot_precipitation_sources(
+            precip_model,
+            thermo_params,
+            microphys_params,
+            dt,
+            Y.c.sgsʲs.:($$j).q_tot,
+            ᶜtsʲs.:($$j),
+        )
     end
+
+    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
+        precip_model,
+        thermo_params,
+        microphys_params,
+        dt,
+        ᶜq_tot⁰,
+        ᶜts⁰,
+    )
 
     # First order approximation: Use environmental mean fields.
     @. ᶜlinear_buoygrad = buoyancy_gradients(

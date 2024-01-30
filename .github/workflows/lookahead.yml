@@ -46,7 +46,7 @@ jobs:
             ${{ runner.os }}-
       - name: Instantiate test env
         run: |
-          julia --project=test -e "using Pkg; Pkg.instantiate(); Pkg.develop(path=\".\")"
+          julia --project=test -e "using Pkg; Pkg.develop(path=\".\"); Pkg.instantiate()"
       - name: Run test_env.yml
         continue-on-error: true
         run: |

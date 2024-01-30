@@ -93,7 +93,6 @@ function get_numerics(parsed_args)
     energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"]))
     tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
     precip_upwinding = Val(Symbol(parsed_args["precip_upwinding"]))
-    density_upwinding = Val(Symbol(parsed_args["density_upwinding"]))
     edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
@@ -105,7 +104,6 @@ function get_numerics(parsed_args)
         energy_upwinding,
         tracer_upwinding,
         precip_upwinding,
-        density_upwinding,
         edmfx_upwinding,
         edmfx_sgsflux_upwinding,
         limiter,
@@ -272,15 +270,6 @@ function get_spaces(parsed_args, params, comms_ctx)
         z_elem,
         z_stretch,
     )
-end
-
-# get_state(simulation, parsed_args, spaces, params, atmos)
-function get_state(simulation, args...)
-    if simulation.restart
-        return get_state_restart(comms_ctx)
-    else
-        return get_state_fresh_start(args...)
-    end
 end
 
 function get_spaces_restart(Y)
@@ -454,7 +443,8 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     (; dt, output_dir) = sim_info
 
     callbacks = ()
-    if !sim_info.restart
+    if parsed_args["log_progress"] && !sim_info.restart
+        @info "Progress logging enabled."
         callbacks = (
             callbacks...,
             call_every_n_steps(
@@ -466,8 +456,10 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     callbacks = (
         callbacks...,
         call_every_n_steps(
-            (integrator) -> maybe_graceful_exit(integrator);
+            terminate!;
             skip_first = true,
+            condition = (u, t, integrator) ->
+                maybe_graceful_exit(integrator),
         ),
     )
 
@@ -780,10 +772,15 @@ function get_simulation(config::AtmosConfig)
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
 
-    if config.parsed_args["log_params"]
-        filepath = joinpath(sim_info.output_dir, "$(job_id)_parameters.toml")
-        CP.log_parameter_information(config.toml_dict, filepath)
-    end
+    # Check that all set parameters have been used
+    param_filepath =
+        joinpath(sim_info.output_dir, "$(sim_info.job_id)_parameters.toml")
+    CP.log_parameter_information(
+        config.toml_dict,
+        param_filepath,
+        strict = true,
+    )
+
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
 
@@ -920,6 +917,7 @@ function get_simulation(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
+    reset_graceful_exit(sim_info.output_dir)
 
     s = @timed_str begin
         for diag in diagnostics_iterations

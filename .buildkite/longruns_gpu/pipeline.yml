@@ -86,6 +86,17 @@ steps:
         env:
           JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M"
 
+      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M"
+
       - label: ":computer: aquaplanet equilmoist clearsky radiation + diagnostic edmf + 0M microphysics"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
@@ -96,3 +107,14 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M"
+      
+      - label: ":computer: aquaplanet equilmoist allsky radiation + diagnostic edmf + 0M microphysics"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M"

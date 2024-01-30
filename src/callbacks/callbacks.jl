@@ -343,3 +343,8 @@ function maybe_graceful_exit(integrator)
         open(io -> print(io, 0), file, "w")
     end
 end
+function reset_graceful_exit(output_dir)
+    file = joinpath(output_dir, "graceful_exit.dat")
+    ispath(output_dir) || mkpath(output_dir)
+    open(io -> print(io, 0), file, "w")
+end

@@ -23,9 +23,21 @@ longrun_hs_rhoe_equil_55km_nz63_0M
 Moist Held Suarez. Test the moist dycore with an equilibrium state with sources and sinks.
 ```
 ```
+longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M
+
+Aquaplanet with idealized insolation, clear-sky radiation, and 0-moment microphysics.
+Use this job to test new physical components.
+```
+```
 longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M
 
 Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf
+and 0-moment microphysics.
+```
+```
+longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M
+
+Aquaplanet with idealized insolation, all-sky radiation, diagnostic edmf
 and 0-moment microphysics.
 ```
 
@@ -51,12 +63,6 @@ longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M
 Aquaplanet with idealized insolation, gray radiation, and 0-moment microphysics.
 ```
 ```
-longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M
-
-Aquaplanet with idealized insolation, clear-sky radiation, and 0-moment microphysics.
-Use this job to test new physical components.
-```
-```
 longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M
 
 Aquaplanet with idealized insolation, clear-sky radiation, diagnostic edmf (diffusion only)
@@ -80,11 +86,6 @@ Earth topography. Use this job to test topography related features.
 longrun_bw_rhoe_equil_highres_topography_earth
 
 Moist baroclinic wave with Earth topography. Test moist dycore with topography.
-```
-```
-longrun_aquaplanet_rhoe_equil_highres_clearsky_ft32_earth
-
-Moist aquaplanet with topography. Will be removed soon.
 ```
 ```
 longrun_aquaplanet_dyamond

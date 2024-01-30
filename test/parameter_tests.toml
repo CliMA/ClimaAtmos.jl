@@ -1,29 +1,23 @@
 [same_name]
 value = 1
 type = "float"
-alias = "same_alias"
 
 [diff_name]
 value = 0
 type = "float"
-alias = "same_alias"
 
 [y_elem]
 value = 0
 type = "float"
-alias = "y_elem"
 
 [dt_save_state_to_disk]
 value = "5mins"
 type = "string"
-alias = "dt_save_state_to_disk"
 
 [dt]
 value = "10secs"
 type = "string"
-alias = "dt"
 
 [z_elem]
 value = 60
 type = "integer"
-alias = "z_elem"

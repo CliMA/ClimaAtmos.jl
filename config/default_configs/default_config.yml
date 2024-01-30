@@ -190,9 +190,6 @@ viscous_sponge:
 job_id:
   help: "Uniquely identifying string for a particular job"
   value: ~
-density_upwinding:
-  help: "Density upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
-  value: none
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
@@ -250,9 +247,6 @@ approximate_linear_solve_iters:
 override_τ_precip:
   help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
   value: true
-log_params:
-  help: "Log parameters to file [`false` (default), `true`]"
-  value: false
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true 
@@ -265,3 +259,6 @@ netcdf_output_at_levels:
 warn_allocations_diagnostics:
   help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
   value: false
+log_progress:
+  help: "Log simulation progress, including wall-time estimates"
+  value: true

@@ -203,8 +203,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
+    (; dt, params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
     (; sfc_conditions) = p.precomputed
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -230,7 +233,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(ρatke_flux[colidx]),
             )
             @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx]))) +
+                tke_dissipation(
+                    Y.c.sgs⁰.ρatke[colidx],
+                    ᶜtke⁰[colidx],
+                    ᶜmixing_length[colidx],
+                    c_d,
+                    dt,
+                )
         end
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -277,8 +287,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
+    (; dt, params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
     (; sfc_conditions) = p.precomputed
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜtke⁰) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -304,7 +317,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(ρatke_flux[colidx]),
             )
             @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx]))) +
+                tke_dissipation(
+                    Y.c.sgs⁰.ρatke[colidx],
+                    ᶜtke⁰[colidx],
+                    ᶜmixing_length[colidx],
+                    c_d,
+                    dt,
+                )
         end
 
         if !(p.atmos.moisture_model isa DryModel)
@@ -342,3 +362,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     return nothing
 end
+
+tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
+    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / dt

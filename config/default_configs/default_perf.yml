@@ -13,3 +13,4 @@ precip_model: "0M"
 dt_save_to_sol: "Inf"
 rad: "allskywithclear"
 warn_allocations_diagnostics: true
+log_progress: false

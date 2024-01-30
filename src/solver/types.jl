@@ -333,7 +333,6 @@ Base.@kwdef struct AtmosNumerics{
     EN_UP,
     TR_UP,
     PR_UP,
-    DE_UP,
     ED_UP,
     ED_SG_UP,
     DYCORE,
@@ -344,7 +343,6 @@ Base.@kwdef struct AtmosNumerics{
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
     precip_upwinding::PR_UP
-    density_upwinding::DE_UP
     edmfx_upwinding::ED_UP
     edmfx_sgsflux_upwinding::ED_SG_UP
 
