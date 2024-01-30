@@ -187,10 +187,8 @@ ColumnPlots = Union{
 
 function make_plots(::ColumnPlots, simulation_path)
     simdir = SimDir(simulation_path)
-    short_names, reduction, period = ["ta", "wa"], "average", "1d"
-    vars = [
-        get(simdir; short_name, reduction, period) for short_name in short_names
-    ]
+    short_names = ["ta", "wa"]
+    vars = [get(simdir, short_name) for short_name in short_names]
     make_plots_generic(
         simulation_path,
         vars,
@@ -203,8 +201,8 @@ end
 
 function make_plots(::Val{:box_hydrostatic_balance_rhoe}, simulation_path)
     simdir = SimDir(simulation_path)
-    short_names = ["wa", "ua"]
-    vars = [get(simdir; short_name) for short_name in short_names]
+    short_names, reduction = ["wa", "ua"], "average"
+    vars = [get(simdir; short_name, reduction) for short_name in short_names]
     make_plots_generic(
         simulation_path,
         vars,
@@ -278,7 +276,7 @@ MountainPlots = Union{
 
 function make_plots(::MountainPlots, simulation_path)
     simdir = SimDir(simulation_path)
-    vars = [get(simdir, short_name = "wa")]
+    vars = [get(simdir, short_name = "wa", reduction = "average")]
     make_plots_generic(
         simulation_path,
         vars,
@@ -303,9 +301,10 @@ function make_plots(
     simulation_path,
 )
     simdir = SimDir(simulation_path)
-    short_names, reduction, period = ["ua", "wa"], "average", "1d"
+    short_names, reduction = ["ua", "wa"], "average"
     vars = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
+        short_name in short_names
     ]
     make_plots_generic(
         simulation_path,
@@ -319,8 +318,8 @@ DryBaroWavePlots = Union{Val{:sphere_baroclinic_wave_rhoe}}
 
 function make_plots(::DryBaroWavePlots, simulation_path)
     simdir = SimDir(simulation_path)
-    short_names = ["pfull", "va", "wa", "rv"]
-    vars = [get(simdir; short_name) for short_name in short_names]
+    short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    vars = [get(simdir; short_name, reduction) for short_name in short_names]
     make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
 end
 
@@ -329,8 +328,8 @@ function make_plots(
     simulation_path,
 )
     simdir = SimDir(simulation_path)
-    short_names = ["pfull", "va", "wa", "rv"]
-    vars = [get(simdir; short_name) for short_name in short_names]
+    short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    vars = [get(simdir; short_name, reduction) for short_name in short_names]
     make_plots_generic(
         simulation_path,
         vars,
@@ -351,8 +350,8 @@ function make_plots(
     simulation_path,
 )
     simdir = SimDir(simulation_path)
-    short_names = ["pfull", "va", "wa", "rv", "hus"]
-    vars = [get(simdir; short_name) for short_name in short_names]
+    short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
+    vars = [get(simdir; short_name, reduction) for short_name in short_names]
     make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
 end
 
@@ -361,9 +360,9 @@ function make_plots(
     simulation_path,
 )
     simdir = SimDir(simulation_path)
-    short_names = ["ta", "hus"]
+    short_names, reduction = ["ta", "hus"], "average"
     vars = [
-        get(simdir; short_name) |> ClimaAnalysis.average_lon for
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
         short_name in short_names
     ]
     make_plots_generic(
@@ -398,9 +397,10 @@ DryHeldSuarezPlots = Union{
 function make_plots(::DryHeldSuarezPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
-    short_names, reduction, period = ["ua", "ta"], "average", "1d"
+    short_names, reduction = ["ua", "ta"], "average"
     vars = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
+        short_name in short_names
     ]
     make_plots_generic(
         simulation_path,
@@ -421,15 +421,14 @@ MoistHeldSuarezPlots = Union{
 function make_plots(::MoistHeldSuarezPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
-    short_names_3D, reduction, period = ["ua", "ta", "hus"], "average", "1d"
+    short_names_3D, reduction = ["ua", "ta", "hus"], "average"
     short_names_sfc = ["hfes", "evspsbl"]
     vars_3D = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
+        short_name in short_names_3D
     ]
-    vars_sfc = [
-        get(simdir; short_name, reduction, period) for
-        short_name in short_names_sfc
-    ]
+    vars_sfc =
+        [get(simdir; short_name, reduction) for short_name in short_names_sfc]
     make_plots_generic(
         simulation_path,
         vars_3D,
@@ -451,9 +450,20 @@ function make_plots(
     simdir = SimDir(simulation_path)
 
     reduction = "average"
-    period = "12h"
     short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
     short_names_sfc = ["hfes", "evspsbl"]
+    available_periods = ClimaAnalysis.available_periods(
+        simdir;
+        short_name = short_names_3D[1],
+        reduction,
+    )
+    if "10d" in available_periods
+        period = "10d"
+    elseif "1d" in available_periods
+        period = "1d"
+    elseif "12h" in available_periods
+        period = "12h"
+    end
     vars_3D = [
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
     ]
@@ -495,16 +505,25 @@ function make_plots(::AquaplanetPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
     reduction = "average"
-    period = "1d"
     short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
     short_names_sfc = ["hfes", "evspsbl"]
+    available_periods = ClimaAnalysis.available_periods(
+        simdir;
+        short_name = short_names_3D[1],
+        reduction,
+    )
+    if "10d" in available_periods
+        period = "10d"
+    elseif "1d" in available_periods
+        period = "1d"
+    elseif "12h" in available_periods
+        period = "12h"
+    end
     vars_3D = [
         get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
     ]
-    vars_sfc = [
-        get(simdir; short_name, reduction, period) for
-        short_name in short_names_sfc
-    ]
+    vars_sfc =
+        [get(simdir; short_name, reduction) for short_name in short_names_sfc]
     make_plots_generic(
         simulation_path,
         vars_3D,
@@ -544,10 +563,7 @@ function make_plots(::EDMFBoxPlots, simulation_path)
 
     short_names = ["ua", "wa", "thetaa", "taup", "haup", "waup", "tke", "arup"]
     reduction = "inst"
-    period = "30m"
-    vars = [
-        get(simdir; short_name, reduction, period) for short_name in short_names
-    ]
+    vars = [get(simdir; short_name, reduction) for short_name in short_names]
     vars_zt = [slice(var, x = 0.0, y = 0.0) for var in vars]
     vars_z = [slice(var, x = 0.0, y = 0.0, time = LAST_SNAP) for var in vars]
     make_plots_generic(
@@ -565,10 +581,7 @@ function make_plots(::EDMFSpherePlots, simulation_path)
 
     short_names = ["ua", "wa", "thetaa", "taup", "haup", "waup", "tke", "arup"]
     reduction = "average"
-    period = "1h"
-    vars = [
-        get(simdir; short_name, reduction, period) for short_name in short_names
-    ]
+    vars = [get(simdir; short_name, reduction) for short_name in short_names]
     vars_zt0_0 = [slice(var, lon = 0.0, lat = 0.0) for var in vars]
     vars_zt30_0 = [slice(var, lon = 0.0, lat = 30.0) for var in vars]
     vars_zt60_0 = [slice(var, lon = 0.0, lat = 60.0) for var in vars]
