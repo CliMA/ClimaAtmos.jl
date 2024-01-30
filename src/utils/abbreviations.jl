@@ -25,7 +25,11 @@ const ᶜdivᵥ = Operators.DivergenceF2C()
 const ᶜadvdivᵥ = Operators.DivergenceF2C(
     bottom = Operators.SetValue(CT3(0)),
     top = Operators.SetValue(CT3(0)),
-) # divergence applied to advective fluxes is zero at the boundaries
+) # Tracers do not have advective fluxes through the top and bottom cell faces
+const ᶜprecipdivᵥ = Operators.DivergenceF2C(
+    top = Operators.SetValue(CT3(0)),
+    bottom = Operators.SetDivergence(0),
+) # Precipitation has no flux at the top, but it has free outflow at the bottom
 const ᶜgradᵥ = Operators.GradientF2C()
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
@@ -73,6 +77,7 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜdivᵥ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ)
 const ᶜadvdivᵥ_matrix = MatrixFields.operator_matrix(ᶜadvdivᵥ)
+const ᶜprecipdivᵥ_matrix = MatrixFields.operator_matrix(ᶜprecipdivᵥ)
 const ᶠinterp_matrix = MatrixFields.operator_matrix(ᶠinterp)
 const ᶠwinterp_matrix = MatrixFields.operator_matrix(ᶠwinterp)
 const ᶠgradᵥ_matrix = MatrixFields.operator_matrix(ᶠgradᵥ)
