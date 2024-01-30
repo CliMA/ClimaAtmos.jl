@@ -218,3 +218,30 @@ Return a `ScheduledDiagnostics` that computes the hourly average for the given v
 """
 hourly_average(short_names; output_writer) =
     hourly_averages(short_names; output_writer)[1]
+
+"""
+    thirtymin_insts(short_names...; output_writer)
+
+Return a `ScheduledDiagnostics` that outputs the instantaneous value for the given variables
+every 30 minutes.
+"""
+function thirtymin_insts(short_names...; output_writer)
+    period = 30 * 60
+    return [
+        ScheduledDiagnosticTime(
+            variable = get_diagnostic_variable(short_name),
+            compute_every = period,
+            output_every = period, # seconds
+            output_writer = output_writer,
+        ) for short_name in short_names
+    ]
+end
+
+"""
+    hourly_average(short_names...; output_writer)
+
+Return a `ScheduledDiagnostics` that outputs the instantaneous value for the given variable
+every 30 minutes.
+"""
+thirtymin_inst(short_names; output_writer) =
+    thirtymin_insts(short_names; output_writer)[1]

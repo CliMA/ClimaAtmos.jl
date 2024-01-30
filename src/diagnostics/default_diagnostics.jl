@@ -238,9 +238,6 @@ function default_diagnostics(::PrognosticEDMFX, t_end; output_writer)
         "lmix",
     ]
 
-    thirtymin_insts(short_names...; output_writer) =
-        common_diagnostics(30 * 60, nothing, output_writer, short_names...;)
-
     edmfx_draft_diagnostics = [
         "arup",
         "rhoaup",
@@ -309,9 +306,6 @@ function default_diagnostics(::DiagnosticEDMFX, t_end; output_writer)
         "tke",
         "lmix",
     ]
-
-    thirtymin_insts(short_names...; output_writer) =
-        common_diagnostics(30 * 60, nothing, output_writer, short_names...;)
 
     diagnostic_edmfx_draft_diagnostics = [
         "arup",
