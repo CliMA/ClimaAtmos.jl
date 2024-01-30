@@ -117,8 +117,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
             )
         bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
         if eltype(bottom_coords) <: Geometry.LatLongZPoint
-            solar_zenith_angle = RRTMGPI.array2field(
-                radiation_model.solar_zenith_angle,
+            cos_zenith = RRTMGPI.array2field(
+                radiation_model.cos_zenith,
                 axes(bottom_coords),
             )
             weighted_irradiance = RRTMGPI.array2field(
@@ -132,16 +132,15 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
                 bottom_coords.long,
                 bottom_coords.lat,
             ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
-            @. solar_zenith_angle =
-                min(first(insolation_tuple), max_zenith_angle)
+            @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
             @. weighted_irradiance =
                 irradiance * (au / last(insolation_tuple))^2
         else
             # assume that the latitude and longitude are both 0 for flat space
             insolation_tuple =
                 instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
-            radiation_model.solar_zenith_angle .=
-                min(first(insolation_tuple), max_zenith_angle)
+            radiation_model.cos_zenith .=
+                cos(min(first(insolation_tuple), max_zenith_angle))
             radiation_model.weighted_irradiance .=
                 irradiance * (au / last(insolation_tuple))^2
         end
