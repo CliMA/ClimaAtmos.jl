@@ -392,7 +392,6 @@ DryHeldSuarezPlots = Union{
     Val{:sphere_held_suarez_rhoe_hightop},
     Val{:longrun_sphere_hydrostatic_balance_rhoe},
     Val{:longrun_hs_rhoe_dry_55km_nz63},
-    Val{:sphere_held_suarez_rhoe_topography_dcmip},
 }
 
 function make_plots(::DryHeldSuarezPlots, simulation_path)
@@ -413,9 +412,7 @@ end
 MoistHeldSuarezPlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
-    Val{:sphere_held_suarez_rhoe_equilmoist_topography_dcmip},
     Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
-    Val{:longrun_hs_rhoe_equil_highres_topography_earth},
 }
 
 function make_plots(::MoistHeldSuarezPlots, simulation_path)
