@@ -247,6 +247,7 @@ function mixing_length(
         l_TKE > l_z ? l_z : l_TKE,
         l_W > l_z ? l_z : l_W,
     )
+    
     # get soft minimum
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
@@ -305,11 +306,29 @@ function edmfx_velocity_relaxation_tendency!(
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
+    (; ᶜK, ᶜh_tot, ᶜspecific) = p.precomputed
+    ᶜu₃ʲ = p.scratch.ᶜtemp_C3
 
     if p.atmos.edmfx_velocity_relaxation
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
+            @. ᶜu₃ʲ[colidx] = ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx])
+            # @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] -= ifelse(
+            #     ᶜu₃ʲ[colidx].components.data.:1 < 0,
+            #     Y.c.sgsʲs.:($$j).ρa[colidx] / dt,
+            #     0,
+            # )
+            @. Yₜ.c.sgsʲs.:($$j).mse[colidx] -= ifelse(
+                ᶜu₃ʲ[colidx].components.data.:1 < 0,
+                (Y.c.sgsʲs.:($$j).mse[colidx] - (ᶜh_tot[colidx] - ᶜK[colidx])) / dt,
+                0,
+            )
+            @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] -= ifelse(
+                ᶜu₃ʲ[colidx].components.data.:1 < 0,
+                (Y.c.sgsʲs.:($$j).q_tot[colidx] - ᶜspecific.q_tot[colidx]) / dt,
+                0,
+            )
         end
     end
 end
