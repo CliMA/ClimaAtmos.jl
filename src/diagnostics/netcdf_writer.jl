@@ -686,7 +686,14 @@ function write_field!(
     elseif length(dim_names) == 1
         v[time_index, :] = interpolated_field
     end
+end
 
-    # Write data to disk
-    NCDatasets.sync(writer.open_files[output_path])
+"""
+    flush(writer::NetCDFWriter)
+
+Flush the data in `writer` (ie, write to disk).
+"""
+function flush(writer::NetCDFWriter)
+    foreach(NCDatasets.sync, values(writer.open_files))
+    return nothing
 end
