@@ -153,19 +153,16 @@ function precipitation_tendency!(
                     ᶜΦ[colidx],
                 )
         elseif !isnothing(Yₜ)
-            @. Yₜ.c.ρe_tot[colidx] +=
-                ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
-                    thermo_params,
-                    ᶜts[colidx],
-                    ᶜΦ[colidx],
-                )
+            ρe_tot_tend_colidx = p.scratch.ᶜtemp_scalar_3[colidx]
+            @. ρe_tot_tend_colidx = ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
+                thermo_params,
+                ᶜts[colidx],
+                ᶜΦ[colidx],
+            )
+            @. Yₜ.c.ρe_tot[colidx] += ρe_tot_tend_colidx
             Operators.column_integral_definite!(
                 col_integrated_precip_energy_tendency[colidx],
-                @. ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
-                    thermo_params,
-                    ᶜts[colidx],
-                    ᶜΦ[colidx],
-                )
+                ρe_tot_tend_colidx,
             )
         end
     end
