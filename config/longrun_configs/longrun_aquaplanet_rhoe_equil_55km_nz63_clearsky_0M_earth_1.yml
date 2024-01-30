@@ -1,4 +1,3 @@
-device: "CPUSingleThreaded"
 FLOAT_TYPE: "Float32"
 dt_save_state_to_disk: "10days"
 dt_save_to_sol: "10days"

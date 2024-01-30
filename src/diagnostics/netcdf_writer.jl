@@ -521,7 +521,7 @@ function NetCDFWriter(;
     # if our topography is non-trivial
     if hypsography isa Grids.Flat || interpolate_z_over_msl
         interpolated_surface = nothing
-    elseif hypsography isa Hypsography.LinearAdaption
+    elseif hypsography isa Hypsography.LinearAdaption || Hypsography.SLEVEAdaption
         disable_vertical_interpolation &&
             interpolate_z_over_msl &&
             error(
