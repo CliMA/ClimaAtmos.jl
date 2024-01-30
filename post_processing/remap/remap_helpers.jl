@@ -29,14 +29,14 @@ function create_weightfile(
 )
     # space info to generate nc raw data
     hspace = cspace.horizontal_space
-    Nq =
-        Quadratures.degrees_of_freedom(cspace.horizontal_space.quadrature_style)
+    quadrature_style = Spaces.quadrature_style(cspace.horizontal_space)
+    Nq = Quadratures.degrees_of_freedom(quadrature_style)
     # create a temporary dir for intermediate data
     mktempdir() do tmp
         mkpath(tmp)
         # write out our cubed sphere mesh
         meshfile_cc = joinpath(tmp, "mesh_cubedsphere.g")
-        ClimaCoreTempestRemap.write_exodus(meshfile_cc, hspace.topology)
+        ClimaCoreTempestRemap.write_exodus(meshfile_cc, Spaces.topology(hspace))
         meshfile_rll = joinpath(tmp, "mesh_rll.g")
         ClimaCoreTempestRemap.rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
         meshfile_overlap = joinpath(tmp, "mesh_overlap.g")
