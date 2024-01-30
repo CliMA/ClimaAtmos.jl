@@ -775,7 +775,13 @@ steps:
           $PERF_CONFIG_PATH/flame_perf_target.yml
         artifact_paths: "flame_perf_target/*"
         agents:
-          slurm_mem: 24GB
+          slurm_mem: 200GB
+
+      - label: ":rocket: JET: perf target (default)"
+        command: julia --color=yes --project=perf perf/jet.jl
+        artifact_paths: "perf_jet/*"
+        agents:
+          slurm_mem: 200GB
 
       - label: ":fire: Flame graph: perf target (with tracers)"
         command: >
