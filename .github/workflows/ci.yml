@@ -18,6 +18,7 @@ jobs:
   test:
     name: ci ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
