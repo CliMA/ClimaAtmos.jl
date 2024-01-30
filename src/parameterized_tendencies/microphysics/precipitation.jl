@@ -27,9 +27,9 @@ precipitation_tendency!(Yₜ, Y, p, t, colidx, ::NoPrecipitation) = nothing
 function precipitation_cache(Y, precip_model::Microphysics0Moment)
     FT = Spaces.undertype(axes(Y.c))
     return (;
-        ᶜS_ρq_tot = zeros(axes(Y.c)),
-        ᶜ3d_rain = zeros(axes(Y.c)),
-        ᶜ3d_snow = zeros(axes(Y.c)),
+        ᶜS_ρq_tot = similar(Y.c, FT),
+        ᶜ3d_rain = similar(Y.c, FT),
+        ᶜ3d_snow = similar(Y.c, FT),
         col_integrated_rain = zeros(
             axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
         ),
@@ -160,7 +160,7 @@ function precipitation_tendency!(
                     ᶜts[colidx],
                     ᶜΦ[colidx],
                 )
-            if p.atmos.surface_model isa PrognosticSurfaceTemperature
+            if !(p.atmos.precip_model isa NoPrecipitation)
                 Operators.column_integral_definite!(
                     col_precip_energy[colidx],
                     @. ᶜS_ρq_tot[colidx] *
