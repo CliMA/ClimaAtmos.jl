@@ -9,7 +9,6 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::PrognosticSurfaceTemperatur
     cp_ocean = slab.cp_ocean
     q_flux = slab.q_flux
 
-
     # ENERGY
     # radiative energy surface fluxes
     if !isnothing(p.atmos.radiation_mode)
@@ -37,25 +36,28 @@ function surface_temp_tendency!(Yₜ, Y, p, t, slab::PrognosticSurfaceTemperatur
         Q = FT(0)
     end
 
-    # TODO: add an energy contribution from melting snow at the surface
-
     @. Yₜ.sfc.T -=
         (sfc_rad_e_flux + sfc_turb_e_flux + Q) /
         (ρ_ocean * cp_ocean * depth_ocean)
 
     if !(p.atmos.moisture_model isa DryModel)
+
+        # ENERGY (correction due to precipitation removal)
+        pet = p.conservation_check.col_integrated_precip_energy_tendency
+        @. Yₜ.sfc.T -= pet / (ρ_ocean * cp_ocean * depth_ocean)
+
         # WATER
         # turbulent surface fluxes: water (evaporation)
         sfc_turb_w_flux = p.precomputed.sfc_conditions.ρ_flux_q_tot
 
         # precipitation
-        ρ_liq = CAP.ρ_cloud_liq(params)
-        ρ_ice = CAP.ρ_cloud_ice(params)
         P_liq = p.precipitation.col_integrated_rain
         P_snow = p.precipitation.col_integrated_snow
+
         @. Yₜ.sfc.water -=
-            P_liq * ρ_liq +
-            P_snow * ρ_ice +
+            P_liq +
+            P_snow +
             Geometry.WVector.(sfc_turb_w_flux).components.data.:1 # d(water)/dt = P - E [kg/m²/s]
+
     end
 end

@@ -84,6 +84,7 @@ const T2 = 290
         p.radiation,
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
+        p.conservation_check,
         p.output_dir,
     )
 

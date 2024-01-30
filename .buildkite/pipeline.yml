@@ -123,7 +123,7 @@ steps:
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
         command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
-      
+
       - label: ":computer: single column non-orographic gravity wave parameterization"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -290,6 +290,15 @@ steps:
           --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
           --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/*"
+        agents:
+          slurm_mem: 20GB
+          slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":computer: aquaplanet (ρe_tot) slabocean equilmoist allsky radiation monin_obukhov varying insolation"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean.yml
+        artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/*"
         agents:
           slurm_mem: 20GB
           slurm_constraint: icelake|cascadelake|skylake|epyc

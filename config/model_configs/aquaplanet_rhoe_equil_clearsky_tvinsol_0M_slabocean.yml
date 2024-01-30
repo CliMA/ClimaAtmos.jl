@@ -1,5 +1,6 @@
+FLOAT_TYPE: "Float32"
 dt_save_state_to_disk: "10days"
-t_end: "100days"
+t_end: "10days"
 moist: "equil"
 precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
@@ -12,7 +13,7 @@ dt_rad: "1hours"
 prognostic_surface: "PrognosticSurfaceTemperature"
 check_conservation: true
 bubble: false
-job_id: "longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"
+job_id: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean"
 output_default_diagnostics: false
 diagnostics:
   - short_name: ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa", "hfes", "hur", "hus", "clw", "cli", "evspsbl", "rsd", "rsu", "rld", "rlu"]
