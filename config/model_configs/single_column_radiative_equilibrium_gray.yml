@@ -11,3 +11,7 @@ z_max: 70000.0
 dt_save_to_sol: "30hours"
 job_id: "single_column_radiative_equilibrium_gray"
 rad: "gray"
+# [2, 2, 80] instead of [1, 1, 80] because Julia ranges are inclusive of the
+# extrema. Given that our columns are 3D, we cannot map the horizontal dimension
+# with just one point.
+netcdf_interpolation_num_points: [2, 2, 80]

@@ -166,7 +166,7 @@ function surface_state_to_conditions(
             coordinates isa Geometry.LatLongPoint
         )
             if atmos.sfc_temperature isa ZonallyAsymmetricSST
-                #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021  
+                #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021
                 T =
                     (
                         (-60 < coordinates.lat < 60) ?

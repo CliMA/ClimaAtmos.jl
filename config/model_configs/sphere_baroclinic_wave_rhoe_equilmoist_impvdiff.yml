@@ -2,12 +2,12 @@ precip_model: "0M"
 vert_diff: "true"
 z_elem: 20
 dz_bottom: 100
-dt_save_state_to_disk: "6days"
+dt_save_state_to_disk: "4days"
 initial_condition: "MoistBaroclinicWave"
 implicit_diffusion: true
 max_newton_iters_ode: 2
 dt: "400secs"
-t_end: "6days"
+t_end: "4days"
 job_id: "sphere_baroclinic_wave_rhoe_equilmoist_impvdiff"
 moist: "equil"
 toml: [toml/sphere_baroclinic_wave_rhoe_equilmoist_expvdiff.toml]

@@ -31,7 +31,7 @@ struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
 Base.@kwdef struct PrognosticSurfaceTemperature{FT} <:
                    AbstractSurfaceTemperature
     # optional slab ocean parameters:
-    depth_ocean::FT = 10 # ocean mixed layer depth [m]
+    depth_ocean::FT = 40 # ocean mixed layer depth [m]
     ρ_ocean::FT = 1020 # ocean density [kg / m³]
     cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
     q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)

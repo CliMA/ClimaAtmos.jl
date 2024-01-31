@@ -111,6 +111,7 @@ function precipitation_tendency!(
         col_integrated_rain,
         col_integrated_snow,
     ) = p.precipitation
+    (; col_integrated_precip_energy_tendency,) = p.conservation_check
 
     thermo_params = CAP.thermodynamics_params(params)
     compute_precipitation_cache!(Y, p, colidx, precip_model, turbconv_model)
@@ -134,11 +135,6 @@ function precipitation_tendency!(
         ᶜ3d_snow[colidx],
     )
 
-    @. col_integrated_rain[colidx] =
-        col_integrated_rain[colidx] / CAP.ρ_cloud_liq(params)
-    @. col_integrated_snow[colidx] =
-        col_integrated_snow[colidx] / CAP.ρ_cloud_ice(params)
-
     if :ρe_tot in propertynames(Y.c)
         #TODO - this is a hack right now. But it will be easier to clean up
         # once we drop the support for the old EDMF code
@@ -157,12 +153,19 @@ function precipitation_tendency!(
                     ᶜΦ[colidx],
                 )
         elseif !isnothing(Yₜ)
-            @. Yₜ.c.ρe_tot[colidx] +=
+            ρe_tot_tend_colidx = p.scratch.ᶜtemp_scalar_3[colidx]
+            @. ρe_tot_tend_colidx =
                 ᶜS_ρq_tot[colidx] * e_tot_0M_precipitation_sources_helper(
                     thermo_params,
                     ᶜts[colidx],
                     ᶜΦ[colidx],
                 )
+
+            @. Yₜ.c.ρe_tot[colidx] += ρe_tot_tend_colidx
+            Operators.column_integral_definite!(
+                col_integrated_precip_energy_tendency[colidx],
+                ρe_tot_tend_colidx,
+            )
         end
     end
     return nothing

@@ -291,13 +291,8 @@ function default_diagnostics(::PrognosticEDMFX; output_writer)
         "lmix",
     ]
 
-    tenmin_averages(short_names...; output_writer) = common_diagnostics(
-        10 * 60,
-        (+),
-        output_writer,
-        short_names...;
-        pre_output_hook! = average_pre_output_hook!,
-    )
+    thirtymin_insts(short_names...; output_writer) =
+        common_diagnostics(30 * 60, nothing, output_writer, short_names...;)
 
     edmfx_draft_diagnostics = [
         "arup",
@@ -327,7 +322,7 @@ function default_diagnostics(::PrognosticEDMFX; output_writer)
     ]
 
     return [
-        tenmin_averages(edmfx_tenmin_diagnostics...; output_writer)...,
+        thirtymin_insts(edmfx_tenmin_diagnostics...; output_writer)...,
         daily_averages(edmfx_draft_diagnostics...; output_writer)...,
         daily_averages(edmfx_env_diagnostics...; output_writer)...,
     ]
@@ -366,13 +361,8 @@ function default_diagnostics(::DiagnosticEDMFX; output_writer)
         "lmix",
     ]
 
-    tenmin_averages(short_names...; output_writer) = common_diagnostics(
-        10 * 60,
-        (+),
-        output_writer,
-        short_names...;
-        pre_output_hook! = average_pre_output_hook!,
-    )
+    thirtymin_insts(short_names...; output_writer) =
+        common_diagnostics(30 * 60, nothing, output_writer, short_names...;)
 
 
     diagnostic_edmfx_draft_diagnostics = [
@@ -390,7 +380,7 @@ function default_diagnostics(::DiagnosticEDMFX; output_writer)
     diagnostic_edmfx_env_diagnostics = ["waen", "tke", "lmix"]
 
     return [
-        tenmin_averages(
+        thirtymin_insts(
             diagnostic_edmfx_tenmin_diagnostics...;
             output_writer,
         )...,

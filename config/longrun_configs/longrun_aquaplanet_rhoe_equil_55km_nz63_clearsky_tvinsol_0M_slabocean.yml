@@ -21,3 +21,8 @@ check_conservation: true
 bubble: false
 job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa", "hfes", "hur", "hus", "clw", "cli", "evspsbl", "rsd", "rsu", "rld", "rlu"]
+    reduction_time: average
+    period: 10days

@@ -23,7 +23,7 @@ y_elem: 2
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
-dt: "10secs"
+dt: "40secs"
 t_end: "6hours"
-dt_save_state_to_disk: "10mins"
+dt_save_state_to_disk: "30mins"
 toml: [toml/prognostic_edmfx_bomex_box.toml]

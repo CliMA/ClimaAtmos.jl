@@ -574,8 +574,19 @@ function get_diagnostics(parsed_args, atmos_model, spaces)
     )
 
     hdf5_writer = CAD.HDF5Writer()
+
+    if !isnothing(parsed_args["netcdf_interpolation_num_points"])
+        num_netcdf_points =
+            tuple(parsed_args["netcdf_interpolation_num_points"]...)
+    else
+        # TODO: Once https://github.com/CliMA/ClimaCore.jl/pull/1567 is merged,
+        # dispatch over the Grid type
+        num_netcdf_points = (180, 90, 50)
+    end
+
     netcdf_writer = CAD.NetCDFWriter(;
         spaces,
+        num_points = num_netcdf_points,
         interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
         disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
     )
@@ -773,12 +784,13 @@ function get_simulation(config::AtmosConfig)
     end
 
     # Check that all set parameters have been used
+    # Strict logging temporarily disabled for compatibility with CloudMicrophysics overrides
     param_filepath =
         joinpath(sim_info.output_dir, "$(sim_info.job_id)_parameters.toml")
     CP.log_parameter_information(
         config.toml_dict,
         param_filepath,
-        strict = true,
+        # strict = true,
     )
 
     initial_condition = get_initial_condition(config.parsed_args)

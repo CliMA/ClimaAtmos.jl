@@ -1,4 +1,5 @@
 import ClimaAtmos as CA
+redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 
 # From: https://timholy.github.io/SnoopCompile.jl/stable/snoopr/
 using SnoopCompileCore
