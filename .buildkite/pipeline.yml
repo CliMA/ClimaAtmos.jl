@@ -312,6 +312,12 @@ steps:
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs.yml
         artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs/*"
 
+      - label: ":computer: deep baroclinic wave (ρe) topography (dcmip)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_topography_dcmip_rs_deep.yml
+        artifact_paths: "sphere_baroclinic_wave_rhoe_topography_dcmip_rs_deep/*"
+
       - label: ":computer: held suarez (ρe) topography (dcmip)"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
