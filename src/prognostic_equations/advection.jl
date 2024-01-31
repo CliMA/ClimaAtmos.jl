@@ -71,17 +71,14 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; params) = p
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    (; ᶜf, ᶜΦ) = p.core
+    (; ᶜf) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
-    (; ᶜp, ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = n > 0 ? p.precomputed : all_nothing
-    (; ᶜp_ref, ᶜρ_ref, ᶠgradᵥ_ᶜΦ) = n > 0 ? p.core : all_nothing
+    (; ᶜuʲs, ᶜKʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
-    (; rayleigh_sponge, precip_model) = p.atmos
     (; ᶜspecific) = p.precomputed
 
     ᶜρa⁰ = advect_tke ? (n > 0 ? p.precomputed.ᶜρa⁰ : Y.c.ρ) : nothing
@@ -91,7 +88,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
-    FT = Spaces.undertype(axes(Y.c))
 
     if point_type <: Geometry.Abstract3DPoint
         @. ᶜω³ = curlₕ(Y.c.uₕ)
@@ -110,10 +106,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶠω¹²ʲs.:($$j) += CT12(curlₕ(Y.f.sgsʲs.:($$j).u₃))
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
-
-    ᶠz = Fields.coordinate_field(Y.f).z
-    ᶠΦ = p.scratch.ᶠtemp_scalar
-    @. ᶠΦ = CAP.grav(params) * ᶠz
 
     Fields.bycolumn(axes(Y.c)) do colidx
         if :ρe_tot in propertynames(Yₜ.c)
@@ -151,7 +143,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     end
 
-
     Fields.bycolumn(axes(Y.c)) do colidx
         @. Yₜ.c.uₕ[colidx] -=
             ᶜinterp(
@@ -166,53 +157,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
                 ᶠgradᵥ(ᶜKʲs.:($$j)[colidx])
-
-            # TODO: Move this to implicit_vertical_advection_tendency!.
-            # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
-            # and calcuate the buoyancy term relative to the grid-mean density.
-            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-                (
-                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
-                    ᶠgradᵥ_ᶜΦ[colidx]
-                ) / ᶠinterp(ᶜρʲs.:($$j)[colidx])
-
-            # buoyancy term in mse equation
-            @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
-                adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx]))) *
-                (ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
-                ᶜgradᵥ(ᶠΦ[colidx]) / ᶜρʲs.:($$j)[colidx]
         end
 
-        # TODO: Move this to implicit_vertical_advection_tendency!.
-        for j in 1:n
-            @. ᶜa_scalar[colidx] =
-                draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
-            vertical_transport!(
-                Yₜ.c.sgsʲs.:($j).ρa[colidx],
-                ᶜJ[colidx],
-                ᶜρʲs.:($j)[colidx],
-                ᶠu³ʲs.:($j)[colidx],
-                ᶜa_scalar[colidx],
-                dt,
-                edmfx_upwinding,
-            )
-
-            vertical_advection!(
-                Yₜ.c.sgsʲs.:($j).mse[colidx],
-                ᶠu³ʲs.:($j)[colidx],
-                Y.c.sgsʲs.:($j).mse[colidx],
-                edmfx_upwinding,
-            )
-
-            vertical_advection!(
-                Yₜ.c.sgsʲs.:($j).q_tot[colidx],
-                ᶠu³ʲs.:($j)[colidx],
-                Y.c.sgsʲs.:($j).q_tot[colidx],
-                edmfx_upwinding,
-            )
-        end
-
-        # TODO: Move this to implicit_vertical_advection_tendency!.
         if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
             @. ᶜa_scalar[colidx] =
                 ᶜtke⁰[colidx] * draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
@@ -226,5 +172,69 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 edmfx_upwinding,
             )
         end
+    end
+end
+
+edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
+    nothing
+
+function edmfx_sgs_vertical_advection_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::PrognosticEDMFX,
+)
+    (; params) = p
+    n = n_prognostic_mass_flux_subdomains(turbconv_model)
+    (; dt) = p
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    (; edmfx_upwinding) = p.atmos.numerics
+    (; ᶠu³ʲs, ᶜρʲs) = p.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+
+    ᶠz = Fields.coordinate_field(Y.f).z
+    ᶜa_scalar = p.scratch.ᶜtemp_scalar
+    for j in 1:n
+        # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
+        # and calcuate the buoyancy term relative to the grid-mean density.
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+            (ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]) /
+            ᶠinterp(ᶜρʲs.:($$j)[colidx])
+
+        # buoyancy term in mse equation
+        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
+            adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx]))) *
+            (ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
+            ᶜgradᵥ(CAP.grav(params) * ᶠz[colidx]) / ᶜρʲs.:($$j)[colidx]
+    end
+
+    for j in 1:n
+        @. ᶜa_scalar[colidx] =
+            draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
+        vertical_transport!(
+            Yₜ.c.sgsʲs.:($j).ρa[colidx],
+            ᶜJ[colidx],
+            ᶜρʲs.:($j)[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            ᶜa_scalar[colidx],
+            dt,
+            edmfx_upwinding,
+        )
+
+        vertical_advection!(
+            Yₜ.c.sgsʲs.:($j).mse[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            Y.c.sgsʲs.:($j).mse[colidx],
+            edmfx_upwinding,
+        )
+
+        vertical_advection!(
+            Yₜ.c.sgsʲs.:($j).q_tot[colidx],
+            ᶠu³ʲs.:($j)[colidx],
+            Y.c.sgsʲs.:($j).q_tot[colidx],
+            edmfx_upwinding,
+        )
     end
 end
