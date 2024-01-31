@@ -107,8 +107,8 @@ function make_hybrid_spaces(
         end
         hypsography = Hypsography.LinearAdaption(z_surface)
     end
+    @show "Deep sphere equations: $(deep)"
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
-    # TODO: return the grid
     center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
     return center_space, face_space
