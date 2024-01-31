@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "9f81176e38b8045a54f2ad5c8891f255e16c2488"
+project_hash = "58caddfd3d8a4a4bd4e9b8cac20a6d8b0834a946"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -284,9 +284,9 @@ weakdeps = ["SparseArrays"]
 
 [[deps.ClimaAnalysis]]
 deps = ["NCDatasets", "OrderedCollections", "Statistics"]
-git-tree-sha1 = "b49f7ecb3b41723e880617ad9404c8bfb4bb1fd0"
+git-tree-sha1 = "13af105a344bb87c6747e57ce0abc55294906fbd"
 uuid = "29b5916a-a76c-4e73-9657-3c8fd22e65e6"
-version = "0.2.1"
+version = "0.4.1"
 weakdeps = ["CairoMakie"]
 
     [deps.ClimaAnalysis.extensions]
