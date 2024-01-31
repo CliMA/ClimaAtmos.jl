@@ -81,7 +81,7 @@ function make_hybrid_spaces(
     z_stretch;
     surface_warp = nothing,
     topo_smoothing = false,
-    deep = true, # should be an option
+    deep = false,
 )
     # TODO: change this to make_hybrid_grid
     h_grid = Spaces.grid(h_space)
