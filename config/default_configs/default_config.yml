@@ -265,3 +265,6 @@ warn_allocations_diagnostics:
 log_progress:
   help: "Log simulation progress, including wall-time estimates"
   value: true
+deep_atmosphere:
+  help: "Do not assume that the atmosphere is shallow, where the vertical columns are cylindrical"
+  value: false
