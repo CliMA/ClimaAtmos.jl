@@ -700,7 +700,6 @@ steps:
         artifact_paths: "gpu_aquaplanet_dyamond/*"
         agents:
           slurm_gpus: 1
-        soft_fail: true
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         command: >
