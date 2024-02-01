@@ -1,3 +1,6 @@
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
 h_elem: 30
 z_max: 55000.0
 z_elem: 63
@@ -11,7 +14,6 @@ dt_rad: "1hours"
 vert_diff: "true" 
 surface_setup: "DefaultMoninObukhov" 
 rayleigh_sponge: true
-dt_save_state_to_disk: "3hours"
 dt: "50secs" 
 t_end: "1days"
 job_id: "gpu_aquaplanet_dyamond" 
