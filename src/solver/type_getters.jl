@@ -673,9 +673,11 @@ function get_diagnostics(parsed_args, atmos_model, spaces)
     diagnostics = vcat(diagnostics_ragged...)
 
     if parsed_args["output_default_diagnostics"]
+        t_end = time_to_seconds(parsed_args["t_end"])
         return [
             CAD.default_diagnostics(
-                atmos_model;
+                atmos_model,
+                t_end;
                 output_writer = netcdf_writer,
             )...,
             diagnostics...,

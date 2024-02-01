@@ -431,10 +431,10 @@ array.
       (required)
     - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
       (required)
-    - `solar_zenith_angle`: zenith angle of sun in radians (required)
+    - `cos_zenith`: cosine of the zenith angle of sun in radians (required)
     - `weighted_irradiance`: irradiance of sun in W/m^2 (required); the incoming
       direct shortwave radiation is given by
-      `model.weighted_irradiance .* cos.(model.solar_zenith_angle)`
+      `model.weighted_irradiance .* model.cos_zenith`
     - `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
       radiation in W/m^2 (assumed to be 0 by default)
 - arguments only available when `radiation_mode isa GrayRadiation`:
@@ -594,12 +594,10 @@ function RRTMGPModel(
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_lw_cld
                 data_loader(joinpath("lookup_tables", "cloudysky_lw.nc")) do ds
-                    lookup_lw_cld = RRTMGP.LookUpTables.LookUpCld(
-                        ds,
-                        FT,
-                        DA,
-                        !use_pade_cloud_optics_mode,
-                    )
+                    lookup_lw_cld =
+                        use_pade_cloud_optics_mode ?
+                        RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
+                        RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
                 end
                 lookups = (; lookups..., lookup_lw_cld)
             end
@@ -658,12 +656,10 @@ function RRTMGPModel(
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_sw_cld
                 data_loader(joinpath("lookup_tables", "cloudysky_sw.nc")) do ds
-                    lookup_sw_cld = RRTMGP.LookUpTables.LookUpCld(
-                        ds,
-                        FT,
-                        DA,
-                        !use_pade_cloud_optics_mode,
-                    )
+                    lookup_sw_cld =
+                        use_pade_cloud_optics_mode ?
+                        RRTMGP.LookUpTables.PadeCld(ds, FT, DA) :
+                        RRTMGP.LookUpTables.LookUpCld(ds, FT, DA)
                 end
                 lookups = (; lookups..., lookup_sw_cld)
             end
@@ -691,8 +687,8 @@ function RRTMGPModel(
             set_and_save!(flux_sw2.flux_net, "face_clear_sw_flux", t...)
         end
 
-        zenith = DA{FT}(undef, ncol)
-        set_and_save!(zenith, "solar_zenith_angle", t..., dict)
+        cos_zenith = DA{FT}(undef, ncol)
+        set_and_save!(cos_zenith, "cos_zenith", t..., dict)
         toa_flux = DA{FT}(undef, ncol)
         set_and_save!(toa_flux, "weighted_irradiance", t..., dict)
         sfc_alb_direct = DA{FT}(undef, nbnd_sw, ncol)
@@ -709,7 +705,7 @@ function RRTMGPModel(
             inc_flux_diffuse = nothing
         end
         bcs_sw = RRTMGP.BCs.SwBCs(
-            zenith,
+            cos_zenith,
             toa_flux,
             sfc_alb_direct,
             inc_flux_diffuse,
@@ -812,9 +808,9 @@ function RRTMGPModel(
                 set_and_save!(gas_view, "$vmr_str$gas_name", t..., dict)
             end
         else
-            vmr = RRTMGP.Vmrs.Vmr(DA{FT}(undef, nlay, ncol, ngas))
+            vmr = RRTMGP.Vmrs.Vmr(DA{FT}(undef, ngas, nlay, ncol))
             for gas_name in ["h2o", "o3", gas_names...]
-                gas_view = view(vmr.vmr, :, :, idx_gases[gas_name])
+                gas_view = view(vmr.vmr, idx_gases[gas_name], :, :)
                 set_and_save!(gas_view, "center_$vmr_str$gas_name", t..., dict)
             end
         end
@@ -822,7 +818,6 @@ function RRTMGPModel(
         if radiation_mode isa ClearSkyRadiation
             cld_r_eff_liq = cld_r_eff_ice = nothing
             cld_path_liq = cld_path_ice = cld_frac = nothing
-            random_lw = random_sw = nothing
             cld_mask_lw = cld_mask_sw = cld_overlap = nothing
             ice_rgh = 1
         else
@@ -840,8 +835,6 @@ function RRTMGPModel(
             set_and_save!(cld_path_ice, name, t..., dict)
             cld_frac = DA{FT}(undef, nlay, ncol)
             set_and_save!(cld_frac, "center_cloud_fraction", t..., dict)
-            random_lw = DA{FT}(undef, nlay, ncol)
-            random_sw = DA{FT}(undef, nlay, ncol)
             cld_mask_lw = DA{Bool}(undef, nlay, ncol)
             cld_mask_sw = DA{Bool}(undef, nlay, ncol)
             cld_overlap = RRTMGP.AtmosphericStates.MaxRandomOverlap()
@@ -871,8 +864,6 @@ function RRTMGPModel(
             cld_path_liq,
             cld_path_ice,
             cld_frac,
-            random_lw, # random_lw array is for internal use only
-            random_sw, # random_sw array is for internal use only
             cld_mask_lw, # cld_mask_lw array is for internal use only
             cld_mask_sw, # cld_mask_sw array is for internal use only
             cld_overlap,
@@ -1108,7 +1099,7 @@ function update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.VmrGM)
     @views vmr.vmr_o3[end, :] .= vmr.vmr_o3[end - 1, :]
 end
 update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.Vmr) =
-    @views vmr.vmr[end, :, :] .= vmr.vmr[end - 1, :, :]
+    @views vmr.vmr[:, end, :] .= vmr.vmr[:, end - 1, :]
 
 update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, as) =
     nothing
@@ -1147,7 +1138,7 @@ update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
 )
 get_vmr_h2o(vmr::RRTMGP.Vmrs.VmrGM, idx_gases) = vmr.vmr_h2o
 get_vmr_h2o(vmr::RRTMGP.Vmrs.Vmr, idx_gases) =
-    view(vmr.vmr, :, :, idx_gases["h2o"])
+    view(vmr.vmr, idx_gases["h2o"], :, :)
 
 NVTX.@annotate update_lw_fluxes!(::GrayRadiation, model) =
     RRTMGP.RTESolver.solve_lw!(model.solver, model.max_threads)
@@ -1221,14 +1212,20 @@ NVTX.@annotate function update_sw_fluxes!(
     )
 end
 
+# TODO: Change these methods back to using face_sw_flux/face_clear_sw_flux
+# instead of face_sw_flux_up - face_sw_flux_dn
 update_net_fluxes!(radiation_mode, model) =
     parent(model.face_flux) .=
-        parent(model.face_lw_flux) .+ parent(model.face_sw_flux)
+        parent(model.face_lw_flux) .+ parent(model.face_sw_flux_up) .-
+        parent(model.face_sw_flux_dn)
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
     parent(model.face_clear_flux) .=
-        parent(model.face_clear_lw_flux) .+ parent(model.face_clear_sw_flux)
+        parent(model.face_clear_lw_flux) .+
+        parent(model.face_clear_sw_flux_up) .-
+        parent(model.face_clear_sw_flux_dn)
     parent(model.face_flux) .=
-        parent(model.face_lw_flux) .+ parent(model.face_sw_flux)
+        parent(model.face_lw_flux) .+ parent(model.face_sw_flux_up) .-
+        parent(model.face_sw_flux_dn)
 end
 
 end # end module
