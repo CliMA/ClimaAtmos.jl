@@ -30,9 +30,6 @@ z_elem:
 z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
-deep_sphere:
-  help: "Deep sphere equations [`true` (default), `false`]"
-  value: true
 vorticity_hyperdiffusion_coefficient:
   help: "Hyperdiffusion coefficient for vorticity (m s-1)"
   value: 1.5
@@ -270,4 +267,4 @@ log_progress:
   value: true
 deep_atmosphere:
   help: "Do not assume that the atmosphere is shallow, where the vertical columns are cylindrical"
-  value: false
+  value: true 
