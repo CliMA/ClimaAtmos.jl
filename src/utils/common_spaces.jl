@@ -101,13 +101,12 @@ function make_hybrid_spaces(
     if isnothing(surface_warp)
         hypsography = Hypsography.Flat()
     else
-        z_surface = surface_warp(Fields.coordinate_field(h_space))
+        z_surface = Geometry.ZPoint.(surface_warp(Fields.coordinate_field(h_space)))
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
         hypsography = Hypsography.LinearAdaption(z_surface)
     end
-    @show "Deep sphere equations: $(deep)"
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
     center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
