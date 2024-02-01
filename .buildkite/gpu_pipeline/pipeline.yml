@@ -67,6 +67,18 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
+      
+      - label: "gpu_aquaplanet_chap"
+        command:
+          - mkdir -p gpu_aquaplanet_chap
+          - >
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_chap/report
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap.yml
+        artifact_paths: "gpu_aquaplanet_chap/*"
+        agents:
+          slurm_gpus: 1
+          slurm_cpus_per_task: 4
 
       - label: "moist Held-Suarez"
         key: "gpu_hs_rhoe_equil_55km_nz63_0M"
