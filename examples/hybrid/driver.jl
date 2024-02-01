@@ -226,6 +226,11 @@ if ClimaComms.iamroot(config.comms_ctx)
     @info "Plotting done"
 
     @info "Creating tarballs"
+    # These NC files are used by our reproducibility tests,
+    # and need to be found later when comparing against the
+    # main branch. If "nc_files.tar" is renamed, then please
+    # search for "nc_files.tar" globally and rename it in the
+    # reproducibility test folder.
     Tar.create(
         f -> endswith(f, ".nc"),
         simulation.output_dir,
