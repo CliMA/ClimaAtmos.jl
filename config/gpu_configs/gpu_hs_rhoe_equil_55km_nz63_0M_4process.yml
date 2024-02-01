@@ -1,4 +1,6 @@
-dt_save_state_to_disk: "10days"
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
 dt: "100secs"
 t_end: "1days"
 h_elem: 30

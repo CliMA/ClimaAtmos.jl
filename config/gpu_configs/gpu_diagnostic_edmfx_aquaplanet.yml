@@ -1,3 +1,6 @@
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
 job_id: gpu_diagnostic_edmfx_aquaplanet
 surface_setup: DefaultExchangeCoefficients 
 rad: gray
@@ -13,5 +16,4 @@ moist: equil
 precip_model: 0M
 dt: 10secs 
 t_end: 1hours 
-dt_save_state_to_disk: 600secs
 toml: [toml/diagnostic_edmfx_box.toml]
