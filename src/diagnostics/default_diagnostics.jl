@@ -174,7 +174,19 @@ end
 # Radiation mode #
 ##################
 function default_diagnostics(::RRTMGPI.AbstractRRTMGPMode, t_end; output_writer)
-    rad_diagnostics = ["rsd", "rsu", "rld", "rlu"]
+    rad_diagnostics = [
+        "rsd",
+        "rsdt",
+        "rsds",
+        "rsu",
+        "rsut",
+        "rsus",
+        "rld",
+        "rlds",
+        "rlu",
+        "rlut",
+        "rlus",
+    ]
 
     average_func = frequency_averages(t_end)
 
@@ -187,12 +199,37 @@ function default_diagnostics(
     t_end;
     output_writer,
 )
-    rad_diagnostics =
-        ["rsd", "rsu", "rld", "rlu", "rsdcs", "rsucs", "rldcs", "rlucs"]
+    rad_diagnostics = [
+        "rsd",
+        "rsdt",
+        "rsds",
+        "rsu",
+        "rsut",
+        "rsus",
+        "rld",
+        "rlds",
+        "rlu",
+        "rlut",
+        "rlus",
+    ]
+    rad_clearsky_diagnostics = [
+        "rsdcs",
+        "rsdscs",
+        "rsucs",
+        "rsutcs",
+        "rsuscs",
+        "rldcs",
+        "rldscs",
+        "rlucs",
+        "rlutcs",
+    ]
 
     average_func = frequency_averages(t_end)
 
-    return [average_func(rad_diagnostics...; output_writer)...]
+    return [
+        average_func(rad_diagnostics...; output_writer)...,
+        average_func(rad_clearsky_diagnostics...; output_writer)...,
+    ]
 end
 
 ##################
