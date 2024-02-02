@@ -169,3 +169,18 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_amip"
+  
+  - group: "atmos-only coupler runs"
+
+    steps:
+
+      - label: ":computer: amip target diagnostic edmf"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_ntasks: 64
+          slurm_mem_per_cpu: 20GB
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "amip_target_diagedmf"
