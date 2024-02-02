@@ -129,7 +129,8 @@ function target_coordinates(
 
     num_points_z = num_points[]
     FT = Spaces.undertype(space)
-    vert_domain = space.topology.mesh.domain
+    topology = Spaces.topology(space)
+    vert_domain = topology.mesh.domain
     z_min, z_max = FT(vert_domain.coord_min.z), FT(vert_domain.coord_max.z)
     # We floor z_min to avoid having to deal with the singular value z = 0.
     z_min = max(z_min, 100)
@@ -159,14 +160,14 @@ add_space_coordinates_maybe!(
     nc,
     space,
     num_points,
-    Meshes.domain(space.topology);
+    Meshes.domain(Spaces.topology(space));
 )
 
 
 # For the horizontal space, we also have to look at the domain, so we define another set of
 # functions that dispatches over the domain
 target_coordinates(space::Spaces.AbstractSpectralElementSpace, num_points) =
-    target_coordinates(space, num_points, Meshes.domain(space.topology))
+    target_coordinates(space, num_points, Meshes.domain(Spaces.topology(space)))
 
 # Box
 function target_coordinates(
@@ -333,7 +334,7 @@ function add_space_coordinates_maybe!(
 
     add_dimension_maybe!(nc, name, reference_altitudes; units = "m", axis = "Z")
 
-    z_top = space.topology.mesh.domain.coord_max.z
+    z_top = Spaces.topology(space).mesh.domain.coord_max.z
 
     # Prepare output array
     desired_shape = (size(interpolated_surface)..., num_points_z)
@@ -501,7 +502,7 @@ function NetCDFWriter(;
     compression_level = 9,
 )
     space = spaces.center_space
-    hypsography = space.hypsography
+    hypsography = Spaces.grid(space).hypsography
 
     # When we are interpolating on the vertical direction, we have to deal with the pesky
     # topography. This is a little annoying to deal with because it couples the horizontal
@@ -518,7 +519,7 @@ function NetCDFWriter(;
         hpts = target_coordinates(horizontal_space, num_points)
         hcoords = hcoords_from_horizontal_space(
             horizontal_space,
-            horizontal_space.topology.mesh.domain,
+            Spaces.topology(horizontal_space).mesh.domain,
             hpts,
         )
         vcoords = []
@@ -596,7 +597,7 @@ function write_field!(
 
         hcoords = hcoords_from_horizontal_space(
             horizontal_space,
-            Meshes.domain(horizontal_space.topology),
+            Meshes.domain(Spaces.topology(horizontal_space)),
             hpts,
         )
 

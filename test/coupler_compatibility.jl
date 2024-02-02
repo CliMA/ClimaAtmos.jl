@@ -213,6 +213,11 @@ end
             "moist" => "equil",
             "rad" => "clearsky",
             "turbconv" => "diagnostic_edmfx",
+            # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
+            # GitHub actions taking too long to run (for unknown reasons). If you need this,
+            # remove the following line and check that the test runs in less than a few
+            # minutes on GitHub
+            "output_default_diagnostics" => false,
         ),
     )
     simulation = CA.get_simulation(config)
