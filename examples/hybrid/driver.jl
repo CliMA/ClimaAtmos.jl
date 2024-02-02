@@ -171,18 +171,27 @@ if config.parsed_args["check_precipitation"]
     # run some simple tests based on the output
     FT = Spaces.undertype(axes(sol.u[end].c.ρ))
     Yₜ = similar(sol.u[end])
+    @. Yₜ = 0
 
     Yₜ_ρ = similar(Yₜ.c.ρq_rai)
     Yₜ_ρqₚ = similar(Yₜ.c.ρq_rai)
     Yₜ_ρqₜ = similar(Yₜ.c.ρq_rai)
 
-    CA.remaining_tendency!(Yₜ, sol.u[end], sol.prob.p, sol.t[end])
-
-    @. Yₜ_ρqₚ = -Yₜ.c.ρq_rai - Yₜ.c.ρq_sno
-    @. Yₜ_ρqₜ = Yₜ.c.ρq_tot
-    @. Yₜ_ρ = Yₜ.c.ρ
 
     ClimaCore.Fields.bycolumn(axes(sol.u[end].c.ρ)) do colidx
+        CA.precipitation_tendency!(
+            Yₜ,
+            sol.u[end],
+            sol.prob.p,
+            sol.t[end],
+            colidx,
+            sol.prob.p.atmos.precip_model,
+        )
+        #CA.remaining_tendency!(Yₜ, sol.u[end], sol.prob.p, sol.t[end])
+
+        @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]
+        @. Yₜ_ρqₜ[colidx] = Yₜ.c.ρq_tot[colidx]
+        @. Yₜ_ρ[colidx] = Yₜ.c.ρ[colidx]
 
         # no nans
         @assert !any(isnan, Yₜ.c.ρ[colidx])

@@ -1,6 +1,6 @@
 config: "column"
 initial_condition: "PrecipitatingColumn"
-surface_setup: "DefaultExchangeCoefficients"
+surface_setup: "DefaultMoninObukhov"
 z_elem: 200
 z_max: 10000.0
 z_stretch: false
@@ -11,9 +11,9 @@ dt_cloud_fraction: "60secs"
 moist: "nonequil"
 precip_model: "1M"
 precip_upwinding: "first_order"
-hyperdiff: "false"
+vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
-vert_diff: "true"
+approximate_linear_solve_iters: 2
 regression_test: false
 check_precipitation: true
 job_id: "single_column_precipitation_test"
