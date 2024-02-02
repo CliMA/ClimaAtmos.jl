@@ -26,8 +26,12 @@ function timed_solve!(integrator)
         end
     end
     @info "solve!: $s"
-    es = EfficiencyStats(integrator.sol.prob.tspan, walltime)
+    (; tspan) = integrator.sol.prob
+    es = EfficiencyStats(tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"
+    n_steps = (tspan[2] - tspan[1]) / integrator.dt
+    wall_time_per_timestep = time_and_units_str(walltime / n_steps)
+    @info "wall_time_per_timestep: $wall_time_per_timestep"
     return (sol, walltime)
 end
 
