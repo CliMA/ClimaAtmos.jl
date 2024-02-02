@@ -22,15 +22,18 @@ const wcurlₕ = Operators.WeakCurl()
 
 const ᶜinterp = Operators.InterpolateF2C()
 const ᶜdivᵥ = Operators.DivergenceF2C()
+const ᶜgradᵥ = Operators.GradientF2C()
+
+# Tracers do not have advective fluxes through the top and bottom cell faces.
 const ᶜadvdivᵥ = Operators.DivergenceF2C(
     bottom = Operators.SetValue(CT3(0)),
     top = Operators.SetValue(CT3(0)),
-) # Tracers do not have advective fluxes through the top and bottom cell faces
-const ᶜprecipdivᵥ = Operators.DivergenceF2C(
-    top = Operators.SetValue(CT3(0)),
-    bottom = Operators.SetDivergence(0),
-) # Precipitation has no flux at the top, but it has free outflow at the bottom
-const ᶜgradᵥ = Operators.GradientF2C()
+)
+
+# Precipitation has no flux at the top, but it has free outflow at the bottom.
+const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
+
+const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
 # interior value at the surface.
@@ -78,6 +81,7 @@ const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜdivᵥ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ)
 const ᶜadvdivᵥ_matrix = MatrixFields.operator_matrix(ᶜadvdivᵥ)
 const ᶜprecipdivᵥ_matrix = MatrixFields.operator_matrix(ᶜprecipdivᵥ)
+const ᶠright_bias_matrix = MatrixFields.operator_matrix(ᶠright_bias)
 const ᶠinterp_matrix = MatrixFields.operator_matrix(ᶠinterp)
 const ᶠwinterp_matrix = MatrixFields.operator_matrix(ᶠwinterp)
 const ᶠgradᵥ_matrix = MatrixFields.operator_matrix(ᶠgradᵥ)

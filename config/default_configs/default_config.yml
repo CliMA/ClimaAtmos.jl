@@ -193,9 +193,6 @@ job_id:
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none
-precip_upwinding:
-  help: "Precipitation upwinding mode [`none` (default), `first_order` , `third_order`]"
-  value: none
 energy_upwinding:
   help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
   value: none

@@ -92,7 +92,6 @@ function get_numerics(parsed_args)
 
     energy_upwinding = Val(Symbol(parsed_args["energy_upwinding"]))
     tracer_upwinding = Val(Symbol(parsed_args["tracer_upwinding"]))
-    precip_upwinding = Val(Symbol(parsed_args["precip_upwinding"]))
     edmfx_upwinding = Val(Symbol(parsed_args["edmfx_upwinding"]))
     edmfx_sgsflux_upwinding =
         Val(Symbol(parsed_args["edmfx_sgsflux_upwinding"]))
@@ -103,7 +102,6 @@ function get_numerics(parsed_args)
     numerics = AtmosNumerics(;
         energy_upwinding,
         tracer_upwinding,
-        precip_upwinding,
         edmfx_upwinding,
         edmfx_sgsflux_upwinding,
         limiter,

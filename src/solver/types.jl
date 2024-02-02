@@ -329,20 +329,11 @@ struct Implicit <: AbstractTimesteppingMode end
 
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 
-Base.@kwdef struct AtmosNumerics{
-    EN_UP,
-    TR_UP,
-    PR_UP,
-    ED_UP,
-    ED_SG_UP,
-    DYCORE,
-    LIM,
-}
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
-    precip_upwinding::PR_UP
     edmfx_upwinding::ED_UP
     edmfx_sgsflux_upwinding::ED_SG_UP
 
