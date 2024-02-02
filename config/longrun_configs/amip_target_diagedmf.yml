@@ -1,0 +1,39 @@
+dt_save_to_sol: "10days"
+dt_save_state_to_disk: "20days"
+h_elem: 16
+z_max: 55000.0
+z_elem: 63
+dz_bottom: 30.0
+dz_top: 3000.0
+moist: "equil"
+precip_model: "0M"
+override_τ_precip: false
+rad: "allskywithclear"
+dt_rad: "1hours"
+dt_cloud_fraction: "1hours"
+idealized_insolation: false
+surface_setup: "DefaultMoninObukhov"
+turbconv: "diagnostic_edmfx"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+prognostic_tke: true
+edmfx_upwinding: "first_order"
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+rayleigh_sponge: true
+dt: "100secs"
+t_end: "40days"
+job_id: "amip_target_diagedmf"
+toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M.toml]
+netcdf_output_at_levels: true
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, pr, rsd, rsu, rld, rlu]
+    reduction_time: average
+    period: 1days
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    reduction_time: average
+    period: 1days
