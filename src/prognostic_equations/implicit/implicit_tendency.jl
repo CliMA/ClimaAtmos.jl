@@ -119,48 +119,42 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. ᶜρχₜ -= ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
-    (; turbconv_model, rayleigh_sponge, precip_model) = p.atmos
+    (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p.core
-    (; ᶜspecific, ᶠu³, ᶜp) = p.precomputed
-    # use CD2 for implicit, upwinding correction goes in explicit part
-    energy_upwinding = Val(:none)
-    tracer_upwinding = Val(:none)
-    (; precip_upwinding) = p.atmos.numerics # precipitation is always upwinded (rain always falls)
+    (; ᶜh_tot, ᶜspecific, ᶠu³, ᶜp) = p.precomputed
+    (; precip_upwinding) = p.atmos.numerics
 
     @. Yₜ.c.ρ[colidx] -=
         ᶜdivᵥ(ᶠwinterp(ᶜJ[colidx], Y.c.ρ[colidx]) * ᶠu³[colidx])
 
-    if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p.precomputed
+    # Central advection of active tracers (e_tot and q_tot)
+    vertical_transport!(
+        Yₜ.c.ρe_tot[colidx],
+        ᶜJ[colidx],
+        Y.c.ρ[colidx],
+        ᶠu³[colidx],
+        ᶜh_tot[colidx],
+        dt,
+        Val(:none),
+    )
+    if !(moisture_model isa DryModel)
         vertical_transport!(
-            Yₜ.c.ρe_tot[colidx],
+            Yₜ.c.ρq_tot[colidx],
             ᶜJ[colidx],
             Y.c.ρ[colidx],
             ᶠu³[colidx],
-            ᶜh_tot[colidx],
+            ᶜspecific.q_tot[colidx],
             dt,
-            energy_upwinding,
-        )
-    end
-    for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-        χ_name == :e_tot && continue
-        vertical_transport!(
-            ᶜρχₜ[colidx],
-            ᶜJ[colidx],
-            Y.c.ρ[colidx],
-            ᶠu³[colidx],
-            ᶜχ[colidx],
-            dt,
-            tracer_upwinding,
+            Val(:none),
         )
     end
 
     if precip_model isa Microphysics1Moment
         # Advection of precipitation with the mean flow
-        # is done with other tracers above.
+        # is done with other passive tracers in the explicit tendency.
         # Here we add the advection with precipitation terminal velocity
         # using first order upwind and free outflow bottom boundary condition
 
