@@ -26,7 +26,7 @@ function common_dirname(files::Vector{T}) where {T <: AbstractString}
     return joinpath(split_files[1][1:last_common_dir]...)
 end
 
-function make_plots(sim, simulation_path)
+function make_plots(sim, _)
     @warn "No plot found for $sim"
 end
 
@@ -59,41 +59,91 @@ YLOGSCALE = Dict(
     ),
 )
 
+long_name(var) = var.attributes["long_name"]
+short_name(var) = var.attributes["short_name"]
+
+"""
+    parse_var_attributes(var)
+
+Takes in an OutputVar and parses some of its attributes into a short, informative string.
+Used to generate unique titles when the same var is being plotted for several times/locations.
+This could be extended to parse more attributes.
+
+For example, the sample attributes:
+attributes = Dict(
+    "units" => "%",
+    "short_name" => "cl",
+    "slice_y" => "0.0",
+    "long_name" => "Cloud fraction, Instantaneous x = 0.0 m y = 0.0 m",
+    "slice_y_units" => "m",
+    "slice_x_units" => "m",
+    "comments" => "",
+    "slice_x" => "0.0",
+)
+will be parsed into "cl, x = 0.0, y = 0.0"
+"""
+function parse_var_attributes(var)
+    MISSING_STR = "MISSING_ATTRIBUTE"
+    attr = var.attributes
+    name = replace(short_name(var), "up" => "")
+
+    attributes = ["slice_lat", "slice_lon", "slice_x", "slice_y", "slice_time"]
+    info = [
+        replace(key, "slice_" => "") * " = " * get(attr, key, MISSING_STR)
+        for key in attributes
+    ]
+    # Filter out missing entries
+    info = filter(x -> !occursin(MISSING_STR, x), [name, info...])
+
+    return join(info, ", ")
+end
+
 function make_plots_generic(
     output_path,
     vars,
     args...;
+    plot_fn = nothing,
     output_name = "summary",
+    summary_files = String[],
+    MAX_NUM_COLS = 1,
+    MAX_NUM_ROWS = 4,
     kwargs...,
 )
-    MAX_PLOTS_PER_PAGE = 4
+    # Default plotting function needs access to kwargs
+    if isnothing(plot_fn)
+        plot_fn =
+            (grid_loc, var) -> viz.plot!(grid_loc, var, args...; kwargs...)
+    end
+
+    MAX_PLOTS_PER_PAGE = MAX_NUM_ROWS * MAX_NUM_COLS
     vars_left_to_plot = length(vars)
 
-    # Define fig, and p_loc, used below. (Needed for scope)
-    fig = CairoMakie.Figure(
-        resolution = (900, 300 * min(vars_left_to_plot, MAX_PLOTS_PER_PAGE)),
-    )
-    p_loc = [1, 1]
-    page = 1
-    summary_files = String[]
-
-    for (var_num, var) in enumerate(vars)
-        # Create a new page if this is the first plot
-        if mod(var_num, MAX_PLOTS_PER_PAGE) == 1
-            fig = CairoMakie.Figure(
-                resolution = (
-                    900,
-                    300 * min(vars_left_to_plot, MAX_PLOTS_PER_PAGE),
-                ),
-            )
-            p_loc = [1, 1]
+    # Define fig, grid, and grid_pos, used below. (Needed for scope)
+    makefig() = CairoMakie.Figure(resolution = (900, 300 * MAX_NUM_ROWS))
+    gridlayout() =
+        map(1:MAX_PLOTS_PER_PAGE) do i
+            row = mod(div(i - 1, MAX_NUM_COLS), MAX_NUM_ROWS) + 1
+            col = mod(i - 1, MAX_NUM_COLS) + 1
+            return fig[row, col] = CairoMakie.GridLayout()
         end
-        viz.plot!(fig, var, args...; p_loc, kwargs...)
 
-        p_loc[1] += 1
+    fig = makefig()
+    grid = gridlayout()
+    page = 1
+    grid_pos = 1
+
+    for var in vars
+        if grid_pos > MAX_PLOTS_PER_PAGE
+            fig = makefig()
+            grid = gridlayout()
+            grid_pos = 1
+        end
+
+        plot_fn(grid[grid_pos], var)
+        grid_pos += 1
 
         # Flush current page
-        if p_loc[1] > min(MAX_PLOTS_PER_PAGE, vars_left_to_plot)
+        if grid_pos > min(MAX_PLOTS_PER_PAGE, vars_left_to_plot)
             file_path = joinpath(output_path, "$(output_name)_$page.pdf")
             CairoMakie.save(file_path, fig)
             push!(summary_files, file_path)
@@ -110,6 +160,7 @@ function make_plots_generic(
 
     # Cleanup
     Filesystem.rm.(summary_files, force = true)
+    return output_file
 end
 
 """
@@ -579,18 +630,133 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_trmm_column},
 }
 
+"""
+    plot_edmf_vert_profile!(grid_loc, var_group)
+
+Helper function for `make_plots_generic`. Takes a list of variables and plots
+them on the same axis.
+"""
+function plot_edmf_vert_profile!(grid_loc, var_group)
+    z = var_group[1].dims["z"]
+    units = var_group[1].attributes["units"]
+    ax = CairoMakie.Axis(
+        grid_loc[1, 1],
+        ylabel = "z [$(var_group[1].dim_attributes["z"]["units"])]",
+        xlabel = "$(short_name(var_group[1])) [$units]",
+        title = parse_var_attributes(var_group[1]),
+    )
+    for var in var_group
+        CairoMakie.lines!(ax, var.data, z, label = short_name(var))
+    end
+    length(var_group) > 1 && Makie.axislegend(ax)
+end
+
+
+"""
+    plot_parsed_attribute_title!(grid_loc, var)
+
+Helper function for `make_plots_generic`. Plots an OutputVar `var`,
+setting the axis title to `parse_var_attributes(var)`
+"""
+plot_parsed_attribute_title!(grid_loc, var) = viz.plot!(
+    grid_loc,
+    var;
+    more_kwargs = Dict(:axis => ca_kwargs(title = parse_var_attributes(var))),
+)
+
+"""
+    pair_edmf_names(vars)
+
+Groups updraft and gridmean EDMF short names into tuples. 
+Matches on the same variable short name with the suffix "up".
+This assumes that the updraft variable name is the same as the corresponding
+gridmean variable with the suffix "up".
+"""
+function pair_edmf_names(short_names)
+    grouped_vars = Any[]
+    short_names_to_be_processed = Set(short_names)
+
+    for name in short_names
+        # If we have already visited this name, go to the next one
+        name in short_names_to_be_processed || continue
+
+        # First, check if we have the pair of variables
+        # We normalize the name to the gridmean version (base_name)
+        # So, if we are visiting "va" or "vaup", we end up with 
+        # base_name = "va" and up_name = "vaup"
+        base_name = replace(name, "up" => "")
+        up_name = base_name * "up"
+
+        if base_name in short_names_to_be_processed &&
+           up_name in short_names_to_be_processed
+            # Gridmean and updraft are available
+            tuple_to_be_added = (base_name, up_name)
+        else
+            # Only single var (updraft OR gridmean) is available
+            tuple_to_be_added = (name,)
+        end
+
+        foreach(n -> delete!(short_names_to_be_processed, n), tuple_to_be_added)
+        push!(grouped_vars, tuple_to_be_added)
+    end
+    return grouped_vars
+end
+
 function make_plots(::EDMFBoxPlots, simulation_path)
     simdir = SimDir(simulation_path)
 
-    short_names = ["ua", "wa", "thetaa", "taup", "haup", "waup", "tke", "arup"]
+    short_names = [
+        "ua",
+        "wa",
+        "thetaa",
+        "thetaaup",
+        "ta",
+        "taup",
+        "ha",
+        "haup",
+        "waup",
+        "tke",
+        "arup",
+        "hus",
+        "husup",
+        "hur",
+        "hurup",
+        "cl",
+        "clw",
+        "clwup",
+        "cli",
+        "cliup",
+    ]
     reduction = "inst"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    vars_zt = [slice(var, x = 0.0, y = 0.0) for var in vars]
-    vars_z = [slice(var, x = 0.0, y = 0.0, time = LAST_SNAP) for var in vars]
+    period = "30m"
+
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt = [
+        (
+            slice(get(simdir; short_name, reduction, period), x = 0.0, y = 0.0) for short_name in var_names
+        ) for var_names in short_name_tuples
+    ]
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,) for
+        group in var_groups_zt
+    ]
+
+    tmp_file = make_plots_generic(
+        simulation_path,
+        output_name = "tmp",
+        var_groups_z;
+        plot_fn = plot_edmf_vert_profile!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
+
     make_plots_generic(
         simulation_path,
-        [vars_zt..., vars_z...],
-        more_kwargs = YLOGSCALE,
+        vcat((var_groups_zt...)...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
     )
 end
 
@@ -600,19 +766,41 @@ EDMFSpherePlots =
 function make_plots(::EDMFSpherePlots, simulation_path)
     simdir = SimDir(simulation_path)
 
-    short_names = ["ua", "wa", "thetaa", "taup", "haup", "waup", "tke", "arup"]
+    short_names =
+        ["ua", "wa", "waup", "thetaa", "ta", "taup", "haup", "tke", "arup"]
     reduction = "average"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    vars_zt0_0 = [slice(var, lon = 0.0, lat = 0.0) for var in vars]
-    vars_zt30_0 = [slice(var, lon = 0.0, lat = 30.0) for var in vars]
-    vars_zt60_0 = [slice(var, lon = 0.0, lat = 60.0) for var in vars]
-    vars_zt90_0 = [slice(var, lon = 0.0, lat = 90.0) for var in vars]
-    vars_zt = [vars_zt0_0..., vars_zt30_0..., vars_zt60_0..., vars_zt90_0...]
-    vars_z = [slice(var, time = LAST_SNAP) for var in vars_zt]
+    period = "1h"
+    latitudes = [0.0, 30.0, 60.0, 90.0]
 
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt = [
+        (
+            slice(
+                get(simdir; short_name, reduction, period),
+                lon = 0.0,
+                lat = lat,
+            ) for short_name in var_names
+        ) for lat in latitudes, var_names in short_name_tuples
+    ]
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,) for
+        group in var_groups_zt
+    ]
+
+    tmp_file = make_plots_generic(
+        simulation_path,
+        output_name = "tmp",
+        var_groups_z;
+        plot_fn = plot_edmf_vert_profile!,
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
+    )
     make_plots_generic(
         simulation_path,
-        [vars_zt..., vars_z...],
-        more_kwargs = YLOGSCALE,
+        vcat((var_groups_zt...)...),
+        plot_fn = plot_parsed_attribute_title!,
+        summary_files = [tmp_file],
+        MAX_NUM_COLS = 2,
+        MAX_NUM_ROWS = 4,
     )
 end
