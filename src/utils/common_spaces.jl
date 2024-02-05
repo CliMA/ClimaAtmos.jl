@@ -100,6 +100,7 @@ function make_hybrid_spaces(
         topo_smoothing ? Hypsography.diffuse_surface_elevation!(z_surface) :
         nothing
         z_face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
+	z_surface = Geometry.ZPoint.(z_surface)
         face_space = Spaces.ExtrudedFiniteDifferenceSpace(
             h_space,
             z_face_space,
