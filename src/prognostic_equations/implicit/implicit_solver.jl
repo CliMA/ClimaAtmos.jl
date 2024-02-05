@@ -356,7 +356,6 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p
     (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
-    (; precip_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
@@ -578,40 +577,19 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                 ᶜdiffusion_u_matrix[colidx] - (I,)
         end
 
-        ᶜprecip_advection_matrix = ᶜadvection_matrix
-        @. ᶜprecip_advection_matrix[colidx] =
-            -(ᶜprecipdivᵥ_matrix()) ⋅
-            DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]))
-
-        precip_info = (
-            (@name(c.ρq_rai), @name(ᶜwᵣ), precip_upwinding),
-            (@name(c.ρq_sno), @name(ᶜwₛ), precip_upwinding),
-        )
-        MatrixFields.unrolled_foreach(
-            precip_info,
-        ) do (ρqₚ_name, wₚ_name, upwinding)
+        ᶠlg = Fields.local_geometry_field(Y.f)
+        precip_info =
+            ((@name(c.ρq_rai), @name(ᶜwᵣ)), (@name(c.ρq_sno), @name(ᶜwₛ)))
+        MatrixFields.unrolled_foreach(precip_info) do (ρqₚ_name, wₚ_name)
             MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
-            ᶠlg = Fields.local_geometry_field(Y.f)
-
-            is_third_order = upwinding == Val(:third_order)
-            UpwindMatrixRowType =
-                is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
-            ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
-            ᶠset_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
-                top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
-                bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
-            ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
-
             @. ∂ᶜρqₚ_err_∂ᶜρqₚ[colidx] +=
-                dtγ * ᶜprecip_advection_matrix[colidx] ⋅
-                ᶠset_upwind_matrix_bcs(
-                    ᶠupwind_matrix(
-                        ᶠinterp(-(ᶜwₚ[colidx])) *
-                        CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])),
-                    ),
-                ) ⋅ DiagonalMatrixRow(1 / ᶜρ[colidx])
+                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
+                    CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])) *
+                    ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]),
+                ) ⋅ ᶠright_bias_matrix() ⋅
+                DiagonalMatrixRow(-(ᶜwₚ[colidx]) / ᶜρ[colidx])
         end
     end
 end

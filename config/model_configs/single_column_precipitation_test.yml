@@ -10,7 +10,6 @@ dt_save_state_to_disk: "500secs"
 dt_cloud_fraction: "60secs"
 moist: "nonequil"
 precip_model: "1M"
-precip_upwinding: "first_order"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
