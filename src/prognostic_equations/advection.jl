@@ -67,7 +67,7 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 end
 
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; moisture_model, turbconv_model) = p.atmos
+    (; turbconv_model) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     advect_tke = use_prognostic_tke(turbconv_model)
     point_type = eltype(Fields.coordinate_field(Y.c))
@@ -108,9 +108,10 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
     Fields.bycolumn(axes(Y.c)) do colidx
-        # Upwinding corrections to active tracers (e_tot and q_tot)
-        if energy_upwinding != Val(:none)
+        if :ρe_tot in propertynames(Yₜ.c)
+            (; ᶜh_tot) = p.precomputed
             for (coeff, upwinding) in ((1, energy_upwinding), (-1, Val(:none)))
+                energy_upwinding isa Val{:none} && continue
                 vertical_transport!(
                     coeff,
                     Yₜ.c.ρe_tot[colidx],
@@ -123,34 +124,24 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 )
             end
         end
-        if !(moisture_model isa DryModel) && tracer_upwinding != Val(:none)
+        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
+            χ_name == :e_tot && continue
             for (coeff, upwinding) in ((1, tracer_upwinding), (-1, Val(:none)))
+                tracer_upwinding isa Val{:none} && continue
                 vertical_transport!(
                     coeff,
-                    Yₜ.c.ρq_tot[colidx],
+                    ᶜρχₜ[colidx],
                     ᶜJ[colidx],
                     Y.c.ρ[colidx],
                     ᶠu³[colidx],
-                    ᶜspecific.q_tot[colidx],
+                    ᶜχ[colidx],
                     dt,
                     upwinding,
                 )
             end
         end
 
-        # Full vertical advection of passive tracers (q_liq, q_rai, etc.)
-        for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
-            χ_name in (:e_tot, :q_tot) && continue
-            vertical_transport!(
-                ᶜρχₜ[colidx],
-                ᶜJ[colidx],
-                Y.c.ρ[colidx],
-                ᶠu³[colidx],
-                ᶜχ[colidx],
-                dt,
-                tracer_upwinding,
-            )
-        end
+    end
 
     Fields.bycolumn(axes(Y.c)) do colidx
         if isnothing(ᶠf¹²)
