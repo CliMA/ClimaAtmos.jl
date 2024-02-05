@@ -442,19 +442,7 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     FT = eltype(params)
     (; dt, output_dir) = sim_info
 
-    callbacks = ()
-    if parsed_args["log_progress"] && !sim_info.restart
-        @info "Progress logging enabled."
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                (integrator) -> print_walltime_estimate(integrator);
-                skip_first = true,
-            ),
-        )
-    end
     callbacks = (
-        callbacks...,
         call_every_n_steps(
             terminate!;
             skip_first = true,
@@ -515,6 +503,20 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
         (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
 
     return callbacks
+end
+
+function get_walltime_estimate_callback(parsed_args, sim_info)
+    if parsed_args["log_progress"] && !sim_info.restart
+        @info "Progress logging enabled."
+        return (
+            call_every_n_steps(
+                (integrator) -> print_walltime_estimate(integrator);
+                skip_first = true,
+            ),
+        )
+    else
+        return ()
+    end
 end
 
 function get_sim_info(config::AtmosConfig)
@@ -905,19 +907,19 @@ function get_simulation(config::AtmosConfig)
 
     diagnostic_callbacks = (
         call_every_n_steps(orchestrate_diagnostics, skip_first = true),
-        call_every_n_steps(
-            flush_writers,
-            steps_cycle_diag,
-            skip_first = true,
-        ),
+        call_every_n_steps(flush_writers, steps_cycle_diag, skip_first = true),
     )
+
+    # The walltime estimate callback has to be the last one called to accurately measure
+    # time spent in callbacks at the end of the simulation
+    wte_cb = get_walltime_estimate_callback(config.parsed_args, sim_info)
 
     # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
     # and continuous. This is not hard, but can introduce significant latency. However, all
     # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
     # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., diagnostic_callbacks...)
+    discrete_callbacks = (callback..., diagnostic_callbacks..., wte_cb...)
 
     s = @timed_str begin
         all_callbacks =
