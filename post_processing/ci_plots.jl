@@ -1,3 +1,43 @@
+# ci_plots.jl:
+#
+# Automatic produce a PDF report of a given job_id.
+#
+# FAQ: How to add a new job?
+#
+# To add a new job, you need to define a new method for the `make_plots` function. The
+# `make_plots` has to take two arguments: a `Val(:job)`, and a list of output paths. In most
+# cases, `make_plots` will work with just one output path, but it still has to accept a list
+# so that the function can be used to compare different outputs with the same report.
+# Support for comparison is for the most part automated as long as `map_comparison` and
+# `make_plot_generic` are used.
+#
+# Consider for example
+# ```julia
+#     function make_plots(
+#         ::Val{:box_hydrostatic_balance_rhoe},
+#         output_paths::Vector{<:AbstractString},
+#     )
+#         simdirs = SimDir.(output_paths)
+#         short_names, reduction = ["wa", "ua"], "average"
+#         vars = map_comparison(simdirs, short_names) do simdir, short_name
+#             return get(simdir; short_name, reduction)
+#         end
+#         make_plots_generic(
+#             output_paths,
+#             vars,
+#             y = 0.0,
+#             time = LAST_SNAP,
+#             more_kwargs = YLOGSCALE,
+#         )
+#     end
+# ```
+#
+# This function takes the required arguments. First, it converts the `output_paths` in
+# `SimDir`s. Then, it extracts the variables we want to plot. `map_comparison` is a small
+# helper function that "broadcasts" your expression to work on multiple simdirs at the same
+# time (used to produce comparison reports). Finally, the function calls
+# `make_plots_generic` with the default plotting function (`ClimaAnalysis.plot!`).
+
 import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
@@ -28,6 +68,22 @@ end
 
 function make_plots(sim, _)
     @warn "No plot found for $sim"
+end
+
+"""
+    make_plots(sim, simulation_path::AbstractString)
+    make_plots(sim, simulation_paths::Iterable{AbstractString})
+
+Plot the corresponding sets for the given `sim`.
+
+When `simulation_path` is a string, use the data in the path.
+
+When `simulation_paths` is a collection of strings, use all those paths and making
+side-by-side comparisons.
+"""
+function make_plots(sim, simulation_path::AbstractString)
+    paths = [simulation_path]
+    make_plots(sim, paths)
 end
 
 # The contour plot functions in ClimaAnalysis work by finding the nearest slice available.
@@ -98,17 +154,74 @@ function parse_var_attributes(var)
     return join(info, ", ")
 end
 
+"""
+    make_plots_generic(
+        output_path::Union{<:AbstractString, Vector{<:AbstractString}},
+        vars,
+        args...;
+        plot_fn = nothing,
+        output_name = "summary",
+        summary_files = String[],
+        MAX_NUM_COLS = 1,
+        MAX_NUM_ROWS = min(4, length(vars)),
+        kwargs...,
+    )
+
+Use `plot_fn` to plot `vars` properly handling pagination.
+
+Arguments
+=========
+
+`output_path` can be a `String` or a list of `String`s. When it is a list of `String`s, it
+is assumed that `vars` are coming from different simulations and they have to be compared.
+Hence, the summary plot is saved to the first `output_path` and the number of columns is
+fixed to be the same as the number of `output_path`s. `summary_files` are also assumed to be
+in the first `output_path`.
+
+`output_name` is the name of the file produced.
+
+`summary_files` is an optional list of paths to prepend to the PDF produced by this
+function. This is useful when building larger and more complex reports that required
+different `plot_fn` to be produced.
+
+Extra Arguments
+===============
+
+`args` and `kwargs` are passed to the plotting function `plot_fn`.
+
+`MAX_NUM_COLS` and `MAX_NUM_ROWS` define the grid layout.
+"""
 function make_plots_generic(
-    output_path,
+    output_path::Union{<:AbstractString, Vector{<:AbstractString}},
     vars,
     args...;
     plot_fn = nothing,
     output_name = "summary",
     summary_files = String[],
     MAX_NUM_COLS = 1,
-    MAX_NUM_ROWS = 4,
+    MAX_NUM_ROWS = min(4, length(vars)),
     kwargs...,
 )
+    # When output_path is a Vector with multiple elements, this means that this function is
+    # being used to produce a comparison plot. In that case, we modify the output name, and
+    # the number of columns (to match how many simulations we are comparing).
+    is_comparison = output_path isa Vector
+    #
+    # However, we don't want to do this when the vector only contains one element.
+    if is_comparison && length(output_path) == 1
+        # Fallback to the "output_path isa String" case
+        output_path = output_path[1]
+        is_comparison = false
+    end
+
+    if is_comparison
+        MAX_NUM_COLS = length(output_path)
+        save_path = output_path[1]
+        output_name *= "_comparison"
+    else
+        save_path = output_path
+    end
+
     # Default plotting function needs access to kwargs
     if isnothing(plot_fn)
         plot_fn =
@@ -119,7 +232,15 @@ function make_plots_generic(
     vars_left_to_plot = length(vars)
 
     # Define fig, grid, and grid_pos, used below. (Needed for scope)
-    makefig() = CairoMakie.Figure(; size = (900, 300 * MAX_NUM_ROWS))
+    function makefig()
+        fig = CairoMakie.Figure(; size = (900, 300 * MAX_NUM_ROWS))
+        if is_comparison
+            for (col, path) in enumerate(output_path)
+                CairoMakie.Label(fig[0, col], path)
+            end
+        end
+        return fig
+    end
     gridlayout() =
         map(1:MAX_PLOTS_PER_PAGE) do i
             row = mod(div(i - 1, MAX_NUM_COLS), MAX_NUM_ROWS) + 1
@@ -144,7 +265,7 @@ function make_plots_generic(
 
         # Flush current page
         if grid_pos > min(MAX_PLOTS_PER_PAGE, vars_left_to_plot)
-            file_path = joinpath(output_path, "$(output_name)_$page.pdf")
+            file_path = joinpath(save_path, "$(output_name)_$page.pdf")
             CairoMakie.save(file_path, fig)
             push!(summary_files, file_path)
             vars_left_to_plot -= MAX_PLOTS_PER_PAGE
@@ -152,7 +273,7 @@ function make_plots_generic(
         end
     end
 
-    output_file = joinpath(output_path, "$(output_name).pdf")
+    output_file = joinpath(save_path, "$(output_name).pdf")
 
     pdfunite() do unite
         run(Cmd([unite, summary_files..., output_file]))
@@ -228,6 +349,65 @@ function make_spectra_generic(
     make_plots_generic(output_path, spectra, args...; output_name, kwargs...)
 end
 
+
+"""
+    map_comparison(func, simdirs, args)
+
+Helper function to make comparison plots for different simdirs.
+
+`make_plots_generic` can plot any `ClimaAnalysis.OutputVar`, regardless of their origin.
+We use this property to help us run the same plotting workflow for multiple simulations so that
+we can make side-by-side comparisons.
+
+The idea is simple: given a `func`tion that returns an `OutputVar` for the `arg` (typically
+a short name), we run it over all the simdirs in order. This will interleave the
+`OutputVar`s from the various N `simdirs`. Then, if we fix the number of columns to be
+exactly N, this will automatically result in the same plot repeated for the N `simdirs`.
+
+For the most part, this interface is transparent: developers only have to worry about
+preparing a plot for one instance, and if `map_comparison` is used, the same plot can be
+automatically extended to comparing N simulations.
+
+The signature for `func` has to be `(simdir, arg)`. You can use closures to define
+more complex behaviors. `func` has to return a `OutputVar`.
+
+Example
+===========
+
+The simplest example is to directly `get` an `OutputVar`:
+```julia
+short_names = ["ta", "wa"]
+vars = map_comparison(get, simdirs, short_names)
+make_plots_generic(
+    simulation_path,
+    vars,
+    time = LAST_SNAP,
+    x = 0.0, # Our columns are still 3D objects...
+    y = 0.0,
+    more_kwargs = YLOGSCALE,
+)
+```
+If we want to be more daring, we can mix in some information about `reductions` and `periods`
+```julia
+short_names = ["ta", "wa"]
+reduction, period = "average", "1d"
+vars = map_comparison(simdirs, short_names) do simdir, short_name
+     get(simdir; short_name, reduction, period)
+end
+make_plots_generic(
+    simulation_path,
+    vars,
+    time = LAST_SNAP,
+    x = 0.0, # Our columns are still 3D objects...
+    y = 0.0,
+    more_kwargs = YLOGSCALE,
+)
+```
+"""
+function map_comparison(func, simdirs, args)
+    return vcat([[func(simdir, arg) for simdir in simdirs] for arg in args]...)
+end
+
 ColumnPlots = Union{
     Val{:single_column_hydrostatic_balance_ft64},
     Val{:single_column_radiative_equilibrium_gray},
@@ -236,26 +416,33 @@ ColumnPlots = Union{
     Val{:single_column_radiative_equilibrium_allsky_idealized_clouds},
 }
 
-function make_plots(::ColumnPlots, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
     short_names = ["ta", "wa"]
-    vars = [get(simdir, short_name) for short_name in short_names]
+    vars = map_comparison(get, simdirs, short_names)
+
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         time = LAST_SNAP,
         x = 0.0, # Our columns are still 3D objects...
         y = 0.0,
+        MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLOGSCALE,
     )
 end
 
-function make_plots(::Val{:box_hydrostatic_balance_rhoe}, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(
+    ::Val{:box_hydrostatic_balance_rhoe},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
     short_names, reduction = ["wa", "ua"], "average"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         y = 0.0,
         time = LAST_SNAP,
@@ -263,8 +450,16 @@ function make_plots(::Val{:box_hydrostatic_balance_rhoe}, simulation_path)
     )
 end
 
-function make_plots(::Val{:single_column_precipitation_test}, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(
+    ::Val{:single_column_precipitation_test},
+    output_paths::Vector{<:AbstractString},
+)
+
+    simdirs = SimDir.(output_paths)
+
+    # TODO: Move this plotting code into the same framework as the other ones
+    simdir = simdirs[1]
+
     short_names = ["hus", "clw", "cli", "husra", "hussn", "ta"]
     vars = [
         slice(get(simdir; short_name), x = 0.0, y = 0.0) for
@@ -308,14 +503,18 @@ function make_plots(::Val{:single_column_precipitation_test}, simulation_path)
         end
     end
 
-    file_path = joinpath(simulation_path, "summary.pdf")
+    file_path = joinpath(output_paths[1], "summary.pdf")
     CairoMakie.save(file_path, fig)
 end
 
-function make_plots(::Val{:box_density_current_test}, simulation_path)
-    simdir = SimDir(simulation_path)
-    vars = [get(simdir, short_name = "thetaa")]
-    make_plots_generic(simulation_path, vars, y = 0.0, time = LAST_SNAP)
+function make_plots(
+    ::Val{:box_density_current_test},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    short_names = ["thetaa"]
+    vars = map_comparison(get, simdirs, short_names)
+    make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
 end
 
 MountainPlots = Union{
@@ -325,22 +524,29 @@ MountainPlots = Union{
     Val{:plane_schar_mountain_test_stretched},
 }
 
-function make_plots(::MountainPlots, simulation_path)
-    simdir = SimDir(simulation_path)
-    vars = [get(simdir, short_name = "wa", reduction = "average")]
+function make_plots(::MountainPlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
+    short_names, reduction = ["wa"], "average"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
     )
 end
 
-function make_plots(::Val{:plane_density_current_test}, simulation_path)
-    simdir = SimDir(simulation_path)
-    vars = [get(simdir, short_name = "thetaa")]
+function make_plots(
+    ::Val{:plane_density_current_test},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    short_names = ["thetaa"]
+    vars = map_comparison(get, simdirs, short_names)
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
@@ -349,73 +555,76 @@ end
 
 function make_plots(
     ::Val{:sphere_hydrostatic_balance_rhoe_ft64},
-    simulation_path,
+    output_paths::Vector{<:AbstractString},
 )
-    simdir = SimDir(simulation_path)
+    simdirs = SimDir.(output_paths)
     short_names, reduction = ["ua", "wa"], "average"
-    vars = [
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
-        short_name in short_names
-    ]
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
     )
 end
 
-function make_plots(::Val{:sphere_baroclinic_wave_rhoe}, simulation_path)
-    simdir = SimDir(simulation_path)
+DryBaroWavePlots = Union{Val{:sphere_baroclinic_wave_rhoe}}
+
+function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
+    make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
 end
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_topography_dcmip_rs},
-    simulation_path,
+    output_paths::Vector{<:AbstractString},
 )
-    simdir = SimDir(simulation_path)
+    simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    make_plots_generic(
-        simulation_path,
-        vars,
-        z_reference = 1500,
-        time = LAST_SNAP,
-    )
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
+    make_plots_generic(output_paths, vars, z_reference = 1500, time = LAST_SNAP)
 end
 
-function make_plots(::Val{:longrun_bw_rhoe_highres}, simulation_path)
-    simdir = SimDir(simulation_path)
-    short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 1500, time = 10days)
+function make_plots(
+    ::Val{:longrun_bw_rhoe_highres},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    vars = map_comparison(simdirs, short_names)
+    make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist},
-    simulation_path,
+    output_paths::Vector{<:AbstractString},
 )
-    simdir = SimDir(simulation_path)
+    simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 1500, time = LAST_SNAP)
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
+    make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
 end
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_expvdiff},
-    simulation_path,
+    output_paths::Vector{<:AbstractString},
 )
-    simdir = SimDir(simulation_path)
+    simdirs = SimDir.(output_paths)
     short_names, reduction = ["ta", "hus"], "average"
-    vars = [
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
-        short_name in short_names
-    ]
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
@@ -429,11 +638,14 @@ LongMoistBaroWavePlots = Union{
     Val{:longrun_bw_rhoe_equil_highres_topography_earth},
 }
 
-function make_plots(::LongMoistBaroWavePlots, simulation_path)
-    simdir = SimDir(simulation_path)
-    short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
-    vars = [get(simdir; short_name, reduction) for short_name in short_names]
-    make_plots_generic(simulation_path, vars, z = 1500, time = 10days)
+function make_plots(
+    ::LongMoistBaroWavePlots,
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    short_names = ["pfull", "va", "wa", "rv", "hus"]
+    vars = map_comparison(simdirs, short_names)
+    make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
 DryHeldSuarezPlots = Union{
@@ -442,16 +654,18 @@ DryHeldSuarezPlots = Union{
     Val{:longrun_hs_rhoe_dry_55km_nz63},
 }
 
-function make_plots(::DryHeldSuarezPlots, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(
+    ::DryHeldSuarezPlots,
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
 
     short_names, reduction = ["ua", "ta"], "average"
-    vars = [
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
-        short_name in short_names
-    ]
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
@@ -464,36 +678,39 @@ MoistHeldSuarezPlots = Union{
     Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
 }
 
-function make_plots(::MoistHeldSuarezPlots, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(
+    ::MoistHeldSuarezPlots,
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
 
     short_names_3D, reduction = ["ua", "ta", "hus"], "average"
-    short_names_sfc = ["hfes", "evspsbl"]
-    vars_3D = [
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon for
-        short_name in short_names_3D
-    ]
-    vars_sfc =
-        [get(simdir; short_name, reduction) for short_name in short_names_sfc]
+    short_names_2D = ["hfes", "evspsbl"]
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        get(simdir; short_name, reduction)
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars_3D,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
     )
     make_plots_generic(
-        simulation_path,
-        vars_sfc,
+        output_paths,
+        vars_2D,
         time = LAST_SNAP,
-        output_name = "summary_sfc",
+        output_name = "summary_2D",
     )
 end
 
 function make_plots(
     ::Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric},
-    simulation_path,
+    output_paths::Vector{<:AbstractString},
 )
-    simdir = SimDir(simulation_path)
+    simdirs = SimDir.(output_paths)
 
     reduction = "average"
     short_names_3D = ["ua", "ta", "hus"]
@@ -509,7 +726,7 @@ function make_plots(
         "evspsbl",
     ]
     available_periods = ClimaAnalysis.available_periods(
-        simdir;
+        simdirs[1];
         short_name = short_names_3D[1],
         reduction,
     )
@@ -522,21 +739,82 @@ function make_plots(
     elseif "1h" in available_periods
         period = "1h"
     end
-    vars_3D = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
-    ]
-    vars_2D = [
-        get(simdir; short_name, reduction, period) for
-        short_name in short_names_2D
-    ]
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
+    end
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        get(simdir; short_name, reduction, period)
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars_3D,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
     )
     make_plots_generic(
-        simulation_path,
+        output_paths,
+        vars_2D,
+        time = LAST_SNAP,
+        output_name = "summary_2D",
+    )
+end
+
+function make_plots(
+    ::Union{
+        Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
+        Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
+        Val{
+            :longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean,
+        },
+    },
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    reduction = "average"
+    short_names_3D = [
+        "ta",
+        "thetaa",
+        "rhoa",
+        "ua",
+        "va",
+        "wa",
+        "hur",
+        "hus",
+        "clw",
+        "cli",
+        "rsd",
+        "rsu",
+        "rld",
+        "rlu",
+    ]
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names_3D[1],
+        reduction,
+    )
+    if "10d" in available_periods
+        period = "10d"
+    elseif "1d" in available_periods
+        period = "1d"
+    elseif "12h" in available_periods
+        period = "12h"
+    end
+    short_names_2D = ["hfes", "evspsbl", "ts"]
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
+    end
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        get(simdir; short_name, reduction, period)
+    end
+    make_plots_generic(
+        output_paths,
+        vars_3D,
+        time = LAST_SNAP,
+        more_kwargs = YLOGSCALE,
+    )
+    make_plots_generic(
+        output_paths,
         vars_2D,
         time = LAST_SNAP,
         output_name = "summary_2D",
@@ -545,7 +823,6 @@ end
 
 AquaplanetPlots = Union{
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
-    Val{:aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
@@ -553,55 +830,43 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_earth},
-    Val{:longrun_aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean},
+    Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_amip},
 }
 
-function make_plots(::AquaplanetPlots, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
 
     reduction = "average"
-    short_names_3D = ["ua", "ta", "hus"]
-    short_names_2D = [
-        "rsdt",
-        "rsds",
-        "rsut",
-        "rsus",
-        "rlds",
-        "rlut",
-        "rlus",
-        "hfes",
-        "evspsbl",
-    ]
+    short_names_3D = ["ua", "ta", "hus", "rsd", "rsu", "rld", "rlu"]
+    short_names_2D = ["hfes", "evspsbl"]
     available_periods = ClimaAnalysis.available_periods(
-        simdir;
+        simdirs[1];
         short_name = short_names_3D[1],
         reduction,
     )
-    if "30d" in available_periods
-        period = "30d"
-    elseif "10d" in available_periods
+    if "10d" in available_periods
         period = "10d"
     elseif "1d" in available_periods
         period = "1d"
-    elseif "1h" in available_periods
-        period = "1h"
+    elseif "12h" in available_periods
+        period = "12h"
     end
-    vars_3D = [
-        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon for short_name in short_names_3D
-    ]
-    vars_2D =
-        [get(simdir; short_name, reduction) for short_name in short_names_2D]
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars_3D,
         time = LAST_SNAP,
         more_kwargs = YLOGSCALE,
     )
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vars_2D,
         time = LAST_SNAP,
         output_name = "summary_2D",
@@ -643,6 +908,7 @@ function plot_edmf_vert_profile!(grid_loc, var_group)
         xlabel = "$(short_name(var_group[1])) [$units]",
         title = parse_var_attributes(var_group[1]),
     )
+
     for var in var_group
         CairoMakie.lines!(ax, var.data, z, label = short_name(var))
     end
@@ -665,7 +931,7 @@ plot_parsed_attribute_title!(grid_loc, var) = viz.plot!(
 """
     pair_edmf_names(vars)
 
-Groups updraft and gridmean EDMF short names into tuples. 
+Groups updraft and gridmean EDMF short names into tuples.
 Matches on the same variable short name with the suffix "up".
 This assumes that the updraft variable name is the same as the corresponding
 gridmean variable with the suffix "up".
@@ -680,7 +946,7 @@ function pair_edmf_names(short_names)
 
         # First, check if we have the pair of variables
         # We normalize the name to the gridmean version (base_name)
-        # So, if we are visiting "va" or "vaup", we end up with 
+        # So, if we are visiting "va" or "vaup", we end up with
         # base_name = "va" and up_name = "vaup"
         base_name = replace(name, "up" => "")
         up_name = base_name * "up"
@@ -700,8 +966,8 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
-function make_plots(::EDMFBoxPlots, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
 
     short_names = [
         "ua",
@@ -729,18 +995,24 @@ function make_plots(::EDMFBoxPlots, simulation_path)
     period = "30m"
 
     short_name_tuples = pair_edmf_names(short_names)
-    var_groups_zt = [
-        (
-            slice(get(simdir; short_name, reduction, period), x = 0.0, y = 0.0) for short_name in var_names
-        ) for var_names in short_name_tuples
-    ]
+    var_groups_zt =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            return [
+                slice(
+                    get(simdir; short_name, reduction, period),
+                    x = 0.0,
+                    y = 0.0,
+                ) for short_name in name_tuple
+            ]
+        end
+
     var_groups_z = [
         ([slice(v, time = LAST_SNAP) for v in group]...,) for
         group in var_groups_zt
     ]
 
     tmp_file = make_plots_generic(
-        simulation_path,
+        output_paths,
         output_name = "tmp",
         var_groups_z;
         plot_fn = plot_edmf_vert_profile!,
@@ -749,8 +1021,8 @@ function make_plots(::EDMFBoxPlots, simulation_path)
     )
 
     make_plots_generic(
-        simulation_path,
-        vcat((var_groups_zt...)...),
+        output_paths,
+        vcat(var_groups_zt...),
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
         MAX_NUM_COLS = 2,
@@ -761,8 +1033,8 @@ end
 EDMFSpherePlots =
     Union{Val{:diagnostic_edmfx_aquaplanet}, Val{:prognostic_edmfx_aquaplanet}}
 
-function make_plots(::EDMFSpherePlots, simulation_path)
-    simdir = SimDir(simulation_path)
+function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
 
     short_names =
         ["ua", "wa", "waup", "thetaa", "ta", "taup", "haup", "tke", "arup"]
@@ -771,22 +1043,35 @@ function make_plots(::EDMFSpherePlots, simulation_path)
     latitudes = [0.0, 30.0, 60.0, 90.0]
 
     short_name_tuples = pair_edmf_names(short_names)
-    var_groups_zt = [
-        (
-            slice(
-                get(simdir; short_name, reduction, period),
-                lon = 0.0,
-                lat = lat,
-            ) for short_name in var_names
-        ) for lat in latitudes, var_names in short_name_tuples
-    ]
+
+    # The hierarchy is:
+    # - A vector looping over variables
+    #     - Containing, a vector looping over latitudes
+    #     - Containing, tuples with one or two variables
+    #   - Repeated for each simdir
+    # All of this is flattened out to be a vector of tuples (with the two gridmean/updraft
+    # variables)
+    var_groups_zt = vcat(
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            return [
+                (
+                    slice(
+                        get(simdir; short_name, reduction, period),
+                        lon = 0.0,
+                        lat = lat,
+                    ) for short_name in name_tuple
+                ) for lat in latitudes
+            ]
+        end...,
+    )
+
     var_groups_z = [
         ([slice(v, time = LAST_SNAP) for v in group]...,) for
         group in var_groups_zt
     ]
 
     tmp_file = make_plots_generic(
-        simulation_path,
+        output_paths,
         output_name = "tmp",
         var_groups_z;
         plot_fn = plot_edmf_vert_profile!,
@@ -794,7 +1079,7 @@ function make_plots(::EDMFSpherePlots, simulation_path)
         MAX_NUM_ROWS = 4,
     )
     make_plots_generic(
-        simulation_path,
+        output_paths,
         vcat((var_groups_zt...)...),
         plot_fn = plot_parsed_attribute_title!,
         summary_files = [tmp_file],
