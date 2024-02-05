@@ -125,6 +125,7 @@ function get_spaces(parsed_args, params, comms_ctx)
     dz_top = FT(parsed_args["dz_top"])
     topography = parsed_args["topography"]
     bubble = parsed_args["bubble"]
+    deep = parsed_args["deep_atmosphere"]
 
     @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
     if topography == "DCMIP200"
@@ -171,7 +172,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             Meshes.Uniform()
         end
         if warp_function == nothing
-            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+            make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; deep)
         else
             make_hybrid_spaces(
                 h_space,
@@ -180,6 +181,7 @@ function get_spaces(parsed_args, params, comms_ctx)
                 z_stretch;
                 surface_warp = warp_function,
                 topo_smoothing = parsed_args["topo_smoothing"],
+                deep,
             )
         end
     elseif parsed_args["config"] == "column" # single column
@@ -232,6 +234,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_elem,
             z_stretch;
             surface_warp = warp_function,
+            deep,
         )
     elseif parsed_args["config"] == "plane"
         FT = eltype(params)
@@ -254,6 +257,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_elem,
             z_stretch;
             surface_warp = warp_function,
+            deep,
         )
     end
     ncols = Fields.ncolumns(center_space)
