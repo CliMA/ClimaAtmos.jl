@@ -2112,7 +2112,7 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
-git-tree-sha1 = "3d2376b4b3f4b614ab324823c00db91f3929bdae"
+git-tree-sha1 = "fc6c52d428ecd4e2f121fd21c33ed1b7ef70b091"
 repo-rev = "ck/inline_always"
 repo-url = "https://github.com/CliMA/RRTMGP.jl.git"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
