@@ -196,8 +196,6 @@ function radiation_model_cache(
         radiation_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
             data_loader,
-            # TODO: pass FT through so that it can be controlled at the top-level
-            Float64,
             context;
             ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
             domain_nlay = Spaces.nlevels(axes(Y.c)),

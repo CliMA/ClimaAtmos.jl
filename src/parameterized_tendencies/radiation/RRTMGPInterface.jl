@@ -285,9 +285,8 @@ function extrap!(::BestFit, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺
     @. p = best_fit_p(T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺)
 end
 function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    FT = eltype(p)
-    cₚ = FT(RRTMGP.Parameters.cp_d(params))
-    R = FT(RRTMGP.Parameters.R_d(params))
+    cₚ = RRTMGP.Parameters.cp_d(params)
+    R = RRTMGP.Parameters.R_d(params)
     @. T = Tₛ
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
@@ -305,10 +304,9 @@ function extrap!(
     Tₛ,
     params,
 )
-    FT = eltype(p)
-    g = FT(RRTMGP.Parameters.grav(params))
-    cₚ = FT(RRTMGP.Parameters.cp_d(params))
-    R = FT(RRTMGP.Parameters.R_d(params))
+    g = RRTMGP.Parameters.grav(params)
+    cₚ = RRTMGP.Parameters.cp_d(params)
+    R = RRTMGP.Parameters.R_d(params)
     @. T = T⁺ + g / cₚ * (z⁺ - z)
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
@@ -382,7 +380,6 @@ array.
   - `lookup_tables/cloudysky_lw.nc`
   - `lookup_tables/clearsky_sw.nc`
   - `lookup_tables/cloudysky_sw.nc`
-- `FT`: floating-point number type (performance with `Float32` is questionable)
 - `DA`: array type (defaults to `CuArray` when a compatible GPU is available)
 
 # Keyword Arguments
@@ -482,7 +479,6 @@ array.
 function RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
     data_loader::Function,
-    ::Type{FT},
     context;
     ncol::Int,
     domain_nlay::Int,
@@ -498,9 +494,10 @@ function RRTMGPModel(
     add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
-) where {FT <: AbstractFloat}
+)
     device = ClimaComms.device(context)
     DA = ClimaComms.array_type(device)
+    FT = typeof(params.grav)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
