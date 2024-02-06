@@ -137,9 +137,9 @@ where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and verti
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
--\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
+-\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
 ```
-projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overbar{u}}``, the cell-center valued velocity vector.
+projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overline{u}}``, the cell-center valued velocity vector.
 ```math
 \nabla_h^2(\boldsymbol{v}) = \nabla_h(\nabla_{h} \cdot \boldsymbol{v}) - \nabla_{h} \times (\nabla_{h} \times \boldsymbol{v}).
 ```
@@ -192,7 +192,7 @@ with the latter treated implicitly.
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
--\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
+-\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
 ```
 projected onto the third contravariant direction.
 
