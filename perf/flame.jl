@@ -1,5 +1,6 @@
 redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
+import PProf
 Random.seed!(1234)
 import ClimaAtmos as CA
 
@@ -28,6 +29,7 @@ mkpath(output_dir)
 Profile.clear()
 prof = Profile.@profile SciMLBase.step!(integrator)
 results = Profile.fetch()
+PProf.pprof(results, web=false)
 Profile.clear()
 
 ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
@@ -79,6 +81,7 @@ Profile.Allocs.@profile sample_rate = sampling_rate SciMLBase.step!(integrator)
 results = Profile.Allocs.fetch()
 Profile.Allocs.clear()
 profile = ProfileCanvas.view_allocs(results)
+PProf.Allocs.pprof(results, web = false)
 ProfileCanvas.html_file(joinpath(output_dir, "allocs.html"), profile)
 
 # We're grouping allocation tests here for convenience.
