@@ -356,8 +356,10 @@ uuid = "c8b6d40d-e815-466f-95ae-c48aefa668fa"
 version = "0.7.3"
 
 [[deps.ClimaTimeSteppers]]
-deps = ["CUDA", "ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "40edb50016a5db1a3862dd6e8f76e37c0fbf4f07"
+deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
+git-tree-sha1 = "799b3761c80905fbe978f016720dc6611d361ecb"
+repo-rev = "ck/annotate_and_range"
+repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 version = "0.7.15"
 
