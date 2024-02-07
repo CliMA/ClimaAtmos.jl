@@ -525,7 +525,7 @@ function NetCDFWriter(;
         vcoords = []
         remapper = Remapper(hcoords, vcoords, horizontal_space)
         interpolated_surface =
-            interpolate(remapper, hypsography.surface, physical_z = false)
+            interpolate(remapper, Geometry.tofloat.(hypsography.surface), physical_z = false)
     end
 
     if disable_vertical_interpolation
