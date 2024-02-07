@@ -26,3 +26,4 @@ dt: "100secs"
 t_end: "30days"
 job_id: "longrun_aquaplanet_amip"
 toml: [toml/longrun_aquaplanet_amip.toml]
+output_default_diagnostics: false

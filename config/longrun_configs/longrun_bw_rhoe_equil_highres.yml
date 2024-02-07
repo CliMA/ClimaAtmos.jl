@@ -8,6 +8,4 @@ h_elem: 16
 precip_model: "0M"
 job_id: "longrun_bw_rhoe_equil_highres"
 moist: "equil"
-diagnostics:
-  - short_name: [pfull, wa, va, rv, hus]
-    period: 1days
+output_default_diagnostics: false

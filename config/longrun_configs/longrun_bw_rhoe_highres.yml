@@ -6,6 +6,4 @@ t_end: "100days"
 z_elem: 45
 dt: "400secs"
 job_id: "longrun_bw_rhoe_highres"
-diagnostics:
-  - short_name: [pfull, wa, va, rv]
-    period: 1days
+output_default_diagnostics: false

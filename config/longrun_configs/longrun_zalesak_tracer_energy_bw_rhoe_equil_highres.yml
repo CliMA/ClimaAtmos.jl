@@ -11,6 +11,4 @@ precip_model: "0M"
 job_id: "longrun_zalesak_tracer_energy_bw_rhoe_equil_highres"
 moist: "equil"
 apply_limiter: true
-diagnostics:
-  - short_name: [pfull, wa, va, rv, hus]
-    period: 1days
+output_default_diagnostics: false
