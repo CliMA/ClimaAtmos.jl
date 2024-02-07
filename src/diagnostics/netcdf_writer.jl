@@ -665,9 +665,9 @@ function write_field!(
         )
         v.attrib["short_name"] = var.short_name
         v.attrib["long_name"] = diagnostic.output_long_name
-        v.attrib["short_name"] = var.short_name
         v.attrib["units"] = var.units
         v.attrib["comments"] = var.comments
+        v.attrib["start_date"] = string(integrator.p.start_date)
 
         temporal_size = 0
     end
