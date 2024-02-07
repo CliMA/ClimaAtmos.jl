@@ -24,6 +24,7 @@ steps:
     command:
       - echo "--- Instantiate examples"
       - julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'
+      - julia --project=examples -e 'using Pkg; Pkg.add("ProfileCanvas")'  # For the flamegraph
       - julia --project=examples -e 'using Pkg; Pkg.precompile()'
       - julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'
       - julia --project=examples -e 'using Pkg; Pkg.status()'
@@ -55,7 +56,6 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
-          slurm_exclusive:
 
       - label: "moist Held-Suarez"
         key: "gpu_hs_rhoe_equil_55km_nz63_0M"
@@ -69,7 +69,6 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_cpus_per_task: 4
-          slurm_exclusive:
 
       - label: "moist Held-Suarez - 4 gpus"
         key: "gpu_hs_rhoe_equil_55km_nz63_0M_4process"
@@ -85,7 +84,6 @@ steps:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
-          slurm_exclusive:
 
       - label: "dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
@@ -101,7 +99,6 @@ steps:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
-          slurm_exclusive:
 
   - group: "DYAMOND GPU strong scaling"
     steps:
@@ -120,7 +117,6 @@ steps:
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_time: 8:00:00
-          slurm_exclusive:
 
       - label: "gpu_aquaplanet_dyamond - strong scaling - 2 GPUs"
         command:
@@ -136,7 +132,6 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 32G
           slurm_time: 8:00:00
-          slurm_exclusive:
 
       - label: "gpu_aquaplanet_dyamond - strong scaling - 4 GPUs"
         command:
@@ -152,7 +147,6 @@ steps:
           slurm_ntasks: 4
           slurm_mem: 32G
           slurm_time: 8:00:00
-          slurm_exclusive:
 
       - wait
 
@@ -165,7 +159,6 @@ steps:
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
-          slurm_exclusive:
 
   - group: "DYAMOND GPU weak scaling"
     steps:
@@ -184,7 +177,6 @@ steps:
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_time: 8:00:00
-          slurm_exclusive:
 
       - label: "gpu_aquaplanet_dyamond - weak scaling - 2 GPUs"
         command:
@@ -200,7 +192,6 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 32G
           slurm_time: 8:00:00
-          slurm_exclusive:
 
       - label: "gpu_aquaplanet_dyamond - weak scaling - 4 GPUs"
         command:
@@ -216,7 +207,6 @@ steps:
           slurm_ntasks: 4
           slurm_mem: 32G
           slurm_time: 8:00:00
-          slurm_exclusive:
 
       - wait
 
@@ -229,8 +219,6 @@ steps:
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
-          slurm_exclusive:
-
 
 
   - group: "Diagnostic EDMF GPU"
@@ -248,4 +236,15 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
           slurm_mem: 32G
-          slurm_exclusive:
+
+  - group: "IO Benchmarks"
+    steps:
+
+      - label: ":fire: Target EDMF Aquaplanet 1 thread"
+        key: "flame_longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M"
+        command:
+          - >
+            julia --color=yes --project=examples perf/longer_flame.jl   config/longrun_configs/longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M.yml
+        artifact_paths: "longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M/*"
+        agents:
+          slurm_gpus: 1
