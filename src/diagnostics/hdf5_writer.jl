@@ -37,6 +37,13 @@ Close all the files open in `writer`. (Currently no-op.)
 """
 close(writer::HDF5Writer) = nothing
 
+"""
+    flush(writer::HDF5Writer)
+
+Flush the data in `writer`. (Currently no-op.)
+"""
+flush(writer::HDF5Writer) = nothing
+
 function write_field!(
     writer::HDF5Writer,
     field,

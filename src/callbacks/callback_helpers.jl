@@ -111,3 +111,8 @@ end
 
 n_steps_per_cycle_per_cb_diagnostic(cbs) =
     [callback_frequency(cb).n for cb in cbs if callback_frequency(cb).n > 0]
+
+function n_steps_per_cycle_diagnostic(cbs)
+    nspc = n_steps_per_cycle_per_cb_diagnostic(cbs)
+    return isempty(nspc) ? 1 : lcm(nspc)
+end

@@ -38,16 +38,16 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 275_800
-allocs_limit["flame_perf_target_tracers"] = 305_776
+allocs_limit["flame_perf_target"] = 277_368
+allocs_limit["flame_perf_target_tracers"] = 307_344
 allocs_limit["flame_perf_target_edmfx"] = 7_005_552
-allocs_limit["flame_perf_diagnostics"] = 108_859_768
+allocs_limit["flame_perf_diagnostics"] = 108_860_376
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 531_000
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
 allocs_limit["flame_perf_target_frierson"] = 8_030_551_088
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
-allocs_limit["flame_perf_target_callbacks"] = 394_984
+allocs_limit["flame_perf_target_callbacks"] = 396_824
 allocs_limit["flame_perf_gw"] = 3_268_961_856
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 445_664
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 4_178_384
