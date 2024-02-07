@@ -555,6 +555,35 @@ function NetCDFWriter(;
     )
 end
 
+function write_single_field!(
+    v,
+    time_index,
+    interpolated_field::T,
+    ::Val{3},
+) where {T}
+    @inbounds v[time_index, :, :, :] = interpolated_field::T
+    return nothing
+end
+
+function write_single_field!(
+    v,
+    time_index,
+    interpolated_field::T,
+    ::Val{2},
+) where {T}
+    @inbounds v[time_index, :, :] = interpolated_field::T
+    return nothing
+end
+function write_single_field!(
+    v,
+    time_index,
+    interpolated_field::T,
+    ::Val{1},
+) where {T}
+    @inbounds v[time_index, :] = interpolated_field::T
+    return nothing
+end
+
 function write_field!(
     writer::NetCDFWriter,
     field,
@@ -679,13 +708,12 @@ function write_field!(
     nc["time"][time_index] = integrator.t
 
     # TODO: It would be nice to find a cleaner way to do this
-    if length(dim_names) == 3
-        v[time_index, :, :, :] = interpolated_field
-    elseif length(dim_names) == 2
-        v[time_index, :, :] = interpolated_field
-    elseif length(dim_names) == 1
-        v[time_index, :] = interpolated_field
-    end
+    write_single_field!(
+        v,
+        time_index,
+        interpolated_field,
+        Val(length(dim_names)),
+    )
 
     # Write data to disk
     NCDatasets.sync(writer.open_files[output_path])
