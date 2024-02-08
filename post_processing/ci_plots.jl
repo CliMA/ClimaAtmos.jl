@@ -119,7 +119,7 @@ function make_plots_generic(
     vars_left_to_plot = length(vars)
 
     # Define fig, grid, and grid_pos, used below. (Needed for scope)
-    makefig() = CairoMakie.Figure(resolution = (900, 300 * MAX_NUM_ROWS))
+    makefig() = CairoMakie.Figure(; size = (900, 300 * MAX_NUM_ROWS))
     gridlayout() =
         map(1:MAX_PLOTS_PER_PAGE) do i
             row = mod(div(i - 1, MAX_NUM_COLS), MAX_NUM_ROWS) + 1
@@ -273,7 +273,7 @@ function make_plots(::Val{:single_column_precipitation_test}, simulation_path)
 
     # We first prepare the axes with all the nice labels with ClimaAnalysis, then we use
     # CairoMakie to add the additional lines.
-    fig = CairoMakie.Figure(resolution = (1200, 600))
+    fig = CairoMakie.Figure(; size = (1200, 600))
 
     p_loc = [1, 1]
 
