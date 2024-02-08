@@ -137,9 +137,9 @@ where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and verti
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
--\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
+-\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
 ```
-projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overbar{u}}``, the cell-center valued velocity vector.
+projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overline{u}}``, the cell-center valued velocity vector.
 ```math
 \nabla_h^2(\boldsymbol{v}) = \nabla_h(\nabla_{h} \cdot \boldsymbol{v}) - \nabla_{h} \times (\nabla_{h} \times \boldsymbol{v}).
 ```
@@ -192,7 +192,7 @@ with the latter treated implicitly.
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
 ```math
--\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overbar{u}})),
+-\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
 ```
 projected onto the third contravariant direction.
 
@@ -375,3 +375,17 @@ It is assummed that some fraction ``\alpha`` of snow is melted during the proces
 ```math
 \frac{d}{dt} \rho e = \rho \mathcal{S}_{acc} ((1+\alpha) I_{liq} - \alpha I_{ice} + \Phi)
 ```
+
+### Stability and positivity
+
+All source terms are individually limited such that they don't exceed the
+  available tracer specific humidity.
+```math
+\mathcal{S}_{x \rightarrow y} = min(\mathcal{S}_{x \rightarrow y}, \frac{q_{x}}{dt})
+```
+This will not ensure positivity because the sum of all source terms,
+  combined with the advection tendency,
+  could still drive the solution to negative numbers.
+It should however help mitigate some of the problems.
+The source terms functions treat negative specific humidities as zeros,
+  so the simulations should be stable even with small negative numbers.

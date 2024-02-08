@@ -21,6 +21,6 @@ z_elem: 82
 z_stretch: false
 dt: 5secs
 t_end: 6hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx_box.toml]

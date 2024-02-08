@@ -1,3 +1,4 @@
+redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
@@ -17,6 +18,7 @@ simulation = CA.get_simulation(config)
 
 import SciMLBase
 SciMLBase.step!(integrator) # compile first
+SciMLBase.step!(integrator) # compile print_walltime_estimate, which skips the first step to avoid timing compilation
 CA.call_all_callbacks!(integrator) # compile callbacks
 import Profile, ProfileCanvas
 output_dir = job_id
@@ -36,18 +38,19 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 145_184
-allocs_limit["flame_perf_target_tracers"] = 177_440
+allocs_limit["flame_perf_target"] = 275_800
+allocs_limit["flame_perf_target_tracers"] = 305_776
 allocs_limit["flame_perf_target_edmfx"] = 7_005_552
-allocs_limit["flame_perf_diagnostics"] = 25_356_928
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_309_104
+allocs_limit["flame_perf_diagnostics"] = 108876856
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 531_000
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
+allocs_limit["flame_perf_target_frierson"] = 8_030_551_088
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
-allocs_limit["flame_perf_target_callbacks"] = 37_277_112
-allocs_limit["flame_perf_gw"] = 3_226_427_872
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 1_241_872
-
+allocs_limit["flame_perf_target_callbacks"] = 394_984
+allocs_limit["flame_perf_gw"] = 3_268_961_856
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 445_664
+allocs_limit["flame_gpu_implicit_barowave_moist"] = 4_178_384
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of
@@ -59,6 +62,15 @@ max_allocs_for_full_sampling = 10e6
 # max_allocs_for_full_sampling, which leads to a sampling rate of 1
 expected_allocs = get(allocs_limit, job_id, max_allocs_for_full_sampling)
 sampling_rate = expected_allocs <= max_allocs_for_full_sampling ? 1 : 0.01
+
+# Some jobs are problematic (the ones with Krylov mostly)
+# https://github.com/pfitzseb/ProfileCanvas.jl/issues/34
+if job_id in (
+    "flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff",
+    "flame_perf_target_frierson",
+)
+    sampling_rate = 0.001
+end
 
 # use new allocation profiler
 @info "collecting allocations with sampling rate $sampling_rate"

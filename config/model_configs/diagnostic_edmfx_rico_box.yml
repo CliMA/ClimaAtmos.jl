@@ -17,7 +17,6 @@ moist: equil
 precip_model: "0M"
 config: box
 hyperdiff: "true"
-kappa_4: 1e21
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
@@ -25,7 +24,7 @@ y_elem: 2
 z_elem: 100
 z_max: 4e3
 z_stretch: false
-dt: 200secs
+dt: 100secs
 t_end: 8hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 toml: [toml/diagnostic_edmfx_trmm_box.toml]

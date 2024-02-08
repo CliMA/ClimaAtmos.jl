@@ -18,7 +18,6 @@ precip_model: "0M"
 override_τ_precip: false
 config: box
 hyperdiff: "true"
-kappa_4: 1e21
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
@@ -26,8 +25,8 @@ y_elem: 2
 z_elem: 82
 z_max: 16400
 z_stretch: false
-dt: 300secs
+dt: 200secs
 t_end: 6hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/diagnostic_edmfx_trmm_box.toml]

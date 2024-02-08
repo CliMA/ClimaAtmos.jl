@@ -1,5 +1,6 @@
 import FastGaussQuadrature
 import StaticArrays as SA
+import Thermodynamics as TD
 
 abstract type AbstractMoistureModel end
 struct DryModel <: AbstractMoistureModel end
@@ -10,6 +11,10 @@ abstract type AbstractPrecipitationModel end
 struct NoPrecipitation <: AbstractPrecipitationModel end
 struct Microphysics0Moment <: AbstractPrecipitationModel end
 struct Microphysics1Moment <: AbstractPrecipitationModel end
+
+abstract type AbstractCloudModel end
+struct GridScaleCloud <: AbstractCloudModel end
+struct QuadratureCloud <: AbstractCloudModel end
 
 abstract type AbstractModelConfig end
 struct SingleColumnModel <: AbstractModelConfig end
@@ -23,11 +28,21 @@ struct ZonallyAsymmetricSST <: AbstractSST end
 
 abstract type AbstractSurfaceTemperature end
 struct PrescribedSurfaceTemperature <: AbstractSurfaceTemperature end
-struct PrognosticSurfaceTemperature <: AbstractSurfaceTemperature end
+Base.@kwdef struct PrognosticSurfaceTemperature{FT} <:
+                   AbstractSurfaceTemperature
+    # optional slab ocean parameters:
+    depth_ocean::FT = 40 # ocean mixed layer depth [m]
+    ρ_ocean::FT = 1020 # ocean density [kg / m³]
+    cp_ocean::FT = 4184 # ocean heat capacity [J/(kg * K)]
+    q_flux::Bool = false # use Q-flux (parameterization of horizontal ocean mixing of energy)
+    Q₀::FT = -20 # Q-flux maximum mplitude [W/m²]
+    ϕ₀::FT = 16 # Q-flux meridional scale [deg]
+end
 
 abstract type AbstractHyperdiffusion end
 Base.@kwdef struct ClimaHyperdiffusion{FT} <: AbstractHyperdiffusion
-    κ₄::FT
+    ν₄_vorticity_coeff::FT
+    ν₄_scalar_coeff::FT
     divergence_damping_factor::FT
 end
 
@@ -36,6 +51,8 @@ Base.@kwdef struct VerticalDiffusion{DM, FT} <: AbstractVerticalDiffusion
     C_E::FT
 end
 diffuse_momentum(::VerticalDiffusion{DM}) where {DM} = DM
+struct FriersonDiffusion{DM, FT} <: AbstractVerticalDiffusion end
+diffuse_momentum(::FriersonDiffusion{DM}) where {DM} = DM
 diffuse_momentum(::Nothing) = false
 
 abstract type AbstractSponge end
@@ -115,41 +132,85 @@ struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 Base.broadcastable(x::BuoyGradMean) = tuple(x)
 
 """
-    EnvBuoyGrad
+    EnvBuoyGradVars
 
 Variables used in the environmental buoyancy gradient computation.
 """
-Base.@kwdef struct EnvBuoyGrad{FT, EBC <: AbstractEnvBuoyGradClosure}
+Base.@kwdef struct EnvBuoyGradVars{FT}
     "temperature in the saturated part"
     t_sat::FT
     "vapor specific humidity  in the saturated part"
     qv_sat::FT
     "total specific humidity in the saturated part"
     qt_sat::FT
+    "liquid specific humidity in the saturated part"
+    ql_sat::FT
+    "ice specific humidity in the saturated part"
+    qi_sat::FT
     "potential temperature in the saturated part"
     θ_sat::FT
     "liquid ice potential temperature in the saturated part"
     θ_liq_ice_sat::FT
-    "virtual potential temperature gradient in the non saturated part"
-    ∂θv∂z_unsat::FT
-    "total specific humidity gradient in the saturated part"
-    ∂qt∂z_sat::FT
-    "liquid ice potential temperature gradient in the saturated part"
-    ∂θl∂z_sat::FT
     "reference pressure"
     p::FT
     "cloud fraction"
     en_cld_frac::FT
     "density"
     ρ::FT
+    "virtual potential temperature gradient in the non saturated part"
+    ∂θv∂z_unsat::FT
+    "total specific humidity gradient in the saturated part"
+    ∂qt∂z_sat::FT
+    "liquid ice potential temperature gradient in the saturated part"
+    ∂θl∂z_sat::FT
 end
-function EnvBuoyGrad(
-    ::EBG,
-    t_sat::FT,
-    args...,
-) where {FT <: Real, EBG <: AbstractEnvBuoyGradClosure}
-    return EnvBuoyGrad{FT, EBG}(t_sat, args...)
+
+function EnvBuoyGradVars(
+    thermo_params,
+    ts::TD.ThermodynamicState,
+    ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat,
+)
+    (; ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat) = ∂θv∂z_unsat_∂qt∂z_sat_∂θl∂z_sat
+    return EnvBuoyGradVars(thermo_params, ts, ∂θv∂z_unsat, ∂qt∂z_sat, ∂θl∂z_sat)
 end
+
+function EnvBuoyGradVars(
+    thermo_params,
+    ts::TD.ThermodynamicState,
+    ∂θv∂z_unsat::FT,
+    ∂qt∂z_sat::FT,
+    ∂θl∂z_sat::FT,
+) where {FT}
+    t_sat = TD.air_temperature(thermo_params, ts)
+    qv_sat = TD.vapor_specific_humidity(thermo_params, ts)
+    qt_sat = TD.total_specific_humidity(thermo_params, ts)
+    ql_sat = TD.liquid_specific_humidity(thermo_params, ts)
+    qi_sat = TD.ice_specific_humidity(thermo_params, ts)
+    θ_sat = TD.dry_pottemp(thermo_params, ts)
+    θ_liq_ice_sat = TD.liquid_ice_pottemp(thermo_params, ts)
+    p = TD.air_pressure(thermo_params, ts)
+    en_cld_frac = ifelse(TD.has_condensate(thermo_params, ts), 1, 0)
+    ρ = TD.air_density(thermo_params, ts)
+    return EnvBuoyGradVars{FT}(
+        t_sat,
+        qv_sat,
+        qt_sat,
+        ql_sat,
+        qi_sat,
+        θ_sat,
+        θ_liq_ice_sat,
+        p,
+        en_cld_frac,
+        ρ,
+        ∂θv∂z_unsat,
+        ∂qt∂z_sat,
+        ∂θl∂z_sat,
+    )
+end
+
+Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
+Base.broadcastable(x::EnvBuoyGradVars) = tuple(x)
+
 
 abstract type AbstractEDMF end
 
@@ -195,9 +256,9 @@ abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end
 struct GaussianQuad <: AbstractQuadratureType end
 
-abstract type AbstractEnvThermo end
-struct SGSMean <: AbstractEnvThermo end
-struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
+abstract type AbstractSGSamplingType end
+struct SGSMean <: AbstractSGSamplingType end
+struct SGSQuadrature{N, QT, A, W} <: AbstractSGSamplingType
     quadrature_type::QT
     a::A
     w::W
@@ -223,7 +284,7 @@ struct SGSQuadrature{N, QT, A, W} <: AbstractEnvThermo
     end
 end
 quadrature_order(::SGSQuadrature{N}) where {N} = N
-quad_type(::SGSQuadrature{N}) where {N} = N
+quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
 
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
@@ -237,7 +298,7 @@ Base.broadcastable(x::PrognosticEDMFX) = tuple(x)
 Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
-Base.broadcastable(x::AbstractEnvThermo) = tuple(x)
+Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -271,22 +332,13 @@ abstract type AbstractTimesteppingMode end
 struct Explicit <: AbstractTimesteppingMode end
 struct Implicit <: AbstractTimesteppingMode end
 
-Base.@kwdef struct AtmosNumerics{
-    EN_UP,
-    TR_UP,
-    PR_UP,
-    DE_UP,
-    ED_UP,
-    ED_SG_UP,
-    DYCORE,
-    LIM,
-}
+struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
+
+Base.@kwdef struct AtmosNumerics{EN_UP, TR_UP, ED_UP, ED_SG_UP, DYCORE, LIM}
 
     """Enable specific upwinding schemes for specific equations"""
     energy_upwinding::EN_UP
     tracer_upwinding::TR_UP
-    precip_upwinding::PR_UP
-    density_upwinding::DE_UP
     edmfx_upwinding::ED_UP
     edmfx_sgsflux_upwinding::ED_SG_UP
 
@@ -330,6 +382,7 @@ Base.@kwdef struct AtmosModel{
     PEM,
     MM,
     PM,
+    CM,
     F,
     S,
     RM,
@@ -358,6 +411,7 @@ Base.@kwdef struct AtmosModel{
     perf_mode::PEM = nothing
     moisture_model::MM = nothing
     precip_model::PM = nothing
+    cloud_model::CM = nothing
     forcing_type::F = nothing
     subsidence::S = nothing
     radiation_mode::RM = nothing
@@ -494,14 +548,6 @@ function AtmosConfig(config::Dict; comms_ctx = nothing)
         FT;
         override_file = CP.merge_toml_files(config["toml"]),
     )
-    # TODO: is there a better way? We need a better
-    #       mechanism on the ClimaCore side.
-    if config["trunc_stack_traces"]
-        @eval Main begin
-            import ClimaCore
-            ClimaCore.Fields.truncate_printing_field_types() = true
-        end
-    end
     comms_ctx = isnothing(comms_ctx) ? get_comms_context(config) : comms_ctx
     device = ClimaComms.device(comms_ctx)
     if device isa ClimaComms.CPUMultiThreaded

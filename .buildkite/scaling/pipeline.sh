@@ -16,23 +16,20 @@ low_resolution_lines=\
 "t_end: 10days
 dt: 400secs
 z_elem: 10
-h_elem: 6
-kappa_4: 2e17"
+h_elem: 6"
 
 medium_resolution_lines=\
 "t_end: 4days
 dt: 150secs
 z_elem: 45
 dz_bottom: 30
-h_elem: 16
-kappa_4: 1e16"
+h_elem: 16"
 
 high_resolution_lines=\
 "t_end: 1days
 dt: 50secs
 z_elem: 45
-h_elem: 30
-kappa_4: 5e14"
+h_elem: 30"
 
 # Create configuration files for each resolution
 for i in "${!resolutions[@]}"; do
@@ -68,7 +65,7 @@ done
 cat << 'EOM'
 agents:
   queue: central
-  modules: julia/1.9.4 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 nsight-systems/2023.3.1
+  modules: julia/1.10.0 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 nsight-systems/2023.3.1
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -76,7 +73,7 @@ env:
   JULIA_NVTX_CALLBACKS: gc
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_CPU_TARGET: 'broadwell;skylake'
+  JULIA_CPU_TARGET: 'broadwell;skylake;icelake;cascadelake;epyc'
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_CUDA_MEMORY_POOL: none

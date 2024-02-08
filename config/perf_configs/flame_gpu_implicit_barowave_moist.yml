@@ -1,0 +1,11 @@
+apply_limiter: false
+precip_model: "0M"
+h_elem: 12
+initial_condition: "MoistBaroclinicWave"
+t_end: "1mins"
+z_elem: 25
+dt: "1secs"
+dt_save_to_sol: "Inf"
+rad: ~
+job_id: "flame_gpu_implicit_barowave_moist"
+moist: "equil"

@@ -36,12 +36,31 @@ end
 
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
-    κ₄ = FT(parsed_args["kappa_4"])
-    divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
-    return if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
-        ClimaHyperdiffusion(; κ₄, divergence_damping_factor)
+    if hyperdiff_name in ("ClimaHyperdiffusion", "true", true)
+        ν₄_vorticity_coeff =
+            FT(parsed_args["vorticity_hyperdiffusion_coefficient"])
+        ν₄_scalar_coeff = FT(parsed_args["scalar_hyperdiffusion_coefficient"])
+        divergence_damping_factor = FT(parsed_args["divergence_damping_factor"])
+        return ClimaHyperdiffusion(;
+            ν₄_vorticity_coeff,
+            ν₄_scalar_coeff,
+            divergence_damping_factor,
+        )
+    elseif hyperdiff_name in ("CAM_SE",)
+        # To match hyperviscosity coefficients in:
+        #    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2017MS001257
+        #    for equation A18 and A19
+        # Need to scale by (1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3  ≈ 1.238
+        ν₄_vorticity_coeff = FT(0.150 * 1.238)
+        ν₄_scalar_coeff = FT(0.751 * 1.238)
+        divergence_damping_factor = FT(5)
+        return ClimaHyperdiffusion(;
+            ν₄_vorticity_coeff,
+            ν₄_scalar_coeff,
+            divergence_damping_factor,
+        )
     elseif hyperdiff_name in ("none", "false", false)
-        nothing
+        return nothing
     else
         error("Uncaught hyperdiffusion model type.")
     end
@@ -58,6 +77,8 @@ function get_vertical_diffusion_model(
         nothing
     elseif vert_diff_name in ("true", true, "VerticalDiffusion")
         VerticalDiffusion{diffuse_momentum, FT}(; C_E = params.C_E)
+    elseif vert_diff_name in ("FriersonDiffusion",)
+        FriersonDiffusion{diffuse_momentum, FT}()
     else
         error("Uncaught diffusion model `$vert_diff_name`.")
     end
@@ -232,6 +253,17 @@ function get_precipitation_model(parsed_args)
     end
 end
 
+function get_cloud_model(parsed_args)
+    cloud_model = parsed_args["cloud_model"]
+    return if cloud_model == "grid_scale"
+        GridScaleCloud()
+    elseif cloud_model == "quadrature"
+        QuadratureCloud()
+    else
+        error("Invalid cloud_model $(cloud_model)")
+    end
+end
+
 function get_forcing_type(parsed_args)
     forcing = parsed_args["forcing"]
     @assert forcing in (nothing, "held_suarez")
@@ -337,11 +369,11 @@ function get_turbconv_model(FT, parsed_args, turbconv_params)
             (nothing, "edmfx", "prognostic_edmfx", "diagnostic_edmfx")
 
     return if turbconv == "prognostic_edmfx"
-        N = turbconv_params.updraft_number
+        N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         PrognosticEDMFX{N, TKE}(turbconv_params.min_area)
     elseif turbconv == "diagnostic_edmfx"
-        N = turbconv_params.updraft_number
+        N = parsed_args["updraft_number"]
         TKE = parsed_args["prognostic_tke"]
         DiagnosticEDMFX{N, TKE}(FT(0.1), turbconv_params.min_area)
     else

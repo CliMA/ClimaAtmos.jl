@@ -1,11 +1,4 @@
+# Configuration file for codecov. Used to remove some GitHub boxes
 comment: false
-coverage:
-  status:
-    project:
-      default:
-        target: auto
-        # this allows a 10% drop from the previous base commit coverage
-        threshold: 10%
-
 github_checks:
     annotations: false

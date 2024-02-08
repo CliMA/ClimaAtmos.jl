@@ -41,7 +41,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     min_area_limiter_power::FT
     max_area_limiter_scale::FT
     max_area_limiter_power::FT
-    updraft_number::Int
 end
 
 Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP} <:
@@ -92,12 +91,13 @@ for var in fieldnames(TD.Parameters.ThermodynamicsParameters)
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 # Thermodynamics derived parameters
-for var in [:molmass_ratio, :R_d, :R_v, :cp_d, :cv_v, :cv_l, :cv_d]
+for var in [:molmass_ratio, :R_d, :R_v, :e_int_v0, :cp_d, :cv_v, :cv_l, :cv_d]
     @eval $var(ps::ACAP) = TD.Parameters.$var(thermodynamics_params(ps))
 end
 
 # Forwarding CloudMicrophysics parameters
 ρ_cloud_liq(ps::ACAP) = ps.water_params.ρw
+ρ_cloud_ice(ps::ACAP) = ps.water_params.ρi
 
 # Forwarding SurfaceFluxes parameters
 von_karman_const(ps::ACAP) =

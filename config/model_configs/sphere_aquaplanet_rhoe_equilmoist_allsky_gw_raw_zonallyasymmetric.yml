@@ -1,5 +1,5 @@
 rad: "allskywithclear"
-dt_save_to_disk: "1days"
+dt_save_state_to_disk: "1days"
 rayleigh_sponge: true
 orographic_gravity_wave: "raw_topo"
 z_elem: 25
@@ -12,6 +12,7 @@ vert_diff: "true"
 idealized_insolation: false
 z_max: 45000.0
 precip_model: "0M"
+cloud_model: "grid_scale"
 regression_test: true
 surface_temperature: "ZonallyAsymmetric"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"

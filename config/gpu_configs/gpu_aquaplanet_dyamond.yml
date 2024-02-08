@@ -1,9 +1,11 @@
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
 h_elem: 30
 z_max: 55000.0
 z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
-kappa_4: 1e14
 moist: "equil" 
 precip_model: "0M" 
 rad: "allskywithclear" 
@@ -12,9 +14,7 @@ dt_rad: "1hours"
 vert_diff: "true" 
 surface_setup: "DefaultMoninObukhov" 
 rayleigh_sponge: true
-dt_save_to_disk: "3hours"
 dt: "50secs" 
-t_end: "1days"
-FLOAT_TYPE: "Float32"
+t_end: "12hours"
 job_id: "gpu_aquaplanet_dyamond" 
 toml: [toml/longrun_aquaplanet_dyamond.toml]

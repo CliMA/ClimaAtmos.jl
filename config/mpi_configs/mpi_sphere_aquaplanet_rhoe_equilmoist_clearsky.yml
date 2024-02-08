@@ -6,3 +6,8 @@ precip_model: "0M"
 job_id: "mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky"
 dt: "400secs"
 t_end: "4days"
+# Test HDF5 writer with MPI as well
+diagnostics:
+  - short_name: [pfull, wa, va, rv]
+    period: 1days
+    writer: h5

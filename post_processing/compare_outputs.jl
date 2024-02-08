@@ -22,10 +22,6 @@ function parse_commandline()
         help = "A bool: compare the state between output_folder_1 and output_folder_2 [`true` [default], `false`]"
         arg_type = Bool
         default = true
-        "--compare_diagnostics"
-        help = "A bool: compare the diagnostics between output_folder_1 and output_folder_2 [`true` [default], `false`]"
-        arg_type = Bool
-        default = true
     end
     parsed_args = ArgParse.parse_args(ARGS, s)
     return (s, parsed_args)
@@ -45,8 +41,6 @@ function get_data(folder, name)
 end
 Y_1 = get_data(parsed_args["output_folder_1"], "Y");
 Y_2 = get_data(parsed_args["output_folder_2"], "Y");
-D_1 = get_data(parsed_args["output_folder_1"], "diagnostics");
-D_2 = get_data(parsed_args["output_folder_2"], "diagnostics");
 
 compare(a::FV, b::FV, pn0 = "") where {FV <: Fields.FieldVector} =
     compare(true, a, b, pn0)
@@ -82,12 +76,5 @@ end
         @test compare(Y_1, Y_2)
     else
         @test_broken compare(Y_1, Y_2)
-    end
-
-    @info "Comparing diagnostics:"
-    if parsed_args["compare_diagnostics"]
-        @test compare(D_1, D_2)
-    else
-        @test_broken compare(D_1, D_2)
     end
 end

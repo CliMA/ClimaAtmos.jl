@@ -185,12 +185,12 @@ function radiation_model_cache(
         end
 
         if idealized_insolation # perpetual equinox with no diurnal cycle
-            solar_zenith_angle = FT(π) / 3
+            cos_zenith = cos(FT(π) / 3)
             weighted_irradiance =
                 @. 1360 * (1 + FT(1.2) / 4 * (1 - 3 * sind(latitude)^2)) /
-                   (4 * cos(solar_zenith_angle))
+                   (4 * cos_zenith)
         else
-            solar_zenith_angle = weighted_irradiance = NaN # initialized in callback
+            cos_zenith = weighted_irradiance = NaN # initialized in callback
         end
 
         radiation_model = RRTMGPI.RRTMGPModel(
@@ -211,7 +211,7 @@ function radiation_model_cache(
             surface_emissivity = 1,
             direct_sw_surface_albedo = 0.38,
             diffuse_sw_surface_albedo = 0.38,
-            solar_zenith_angle,
+            cos_zenith,
             weighted_irradiance,
             kwargs...,
         )

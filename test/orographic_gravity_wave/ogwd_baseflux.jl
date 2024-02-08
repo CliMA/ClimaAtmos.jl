@@ -19,7 +19,7 @@ z_max = 30e3
 z_elem = 1
 radius = 6.371229e6
 
-quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 z_stretch = Meshes.Uniform()

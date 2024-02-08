@@ -45,6 +45,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         end
 
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.radiation_mode)
+        edmfx_sgs_vertical_advection_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.turbconv_model,
+        )
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_sgs_mass_flux_tendency!(
             Yₜ,
@@ -56,6 +64,15 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         )
         edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        edmfx_precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.turbconv_model,
+            p.atmos.precip_model,
+        )
         precipitation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.precip_model)
 
         # NOTE: All ρa tendencies should be applied before calling this function

@@ -1,0 +1,17 @@
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
+dt: "100secs"
+t_end: "1days"
+h_elem: 30
+z_elem: 63
+dz_bottom: 30.0
+dz_top: 3000.0
+z_max: 55000.0
+vert_diff: "true"
+moist: "equil"
+precip_model: "0M"
+rayleigh_sponge: true
+forcing: "held_suarez"
+job_id: "gpu_hs_rhoe_equil_55km_nz63_0M_4process"
+toml: [toml/longrun_hs_rhoe_equil_55km_nz63_0M.toml]

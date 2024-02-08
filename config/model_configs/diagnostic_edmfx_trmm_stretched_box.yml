@@ -6,11 +6,10 @@ surface_setup: TRMM_LBA
 turbconv: diagnostic_edmfx
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-max_newton_iters_ode: 1
 prognostic_tke: true
 edmfx_upwinding: first_order
-edmfx_entr_model: "Generalized" 
-edmfx_detr_model: "Generalized" 
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
@@ -20,7 +19,6 @@ precip_model: "0M"
 override_τ_precip: false
 config: box
 hyperdiff: "true"
-kappa_4: 1e21
 x_max: 1e8
 y_max: 1e8
 x_elem: 2
@@ -31,6 +29,6 @@ dz_bottom: 50
 dz_top: 2000
 dt: 300secs
 t_end: 6hours
-dt_save_to_disk: 10mins
+dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/diagnostic_edmfx_trmm_box.toml]

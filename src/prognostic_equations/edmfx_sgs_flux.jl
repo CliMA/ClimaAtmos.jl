@@ -103,12 +103,15 @@ function edmfx_sgs_mass_flux_tendency!(
     turbconv_model::DiagnosticEDMFX,
 )
 
+    turbconv_params = CAP.turbconv_params(p.params)
+    a_max = CAP.max_area(turbconv_params)
     n = n_mass_flux_subdomains(turbconv_model)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
-    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜh_totʲs, ᶜq_totʲs) = p.precomputed
+    (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    FT = eltype(Y)
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
@@ -116,9 +119,24 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜa_scalar_colidx = p.scratch.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+            # @. ᶜa_scalar_colidx =
+            #     (ᶜmseʲs.:($$j)[colidx] + ᶜKʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
+            #     draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+            # TODO: remove this filter when mass flux is treated implicitly
             @. ᶜa_scalar_colidx =
-                (ᶜh_totʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
-                draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+                (ᶜmseʲs.:($$j)[colidx] + ᶜKʲs.:($$j)[colidx] - ᶜh_tot[colidx]) *
+                min(
+                    min(
+                        draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx]),
+                        a_max,
+                    ),
+                    FT(0.02) / max(
+                        Geometry.WVector(
+                            ᶜinterp(ᶠu³_diff_colidx),
+                        ).components.data.:1,
+                        eps(FT),
+                    ),
+                )
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -134,9 +152,26 @@ function edmfx_sgs_mass_flux_tendency!(
             # specific humidity
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+                # @. ᶜa_scalar_colidx =
+                #     (ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]) *
+                #     draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+                # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar_colidx =
-                    (ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]) *
-                    draft_area(ᶜρaʲs.:($$j)[colidx], ᶜρʲs.:($$j)[colidx])
+                    (ᶜq_totʲs.:($$j)[colidx] - ᶜspecific.q_tot[colidx]) * min(
+                        min(
+                            draft_area(
+                                ᶜρaʲs.:($$j)[colidx],
+                                ᶜρʲs.:($$j)[colidx],
+                            ),
+                            a_max,
+                        ),
+                        FT(0.02) / max(
+                            Geometry.WVector(
+                                ᶜinterp(ᶠu³_diff_colidx),
+                            ).components.data.:1,
+                            eps(FT),
+                        ),
+                    )
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
@@ -168,8 +203,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
+    (; dt, params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
     (; sfc_conditions) = p.precomputed
-    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰) = p.precomputed
+    (; ᶜρa⁰, ᶜu⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -195,7 +233,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(ρatke_flux[colidx]),
             )
             @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx]))) +
+                tke_dissipation(
+                    Y.c.sgs⁰.ρatke[colidx],
+                    ᶜtke⁰[colidx],
+                    ᶜmixing_length[colidx],
+                    c_d,
+                    dt,
+                )
         end
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
@@ -242,8 +287,11 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
+    (; dt, params) = p
+    turbconv_params = CAP.turbconv_params(params)
+    c_d = CAP.tke_diss_coeff(turbconv_params)
     (; sfc_conditions) = p.precomputed
-    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜtke⁰) = p.precomputed
+    (; ᶜu, ᶜh_tot, ᶜspecific, ᶜtke⁰, ᶜmixing_length) = p.precomputed
     (; ᶜK_u, ᶜK_h, ρatke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
 
@@ -269,7 +317,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 bottom = Operators.SetValue(ρatke_flux[colidx]),
             )
             @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx])))
+                ᶜdivᵥ_ρatke(-(ᶠρaK_u[colidx] * ᶠgradᵥ(ᶜtke⁰[colidx]))) +
+                tke_dissipation(
+                    Y.c.sgs⁰.ρatke[colidx],
+                    ᶜtke⁰[colidx],
+                    ᶜmixing_length[colidx],
+                    c_d,
+                    dt,
+                )
         end
 
         if !(p.atmos.moisture_model isa DryModel)
@@ -307,3 +362,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     return nothing
 end
+
+tke_dissipation(ρatke⁰, tke⁰, mixing_length, c_d, dt) =
+    tke⁰ >= 0 ? c_d * ρatke⁰ * sqrt(tke⁰) / max(mixing_length, 1) : ρatke⁰ / dt

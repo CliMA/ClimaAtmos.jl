@@ -30,9 +30,12 @@ z_elem:
 z_max:
   help: "Model top height. Default: 30km"
   value: 30000.0
-kappa_4:
-  help: "Hyperdiffusion parameter"
-  value: 2.0e17
+vorticity_hyperdiffusion_coefficient:
+  help: "Hyperdiffusion coefficient for vorticity (m s-1)"
+  value: 1.5
+scalar_hyperdiffusion_coefficient:
+  help: "Hyperdiffusion coefficient for scalar (m s-1)"
+  value: 1.5
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
@@ -93,8 +96,9 @@ idealized_clouds:
 idealized_insolation:
   help: "Use idealized insolation in radiation model [`false`, `true` (default)]"
   value: true
-
-
+dt_cloud_fraction:
+  help: "Time between calling cloud fraction update"
+  value: "3hours"
 config:
   help: "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
   value: "sphere"
@@ -117,11 +121,8 @@ reference_job_id:
   help: |-
     Identifier of job to use as the "reference" solution in the quicklook plot; the current job's results get compared to the results of the quicklook job on the main branch
   value: ~
-post_process:
-  help: "Post process [`true` (default), `false`]"
-  value: true
 vert_diff:
-  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`)]"
+  help: "Vertical diffusion [`false` (default), `VerticalDiffusion`, `true` (defaults to `VerticalDiffusion`), `FriersonDiffusion`]"
   value: "false"
 hyperdiff:
   help: "Hyperdiffusion [`ClimaHyperdiffusion` (or `true`; default), `none` (or `false`)]"
@@ -138,11 +139,8 @@ forcing:
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
-dt_save_to_disk:
-  help: "Time between saving to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
-  value: "Inf"
-dt_save_restart:
-  help: "Time between saving restart files to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
+dt_save_state_to_disk:
+  help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `Inf` (do not save)]"
   value: "Inf"
 dt_save_to_sol:
   help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
@@ -171,15 +169,15 @@ perturb_initstate:
 discrete_hydrostatic_balance:
   help: "Set the initial state to discrete hydrostatic balance"
   value: false
-trunc_stack_traces:
-  help: "Set to `true` to truncate printing of ClimaCore `Field`s"
-  value: true
 apply_limiter:
   help: "Apply a horizontal limiter to every tracer [`false` (default), `true`]"
   value: false
 precip_model:
   help: "Precipitation model [`nothing` (default), `0M`]"
   value: ~
+cloud_model:
+  help: "Cloud model [`grid_scale`, `quadrature` (default)]"
+  value: "quadrature"
 perf_mode:
   help: "A flag for analyzing performance [`PerfStandard` (default), `PerfExperimental`]"
   value: "PerfStandard"
@@ -196,14 +194,8 @@ c_smag:
 job_id:
   help: "Uniquely identifying string for a particular job"
   value: ~
-density_upwinding:
-  help: "Density upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
-  value: none
 tracer_upwinding:
   help: "Tracer upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
-  value: none
-precip_upwinding:
-  help: "Precipitation upwinding mode [`none` (default), `first_order` , `third_order`]"
   value: none
 energy_upwinding:
   help: "Energy upwinding mode [`none` (default), `first_order` , `third_order`, `boris_book`, `zalesak`]"
@@ -256,15 +248,21 @@ approximate_linear_solve_iters:
 override_τ_precip:
   help: "If true, sets τ_precip to dt. Otherwise, τ_precip is set to the value in the toml dictionary"
   value: true
-log_params:
-  help: "Log parameters to file [`false` (default), `true`]"
-  value: false
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
 netcdf_interpolate_z_over_msl:
   help: "Interpolate diagnostics in the NetCDF files in such a way that `z` is the elevation from the sea level (as opposed to the elevation from the surface)"
   value: false
-warn_allocations_diagnostics:
-  help: "When true, a dry-run for all the diagnostics is perform to check whether the functions allocate additional memory (which reduces performances)"
+netcdf_output_at_levels:
+  help: "Do not perform any vertical interpolation in the output NetCDF files. Instead, interpolate horizontally and output the level. This is incompatible with netcdf_interpolate_z_over_msl when topography is present."
   value: false
+netcdf_interpolation_num_points:
+  help: "Override the number of interpolation point for the NetCDF output. This configuration has to be a list of integers, e.g. [180, 90, 10]."
+  value: ~
+warn_allocations_diagnostics:
+  help: "When true, a dry-run for all the diagnostics is performed to check whether the functions allocate additional memory (which reduces performances)"
+  value: false
+log_progress:
+  help: "Log simulation progress, including wall-time estimates"
+  value: true

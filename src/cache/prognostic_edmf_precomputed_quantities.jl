@@ -61,7 +61,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
     thermo_params = CAP.thermodynamics_params(params)
 
     (; ᶜΦ,) = p.core
-    (; ᶜspecific, ᶜp, ᶜh_tot) = p.precomputed
+    (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
@@ -105,11 +105,12 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         # Based on boundary conditions for updrafts we overwrite
         # the first interior point for EDMFX ᶜh_totʲ...
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
-        ᶜh_totʲ_int_val = p.scratch.temp_data_level
-        @. ᶜh_totʲ_int_val = sgs_scalar_first_interior_bc(
+        ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
+        ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
+        @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
-            ᶜh_tot_int_val,
+            ᶜh_tot_int_val - ᶜK_int_val,
             buoyancy_flux_val,
             ρ_flux_h_tot_val,
             ustar_val,
@@ -132,10 +133,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         )
 
         # Then overwrite the prognostic variables at first inetrior point.
-        ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
-        ᶜKʲ_int_val = Fields.field_values(Fields.level(ᶜKʲ, 1))
         ᶜΦ_int_val = Fields.field_values(Fields.level(ᶜΦ, 1))
-        @. ᶜmseʲ_int_val = ᶜh_totʲ_int_val - ᶜKʲ_int_val
         ᶜtsʲ_int_val = Fields.field_values(Fields.level(ᶜtsʲ, 1))
         @. ᶜtsʲ_int_val = TD.PhaseEquil_phq(
             thermo_params,
@@ -163,12 +161,13 @@ Updates the precomputed quantities stored in `p` for edmfx closures.
 """
 function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
-    (; moisture_model, turbconv_model) = p.atmos
+    (; moisture_model, turbconv_model, precip_model) = p.atmos
     @assert !(moisture_model isa DryModel)
 
     (; params) = p
     (; dt) = p
     thermo_params = CAP.thermodynamics_params(params)
+    microphys_params = CAP.microphysics_params(params)
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -183,6 +182,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ρatke_flux,
     ) = p.precomputed
     (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
+    (; ᶜS_q_totʲs, ᶜS_q_tot⁰) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -192,6 +192,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
     ᶜvert_div = p.scratch.ᶜtemp_scalar
     for j in 1:n
+        # entrainment/detrainment
         @. ᶜentrʲs.:($$j) = entrainment(
             params,
             ᶜz,
@@ -206,8 +207,12 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
-            dt,
             p.atmos.edmfx_entr_model,
+        )
+        @. ᶜentrʲs.:($$j) = limit_entrainment(
+            ᶜentrʲs.:($$j),
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            dt,
         )
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜdetrʲs.:($$j) = detrainment(
@@ -226,36 +231,48 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             FT(0),
             ᶜentrʲs.:($$j),
             ᶜvert_div,
-            dt,
             p.atmos.edmfx_detr_model,
+        )
+        @. ᶜdetrʲs.:($$j) = limit_detrainment(
+            ᶜdetrʲs.:($$j),
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            dt,
+        )
+        # precipitation
+        @. ᶜS_q_totʲs.:($$j) = q_tot_precipitation_sources(
+            precip_model,
+            thermo_params,
+            microphys_params,
+            dt,
+            Y.c.sgsʲs.:($$j).q_tot,
+            ᶜtsʲs.:($$j),
         )
     end
 
+    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
+        precip_model,
+        thermo_params,
+        microphys_params,
+        dt,
+        ᶜq_tot⁰,
+        ᶜts⁰,
+    )
+
     # First order approximation: Use environmental mean fields.
     @. ᶜlinear_buoygrad = buoyancy_gradients(
-        params,
+        BuoyGradMean(),
+        thermo_params,
         moisture_model,
-        EnvBuoyGrad(
-            BuoyGradMean(),
-            TD.air_temperature(thermo_params, ᶜts⁰),                           # t_sat
-            TD.vapor_specific_humidity(thermo_params, ᶜts⁰),                   # qv_sat
-            ᶜq_tot⁰,                                                           # qt_sat
-            TD.dry_pottemp(thermo_params, ᶜts⁰),                               # θ_sat
-            TD.liquid_ice_pottemp(thermo_params, ᶜts⁰),                        # θ_liq_ice_sat
-            projected_vector_data(
+        EnvBuoyGradVars(
+            thermo_params,
+            ᶜts⁰,
+            projected_vector_buoy_grad_vars(
                 C3,
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),
+                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),    # ∂θv∂z_unsat
+                ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰)),                                    # ∂qt∂z_sat
+                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))), # ∂θl∂z_sat
                 ᶜlg,
-            ),                                                                 # ∂θv∂z_unsat
-            projected_vector_data(C3, ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰)), ᶜlg),          # ∂qt∂z_sat
-            projected_vector_data(
-                C3,
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))),
-                ᶜlg,
-            ),                                                                 # ∂θl∂z_sat
-            ᶜp,                                                                # p
-            ifelse(TD.has_condensate(thermo_params, ᶜts⁰), 1, 0),              # en_cld_frac
-            ᶜρ⁰,                                                               # ρ
+            ),
         ),
     )
 

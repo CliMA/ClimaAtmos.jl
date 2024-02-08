@@ -1,5 +1,6 @@
 import NCRegressionTests
 import NCDatasets
+import Tar
 import ClimaCoreTempestRemap as CCTR
 
 include("self_reference_or_path.jl")
@@ -32,6 +33,23 @@ function regression_test(; job_id, reference_mse, ds_filename_computed, varname)
         ds_filename_reference = joinpath(path, ds_filename_computed)
         @info "`ds_filename_computed`: `$ds_filename_computed`"
         @info "`ds_filename_reference`: `$ds_filename_reference`"
+        if !isfile(ds_filename_reference)
+            # We may have converted to tarball, try to
+            # extract nc files from tarball first:
+            job_dir = dirname(ds_filename_reference)
+            mktempdir(joinpath(job_dir, tempdir())) do tdir
+                # We must extract to an empty folder, let's
+                # move it back to job_dir after.
+                Tar.extract(joinpath(job_dir, "nc_files.tar"), tdir) do hdr
+                    basename(hdr.path) == basename(ds_filename_reference)
+                end
+                mv(
+                    joinpath(tdir, basename(ds_filename_reference)),
+                    joinpath(job_dir, basename(ds_filename_reference));
+                    force = true,
+                )
+            end
+        end
         if !isfile(ds_filename_reference)
             msg = "\n\n"
             msg *= "Pull request author:\n"

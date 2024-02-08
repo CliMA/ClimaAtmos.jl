@@ -1,41 +1,22 @@
 config: "column"
 initial_condition: "PrecipitatingColumn"
-surface_setup: "DefaultExchangeCoefficients"
+surface_setup: "DefaultMoninObukhov"
 z_elem: 200
 z_max: 10000.0
 z_stretch: false
 dt: "10secs"
 t_end: "1500secs"
-dt_save_to_disk: "500secs"
+dt_save_state_to_disk: "500secs"
+dt_cloud_fraction: "60secs"
 moist: "nonequil"
 precip_model: "1M"
-precip_upwinding: "first_order"
-hyperdiff: "false"
+vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
-vert_diff: "true"
+approximate_linear_solve_iters: 2
 regression_test: false
 check_precipitation: true
 job_id: "single_column_precipitation_test"
 toml: [toml/single_column_precipitation_test.toml]
 diagnostics:
-  - short_name: hus
+  - short_name: [hus, clw, cli, husra, hussn, ta, wa]
     period: 500secs
-    writer: h5
-  - short_name: clw
-    period: 500secs
-    writer: h5
-  - short_name: cli
-    period: 500secs
-    writer: h5
-  - short_name: husra
-    period: 500secs
-    writer: h5
-  - short_name: hussn
-    period: 500secs
-    writer: h5
-  - short_name: ta
-    period: 500secs
-    writer: h5
-  - short_name: wa
-    period: 500secs
-    writer: h5

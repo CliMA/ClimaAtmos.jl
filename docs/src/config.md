@@ -29,9 +29,8 @@ prognostic_tke: false
 moist: "equil"
 config: "box"
 hyperdiff: "true"
-kappa_4: 1.0e12
-x_max: 1e5
-y_max: 1e5
+x_max: 1e8
+y_max: 1e8
 z_max: 3e3
 x_elem: 2
 y_elem: 2
@@ -40,7 +39,7 @@ z_stretch: false
 perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
-dt_save_to_disk: "10mins"
+dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_box.toml]
 ```
 

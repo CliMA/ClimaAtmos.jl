@@ -8,7 +8,6 @@ import CLIMAParameters as CP
 import ClimaComms
 using ClimaCoreTempestRemap
 
-using ImageFiltering
 using Interpolations
 
 using Plots
@@ -81,7 +80,7 @@ earth_spline = NCDataset(data_path) do data
     lat = Array(data["latitude"])
     # Apply Smoothing
     smooth_degree = 15
-    esmth = imfilter(zlevels, Kernel.gaussian(smooth_degree))
+    esmth = CA.gaussian_smooth(zlevels, smooth_degree)
     linear_interpolation(
         (lon, lat),
         zlevels,
@@ -100,7 +99,7 @@ dz_bottom = 300.0
 dz_top = 5000.0
 radius = 6.371229e6
 
-quad = Spaces.Quadratures.GLL{nh_poly + 1}()
+quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 
@@ -212,10 +211,7 @@ p = (; orographic_gravity_wave = CA.orographic_gravity_wave_cache(Y, ogw))
 (; ᶜdTdz) = p.orographic_gravity_wave
 
 # pre-compute thermal vars
-aliases = string.(fieldnames(TD.Parameters.ThermodynamicsParameters))
-toml_dict = CP.create_toml_dict(FT; dict_type = "alias")
-pairs = CP.get_parameter_values!(toml_dict, aliases, "Thermodynamics")
-thermo_params = TD.Parameters.ThermodynamicsParameters{FT}(; pairs...)
+thermo_params = TD.Parameters.ThermodynamicsParameters(FT)
 
 ᶜT = gfdl_ca_temp
 ᶜp = gfdl_ca_p

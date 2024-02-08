@@ -1,4 +1,11 @@
 import ClimaTimeSteppers as CTS
+import Base.Sys: maxrss
+
+# Empty integrator.tstops to stop time-marching.
+function terminate!(integrator::CTS.DistributedODEIntegrator)
+    @info "Gracefully exiting simulation."
+    empty!(integrator.tstops.valtree)
+end
 
 struct EfficiencyStats{TS <: Tuple, WT}
     tspan::TS
@@ -19,8 +26,12 @@ function timed_solve!(integrator)
         end
     end
     @info "solve!: $s"
-    es = EfficiencyStats(integrator.sol.prob.tspan, walltime)
+    (; tspan) = integrator.sol.prob
+    es = EfficiencyStats(tspan, walltime)
     @info "sypd: $(simulated_years_per_day(es))"
+    n_steps = (tspan[2] - tspan[1]) / integrator.dt
+    wall_time_per_timestep = time_and_units_str(walltime / n_steps)
+    @info "wall_time_per_timestep: $wall_time_per_timestep"
     return (sol, walltime)
 end
 
@@ -67,11 +78,21 @@ function solve_atmos!(simulation)
             return AtmosSolveResults(sol, :success, walltime)
         end
     catch ret_code
+        if !CA.is_distributed(comms_ctx)
+            # We can only save when not distributed because we don't have a way to sync the
+            # MPI processes (maybe just one MPI rank crashes, leading to a hanging
+            # simulation)
+            CA.save_state_to_disk_func(integrator, simulation.output_dir)
+        end
         @error "ClimaAtmos simulation crashed. Stacktrace for failed simulation" exception =
             (ret_code, catch_backtrace())
         return AtmosSolveResults(nothing, :simulation_crashed, nothing)
     finally
         # Close all the files opened by the writers
+
+        maxrss_str = prettymemory(maxrss())
+        @info "Memory currently used (after solve!) by the process (RSS): $maxrss_str"
+
         foreach(CAD.close, output_writers)
     end
 end

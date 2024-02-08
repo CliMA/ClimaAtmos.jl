@@ -35,6 +35,7 @@ import ..DiagnosticEDMFX
 
 # functions used to calculate diagnostics
 import ..draft_area
+import ..compute_gm_mixing_length!
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))

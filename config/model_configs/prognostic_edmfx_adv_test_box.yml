@@ -7,9 +7,8 @@ edmfx_upwinding: "first_order"
 config: "box"
 moist: "equil"
 hyperdiff: "true"
-kappa_4: 1e8
-x_max: 1e4
-y_max: 1e4
+x_max: 1e8
+y_max: 1e8
 z_max: 5.5e4
 x_elem: 2
 y_elem: 2
@@ -18,6 +17,6 @@ dz_bottom: 30.0
 dz_top: 3000.0
 dt: "10secs"
 t_end: "3600secs"
-dt_save_to_disk: "100secs"
+dt_save_state_to_disk: "100secs"
 FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx_box_advection.toml]

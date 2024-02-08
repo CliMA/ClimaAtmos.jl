@@ -1,3 +1,6 @@
+dt_save_state_to_disk: "Inf"
+dt_save_to_sol: "Inf"
+output_default_diagnostics: false
 h_elem: 30
 initial_condition: "DryBaroclinicWave"
 t_end: "1days"
@@ -5,5 +8,4 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 dt: "150secs"
-dt_save_to_sol: "Inf"
 job_id: "target_gpu_implicit_baroclinic_wave"

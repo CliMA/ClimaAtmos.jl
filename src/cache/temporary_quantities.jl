@@ -9,10 +9,20 @@ function temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
 
     FT = Spaces.undertype(center_space)
+    CTh = CTh_vector_type(Y.c)
     return (;
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_E
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
+        ᶜtemp_scalar_3 = Fields.Field(FT, center_space),
+        ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
+        temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_field_level_3 = Fields.level(Fields.Field(FT, center_space), 1),
+        temp_data = Fields.field_values(Fields.Field(FT, center_space)),
+        temp_data_face_level = Fields.field_values(
+            Fields.level(Fields.Field(FT, face_space), half),
+        ), # ρaʲu³ʲ_data
         temp_data_level = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_data
@@ -22,6 +32,7 @@ function temporary_quantities(Y, atmos)
         temp_data_level_3 = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_datah_tot
+        ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
@@ -40,5 +51,15 @@ function temporary_quantities(Y, atmos)
         ), # ᶠstrain_rate
         # TODO: Remove this hack
         sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
+        # Implicit solver cache:
+        ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CTh{FT}}}),
+        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
+        ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
+        ᶜadvection_matrix = similar(
+            Y.c,
+            BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
+        ),
+        ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
     )
 end

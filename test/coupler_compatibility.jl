@@ -58,6 +58,8 @@ const T2 = 290
     @. sfc_setup = (surface_state,)
     p_overwritten = CA.AtmosCache(
         p.dt,
+        simulation.t_end,
+        CA.WallTimeEstimate(),
         p.start_date,
         p.atmos,
         p.numerics,
@@ -65,7 +67,7 @@ const T2 = 290
         p.core,
         sfc_setup,
         p.ghost_buffer,
-        p.env_thermo_quad,
+        p.SG_quad,
         p.precomputed,
         p.scratch,
         p.hyperdiff,
@@ -82,6 +84,8 @@ const T2 = 290
         p.radiation,
         p.net_energy_flux_toa,
         p.net_energy_flux_sfc,
+        p.conservation_check,
+        p.output_dir,
     )
 
     # Test that set_precomputed_quantities! can be used to update the surface
@@ -209,6 +213,11 @@ end
             "moist" => "equil",
             "rad" => "clearsky",
             "turbconv" => "diagnostic_edmfx",
+            # NOTE: We do not output diagnostics because it leads to problems with Ubuntu on
+            # GitHub actions taking too long to run (for unknown reasons). If you need this,
+            # remove the following line and check that the test runs in less than a few
+            # minutes on GitHub
+            "output_default_diagnostics" => false,
         ),
     )
     simulation = CA.get_simulation(config)

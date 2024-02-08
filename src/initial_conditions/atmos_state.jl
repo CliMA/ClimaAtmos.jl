@@ -72,12 +72,29 @@ energy_variables(ls) = (;
 
 atmos_surface_field(surface_space, ::PrescribedSurfaceTemperature) = (;)
 function atmos_surface_field(surface_space, ::PrognosticSurfaceTemperature)
-    return (;
-        sfc = map(
-            coord -> (; T = Geometry.float_type(coord)(300)),
-            Fields.coordinate_field(surface_space),
+    if :lat in propertynames(Fields.coordinate_field(surface_space))
+        return (;
+            sfc = map(
+                coord -> (;
+                    T = Geometry.float_type(coord)(
+                        271 + 29 * exp(-coord.lat^2 / (2 * 26^2)),
+                    ),
+                    water = Geometry.float_type(coord)(0),
+                ),
+                Fields.coordinate_field(surface_space),
+            )
         )
-    )
+    else
+        return (;
+            sfc = map(
+                coord -> (;
+                    T = Geometry.float_type(coord)(300),
+                    water = Geometry.float_type(coord)(0),
+                ),
+                Fields.coordinate_field(surface_space),
+            )
+        )
+    end
 end
 
 function moisture_variables(ls, ::DryModel)

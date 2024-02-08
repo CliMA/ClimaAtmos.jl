@@ -49,8 +49,35 @@ trials["implicit_tendency!"] = get_trial(implicit_fun(integrator), implicit_args
 trials["remaining_tendency!"] = get_trial(remaining_fun(integrator), remaining_args(integrator), "remaining_tendency!");
 trials["additional_tendency!"] = get_trial(CA.additional_tendency!, (X, u, p, t), "additional_tendency!");
 trials["hyperdiffusion_tendency!"] = get_trial(CA.hyperdiffusion_tendency!, (X, u, p, t), "hyperdiffusion_tendency!");
+trials["limited_tendency!"] = get_trial(CA.limited_tendency!, (X, u, p, t), "limited_tendency!");
+trials["dss!"] = get_trial(CA.dss!, (u, p, t), "dss!");
+trials["set_precomputed_quantities!"] = get_trial(CA.set_precomputed_quantities!, (u, p, t), "set_precomputed_quantities!");
 trials["step!"] = get_trial(SciMLBase.step!, (integrator, ), "step!");
 #! format: on
+
+using Test
+using ClimaComms
+are_boundschecks_forced = Base.JLOptions().check_bounds == 1
+# Benchmark allocation tests
+@testset "Benchmark allocation tests" begin
+    if ClimaComms.device(config.comms_ctx) isa ClimaComms.CPUSingleThreaded &&
+       !are_boundschecks_forced
+        @test trials["Wfact"].memory == 0
+        @test trials["linsolve"].memory == 0
+        @test trials["implicit_tendency!"].memory == 0
+        @test trials["remaining_tendency!"].memory == 0
+        @test trials["additional_tendency!"].memory == 0
+        @test trials["hyperdiffusion_tendency!"].memory == 0
+        @test trials["limited_tendency!"].memory == 0
+        @test trials["dss!"].memory == 0
+        @test trials["set_precomputed_quantities!"].memory ≤ 32
+        @test_broken trials["set_precomputed_quantities!"].memory < 32
+
+        # It's difficult to guarantee zero allocations,
+        # so let's just leave this as broken for now.
+        @test_broken trials["step!"].memory == 0
+    end
+end
 
 table_summary = OrderedCollections.OrderedDict()
 for k in keys(trials)

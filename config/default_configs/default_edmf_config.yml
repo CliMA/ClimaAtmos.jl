@@ -29,3 +29,6 @@ edmfx_sgs_mass_flux:
 edmfx_sgs_diffusive_flux:
   help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
   value: false
+updraft_number:
+  help: "Sets the number of updrafts for the EDMF scheme"
+  value: 1

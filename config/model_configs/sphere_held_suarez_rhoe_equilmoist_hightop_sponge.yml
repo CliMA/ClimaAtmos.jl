@@ -1,4 +1,4 @@
-dt_save_to_disk: "4days"
+dt_save_state_to_disk: "4days"
 rayleigh_sponge: true
 dt: "450secs"
 z_elem: 25

@@ -60,10 +60,10 @@ We make use of the following operators
 
 ## Auxiliary and derived quantities
 
-* ``\tilde{\boldsymbol{u}^j}`` is the mass-weighted reconstruction of velocity at the interfaces:
+* ``\tilde{\boldsymbol{u}}^j`` is the mass-weighted reconstruction of velocity at the interfaces:
   by interpolation of contravariant components
     ```math
-  \tilde{\boldsymbol{u}^j} = WI^f(\rho^j J, \boldsymbol{u}_h) + \boldsymbol{u}_v^j
+  \tilde{\boldsymbol{u}}^j = WI^f \left( \rho^j J, \boldsymbol{u}_h \right) + \boldsymbol{u}_v^j.
   ```
 Technically, from mass conservation, the weighting factor should be ``\hat{\rho}^j J``.
 However, in order to avoid issues coming from close to zero sub-domain area fractions,
@@ -72,16 +72,16 @@ we can instead use ``\rho^j J`` or even ``\rho J``.
 * ``\bar{\boldsymbol{u}}^j`` is the reconstruction of velocity at cell-centers,
   carried out by linear interpolation of the covariant vertical component:
   ```math
-  \bar{\boldsymbol{u}}^j = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v^j)
+  \bar{\boldsymbol{u}}^j = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v^j),
   ```
 
 * ``\boldsymbol{b}^j`` is the reduced gravitational acceleration
   ```math
-  \boldsymbol{b}^j = - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla \Phi
+  \boldsymbol{b}^j = - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla \Phi,
   ```
 * ``K^j = \tfrac{1}{2} \|\boldsymbol{u}^j\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
   ```math
-  K^j = \tfrac{1}{2} (\boldsymbol{u}_{h}^j \cdot \boldsymbol{u}_{h}^j + 2 \boldsymbol{u}_{h}^j \cdot I_{c} (\boldsymbol{u}_{v}^j) + I_{c}(\boldsymbol{u}_{v}^j \cdot \boldsymbol{u}_{v}^j)),
+  K^j = \tfrac{1}{2} \left(\boldsymbol{u}_{h}^j \cdot \boldsymbol{u}_{h}^j + 2 \boldsymbol{u}_{h}^j \cdot I_{c} (\boldsymbol{u}_{v}^j) + I_{c}(\boldsymbol{u}_{v}^j \cdot \boldsymbol{u}_{v}^j) \right),
   ```
   where ``\boldsymbol{u}_{h}^j`` is defined on cell-centers, ``\boldsymbol{u}_{v}^j`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.
 
@@ -89,7 +89,7 @@ we can instead use ``\rho^j J`` or even ``\rho J``.
 
 * No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v,j}``, to be zero. The vertical covariant velocity component is computed as
   ```math
-  \tilde{u}_{v}^j = - \tfrac{u_{1}g^{31} + u_{2}g^{32}}{g^{33}}.
+  \tilde{u}_{v}^j = - \frac{u_{1}g^{31} + u_{2}g^{32}}{g^{33}}.
   ```
 
 ## Equations and discretizations
@@ -98,20 +98,20 @@ we can instead use ``\rho^j J`` or even ``\rho J``.
 
 Follows the continuity equation
 ```math
-\frac{\partial}{\partial t} \hat{\rho}^j = - \nabla \cdot (\hat{\rho}^j \boldsymbol{u}^j)  + RHS
+\frac{\partial}{\partial t} \hat{\rho}^j = - \nabla \cdot (\hat{\rho}^j \boldsymbol{u}^j)  + RHS.
 ```
 
 This is discretized using the following
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j
-= - D_h[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS
+= - D_h \left[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j)) \right] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS.
 ```
 
 ### Momentum
 
 Uses the advective form equation
 ```math
-\frac{\partial}{\partial t} \boldsymbol{u}^j  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}^j) \times \boldsymbol{u}^j - \frac{1}{\rho^j} \nabla (p - p_{\text{ref}})  + \boldsymbol{b}^j - \nabla K^j + RHS
+\frac{\partial}{\partial t} \boldsymbol{u}^j  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}^j) \times \boldsymbol{u}^j - \frac{1}{\rho^j} \nabla (p - p_{\text{ref}})  + \boldsymbol{b}^j - \nabla K^j + RHS.
 ```
 By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain
 the vertical momentum equation. The horizontal momentum equation is only solved in the grid-mean.
@@ -133,18 +133,18 @@ The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \t
 ```math
 (C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v^j]) \times I^f(\boldsymbol{u}^h) ,
 ```
-and the ``-\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j`` term as
+and the ``-\frac{1}{\rho^j} \nabla_v (p - p_{\text{ref}}) - \frac{\rho^j - \rho_{\text{ref}}}{\rho^j} \nabla_v \Phi - \nabla_v K^j`` terms as
 ```math
 -\frac{1}{I^f(\rho^j)} G^f_v[p - p_{\text{ref}}] - \frac{I^f(\rho^j - \rho_{\text{ref}})}{I^f(\rho^j)} G^f_v[\Phi] - G^f_v[K^j] ,
 ```
 
 The hyperviscosity term is
 ```math
-- \nu_u \hat{\mathcal{D}}_h (\mathcal{G}_h (\psi) )
+- \nu_u \hat{\mathcal{D}}_h (\mathcal{G}_h (\psi) ),
 ```
 where
 ```math
-\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h (w^j)\right) \right]
+\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h (w^j)\right) \right].
 ```
 
 ### Total energy
@@ -154,15 +154,20 @@ where
 ```
 which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
 ```math
-- \nu_h \nabla \cdot \left( \hat{\rho}^j \nabla^3 \left(\frac{\rho^j e^j + p}{\rho^j} \right)\right)
+- \nu_h \nabla \cdot \left( \hat{\rho}^j \nabla^3 \left(\frac{\rho^j e^j + p}{\rho^j} \right)\right).
 ```
 
-is discretized using
+The equation is discretized as
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
-- D_h[ (\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p) (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
-- D^c_v \left[ WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho^j} e^j + \frac{\hat{\rho^j}}{\rho^j}p}{\hat{\rho}^j} \right)
-  \right] - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
+- D_h \left[ 
+    \left( \hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p \right) 
+    \left( \boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j) \right)
+  \right]
+- D^c_v \left[ 
+    WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p}{\hat{\rho}^j} \right)
+  \right] 
+  - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
 ```
 where
 ```math

@@ -1,5 +1,7 @@
 struct AtmosCache{
     FT <: AbstractFloat,
+    FTE,
+    WTE,
     SD,
     AM,
     NUM,
@@ -7,7 +9,7 @@ struct AtmosCache{
     COR,
     SFC,
     GHOST,
-    ENV,
+    SGQ,
     PREC,
     SCRA,
     HYPE,
@@ -25,9 +27,17 @@ struct AtmosCache{
     RAD,
     NETFLUXTOA,
     NETFLUXSFC,
+    CONSCHECK,
+    OD,
 }
     """Timestep of the simulation (in seconds). This is also used by callbacks and tendencies"""
     dt::FT
+
+    """End time of the simulation (in seconds). This used by callbacks"""
+    t_end::FTE
+
+    """Walltime estimate"""
+    walltime_estimate::WTE
 
     """Start date (used for insolation)."""
     start_date::SD
@@ -50,7 +60,8 @@ struct AtmosCache{
     """Center and face ghost buffers used by DSS"""
     ghost_buffer::GHOST
 
-    env_thermo_quad::ENV
+    """Struct with sub-grid sampling quadrature"""
+    SG_quad::SGQ
 
     """Quantities that are updated with set_precomputed_quantities!"""
     precomputed::PREC
@@ -80,6 +91,12 @@ struct AtmosCache{
     """Net energy flux coming through top of atmosphere and surface"""
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
+
+    """Conservation check for prognostic surface temperature"""
+    conservation_check::CONSCHECK
+
+    """Directory output."""
+    output_dir::OD
 end
 
 # Functions on which the model depends:
@@ -94,7 +111,8 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, dt, start_date)
+function build_cache(Y, atmos, params, surface_setup, sim_info)
+    (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
@@ -121,8 +139,9 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
     end
     ᶜf = @. CT3(Geometry.WVector(ᶜf))
 
-    quadrature_style = Spaces.horizontal_space(axes(Y.c)).quadrature_style
-    do_dss = quadrature_style isa Spaces.Quadratures.GLL
+    quadrature_style =
+        Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
+    do_dss = quadrature_style isa Quadratures.GLL
     ghost_buffer =
         !do_dss ? (;) :
         (; c = Spaces.create_dss_buffer(Y.c), f = Spaces.create_dss_buffer(Y.f))
@@ -130,9 +149,19 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
     net_energy_flux_toa = [Geometry.WVector(FT(0))]
     net_energy_flux_sfc = [Geometry.WVector(FT(0))]
 
-    limiter =
-        isnothing(atmos.numerics.limiter) ? nothing :
-        atmos.numerics.limiter(similar(Y.c, FT))
+    conservation_check =
+        !(atmos.precip_model isa NoPrecipitation) ?
+        (;
+            col_integrated_precip_energy_tendency = zeros(
+                axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
+            )
+        ) : (; col_integrated_precip_energy_tendency = (;))
+
+    limiter = if isnothing(atmos.numerics.limiter)
+        nothing
+    elseif atmos.numerics.limiter isa QuasiMonotoneLimiter
+        Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
+    end
 
     numerics = (; limiter)
 
@@ -146,7 +175,6 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
         ᶜf,
-        ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry)
@@ -155,11 +183,11 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
 
     sfc_setup = surface_setup(params)
     scratch = temporary_quantities(Y, atmos)
-    env_thermo_quad = SGSQuadrature(FT)
+    SG_quad = SGSQuadrature(FT)
 
     precomputed = precomputed_quantities(Y, atmos)
     precomputing_arguments =
-        (; atmos, core, params, sfc_setup, precomputed, scratch, dt)
+        (; atmos, core, params, sfc_setup, precomputed, scratch, dt, SG_quad)
 
     # Coupler compatibility
     isnothing(precomputing_arguments.sfc_setup) &&
@@ -186,6 +214,8 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
 
     args = (
         dt,
+        t_end,
+        WallTimeEstimate(),
         start_date,
         atmos,
         numerics,
@@ -193,7 +223,7 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
         core,
         sfc_setup,
         ghost_buffer,
-        env_thermo_quad,
+        SG_quad,
         precomputed,
         scratch,
         hyperdiff,
@@ -211,6 +241,8 @@ function build_cache(Y, atmos, params, surface_setup, dt, start_date)
         radiation,
         net_energy_flux_toa,
         net_energy_flux_sfc,
+        conservation_check,
+        output_dir,
     )
 
     return AtmosCache{map(typeof, args)...}(args...)

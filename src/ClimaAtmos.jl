@@ -1,11 +1,13 @@
 module ClimaAtmos
 
 using NVTX, Colors
+import Thermodynamics as TD
 
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
+include(joinpath("utils", "gpu_compat.jl"))
 include(joinpath("utils", "common_spaces.jl"))
 include(joinpath("solver", "types.jl"))
 include(joinpath("solver", "cli_options.jl"))
@@ -25,6 +27,7 @@ include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "precipitation_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
+include(joinpath("cache", "cloud_fraction.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(
@@ -73,6 +76,7 @@ include(
     ),
 )
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
+include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
 include(joinpath("prognostic_equations", "edmf_coriolis.jl"))
 include(joinpath("prognostic_equations", "buoyancy_gradients.jl"))
 include(joinpath("prognostic_equations", "edmfx_closures.jl"))
@@ -80,7 +84,7 @@ include(joinpath("prognostic_equations", "edmfx_entr_detr.jl"))
 include(joinpath("prognostic_equations", "edmfx_tke.jl"))
 include(joinpath("prognostic_equations", "edmfx_sgs_flux.jl"))
 include(joinpath("prognostic_equations", "edmfx_boundary_condition.jl"))
-include(joinpath("prognostic_equations", "cloud_fraction.jl"))
+include(joinpath("prognostic_equations", "edmfx_precipitation.jl"))
 include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
 )
@@ -105,6 +109,7 @@ include(joinpath("prognostic_equations", "dss.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
+include(joinpath("callbacks", "get_callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD

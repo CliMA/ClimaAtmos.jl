@@ -17,7 +17,6 @@ edmfx_sgs_diffusive_flux: true
 moist: "equil"
 config: "box" 
 hyperdiff: "true" 
-kappa_4: 1e21
 x_max: 1e8 
 y_max: 1e8 
 x_elem: 2 
@@ -28,5 +27,5 @@ dz_bottom: 50.0
 dz_top: 200.0
 dt: "200secs" 
 t_end: "6hours" 
-dt_save_to_disk: "10mins"
+dt_save_state_to_disk: "10mins"
 toml: [toml/diagnostic_edmfx_box.toml]
