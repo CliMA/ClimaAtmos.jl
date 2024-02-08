@@ -236,45 +236,6 @@ end
 # Turbconv model #
 ##################
 function default_diagnostics(::PrognosticEDMFX, t_end; output_writer)
-    edmfx_tenmin_diagnostics = [
-        "ts",
-        "ta",
-        "thetaa",
-        "ha",
-        "pfull",
-        "rhoa",
-        "ua",
-        "va",
-        "wa",
-        "hur",
-        "hus",
-        "cl",
-        "clw",
-        "cli",
-        "hussfc",
-        "evspsbl",
-        "arup",
-        "waup",
-        "taup",
-        "thetaaup",
-        "haup",
-        "husup",
-        "hurup",
-        "clwup",
-        "cliup",
-        "rhoaen",
-        "waen",
-        "taen",
-        "thetaaen",
-        "haen",
-        "husen",
-        "huren",
-        "clwen",
-        "clien",
-        "tke",
-        "lmix",
-    ]
-
     edmfx_draft_diagnostics = [
         "arup",
         "rhoaup",
@@ -305,7 +266,6 @@ function default_diagnostics(::PrognosticEDMFX, t_end; output_writer)
     average_func = frequency_averages(t_end)
 
     return [
-        thirtymin_insts(edmfx_tenmin_diagnostics...; output_writer)...,
         average_func(edmfx_draft_diagnostics...; output_writer)...,
         average_func(edmfx_env_diagnostics...; output_writer)...,
     ]
@@ -313,37 +273,6 @@ end
 
 
 function default_diagnostics(::DiagnosticEDMFX, t_end; output_writer)
-    diagnostic_edmfx_tenmin_diagnostics = [
-        "ts",
-        "ta",
-        "thetaa",
-        "ha",
-        "pfull",
-        "rhoa",
-        "ua",
-        "va",
-        "wa",
-        "hur",
-        "hus",
-        "cl",
-        "clw",
-        "cli",
-        "hussfc",
-        "evspsbl",
-        "arup",
-        "waup",
-        "taup",
-        "thetaaup",
-        "haup",
-        "husup",
-        "hurup",
-        "clwup",
-        "cliup",
-        "waen",
-        "tke",
-        "lmix",
-    ]
-
     diagnostic_edmfx_draft_diagnostics = [
         "arup",
         "rhoaup",
@@ -361,10 +290,6 @@ function default_diagnostics(::DiagnosticEDMFX, t_end; output_writer)
     average_func = frequency_averages(t_end)
 
     return [
-        thirtymin_insts(
-            diagnostic_edmfx_tenmin_diagnostics...;
-            output_writer,
-        )...,
         average_func(diagnostic_edmfx_draft_diagnostics...; output_writer)...,
         average_func(diagnostic_edmfx_env_diagnostics...; output_writer)...,
     ]
