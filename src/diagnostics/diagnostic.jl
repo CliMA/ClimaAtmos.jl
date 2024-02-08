@@ -733,7 +733,9 @@ function get_callbacks_from_diagnostics(
                     diag.output_writer,
                     storage[diag],
                     diag,
-                    integrator,
+                    integrator.u,
+                    integrator.p,
+                    integrator.t,
                     output_dir,
                 )
 

@@ -852,12 +852,8 @@ function get_simulation(config::AtmosConfig)
                 # The first time we call compute! we use its return value. All
                 # the subsequent times (in the callbacks), we will write the
                 # result in place
-                diagnostic_storage[diag] = variable.compute!(
-                    nothing,
-                    integrator.u,
-                    integrator.p,
-                    integrator.t,
-                )
+                diagnostic_storage[diag] =
+                    variable.compute!(nothing, Y, p, t_start)
                 diagnostic_counters[diag] = 1
                 # If it is not a reduction, call the output writer as well
                 if isnothing(diag.reduction_time_func)
@@ -865,7 +861,9 @@ function get_simulation(config::AtmosConfig)
                         diag.output_writer,
                         diagnostic_storage[diag],
                         diag,
-                        integrator,
+                        Y,
+                        p,
+                        t_start,
                         sim_info.output_dir,
                     )
                 else
@@ -893,9 +891,9 @@ function get_simulation(config::AtmosConfig)
             # We write over the storage space we have already prepared (and filled) before
             allocs = @allocated diag.variable.compute!(
                 diagnostic_storage[diag],
-                integrator.u,
-                integrator.p,
-                integrator.t,
+                Y,
+                p,
+                t_start,
             )
             if allocs > 10 * 1024
                 @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"
