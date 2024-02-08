@@ -692,6 +692,17 @@ function get_simulation(config::AtmosConfig)
     atmos = get_atmos(config, params)
 
     sim_info = get_sim_info(config)
+    job_id = sim_info.job_id
+    output_dir = sim_info.output_dir
+
+    CP.log_parameter_information(
+        config.toml_dict,
+        joinpath(output_dir, "$(job_id)_parameters.toml"),
+        # Strict logging temporarily disabled for compatibility with CloudMicrophysics overrides
+        # strict = true,
+    )
+    YAML.write_file(joinpath(output_dir, "$job_id.yml"), config.parsed_args)
+
     if sim_info.restart
         s = @timed_str begin
             (Y, t_start) = get_state_restart(config.comms_ctx)
@@ -702,16 +713,6 @@ function get_simulation(config::AtmosConfig)
     else
         spaces = get_spaces(config.parsed_args, params, config.comms_ctx)
     end
-
-    # Check that all set parameters have been used
-    # Strict logging temporarily disabled for compatibility with CloudMicrophysics overrides
-    param_filepath =
-        joinpath(sim_info.output_dir, "$(sim_info.job_id)_parameters.toml")
-    CP.log_parameter_information(
-        config.toml_dict,
-        param_filepath,
-        # strict = true,
-    )
 
     initial_condition = get_initial_condition(config.parsed_args)
     surface_setup = get_surface_setup(config.parsed_args)
@@ -786,7 +787,7 @@ function get_simulation(config::AtmosConfig)
             diagnostic_storage,
             diagnostic_accumulators,
             diagnostic_counters,
-            sim_info.output_dir,
+            output_dir,
         )
     end
     @info "Prepared diagnostic callbacks: $s"
@@ -843,7 +844,7 @@ function get_simulation(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
-    reset_graceful_exit(sim_info.output_dir)
+    reset_graceful_exit(output_dir)
 
     s = @timed_str begin
         for diag in diagnostics_iterations
@@ -864,7 +865,7 @@ function get_simulation(config::AtmosConfig)
                         Y,
                         p,
                         t_start,
-                        sim_info.output_dir,
+                        output_dir,
                     )
                 else
                     # Add to the accumulator
@@ -902,8 +903,8 @@ function get_simulation(config::AtmosConfig)
     end
 
     return AtmosSimulation(
-        sim_info.job_id,
-        sim_info.output_dir,
+        job_id,
+        output_dir,
         sim_info.start_date,
         sim_info.t_end,
         writers,
