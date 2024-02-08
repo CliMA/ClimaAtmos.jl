@@ -71,7 +71,7 @@ num_ticks = 4
 min_tick, max_tick = extrema(sypd_clima_atmos)
 tick_size = (max_tick - min_tick) / num_ticks
 
-fig = Figure(resolution = (1200, 900))
+fig = Figure(; size = (1200, 900))
 Makie.Label(
     fig[begin - 1, 1:2],
     "$resolution scaling";
