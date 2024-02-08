@@ -468,7 +468,7 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function get_diagnostics(parsed_args, atmos_model, spaces)
+function get_diagnostics(parsed_args, atmos_model, cspace)
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -503,7 +503,7 @@ function get_diagnostics(parsed_args, atmos_model, spaces)
     end
 
     netcdf_writer = CAD.NetCDFWriter(;
-        spaces,
+        cspace,
         num_points = num_netcdf_points,
         interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
         disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
@@ -745,74 +745,16 @@ function get_simulation(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+        (; callbacks, diagnostic_callbacks, diagnostics_functions, writers) = get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
     @info "get_callbacks: $s"
-
-    # Initialize diagnostics
-    s = @timed_str begin
-        diagnostics, writers =
-            get_diagnostics(config.parsed_args, atmos, spaces)
-    end
-    @info "initializing diagnostics: $s"
-
-    length(diagnostics) > 0 && @info "Computing diagnostics:"
-
-    for writer in writers
-        writer_str = nameof(typeof(writer))
-        diags_with_writer =
-            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
-        diags_outputs = [
-            getproperty(diag, :output_short_name) for diag in diags_with_writer
-        ]
-        @info "$writer_str: $diags_outputs"
-    end
-
-    # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
-    # ensuring that there is consistency in the timestep and the periods and translating
-    # those periods that depended on the timestep
-    diagnostics_iterations =
-        [CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for d in diagnostics]
-
-    # For diagnostics that perform reductions, the storage is used for the values computed
-    # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
-    diagnostic_storage = Dict()
-    diagnostic_accumulators = Dict()
-    diagnostic_counters = Dict()
-
-    s = @timed_str begin
-        diagnostics_functions = CAD.get_callbacks_from_diagnostics(
-            diagnostics_iterations,
-            diagnostic_storage,
-            diagnostic_accumulators,
-            diagnostic_counters,
-            sim_info.output_dir,
-        )
-    end
-    @info "Prepared diagnostic callbacks: $s"
-
-    # It would be nice to just pass the callbacks to the integrator. However, this leads to
-    # a significant increase in compile time for reasons that are not known. For this
-    # reason, we only add one callback to the integrator, and this function takes care of
-    # executing the other callbacks. This single function is orchestrate_diagnostics
-
-    function orchestrate_diagnostics(integrator)
-        for d in diagnostics_functions
-            if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
-                d.f!(integrator)
-            end
-        end
-    end
-
-    diagnostic_callbacks =
-        call_every_n_steps(orchestrate_diagnostics, skip_first = true)
 
     # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
     # and continuous. This is not hard, but can introduce significant latency. However, all
     # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
     # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., diagnostic_callbacks)
+    discrete_callbacks = (callbacks..., diagnostic_callbacks)
 
     s = @timed_str begin
         all_callbacks =
@@ -844,62 +786,6 @@ function get_simulation(config::AtmosConfig)
     end
     @info "init integrator: $s"
     reset_graceful_exit(sim_info.output_dir)
-
-    s = @timed_str begin
-        for diag in diagnostics_iterations
-            variable = diag.variable
-            try
-                # The first time we call compute! we use its return value. All
-                # the subsequent times (in the callbacks), we will write the
-                # result in place
-                diagnostic_storage[diag] =
-                    variable.compute!(nothing, Y, p, t_start)
-                diagnostic_counters[diag] = 1
-                # If it is not a reduction, call the output writer as well
-                if isnothing(diag.reduction_time_func)
-                    CAD.write_field!(
-                        diag.output_writer,
-                        diagnostic_storage[diag],
-                        diag,
-                        Y,
-                        p,
-                        t_start,
-                        sim_info.output_dir,
-                    )
-                else
-                    # Add to the accumulator
-
-                    # We use similar + .= instead of copy because CUDA 5.2 does
-                    # not supported nested wrappers with view(reshape(view))
-                    # objects. See discussion in
-                    # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
-                    # https://github.com/JuliaGPU/Adapt.jl/issues/21
-                    diagnostic_accumulators[diag] =
-                        similar(diagnostic_storage[diag])
-                    diagnostic_accumulators[diag] .=
-                        diagnostic_storage[diag]
-                end
-            catch e
-                error("Could not compute diagnostic $(variable.long_name): $e")
-            end
-        end
-    end
-    @info "Init diagnostics: $s"
-
-    if config.parsed_args["warn_allocations_diagnostics"]
-        for diag in diagnostics_iterations
-            # We write over the storage space we have already prepared (and filled) before
-            allocs = @allocated diag.variable.compute!(
-                diagnostic_storage[diag],
-                Y,
-                p,
-                t_start,
-            )
-            if allocs > 10 * 1024
-                @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"
-            end
-        end
-    end
 
     return AtmosSimulation(
         sim_info.job_id,

@@ -495,13 +495,13 @@ Keyword arguments
 
 """
 function NetCDFWriter(;
-    spaces,
+    cspace,
     num_points = (180, 90, 50),
     interpolate_z_over_msl = false,
     disable_vertical_interpolation = false,
     compression_level = 9,
 )
-    space = spaces.center_space
+    space = cspace
     hypsography = Spaces.grid(space).hypsography
 
     # When we are interpolating on the vertical direction, we have to deal with the pesky

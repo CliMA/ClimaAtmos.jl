@@ -75,5 +75,8 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     callbacks =
         (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
 
-    return callbacks
+    (; diagnostic_callbacks, diagnostics_functions, writers) =
+        get_diagnostic_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+
+    return (; callbacks, diagnostic_callbacks, diagnostics_functions, writers)
 end
