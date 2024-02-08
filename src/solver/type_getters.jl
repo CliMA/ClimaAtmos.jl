@@ -435,86 +435,6 @@ thermo_state_type(::EquilMoistModel, ::Type{FT}) where {FT} = TD.PhaseEquil{FT}
 thermo_state_type(::NonEquilMoistModel, ::Type{FT}) where {FT} =
     TD.PhaseNonEquil{FT}
 
-
-function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
-    FT = eltype(params)
-    (; dt, output_dir) = sim_info
-
-    callbacks = ()
-    if parsed_args["log_progress"] && !sim_info.restart
-        @info "Progress logging enabled."
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                (integrator) -> print_walltime_estimate(integrator);
-                skip_first = true,
-            ),
-        )
-    end
-    callbacks = (
-        callbacks...,
-        call_every_n_steps(
-            terminate!;
-            skip_first = true,
-            condition = (u, t, integrator) ->
-                maybe_graceful_exit(integrator),
-        ),
-    )
-
-    dt_save_state_to_disk =
-        time_to_seconds(parsed_args["dt_save_state_to_disk"])
-    if !(dt_save_state_to_disk == Inf)
-        callbacks = (
-            callbacks...,
-            call_every_dt(
-                (integrator) ->
-                    save_state_to_disk_func(integrator, output_dir),
-                dt_save_state_to_disk;
-                skip_first = sim_info.restart,
-            ),
-        )
-    end
-
-    if is_distributed(comms_ctx)
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                gc_func,
-                parse(Int, get(ENV, "CLIMAATMOS_GC_NSTEPS", "1000")),
-                skip_first = true,
-            ),
-        )
-    end
-
-    if parsed_args["check_conservation"]
-        callbacks = (
-            callbacks...,
-            call_every_n_steps(
-                flux_accumulation!;
-                skip_first = true,
-                call_at_end = true,
-            ),
-        )
-    end
-
-    if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
-        # TODO: better if-else criteria?
-        dt_rad = if parsed_args["config"] == "column"
-            dt
-        else
-            FT(time_to_seconds(parsed_args["dt_rad"]))
-        end
-        callbacks =
-            (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
-    end
-
-    dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-    callbacks =
-        (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
-
-    return callbacks
-end
-
 function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
@@ -548,7 +468,7 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function get_diagnostics(parsed_args, atmos_model, spaces)
+function get_diagnostics(parsed_args, atmos_model, cspace)
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
     # (which will result in an empty list being created by the map below)
@@ -583,7 +503,7 @@ function get_diagnostics(parsed_args, atmos_model, spaces)
     end
 
     netcdf_writer = CAD.NetCDFWriter(;
-        spaces,
+        cspace,
         num_points = num_netcdf_points,
         interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
         disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
@@ -825,20 +745,14 @@ function get_simulation(config::AtmosConfig)
     @info "ode_configuration: $s"
 
     s = @timed_str begin
-        callback = get_callbacks(
-            config.parsed_args,
-            sim_info,
-            atmos,
-            params,
-            config.comms_ctx,
-        )
+        callback = get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     end
     @info "get_callbacks: $s"
 
     # Initialize diagnostics
     s = @timed_str begin
         diagnostics, writers =
-            get_diagnostics(config.parsed_args, atmos, spaces)
+            get_diagnostics(config.parsed_args, atmos, Spaces.axes(Y.c))
     end
     @info "initializing diagnostics: $s"
 
@@ -938,12 +852,8 @@ function get_simulation(config::AtmosConfig)
                 # The first time we call compute! we use its return value. All
                 # the subsequent times (in the callbacks), we will write the
                 # result in place
-                diagnostic_storage[diag] = variable.compute!(
-                    nothing,
-                    integrator.u,
-                    integrator.p,
-                    integrator.t,
-                )
+                diagnostic_storage[diag] =
+                    variable.compute!(nothing, Y, p, t_start)
                 diagnostic_counters[diag] = 1
                 # If it is not a reduction, call the output writer as well
                 if isnothing(diag.reduction_time_func)
@@ -951,7 +861,9 @@ function get_simulation(config::AtmosConfig)
                         diag.output_writer,
                         diagnostic_storage[diag],
                         diag,
-                        integrator,
+                        Y,
+                        p,
+                        t_start,
                         sim_info.output_dir,
                     )
                 else
@@ -979,9 +891,9 @@ function get_simulation(config::AtmosConfig)
             # We write over the storage space we have already prepared (and filled) before
             allocs = @allocated diag.variable.compute!(
                 diagnostic_storage[diag],
-                integrator.u,
-                integrator.p,
-                integrator.t,
+                Y,
+                p,
+                t_start,
             )
             if allocs > 10 * 1024
                 @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"

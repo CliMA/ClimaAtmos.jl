@@ -476,6 +476,7 @@ performing a pointwise (non-conservative) remapping first.
 Keyword arguments
 ==================
 
+- `cspace`: Center space of fields.
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
                 or X-Y-Z (the details depend on the configuration being simulated).
@@ -495,13 +496,13 @@ Keyword arguments
 
 """
 function NetCDFWriter(;
-    spaces,
+    cspace,
     num_points = (180, 90, 50),
     interpolate_z_over_msl = false,
     disable_vertical_interpolation = false,
     compression_level = 9,
 )
-    space = spaces.center_space
+    space = cspace
     hypsography = Spaces.grid(space).hypsography
 
     # When we are interpolating on the vertical direction, we have to deal with the pesky
@@ -559,7 +560,9 @@ function write_field!(
     writer::NetCDFWriter,
     field,
     diagnostic,
-    integrator,
+    u,
+    p,
+    t,
     output_dir,
 )
 
@@ -667,7 +670,7 @@ function write_field!(
         v.attrib["long_name"] = diagnostic.output_long_name
         v.attrib["units"] = var.units
         v.attrib["comments"] = var.comments
-        v.attrib["start_date"] = string(integrator.p.start_date)
+        v.attrib["start_date"] = string(p.start_date)
 
         temporal_size = 0
     end
@@ -676,7 +679,7 @@ function write_field!(
     # position ever if we are writing the file for the first time)
     time_index = temporal_size + 1
 
-    nc["time"][time_index] = integrator.t
+    nc["time"][time_index] = t
 
     # TODO: It would be nice to find a cleaner way to do this
     if length(dim_names) == 3
