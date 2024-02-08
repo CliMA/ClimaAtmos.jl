@@ -1,4 +1,5 @@
-function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
+function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
+    (; parsed_args, comms_ctx) = config
     FT = eltype(params)
     (; dt, output_dir) = sim_info
 
