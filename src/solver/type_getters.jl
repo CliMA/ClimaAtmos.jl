@@ -515,18 +515,28 @@ function get_callbacks(parsed_args, sim_info, atmos, params, comms_ctx)
     return callbacks
 end
 
+function get_job_id(config::AtmosConfig)
+    (; parsed_args) = config
+    if isnothing(parsed_args["job_id"])
+        return job_id_from_config(parsed_args)
+    else
+        return parsed_args["job_id"]
+    end
+end
+
+function get_output_dir(config::AtmosConfig)
+    (; parsed_args) = config
+    job_id = get_job_id(config)
+    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
+    out_dir = parsed_args["output_dir"]
+    return isnothing(out_dir) ? default_output : out_dir
+end
+
 function get_sim_info(config::AtmosConfig)
     (; parsed_args) = config
     FT = eltype(config)
-
-    job_id = if isnothing(parsed_args["job_id"])
-        job_id_from_config(parsed_args)
-    else
-        parsed_args["job_id"]
-    end
-    default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
-    out_dir = parsed_args["output_dir"]
-    output_dir = isnothing(out_dir) ? default_output : out_dir
+    job_id = get_job_id(config)
+    output_dir = get_output_dir(config)
     mkpath(output_dir)
 
     sim = (;
