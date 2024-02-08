@@ -41,16 +41,18 @@ function write_field!(
     writer::HDF5Writer,
     field,
     diagnostic,
-    integrator,
+    u,
+    p,
+    t,
     output_dir,
 )
     var = diagnostic.variable
-    time = integrator.t
+    time = t
 
     output_path =
         joinpath(output_dir, "$(diagnostic.output_short_name)_$(time).h5")
 
-    comms_ctx = ClimaComms.context(integrator.u.c)
+    comms_ctx = ClimaComms.context(u.c)
     hdfwriter = InputOutput.HDF5Writer(output_path, comms_ctx)
     InputOutput.write!(hdfwriter, field, "$(diagnostic.output_short_name)")
     attributes = Dict(

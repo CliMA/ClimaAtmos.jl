@@ -108,6 +108,7 @@ include(joinpath("prognostic_equations", "dss.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
+include(joinpath("callbacks", "get_callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
