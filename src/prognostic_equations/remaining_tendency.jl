@@ -13,17 +13,17 @@ end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
-    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
+    #horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
     # Vertical tendencies
     Fields.bycolumn(axes(Y.c)) do colidx
         rayleigh_sponge_tendency!(Yₜ, Y, p, t, colidx, p.atmos.rayleigh_sponge)
-        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
         forcing_tendency!(Yₜ, Y, p, t, colidx, p.atmos.forcing_type)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
+        #vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
 
         if p.atmos.diff_mode == Explicit()
             vertical_diffusion_boundary_layer_tendency!(
