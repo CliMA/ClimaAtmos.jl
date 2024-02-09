@@ -55,6 +55,11 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
 
     # momentum balance adjustment
  
+    u_cart = @. Geometry.UVWVector(Y.c.uₕ) + ᶜinterp(Geometry.UVWVector(Y.f.u₃))
+    hdiv_u_cart = @. divₕ(u_cart)
+    hgrad_u_cart = @. gradₕ(u_cart)
+    hgrad_u_cart_T = similar(hgrad_u_cart)
+
     # construct 3D cartesian component
 
     @. Yₜ.c.uₕ -=
