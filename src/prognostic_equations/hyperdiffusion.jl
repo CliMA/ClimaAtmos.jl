@@ -55,6 +55,44 @@ function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
     return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs)
 end
 
+NVTX.@annotate function dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    (; hyperdiff, turbconv_model) = p.atmos
+    buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
+    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+    diffuse_tke = use_prognostic_tke(turbconv_model)
+    n = n_mass_flux_subdomains(turbconv_model)
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
+    elseif turbconv_model isa DiagnosticEDMFX
+        (; ᶜ∇²tke⁰) = p.hyperdiff
+    end
+    # DSS on Grid scale quantities
+    # Need to split the DSS computation here, because our DSS
+    # operations do not accept Covariant123Vector types
+    Spaces.weighted_dss!(
+        ᶜ∇²u => buffer.ᶜ∇²u,
+        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
+        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
+    )
+    if turbconv_model isa PrognosticEDMFX
+        # Need to split the DSS computation here, because our DSS
+        # operations do not accept Covariant123Vector types
+        for j in 1:n
+            @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
+            @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
+        end
+        Spaces.weighted_dss!(
+            ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
+            ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
+            ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
+        )
+        for j in 1:n
+            @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
+        end
+    end
+end
+
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
@@ -83,9 +121,6 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         (; ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
-    if do_dss
-        buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    end
 
     # Grid scale hyperdiffusion
     @. ᶜ∇²u =
@@ -108,36 +143,7 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if do_dss
-        NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            # DSS on Grid scale quantities
-            # Need to split the DSS computation here, because our DSS
-            # operations do not accept Covariant123Vector types
-            Spaces.weighted_dss!(
-                ᶜ∇²u => buffer.ᶜ∇²u,
-                ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
-                (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
-            )
-            if turbconv_model isa PrognosticEDMFX
-                # Need to split the DSS computation here, because our DSS
-                # operations do not accept Covariant123Vector types
-                for j in 1:n
-                    @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
-                    @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
-                end
-                Spaces.weighted_dss!(
-                    ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
-                    ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
-                    ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
-                )
-                for j in 1:n
-                    @. ᶜ∇²uʲs.:($$j) =
-                        C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
-                end
-            end
-
-        end
-    end
+    do_dss && dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # re-use to store the curl-curl part
     @. ᶜ∇²u =
@@ -168,6 +174,18 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     if turbconv_model isa DiagnosticEDMFX && diffuse_tke
         @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
+    end
+end
+NVTX.@annotate function dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    (; turbconv_model) = p.atmos
+    (; ᶜ∇²specific_tracers) = p.hyperdiff
+    buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
+    if !isempty(propertynames(ᶜ∇²specific_tracers))
+        Spaces.weighted_dss!(ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers)
+    end
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∇²q_totʲs) = p.hyperdiff
+        Spaces.weighted_dss!(ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs)
     end
 end
 
@@ -202,18 +220,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         end
     end
 
-    if do_dss
-        NVTX.@range "dss_hyperdiffusion_tendency" color = colorant"green" begin
-            if !isempty(propertynames(ᶜ∇²specific_tracers))
-                Spaces.weighted_dss!(
-                    ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,
-                )
-            end
-            if turbconv_model isa PrognosticEDMFX
-                Spaces.weighted_dss!(ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs)
-            end
-        end
-    end
+    do_dss && dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # TODO: Since we are not applying the limiter to density (or area-weighted
     # density), the mass redistributed by hyperdiffusion will not be conserved
