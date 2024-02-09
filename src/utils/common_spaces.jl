@@ -56,7 +56,12 @@ function make_horizontal_space(
     return space
 end
 
-function make_horizontal_space(mesh, quad, comms_ctx, bubble)
+function make_horizontal_space(
+    mesh, 
+    quad, 
+    comms_ctx::ClimaComms.AbstractCommsContext, 
+    bubble
+)
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
     elseif mesh isa Meshes.AbstractMesh2D
@@ -90,6 +95,7 @@ function make_hybrid_spaces(
         Geometry.ZPoint(z_max);
         boundary_tags = (:bottom, :top),
     )
+
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
     device = ClimaComms.device(h_space)
@@ -101,7 +107,7 @@ function make_hybrid_spaces(
     if isnothing(surface_warp)
         hypsography = Hypsography.Flat()
     else
-        z_surface = surface_warp(Fields.coordinate_field(h_space))
+        z_surface = Geometry.ZPoint.(surface_warp(Fields.coordinate_field(h_space)))
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
