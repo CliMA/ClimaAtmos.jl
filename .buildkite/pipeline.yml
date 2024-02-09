@@ -207,6 +207,7 @@ steps:
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
         command: >
+          nsys profile --trace=nvtx,cuda --output=sphere_baroclinic_wave_rhoe_equilmoist/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
 
@@ -231,6 +232,7 @@ steps:
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist with cloud diagnostics"
         command: >
+          nsys profile --trace=nvtx,cuda --output=sphere_baroclinic_wave_rhoe_equilmoist_cldiag/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_cldiag.yml
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_cldiag/*"
