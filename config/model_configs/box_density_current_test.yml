@@ -1,4 +1,3 @@
-device: "CPUSingleThreaded"
 dt_save_state_to_disk: "10secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
@@ -10,6 +9,7 @@ y_elem: 15
 z_stretch: false
 x_elem: 45
 ode_algo: "SSP33ShuOsher"
+rayleigh_sponge: true
 config: "box"
 vorticity_hyperdiffusion_coefficient: 0.6
 scalar_hyperdiffusion_coefficient: 0.6

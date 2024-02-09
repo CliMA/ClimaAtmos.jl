@@ -8,7 +8,7 @@ import LinearAlgebra as la
 import ClimaCore: Geometry
 
 smagorinsky_lilly_cache(Y, atmos::AtmosModel) =
-    smagorinsky_lilly_cache(Y, atmos.rayleigh_sponge)
+    smagorinsky_lilly_cache(Y, atmos.smagorinsky_lilly)
 
 smagorinsky_lilly_cache(Y, ::Nothing) = (;)
 function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
@@ -54,10 +54,13 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; v_t, ᶜD) = p.smagorinsky_lilly
 
     # momentum balance adjustment
+ 
+    # construct 3D cartesian component
+
     @. Yₜ.c.uₕ -=
     2*v_t * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
 
-    ᶠv_t = p.ᶠtemp_scalar
+    ᶠv_t = p.scratch.ᶠtemp_scalar
     @. ᶠv_t = ᶠinterp(v_t)
     @. Yₜ.f.u₃ -= 2 * ᶠv_t * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
     

@@ -13,7 +13,7 @@ end
 
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     viscous_sponge_tendency!(Yₜ, Y, p, t, p.atmos.viscous_sponge)
-    #horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, p.atmos.smagorinsky_lilly)
     surface_temp_tendency!(Yₜ, Y, p, t, p.atmos.surface_model)
 
     # Vertical tendencies
