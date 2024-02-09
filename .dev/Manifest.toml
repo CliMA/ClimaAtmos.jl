@@ -16,9 +16,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.CSTParser]]
 deps = ["Tokenize"]
-git-tree-sha1 = "1dd0361befc505b9c6db4b5ab7eb874837de0569"
+git-tree-sha1 = "b1d309487c04e92253b55c1f803b1d6f0e136920"
 uuid = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
-version = "3.4.0"
+version = "3.4.1"
 
 [[deps.CommonMark]]
 deps = ["Crayons", "JSON", "PrecompileTools", "URIs"]
