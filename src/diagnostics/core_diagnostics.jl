@@ -664,9 +664,9 @@ end
 
 function compute_orog!(out, state, cache, time, hypsography)
     if isnothing(out)
-        return hypsography.surface
+        return Geometry.tofloat.(hypsography.surface)
     else
-        out .= hypsography.surface
+        out .= Geometry.tofloat.(hypsography.surface)
     end
 end
 

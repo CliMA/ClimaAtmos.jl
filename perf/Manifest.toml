@@ -317,9 +317,9 @@ version = "0.5.6"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "541bf25a8adc3c7ddf8d45a96149964f5cfbb074"
+git-tree-sha1 = "c9f8744c0ca7fd0f3f1833625ab4aa8edba28149"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.11.9"
+version = "0.12.0"
 weakdeps = ["Krylov"]
 
     [deps.ClimaCore.extensions]
@@ -327,33 +327,33 @@ weakdeps = ["Krylov"]
 
 [[deps.ClimaCoreMakie]]
 deps = ["ClimaCore", "Makie"]
-git-tree-sha1 = "6558051ff4e3711c29ec83821f8b05466f8d5383"
+git-tree-sha1 = "8c50d9642c3c97b566f1a022cebbb5839655c246"
 uuid = "908f55d8-4145-4867-9c14-5dad1a479e4d"
-version = "0.4.2"
+version = "0.4.3"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
-git-tree-sha1 = "11b973227d09bbdeaaa191ab59f2338f3f11d118"
+git-tree-sha1 = "e86fd9242e89b526c9fb29e05db3071ce64e3a8e"
 uuid = "cf7c7e5a-b407-4c48-9047-11a94a308626"
-version = "0.2.6"
+version = "0.2.7"
 
 [[deps.ClimaCoreSpectra]]
 deps = ["ClimaCore", "FFTW"]
-git-tree-sha1 = "bc3d17bc3a90a2d5f73374a9cb1a220110d93311"
+git-tree-sha1 = "380c82b44cbea4d462f671692137cace753b8bd3"
 uuid = "c2caaa1d-32ae-4754-ba0d-80e7561362e9"
-version = "0.1.1"
+version = "0.1.2"
 
 [[deps.ClimaCoreTempestRemap]]
 deps = ["ClimaComms", "ClimaCore", "CommonDataModel", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll"]
-git-tree-sha1 = "da5726ce5a79ec27a95bd6d4f178bd4022ca8f39"
+git-tree-sha1 = "2267e018c34f44fa8300b8d550d59f3eecef6094"
 uuid = "d934ef94-cdd4-4710-83d6-720549644b70"
-version = "0.3.12"
+version = "0.3.13"
 
 [[deps.ClimaCoreVTK]]
 deps = ["ClimaCore", "WriteVTK"]
-git-tree-sha1 = "aa5859eade145463cb628f5d1e3aaeee20316f55"
+git-tree-sha1 = "1a44ca6979f9be143b4ddb5ed333dbc84ab196f1"
 uuid = "c8b6d40d-e815-466f-95ae-c48aefa668fa"
-version = "0.7.3"
+version = "0.7.4"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
@@ -559,9 +559,9 @@ version = "0.1.0+0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "DataStructures", "DocStringExtensions", "EnumX", "EnzymeCore", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PreallocationTools", "PrecompileTools", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Static", "StaticArraysCore", "Statistics", "Tricks", "TruncatedStacktraces"]
-git-tree-sha1 = "fefc2eeabecb745f1b1e1f91634381f7c81bd75d"
+git-tree-sha1 = "eaf775818162923a0d509b10ca9ef809adfb43e8"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.146.1"
+version = "6.146.2"
 
     [deps.DiffEqBase.extensions]
     DiffEqBaseChainRulesCoreExt = "ChainRulesCore"
@@ -2174,9 +2174,9 @@ version = "0.6.12"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "SparseArrays", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "2bd309f5171a628efdf5309361cd8a779b9e63a9"
+git-tree-sha1 = "09c906ce9fa905d40e0706cdb62422422091c22f"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.8.0"
+version = "3.8.1"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -2427,9 +2427,9 @@ weakdeps = ["ChainRulesCore"]
 
 [[deps.StableHashTraits]]
 deps = ["Compat", "PikaParser", "SHA", "Tables", "TupleTools"]
-git-tree-sha1 = "662f56ffe22b3985f3be7474f0aecbaf214ecf0f"
+git-tree-sha1 = "60c334d923094a5fa4c2f65899b212261d429323"
 uuid = "c5dd0088-6c3f-4803-b00e-f31a60c170fa"
-version = "1.1.6"
+version = "1.1.7"
 
 [[deps.StackViews]]
 deps = ["OffsetArrays"]
