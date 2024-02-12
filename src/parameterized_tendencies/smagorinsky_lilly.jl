@@ -54,6 +54,9 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; v_t, ᶜD) = p.smagorinsky_lilly
 
     # momentum balance adjustment
+    #
+    # p.scratch.ᶜtemp_UVWxUVW can be used for strain-rate calculations using the 
+    # ClimaAtmos utilities functions
  
     u_cart = @. Geometry.UVWVector(Y.c.uₕ) + ᶜinterp(Geometry.UVWVector(Y.f.u₃))
     hdiv_u_cart = @. divₕ(u_cart)
