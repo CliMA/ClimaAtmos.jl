@@ -18,6 +18,7 @@ z_max: 6400.0
 job_id: "box_density_current_test"
 smagorinsky_lilly: true
 c_smag: 0.2
+output_default_diagnostics: false
 diagnostics:
   - short_name: thetaa
     period: 10secs

@@ -34,11 +34,9 @@ function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
 
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶜD = ᶜtemp_scalar_2
-    v_t = ᶜtemp_scalar_3
-    @. v_t = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
-    Pr = 1/3
-    @. ᶜD = (1/Pr)*v_t
-    return (; v_t, ᶜD)
+    νₜ = ᶜtemp_scalar_3
+    @. νₜ = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    return (; νₜ, ᶜD)
 end
 
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -51,26 +49,33 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     end
 
     (; Cs) = sl
-    (; v_t, ᶜD) = p.smagorinsky_lilly
+    (; νₜ, ᶜD) = p.smagorinsky_lilly
+    (; ᶜu, ᶠu³) = p.precomputed 
 
     # momentum balance adjustment
     #
     # p.scratch.ᶜtemp_UVWxUVW can be used for strain-rate calculations using the 
     # ClimaAtmos utilities functions
  
-    u_cart = @. Geometry.UVWVector(Y.c.uₕ) + ᶜinterp(Geometry.UVWVector(Y.f.u₃))
-    hdiv_u_cart = @. divₕ(u_cart)
-    hgrad_u_cart = @. gradₕ(u_cart)
-    hgrad_u_cart_T = similar(hgrad_u_cart)
+    # Smagorinsky Computations ####
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
+    ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
+    compute_strain_rate_center!(ᶜϵ, ᶠu)
+    compute_strain_rate_face!(ᶠϵ, ᶜu)
+    Δ = eltype(Cs)(100)
+    ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm(ᶜϵ))
+    ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm(ᶠϵ))
+    @. ᶜD = 3 * ᶜνₜ
+    # Smagorinsky Computations ####
 
     # construct 3D cartesian component
 
     @. Yₜ.c.uₕ -=
-    2*v_t * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
+    2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
 
-    ᶠv_t = p.scratch.ᶠtemp_scalar
-    @. ᶠv_t = ᶠinterp(v_t)
-    @. Yₜ.f.u₃ -= 2 * ᶠv_t * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
+    @. Yₜ.f.u₃ -= 2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
     
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -98,19 +103,33 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     end
 
     (; Cs) = sl
-    (; v_t, ᶜD) = p
-    (; ᶜspecific, sfc_conditions) = p
+    (; νₜ, ᶜD) = p.smagorinsky_lilly
+    (; ᶜspecific, sfc_conditions) = p.precomputed
+    (; ᶜu, ᶠu³) = p.precomputed 
     
-    ρ_flux_χ = p.sfc_temp_C3
+    ρ_flux_χ = p.scratch.ᶜtemp_scalar
 
     FT = eltype(Y)
+    
+    # Smagorinsky Computations ####
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
+    ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
+    compute_strain_rate_center!(ᶜϵ, ᶠu)
+    compute_strain_rate_face!(ᶠϵ, ᶜu)
+    Δ = eltype(Cs)(100)
+    ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm(ᶜϵ))
+    ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm(ᶠϵ))
+    @. ᶜD = 3 * ᶜνₜ
+    # Smagorinsky Computations ####
 
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
     )
     @. Yₜ.c.uₕ[colidx] -=
-        ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(2*v_t[colidx]) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
+        ᶜdivᵥ_uₕ(-(ᶠinterp(Y.c.ρ[colidx]) * ᶠinterp(2 * ᶜνₜ[colidx]) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
 
     # TODO: is the code below doing what you think it does?
     divᵥ_u3 = Operators.DivergenceC2F(
@@ -119,10 +138,10 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     )
 
     @. Yₜ.f.u₃[colidx] -= 
-        divᵥ_u3(-(Y.c.ρ[colidx] * 2*v_t[colidx] * ᶜgradᵥ(Y.f.u₃[colidx]))) / ᶠinterp(Y.c.ρ[colidx])
+        divᵥ_u3(-(Y.c.ρ[colidx] * 2 * ᶜνₜ[colidx] * ᶜgradᵥ(Y.f.u₃[colidx]))) / ᶠinterp(Y.c.ρ[colidx])
     
     if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p
+        (; ᶜh_tot) = p.precomputed
         
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
