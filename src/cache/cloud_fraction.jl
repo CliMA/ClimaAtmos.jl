@@ -55,15 +55,9 @@ function set_cloud_fraction!(
     coeff = FT(2.1) # TODO - move to parameters
     @. ᶜcloud_fraction = quad_loop(
         SG_quad,
-        ᶜp,
-        TD.total_specific_humidity(thermo_params, ᶜts),
-        TD.liquid_ice_pottemp(thermo_params, ᶜts),
-        Geometry.WVector(
-            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts))),
-        ),
-        Geometry.WVector(
-            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),
-        ),
+        ᶜts,
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
+        Geometry.WVector(p.precomputed.ᶜgradᵥ_θ_liq_ice),
         coeff,
         ᶜmixing_length,
         thermo_params,
@@ -71,13 +65,12 @@ function set_cloud_fraction!(
 end
 
 """
-    function quad_loop(SG_quad, p_c, q_mean, θ_mean, ᶜ∇q, ᶜ∇θ,
+    function quad_loop(SG_quad, ts, ᶜ∇q, ᶜ∇θ,
                        coeff, ᶜlength_scale, thermo_params)
 
 where:
   - SG_quad is a struct containing information about quadrature type and order
-  - p_c is the atmospheric pressure
-  - q_mean, θ_mean is the grid mean q_tot and liquid ice potential temperature
+  - ts is the thermodynamic state
   - ᶜ∇q, ᶜ∇θ are the gradients of q_tot and liquid ice potential temperature
   - coeff - a free parameter (to be moved into params)
   - ᶜlength_scale - mixing length for simulations with EDMF and Smagorinsky
@@ -89,15 +82,16 @@ returns cloud fraction computed as a sum over quadrature points.
 """
 function quad_loop(
     SG_quad::SGSQuadrature,
-    p_c,
-    q_mean,
-    θ_mean,
+    ts,
     ᶜ∇q,
     ᶜ∇θ,
     coeff,
     ᶜlength_scale,
     thermo_params,
 )
+    p_c = TD.air_pressure(thermo_params, ts)
+    q_mean = TD.total_specific_humidity(thermo_params, ts)
+    θ_mean = TD.liquid_ice_pottemp(thermo_params, ts)
     # Returns the physical values based on quadrature sampling points
     # and limited covarainces
     function get_x_hat(χ1, χ2)
@@ -139,8 +133,8 @@ function quad_loop(
         FT = eltype(x1_hat)
         @assert(x1_hat >= FT(0))
         @assert(x2_hat >= FT(0))
-        ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
-        hc = TD.has_condensate(thermo_params, ts)
+        _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
+        hc = TD.has_condensate(thermo_params, _ts)
         return (;
             cf = hc ? FT(1) : FT(0), # cloud fraction
             q_tot_sat = hc ? x2_hat : FT(0), # cloudy/dry for buoyancy in TKE
