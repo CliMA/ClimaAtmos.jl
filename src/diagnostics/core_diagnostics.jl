@@ -553,7 +553,6 @@ add_diagnostic_variable!(
 
 ###
 # Precipitation (2d)
-# TODO: change to kg m^-2 s^-1
 # TODO: add precipitation flux for the 1-moment microphysics
 ###
 compute_pr!(out, state, cache, time) =
@@ -576,7 +575,7 @@ add_diagnostic_variable!(
     short_name = "pr",
     long_name = "Precipitation",
     standard_name = "precipitation",
-    units = "m s^-1",
+    units = "kg m^-2 s^-1",
     comments = "Total precipitation including rain and snow",
     compute! = compute_pr!,
 )
