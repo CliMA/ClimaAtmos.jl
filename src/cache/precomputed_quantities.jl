@@ -41,6 +41,8 @@ function precomputed_quantities(Y, atmos)
     @assert isnothing(atmos.turbconv_model) || isnothing(atmos.vert_diff)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
+    cspace = axes(Y.c)
+    fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜspecific = specific_gs.(Y.c),
@@ -83,6 +85,12 @@ function precomputed_quantities(Y, atmos)
             ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
             ᶜS_q_tot⁰ = similar(Y.c, FT),
         ) : (;)
+    sgs_quantities = (;
+        ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
+        ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
+        ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
+    )
+
     diagnostic_sgs_quantities =
         atmos.turbconv_model isa DiagnosticEDMFX ?
         (;
@@ -124,6 +132,7 @@ function precomputed_quantities(Y, atmos)
         (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
     return (;
         gs_quantities...,
+        sgs_quantities...,
         advective_sgs_quantities...,
         diagnostic_sgs_quantities...,
         vert_diff_quantities...,
@@ -446,6 +455,15 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
     @. ᶜts = ts_gs(thermo_args..., ᶜspecific, ᶜK, ᶜΦ, Y.c.ρ)
     @. ᶜp = TD.air_pressure(thermo_params, ᶜts)
+
+    if turbconv_model isa AbstractEDMF
+        @. p.precomputed.ᶜgradᵥ_θ_virt =
+            ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
+        @. p.precomputed.ᶜgradᵥ_q_tot =
+            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+        @. p.precomputed.ᶜgradᵥ_θ_liq_ice =
+            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
+    end
 
     (; ᶜh_tot) = p.precomputed
     @. ᶜh_tot = TD.total_specific_enthalpy(thermo_params, ᶜts, ᶜspecific.e_tot)
