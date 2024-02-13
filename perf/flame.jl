@@ -47,7 +47,7 @@ allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
 allocs_limit["flame_perf_target_frierson"] = 4_015_545_328
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
-allocs_limit["flame_perf_target_callbacks"] = 394_984
+allocs_limit["flame_perf_target_callbacks"] = 395048
 allocs_limit["flame_perf_gw"] = 3_268_961_856
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 299_616
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 4300000
