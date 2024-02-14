@@ -264,7 +264,6 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         thermo_params,
         moisture_model,
         EnvBuoyGradVars(
-            thermo_params,
             ᶜts⁰,
             projected_vector_buoy_grad_vars(
                 C3,

@@ -1,4 +1,26 @@
 import Thermodynamics.Parameters as TDP
+get_t_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.air_temperature(thermo_params, x.ts)
+get_p(thermo_params, x::EnvBuoyGradVars) = TD.air_pressure(thermo_params, x.ts)
+get_ρ(thermo_params, x::EnvBuoyGradVars) = TD.air_density(thermo_params, x.ts)
+get_en_cld_frac(thermo_params, x::EnvBuoyGradVars) =
+    ifelse(TD.has_condensate(thermo_params, x.ts), 1, 0)
+get_θ_liq_ice_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.liquid_ice_pottemp(thermo_params, x.ts)
+get_qt_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.total_specific_humidity(thermo_params, x.ts)
+get_ql_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.liquid_specific_humidity(thermo_params, x.ts)
+get_qi_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.ice_specific_humidity(thermo_params, x.ts)
+get_qv_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.vapor_specific_humidity(thermo_params, x.ts)
+get_θ_sat(thermo_params, x::EnvBuoyGradVars) =
+    TD.dry_pottemp(thermo_params, x.ts)
+get_∂θl∂z_sat(_, x::EnvBuoyGradVars) = x.∂θl∂z_sat
+get_∂qt∂z_sat(_, x::EnvBuoyGradVars) = x.∂qt∂z_sat
+get_∂θv∂z_unsat(_, x::EnvBuoyGradVars) = x.∂θv∂z_unsat
+
 """
     buoyancy_gradients(
         ::AbstractEnvBuoyGradClosure,
@@ -26,63 +48,47 @@ function buoyancy_gradients(
     R_v = TDP.R_v(thermo_params)
 
     phase_part = TD.PhasePartition(FT(0), FT(0), FT(0)) # assuming R_d = R_m
-    Π = TD.exner_given_pressure(thermo_params, bg_model.p, phase_part)
+    p = get_p(thermo_params, bg_model)
+    Π = TD.exner_given_pressure(thermo_params, p, phase_part)
 
-    ∂b∂θv = g * (R_d * bg_model.ρ / bg_model.p) * Π
+    ∂b∂θv = g * (R_d * get_ρ(thermo_params, bg_model) / p) * Π
+    θ_liq_ice_sat = get_θ_liq_ice_sat(thermo_params, bg_model)
+    qt_sat = get_qt_sat(thermo_params, bg_model)
 
-    if bg_model.en_cld_frac > 0.0
+    if get_en_cld_frac(thermo_params, bg_model) > 0.0
         ts_sat = if moisture_model isa DryModel
-            TD.PhaseDry_pθ(thermo_params, bg_model.p, bg_model.θ_liq_ice_sat)
+            TD.PhaseDry_pθ(thermo_params, p, θ_liq_ice_sat)
         elseif moisture_model isa EquilMoistModel
-            TD.PhaseEquil_pθq(
-                thermo_params,
-                bg_model.p,
-                bg_model.θ_liq_ice_sat,
-                bg_model.qt_sat,
-            )
+            TD.PhaseEquil_pθq(thermo_params, p, θ_liq_ice_sat, qt_sat)
         elseif moisture_model isa NonEquilMoistModel
             TD.PhaseNonEquil_pθq(
                 thermo_params,
-                bg_model.p,
-                bg_model.θ_liq_ice_sat,
+                p,
+                θ_liq_ice_sat,
                 TD.PhasePartition(
-                    bg_model.qt_sat,
-                    bg_model.ql_sat,
-                    bg_model.qi_sat,
+                    qt_sat,
+                    get_ql_sat(thermo_params, bg_model),
+                    get_qi_sat(thermo_params, bg_model),
                 ),
             )
         else
             error("Unsupported moisture model")
         end
 
-        phase_part =
-            if moisture_model isa DryModel || moisture_model isa EquilMoistModel
-                TD.PhasePartition(thermo_params, ts_sat)
-            elseif moisture_model isa NonEquilMoistModel
-                TD.PhasePartition(
-                    bg_model.qt_sat,
-                    bg_model.ql_sat,
-                    bg_model.qi_sat,
-                )
-            end
-
+        phase_part = TD.PhasePartition(thermo_params, ts_sat)
         lh = TD.latent_heat_liq_ice(thermo_params, phase_part)
         cp_m = TD.cp_m(thermo_params, ts_sat)
+        t_sat = get_t_sat(thermo_params, bg_model)
+        qv_sat = get_qv_sat(thermo_params, bg_model)
         # TODO - double check if this is assuming liquid only?
         ∂b∂θl_sat = (
-            ∂b∂θv * (
-                1 +
-                molmass_ratio *
-                (1 + lh / R_v / bg_model.t_sat) *
-                bg_model.qv_sat - bg_model.qt_sat
-            ) / (
-                1 +
-                lh * lh / cp_m / R_v / bg_model.t_sat / bg_model.t_sat *
-                bg_model.qv_sat
-            )
+            ∂b∂θv *
+            (1 + molmass_ratio * (1 + lh / R_v / t_sat) * qv_sat - qt_sat) /
+            (1 + lh * lh / cp_m / R_v / t_sat / t_sat * qv_sat)
         )
         ∂b∂qt_sat =
-            (lh / cp_m / bg_model.t_sat * ∂b∂θl_sat - ∂b∂θv) * bg_model.θ_sat
+            (lh / cp_m / t_sat * ∂b∂θl_sat - ∂b∂θv) *
+            get_θ_sat(thermo_params, bg_model)
     else
         ∂b∂θl_sat = FT(0)
         ∂b∂qt_sat = FT(0)
@@ -91,6 +97,7 @@ function buoyancy_gradients(
     ∂b∂z = buoyancy_gradient_chain_rule(
         ebgc,
         bg_model,
+        thermo_params,
         ∂b∂θv,
         ∂b∂θl_sat,
         ∂b∂qt_sat,
@@ -102,6 +109,7 @@ end
     buoyancy_gradient_chain_rule(
         ::AbstractEnvBuoyGradClosure,
         bg_model::EnvBuoyGradVars{FT, EBG},
+        thermo_params,
         ∂b∂θv::FT,
         ∂b∂θl_sat::FT,
         ∂b∂qt_sat::FT,
@@ -113,25 +121,26 @@ from the partial derivatives with respect to thermodynamic variables in dry and 
 function buoyancy_gradient_chain_rule(
     ::AbstractEnvBuoyGradClosure,
     bg_model::EnvBuoyGradVars{FT},
+    thermo_params,
     ∂b∂θv::FT,
     ∂b∂θl_sat::FT,
     ∂b∂qt_sat::FT,
 ) where {FT <: Real}
-    if bg_model.en_cld_frac > FT(0)
-        ∂b∂z_θl_sat = ∂b∂θl_sat * bg_model.∂θl∂z_sat
-        ∂b∂z_qt_sat = ∂b∂qt_sat * bg_model.∂qt∂z_sat
+    en_cld_frac = get_en_cld_frac(thermo_params, bg_model)
+    if en_cld_frac > FT(0)
+        ∂b∂z_θl_sat = ∂b∂θl_sat * get_∂θl∂z_sat(thermo_params, bg_model)
+        ∂b∂z_qt_sat = ∂b∂qt_sat * get_∂qt∂z_sat(thermo_params, bg_model)
     else
         ∂b∂z_θl_sat = FT(0)
         ∂b∂z_qt_sat = FT(0)
     end
 
     ∂b∂z_unsat =
-        bg_model.en_cld_frac < FT(1) ? ∂b∂θv * bg_model.∂θv∂z_unsat : FT(0)
+        en_cld_frac < FT(1) ? ∂b∂θv * get_∂θv∂z_unsat(thermo_params, bg_model) :
+        FT(0)
 
     ∂b∂z_sat = ∂b∂z_θl_sat + ∂b∂z_qt_sat
-    ∂b∂z =
-        (1 - bg_model.en_cld_frac) * ∂b∂z_unsat +
-        bg_model.en_cld_frac * ∂b∂z_sat
+    ∂b∂z = (1 - en_cld_frac) * ∂b∂z_unsat + en_cld_frac * ∂b∂z_sat
 
     return ∂b∂z
 end
