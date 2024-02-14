@@ -35,7 +35,7 @@ function flux_accumulation!(integrator)
     return nothing
 end
 
-function cloud_fraction_model_callback!(integrator)
+NVTX.@annotate function cloud_fraction_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     set_cloud_fraction!(Y, p, p.atmos.moisture_model, p.atmos.cloud_model)
@@ -183,7 +183,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     return nothing
 end
 
-function save_state_to_disk_func(integrator, output_dir)
+NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
 

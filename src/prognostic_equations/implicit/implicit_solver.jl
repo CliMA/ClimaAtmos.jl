@@ -263,7 +263,7 @@ end
 Base.similar(A::ImplicitEquationJacobian) = A
 
 # This method specifies how to solve the equation E'(Y) * ΔY = E(Y) for ΔY.
-function ldiv!(
+NVTX.@annotate function ldiv!(
     x::Fields.FieldVector,
     A::ImplicitEquationJacobian,
     b::Fields.FieldVector,
@@ -277,7 +277,7 @@ end
 # This method for ldiv! is called by Krylov.jl from inside ClimaTimeSteppers.jl.
 # See https://github.com/JuliaSmoothOptimizers/Krylov.jl/issues/605 for a
 # related issue that requires the same workaround.
-function ldiv!(
+NVTX.@annotate function ldiv!(
     x::AbstractVector,
     A::ImplicitEquationJacobian,
     b::AbstractVector,
@@ -293,61 +293,59 @@ _linsolve!(x, A, b, update_matrix = false; kwargs...) = ldiv!(x, A, b)
 
 # This method specifies how to compute E'(Y), which is referred to as "Wfact" in
 # DiffEqBase.jl.
-function Wfact!(A, Y, p, dtγ, t)
-    NVTX.@range "Wfact!" color = colorant"green" begin
-        # Remove unnecessary values from p to avoid allocations in bycolumn.
-        p′ = (;
-            p.precomputed.ᶜspecific,
-            p.precomputed.ᶜK,
-            p.precomputed.ᶜts,
-            p.precomputed.ᶜp,
-            (
-                p.atmos.precip_model isa Microphysics1Moment ?
-                (; p.precomputed.ᶜwᵣ, p.precomputed.ᶜwₛ) : (;)
-            )...,
-            p.precomputed.ᶜh_tot,
-            (
-                use_derivative(A.diffusion_flag) ?
-                (; p.precomputed.ᶜK_u, p.precomputed.ᶜK_h) : (;)
-            )...,
-            (
-                use_derivative(A.diffusion_flag) &&
-                p.atmos.turbconv_model isa AbstractEDMF ?
-                (; p.precomputed.ᶜtke⁰, p.precomputed.ᶜmixing_length) : (;)
-            )...,
-            (
-                use_derivative(A.diffusion_flag) &&
-                p.atmos.turbconv_model isa PrognosticEDMFX ?
-                (; p.precomputed.ᶜρa⁰) : (;)
-            )...,
-            p.core.ᶜΦ,
-            p.core.ᶠgradᵥ_ᶜΦ,
-            p.core.ᶜρ_ref,
-            p.core.ᶜp_ref,
-            p.scratch.ᶜtemp_scalar,
-            p.scratch.∂ᶜK_∂ᶜuₕ,
-            p.scratch.∂ᶜK_∂ᶠu₃,
-            p.scratch.ᶠp_grad_matrix,
-            p.scratch.ᶜadvection_matrix,
-            p.scratch.ᶜdiffusion_h_matrix,
-            p.scratch.ᶜdiffusion_u_matrix,
-            p.dt,
-            p.params,
-            p.atmos,
-            (
-                p.atmos.rayleigh_sponge isa RayleighSponge ?
-                (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
-            )...,
-        )
+NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
+    # Remove unnecessary values from p to avoid allocations in bycolumn.
+    p′ = (;
+        p.precomputed.ᶜspecific,
+        p.precomputed.ᶜK,
+        p.precomputed.ᶜts,
+        p.precomputed.ᶜp,
+        (
+            p.atmos.precip_model isa Microphysics1Moment ?
+            (; p.precomputed.ᶜwᵣ, p.precomputed.ᶜwₛ) : (;)
+        )...,
+        p.precomputed.ᶜh_tot,
+        (
+            use_derivative(A.diffusion_flag) ?
+            (; p.precomputed.ᶜK_u, p.precomputed.ᶜK_h) : (;)
+        )...,
+        (
+            use_derivative(A.diffusion_flag) &&
+            p.atmos.turbconv_model isa AbstractEDMF ?
+            (; p.precomputed.ᶜtke⁰, p.precomputed.ᶜmixing_length) : (;)
+        )...,
+        (
+            use_derivative(A.diffusion_flag) &&
+            p.atmos.turbconv_model isa PrognosticEDMFX ?
+            (; p.precomputed.ᶜρa⁰) : (;)
+        )...,
+        p.core.ᶜΦ,
+        p.core.ᶠgradᵥ_ᶜΦ,
+        p.core.ᶜρ_ref,
+        p.core.ᶜp_ref,
+        p.scratch.ᶜtemp_scalar,
+        p.scratch.∂ᶜK_∂ᶜuₕ,
+        p.scratch.∂ᶜK_∂ᶠu₃,
+        p.scratch.ᶠp_grad_matrix,
+        p.scratch.ᶜadvection_matrix,
+        p.scratch.ᶜdiffusion_h_matrix,
+        p.scratch.ᶜdiffusion_u_matrix,
+        p.dt,
+        p.params,
+        p.atmos,
+        (
+            p.atmos.rayleigh_sponge isa RayleighSponge ?
+            (; p.rayleigh_sponge.ᶠβ_rayleigh_w) : (;)
+        )...,
+    )
 
-        # Convert dtγ from a Float64 to an FT.
-        FT = Spaces.undertype(axes(Y.c))
-        dtγ′ = FT(dtγ)
+    # Convert dtγ from a Float64 to an FT.
+    FT = Spaces.undertype(axes(Y.c))
+    dtγ′ = FT(dtγ)
 
-        A.dtγ_ref[] = dtγ′
-        Fields.bycolumn(axes(Y.c)) do colidx
-            update_implicit_equation_jacobian!(A, Y, p′, dtγ′, colidx)
-        end
+    A.dtγ_ref[] = dtγ′
+    Fields.bycolumn(axes(Y.c)) do colidx
+        update_implicit_equation_jacobian!(A, Y, p′, dtγ′, colidx)
     end
 end
 
