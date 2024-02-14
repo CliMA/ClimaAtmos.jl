@@ -37,7 +37,6 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
         thermo_params,
         p.atmos.moisture_model,
         EnvBuoyGradVars(
-            thermo_params,
             ᶜts,
             projected_vector_buoy_grad_vars(
                 C3,
