@@ -234,6 +234,9 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist_cldiag.yml
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist_cldiag/*"
+        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist explicit vertdiff"
         command: >
