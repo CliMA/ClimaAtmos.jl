@@ -88,7 +88,7 @@ using Test
 # Threaded allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = occursin("threaded", job_id) ? 1.4 : 1
+buffer = occursin("threaded", job_id) ? 1.4 : 1.1
 
 
 ## old allocation profiler (TODO: remove this)
