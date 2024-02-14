@@ -235,6 +235,9 @@ prognostic_tke:
 prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
   value: "false"
+albedo_model:
+  help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`]"
+  value: "ConstantAlbedo"
 implicit_diffusion:
   help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"
   value: false

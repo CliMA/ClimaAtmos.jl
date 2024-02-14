@@ -97,6 +97,20 @@ function get_surface_model(parsed_args)
     end
 end
 
+function get_surface_albedo_model(parsed_args, ::Type{FT}) where {FT}
+    albedo_name = parsed_args["albedo_model"]
+    return if albedo_name in ("ConstantAlbedo",)
+        ConstantAlbedo{FT}()
+    elseif albedo_name in ("RegressionFunctionAlbedo",)
+        isnothing(parsed_args["rad"]) && error(
+            "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
+        )
+        RegressionFunctionAlbedo{FT}()
+    else
+        error("Uncaught surface albedo model `$albedo_name`.")
+    end
+end
+
 function get_viscous_sponge_model(parsed_args, params, ::Type{FT}) where {FT}
     vs_name = parsed_args["viscous_sponge"]
     return if vs_name in ("false", false, "none")

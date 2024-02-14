@@ -209,8 +209,8 @@ function radiation_model_cache(
             center_temperature = NaN, # initialized in callback
             surface_temperature = NaN, # initialized in callback
             surface_emissivity = 1,
-            direct_sw_surface_albedo = 0.38,
-            diffuse_sw_surface_albedo = 0.38,
+            direct_sw_surface_albedo = NaN, # initialized in callback
+            diffuse_sw_surface_albedo = NaN, # initialized in callback
             cos_zenith,
             weighted_irradiance,
             kwargs...,
