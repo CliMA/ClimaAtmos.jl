@@ -1,19 +1,17 @@
-device: "CPUSingleThreaded"
-dt_save_state_to_disk: "10secs"
+dt_save_state_to_disk: "30secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
-dt: "0.1secs"
-t_end: "300.0secs"
+dt: "0.25secs"
+t_end: "900.0secs"
 y_max: 6400.0
 y_elem: 15
 z_stretch: false
 x_elem: 45
-ode_algo: "SSP33ShuOsher"
 rayleigh_sponge: true
 config: "box"
-vorticity_hyperdiffusion_coefficient: 0.6
-scalar_hyperdiffusion_coefficient: 0.6
+vorticity_hyperdiffusion_coefficient: 0.0
+scalar_hyperdiffusion_coefficient: 0.0
 z_max: 6400.0
 job_id: "box_density_current_test"
 smagorinsky_lilly: true
@@ -21,8 +19,8 @@ c_smag: 0.2
 output_default_diagnostics: false
 diagnostics:
   - short_name: thetaa
-    period: 10secs
+    period: 30secs
   - short_name: ua
-    period: 10secs
+    period: 30secs
   - short_name: wa
-    period: 10secs
+    period: 30secs
