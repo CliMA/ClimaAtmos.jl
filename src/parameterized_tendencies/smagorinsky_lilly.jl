@@ -53,38 +53,39 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; ᶜu, ᶠu³) = p.precomputed 
 
     # momentum balance adjustment
-    #
-    # p.scratch.ᶜtemp_UVWxUVW can be used for strain-rate calculations using the 
-    # ClimaAtmos utilities functions
  
-    # Smagorinsky Computations ####
+    # Velocity composition onto cell faces #
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+
+    # Set up scratch space for strain rates
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
+    # Compute strain rates
     compute_strain_rate_center!(ᶜϵ, ᶠu)
     compute_strain_rate_face!(ᶠϵ, ᶜu)
     Δ = eltype(Cs)(250)
     ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶜϵ))
     ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶠϵ))
     @. ᶜD = 3 * ᶜνₜ
-    # Smagorinsky Computations ####
+    
+    # Smagorinsky Operators #
     wdivₕ = Operators.WeakDivergence()
 
-    # construct 3D cartesian component
- #   @. Yₜ.c.uₕ -=
- #   2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
+    # Compute the 3D Cartesian Components
+    @. Yₜ.c.uₕ -=
+    -2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
 
-    @. Yₜ.c.uₕ -= C12(
-        wdivₕ(
-            -2 *
-            Y.c.ρ *
-            ᶜνₜ *
-            ᶜϵ,
-        ) / Y.c.ρ
-    )
+ #   @. Yₜ.c.uₕ -= C12(
+ #       wdivₕ(
+ #           -2 *
+ #           Y.c.ρ *
+ #           ᶜνₜ *
+ #           ᶜϵ,
+ #       ) / Y.c.ρ
+ #   )
             
-    @. Yₜ.f.u₃ -= 2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
+    @. Yₜ.f.u₃ -= -2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
 
  #   @. Yₜ.f.u₃ -= C3(
  #       wdivₕ(
@@ -143,7 +144,10 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     @. ᶜD = 3 * ᶜνₜ
     
     # Smagorinsky Computations ####
-    ᶜdivᵥ_uₕ = Operators.DivergenceF2C()
+    ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
+        top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+        bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
+    )
 
     @. Yₜ.c.uₕ[colidx] -= C12(
         ᶜdivᵥ(
