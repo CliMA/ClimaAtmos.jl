@@ -33,11 +33,27 @@ function field2array(field::Fields.Field)
     return data2array(Fields.field_values(field))
 end
 data2array(data::Union{DataLayouts.IF, DataLayouts.IFH}) =
-    reshape(parent(data), :)
+    collect(reshape(parent(data), :))
 data2array(data::Union{DataLayouts.IJF, DataLayouts.IJFH}) =
-    reshape(parent(data), :)
+    collect(reshape(parent(data), :))
 data2array(data::Union{DataLayouts.VF, DataLayouts.VIFH, DataLayouts.VIJFH}) =
-    reshape(parent(data), size(parent(data), 1), :)
+    collect(reshape(parent(data), size(parent(data), 1), :))
+
+function field2array_reshape(field::Fields.Field)
+    if sizeof(eltype(field)) != sizeof(eltype(parent(field)))
+        f_axis_size = sizeof(eltype(parent(field))) ÷ sizeof(eltype(field))
+        error("unable to use field2array because each Field element is \
+               represented by $f_axis_size array elements (must be 1)")
+    end
+    return data2array_reshape(Fields.field_values(field))
+end
+data2array_reshape(data::Union{DataLayouts.IF, DataLayouts.IFH}) =
+    reshape(parent(data), :)
+data2array_reshape(data::Union{DataLayouts.IJF, DataLayouts.IJFH}) =
+    reshape(parent(data), :)
+data2array_reshape(
+    data::Union{DataLayouts.VF, DataLayouts.VIFH, DataLayouts.VIJFH},
+) = reshape(parent(data), size(parent(data), 1), :)
 
 """
     array2field(array, space)

@@ -189,7 +189,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     end
 
     RRTMGPI.update_fluxes!(radiation_model)
-    RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
+    RRTMGPI.field2array_reshape(ᶠradiation_flux) .= radiation_model.face_flux
     return nothing
 end
 
