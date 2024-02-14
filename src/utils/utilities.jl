@@ -201,14 +201,11 @@ The type should correspond to a vector with only one component, i.e., a basis ve
 projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
     V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
 
-function projected_vector_buoy_grad_vars(::Type{V}, v1, v2, v3, lg) where {V}
-    ubvd = unit_basis_vector_data(V, lg)
-    return (;
-        ∂θv∂z_unsat = V(v1, lg)[1] / ubvd,
-        ∂qt∂z_sat = V(v2, lg)[1] / ubvd,
-        ∂θl∂z_sat = V(v3, lg)[1] / ubvd,
-    )
-end
+projected_vector_buoy_grad_vars(v1, v2, v3, C3_ubv) = (;
+    ∂θv∂z_unsat = v1[1] / C3_ubv,
+    ∂qt∂z_sat = v2[1] / C3_ubv,
+    ∂θl∂z_sat = v3[1] / C3_ubv,
+)
 
 """
     get_physical_w(u, local_geometry)

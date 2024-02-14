@@ -113,8 +113,10 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
-    ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
-    ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶜcoord = ᶜlg.coordinates
+    ᶠcoord = ᶠlg.coordinates
     grav = FT(CAP.grav(params))
     ᶜΦ = grav .* ᶜcoord.z
 
@@ -180,8 +182,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
 
     numerics = (; limiter)
 
-    sfc_local_geometry =
-        Fields.level(Fields.local_geometry_field(Y.f), Fields.half)
+    sfc_local_geometry = Fields.level(ᶠlg, Fields.half)
 
     core = (
         ᶜΦ,

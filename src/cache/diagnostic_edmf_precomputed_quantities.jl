@@ -745,7 +745,7 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
     ᶜdz = Fields.Δz_field(axes(Y.c))
     (; params) = p
     (; dt) = p
-    (; ᶜp, ᶜu, ᶜts) = p.precomputed
+    (; ᶜp, ᶜu, ᶜts, ᶜC3_ubv) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
@@ -765,11 +765,10 @@ function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
         EnvBuoyGradVars(
             ᶜts,
             projected_vector_buoy_grad_vars(
-                C3,
                 p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
                 p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
                 p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
-                ᶜlg,
+                ᶜC3_ubv,
             ),
         ),
     )

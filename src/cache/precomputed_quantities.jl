@@ -34,6 +34,7 @@ TODO: Rename `ᶜK` to `ᶜκ`.
 """
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
+    ᶜlg = Fields.local_geometry_field(Y.c)
     @assert !(atmos.moisture_model isa DryModel) ||
             !(atmos.turbconv_model isa DiagnosticEDMFX)
     @assert !(atmos.moisture_model isa DryModel) ||
@@ -50,6 +51,7 @@ function precomputed_quantities(Y, atmos)
         ᶠu³ = similar(Y.f, CT3{FT}),
         ᶜK = similar(Y.c, FT),
         ᶜts = similar(Y.c, TST),
+        ᶜC3_ubv = unit_basis_vector_data.(C3, ᶜlg),
         ᶜp = similar(Y.c, FT),
         ᶜh_tot = similar(Y.c, FT),
         ᶜmixing_length = similar(Y.c, FT),

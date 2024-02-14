@@ -28,7 +28,7 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶜp, ᶠu³) = p.precomputed
+    (; ᶜts, ᶜp, ᶠu³, ᶜC3_ubv) = p.precomputed
     (; obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜlinear_buoygrad = p.scratch.ᶜtemp_scalar
@@ -39,11 +39,10 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
         EnvBuoyGradVars(
             ᶜts,
             projected_vector_buoy_grad_vars(
-                C3,
                 p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
                 p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
                 p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
-                ᶜlg,
+                ᶜC3_ubv,
             ),
         ),
     )
