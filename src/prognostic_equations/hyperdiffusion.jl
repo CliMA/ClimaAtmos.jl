@@ -67,26 +67,26 @@ NVTX.@annotate function dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     elseif turbconv_model isa DiagnosticEDMFX
         (; ᶜ∇²tke⁰) = p.hyperdiff
     end
-    # DSS on Grid scale quantities
-    # Need to split the DSS computation here, because our DSS
-    # operations do not accept Covariant123Vector types
-    Spaces.weighted_dss!(
-        ᶜ∇²u => buffer.ᶜ∇²u,
-        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
-        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
-    )
     if turbconv_model isa PrognosticEDMFX
-        # Need to split the DSS computation here, because our DSS
-        # operations do not accept Covariant123Vector types
         for j in 1:n
             @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
             @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
         end
-        Spaces.weighted_dss!(
+    end
+    core_pairs = (
+        ᶜ∇²u => buffer.ᶜ∇²u,
+        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
+        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
+    )
+    tc_pairs =
+        turbconv_model isa PrognosticEDMFX ?
+        (
             ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
             ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
             ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
-        )
+        ) : ()
+    Spaces.weighted_dss!(core_pairs..., tc_pairs...)
+    if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
         end
@@ -180,13 +180,14 @@ NVTX.@annotate function dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; turbconv_model) = p.atmos
     (; ᶜ∇²specific_tracers) = p.hyperdiff
     buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    if !isempty(propertynames(ᶜ∇²specific_tracers))
-        Spaces.weighted_dss!(ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers)
-    end
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²q_totʲs) = p.hyperdiff
-        Spaces.weighted_dss!(ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs)
-    end
+    tracer_pairs =
+        !isempty(propertynames(ᶜ∇²specific_tracers)) ?
+        (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
+    tc_pairs =
+        turbconv_model isa PrognosticEDMFX ?
+        (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
+    pairs = (tracer_pairs..., tc_pairs...)
+    isempty(pairs) || Spaces.weighted_dss!(pairs...)
 end
 
 NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
