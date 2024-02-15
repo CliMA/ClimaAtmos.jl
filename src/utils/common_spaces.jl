@@ -85,6 +85,7 @@ function make_hybrid_spaces(
 )
     # TODO: change this to make_hybrid_grid
     h_grid = Spaces.grid(h_space)
+    FT = eltype(z_max)
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
         Geometry.ZPoint(z_max);
@@ -105,7 +106,7 @@ function make_hybrid_spaces(
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
-        hypsography = Hypsography.LinearAdaption(z_surface)
+        hypsography = Hypsography.SLEVEAdaption(z_surface, FT(0.7), FT(10))
     end
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
     # TODO: return the grid
