@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "1b7b7b12f210f5da35bb4f69ad563a64237fde09"
+project_hash = "e87302db215ea786d20636f8bd0f2a0f02bd5a64"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -261,7 +261,9 @@ weakdeps = ["Krylov"]
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "216385dda9966d820b484f399b90447f073893a6"
+git-tree-sha1 = "78eed5fa695e5d40391601f7505651508e43a09c"
+repo-rev = "ck/async_support"
+repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 version = "0.7.16"
 
