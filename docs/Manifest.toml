@@ -261,7 +261,7 @@ weakdeps = ["Krylov"]
 
 [[deps.ClimaTimeSteppers]]
 deps = ["CUDA", "ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "a4948e4bf9b1a05ca889ed133d305bea11ecb9f1"
+git-tree-sha1 = "9abe898f5deeda980e4e09ec6eba305580daedc8"
 repo-rev = "ck/async_support"
 repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
