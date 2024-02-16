@@ -2065,8 +2065,6 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "CUDA", "ClimaComms", "DocStringExtensions", "GaussQuadrature", "Random", "StaticArrays"]
 git-tree-sha1 = "411d7064df9a123db8d2878539b7cc86158ed215"
-repo-rev = "main"
-repo-url = "https://github.com/CliMA/RRTMGP.jl.git"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
 version = "0.12.0"
 weakdeps = ["CLIMAParameters"]
