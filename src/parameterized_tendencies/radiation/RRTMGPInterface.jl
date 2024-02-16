@@ -640,7 +640,7 @@ function RRTMGPModel(
         src_sw = flux_sw = fluxb_sw = bcs_sw = nothing
     else
         if radiation_mode isa GrayRadiation
-            nbnd_sw =  1
+            nbnd_sw = 1
         else
             local lookup_sw, idx_gases
             data_loader(joinpath("lookup_tables", "clearsky_sw.nc")) do ds
@@ -727,7 +727,8 @@ function RRTMGPModel(
             set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
         end
         if !(radiation_mode isa GrayRadiation)
-            @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) == RRTMGP.LookUpTables.get_n_gases(lookup_sw)
+            @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
+                    RRTMGP.LookUpTables.get_n_gases(lookup_sw)
             @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
         end
     end

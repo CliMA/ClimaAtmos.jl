@@ -50,24 +50,13 @@ function create_parameter_set(config::AtmosConfig)
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
     TP = typeof(thermodynamics_params)
 
-    # TODO: update to the RRTMGP package extension
-    rrtmgp_name_map = (;
-        :gravitational_acceleration => :grav,
-        :molar_mass_dry_air => :molmass_dryair,
-        :molar_mass_water => :molmass_water,
-        :gas_constant => :gas_constant,
-        :adiabatic_exponent_dry_air => :kappa_d,
-        :stefan_boltzmann_constant => :Stefan,
-        :avogadro_constant => :avogad,
-    )
-    parameters = CP.get_parameter_values(toml_dict, rrtmgp_name_map, "RRTMGP")
-    rrtmgp_params = RRTMGPParameters{FT}(; parameters...)
+    rrtmgp_params = RRTMGPParameters(toml_dict)
     RP = typeof(rrtmgp_params)
 
     insolation_params = InsolationParameters(toml_dict)
     IP = typeof(insolation_params)
 
-    water_params = CM.Parameters.WaterProperties(FT, toml_dict)
+    water_params = CM.Parameters.WaterProperties(toml_dict)
     WP = typeof(water_params)
 
     surface_fluxes_params =
@@ -80,27 +69,21 @@ function create_parameter_set(config::AtmosConfig)
         toml_dict["precipitation_timescale"]["value"] =
             FT(CA.time_to_seconds(parsed_args["dt"]))
     end
-    # Force logging because CloudMicrophysics doesn't
-    CP.get_parameter_values(
-        toml_dict,
-        "precipitation_timescale",
-        "CloudMicrophysics",
-    )
     precip_model = parsed_args["precip_model"]
     microphysics_params =
         if precip_model == nothing || precip_model == "nothing"
             nothing
         elseif precip_model == "0M"
-            CM.Parameters.Parameters0M(FT, toml_dict)
+            CM.Parameters.Parameters0M(toml_dict)
         elseif precip_model == "1M"
             (;
-                cl = CM.Parameters.CloudLiquid(FT, toml_dict),
-                ci = CM.Parameters.CloudIce(FT, toml_dict),
-                pr = CM.Parameters.Rain(FT, toml_dict),
-                ps = CM.Parameters.Snow(FT, toml_dict),
-                ce = CM.Parameters.CollisionEff(FT, toml_dict),
-                tv = CM.Parameters.Blk1MVelType(FT, toml_dict),
-                aps = CM.Parameters.AirProperties(FT, toml_dict),
+                cl = CM.Parameters.CloudLiquid(toml_dict),
+                ci = CM.Parameters.CloudIce(toml_dict),
+                pr = CM.Parameters.Rain(toml_dict),
+                ps = CM.Parameters.Snow(toml_dict),
+                ce = CM.Parameters.CollisionEff(toml_dict),
+                tv = CM.Parameters.Blk1MVelType(toml_dict),
+                aps = CM.Parameters.AirProperties(toml_dict),
             )
         else
             error("Invalid precip_model $(precip_model)")
