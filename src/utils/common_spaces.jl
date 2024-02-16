@@ -41,6 +41,7 @@ function make_horizontal_space(
         topology = Topologies.IntervalTopology(comms_ctx, mesh)
         space = Spaces.SpectralElementSpace1D(topology, quad)
     elseif mesh isa Meshes.AbstractMesh2D
+        @show "constructing topo with spacefillingcurve"
         topology = Topologies.Topology2D(
             comms_ctx,
             mesh,

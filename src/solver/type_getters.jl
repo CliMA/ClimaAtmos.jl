@@ -155,6 +155,7 @@ function get_spaces(parsed_args, params, comms_ctx)
 
     h_elem = parsed_args["h_elem"]
     radius = CAP.planet_radius(params)
+    @show "domain type $(parsed_args["config"])"
     center_space, face_space = if parsed_args["config"] == "sphere"
         nh_poly = parsed_args["nh_poly"]
         quad = Quadratures.GLL{nh_poly + 1}()
