@@ -352,7 +352,7 @@ version = "0.7.4"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["CUDA", "ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "61db617cacdeeba24000a471e2ced326597109b2"
+git-tree-sha1 = "7f8b8ce589748de2e920718cd487ba0ba9cdf0fd"
 repo-rev = "ck/async_support"
 repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
