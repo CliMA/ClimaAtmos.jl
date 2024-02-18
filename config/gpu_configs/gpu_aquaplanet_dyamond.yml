@@ -15,6 +15,6 @@ vert_diff: "true"
 surface_setup: "DefaultMoninObukhov" 
 rayleigh_sponge: true
 dt: "50secs" 
-t_end: "12hours"
+t_end: "2hours"
 job_id: "gpu_aquaplanet_dyamond" 
 toml: [toml/longrun_aquaplanet_dyamond.toml]
