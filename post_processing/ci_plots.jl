@@ -598,7 +598,10 @@ function make_plots(
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
-    vars = map_comparison(simdirs, short_names)
+    short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
     make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
@@ -609,7 +612,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        return get(simdir; short_name, reduction)
     end
     make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
 end
@@ -643,8 +646,10 @@ function make_plots(
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
-    short_names = ["pfull", "va", "wa", "rv", "hus"]
-    vars = map_comparison(simdirs, short_names)
+    short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
     make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
