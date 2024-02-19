@@ -4,7 +4,7 @@ hyperdiff: "false"
 z_elem: 70
 dt: "3hours"
 idealized_h2o: true
-t_end: "654days"
+t_end: "100days"
 dz_top: 10000.0
 idealized_clouds: true
 dz_bottom: 100.0

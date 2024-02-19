@@ -103,7 +103,7 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
 
     if !idealized_insolation
         current_datetime = p.start_date + Dates.Second(round(Int, t)) # current time
-        max_zenith_angle = FT(π) / 2 - eps(FT)
+        max_zenith_angle = FT(π) / 2 - 1000*eps(FT)
         irradiance = FT(CAP.tot_solar_irrad(params))
         au = FT(CAP.astro_unit(params))
         date0 = DateTime("2000-01-01T11:58:56.816")

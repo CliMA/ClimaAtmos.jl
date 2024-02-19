@@ -1229,18 +1229,18 @@ function update_net_fluxes!(radiation_mode, model)
         parent(model.face_sw_flux_dn)
 end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    parent(model.face_sw_flux_up) .=
-        ifelse.(
-            parent(model.cos_zenith) .> Float32(7.54979f-8),
-            parent(model.face_sw_flux_up),
-            0,
-        )
-    parent(model.face_sw_flux_dn) .=
-        ifelse.(
-            parent(model.cos_zenith) .> Float32(7.54979f-8),
-            parent(model.face_sw_flux_dn),
-            0,
-        )
+    # parent(model.face_sw_flux_up) .=
+    #     ifelse.(
+    #         parent(model.cos_zenith) .> Float32(7.54979f-8),
+    #         parent(model.face_sw_flux_up),
+    #         0,
+    #     )
+    # parent(model.face_sw_flux_dn) .=
+    #     ifelse.(
+    #         parent(model.cos_zenith) .> Float32(7.54979f-8),
+    #         parent(model.face_sw_flux_dn),
+    #         0,
+    #     )
     parent(model.face_clear_flux) .=
         parent(model.face_clear_lw_flux) .+
         parent(model.face_clear_sw_flux_up) .-
