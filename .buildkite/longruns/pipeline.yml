@@ -54,7 +54,6 @@ steps:
         artifact_paths: "$$JOB_NAME/*"
         agents:
           slurm_gpus: 1
-          slurm_ntasks: 32
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_sphere_hydrostatic_balance_rhoe"
