@@ -117,6 +117,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     grav = FT(CAP.grav(params))
     ᶜΦ = grav .* ᶜcoord.z
+    ᶠΦ = grav .* ᶠcoord.z
 
     if atmos.numerics.use_reference_state
         R_d = FT(CAP.R_d(params))
@@ -186,6 +187,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
+        ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
         ᶜρ_ref,
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
