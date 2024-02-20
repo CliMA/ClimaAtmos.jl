@@ -216,8 +216,8 @@ include("diagnostics_utils.jl")
 # have a geometric average. If more complex reduction are needed, this mechanism has to be
 # changed.
 
-struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
-    variable::DiagnosticVariable
+struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO, T}
+    variable::DiagnosticVariable{T}
     output_every::T1
     output_writer::OW
     reduction_time_func::F1
@@ -301,7 +301,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
 
     """
     function ScheduledDiagnosticIterations(;
-        variable::DiagnosticVariable,
+        variable::DiagnosticVariable{T},
         output_every,
         output_writer,
         reduction_time_func = nothing,
@@ -322,7 +322,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
             pre_output_hook!;
             units_are_seconds = false,
         ),
-    )
+    ) where {T}
 
         # We provide an inner constructor to enforce some constraints
 
@@ -352,7 +352,7 @@ struct ScheduledDiagnosticIterations{T1, T2, OW, F1, F2, PO}
         F2 = typeof(reduction_space_func)
         PO = typeof(pre_output_hook!)
 
-        new{T1, T2, OW, F1, F2, PO}(
+        new{T1, T2, OW, F1, F2, PO, T}(
             variable,
             output_every,
             output_writer,

@@ -579,7 +579,7 @@ function RRTMGPModel(
         src_lw = flux_lw = fluxb_lw = bcs_lw = nothing
     else
         if radiation_mode isa GrayRadiation
-            nbnd_lw = ngpt_lw = 1
+            nbnd_lw = 1
         else
             local lookup_lw, idx_gases
             data_loader(joinpath("lookup_tables", "clearsky_lw.nc")) do ds
@@ -587,9 +587,8 @@ function RRTMGPModel(
             end
             lookups = (; lookups..., lookup_lw, idx_gases)
 
-            nbnd_lw = lookup_lw.n_bnd
-            ngpt_lw = lookup_lw.n_gpt
-            ngas = lookup_lw.n_gases
+            nbnd_lw = RRTMGP.LookUpTables.get_n_bnd(lookup_lw)
+            ngas = RRTMGP.LookUpTables.get_n_gases(lookup_lw)
 
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_lw_cld
@@ -629,7 +628,7 @@ function RRTMGPModel(
         set_and_save!(sfc_emis, "surface_emissivity", t..., dict)
         name = "top_of_atmosphere_lw_flux_dn"
         if Symbol(name) in keys(dict)
-            inc_flux = DA{FT}(undef, ncol, ngpt_lw)
+            inc_flux = DA{FT}(undef, ncol)
             set_and_save!(transpose(inc_flux), name, t..., dict)
         else
             inc_flux = nothing
@@ -641,7 +640,7 @@ function RRTMGPModel(
         src_sw = flux_sw = fluxb_sw = bcs_sw = nothing
     else
         if radiation_mode isa GrayRadiation
-            nbnd_sw = ngpt_sw = 1
+            nbnd_sw = 1
         else
             local lookup_sw, idx_gases
             data_loader(joinpath("lookup_tables", "clearsky_sw.nc")) do ds
@@ -649,9 +648,8 @@ function RRTMGPModel(
             end
             lookups = (; lookups..., lookup_sw, idx_gases)
 
-            nbnd_sw = lookup_sw.n_bnd
-            ngpt_sw = lookup_sw.n_gpt
-            ngas = lookup_sw.n_gases
+            nbnd_sw = RRTMGP.LookUpTables.get_n_bnd(lookup_sw)
+            ngas = RRTMGP.LookUpTables.get_n_gases(lookup_sw)
 
             if !(radiation_mode isa ClearSkyRadiation)
                 local lookup_sw_cld
@@ -729,7 +727,8 @@ function RRTMGPModel(
             set_and_save!(similar(flux_lw2.flux_net), "face_clear_flux", t...)
         end
         if !(radiation_mode isa GrayRadiation)
-            @assert lookup_lw.n_gases == lookup_sw.n_gases
+            @assert RRTMGP.LookUpTables.get_n_gases(lookup_lw) ==
+                    RRTMGP.LookUpTables.get_n_gases(lookup_sw)
             @assert lookup_lw.p_ref_min == lookup_sw.p_ref_min
         end
     end

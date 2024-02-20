@@ -37,13 +37,12 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
         thermo_params,
         p.atmos.moisture_model,
         EnvBuoyGradVars(
-            thermo_params,
             ᶜts,
             projected_vector_buoy_grad_vars(
                 C3,
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts))),         # ∂θv∂z_unsat
-                ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts))), # ∂qt∂z_sat
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts))),      # ∂θl∂z_sat
+                p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
+                p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
+                p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
                 ᶜlg,
             ),
         ),

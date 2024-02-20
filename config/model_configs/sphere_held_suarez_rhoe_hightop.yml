@@ -4,5 +4,6 @@ t_end: "8days"
 forcing: "held_suarez"
 dt: "400secs"
 z_elem: 25
+deep_atmosphere: true
 job_id: "sphere_held_suarez_rhoe_hightop"
 z_max: 45000.0
