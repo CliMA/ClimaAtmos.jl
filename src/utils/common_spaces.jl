@@ -42,6 +42,7 @@ function make_horizontal_space(
         space = Spaces.SpectralElementSpace1D(topology, quad)
     elseif mesh isa Meshes.AbstractMesh2D
         @show "constructing topo with spacefillingcurve"
+        @show bubble
         topology = Topologies.Topology2D(
             comms_ctx,
             mesh,
