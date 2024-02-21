@@ -64,37 +64,47 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     # Compute strain rates
     compute_strain_rate_center!(ᶜϵ, ᶠu)
     compute_strain_rate_face!(ᶠϵ, ᶜu)
-    Δ = eltype(Cs)(250)
+    Δ = eltype(Cs)(300)
     ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶜϵ))
     ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶠϵ))
     @. ᶜD = 3 * ᶜνₜ
     
     # Smagorinsky Operators #
     wdivₕ = Operators.WeakDivergence()
+    hgrad = Operators.Gradient()
 
     # Compute the 3D Cartesian Components
-    @. Yₜ.c.uₕ -=
-    -2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
+    #@. Yₜ.c.uₕ -=
+    #-2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
 
- #   @. Yₜ.c.uₕ -= C12(
- #       wdivₕ(
- #           -2 *
- #           Y.c.ρ *
- #           ᶜνₜ *
- #           ᶜϵ,
- #       ) / Y.c.ρ
- #   )
-            
-    @. Yₜ.f.u₃ -= -2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
+    #@. Yₜ.f.u₃ -= -2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
 
- #   @. Yₜ.f.u₃ -= C3(
- #       wdivₕ(
- #           -2 *
- #           ᶠinterp(Y.c.ρ) *
- #           ᶠνₜ *
- #           ᶠϵ,
- #       ) / ᶠinterp(Y.c.ρ)
- #   )
+    ρτ = @. -2 * ᶠinterp(Y.c.ρ) * ᶠνₜ * ᶠϵ
+    ρτc = @. -2 * Y.c.ρ * ᶜνₜ * ᶜϵ
+
+    ρτ11 = ρτ.components.data.:1
+    ρτ12 = ρτ.components.data.:4
+    ρτ13 = ρτ.components.data.:7
+    ρτ22 = ρτ.components.data.:5
+    ρτ23 = ρτ.components.data.:8
+    ρτ33 = ρτ.components.data.:9
+
+    # Assert stress tensor symmetry. 
+    ρτc11 = ρτc.components.data.:1
+    ρτc12 = ρτc.components.data.:4
+    ρτc13 = ρτc.components.data.:7
+    ρτc22 = ρτc.components.data.:5
+    ρτc23 = ρτc.components.data.:8
+    ρτc33 = ρτc.components.data.:9
+
+    @. Yₜ.c.uₕ.components.data.:1 += hgrad(ρτc11).components.data.:1 / Y.c.ρ
+    @. Yₜ.c.uₕ.components.data.:1 += hgrad(ρτc12).components.data.:2 / Y.c.ρ
+    
+    @. Yₜ.c.uₕ.components.data.:2 += hgrad(ρτc12).components.data.:1 / Y.c.ρ
+    @. Yₜ.c.uₕ.components.data.:2 += hgrad(ρτc22).components.data.:2 / Y.c.ρ
+    
+    @. Yₜ.f.u₃.components.data.:1 += hgrad(ρτ13).components.data.:1 / ᶠinterp(Y.c.ρ)
+    @. Yₜ.f.u₃.components.data.:1 += hgrad(ρτ23).components.data.:2 / ᶠinterp(Y.c.ρ)
     
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -138,7 +148,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     compute_strain_rate_center!(ᶜϵ, ᶠu)
     compute_strain_rate_face!(ᶠϵ, ᶜu)
-    Δ = eltype(Cs)(250)
+    Δ = eltype(Cs)(300)
     ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶜϵ))
     ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶠϵ))
     @. ᶜD = 3 * ᶜνₜ

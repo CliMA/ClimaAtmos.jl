@@ -2,7 +2,7 @@ dt_save_state_to_disk: "30secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
-dt: "0.25secs"
+dt: "0.1secs"
 t_end: "900.0secs"
 y_max: 6400.0
 y_elem: 15
@@ -16,11 +16,7 @@ z_max: 6400.0
 job_id: "box_density_current_test"
 smagorinsky_lilly: true
 c_smag: 0.2
-output_default_diagnostics: false
+output_default_diagnostics: true
 diagnostics:
-  - short_name: thetaa
-    period: 30secs
-  - short_name: ua
-    period: 30secs
-  - short_name: wa
-    period: 30secs
+  - short_name: [thetaa, ua, va, wa, ta]
+    period: 90secs
