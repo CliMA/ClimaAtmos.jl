@@ -311,7 +311,8 @@ function turbulent_prandtl_number(
     return prandtl_nvec
 end
 
-edmfx_velocity_relaxation_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
+edmfx_velocity_relaxation_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
+    nothing
 function edmfx_velocity_relaxation_tendency!(
     Yₜ,
     Y,
@@ -325,6 +326,46 @@ function edmfx_velocity_relaxation_tendency!(
     (; dt) = p
 
     for j in 1:n
-        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+            C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
     end
+end
+
+function edmfx_updraft_filter!(integrator)
+    p = integrator.p
+    t = integrator.t
+    Y = integrator.u
+
+    FT = eltype(Y)
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. Y.c.sgsʲs.:($$j).ρa = ifelse(
+            Y.c.sgsʲs.:($$j).ρa <= FT(1e-5),
+            0,
+            Y.c.sgsʲs.:($$j).ρa,
+        )
+        @. Y.f.sgsʲs.:($$j).u₃ =
+            C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
+        @. Y.f.sgsʲs.:($$j).u₃ = ifelse(
+            ᶠinterp(Y.c.sgsʲs.:($$j).ρa) <= FT(1e-5),
+            C3(0),
+            Y.f.sgsʲs.:($$j).u₃,
+        )
+        @. Y.c.sgsʲs.:($$j).ρa = ifelse(
+            ᶜinterp(Y.f.sgsʲs.:($$j).u₃).components.data.:1 <= 0,
+            0,
+            Y.c.sgsʲs.:($$j).ρa,
+        )
+        @. Y.c.sgsʲs.:($$j).mse = ifelse(
+            ᶜinterp(Y.f.sgsʲs.:($$j).u₃).components.data.:1 <= 0,
+            p.precomputed.ᶜh_tot - p.precomputed.ᶜK,
+            Y.c.sgsʲs.:($$j).mse,
+        )
+        @. Y.c.sgsʲs.:($$j).q_tot = ifelse(
+            ᶜinterp(Y.f.sgsʲs.:($$j).u₃).components.data.:1 <= 0,
+            p.precomputed.ᶜspecific.q_tot,
+            Y.c.sgsʲs.:($$j).q_tot,
+        )
+    end
+    #SciMLBase.u_modified!(integrator, false)
 end

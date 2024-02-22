@@ -75,5 +75,11 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     callbacks =
         (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
 
+    if atmos.turbconv_model isa PrognosticEDMFX
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(edmfx_updraft_filter!; skip_first = true),
+        )
+    end
     return callbacks
 end
