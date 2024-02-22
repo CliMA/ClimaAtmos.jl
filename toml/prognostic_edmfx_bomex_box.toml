@@ -15,7 +15,7 @@ value = 0
 type = "float"
 
 [entr_coeff]
-value = 0.1
+value = 0.05
 type = "float"
 
 [min_area_limiter_scale]

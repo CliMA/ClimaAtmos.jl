@@ -331,6 +331,52 @@ function edmfx_velocity_relaxation_tendency!(
     end
 end
 
+edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
+    nothing
+function edmfx_vertical_diffusion_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::PrognosticEDMFX,
+)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶜKʲs, ᶜρʲs) = p.precomputed
+    FT = eltype(Y)
+
+    for j in 1:n
+        ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
+
+        ᶠdivᵥ_u₃ = Operators.DivergenceC2F(
+            top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
+            bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
+        )
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+            ᶠdivᵥ_u₃(-(FT(1) * ᶜgradᵥ(Y.f.sgsʲs.:($$j).u₃[colidx])))
+
+        ᶜdivᵥ_scalar = Operators.DivergenceF2C(
+            top = Operators.SetValue(C3(FT(0))),
+            bottom = Operators.SetValue(C3(FT(0))),
+        )
+        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] -= ᶜdivᵥ_scalar(
+            -(
+                ᶠinterp(ᶜρʲs.:($$j)[colidx]) *
+                FT(1) *
+                ᶠgradᵥ(
+                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx]),
+                )
+            ),
+        )
+        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] -= ᶜdivᵥ_scalar(
+            -(FT(1) * ᶠgradᵥ(Yₜ.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx])),
+        )
+        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] -=
+            ᶜdivᵥ_scalar(-(FT(1) * ᶠgradᵥ(Yₜ.c.sgsʲs.:($$j).q_tot[colidx])))
+    end
+end
+
 function edmfx_updraft_filter!(integrator)
     p = integrator.p
     t = integrator.t
@@ -339,11 +385,8 @@ function edmfx_updraft_filter!(integrator)
     FT = eltype(Y)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        @. Y.c.sgsʲs.:($$j).ρa = ifelse(
-            Y.c.sgsʲs.:($$j).ρa <= FT(1e-5),
-            0,
-            Y.c.sgsʲs.:($$j).ρa,
-        )
+        @. Y.c.sgsʲs.:($$j).ρa =
+            ifelse(Y.c.sgsʲs.:($$j).ρa <= FT(1e-5), 0, Y.c.sgsʲs.:($$j).ρa)
         @. Y.f.sgsʲs.:($$j).u₃ =
             C3(max(Y.f.sgsʲs.:($$j).u₃.components.data.:1, 0))
         @. Y.f.sgsʲs.:($$j).u₃ = ifelse(
