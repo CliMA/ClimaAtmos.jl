@@ -34,7 +34,8 @@ function temporary_quantities(Y, atmos)
         ), # ρaʲu³ʲ_datah_tot
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
-        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
+        ᶠtemp_C3 = Fields.Field(C3{FT}, face_space), # ᶠuₕ³
+        ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # buoyancy_tendency
         ᶠtemp_CT12 = Fields.Field(CT12{FT}, face_space), # ᶠω¹²
         ᶠtemp_CT12ʲs = Fields.Field(
             NTuple{n_mass_flux_subdomains(atmos.turbconv_model), CT12{FT}},

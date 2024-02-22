@@ -76,7 +76,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
-    (; ᶜuʲs, ᶜKʲs) = n > 0 ? p.precomputed : all_nothing
+    (; ᶜuʲs, ᶜKʲs, ᶜKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; ᶠu³⁰) = advect_tke ? p.precomputed : all_nothing
     (; energy_upwinding, tracer_upwinding) = p.atmos.numerics
     (; ᶜspecific) = p.precomputed
@@ -169,7 +169,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
-                ᶠgradᵥ(ᶜKʲs.:($$j)[colidx])
+                ᶠgradᵥ(ᶜKʲs.:($$j)[colidx] - ᶜKᵥʲs.:($$j)[colidx])
         end
 
         if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
@@ -204,7 +204,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
     (; edmfx_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶜρʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶜKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
 
     ᶠz = Fields.coordinate_field(Y.f).z
@@ -212,9 +212,11 @@ function edmfx_sgs_vertical_advection_tendency!(
     for j in 1:n
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.
-        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-            (ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]) /
+        buoyancy_tendency = p.scratch.ᶠtemp_C3[colidx]
+        @. buoyancy_tendency = (ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]) /
             ᶠinterp(ᶜρʲs.:($$j)[colidx])
+        @. buoyancy_tendency = C3(min(buoyancy_tendency.components.data.:1, max(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0) / dt))
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= buoyancy_tendency + ᶠgradᵥ(ᶜKᵥʲs.:($$j)[colidx])
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=

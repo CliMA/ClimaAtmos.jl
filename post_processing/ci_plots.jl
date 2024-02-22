@@ -887,6 +887,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_gabls_box},
     Val{:prognostic_edmfx_bomex_fixtke_box},
     Val{:prognostic_edmfx_bomex_box},
+    Val{:prognostic_edmfx_bomex_column},
     Val{:prognostic_edmfx_bomex_stretched_box},
     Val{:prognostic_edmfx_dycoms_rf01_box},
     Val{:prognostic_edmfx_rico_column},
@@ -972,6 +973,8 @@ function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
     short_names = [
         "ua",
         "wa",
+        "rhoa",
+        "rhoaup",
         "thetaa",
         "thetaaup",
         "ta",

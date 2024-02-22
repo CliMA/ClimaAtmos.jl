@@ -39,7 +39,7 @@ value = 0.3
 type = "float"
 
 [detr_vertdiv_coeff]
-value = 0.6
+value = 0
 type = "float"
 
 [max_area_limiter_scale]
