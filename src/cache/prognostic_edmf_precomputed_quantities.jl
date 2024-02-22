@@ -64,8 +64,6 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
     (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
-    ᶜinterp_lb = Operators.LeftBiasedF2C()
-    ᶜinterp_rb = Operators.RightBiasedF2C()
 
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
@@ -218,7 +216,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
-        @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
+        @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
         @. ᶜdetrʲs.:($$j) = detrainment(
             params,
             ᶜz,
@@ -226,6 +224,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             ᶜp,
             Y.c.ρ,
             buoyancy_flux,
+            Y.c.sgsʲs.:($$j).ρa,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),

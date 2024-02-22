@@ -35,13 +35,13 @@ value = 0
 type = "float"
 
 [detr_buoy_coeff]
-value = 0.3
-type = "float"
-
-[detr_vertdiv_coeff]
 value = 0
 type = "float"
 
+[detr_vertdiv_coeff]
+value = 1
+type = "float"
+
 [max_area_limiter_scale]
-value = 0.01
+value = 0
 type = "float"

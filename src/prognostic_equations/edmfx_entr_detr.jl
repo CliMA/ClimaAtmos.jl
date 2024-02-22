@@ -236,6 +236,7 @@ function detrainment(
     ᶜp::FT,
     ᶜρ::FT,
     buoy_flux_surface::FT,
+    ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -259,12 +260,17 @@ function detrainment(
     max_area_limiter =
         max_area_limiter_scale *
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
-    detr =
-        detr_inv_tau +
-        detr_coeff * abs(ᶜwʲ) +
-        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div +
-        max_area_limiter
+    
+    if ᶜρaʲ <= 0
+        detr = 0
+    else
+        detr =
+            detr_inv_tau +
+            detr_coeff * abs(ᶜwʲ) +
+            detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+            max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * min(ᶜvert_div, 0) / ᶜρaʲ +
+            max_area_limiter
+    end
 
     return detr
 end
