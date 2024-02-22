@@ -213,9 +213,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_sgs_diffusive_flux
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * max(ᶠinterp(ᶜK_h[colidx]), FT(1))
+        @. ᶠρaK_h[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_h[colidx])
         ᶠρaK_u = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * max(ᶠinterp(ᶜK_u[colidx]), FT(1))
+        @. ᶠρaK_u[colidx] = ᶠinterp(ᶜρa⁰[colidx]) * ᶠinterp(ᶜK_u[colidx])
 
         # energy
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(

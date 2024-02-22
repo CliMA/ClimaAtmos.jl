@@ -11,15 +11,15 @@ value = 0.7
 type = "float"
 
 [entr_inv_tau]
-value = 0
+value = 0.0008
 type = "float"
 
 [entr_coeff]
-value = 0.05
+value = 0
 type = "float"
 
 [min_area_limiter_scale]
-value = 0.001
+value = 0
 type = "float"
 
 [min_area_limiter_power]

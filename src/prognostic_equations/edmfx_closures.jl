@@ -410,5 +410,7 @@ function edmfx_updraft_filter!(integrator)
             Y.c.sgsʲs.:($$j).q_tot,
         )
     end
+    @. Y.c.sgs⁰.ρatke =
+        max(Y.c.sgs⁰.ρatke, 0)
     #SciMLBase.u_modified!(integrator, false)
 end
