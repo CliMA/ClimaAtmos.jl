@@ -365,12 +365,18 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶠinterp(ᶜρʲs.:($$j)[colidx]) *
                 FT(1) *
                 ᶠgradᵥ(
-                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx]),
+                    draft_area(
+                        Y.c.sgsʲs.:($$j).ρa[colidx],
+                        ᶜρʲs.:($$j)[colidx],
+                    ),
                 )
             ),
         )
         @. Yₜ.c.sgsʲs.:($$j).mse[colidx] -= ᶜdivᵥ_scalar(
-            -(FT(1) * ᶠgradᵥ(Yₜ.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx])),
+            -(
+                FT(1) *
+                ᶠgradᵥ(Yₜ.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx])
+            ),
         )
         @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] -=
             ᶜdivᵥ_scalar(-(FT(1) * ᶠgradᵥ(Yₜ.c.sgsʲs.:($$j).q_tot[colidx])))
@@ -410,7 +416,6 @@ function edmfx_updraft_filter!(integrator)
             Y.c.sgsʲs.:($$j).q_tot,
         )
     end
-    @. Y.c.sgs⁰.ρatke =
-        max(Y.c.sgs⁰.ρatke, 0)
+    @. Y.c.sgs⁰.ρatke = max(Y.c.sgs⁰.ρatke, 0)
     #SciMLBase.u_modified!(integrator, false)
 end

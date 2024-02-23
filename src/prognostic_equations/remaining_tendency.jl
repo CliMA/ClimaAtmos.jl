@@ -69,14 +69,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             colidx,
             p.atmos.turbconv_model,
         )
-        edmfx_vertical_diffusion_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            colidx,
-            p.atmos.turbconv_model,
-        )
+        # edmfx_vertical_diffusion_tendency!(
+        #     Yₜ,
+        #     Y,
+        #     p,
+        #     t,
+        #     colidx,
+        #     p.atmos.turbconv_model,
+        # )
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_precipitation_tendency!(
             Yₜ,
