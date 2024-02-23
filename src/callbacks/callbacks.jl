@@ -188,6 +188,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         @. ᶜfrac = ᶜcloud_fraction
     end
 
+    set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
+
     RRTMGPI.update_fluxes!(radiation_model)
     RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
     return nothing

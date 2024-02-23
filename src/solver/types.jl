@@ -342,6 +342,7 @@ Base.@kwdef struct AtmosModel{
     RS,
     ST,
     SM,
+    SA,
     NUM,
 }
     model_config::MC = nothing
@@ -370,6 +371,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing
+    surface_albedo::SA = nothing
     numerics::NUM = nothing
 end
 
