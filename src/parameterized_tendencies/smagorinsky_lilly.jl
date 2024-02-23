@@ -74,13 +74,14 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     hgrad = Operators.Gradient()
 
     # Compute the 3D Cartesian Components
-    #@. Yₜ.c.uₕ -=
-    #-2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
-
+    #@. Yₜ.c.uₕ -= -2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
     #@. Yₜ.f.u₃ -= -2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
 
     ρτ = @. -2 * ᶠinterp(Y.c.ρ) * ᶠνₜ * ᶠϵ
     ρτc = @. -2 * Y.c.ρ * ᶜνₜ * ᶜϵ
+
+    @show ᶜνₜ
+    @show ᶠνₜ
 
     ρτ11 = ρτ.components.data.:1
     ρτ12 = ρτ.components.data.:4
@@ -97,14 +98,14 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     ρτc23 = ρτc.components.data.:8
     ρτc33 = ρτc.components.data.:9
 
-    @. Yₜ.c.uₕ.components.data.:1 += hgrad(ρτc11).components.data.:1 / Y.c.ρ
-    @. Yₜ.c.uₕ.components.data.:1 += hgrad(ρτc12).components.data.:2 / Y.c.ρ
+    @. Yₜ.c.uₕ.components.data.:1 -= hgrad(ρτc11).components.data.:1 / Y.c.ρ
+    @. Yₜ.c.uₕ.components.data.:1 -= hgrad(ρτc12).components.data.:2 / Y.c.ρ
     
-    @. Yₜ.c.uₕ.components.data.:2 += hgrad(ρτc12).components.data.:1 / Y.c.ρ
-    @. Yₜ.c.uₕ.components.data.:2 += hgrad(ρτc22).components.data.:2 / Y.c.ρ
+    @. Yₜ.c.uₕ.components.data.:2 -= hgrad(ρτc12).components.data.:1 / Y.c.ρ
+    @. Yₜ.c.uₕ.components.data.:2 -= hgrad(ρτc22).components.data.:2 / Y.c.ρ
     
-    @. Yₜ.f.u₃.components.data.:1 += hgrad(ρτ13).components.data.:1 / ᶠinterp(Y.c.ρ)
-    @. Yₜ.f.u₃.components.data.:1 += hgrad(ρτ23).components.data.:2 / ᶠinterp(Y.c.ρ)
+    @. Yₜ.f.u₃.components.data.:1 -= hgrad(ρτ13).components.data.:1 / ᶠinterp(Y.c.ρ)
+    @. Yₜ.f.u₃.components.data.:1 -= hgrad(ρτ23).components.data.:2 / ᶠinterp(Y.c.ρ)
     
     # energy adjustment
     (; ᶜspecific) = p.precomputed

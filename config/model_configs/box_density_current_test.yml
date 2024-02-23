@@ -1,3 +1,4 @@
+device: "CPUSingleThreaded"
 dt_save_state_to_disk: "30secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
