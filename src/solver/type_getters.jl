@@ -41,6 +41,9 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
 
+    edmfx_velocity_relaxation = parsed_args["edmfx_velocity_relaxation"]
+    @assert edmfx_velocity_relaxation in (false, true)
+
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
 
@@ -62,6 +65,7 @@ function get_atmos(config::AtmosConfig, params)
         edmfx_sgs_mass_flux,
         edmfx_sgs_diffusive_flux,
         edmfx_nh_pressure,
+        edmfx_velocity_relaxation,
         precip_model,
         cloud_model,
         forcing_type,

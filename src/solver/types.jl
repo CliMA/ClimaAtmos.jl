@@ -333,6 +333,7 @@ Base.@kwdef struct AtmosModel{
     ESMF,
     ESDF,
     ENP,
+    EVR,
     TCM,
     NOGW,
     OGW,
@@ -363,6 +364,7 @@ Base.@kwdef struct AtmosModel{
     edmfx_sgs_mass_flux::ESMF = nothing
     edmfx_sgs_diffusive_flux::ESDF = nothing
     edmfx_nh_pressure::ENP = nothing
+    edmfx_velocity_relaxation::EVR = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
