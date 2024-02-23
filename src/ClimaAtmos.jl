@@ -43,6 +43,7 @@ include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
+include(joinpath("prognostic_equations", "zero_gridscale_tendency.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))

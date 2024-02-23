@@ -896,6 +896,7 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_dycoms_rf01_box},
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_simpleplume_column},
 }
 
 """

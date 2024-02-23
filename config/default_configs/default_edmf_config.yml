@@ -5,6 +5,9 @@ turbconv:
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
+gs_tendency:
+  help: "Turns on all grid-scale tendencies [`true` (default), `false`]"
+  value: true
 edmf_coriolis:
   help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
   value: ~
