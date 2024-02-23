@@ -209,7 +209,7 @@ function target_coordinates(
     num_points_long, num_points_lat = num_points
     FT = Spaces.undertype(space)
     longpts = collect(range(FT(-180), FT(180), num_points_long))
-    latpts = collect(range(FT(-80), FT(80), num_points_lat))
+    latpts = collect(range(FT(-90), FT(90), num_points_lat))
 
     return (longpts, latpts)
 end
