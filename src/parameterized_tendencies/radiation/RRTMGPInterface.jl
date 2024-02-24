@@ -285,9 +285,8 @@ function extrap!(::BestFit, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺
     @. p = best_fit_p(T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺)
 end
 function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    FT = eltype(p)
-    cₚ = FT(RRTMGP.Parameters.cp_d(params))
-    R = FT(RRTMGP.Parameters.R_d(params))
+    cₚ = RRTMGP.Parameters.cp_d(params)
+    R = RRTMGP.Parameters.R_d(params)
     @. T = Tₛ
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
@@ -482,7 +481,6 @@ array.
 function RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
     data_loader::Function,
-    ::Type{FT},
     context;
     ncol::Int,
     domain_nlay::Int,
@@ -498,9 +496,10 @@ function RRTMGPModel(
     add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
-) where {FT <: AbstractFloat}
+)
     device = ClimaComms.device(context)
     DA = ClimaComms.array_type(device)
+    FT = typeof(params.grav)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
@@ -1211,20 +1210,30 @@ NVTX.@annotate function update_sw_fluxes!(
     )
 end
 
-# TODO: Change these methods back to using face_sw_flux/face_clear_sw_flux
-# instead of face_sw_flux_up - face_sw_flux_dn
-update_net_fluxes!(radiation_mode, model) =
-    parent(model.face_flux) .=
-        parent(model.face_lw_flux) .+ parent(model.face_sw_flux_up) .-
-        parent(model.face_sw_flux_dn)
+function update_net_fluxes!(_, model)
+    FT = eltype(model.face_flux)
+    model.face_flux .=
+        ifelse.(
+            model.cos_zenith' .<= sqrt(eps(FT)),
+            model.face_lw_flux,
+            model.face_lw_flux .+ model.face_sw_flux,
+        )
+
+end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    parent(model.face_clear_flux) .=
-        parent(model.face_clear_lw_flux) .+
-        parent(model.face_clear_sw_flux_up) .-
-        parent(model.face_clear_sw_flux_dn)
-    parent(model.face_flux) .=
-        parent(model.face_lw_flux) .+ parent(model.face_sw_flux_up) .-
-        parent(model.face_sw_flux_dn)
+    FT = eltype(model.face_flux)
+    model.face_clear_flux .=
+        ifelse.(
+            model.cos_zenith' .<= sqrt(eps(FT)),
+            model.face_clear_lw_flux,
+            model.face_clear_lw_flux .+ model.face_clear_sw_flux,
+        )
+    model.face_flux .=
+        ifelse.(
+            model.cos_zenith' .<= sqrt(eps(FT)),
+            model.face_lw_flux,
+            model.face_lw_flux .+ model.face_sw_flux,
+        )
 end
 
 end # end module
