@@ -324,6 +324,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         p.core.ᶜρ_ref,
         p.core.ᶜp_ref,
         p.scratch.ᶜtemp_scalar,
+        p.scratch.ᶠtemp_CT3,
         p.scratch.∂ᶜK_∂ᶜuₕ,
         p.scratch.∂ᶜK_∂ᶠu₃,
         p.scratch.ᶠp_grad_matrix,
@@ -582,11 +583,13 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             MatrixFields.has_field(Y, ρqₚ_name) || return
             ∂ᶜρqₚ_err_∂ᶜρqₚ = matrix[ρqₚ_name, ρqₚ_name]
             ᶜwₚ = MatrixFields.get_field(p, wₚ_name)
+            ᶠtmp = p.ᶠtemp_CT3
+            @. ᶠtmp[colidx] =
+                CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])) *
+                ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx])
             @. ∂ᶜρqₚ_err_∂ᶜρqₚ[colidx] +=
-                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(
-                    CT3(unit_basis_vector_data(CT3, ᶠlg[colidx])) *
-                    ᶠwinterp(ᶜJ[colidx], ᶜρ[colidx]),
-                ) ⋅ ᶠright_bias_matrix() ⋅
+                dtγ * -(ᶜprecipdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠtmp) ⋅
+                ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-(ᶜwₚ[colidx]) / ᶜρ[colidx])
         end
     end
