@@ -2543,9 +2543,9 @@ version = "7.2.1+1"
 
 [[deps.SurfaceFluxes]]
 deps = ["DocStringExtensions", "RootSolvers", "Thermodynamics"]
-git-tree-sha1 = "3ded2d347cab67d1727b4d25bb5c99fb4982a868"
+git-tree-sha1 = "c2329f2ba04cfd7d93b1fa00d43822b1ccacaa4e"
 uuid = "49b00bb7-8bd4-4f2b-b78c-51cd0450215f"
-version = "0.9.2"
+version = "0.9.4"
 weakdeps = ["CLIMAParameters"]
 
     [deps.SurfaceFluxes.extensions]
@@ -2611,9 +2611,9 @@ version = "1.0.1"
 
 [[deps.Thermodynamics]]
 deps = ["DocStringExtensions", "KernelAbstractions", "Random", "RootSolvers"]
-git-tree-sha1 = "b484b3da3984316967a00089ed6597e59dc03464"
+git-tree-sha1 = "9c9ccbdb2ecb490fc69a0392c98766dcc2024eae"
 uuid = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
-version = "0.12.1"
+version = "0.12.3"
 weakdeps = ["CLIMAParameters"]
 
     [deps.Thermodynamics.extensions]
