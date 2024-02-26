@@ -1,4 +1,3 @@
-device: "CPUSingleThreaded"
 dt_save_state_to_disk: "30secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
@@ -11,8 +10,8 @@ z_stretch: false
 x_elem: 45
 rayleigh_sponge: true
 config: "box"
-vorticity_hyperdiffusion_coefficient: 0.3
-scalar_hyperdiffusion_coefficient: 0.3
+vorticity_hyperdiffusion_coefficient: 0.0
+scalar_hyperdiffusion_coefficient: 0.0
 z_max: 6400.0
 job_id: "box_density_current_test"
 smagorinsky_lilly: true
