@@ -207,6 +207,7 @@ steps:
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist"
         command: >
+          nsys profile --trace=nvtx,cuda --output=sphere_baroclinic_wave_rhoe_equilmoist/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_baroclinic_wave_rhoe_equilmoist.yml
 
@@ -215,18 +216,8 @@ steps:
           --out_dir sphere_baroclinic_wave_rhoe_equilmoist
         artifact_paths: "sphere_baroclinic_wave_rhoe_equilmoist/*"
         agents:
-          slurm_constraint: icelake|cascadelake|skylake|epyc
-      
-      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist (deep sphere)"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
-
-          julia --color=yes --project=examples regression_tests/test_mse.jl
-          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
-          --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist
-        artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/*"
-        agents:
+          slurm_mem: 16G
+          slurm_gpus: 1
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist with cloud diagnostics"
@@ -238,6 +229,18 @@ steps:
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
+
+      - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist (deep sphere)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/deep_sphere_baroclinic_wave_rhoe_equilmoist.yml
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl
+          --job_id deep_sphere_baroclinic_wave_rhoe_equilmoist
+          --out_dir deep_sphere_baroclinic_wave_rhoe_equilmoist
+        artifact_paths: "deep_sphere_baroclinic_wave_rhoe_equilmoist/*"
+        agents:
+          slurm_constraint: icelake|cascadelake|skylake|epyc
 
       - label: ":computer: no lim ARS baroclinic wave (ρe) equilmoist explicit vertdiff"
         command: >
