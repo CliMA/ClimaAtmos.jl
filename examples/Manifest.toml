@@ -352,7 +352,9 @@ version = "0.7.4"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "216385dda9966d820b484f399b90447f073893a6"
+git-tree-sha1 = "be5cf898320a7e5614c08acf069158200430489c"
+repo-rev = "ck/fuse_impl"
+repo-url = "https://github.com/CliMA/ClimaTimeSteppers.jl.git"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
 version = "0.7.16"
 
