@@ -1,6 +1,6 @@
 dt_save_state_to_disk: "10days"
 dt: "150secs"
-t_end: "900days"
+t_end: "600days"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
@@ -9,7 +9,7 @@ z_max: 55000.0
 rayleigh_sponge: true
 topography: "Earth"
 topo_smoothing: true
-smoothing_order: 2
+smoothing_order: 1
 vorticity_hyperdiffusion_coefficient: 1.0
 divergence_damping_factor: 4.0
 scalar_hyperdiffusion_coefficient: 4.0
@@ -21,5 +21,5 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
-job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
-toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth.toml]
+job_id: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth2"
+toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth2.toml]
