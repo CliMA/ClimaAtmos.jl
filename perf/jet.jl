@@ -3,10 +3,12 @@ import Random
 import HDF5, NCDatasets, CUDA
 Random.seed!(1234)
 import ClimaAtmos as CA
+import Thermodynamics as TD
+TD.error_on_non_convergence() = false
 
 include("common.jl")
 
-config_dict = Dict("z_elem" => 63, "dt" => "10secs", "t_end" => "3600secs")
+config_dict = Dict("z_elem" => 20, "dt" => "10secs", "t_end" => "3600secs")
 config = AtmosCoveragePerfConfig(config_dict)
 
 simulation = CA.get_simulation(config)

@@ -879,6 +879,13 @@ steps:
         agents:
           slurm_mem: 24GB
 
+      - label: ":rocket: JET test inference (inference)"
+        command: >
+          julia --color=yes --project=perf perf/jet.jl
+          $PERF_CONFIG_PATH/jet_n_failures.yml
+        agents:
+          slurm_mem: 24GB
+
       # Latency
       - label: ":mag::rocket: Invalidations"
         command: >
