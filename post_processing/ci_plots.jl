@@ -266,6 +266,7 @@ function make_plots_generic(
         # Flush current page
         if grid_pos > min(MAX_PLOTS_PER_PAGE, vars_left_to_plot)
             file_path = joinpath(save_path, "$(output_name)_$page.pdf")
+            CairoMakie.resize_to_layout!(fig)
             CairoMakie.save(file_path, fig)
             push!(summary_files, file_path)
             vars_left_to_plot -= MAX_PLOTS_PER_PAGE
