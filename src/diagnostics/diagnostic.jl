@@ -701,7 +701,7 @@ function get_callbacks_from_diagnostics(
                     integrator.u,
                     integrator.p,
                     integrator.t,
-                )
+                )::typeof(storage[diag])
 
                 # accumulator[diag] is not defined for non-reductions
                 diag_accumulator = get(accumulators, diag, nothing)
