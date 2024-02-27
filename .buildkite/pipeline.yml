@@ -96,27 +96,27 @@ steps:
     steps:
 
       - label: ":computer: non-orographic gravity wave parameterization unit test 3d"
-        command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_3d.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave/non_orographic_gravity_wave/nogw_test_3d.jl"
         artifact_paths: "nonorographic_gravity_wave_test_3d/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization test with MiMA output"
-        command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_mima.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave/non_orographic_gravity_wave/nogw_test_mima.jl"
         artifact_paths: "nonorographic_gravity_wave_test_mima/*"
         agents:
           slurm_mem: 20GB
 
       - label: ":computer: non-orographic gravity wave parameterization unit test single column"
-        command: "julia --color=yes --project=examples test/non_orographic_gravity_wave/nogw_test_single_column.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave/non_orographic_gravity_wave/nogw_test_single_column.jl"
         artifact_paths: "nonorographic_gravity_wave_test_single_column/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for base flux calculation"
-        command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_baseflux.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave/orographic_gravity_wave/ogwd_baseflux.jl"
         artifact_paths: "orographic_gravity_wave_test_baseflux/*"
 
       - label: ":computer: orographic gravity wave parameterization unit test for 3d calculation"
-        command: "julia --color=yes --project=examples test/orographic_gravity_wave/ogwd_3d.jl"
+        command: "julia --color=yes --project=examples test/gravity_wave/orographic_gravity_wave/ogwd_3d.jl"
         artifact_paths: "orographic_gravity_wave_test_3d/*"
 
       - label: ":computer: single column non-orographic gravity wave parameterization"

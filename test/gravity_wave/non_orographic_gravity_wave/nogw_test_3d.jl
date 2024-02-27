@@ -4,8 +4,9 @@ using Interpolations
 using Statistics
 import ClimaAtmos
 import ClimaAtmos as CA
-using Plots
 const FT = Float64
+
+include("../gw_plotutils.jl")
 
 # test Figure 8 of the Alexander and Dunkerton (1999) paper:
 # https://journals.ametsoc.org/view/journals/atsc/56/24/1520-0469_1999_056_4167_aspomf_2.0.co_2.xml?tab_body=pdf
@@ -146,16 +147,16 @@ for j in 1:length(lat)
     )
 end
 
-ENV["GKSwstype"] = "nul"
 output_dir = "nonorographic_gravity_wave_test_3d"
 mkpath(output_dir)
-png(
-    contourf(
-        lat[end:-1:1],
-        center_z[source_level:end],
-        86400 * Jan_uforcing[end:-1:1, source_level:end]',
-        color = :balance,
-        clim = (-1, 1),
-    ),
-    joinpath(output_dir, "test-fig8.png"),
+fig = generate_empty_figure();
+create_plot!(
+    fig;
+    X = lat[end:-1:1],
+    Y = center_z[source_level:end],
+    Z = 86400 * Jan_uforcing[end:-1:1, source_level:end],
+    levels = range(-1, 1; length = 20),
+    yreversed = false,
+    yscale = identity,
 )
+CairoMakie.save(joinpath(output_dir, "test-fig8.png"), fig)

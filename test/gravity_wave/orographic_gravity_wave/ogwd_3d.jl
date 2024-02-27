@@ -10,12 +10,9 @@ using ClimaCoreTempestRemap
 
 using Interpolations
 
-using Plots
-using ClimaCorePlots
-
 const FT = Float64
-
-include("../../post_processing/remap/remap_helpers.jl")
+include("../../../post_processing/remap/remap_helpers.jl")
+include("../gw_plotutils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
 
@@ -406,43 +403,57 @@ end
 
 # Plot on lat-lon grid
 for k in [21, 31]
-    p1 = contourf(
-        lon,
-        lat,
-        ogwd_u[:, :, k, 1]' .* 86400,
-        color = :balance,
-        clim = (-10, 10),
-        title = "climaatmos at z = " * string(z_coord[k]),
+    fig = generate_empty_figure()
+    title = "climaatmos at z = " * string(z_coord[k])
+    create_plot!(
+        fig;
+        X = lon,
+        Y = lat,
+        Z = ogwd_u[:, :, k, 1] .* 86400,
+        levels = range(-10, 10; length = 20),
+        title,
+        p_loc = (1, 1),
+        yreversed = false,
     )
-    p2 = contourf(
-        lon,
-        lat,
-        gfdl_udt_topo[:, :, k, 1]' .* 86400,
-        color = :balance,
-        clim = (-10, 10),
-        title = "gfdl at z = " * string(z_coord[k]),
+
+    title = "gfdl at z = " * string(z_coord[k])
+    create_plot!(
+        fig;
+        X = lon,
+        Y = lat,
+        Z = gfdl_udt_topo[:, :, k, 1] .* 86400,
+        levels = range(-10, 10; length = 20),
+        title,
+        p_loc = (2, 1),
+        yreversed = false,
     )
-    uplot = plot(p1, p2, layout = (2, 1))
-    png(uplot, joinpath(output_dir, "uforcing_" * string(k) * ".png"))
+    CairoMakie.save(joinpath(output_dir, "uforcing_$k.png"), fig)
 end
 
 for k in [21, 31]
-    p1 = contourf(
-        lon,
-        lat,
-        ogwd_v[:, :, k, 1]' .* 86400,
-        color = :balance,
-        clim = (-10, 10),
-        title = "climaatmos at z = " * string(z_coord[k]),
+    fig = generate_empty_figure()
+    title = "climaatmos at z = " * string(z_coord[k])
+    create_plot!(
+        fig;
+        X = lon,
+        Y = lat,
+        Z = ogwd_v[:, :, k, 1] .* 86400,
+        levels = range(-10, 10; length = 20),
+        title,
+        p_loc = (1, 1),
+        yreversed = false,
     )
-    p2 = contourf(
-        lon,
-        lat,
-        gfdl_vdt_topo[:, :, k, 1]' .* 86400,
-        color = :balance,
-        clim = (-10, 10),
-        title = "gfdl at z = " * string(z_coord[k]),
+
+    title = "gfdl at z = " * string(z_coord[k])
+    create_plot!(
+        fig;
+        X = lon,
+        Y = lat,
+        Z = gfdl_vdt_topo[:, :, k, 1] .* 86400,
+        levels = range(-10, 10; length = 20),
+        title,
+        p_loc = (2, 1),
+        yreversed = false,
     )
-    vplot = plot(p1, p2, layout = (2, 1))
-    png(vplot, joinpath(output_dir, "vforcing_" * string(k) * ".png"))
+    CairoMakie.save(joinpath(output_dir, "vforcing_$k.png"), fig)
 end
