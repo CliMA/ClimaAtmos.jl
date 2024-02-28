@@ -2,7 +2,7 @@
 ##### Advection
 #####
 
-using LinearAlgebra: ×, dot
+using LinearAlgebra: ×
 import ClimaCore.Fields as Fields
 import ClimaCore.Geometry as Geometry
 
