@@ -90,7 +90,6 @@ function cloud_sources(
         TD.saturation_vapor_pressure(thp, T, TD.Liquid()),
     )
 
-<<<<<<< HEAD
     if qᵥ + qₗ > FT(0)
         S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
             cm_params,
@@ -110,23 +109,6 @@ function cloud_sources(
     return ifelse(
         S > FT(0),
         triangle_inequality_limiter(S, limit(qᵥ - qₛₗ, dt, 2)),
-=======
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-        cm_params,
-        thp,
-        qₜ,
-        qₗ,
-        qᵢ,
-        qᵣ,
-        qₛ,
-        ρ,
-        Tₐ,
-    )
-
-    return ifelse(
-        S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ, dt, 2)),
->>>>>>> 77b7c53bd (removing noneq clipping)
         -triangle_inequality_limiter(abs(S), limit(qₗ, dt, 2)),
     )
 end
@@ -145,7 +127,6 @@ function cloud_sources(
 
     qᵥ = qₜ - qₗ - qᵢ - qᵣ - qₛ
 
-<<<<<<< HEAD
     qₛᵢ = TD.q_vap_saturation_from_density(
         thp,
         T,
@@ -172,23 +153,6 @@ function cloud_sources(
     return ifelse(
         S > FT(0),
         triangle_inequality_limiter(S, limit(qᵥ - qₛᵢ, dt, 2)),
-=======
-    S = CMNe.conv_q_vap_to_q_liq_ice_MM2015(
-        cm_params,
-        thp,
-        qₜ,
-        qₗ,
-        qᵢ,
-        qᵣ,
-        qₛ,
-        ρ,
-        T,
-    )
-
-    return ifelse(
-        S > FT(0),
-        triangle_inequality_limiter(S, limit(qᵥ, dt, 2)),
->>>>>>> 77b7c53bd (removing noneq clipping)
         -triangle_inequality_limiter(abs(S), limit(qᵢ, dt, 2)),
     )
 end
