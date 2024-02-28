@@ -15,9 +15,9 @@
 #   ...), but also different types of fields (horizontal ones, 3D ones, ...)
 #
 
-################
+###################
 # NetCDFWriter #
-################
+##################
 """
     add_dimension_maybe!(nc::NCDatasets.NCDataset,
                          name::String,
@@ -264,7 +264,7 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
-    interpolated_surface = nothing,
+    interpolated_physical_z = nothing,
 )
 
     hdims_names = vdims_names = []
@@ -283,7 +283,7 @@ function add_space_coordinates_maybe!(
         Spaces.staggering(space),
     )
 
-    if isnothing(interpolated_surface)
+    if Spaces.grid(space).hypsography isa Grids.Flat
         vdims_names =
             add_space_coordinates_maybe!(nc, vertical_space, num_points_vertic)
     else
@@ -291,7 +291,7 @@ function add_space_coordinates_maybe!(
             nc,
             vertical_space,
             num_points_vertic,
-            interpolated_surface;
+            interpolated_physical_z;
             names = ("z_reference",),
             depending_on_dimensions = hdims_names,
         )
@@ -300,13 +300,13 @@ function add_space_coordinates_maybe!(
     return (hdims_names..., vdims_names...)
 end
 
-# Ignore the interpolated_surface/disable_vertical_interpolation keywords in the general
+# Ignore the interpolated_physical_z/disable_vertical_interpolation keywords in the general
 # case (we only case about the specialized one for extruded spaces)
 add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space,
     num_points;
-    interpolated_surface = nothing,
+    interpolated_physical_z = nothing,
     disable_vertical_interpolation = false,
 ) = add_space_coordinates_maybe!(nc::NCDatasets.NCDataset, space, num_points)
 
@@ -322,34 +322,21 @@ function add_space_coordinates_maybe!(
     nc::NCDatasets.NCDataset,
     space::Spaces.FiniteDifferenceSpace,
     num_points,
-    interpolated_surface;
+    interpolated_physical_z;
     names = ("z_reference",),
     depending_on_dimensions,
 )
     num_points_z = num_points
     name, _... = names
 
-    # Implement the LinearAdaption hypsography
+    # Add z_reference
     reference_altitudes = target_coordinates(space, num_points_z)
-
     add_dimension_maybe!(nc, name, reference_altitudes; units = "m", axis = "Z")
-
-    z_top = Spaces.topology(space).mesh.domain.coord_max.z
-
-    # Prepare output array
-    desired_shape = (size(interpolated_surface)..., num_points_z)
-    zpts = zeros(eltype(interpolated_surface), desired_shape)
-
-    for i in CartesianIndices(interpolated_surface)
-        z_surface = interpolated_surface[i]
-        @. zpts[i, :] +=
-            reference_altitudes + (1 .- reference_altitudes / z_top) * z_surface
-    end
 
     # We also have to add an extra variable with the physical altitudes
     physical_name = "z_physical"
     if !haskey(nc, physical_name)
-        FT = eltype(zpts)
+        FT = eltype(interpolated_physical_z)
         dim = NCDatasets.defVar(
             nc,
             physical_name,
@@ -357,8 +344,15 @@ function add_space_coordinates_maybe!(
             (depending_on_dimensions..., name),
         )
         dim.attrib["units"] = "m"
-        dim[:, :, :] = zpts
+        if length(depending_on_dimensions) == 2
+            dim[:, :, :] = interpolated_physical_z
+        elseif length(depending_on_dimensions) == 1
+            dim[:, :] = interpolated_physical_z
+        else
+            error("Error in calculating z_physical")
+        end
     end
+    # We do not output this name because it is not an axis
 
     return [name]
 end
@@ -440,10 +434,8 @@ struct NetCDFWriter{T, TS}
     # compression.
     compression_level::Int
 
-    # nothing, if z is the altitude from the sea level (ie, no topography, or topography
-    # already interpolated). Otherwise, a 1/2D array that describes the surface elevation
-    # interpolated on the horizontal points.
-    interpolated_surface::TS
+    # An array with size num_points with the physical altitude of any given target point.
+    interpolated_physical_z::TS
 
     # NetCDF files that are currently open. Only the root process uses this field.
     open_files::Dict{String, NCDatasets.NCDataset}
@@ -490,31 +482,8 @@ function NetCDFWriter(;
     compression_level = 9,
 )
     space = cspace
-    hypsography = Spaces.grid(space).hypsography
-
-    # When we are interpolating on the vertical direction, we have to deal with the pesky
-    # topography. This is a little annoying to deal with because it couples the horizontal
-    # and the vertical dimensions, so it doesn't fit the common paradigm for all the other
-    # dimensions. Moreover, with topography, we need to perform an interpolation for the
-    # surface.
-
-    # We have to deal with the surface only if we are not interpolating the topography and
-    # if our topography is non-trivial
-    if hypsography isa Grids.Flat
-        interpolated_surface = nothing
-    else
-        horizontal_space = axes(hypsography.surface)
-        hpts = target_coordinates(horizontal_space, num_points)
-        hcoords = hcoords_from_horizontal_space(
-            horizontal_space,
-            Spaces.topology(horizontal_space).mesh.domain,
-            hpts,
-        )
-        vcoords = []
-        remapper = Remapper(horizontal_space, hcoords, vcoords)
-        interpolated_surface =
-            interpolate(remapper, Geometry.tofloat.(hypsography.surface))
-    end
+    horizontal_space = Spaces.horizontal_space(space)
+    is_horizontal_space = horizontal_space == space
 
     if disable_vertical_interpolation
         # It is a little tricky to override the number of vertical points because we don't
@@ -532,11 +501,31 @@ function NetCDFWriter(;
         num_points = Tuple([num_points[1:num_horiz_dimensions]..., num_vpts])
     end
 
-    return NetCDFWriter{typeof(num_points), typeof(interpolated_surface)}(
+    # Interpolate physical zs
+    if is_horizontal_space
+        hpts = target_coordinates(space, num_points)
+        vpts = []
+    else
+        hpts, vpts = target_coordinates(space, num_points)
+    end
+
+    hcoords = hcoords_from_horizontal_space(
+        horizontal_space,
+        Meshes.domain(Spaces.topology(horizontal_space)),
+        hpts,
+    )
+    zcoords = Geometry.ZPoint.(vpts)
+
+    remapper = Remapper(space, hcoords, zcoords)
+
+    interpolated_physical_z =
+        interpolate(remapper, Fields.coordinate_field(space).z)
+
+    return NetCDFWriter{typeof(num_points), typeof(interpolated_physical_z)}(
         Dict(),
         num_points,
         compression_level,
-        interpolated_surface,
+        interpolated_physical_z,
         Dict(),
         disable_vertical_interpolation,
     )
@@ -634,7 +623,7 @@ function write_field!(
         nc,
         space,
         writer.num_points;
-        writer.interpolated_surface,
+        writer.interpolated_physical_z,
     )
 
     if haskey(nc, "$(var.short_name)")
@@ -656,15 +645,6 @@ function write_field!(
         v.attrib["units"] = var.units
         v.attrib["comments"] = var.comments
         v.attrib["start_date"] = string(p.start_date)
-
-        # Attributes for topography, if extruded space
-        if space isa Spaces.ExtrudedFiniteDifferenceSpace
-            v.attrib["topo_name"] = string(nameof(typeof(space.hypsography)))
-            for field in fieldnames(typeof(space.hypsography))
-                value = getproperty(space.hypsography, field)
-                value isa AbstractFloat && (v.attrib["topo_$(field)"] = value)
-            end
-        end
         temporal_size = 0
     end
 
