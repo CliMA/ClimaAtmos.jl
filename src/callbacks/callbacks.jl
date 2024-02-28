@@ -551,6 +551,56 @@ function gc_func(integrator)
     return nothing
 end
 
+# TODO: Move these functions to ClimaTimeSteppers.jl
+is_implicit_timestepper(integrator) =
+    integrator.alg isa CTS.RosenbrockAlgorithm || (
+        integrator.alg.name isa CTS.IMEXARKAlgorithmName &&
+        !isnothing(integrator.cache.newtons_method_cache)
+    )
+jacobian(integrator) =
+    if integrator.alg isa CTS.RosenbrockAlgorithm
+        integrator.cache.W
+    elseif (
+        integrator.alg.name isa CTS.IMEXARKAlgorithmName &&
+        !isnothing(integrator.cache.newtons_method_cache)
+    )
+        integrator.cache.newtons_method_cache.j
+    else
+        error("Jacobian is not available")
+    end
+function dtγ(integrator)
+    is_implicit_timestepper(integrator) || error("dtγ is not available")
+    (; dt, alg) = integrator
+    tableau_coefficients =
+        alg isa CTS.RosenbrockAlgorithm ? alg.tableau.Γ : alg.tableau.a_imp
+    γs = unique(filter(!iszero, LinearAlgebra.diag(tableau_coefficients)))
+    length(γs) == 1 || error(
+        "The exact Jacobian must be updated on every Newton iteration, rather \
+         than on every timestep (or every N steps), because the specified IMEX \
+         algorithm has implicit stages with distinct tableau coefficients \
+         (i.e., it is not an SDIRK algorithm).",
+    )
+    return float(dt) * γs[1]
+end
+
+function update_jacobian!(integrator)
+    is_implicit_timestepper(integrator) || return # TODO: Remove this check.
+    (; u, p, t) = integrator
+    update_jacobian!(jacobian(integrator), u, p, dtγ(integrator), t)
+end
+
+function update_and_check_jacobian!(integrator)
+    is_implicit_timestepper(integrator) || return # TODO: Remove this check.
+    (; u, p, t) = integrator
+    update_and_check_jacobian!(jacobian(integrator), u, p, dtγ(integrator), t)
+end
+
+function save_jacobian!(integrator)
+    is_implicit_timestepper(integrator) || return # TODO: Remove this check.
+    (; u, p, t) = integrator
+    save_jacobian!(jacobian(integrator), u, p, dtγ(integrator), t)
+end
+
 """
     maybe_graceful_exit(integrator)
 

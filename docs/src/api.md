@@ -46,6 +46,10 @@ ClimaAtmos.InitialConditions.Soares
 ### Implicit Solver
 
 ```@docs
+ClimaAtmos.JacobianAlgorithm
+ClimaAtmos.ApproxJacobian
+ClimaAtmos.ExactJacobian
+ClimaAtmos.DebugJacobian
 ClimaAtmos.ImplicitEquationJacobian
 ```
 
