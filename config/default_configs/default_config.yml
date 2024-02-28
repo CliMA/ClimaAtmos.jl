@@ -62,9 +62,6 @@ newton_rtol:
 surface_thermo_state_type:
   help: "Surface thermo state type [`GCMSurfaceThermoState` (default), `PrescribedThermoState`]"
   value: "GCMSurfaceThermoState"
-split_ode:
-  help: "Use split of ODE problem. Examples: [`true` (implicit, default), `false` (explicit)]"
-  value: true
 use_krylov_method:
   help: "Whether to use a Krylov method to solve the linear system in Newton's method (only for ClimaTimeSteppers.jl)"
   value: false
@@ -86,6 +83,24 @@ eisenstat_walker_forcing_alpha:
 jvp_step_adjustment:
   help: "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
   value: 1.0
+use_exact_jacobian:
+  help: "Whether to solve the linear system using the exact Jacobian, which is computed with forward-mode automatic differentiation once per `dt_update_exact_jacobian` (default is `false`)"
+  value: false
+debug_approximate_jacobian:
+  help: "Whether to compare the approximate Jacobian against the exact Jacobian once per `dt_update_exact_jacobian` (default is `false`)"
+  value: true # TODO: Change this to false
+only_debug_first_column_jacobian:
+  help: "Whether to debug only the Jacobian in the first column when `debug_approximate_jacobian` is `true` and `use_exact_jacobian` is `false` (default is equal to `n_cols > 10000`)"
+  value: ~
+plot_jacobian:
+  help: "Whether to save and plot the Jacobian, and also the difference between the approximate Jacobian and exact Jacobian when `debug_approximate_jacobian` is `true` (default is equal to `debug_approximate_jacobian`)"
+  value: ~
+dt_save_jacobian:
+  help: "Time between snapshots of the Jacobian when `plot_jacobian` is `true` (default is equal to `t_span / 5`)"
+  value: ~
+dt_update_exact_jacobian:
+  help: "Time between updates to the exact Jacobian (when either `use_exact_jacobian` or `debug_approximate_jacobian` is `true`), with any value smaller than `dt` corresponding to an update before each linear solve (default is equal to `use_exact_jacobian ? 0 : dt_save_jacobian`)"
+  value: ~
 # Radiation
 rad:
   help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"
