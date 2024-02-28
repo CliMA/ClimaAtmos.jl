@@ -4,6 +4,7 @@
 import ClimaComms
 import ClimaCore: Spaces, Topologies, Fields, Geometry
 import LinearAlgebra: norm_sqr
+import Statistics: quantile
 
 is_energy_var(symbol) = symbol in (:ρe_tot, :ρae_tot)
 is_momentum_var(symbol) = symbol in (:uₕ, :ρuₕ, :u₃, :ρw)
@@ -283,28 +284,40 @@ end
 import Dates
 
 """
-    time_and_units_str(x::Real)
+    time_and_units_str(seconds)
 
-Returns a truncated string of time and units,
-given a time `x` in Seconds.
+Converts the given number of seconds into a string that contains a numerical
+value (rounded to the nearest 2 decimal digits) and its corresponding units.
 """
-time_and_units_str(x::Real) =
-    trunc_time(string(compound_period(x, Dates.Second)))
-
-"""
-    compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
-
-A canonicalized `Dates.CompoundPeriod` given a real value
-`x`, and its units via the period type `T`.
-"""
-function compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
-    nf = Dates.value(convert(Dates.Nanosecond, T(1)))
-    ns = Dates.Nanosecond(ceil(x * nf))
-    return Dates.canonicalize(Dates.CompoundPeriod(ns))
+function time_and_units_str(seconds)
+    # Convert seconds from Float32 to Float64 to avoid round-off errors.
+    precise_seconds = seconds isa Float32 ? Float64(seconds) : seconds
+    full_period = compound_period(precise_seconds)
+    isempty(Dates.periods(full_period)) && return "0 Seconds"
+    whole_period = Dates.periods(full_period)[1]
+    whole_period_value = Dates.value(whole_period)
+    remaining_period = full_period - whole_period
+    no_remaining_digits = isempty(Dates.periods(remaining_period))
+    period_units =
+        string(typeof(whole_period).name.name) *
+        (whole_period_value == 1 && no_remaining_digits ? "" : "s")
+    no_remaining_digits && return "$whole_period_value $period_units"
+    remaining_period_value =
+        Dates.value(convert(Dates.Nanosecond, remaining_period)) /
+        Dates.value(convert(Dates.Nanosecond, typeof(whole_period)(1)))
+    remaining_period_value < 0.01 && return "$whole_period_value $period_units"
+    remaining_digits = lpad(round(Int, remaining_period_value * 100), 2, '0')
+    return "$whole_period_value.$remaining_digits $period_units"
 end
 
-trunc_time(s::String) = count(',', s) > 1 ? join(split(s, ",")[1:2], ",") : s
+"""
+    compound_period(seconds)
 
+A `Dates.CompoundPeriod` that represents the given number of seconds (rounded to
+the nearest nanosecond).
+"""
+compound_period(seconds) =
+    Dates.canonicalize(Dates.Nanosecond(round(Int, seconds * 10^9)))
 
 function prettymemory(b)
     if b < 1024
@@ -332,6 +345,19 @@ macro timed_str(ex)
     end
 end
 
+"""
+    dump_string(x)
+
+Returns a string that contains the output of `dump(x)`.
+"""
+function dump_string(x)
+    buffer = IOBuffer()
+    dump(buffer, x)
+    result = String(take!(buffer))
+    close(buffer)
+    return result
+end
+
 struct AllNothing end
 const all_nothing = AllNothing()
 Base.getproperty(::AllNothing, ::Symbol) = nothing
@@ -350,6 +376,23 @@ end
 function horizontal_integral_at_boundary(f::Fields.Field)
     @assert axes(f) isa Spaces.SpectralElementSpace2D
     sum(f ./ Fields.Δz_field(axes(f)) .* 2) # TODO: is there a way to ensure this is derived from face z? The 2d topology doesn't contain this info
+end
+
+"""
+    smooth_maximum(array, [percentile_rank])
+
+Filters out all non-negligible values in the given `array` and computes the
+specified percentile of the result.
+
+Specifically, this assumes that only the top 9 orders of magnitude of nonzero
+data are significant, and, by default, it roughly selects the 90th percentile
+along each dimension of the filtered data.
+"""
+function smooth_maximum(array, percentile_rank = 1 - 0.1^ndims(array))
+    minimum_filtered_value = maximum(abs, array) / 1e9
+    filtered_array_values = filter(>(minimum_filtered_value), map(abs, array))
+    isempty(filtered_array_values) && return zero(eltype(array))
+    return quantile(filtered_array_values, percentile_rank)
 end
 
 """
