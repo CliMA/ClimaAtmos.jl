@@ -154,6 +154,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 (ᶜf³[colidx] + ᶜω³[colidx]) × CT12(ᶜu[colidx])
             @. Yₜ.f.u₃[colidx] -=
                 ᶠω¹²[colidx] × ᶠinterp(CT12(ᶜu[colidx])) + ᶠgradᵥ(ᶜK[colidx])
+            for j in 1:n
+                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                    ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
+                    ᶠgradᵥ(ᶜKʲs.:($$j)[colidx] - ᶜKᵥʲs.:($$j)[colidx])
+            end
         else
             # deep atmosphere
             @. Yₜ.c.uₕ[colidx] -=
@@ -165,11 +170,12 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             @. Yₜ.f.u₃[colidx] -=
                 (ᶠf¹²[colidx] + ᶠω¹²[colidx]) × ᶠinterp(CT12(ᶜu[colidx])) +
                 ᶠgradᵥ(ᶜK[colidx])
-        end
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-                ᶠω¹²ʲs.:($$j)[colidx] × ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
-                ᶠgradᵥ(ᶜKʲs.:($$j)[colidx] - ᶜKᵥʲs.:($$j)[colidx])
+            for j in 1:n
+                @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                    (ᶠf¹²[colidx] + ᶠω¹²ʲs.:($$j)[colidx]) ×
+                    ᶠinterp(CT12(ᶜuʲs.:($$j)[colidx])) +
+                    ᶠgradᵥ(ᶜKʲs.:($$j)[colidx] - ᶜKᵥʲs.:($$j)[colidx])
+            end
         end
 
         if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
