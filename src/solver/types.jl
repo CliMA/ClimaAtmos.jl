@@ -327,6 +327,7 @@ Base.@kwdef struct AtmosModel{
     LA,
     EC,
     AT,
+    GT,
     EEM,
     EDM,
     ESMF,
@@ -356,6 +357,7 @@ Base.@kwdef struct AtmosModel{
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
+    gs_tendency::GT = nothing
     edmfx_entr_model::EEM = nothing
     edmfx_detr_model::EDM = nothing
     edmfx_sgs_mass_flux::ESMF = nothing

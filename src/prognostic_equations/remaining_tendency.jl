@@ -79,6 +79,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         # NOTE: This will zero out all momentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
+
+        # NOTE: This will zero out all grid-scale tendencies in the simple edmfx test
+        # please DO NOT add additional grid-scale tendencies after this function
+        zero_gridscale_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(

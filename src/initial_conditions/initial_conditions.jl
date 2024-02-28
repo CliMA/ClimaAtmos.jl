@@ -571,6 +571,34 @@ function (initial_condition::MoistAdiabaticProfileEDMFX)(params)
     return local_state
 end
 
+"""
+    SimplePlume(; perturb = true)
+
+An `InitialCondition` with a moist adiabatic temperature profile
+"""
+Base.@kwdef struct SimplePlume <: InitialCondition
+    prognostic_tke::Bool = false
+end
+
+function (initial_condition::SimplePlume)(params)
+    function local_state(local_geometry)
+        FT = eltype(params)
+        thermo_params = CAP.thermodynamics_params(params)
+        temp_profile = DryAdiabaticProfile{FT}(thermo_params, FT(310), FT(290))
+
+        (; z) = local_geometry.coordinates
+        T, p = temp_profile(thermo_params, z)
+        q_tot = FT(0)
+
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            turbconv_state = EDMFState(; tke = FT(0)),
+        )
+    end
+    return local_state
+end
 ##
 ## EDMF Test Cases
 ##

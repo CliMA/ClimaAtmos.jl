@@ -544,6 +544,14 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX simple plume test in a column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column.yml
+        artifact_paths: "prognostic_edmfx_simpleplume_column/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Prognostic EDMFX GABLS in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
