@@ -119,7 +119,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/single_column_nonorographic_gravity_wave.yml
           --job_id single_column_nonorographic_gravity_wave
-        artifact_paths: "single_column_nonorographic_gravity_wave/*"
+        artifact_paths: "single_column_nonorographic_gravity_wave/output_active/*"
 
   - group: "Column Examples"
     steps:
@@ -153,6 +153,8 @@ steps:
           --config_file $CONFIG_PATH/box_density_current_test.yml
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":computer: Box rcemipii with diagnostic edmf"
         command: >
@@ -168,7 +170,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/les_isdac_box.yml
           --job_id les_isdac_box
-        artifact_paths: "les_isdac_box/*"
+        artifact_paths: "les_isdac_box/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -735,6 +737,15 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX simple plume test in a column (autodiff)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_simpleplume_column_autodiff.yml
+          --job_id prognostic_edmfx_simpleplume_column_autodiff
+        artifact_paths: "prognostic_edmfx_simpleplume_column_autodiff/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Prognostic EDMFX GABLS in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -818,6 +829,15 @@ steps:
           slurm_mem: 20GB
         soft_fail: true
 
+      - label: ":umbrella: Prognostic EDMFX TRMM in a column (implicit)"
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_implicit_column.yml
+          --job_id prognostic_edmfx_trmm_implicit_column
+        artifact_paths: "prognostic_edmfx_trmm_implicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Prognostic EDMFX TRMM with 0-moment in a column"
         command: >
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
@@ -842,7 +862,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
           --job_id prognostic_edmfx_bomex_box
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
+        artifact_paths: "prognostic_edmfx_bomex_box/output_active/*"
         agents:
           slurm_mem: 20GB
 
@@ -868,7 +888,7 @@ steps:
           julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/sphere_nonorographic_gravity_wave.yml
           --job_id sphere_nonorographic_gravity_wave
-        artifact_paths: "sphere_nonorographic_gravity_wave/*"
+        artifact_paths: "sphere_nonorographic_gravity_wave/output_active/*"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:

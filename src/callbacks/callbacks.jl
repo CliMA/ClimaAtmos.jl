@@ -455,6 +455,39 @@ function gc_func(integrator)
     return nothing
 end
 
+# TODO: Move this function to ClimaTimeSteppers.jl
+function get_dtγ(integrator)
+    (; dt, alg) = integrator
+    is_implicit =
+        alg isa CTS.RosenbrockAlgorithm || alg.name isa CTS.IMEXARKAlgorithmName
+    is_implicit || return nothing
+    dt_seconds = dt isa ITime ? seconds(dt) : dt
+    tableau_coefficients =
+        alg isa CTS.RosenbrockAlgorithm ? alg.tableau.Γ : alg.tableau.a_imp
+    γs = unique(filter(!iszero, LinearAlgebra.diag(tableau_coefficients)))
+    length(γs) == 1 || error(
+        "The exact Jacobian must be updated on every Newton iteration, rather \
+         than on every timestep (or every N steps), because the specified IMEX \
+         algorithm has implicit stages with distinct tableau coefficients \
+         (i.e., it is not an SDIRK algorithm).",
+    )
+    return dt_seconds * γs[1]
+end
+
+function update_exact_jacobian!(integrator)
+    dtγ = get_dtγ(integrator)
+    isnothing(dtγ) && return
+    (; u, p, t) = integrator
+    update_exact_jacobian!(p.jacobian, u, p, dtγ, t)
+end
+
+function update_jacobian_init!(integrator)
+    dtγ = get_dtγ(integrator)
+    isnothing(dtγ) && return
+    (; u, p, t) = integrator
+    update_jacobian_init!(p.jacobian, u, p, dtγ, t)
+end
+
 """
     maybe_graceful_exit(integrator)
 

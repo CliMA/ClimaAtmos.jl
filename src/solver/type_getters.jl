@@ -6,12 +6,11 @@ import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
-import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import Logging
 
-import ClimaUtilities.TimeManager: ITime
+import ClimaUtilities.TimeManager: ITime, seconds
 
 import ClimaDiagnostics
 
@@ -403,75 +402,41 @@ function get_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
-is_explicit_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.ERKAlgorithmName
-
-is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.IMEXARKAlgorithmName
-
-is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
-
-is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
-is_imex_CTS_algo(::CTS.RosenbrockAlgorithm) = true
-is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
-
-is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
-
-is_rosenbrock(::SciMLBase.AbstractODEAlgorithm) = false
-use_transform(ode_algo) =
-    !(is_imex_CTS_algo(ode_algo) || is_rosenbrock(ode_algo))
-
-additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
-    adaptive = false,
-    progress = isinteractive(),
-    progress_steps = isinteractive() ? 1 : 1000,
-)
-import DiffEqBase
-additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
-    kwargshandle = DiffEqBase.KeywordArgSilent, # allow custom kwargs
-    adjustfinal = true,
-    # TODO: enable progress bars in ClimaTimeSteppers
-)
-
-is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
-is_cts_algo(::CTS.DistributedODEAlgorithm) = true
-
-function jac_kwargs(ode_algo, Y, atmos, parsed_args)
-    if is_implicit(ode_algo)
-        A = ImplicitEquationJacobian(
-            Y,
-            atmos;
-            approximate_solve_iters = parsed_args["approximate_linear_solve_iters"],
-            transform_flag = use_transform(ode_algo),
-        )
-        if use_transform(ode_algo)
-            return (; jac_prototype = A, Wfact_t = Wfact!)
+get_jacobian(ode_algo, Y, atmos, parsed_args) =
+    if ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm}
+        use_exact_jacobian = parsed_args["use_exact_jacobian"]
+        only_first_column = parsed_args["debug_approximate_jacobian"]
+        always_update_exact_jacobian =
+            parsed_args["n_steps_update_exact_jacobian"] == 0
+        exact_jacobian_alg =
+            ExactJacobian(; only_first_column, always_update_exact_jacobian)
+        approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
+        approx_jacobian_alg = ApproxJacobian(; approximate_solve_iters)
+        jacobian_algorithm = if parsed_args["debug_approximate_jacobian"]
+            DebugJacobian(
+                exact_jacobian_alg,
+                approx_jacobian_alg;
+                use_exact_jacobian,
+            )
         else
-            return (; jac_prototype = A, Wfact = Wfact!)
+            use_exact_jacobian ? exact_jacobian_alg : approx_jacobian_alg
         end
+        @info "Jacobian algorithm: $(dump_string(jacobian_algorithm))"
+        ImplicitEquationJacobian(jacobian_algorithm, Y, atmos)
     else
-        return NamedTuple()
+        nothing
     end
-end
 
-#=
-    ode_configuration(Y, parsed_args)
-
-Returns the ode algorithm
-=#
 function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
-    alg_or_tableau = getproperty(CTS, Symbol(ode_name))
-    @info "Using ODE config: `$alg_or_tableau`"
-    if ode_name == "SSPKnoth"
-        return CTS.RosenbrockAlgorithm(CTS.tableau(CTS.SSPKnoth()))
-    end
-
-    if is_explicit_CTS_algo_type(alg_or_tableau)
-        return CTS.ExplicitAlgorithm(alg_or_tableau())
-    elseif !is_implicit_type(alg_or_tableau)
-        return alg_or_tableau()
-    elseif is_imex_CTS_algo_type(alg_or_tableau)
+    ode_algo_name = getproperty(CTS, Symbol(ode_name))
+    @info "Using ODE config: `$ode_algo_name`"
+    return if ode_algo_name <: CTS.RosenbrockAlgorithmName
+        CTS.RosenbrockAlgorithm(CTS.tableau(ode_algo_name()))
+    elseif ode_algo_name <: CTS.ERKAlgorithmName
+        CTS.ExplicitAlgorithm(ode_algo_name())
+    else
+        @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters_ode"],
             krylov_method = if parsed_args["use_krylov_method"]
@@ -500,9 +465,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
                 nothing
             end,
         )
-        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
-    else
-        return alg_or_tableau(; linsolve = linsolve!)
+        CTS.IMEXAlgorithm(ode_algo_name(), newtons_method)
     end
 end
 
@@ -645,40 +608,36 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, dt) = p
-
+function args_integrator(parsed_args, Y, p, tspan, ode_algo, jacobian, callback)
+    (; dt) = p
     s = @timed_str begin
-        func = if parsed_args["split_ode"]
-            implicit_func = SciMLBase.ODEFunction(
-                implicit_tendency!;
-                jac_kwargs(ode_algo, Y, atmos, parsed_args)...,
-                tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
-            )
-            if is_cts_algo(ode_algo)
-                CTS.ClimaODEFunction(;
-                    T_exp_T_lim! = remaining_tendency!,
-                    T_imp! = implicit_func,
-                    # Can we just pass implicit_tendency! and jac_prototype etc.?
-                    lim! = limiters_func!,
-                    dss!,
-                    cache! = set_precomputed_quantities!,
-                    cache_imp! = set_implicit_precomputed_quantities!,
-                )
-            else
-                SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
-            end
-        else
-            remaining_tendency! # should be total_tendency!
-        end
+        T_imp! = SciMLBase.ODEFunction(
+            implicit_tendency!;
+            jac_prototype = jacobian,
+            Wfact = update_jacobian!,
+        )
+        tendency_function = CTS.ClimaODEFunction(;
+            T_exp_T_lim! = remaining_tendency!,
+            T_imp!,
+            lim! = limiters_func!,
+            dss!,
+            cache! = set_precomputed_quantities!,
+            cache_imp! = set_implicit_precomputed_quantities!,
+        )
     end
     @info "Define ode function: $s"
-    problem = SciMLBase.ODEProblem(func, Y, tspan, p)
-    t_begin, t_end, _ = promote(tspan[1], tspan[2], p.dt)
+    problem = SciMLBase.ODEProblem(tendency_function, Y, tspan, p)
+    t_begin, t_end, _ = promote(tspan[1], tspan[2], dt)
     # Save solution to integrator.sol at the beginning and end
     saveat = [t_begin, t_end]
     args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
+    kwargs = (;
+        saveat,
+        callback,
+        dt,
+        kwargshandle = DiffEqBase.KeywordArgSilent, # allow custom kwargs
+        adjustfinal = true,
+    )
     return (args, kwargs)
 end
 
@@ -765,9 +724,21 @@ function get_simulation(config::AtmosConfig)
         )
     end
 
+    FT = Spaces.undertype(axes(Y.c))
+
     tracers = get_tracers(config.parsed_args)
     steady_state_velocity =
         get_steady_state_velocity(params, Y, config.parsed_args)
+
+    s = @timed_str begin
+        ode_algo = ode_configuration(FT, config.parsed_args)
+    end
+    @info "ode_configuration: $s"
+
+    s = @timed_str begin
+        jacobian = get_jacobian(ode_algo, Y, atmos, config.parsed_args)
+    end
+    @info "Allocating jacobian: $s"
 
     s = @timed_str begin
         p = build_cache(
@@ -778,6 +749,7 @@ function get_simulation(config::AtmosConfig)
             sim_info,
             tracers.aerosol_names,
             steady_state_velocity,
+            jacobian,
         )
     end
     @info "Allocating cache (p): $s"
@@ -785,12 +757,6 @@ function get_simulation(config::AtmosConfig)
     if config.parsed_args["discrete_hydrostatic_balance"]
         set_discrete_hydrostatic_balanced_state!(Y, p)
     end
-
-    FT = Spaces.undertype(axes(Y.c))
-    s = @timed_str begin
-        ode_algo = ode_configuration(FT, config.parsed_args)
-    end
-    @info "ode_configuration: $s"
 
     s = @timed_str begin
         callback = get_callbacks(config, sim_info, atmos, params, Y, p)
@@ -853,6 +819,7 @@ function get_simulation(config::AtmosConfig)
             p,
             tspan,
             ode_algo,
+            jacobian,
             all_callbacks,
         )
     end
@@ -863,6 +830,13 @@ function get_simulation(config::AtmosConfig)
     @info "init integrator: $s"
 
     if config.parsed_args["enable_diagnostics"]
+        short_names =
+            map(diag -> diag.variable.short_name, scheduled_diagnostics)
+        if "ejac1" in short_names || "ajac1" in short_names
+            # TODO: Only do this if the Jacobian needs to be saved at t = 0.
+            update_jacobian_init!(integrator)
+        end
+
         s = @timed_str begin
             integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
                 integrator,

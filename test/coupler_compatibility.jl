@@ -74,6 +74,7 @@ const T2 = 290
         p.ghost_buffer,
         p.precomputed,
         p.scratch,
+        p.jacobian,
         p.hyperdiff,
         p.external_forcing,
         p.non_orographic_gravity_wave,
