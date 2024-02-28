@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "9f84ec58e509508e57495c836422d311eb03b970"
+project_hash = "8195465518911c7d49a3641e14bac6595ad618c6"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -319,7 +319,9 @@ version = "0.5.7"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "fd3bb1f7655ebcc8c8a652a8cc6c4f7f2620ae72"
+git-tree-sha1 = "fe4e748a34ad506aa98b97269563c9c40124bc29"
+repo-rev = "ck/remove_dep_warn"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.12.1"
 weakdeps = ["Krylov"]
