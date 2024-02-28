@@ -188,7 +188,6 @@ function get_diagnostics(parsed_args, atmos_model, Y, p, sim_info, output_dir)
             diagnostics...,
         ]
     end
-    diagnostics = collect(diagnostics)
 
     periods_reductions = Set()
     for diag in diagnostics
@@ -379,6 +378,49 @@ function get_callbacks(config, sim_info, atmos, params, Y, p)
         end
 
         callbacks = (callbacks..., call_every_dt(nogw_model_callback!, dt_nogw))
+    end
+
+    use_exact_jacobian = parsed_args["use_exact_jacobian"]
+    debug_approximate_jacobian = parsed_args["debug_approximate_jacobian"]
+    need_to_update_exact_jacobian_in_callback =
+        (
+            (debug_approximate_jacobian && !use_exact_jacobian) &&
+            isnothing(parsed_args["dt_update_exact_jacobian"])
+        ) || (
+            (debug_approximate_jacobian || use_exact_jacobian) &&
+            !isnothing(parsed_args["dt_update_exact_jacobian"]) &&
+            time_to_seconds(parsed_args["dt_update_exact_jacobian"]) >=
+            time_to_seconds(parsed_args["dt"])
+        )
+    need_to_save_jacobian =
+        isnothing(parsed_args["plot_jacobian"]) ? debug_approximate_jacobian :
+        parsed_args["plot_jacobian"]
+    dt_save_jacobian = if isnothing(parsed_args["dt_save_jacobian"])
+        (t_end - t_start) ÷ 5
+    else
+        dt isa ITime ?
+        ITime(time_to_seconds(parsed_args["dt_save_jacobian"])) :
+        FT(time_to_seconds(parsed_args["dt_save_jacobian"]))
+    end
+    dt_update_jacobian = if isnothing(parsed_args["dt_update_exact_jacobian"])
+        dt_save_jacobian
+    else
+        dt isa ITime ?
+        ITime(time_to_seconds(parsed_args["dt_update_exact_jacobian"])) :
+        FT(time_to_seconds(parsed_args["dt_update_exact_jacobian"]))
+    end
+    if need_to_update_exact_jacobian_in_callback
+        update_jacobian_in_callback! =
+            debug_approximate_jacobian ? update_and_check_jacobian! :
+            update_jacobian!
+        callbacks = (
+            callbacks...,
+            call_every_dt(update_jacobian_in_callback!, dt_update_jacobian),
+        )
+    end
+    if need_to_save_jacobian
+        callbacks =
+            (callbacks..., call_every_dt(save_jacobian!, dt_save_jacobian))
     end
 
     return callbacks
