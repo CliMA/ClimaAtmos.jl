@@ -1,22 +1,17 @@
 agents:
-  queue: central
+  queue: new-central
   slurm_mem_per_cpu: 8G
-  modules: julia/1.10.0 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 nsight-systems/2023.3.1
+  modules: climacommon/2024_02_27
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
   OPENBLAS_NUM_THREADS: 1
   JULIA_NVTX_CALLBACKS: gc
-  OMPI_MCA_opal_warn_on_missing_libcuda: 0
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_CPU_TARGET: 'broadwell;skylake;icelake;cascadelake;epyc'
   CONFIG_PATH: "config/longrun_configs"
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
-  JULIA_CUDA_MEMORY_POOL: none
-  JULIA_MPI_HAS_CUDA: "true"
-  MPITRAMPOLINE_LIB: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/lib64/libmpiwrapper.so"
-  MPITRAMPOLINE_MPIEXEC: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/bin/mpiwrapperexec"
 
 timeout_in_minutes: 1440
 
