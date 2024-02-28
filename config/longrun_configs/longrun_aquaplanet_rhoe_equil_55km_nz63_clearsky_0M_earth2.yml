@@ -11,8 +11,8 @@ topography: "Earth"
 topo_smoothing: true
 smoothing_order: 1
 vorticity_hyperdiffusion_coefficient: 1.0
-divergence_damping_factor: 4.0
-scalar_hyperdiffusion_coefficient: 4.0
+divergence_damping_factor: 5.0
+scalar_hyperdiffusion_coefficient: 5.0
 moist: "equil"
 precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
