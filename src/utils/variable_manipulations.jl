@@ -62,9 +62,9 @@ function as
        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2`.
 """
 sgs_weight_function(a, a_half) =
-    if a < 0
+    if a <= 0 # autodiff generates NaNs when a is 0
         zero(a)
-    elseif a > 1
+    elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
         one(a)
     else
         (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2

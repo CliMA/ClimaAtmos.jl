@@ -408,7 +408,7 @@ function mixing_length(
     # provides a conservative lower bound.
     l_final = max(l_final, eps_FT)
 
-    return MixingLength{FT}(l_final, l_W, l_TKE, l_N)
+    return MixingLength(l_final, l_W, l_TKE, l_N)
 end
 
 """

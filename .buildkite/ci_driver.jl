@@ -41,6 +41,7 @@ import Base.Filesystem: rm
 import Statistics: mean
 import LinearAlgebra: norm_sqr
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
+include(joinpath(pkgdir(CA), "post_processing", "jacobian_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
 reference_job_id = isnothing(ref_job_id) ? simulation.job_id : ref_job_id
@@ -187,6 +188,7 @@ if ClimaComms.iamroot(config.comms_ctx)
             "reproducibility_utils.jl",
         ),
     )
+
     @info "Plotting"
     paths = latest_comparable_dirs() # __build__ path (not job path)
     if isempty(paths)
@@ -217,6 +219,17 @@ if ClimaComms.iamroot(config.comms_ctx)
             [simulation.output_dir, nc_dir]
         end
         make_plots(Val(Symbol(reference_job_id)), paths)
+    end
+    if (
+        isnothing(config.parsed_args["plot_jacobian"]) ?
+        config.parsed_args["debug_manual_jacobian"] :
+        config.parsed_args["plot_jacobian"]
+    )
+        make_jacobian_plots(
+            simulation.output_dir,
+            integrator.u,
+            float(integrator.dt),
+        )
     end
     @info "Plotting done"
 
