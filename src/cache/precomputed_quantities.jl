@@ -94,7 +94,6 @@ function precomputed_quantities(Y, atmos)
     TST = thermo_state_type(atmos.moisture_model, FT)
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
-    fspace = axes(Y.f)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
@@ -154,9 +153,9 @@ function precomputed_quantities(Y, atmos)
         ) : (;)
 
     sgs_quantities = (;
-        ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
-        ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
-        ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
+        ᶜgradᵥ_θ_virt = similar(Y.c, C3{FT}),
+        ᶜgradᵥ_q_tot = similar(Y.c, C3{FT}),
+        ᶜgradᵥ_θ_liq_ice = similar(Y.c, C3{FT}),
     )
 
     diagnostic_sgs_quantities =
@@ -561,7 +560,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_precipitation!(
             Y,
             p,
-            p.atmos.precip_model,
+            precip_model,
         )
     end
 
@@ -574,7 +573,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
             Y,
             p,
             t,
-            p.atmos.precip_model,
+            precip_model,
         )
     end
 

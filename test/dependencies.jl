@@ -36,6 +36,7 @@ known_dependencies = Set([
     "ArgParse",
     "Artifacts",
     "AtmosphericProfilesLibrary",
+    "BlockArrays",
     "ClimaComms",
     "ClimaCore",
     "ClimaDiagnostics",
@@ -46,6 +47,7 @@ known_dependencies = Set([
     "Dates",
     "DiffEqBase",
     "FastGaussQuadrature",
+    "ForwardDiff",
     "Insolation",
     "Interpolations",
     "LazyBroadcast", # for https://github.com/CliMA/ClimaAtmos.jl/issues/3594
