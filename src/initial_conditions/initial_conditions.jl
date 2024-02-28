@@ -69,7 +69,7 @@ function column_indefinite_integral(
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(first(zspan)),
         Geometry.ZPoint(last(zspan));
-        boundary_tags = (:bottom, :top),
+        boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain; nelems)
     context = ClimaComms.SingletonCommsContext()
