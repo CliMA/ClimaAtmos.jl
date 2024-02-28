@@ -12,6 +12,7 @@ struct AtmosCache{
     SGQ,
     PREC,
     SCRA,
+    J,
     HYPE,
     DSS,
     RS,
@@ -70,6 +71,9 @@ struct AtmosCache{
     """Pre-allocated areas of memory to store temporary values"""
     scratch::SCRA
 
+    """Jacobian matrix for residual of implicit solve"""
+    jacobian::J
+
     """Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
        ghost buffers for DSS"""
     hyperdiff::HYPE
@@ -101,6 +105,10 @@ struct AtmosCache{
     output_dir::OD
 end
 
+# When we call SciMLBase.init, DiffEqBase.jl promotes Y and t to Dual numbers
+# when anything in p has a Dual eltype, unless we define the following method.
+DiffEqBase.anyeltypedual(::AtmosCache) = Any
+
 # Functions on which the model depends:
 # CAP.R_d(params)         # dry specific gas constant
 # CAP.kappa_d(params)     # dry adiabatic exponent
@@ -113,7 +121,15 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
+function build_cache(
+    Y,
+    atmos,
+    params,
+    surface_setup,
+    sim_info,
+    jacobian,
+    aerosol_names,
+)
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
@@ -212,6 +228,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         SG_quad,
         precomputed,
         scratch,
+        jacobian,
         hyperdiff,
         do_dss,
         rayleigh_sponge,

@@ -108,14 +108,8 @@ end
 Returns the total energy source term multiplier from precipitation formation
 for the 0-moment scheme
 """
-function e_tot_0M_precipitation_sources_helper(
-    thp,
-    ts,
-    Φ::FT,
-) where {FT <: Real}
-
-    λ::FT = TD.liquid_fraction(thp, ts)
-
+function e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
+    λ = TD.liquid_fraction(thp, ts)
     return λ * Iₗ(thp, ts) + (1 - λ) * Iᵢ(thp, ts) + Φ
 end
 
