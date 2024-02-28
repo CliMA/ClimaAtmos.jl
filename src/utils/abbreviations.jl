@@ -1,4 +1,5 @@
-using ClimaCore: Geometry, Operators, MatrixFields
+using ClimaCore: Geometry, Operators
+using ClimaCore.MatrixFields
 
 # Alternatively, we could use Vec₁₂₃, Vec³, etc., if that is more readable.
 const C1 = Geometry.Covariant1Vector

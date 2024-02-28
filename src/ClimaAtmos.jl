@@ -1,6 +1,8 @@
 module ClimaAtmos
 
 using NVTX
+import DiffEqBase # TODO: Get rid of this dependency.
+import LinearAlgebra
 import Thermodynamics as TD
 
 include(joinpath("parameters", "Parameters.jl"))
@@ -51,6 +53,10 @@ include(joinpath("prognostic_equations", "zero_tendency.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
+include(joinpath("prognostic_equations", "implicit", "approx_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "exact_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "debug_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "dual_fixes.jl"))
 
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
