@@ -1,5 +1,5 @@
 dt_save_state_to_disk: "10days"
-dt: "150secs"
+dt: "125secs"
 t_end: "600days"
 h_elem: 16
 z_elem: 63
@@ -10,9 +10,9 @@ rayleigh_sponge: true
 topography: "Earth"
 topo_smoothing: true
 smoothing_order: 1
-vorticity_hyperdiffusion_coefficient: 0.75
+vorticity_hyperdiffusion_coefficient: 1.0
 divergence_damping_factor: 6.0
-scalar_hyperdiffusion_coefficient: 4.5
+scalar_hyperdiffusion_coefficient: 6.0
 moist: "equil"
 precip_model: "0M"
 surface_setup: "DefaultMoninObukhov"
