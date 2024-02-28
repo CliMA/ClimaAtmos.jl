@@ -42,31 +42,6 @@ steps:
   - group: "Targeted resolution AMIP long runs"
     steps:
 
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + earth topography + 0M microphysics (T0)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_gpus: 1
-          slurm_cpus_per_task: 4
-          slurm_time: 12:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
-          RESTART_FILE: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/51/climaatmos-gpulongruns/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth/day400.0.hdf5"
-          
-
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + earth topography + 0M microphysics (T1)"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_gpus: 1
-          slurm_cpus_per_task: 4
-          slurm_time: 12:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth1"
-          RESTART_FILE: "/scratch/clima/slurm-buildkite/climaatmos-gpulongruns/51/climaatmos-gpulongruns/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth1/day400.0.hdf5"
-      
       - label: ":computer: aquaplanet equilmoist clearsky radiation + earth topography + 0M microphysics (T2)"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
