@@ -885,6 +885,60 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+Aquaplanet1MPlots =
+    Union{Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_1M}}
+
+function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
+
+    reduction = "average"
+    short_names_3D = [
+        "ua",
+        "ta",
+        "hus",
+        "rsd",
+        "rsu",
+        "rld",
+        "rlu",
+        "husra",
+        "hussn",
+        "hur",
+        "cl",
+        "cli",
+        "clw",
+    ]
+    short_names_2D = ["hfes", "evspsbl"]
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names_3D[1],
+        reduction,
+    )
+    if "10d" in available_periods
+        period = "10d"
+    elseif "1d" in available_periods
+        period = "1d"
+    elseif "12h" in available_periods
+        period = "12h"
+    end
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
+    make_plots_generic(
+        output_paths,
+        vars_3D,
+        time = LAST_SNAP,
+        more_kwargs = YLOGSCALE,
+    )
+    make_plots_generic(
+        output_paths,
+        vars_2D,
+        time = LAST_SNAP,
+        output_name = "summary_2D",
+    )
+end
 
 EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_gabls_box},
