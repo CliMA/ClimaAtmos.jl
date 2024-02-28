@@ -261,7 +261,7 @@ if ClimaComms.iamroot(config.comms_ctx)
         paths = if isempty(readdir(nc_dir))
             simulation.output_dir
         else
-            [simulation.output_dir, nc_dir]
+            [nc_dir, simulation.output_dir]
         end
         make_plots(Val(Symbol(reference_job_id)), paths)
     end
