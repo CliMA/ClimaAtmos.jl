@@ -2,6 +2,7 @@ module ClimaAtmos
 
 using NVTX
 import Adapt
+import LinearAlgebra
 import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
 import LazyBroadcast: lazy
@@ -56,6 +57,10 @@ include(joinpath("prognostic_equations", "zero_velocity.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
+include(joinpath("prognostic_equations", "implicit", "approx_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "exact_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "debug_jacobian.jl"))
+include(joinpath("prognostic_equations", "implicit", "dual_fixes.jl"))
 
 include(joinpath("prognostic_equations", "water_advection.jl"))
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
