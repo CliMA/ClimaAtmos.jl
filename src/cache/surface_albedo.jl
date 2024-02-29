@@ -1,6 +1,8 @@
 # we are ignoring the volume reflectance for now
 abstract type SurfaceAlbedoModel end
 
+struct CouplerAlbedo <: SurfaceAlbedoModel end
+
 """
     Base.@kwdef struct ConstantAlbedo{FT} <: SurfaceAlbedoModel
 
@@ -96,6 +98,13 @@ function set_surface_albedo!(
             :,
         )
 end
+
+"""
+    set_surface_albedo!(::CouplerAlbedo)
+
+Tell the ClimaAtmos to skip setting the surface albedo, as it is handled by the coupler.
+"""
+set_surface_albedo!(Y, p, t, ::CouplerAlbedo) = nothing
 
 """
     surface_albedo_direct(α_model::RegressionFunctionAlbedo{FT}) where {FT}

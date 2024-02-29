@@ -106,6 +106,8 @@ function get_surface_albedo_model(parsed_args, ::Type{FT}) where {FT}
             "Radiation model not specified, so cannot use RegressionFunctionAlbedo",
         )
         RegressionFunctionAlbedo{FT}()
+    elseif albedo_name in ("CouplerAlbedo",)
+        CouplerAlbedo()
     else
         error("Uncaught surface albedo model `$albedo_name`.")
     end
