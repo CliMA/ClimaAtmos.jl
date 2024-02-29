@@ -316,9 +316,9 @@ version = "0.5.7"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "fd3bb1f7655ebcc8c8a652a8cc6c4f7f2620ae72"
+git-tree-sha1 = "015898159f05bfa6075cbec6790fff4efea16aa5"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.12.1"
+version = "0.13.0"
 weakdeps = ["Krylov"]
 
     [deps.ClimaCore.extensions]
@@ -326,33 +326,33 @@ weakdeps = ["Krylov"]
 
 [[deps.ClimaCoreMakie]]
 deps = ["ClimaCore", "Makie"]
-git-tree-sha1 = "8c50d9642c3c97b566f1a022cebbb5839655c246"
+git-tree-sha1 = "23fa6f29e0765d5467afa73f42fea76a3a4a5244"
 uuid = "908f55d8-4145-4867-9c14-5dad1a479e4d"
-version = "0.4.3"
+version = "0.4.4"
 
 [[deps.ClimaCorePlots]]
 deps = ["ClimaCore", "RecipesBase", "StaticArrays", "TriplotBase"]
-git-tree-sha1 = "e86fd9242e89b526c9fb29e05db3071ce64e3a8e"
+git-tree-sha1 = "ded3e0f3e7069f7c807f7b56caff232921bc2f5f"
 uuid = "cf7c7e5a-b407-4c48-9047-11a94a308626"
-version = "0.2.7"
+version = "0.2.8"
 
 [[deps.ClimaCoreSpectra]]
 deps = ["ClimaCore", "FFTW"]
-git-tree-sha1 = "380c82b44cbea4d462f671692137cace753b8bd3"
+git-tree-sha1 = "697b785d474be925987005655a5e5dc21d0cb0d2"
 uuid = "c2caaa1d-32ae-4754-ba0d-80e7561362e9"
-version = "0.1.2"
+version = "0.1.3"
 
 [[deps.ClimaCoreTempestRemap]]
 deps = ["ClimaComms", "ClimaCore", "CommonDataModel", "Dates", "LinearAlgebra", "NCDatasets", "PkgVersion", "TempestRemap_jll"]
-git-tree-sha1 = "2267e018c34f44fa8300b8d550d59f3eecef6094"
+git-tree-sha1 = "ac11cc8ad2c043ab753d6888c224c7e2f35f42c0"
 uuid = "d934ef94-cdd4-4710-83d6-720549644b70"
-version = "0.3.13"
+version = "0.3.14"
 
 [[deps.ClimaCoreVTK]]
 deps = ["ClimaCore", "WriteVTK"]
-git-tree-sha1 = "1a44ca6979f9be143b4ddb5ed333dbc84ab196f1"
+git-tree-sha1 = "76e6513438a5a888cf548f78b6e71311e370d626"
 uuid = "c8b6d40d-e815-466f-95ae-c48aefa668fa"
-version = "0.7.4"
+version = "0.7.5"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]

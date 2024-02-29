@@ -448,11 +448,7 @@ struct NetCDFWriter{T, TS}
     # NetCDF files that are currently open. Only the root process uses this field.
     open_files::Dict{String, NCDatasets.NCDataset}
 
-    # Whether to treat z as altitude over the surface or the sea level or over the surface
-    interpolate_z_over_msl::Bool
-
     # Do not interpolate on the z direction, instead evaluate on the levels.
-    # This is incompatible with interpolate_z_over_msl when topography is present.
     # When disable_vertical_interpolation is true, the num_points on the vertical direction
     # is ignored.
     disable_vertical_interpolation::Bool
@@ -480,17 +476,9 @@ Keyword arguments
 - `num_points`: How many points to use along the different dimensions to interpolate the
                 fields. This is a tuple of integers, typically having meaning Long-Lat-Z,
                 or X-Y-Z (the details depend on the configuration being simulated).
-- `interpolate_z_over_msl`: When `true`, the variable `z` is intended to be altitude from
-                            the sea level (in meters). Values of `z` that are below the
-                            surface are filled with `NaN`s. When `false`, `z` is intended to
-                            be altitude from the surface (in meters). `z` becomes a
-                            multidimensional array that returns the altitude for the given
-                            horizontal coordinates.
 - `disable_vertical_interpolation`: Do not interpolate on the z direction, instead evaluate
-                                    at on levels. This is incompatible with
-                                    interpolate_z_over_msl when topography is present. When
-                                    disable_vertical_interpolation is true, the num_points
-                                    on the vertical direction is ignored.
+                                    at on levels. When disable_vertical_interpolation is true,
+                                    the num_points on the vertical direction is ignored.
 - `compression_level`: How much to compress the output NetCDF file (0 is no compression, 9
   is maximum compression).
 
@@ -498,7 +486,6 @@ Keyword arguments
 function NetCDFWriter(;
     cspace,
     num_points = (180, 90, 50),
-    interpolate_z_over_msl = false,
     disable_vertical_interpolation = false,
     compression_level = 9,
 )
@@ -513,7 +500,7 @@ function NetCDFWriter(;
 
     # We have to deal with the surface only if we are not interpolating the topography and
     # if our topography is non-trivial
-    if hypsography isa Grids.Flat || interpolate_z_over_msl
+    if hypsography isa Grids.Flat
         interpolated_surface = nothing
     else
         horizontal_space = axes(hypsography.surface)
@@ -524,12 +511,9 @@ function NetCDFWriter(;
             hpts,
         )
         vcoords = []
-        remapper = Remapper(hcoords, vcoords, horizontal_space)
-        interpolated_surface = interpolate(
-            remapper,
-            Geometry.tofloat.(hypsography.surface),
-            physical_z = false,
-        )
+        remapper = Remapper(horizontal_space, hcoords, vcoords)
+        interpolated_surface =
+            interpolate(remapper, Geometry.tofloat.(hypsography.surface))
     end
 
     if disable_vertical_interpolation
@@ -554,7 +538,6 @@ function NetCDFWriter(;
         compression_level,
         interpolated_surface,
         Dict(),
-        interpolate_z_over_msl,
         disable_vertical_interpolation,
     )
 end
@@ -621,15 +604,14 @@ function write_field!(
 
         zcoords = [Geometry.ZPoint(p) for p in vpts]
 
-        writer.remappers[var.short_name] = Remapper(hcoords, zcoords, space)
+        writer.remappers[var.short_name] = Remapper(space, hcoords, zcoords)
     end
 
     remapper = writer.remappers[var.short_name]
 
     # Now we can interpolate onto the target points
     # There's an MPI call in here (to aggregate the results)
-    interpolated_field =
-        interpolate(remapper, field; physical_z = writer.interpolate_z_over_msl)
+    interpolated_field = interpolate(remapper, field)
 
     # Only the root process has to write
     ClimaComms.iamroot(ClimaComms.context(field)) || return
@@ -675,6 +657,14 @@ function write_field!(
         v.attrib["comments"] = var.comments
         v.attrib["start_date"] = string(p.start_date)
 
+        # Attributes for topography, if extruded space
+        if space isa Spaces.ExtrudedFiniteDifferenceSpace
+            v.attrib["topo_name"] = string(nameof(typeof(space.hypsography)))
+            for field in fieldnames(typeof(space.hypsography))
+                value = getproperty(space.hypsography, field)
+                value isa AbstractFloat && (v.attrib["topo_$(field)"] = value)
+            end
+        end
         temporal_size = 0
     end
 

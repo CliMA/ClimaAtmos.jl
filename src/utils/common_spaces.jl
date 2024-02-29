@@ -88,7 +88,7 @@ function make_hybrid_spaces(
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(zero(z_max)),
         Geometry.ZPoint(z_max);
-        boundary_tags = (:bottom, :top),
+        boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain, z_stretch; nelems = z_elem)
     @info "z heights" z_mesh.faces
@@ -105,7 +105,7 @@ function make_hybrid_spaces(
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
-        hypsography = Hypsography.LinearAdaption(z_surface)
+        hypsography = Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
     end
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
     # TODO: return the grid
