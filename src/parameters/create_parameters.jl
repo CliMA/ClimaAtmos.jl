@@ -50,7 +50,7 @@ function create_parameter_set(config::AtmosConfig)
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
     TP = typeof(thermodynamics_params)
 
-    rrtmgp_params = RRTMGPParameters(toml_dict)
+    rrtmgp_params = nothing
     RP = typeof(rrtmgp_params)
 
     insolation_params = InsolationParameters(toml_dict)
