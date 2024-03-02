@@ -1,7 +1,5 @@
 NVTX.@annotate function limited_tendency!(Yₜ, Y, p, t)
-    Yₜ .= zero(eltype(Yₜ))
-    horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
-    tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    # TODO: deprecate this function (it's getting fused with remaining_tendency!)
     return nothing
 end
 

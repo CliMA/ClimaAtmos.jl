@@ -57,15 +57,9 @@ end
 
 NVTX.@annotate function dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
-    buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    (; ᶜp, ᶜspecific) = p.precomputed
-    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
-    diffuse_tke = use_prognostic_tke(turbconv_model)
     n = n_mass_flux_subdomains(turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
-    elseif turbconv_model isa DiagnosticEDMFX
-        (; ᶜ∇²tke⁰) = p.hyperdiff
+        (; ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs) = p.hyperdiff
     end
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
@@ -73,19 +67,8 @@ NVTX.@annotate function dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
         end
     end
-    core_pairs = (
-        ᶜ∇²u => buffer.ᶜ∇²u,
-        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
-        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
-    )
-    tc_pairs =
-        turbconv_model isa PrognosticEDMFX ?
-        (
-            ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
-            ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
-            ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
-        ) : ()
-    Spaces.weighted_dss!(core_pairs..., tc_pairs...)
+    pairs = dss_hyperdiffusion_pairs(Y, p)
+    isempty(pairs) || Spaces.weighted_dss!(pairs...)
     if turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
@@ -176,21 +159,22 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
     end
 end
-NVTX.@annotate function dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; turbconv_model) = p.atmos
-    (; ᶜ∇²specific_tracers) = p.hyperdiff
-    buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    tracer_pairs =
-        !isempty(propertynames(ᶜ∇²specific_tracers)) ?
-        (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
-    tc_pairs =
-        turbconv_model isa PrognosticEDMFX ?
-        (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
-    pairs = (tracer_pairs..., tc_pairs...)
-    isempty(pairs) || Spaces.weighted_dss!(pairs...)
-end
+# TODO: delete
+# NVTX.@annotate function dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+#     (; turbconv_model) = p.atmos
+#     (; ᶜ∇²specific_tracers) = p.hyperdiff
+#     buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
+#     tracer_pairs =
+#         !isempty(propertynames(ᶜ∇²specific_tracers)) ?
+#         (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
+#     tc_pairs =
+#         turbconv_model isa PrognosticEDMFX ?
+#         (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
+#     pairs = (tracer_pairs..., tc_pairs...)
+#     isempty(pairs) || Spaces.weighted_dss!(pairs...)
+# end
 
-NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function tracer_hyperdiffusion_tendency_prep!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
@@ -201,13 +185,9 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
 
     (; ᶜspecific) = p.precomputed
-    (; do_dss) = p
     (; ᶜ∇²specific_tracers) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²q_totʲs) = p.hyperdiff
-    end
-    if do_dss
-        buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
     end
 
     for χ_name in propertynames(ᶜ∇²specific_tracers)
@@ -220,8 +200,24 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
         end
     end
+    # we are now ready to dss the tracer hyperdiffusion tendencies
+    return nothing
+end
 
-    do_dss && dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    # dss_tracer_hyperdiffusion_tendency!
+    (; hyperdiff, turbconv_model) = p.atmos
+    isnothing(hyperdiff) && return nothing
+
+    (; ν₄_scalar_coeff) = hyperdiff
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    h_length_scale = Spaces.node_horizontal_length_scale(h_space) # mean nodal distance
+    ν₄_scalar = ν₄_scalar_coeff * h_length_scale^3
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶜ∇²specific_tracers) = p.hyperdiff
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∇²q_totʲs) = p.hyperdiff
+    end
 
     # TODO: Since we are not applying the limiter to density (or area-weighted
     # density), the mass redistributed by hyperdiffusion will not be conserved
@@ -246,4 +242,40 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         end
     end
     return nothing
+end
+
+
+function dss_hyperdiffusion_pairs(Y, p)
+    # hyperdiffusion
+    (; hyperdiff, turbconv_model) = p.atmos
+    buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
+    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+    diffuse_tke = use_prognostic_tke(turbconv_model)
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
+    elseif turbconv_model isa DiagnosticEDMFX
+        (; ᶜ∇²tke⁰) = p.hyperdiff
+    end
+    core_pairs = (
+        ᶜ∇²u => buffer.ᶜ∇²u,
+        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
+        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
+    )
+    tc_pairs =
+        turbconv_model isa PrognosticEDMFX ?
+        (
+            ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
+            ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
+            ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
+        ) : ()
+
+    # Tracers
+    (; ᶜ∇²specific_tracers) = p.hyperdiff
+    core_tracer_pairs =
+        !isempty(propertynames(ᶜ∇²specific_tracers)) ?
+        (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
+    tc_tracer_pairs =
+        turbconv_model isa PrognosticEDMFX ?
+        (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
+    return (core_pairs..., tc_pairs..., core_tracer_pairs..., tc_tracer_pairs...)
 end
