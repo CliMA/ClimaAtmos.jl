@@ -1,8 +1,6 @@
 [zd_viscous]
 value = 30000.0
-type = "float"
 
 [zd_rayleigh]
 value = 30000.0
-type = "float"
 
