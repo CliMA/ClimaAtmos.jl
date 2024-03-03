@@ -43,8 +43,8 @@ version = "0.4.5"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "126bcb15b7d6bf74a6dbd37be4e78f262bd8b35a"
-repo-rev = "ck/inline_recurse"
+git-tree-sha1 = "09692b82669b31eb9edb902198c6638a5108d1f6"
+repo-rev = "master"
 repo-url = "https://github.com/charleskawczynski/Adapt.jl"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "4.0.1"
