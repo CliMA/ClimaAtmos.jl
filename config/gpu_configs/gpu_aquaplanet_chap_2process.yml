@@ -1,4 +1,4 @@
-job_id: gpu_aquaplanet_chap
+job_id: gpu_aquaplanet_chap_2process
 dt_save_state_to_disk: "Inf"
 dt_save_to_sol: "Inf"
 output_default_diagnostics: false
