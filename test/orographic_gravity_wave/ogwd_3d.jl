@@ -4,7 +4,7 @@ using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
 import Thermodynamics as TD
-import CLIMAParameters as CP
+import CLIMAParams as CP
 import ClimaComms
 using ClimaCoreTempestRemap
 
