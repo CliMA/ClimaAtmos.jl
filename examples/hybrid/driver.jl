@@ -37,7 +37,7 @@ import Tar
 import Base.Filesystem: rm
 import OrderedCollections
 using ClimaCoreTempestRemap
-using ClimaCorePlots, Plots
+using ClimaCorePlots
 using ClimaCoreMakie, CairoMakie
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 

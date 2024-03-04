@@ -4,8 +4,9 @@ using Interpolations
 using Statistics
 import ClimaAtmos
 import ClimaAtmos as CA
-using Plots
 const FT = Float64
+
+include("../gw_plotutils.jl")
 
 # compute the source parameters
 function non_orographic_gravity_wave(
@@ -203,72 +204,97 @@ vforcing_zonalave = dropdims(mean(vforcing, dims = 1), dims = 1)
 gwfu_zonalave = dropdims(mean(gwfu_cgwd, dims = 1), dims = 1)
 gwfv_zonalave = dropdims(mean(gwfv_cgwd, dims = 1), dims = 1)
 
+
+
 ENV["GKSwstype"] = "nul"
 output_dir = "nonorographic_gravity_wave_test_mima"
 mkpath(output_dir)
+
 for it in 1:length(time)
-    c1 = contourf(
-        lat,
-        pfull,
-        uforcing_zonalave[:, end:-1:1, it]' * 86400,
-        color = :balance,
-        clim = (-3, 3),
-        title = "gwfu clima (m/s/day)",
-        yflip = true,
-        yscale = :log10,
+    # Generate empty figure
+    fig = generate_empty_figure()
+
+    # Generic axis properties
+    yreversed = true
+    yscale = log10
+
+    # Generic plot properties
+    colormap = :balance
+    extendlow = :cyan
+    extendhigh = :magenta
+
+    # Populate figure grid
+    title = "gwfu clima (m/s/day)"
+    create_plot!(
+        fig;
+        X = lat,
+        Y = pfull,
+        Z = uforcing_zonalave[:, end:-1:1, it] * 86400,
+        title,
+        p_loc = (1, 1),
+        levels = range(-3, 3; length = 20),
     )
-    c2 = contourf(
-        lat,
-        pfull,
-        gwfu_zonalave[:, :, it]' * 86400,
-        color = :balance,
-        clim = (-3, 3),
-        title = "gwfu mima (m/s/day)",
-        yflip = true,
-        yscale = :log10,
+
+    title = "gwfu mima (m/s/day)"
+    create_plot!(
+        fig;
+        X = lat,
+        Y = pfull,
+        Z = gwfu_zonalave[:, :, it] * 86400,
+        levels = range(-3, 3; length = 20),
+        title,
+        p_loc = (1, 2),
+        colormap,
+        extendhigh,
+        extendlow,
     )
-    c3 = contourf(
-        lat,
-        pfull,
-        (uforcing_zonalave[:, end:-1:1, it] .- gwfu_zonalave[:, :, it])' ./
-        gwfu_zonalave[:, :, it]' .* 100,
-        color = :balance,
-        clim = (-100, 100),
-        title = "gwfu clima-mima (%)",
-        yflip = true,
-        yscale = :log10,
+
+    title = "gwfu (clima - mima) (%)"
+    create_plot!(
+        fig;
+        X = lat,
+        Y = pfull,
+        Z = (uforcing_zonalave[:, end:-1:1, it] .- gwfu_zonalave[:, :, it]) ./
+            gwfu_zonalave[:, :, it] .* 100,
+        levels = range(-100, 100; length = 20),
+        title,
+        p_loc = (1, 3),
     )
-    c4 = contourf(
-        lat,
-        pfull,
-        vforcing_zonalave[:, end:-1:1, it]' * 86400,
-        color = :balance,
-        clim = (-3, 3),
-        title = "gwfv clima (m/s/day)",
-        yflip = true,
-        yscale = :log10,
+
+    title = "gwfv clima (m/s/day)"
+    create_plot!(
+        fig;
+        X = lat,
+        Y = pfull,
+        Z = vforcing_zonalave[:, end:-1:1, it] * 86400,
+        levels = range(-3, 3; length = 20),
+        title,
+        p_loc = (2, 1),
     )
-    c5 = contourf(
-        lat,
-        pfull,
-        gwfv_zonalave[:, :, it]' * 86400,
-        color = :balance,
-        clim = (-3, 3),
-        title = "gwfv mima (m/s/day)",
-        yflip = true,
-        yscale = :log10,
+
+    title = "gwfv mima (m/s/day)"
+    create_plot!(
+        fig;
+        X = lat,
+        Y = pfull,
+        Z = gwfv_zonalave[:, :, it] * 86400,
+        levels = range(-3, 3; length = 20),
+        title,
+        p_loc = (2, 2),
     )
-    c6 = contourf(
-        lat,
-        pfull,
-        (vforcing_zonalave[:, end:-1:1, it] .- gwfv_zonalave[:, :, it])' ./
-        gwfv_zonalave[:, :, it]' .* 100,
-        color = :balance,
-        clim = (-100, 100),
-        title = "gwfv clima-mima (%)",
-        yflip = true,
-        yscale = :log10,
+
+    title = "gwfv (clima-mima) (%)"
+    create_plot!(
+        fig;
+        X = lat,
+        Y = pfull,
+        Z = (vforcing_zonalave[:, end:-1:1, it] .- gwfv_zonalave[:, :, it]) ./
+            gwfv_zonalave[:, :, it] .* 100,
+        levels = range(-100, 100; length = 20),
+        title,
+        p_loc = (2, 3),
     )
-    p = plot(c1, c2, c3, c4, c5, c6, layout = (2, 3), size = (1500, 800))
-    png(p, joinpath(output_dir, string(it) * ".png"))
+
+    # Save to disk
+    CairoMakie.save(joinpath(output_dir, "$it.png"), fig)
 end
