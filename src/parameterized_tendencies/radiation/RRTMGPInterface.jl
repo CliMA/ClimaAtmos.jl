@@ -482,6 +482,7 @@ array.
 function RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
     data_loader::Function,
+    ::Type{FT},
     context;
     ncol::Int,
     domain_nlay::Int,
@@ -497,10 +498,10 @@ function RRTMGPModel(
     add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
-)
+) where {FT <: AbstractFloat}
     device = ClimaComms.device(context)
     DA = ClimaComms.array_type(device)
-    FT = typeof(params.grav)
+    #FT = typeof(params.grav)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
@@ -1242,12 +1243,14 @@ function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
             model.face_clear_lw_flux,
             model.face_clear_lw_flux .+ model.face_clear_sw_flux,
         )
+    #model.face_clear_flux .= model.face_clear_lw_flux .+ model.face_clear_sw_flux
     model.face_flux .=
         ifelse.(
             model.cos_zenith' .<= sqrt(eps(FT)),
             model.face_lw_flux,
             model.face_lw_flux .+ model.face_sw_flux,
         )
+    #model.face_flux .= model.face_lw_flux .+ model.face_sw_flux
 end
 
 end # end module

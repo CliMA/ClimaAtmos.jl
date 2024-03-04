@@ -115,6 +115,10 @@ end
 @info "Callback verification, n_expected_calls: $(CA.n_expected_calls(integrator))"
 @info "Callback verification, n_measured_calls: $(CA.n_measured_calls(integrator))"
 
+using LinearAlgebra: norm
+@info norm(sol.u[end].c.ρ)
+@info norm(sol.u[end].c.ρe_tot)
+
 # Conservation checks
 if config.parsed_args["check_conservation"]
     @info "Checking conservation"

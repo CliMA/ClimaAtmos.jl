@@ -35,6 +35,7 @@ function set_cloud_fraction!(
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
     @. ᶜcloud_fraction = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0)
+    #@. ᶜcloud_fraction = 1
 end
 function set_cloud_fraction!(
     Y,

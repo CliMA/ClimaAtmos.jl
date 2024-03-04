@@ -196,6 +196,7 @@ function radiation_model_cache(
         radiation_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
             data_loader,
+            Float32,
             context;
             ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
             domain_nlay = Spaces.nlevels(axes(Y.c)),
