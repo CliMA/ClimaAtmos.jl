@@ -187,7 +187,6 @@ if config.parsed_args["check_precipitation"]
             colidx,
             sol.prob.p.atmos.precip_model,
         )
-        #CA.remaining_tendency!(Yₜ, sol.u[end], sol.prob.p, sol.t[end])
 
         @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]
         @. Yₜ_ρqₜ[colidx] = Yₜ.c.ρq_tot[colidx]

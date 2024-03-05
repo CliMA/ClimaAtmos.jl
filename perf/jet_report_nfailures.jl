@@ -21,6 +21,8 @@ du = integrator.u;
 p = integrator.p;
 t = integrator.t;
 Yₜ = similar(Y);
+Yₜ_exp = similar(Y);
+Yₜ_lim = similar(Y);
 ref_Y = similar(Y);
 #! format: off
 n["step!"]                                       = @n_failures SciMLBase.step!(integrator);
@@ -30,7 +32,7 @@ n["horizontal_tracer_advection_tendency!"]       = @n_failures CA.horizontal_tra
 n["explicit_vertical_advection_tendency!"]       = @n_failures CA.explicit_vertical_advection_tendency!(Yₜ, Y, p, t);
 n["hyperdiffusion_tendency!"]                    = @n_failures CA.hyperdiffusion_tendency!(Yₜ, Y, p, t);
 n["tracer_hyperdiffusion_tendency!"]             = @n_failures CA.tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t);
-n["remaining_tendency!"]                         = @n_failures CA.remaining_tendency!(Yₜ, Y, p, t);
+n["remaining_tendency!"]                         = @n_failures CA.remaining_tendency!(Yₜ_exp, Yₜ_lim, Y, p, t);
 n["additional_tendency!"]                        = @n_failures CA.additional_tendency!(Yₜ, Y, p, t);
 n["vertical_diffusion_boundary_layer_tendency!"] = @n_failures CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t);
 n["implicit_tendency!"]                          = @n_failures CA.implicit_tendency!(Yₜ, Y, p, t);
