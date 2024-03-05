@@ -2,8 +2,7 @@ dz_bottom: 30.0
 dz_top: 3000.0
 dt: "180secs"
 dt_save_state_to_disk: "60mins"
-output_default_diagnostics: true
-t_end: "300days"
+t_end: "5days"
 h_elem: 16
 z_elem: 63
 z_max: 55000.0
@@ -15,3 +14,8 @@ vorticity_hyperdiffusion_coefficient: 4.0
 scalar_hyperdiffusion_coefficient: 4.0
 job_id: "longrun_hs_rhoe_dry_55km_nz63"
 toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth.toml]
+diagnostics: 
+  - short_name: [pfull, wa, ua, va, ta]
+    period: 1hours
+    reduction: inst
+
