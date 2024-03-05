@@ -1,5 +1,5 @@
 using Test
-import CLIMAParameters as CP
+import ClimaParameters as CP
 import ClimaAtmos as CA
 
 FT = Float64
