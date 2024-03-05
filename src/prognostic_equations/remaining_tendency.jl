@@ -1,14 +1,22 @@
 
-NVTX.@annotate function horizontal_tendency!(Yₜ, Y, p, t)
-    horizontal_advection_tendency!(Yₜ, Y, p, t)
-    hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    return nothing
+NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    if p.do_dss && !isnothing(p.atmos.hyperdiff)
+        pairs = dss_hyperdiffusion_tendency_pairs(p)
+        Spaces.weighted_dss!(pairs...)
+    end
+    apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 end
+
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-    limited_tendency!(Yₜ_lim, Y, p, t)
-    fill_with_nans!(p)
+    Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
-    horizontal_tendency!(Yₜ, Y, p, t)
+    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+    fill_with_nans!(p)
+    horizontal_advection_tendency!(Yₜ, Y, p, t)
+    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
     return Yₜ
