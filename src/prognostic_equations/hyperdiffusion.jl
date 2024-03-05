@@ -55,66 +55,18 @@ function hyperdiffusion_cache(Y, hyperdiff::ClimaHyperdiffusion, turbconv_model)
     return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs)
 end
 
-NVTX.@annotate function dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff, turbconv_model) = p.atmos
-    buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    (; ᶜp, ᶜspecific) = p.precomputed
-    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
-    diffuse_tke = use_prognostic_tke(turbconv_model)
-    n = n_mass_flux_subdomains(turbconv_model)
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
-    elseif turbconv_model isa DiagnosticEDMFX
-        (; ᶜ∇²tke⁰) = p.hyperdiff
-    end
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
-            @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
-        end
-    end
-    core_pairs = (
-        ᶜ∇²u => buffer.ᶜ∇²u,
-        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
-        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
-    )
-    tc_pairs =
-        turbconv_model isa PrognosticEDMFX ?
-        (
-            ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
-            ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
-            ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
-        ) : ()
-    Spaces.weighted_dss!(core_pairs..., tc_pairs...)
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
-        end
-    end
-end
-
-NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
+# This should prep variables that we will dss in
+# dss_hyperdiffusion_tendency_pairs
+NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
-    (; ν₄_vorticity_coeff, ν₄_scalar_coeff, divergence_damping_factor) =
-        hyperdiff
-
-    h_space = Spaces.horizontal_space(axes(Y.c))
-    h_length_scale = Spaces.node_horizontal_length_scale(h_space) # mean nodal distance
-
-    ν₄_scalar = ν₄_scalar_coeff * h_length_scale^3
-    ν₄_vorticity = ν₄_vorticity_coeff * h_length_scale^3
-
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    point_type = eltype(Fields.coordinate_field(Y.c))
-    (; do_dss) = p
     (; ᶜp, ᶜspecific) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜρa⁰, ᶜtke⁰) = p.precomputed
+        (; ᶜtke⁰) = p.precomputed
         (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
     end
     if turbconv_model isa DiagnosticEDMFX
@@ -140,10 +92,47 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
                 C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
             @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
+            @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
+            @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
         end
     end
+end
 
-    do_dss && dss_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+# This requires dss to have been called on
+# variables in dss_hyperdiffusion_tendency_pairs
+NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    (; hyperdiff, turbconv_model) = p.atmos
+    isnothing(hyperdiff) && return nothing
+
+    (; ν₄_vorticity_coeff, ν₄_scalar_coeff, divergence_damping_factor) =
+        hyperdiff
+
+    h_space = Spaces.horizontal_space(axes(Y.c))
+    h_length_scale = Spaces.node_horizontal_length_scale(h_space) # mean nodal distance
+
+    ν₄_scalar = ν₄_scalar_coeff * h_length_scale^3
+    ν₄_vorticity = ν₄_vorticity_coeff * h_length_scale^3
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    diffuse_tke = use_prognostic_tke(turbconv_model)
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    point_type = eltype(Fields.coordinate_field(Y.c))
+    (; ᶜp, ᶜspecific) = p.precomputed
+    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜρa⁰, ᶜtke⁰) = p.precomputed
+        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²uʲs, ᶜ∇²mseʲs) = p.hyperdiff
+    end
+    if turbconv_model isa DiagnosticEDMFX
+        (; ᶜtke⁰) = p.precomputed
+        (; ᶜ∇²tke⁰) = p.hyperdiff
+    end
+
+    if turbconv_model isa PrognosticEDMFX
+        for j in 1:n
+            @. ᶜ∇²uʲs.:($$j) = C123(ᶜ∇²uₕʲs.:($$j)) + C123(ᶜ∇²uᵥʲs.:($$j))
+        end
+    end
 
     # re-use to store the curl-curl part
     @. ᶜ∇²u =
@@ -176,21 +165,69 @@ NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= ν₄_vorticity * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²tke⁰))
     end
 end
-NVTX.@annotate function dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; turbconv_model) = p.atmos
-    (; ᶜ∇²specific_tracers) = p.hyperdiff
+
+function dss_hyperdiffusion_tendency_pairs(p)
+    (; hyperdiff, turbconv_model) = p.atmos
     buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    tracer_pairs =
+    (; ᶜ∇²u, ᶜ∇²specific_energy) = p.hyperdiff
+    diffuse_tke = use_prognostic_tke(turbconv_model)
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∇²tke⁰, ᶜ∇²uₕʲs, ᶜ∇²uᵥʲs, ᶜ∇²mseʲs) = p.hyperdiff
+    elseif turbconv_model isa DiagnosticEDMFX
+        (; ᶜ∇²tke⁰) = p.hyperdiff
+    end
+    core_dynamics_pairs = (
+        ᶜ∇²u => buffer.ᶜ∇²u,
+        ᶜ∇²specific_energy => buffer.ᶜ∇²specific_energy,
+        (diffuse_tke ? (ᶜ∇²tke⁰ => buffer.ᶜ∇²tke⁰,) : ())...,
+    )
+    tc_dynamics_pairs =
+        turbconv_model isa PrognosticEDMFX ?
+        (
+            ᶜ∇²uₕʲs => buffer.ᶜ∇²uₕʲs,
+            ᶜ∇²uᵥʲs => buffer.ᶜ∇²uᵥʲs,
+            ᶜ∇²mseʲs => buffer.ᶜ∇²mseʲs,
+        ) : ()
+    dynamics_pairs = (core_dynamics_pairs..., tc_dynamics_pairs...)
+
+    (; ᶜ∇²specific_tracers) = p.hyperdiff
+    core_tracer_pairs =
         !isempty(propertynames(ᶜ∇²specific_tracers)) ?
         (ᶜ∇²specific_tracers => buffer.ᶜ∇²specific_tracers,) : ()
-    tc_pairs =
+    tc_tracer_pairs =
         turbconv_model isa PrognosticEDMFX ?
         (p.hyperdiff.ᶜ∇²q_totʲs => buffer.ᶜ∇²q_totʲs,) : ()
-    pairs = (tracer_pairs..., tc_pairs...)
-    isempty(pairs) || Spaces.weighted_dss!(pairs...)
+    tracer_pairs = (core_tracer_pairs..., tc_tracer_pairs...)
+    return (dynamics_pairs..., tracer_pairs...)
 end
 
-NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+# This should prep variables that we will dss in
+# dss_hyperdiffusion_tendency_pairs
+NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    (; hyperdiff, turbconv_model) = p.atmos
+    isnothing(hyperdiff) && return nothing
+
+    (; ᶜspecific) = p.precomputed
+    (; ᶜ∇²specific_tracers) = p.hyperdiff
+
+    for χ_name in propertynames(ᶜ∇²specific_tracers)
+        @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
+    end
+
+    if turbconv_model isa PrognosticEDMFX
+        n = n_mass_flux_subdomains(turbconv_model)
+        (; ᶜ∇²q_totʲs) = p.hyperdiff
+        for j in 1:n
+            # Note: It is more correct to have ρa inside and outside the divergence
+            @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
+        end
+    end
+    return nothing
+end
+
+# This requires dss to have been called on
+# variables in dss_hyperdiffusion_tendency_pairs
+NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
 
@@ -200,28 +237,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ν₄_scalar = ν₄_scalar_coeff * h_length_scale^3
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜspecific) = p.precomputed
-    (; do_dss) = p
     (; ᶜ∇²specific_tracers) = p.hyperdiff
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²q_totʲs) = p.hyperdiff
-    end
-    if do_dss
-        buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    end
-
-    for χ_name in propertynames(ᶜ∇²specific_tracers)
-        @. ᶜ∇²specific_tracers.:($$χ_name) = wdivₕ(gradₕ(ᶜspecific.:($$χ_name)))
-    end
-
-    if turbconv_model isa PrognosticEDMFX
-        for j in 1:n
-            # Note: It is more correct to have ρa inside and outside the divergence
-            @. ᶜ∇²q_totʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
-        end
-    end
-
-    do_dss && dss_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     # TODO: Since we are not applying the limiter to density (or area-weighted
     # density), the mass redistributed by hyperdiffusion will not be conserved
@@ -237,6 +253,7 @@ NVTX.@annotate function tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         end
     end
     if turbconv_model isa PrognosticEDMFX
+        (; ᶜ∇²q_totʲs) = p.hyperdiff
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).ρa -=
                 ν₄_scalar *

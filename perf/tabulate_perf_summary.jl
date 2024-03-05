@@ -195,7 +195,6 @@ funcs = [
     "implicit_tendency!",
     "remaining_tendency!",
     "additional_tendency!",
-    "hyperdiffusion_tendency!",
     "step!",
 ]
 
