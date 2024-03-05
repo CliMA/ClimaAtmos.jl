@@ -9,6 +9,7 @@ edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+edmfx_velocity_relaxation: true
 prognostic_tke: true
 moist: "equil"
 config: "column"
@@ -17,7 +18,7 @@ z_elem: 80
 z_stretch: false
 perturb_initstate: false
 dt: "1secs"
-t_end: "6hours"
+t_end: "12hours"
 dt_save_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_simpleplume.toml]
 netcdf_output_at_levels: true

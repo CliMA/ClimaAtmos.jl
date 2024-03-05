@@ -62,14 +62,16 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
 
     (; ᶜΦ,) = p.core
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶜKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+    ᶜinterp_lb = Operators.LeftBiasedF2C()
+    ᶜinterp_rb = Operators.RightBiasedF2C()
 
     for j in 1:n
         ᶜuʲ = ᶜuʲs.:($j)
         ᶠu³ʲ = ᶠu³ʲs.:($j)
         ᶜKʲ = ᶜKʲs.:($j)
-        ᶜKᵥʲ = ᶜKᵥʲs.:($j)
+        ᶠKᵥʲ = ᶠKᵥʲs.:($j)
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         ᶜtsʲ = ᶜtsʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
@@ -77,7 +79,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ�
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
         set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³)
-        @. ᶜKᵥʲ = ᶜinterp(adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+        @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
         @. ᶜtsʲ = TD.PhaseEquil_phq(thermo_params, ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_totʲ)
         @. ᶜρʲ = TD.air_density(thermo_params, ᶜtsʲ)
 
