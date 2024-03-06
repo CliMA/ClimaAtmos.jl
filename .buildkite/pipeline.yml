@@ -6,6 +6,7 @@ agents:
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
   OPENBLAS_NUM_THREADS: 1
+  SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
@@ -14,8 +15,6 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs/"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
-  SLURM_KILL_BAD_EXIT: 1
-  JULIA_NVTX_CALLBACKS: gc
 
 steps:
   - label: "init :computer:"
