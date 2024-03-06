@@ -524,7 +524,6 @@ function get_diagnostics(parsed_args, atmos_model, cspace)
     netcdf_writer = CAD.NetCDFWriter(;
         cspace,
         num_points = num_netcdf_points,
-        interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
         disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
     )
     writers = (hdf5_writer, netcdf_writer)

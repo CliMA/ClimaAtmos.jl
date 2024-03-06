@@ -28,8 +28,8 @@ function create_weightfile(
     mono = false,
 )
     # space info to generate nc raw data
-    hspace = cspace.horizontal_space
-    quadrature_style = Spaces.quadrature_style(cspace.horizontal_space)
+    hspace = Spaces.horizontal_space(cspace)
+    quadrature_style = Spaces.quadrature_style(Spaces.horizontal_space(cspace))
     Nq = Quadratures.degrees_of_freedom(quadrature_style)
     # create a temporary dir for intermediate data
     mktempdir() do tmp
@@ -95,7 +95,7 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     # reconstruct space
     cspace = axes(Y.c)
     fspace = axes(Y.f)
-    hspace = cspace.horizontal_space
+    hspace = Spaces.horizontal_space(cspace)
 
     ### create an nc file to store raw cg data
     # create data
