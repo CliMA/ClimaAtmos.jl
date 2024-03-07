@@ -236,7 +236,7 @@ prognostic_surface:
   help: "Determines if surface temperature is prognostic [`false` (default), , `true`, `PrognosticSurfaceTemperature`, `PrescribedSurfaceTemperature`]"
   value: "false"
 albedo_model:
-  help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`]"
+  help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"
 implicit_diffusion:
   help: "Whether to treat the vertical diffusion tendency implicitly [`false` (default), `true`]"

@@ -31,9 +31,22 @@ redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
 
     ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
 
-    # test that the albedo is initiated (not NaN) - values are checked below
+    # test that the albedo is initiated (not NaN) - precise values are checked in the testset below
     @test !isnan(sum(p.radiation.radiation_model.direct_sw_surface_albedo))
     @test !isnan(sum(p.radiation.radiation_model.diffuse_sw_surface_albedo))
+
+    # test set_surface_albedo!(Y, p, t, α_type::CouplerAlbedo)
+    config.parsed_args["rad"] = "clearsky"
+    config.parsed_args["albedo_model"] = "CouplerAlbedo"
+    simulation = ClimaAtmos.get_simulation(config)
+    (; u, p, t) = simulation.integrator
+
+    ClimaAtmos.set_surface_albedo!(u, p, t, p.atmos.surface_albedo)
+
+    # test that the albedo is not initiated by atmos (includes NaNs)
+    @test isnan(sum(p.radiation.radiation_model.direct_sw_surface_albedo))
+    @test isnan(sum(p.radiation.radiation_model.diffuse_sw_surface_albedo))
+
 end
 
 

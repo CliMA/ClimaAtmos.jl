@@ -69,8 +69,10 @@ for clear sky, and
 
 for cloudy sky. In the current implementation we assume clear skies everywhere.
 
+### 3) `CouplerAlbedo`
+This informs ClimaAtmos that albedo will be set by the coupler.
 
-## Comparison with Jin et al. (2011)
+## Comparison of `RegressionFunctionAlbedo` with Jin et al. (2011)
 -
 ```@example
 include("surface_albedo_jin11_plots.jl")
