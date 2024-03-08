@@ -11,7 +11,7 @@ env:
   OPENBLAS_NUM_THREADS: 1
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   SLURM_KILL_BAD_EXIT: 1
-  SLURM_GPU_BIND: none # https://github.com/open-mpi/ompi/issues/11949#issuecomment-1737712291
+  SLURM_GRES_FLAGS: "allow-task-sharing"
   CONFIG_PATH: "config/model_configs"
   GPU_CONFIG_PATH: "config/gpu_configs/"
   PERF_CONFIG_PATH: "config/perf_configs"
@@ -219,6 +219,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_2process
           - >
+            srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_2process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_2process/*"
@@ -234,6 +235,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_4process
           - >
+            srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_4process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_4process/*"
