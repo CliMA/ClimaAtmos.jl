@@ -238,7 +238,6 @@ if ClimaComms.iamroot(config.comms_ctx)
     if path == :self_reference
         make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
     else
-
         main_job_path = joinpath(path, reference_job_id)
         nc_dir = joinpath(main_job_path, "nc_files")
         if ispath(nc_dir)
