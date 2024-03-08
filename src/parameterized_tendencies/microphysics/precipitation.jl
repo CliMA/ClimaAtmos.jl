@@ -185,6 +185,14 @@ function precipitation_cache(Y, precip_model::Microphysics1Moment)
     )
 end
 
+function qₚ(ρqₚ::FT, ρ::FT) where {FT}
+    return max(FT(0), ρqₚ / ρ)
+end
+
+function limit(q::FT, dt::FT) where {FT}
+    return q / dt
+end
+
 function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
@@ -210,9 +218,6 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     Tₐ(ts) = TD.air_temperature(thp, ts)
     α(ts) = TD.Parameters.cv_l(thp) / Lf(ts) * (Tₐ(ts) - cmp.ps.T_freeze)
 
-    qₚ(ρqₚ, ρ) = max(FT(0), ρqₚ / ρ)
-    limit(q, dt) = q / dt
-
     # zero out the source terms
     @. ᶜSqₜᵖ[colidx] = FT(0)
     @. ᶜSeₜᵖ[colidx] = FT(0)
@@ -225,11 +230,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
     # rain autoconversion: q_liq -> q_rain
     @. ᶜSᵖ[colidx] = min(
         limit(qₗ(ᶜts[colidx]), dt),
-        CM1.conv_q_liq_to_q_rai(
-            cmp.pr.acnv1M,
-            qₗ(ᶜts[colidx]),
-            smooth_transition = true,
-        ),
+        CM1.conv_q_liq_to_q_rai(cmp.pr.acnv1M, qₗ(ᶜts[colidx]), true),
     )
     @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]
     @. ᶜSqᵣᵖ[colidx] += ᶜSᵖ[colidx]
@@ -241,7 +242,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
         CM1.conv_q_ice_to_q_sno_no_supersat(
             cmp.ps.acnv1M,
             qᵢ(ᶜts[colidx]),
-            smooth_transition = true,
+            true,
         ),
     )
     @. ᶜSqₜᵖ[colidx] -= ᶜSᵖ[colidx]

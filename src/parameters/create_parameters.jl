@@ -82,7 +82,7 @@ function create_parameter_set(config::AtmosConfig)
                 pr = CM.Parameters.Rain(toml_dict),
                 ps = CM.Parameters.Snow(toml_dict),
                 ce = CM.Parameters.CollisionEff(toml_dict),
-                tv = CM.Parameters.Blk1MVelType(FT, toml_dict),
+                tv = CM.Parameters.Blk1MVelType(toml_dict),
                 aps = CM.Parameters.AirProperties(toml_dict),
             )
         else

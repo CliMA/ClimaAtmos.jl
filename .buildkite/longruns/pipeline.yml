@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem_per_cpu: 8G
-  modules: climacommon/2024_02_27
+  modules: climacommon/2024_03_07
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
@@ -99,17 +99,6 @@ steps:
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean"
 
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + 1M microphysics"
-        command:
-          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
-        artifact_paths: "$$JOB_NAME/*"
-        agents:
-          slurm_ntasks: 64
-          slurm_mem_per_cpu: 16GB
-          slurm_time: 24:00:00
-        env:
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_1M"
-      
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + deep-atmosphere eqns"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml

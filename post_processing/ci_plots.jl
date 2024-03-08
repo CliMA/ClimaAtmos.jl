@@ -834,7 +834,6 @@ function make_plots(
 end
 
 AquaplanetPlots = Union{
-    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
@@ -886,8 +885,10 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
-Aquaplanet1MPlots =
-    Union{Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_1M}}
+Aquaplanet1MPlots = Union{
+    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
+    Val{:gpu_aquaplanet_clearsky_1M},
+}
 
 function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
