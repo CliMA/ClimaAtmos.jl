@@ -19,18 +19,16 @@
 # NetCDFWriter #
 ##################
 """
-    add_dimension_maybe!(nc::NCDatasets.NCDataset,
-                         name::String,
-                         points;
-                         kwargs...)
+    add_dimension!(nc::NCDatasets.NCDataset,
+                   name::String,
+                   points;
+                   kwargs...)
 
 
 Add dimension identified by `name` in the given `nc` file and fill it with the given
-`points`. If the dimension already exists, check if it is consistent with the new one.
-Optionally, add all the keyword arguments as attributes.
+`points`.
 """
-
-function add_dimension_maybe!(
+function add_dimension!(
     nc::NCDatasets.NCDataset,
     name::String,
     points;
@@ -38,22 +36,32 @@ function add_dimension_maybe!(
 )
     FT = eltype(points)
 
+    NCDatasets.defDim(nc, name, size(points)[end])
+
+    dim = NCDatasets.defVar(nc, name, FT, (name,))
+    for (k, v) in kwargs
+        dim.attrib[String(k)] = v
+    end
+
+    dim[:] = points
+
+    return nothing
+end
+
+function dimension_exists(
+    nc::NCDatasets.NCDataset,
+    name::String,
+    expected_size::Tuple,
+)
     if haskey(nc, name)
-        # dimension already exists: check correct size
-        if size(nc[name]) != size(points)
-            error("Incompatible $name dimension already exists")
+        if size(nc[name]) != expected_size
+            error("Incompatible $name dimension already exists in file")
+        else
+            return true
         end
     else
-        NCDatasets.defDim(nc, name, size(points)[end])
-
-        dim = NCDatasets.defVar(nc, name, FT, (name,))
-        for (k, v) in kwargs
-            dim.attrib[String(k)] = v
-        end
-
-        dim[:] = points
+        return false
     end
-    return nothing
 end
 
 """
@@ -147,8 +155,11 @@ function add_space_coordinates_maybe!(
     names = ("z",),
 )
     name, _... = names
-    zpts = target_coordinates(space, num_points_z)
-    add_dimension_maybe!(nc, name, zpts, units = "m", axis = "Z")
+    z_dimension_exists = dimension_exists(nc, name, (num_points_z,))
+    if !z_dimension_exists
+        zpts = target_coordinates(space, num_points_z)
+        add_dimension!(nc, name, zpts, units = "m", axis = "Z")
+    end
     return [name]
 end
 
@@ -223,9 +234,15 @@ function add_space_coordinates_maybe!(
     names = ("x", "y"),
 )
     xname, yname = names
-    xpts, ypts = target_coordinates(space, num_points)
-    add_dimension_maybe!(nc, "x", xpts; units = "m", axis = "X")
-    add_dimension_maybe!(nc, "y", ypts; units = "m", axis = "Y")
+    num_points_x, num_points_y = num_points
+    x_dimension_exists = dimension_exists(nc, xname, (num_points_x,))
+    y_dimension_exists = dimension_exists(nc, yname, (num_points_y,))
+
+    if !x_dimension_exists && !y_dimension_exists
+        xpts, ypts = target_coordinates(space, num_points)
+        add_dimension!(nc, xname, xpts; units = "m", axis = "X")
+        add_dimension!(nc, yname, ypts; units = "m", axis = "Y")
+    end
     return [xname, yname]
 end
 
@@ -238,8 +255,13 @@ function add_space_coordinates_maybe!(
     names = ("x",),
 )
     xname, _... = names
-    xpts = target_coordinates(space, num_points)
-    add_dimension_maybe!(nc, "x", xpts; units = "m", axis = "X")
+    num_points_x, = num_points
+    x_dimension_exists = dimension_exists(nc, xname, (num_points_x,))
+
+    if !x_dimension_exists
+        xpts = target_coordinates(space, num_points)
+        add_dimension!(nc, xname, xpts; units = "m", axis = "X")
+    end
     return [xname]
 end
 
@@ -252,9 +274,23 @@ function add_space_coordinates_maybe!(
     names = ("lon", "lat"),
 )
     longname, latname = names
-    longpts, latpts = target_coordinates(space, num_points)
-    add_dimension_maybe!(nc, "lon", longpts; units = "degrees_east", axis = "X")
-    add_dimension_maybe!(nc, "lat", latpts; units = "degrees_north", axis = "Y")
+    num_points_long, num_points_lat = num_points
+
+    long_dimension_exists = dimension_exists(nc, longname, (num_points_long,))
+    lat_dimension_exists = dimension_exists(nc, latname, (num_points_lat,))
+
+    if !long_dimension_exists && !lat_dimension_exists
+        longpts, latpts = target_coordinates(space, num_points)
+        add_dimension!(
+            nc,
+            longname,
+            longpts;
+            units = "degrees_east",
+            axis = "X",
+        )
+        add_dimension!(nc, latname, latpts; units = "degrees_north", axis = "Y")
+    end
+
     return [longname, latname]
 end
 
@@ -330,12 +366,20 @@ function add_space_coordinates_maybe!(
     name, _... = names
 
     # Add z_reference
-    reference_altitudes = target_coordinates(space, num_points_z)
-    add_dimension_maybe!(nc, name, reference_altitudes; units = "m", axis = "Z")
+    z_reference_dimension_dimension_exists =
+        dimension_exists(nc, name, (num_points_z,))
+
+    if !z_reference_dimension_dimension_exists
+        reference_altitudes = target_coordinates(space, num_points_z)
+        add_dimension!(nc, name, reference_altitudes; units = "m", axis = "Z")
+    end
 
     # We also have to add an extra variable with the physical altitudes
     physical_name = "z_physical"
-    if !haskey(nc, physical_name)
+    z_physical_dimension_dimension_exists =
+        dimension_exists(nc, physical_name, size(interpolated_physical_z))
+
+    if !z_physical_dimension_dimension_exists
         FT = eltype(interpolated_physical_z)
         dim = NCDatasets.defVar(
             nc,
@@ -522,11 +566,11 @@ function NetCDFWriter(;
         interpolate(remapper, Fields.coordinate_field(space).z)
 
     return NetCDFWriter{typeof(num_points), typeof(interpolated_physical_z)}(
-        Dict(),
+        Dict{String, Remapper}(),
         num_points,
         compression_level,
         interpolated_physical_z,
-        Dict(),
+        Dict{String, NCDatasets.NCDataset}(),
         disable_vertical_interpolation,
     )
 end

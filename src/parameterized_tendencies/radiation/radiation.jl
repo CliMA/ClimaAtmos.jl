@@ -3,7 +3,7 @@
 #####
 
 import ClimaComms
-import ClimaCore: Device, DataLayouts, Geometry, Spaces, Fields, Operators
+import ClimaCore: DataLayouts, Geometry, Spaces, Fields, Operators
 import Insolation
 import Thermodynamics as TD
 import .Parameters as CAP
