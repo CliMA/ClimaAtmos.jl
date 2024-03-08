@@ -566,11 +566,11 @@ function NetCDFWriter(;
         interpolate(remapper, Fields.coordinate_field(space).z)
 
     return NetCDFWriter{typeof(num_points), typeof(interpolated_physical_z)}(
-        Dict(),
+        Dict{String, Remapper}(),
         num_points,
         compression_level,
         interpolated_physical_z,
-        Dict(),
+        Dict{String, NCDatasets.NCDataset}(),
         disable_vertical_interpolation,
     )
 end
