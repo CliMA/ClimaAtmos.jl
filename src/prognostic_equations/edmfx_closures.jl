@@ -310,3 +310,25 @@ function turbulent_prandtl_number(
     end
     return prandtl_nvec
 end
+
+edmfx_velocity_relaxation_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
+    nothing
+function edmfx_velocity_relaxation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::PrognosticEDMFX,
+)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; dt) = p
+
+    if p.atmos.edmfx_velocity_relaxation
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
+        end
+    end
+end

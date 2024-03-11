@@ -1,3 +1,4 @@
+using Adapt
 using Dates: DateTime, @dateformat_str
 using Dierckx
 using Interpolations
@@ -25,6 +26,9 @@ function get_atmos(config::AtmosConfig, params)
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
 
+    gs_tendency = parsed_args["gs_tendency"]
+    @assert gs_tendency in (false, true)
+
     edmfx_entr_model = get_entrainment_model(parsed_args)
     edmfx_detr_model = get_detrainment_model(parsed_args)
 
@@ -36,6 +40,9 @@ function get_atmos(config::AtmosConfig, params)
 
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
+
+    edmfx_velocity_relaxation = parsed_args["edmfx_velocity_relaxation"]
+    @assert edmfx_velocity_relaxation in (false, true)
 
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
@@ -52,11 +59,13 @@ function get_atmos(config::AtmosConfig, params)
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
+        gs_tendency,
         edmfx_entr_model,
         edmfx_detr_model,
         edmfx_sgs_mass_flux,
         edmfx_sgs_diffusive_flux,
         edmfx_nh_pressure,
+        edmfx_velocity_relaxation,
         precip_model,
         cloud_model,
         forcing_type,
@@ -78,6 +87,7 @@ function get_atmos(config::AtmosConfig, params)
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
+        surface_albedo = get_surface_albedo_model(parsed_args, FT),
         numerics = get_numerics(parsed_args),
     )
     @assert !@any_reltype(atmos, (UnionAll, DataType))
@@ -136,6 +146,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         warp_function = nothing
     elseif topography == "Earth"
         data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        array_type = ClimaComms.array_type(comms_ctx.device)
         earth_spline = NCDatasets.NCDataset(data_path) do data
             zlevels = Array(data["elevation"])
             lon = Array(data["longitude"])
@@ -143,10 +154,13 @@ function get_spaces(parsed_args, params, comms_ctx)
             # Apply Smoothing
             smooth_degree = Int(parsed_args["smoothing_order"])
             esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-            linear_interpolation(
-                (lon, lat),
-                esmth,
-                extrapolation_bc = (Periodic(), Flat()),
+            Adapt.adapt(
+                array_type,
+                linear_interpolation(
+                    (lon, lat),
+                    esmth,
+                    extrapolation_bc = (Periodic(), Flat()),
+                ),
             )
         end
         @info "Generated interpolation stencil"
@@ -312,6 +326,7 @@ function get_initial_condition(parsed_args)
         "DYCOMS_RF02",
         "Rico",
         "TRMM_LBA",
+        "SimplePlume",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["prognostic_tke"],
@@ -510,7 +525,6 @@ function get_diagnostics(parsed_args, atmos_model, cspace)
     netcdf_writer = CAD.NetCDFWriter(;
         cspace,
         num_points = num_netcdf_points,
-        interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
         disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
     )
     writers = (hdf5_writer, netcdf_writer)
@@ -624,8 +638,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
             )
             if is_cts_algo(ode_algo)
                 CTS.ClimaODEFunction(;
-                    T_lim! = limited_tendency!,
-                    T_exp! = remaining_tendency!,
+                    T_exp_T_lim! = remaining_tendency!,
                     T_imp! = implicit_func,
                     # Can we just pass implicit_tendency! and jac_prototype etc.?
                     lim! = limiters_func!,

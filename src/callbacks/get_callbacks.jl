@@ -60,6 +60,10 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         )
     end
 
+    dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+    callbacks =
+        (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         # TODO: better if-else criteria?
         dt_rad = if parsed_args["config"] == "column"
@@ -70,10 +74,6 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         callbacks =
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end
-
-    dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-    callbacks =
-        (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
 
     return callbacks
 end

@@ -343,7 +343,7 @@ end
 
 function horizontal_integral_at_boundary(f::Fields.Field)
     @assert axes(f) isa Spaces.SpectralElementSpace2D
-    sum(f ./ Fields.dz_field(axes(f)) .* 2) # TODO: is there a way to ensure this is derived from face z? The 2d topology doesn't contain this info
+    sum(f ./ Fields.Δz_field(axes(f)) .* 2) # TODO: is there a way to ensure this is derived from face z? The 2d topology doesn't contain this info
 end
 
 """

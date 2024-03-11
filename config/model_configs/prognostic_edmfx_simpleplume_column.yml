@@ -1,0 +1,30 @@
+job_id: "prognostic_edmfx_simpleplume_column"
+initial_condition: "SimplePlume"
+surface_setup: "SimplePlume"
+turbconv: "prognostic_edmfx"
+gs_tendency: false
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_velocity_relaxation: true
+prognostic_tke: true
+moist: "equil"
+config: "column"
+z_max: 4e3
+z_elem: 80
+z_stretch: false
+perturb_initstate: false
+dt: "1secs"
+t_end: "12hours"
+dt_save_to_disk: "10mins"
+toml: [toml/prognostic_edmfx_simpleplume.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 80]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 10mins
+  - short_name: [arup, waup, taup, rhoaup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke, lmix]
+    period: 10mins
