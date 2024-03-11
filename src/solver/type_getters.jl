@@ -727,7 +727,6 @@ function get_simulation(config::AtmosConfig)
         s = @timed_str begin
             (Y, t_start) = get_state_restart(config)
             spaces = get_spaces_restart(Y)
-            @warn "Progress estimates do not support restarted simulations"
         end
         @info "Allocating Y: $s"
     else

@@ -4,7 +4,7 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     (; dt, output_dir) = sim_info
 
     callbacks = ()
-    if parsed_args["log_progress"] && !sim_info.restart
+    if parsed_args["log_progress"]
         @info "Progress logging enabled."
         callbacks = (
             callbacks...,
