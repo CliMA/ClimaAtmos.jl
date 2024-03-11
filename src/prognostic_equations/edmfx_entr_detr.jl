@@ -114,38 +114,6 @@ function entrainment(
     return entr
 end
 
-function entrainment(
-    params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    buoy_flux_surface::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ::GeneralizedHarmonicsEntrainment,
-) where {FT}
-    turbconv_params = CAP.turbconv_params(params)
-    entr_inv_tau = CAP.entr_tau(turbconv_params)
-    entr_coeff = CAP.entr_coeff(turbconv_params)
-    min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
-    min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
-
-    min_area_limiter =
-        min_area_limiter_scale *
-        exp(-min_area_limiter_power * (max(ᶜaʲ, 0) - a_min))
-    entr =
-        entr_inv_tau + entr_coeff * abs(ᶜwʲ) / (ᶜz - z_sfc) + min_area_limiter
-
-    return entr * FT(2) * hm_limiter(ᶜaʲ)
-end
-
 """
    Return detrainment rate [1/s].
 
@@ -153,11 +121,12 @@ end
    - params set with model parameters
    - ᶜz, z_sfc, ᶜp, ᶜρ, - grid-scale height, surface height, grid-scale pressure and density
    - buoy_flux_surface - buoyancy flux at the surface
-   - ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ - updraft area, physical vertical velocity,
+   - ᶜρaʲ, ᶜaʲ, ᶜwʲ, ᶜRHʲ, ᶜbuoyʲ - updraft effective density, updraft area, physical vertical velocity,
                                    relative humidity and buoyancy
    - ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰ - environment physical vertical velocity,
                               relative humidity and buoyancy
-   - dt - timestep
+   - ᶜentr - entrainment rate
+   - ᶜvert_div,ᶜmassflux_vert_div - vertical divergence, vertical mass flux divergence
 """
 function detrainment(
     params,
@@ -166,6 +135,7 @@ function detrainment(
     ᶜp::FT,
     ᶜρ::FT,
     buoy_flux_surface::FT,
+    ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -175,6 +145,7 @@ function detrainment(
     ᶜbuoy⁰::FT,
     ᶜentr::FT,
     ᶜvert_div::FT,
+    ᶜmassflux_vert_div::FT,
     ::NoDetrainment,
 ) where {FT}
     return FT(0)
@@ -187,6 +158,7 @@ function detrainment(
     ᶜp::FT,
     ᶜρ::FT,
     buoy_flux_surface::FT,
+    ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -196,6 +168,7 @@ function detrainment(
     ᶜbuoy⁰::FT,
     ᶜentr::FT,
     ᶜvert_div::FT,
+    ᶜmassflux_vert_div::FT,
     ::PiGroupsDetrainment,
 ) where {FT}
 
@@ -236,6 +209,7 @@ function detrainment(
     ᶜp::FT,
     ᶜρ::FT,
     buoy_flux_surface::FT,
+    ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -245,6 +219,7 @@ function detrainment(
     ᶜbuoy⁰::FT,
     ᶜentr::FT,
     ᶜvert_div::FT,
+    ᶜmassflux_vert_div::FT,
     ::GeneralizedDetrainment,
 ) where {FT}
     turbconv_params = CAP.turbconv_params(params)
@@ -252,6 +227,8 @@ function detrainment(
     detr_coeff = CAP.detr_coeff(turbconv_params)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
     detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
+    detr_massflux_vertdiv_coeff =
+        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
     max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
     max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
@@ -259,12 +236,18 @@ function detrainment(
     max_area_limiter =
         max_area_limiter_scale *
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
-    detr =
-        detr_inv_tau +
-        detr_coeff * abs(ᶜwʲ) +
-        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div +
-        max_area_limiter
+
+    if ᶜρaʲ <= 0
+        detr = 0
+    else
+        detr =
+            detr_inv_tau +
+            detr_coeff * abs(ᶜwʲ) +
+            detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
+            max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div -
+            detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / ᶜρaʲ +
+            max_area_limiter
+    end
 
     return detr
 end
@@ -276,6 +259,7 @@ function detrainment(
     ᶜp::FT,
     ᶜρ::FT,
     buoy_flux_surface::FT,
+    ᶜρaʲ::FT,
     ᶜaʲ::FT,
     ᶜwʲ::FT,
     ᶜRHʲ::FT,
@@ -285,46 +269,7 @@ function detrainment(
     ᶜbuoy⁰::FT,
     ᶜentr::FT,
     ᶜvert_div::FT,
-    ::GeneralizedHarmonicsDetrainment,
-) where {FT}
-    turbconv_params = CAP.turbconv_params(params)
-    detr_inv_tau = CAP.detr_tau(turbconv_params)
-    detr_coeff = CAP.detr_coeff(turbconv_params)
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    detr_vertdiv_coeff = CAP.detr_vertdiv_coeff(turbconv_params)
-    max_area_limiter_scale = CAP.max_area_limiter_scale(turbconv_params)
-    max_area_limiter_power = CAP.max_area_limiter_power(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-
-    max_area_limiter =
-        max_area_limiter_scale *
-        exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
-    detr =
-        detr_inv_tau +
-        detr_coeff * abs(ᶜwʲ) +
-        detr_buoy_coeff * abs(min(ᶜbuoyʲ - ᶜbuoy⁰, 0)) /
-        max(eps(FT), abs(ᶜwʲ - ᶜw⁰)) - detr_vertdiv_coeff * ᶜvert_div +
-        max_area_limiter
-
-    return detr * FT(2) * hm_limiter(ᶜaʲ)
-end
-
-function detrainment(
-    params,
-    ᶜz::FT,
-    z_sfc::FT,
-    ᶜp::FT,
-    ᶜρ::FT,
-    buoy_flux_surface::FT,
-    ᶜaʲ::FT,
-    ᶜwʲ::FT,
-    ᶜRHʲ::FT,
-    ᶜbuoyʲ::FT,
-    ᶜw⁰::FT,
-    ᶜRH⁰::FT,
-    ᶜbuoy⁰::FT,
-    ᶜentr::FT,
-    ᶜvert_div::FT,
+    ᶜmassflux_vert_div::FT,
     ::ConstantAreaDetrainment,
 ) where {FT}
     detr = ᶜentr - ᶜvert_div

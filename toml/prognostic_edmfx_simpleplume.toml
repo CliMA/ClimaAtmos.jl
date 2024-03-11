@@ -1,47 +1,38 @@
 [EDMF_surface_area]
 value = 0.1
-type = "float"
 
 [EDMF_min_area]
-value = 1.0e-5
-type = "float" 
+value = 1.0e-5 
 
 [EDMF_max_area]
 value = 0.7
-type = "float"
 
 [entr_inv_tau]
 value = 0.0001
-type = "float"
 
 [entr_coeff]
 value = 0
-type = "float"
 
 [min_area_limiter_scale]
 value = 0
-type = "float"
 
 [min_area_limiter_power]
 value = 10
-type = "float"
 
 [detr_inv_tau]
 value = 0
-type = "float"
 
 [detr_coeff]
 value = 0
-type = "float"
 
 [detr_buoy_coeff]
-value = 0.3
-type = "float"
+value = 0
 
 [detr_vertdiv_coeff]
 value = 0
-type = "float"
+
+[detr_massflux_vertdiv_coeff]
+value = 1
 
 [max_area_limiter_scale]
-value = 0.01
-type = "float"
+value = 0

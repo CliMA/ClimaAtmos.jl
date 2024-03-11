@@ -37,6 +37,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     detr_coeff::FT
     detr_buoy_coeff::FT
     detr_vertdiv_coeff::FT
+    detr_massflux_vertdiv_coeff::FT
     min_area_limiter_scale::FT
     min_area_limiter_power::FT
     max_area_limiter_scale::FT
