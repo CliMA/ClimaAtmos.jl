@@ -54,18 +54,20 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     compute_strain_rate_center!(ᶜstrain_rate, ᶠu)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
-    @. ᶜprandtl_nvec = turbulent_prandtl_number(
-        params,
-        obukhov_length,
-        ᶜlinear_buoygrad,
-        norm_sqr(ᶜstrain_rate),
-    )
+    @fused begin
+        @. ᶜprandtl_nvec = turbulent_prandtl_number(
+            params,
+            obukhov_length,
+            ᶜlinear_buoygrad,
+            norm_sqr(ᶜstrain_rate),
+        )
 
-    @. ᶜmixing_length = smagorinsky_lilly_length(
-        CAP.c_smag(params),
-        sqrt(max(ᶜlinear_buoygrad, 0)),   #N_eff
-        ᶜdz,
-        ᶜprandtl_nvec,
-        norm_sqr(ᶜstrain_rate),
-    )
+        @. ᶜmixing_length = smagorinsky_lilly_length(
+            CAP.c_smag(params),
+            sqrt(max(ᶜlinear_buoygrad, 0)),   #N_eff
+            ᶜdz,
+            ᶜprandtl_nvec,
+            norm_sqr(ᶜstrain_rate),
+        )
+    end
 end

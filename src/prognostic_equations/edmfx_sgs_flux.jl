@@ -26,12 +26,15 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶠu³_diff_colidx = p.scratch.ᶠtemp_CT3[colidx]
         ᶜa_scalar_colidx = p.scratch.ᶜtemp_scalar[colidx]
         for j in 1:n
-            @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-            @. ᶜa_scalar_colidx =
-                (
-                    Y.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx] -
-                    ᶜh_tot[colidx]
-                ) * draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
+            @fused begin
+                @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+                @. ᶜa_scalar_colidx =
+                    (
+                        Y.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx] -
+                        ᶜh_tot[colidx]
+                    ) *
+                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
+            end
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -42,10 +45,12 @@ function edmfx_sgs_mass_flux_tendency!(
                 edmfx_sgsflux_upwinding,
             )
         end
-        @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
-        @. ᶜa_scalar_colidx =
-            (ᶜmse⁰[colidx] + ᶜK⁰[colidx] - ᶜh_tot[colidx]) *
-            draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
+        @fused begin
+            @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
+            @. ᶜa_scalar_colidx =
+                (ᶜmse⁰[colidx] + ᶜK⁰[colidx] - ᶜh_tot[colidx]) *
+                draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
+        end
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
             ᶜJ[colidx],
@@ -59,10 +64,17 @@ function edmfx_sgs_mass_flux_tendency!(
         if !(p.atmos.moisture_model isa DryModel)
             # specific humidity
             for j in 1:n
-                @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-                @. ᶜa_scalar_colidx =
-                    (Y.c.sgsʲs.:($$j).q_tot[colidx] - ᶜspecific.q_tot[colidx]) *
-                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
+                @fused begin
+                    @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
+                    @. ᶜa_scalar_colidx =
+                        (
+                            Y.c.sgsʲs.:($$j).q_tot[colidx] -
+                            ᶜspecific.q_tot[colidx]
+                        ) * draft_area(
+                            Y.c.sgsʲs.:($$j).ρa[colidx],
+                            ᶜρʲs.:($$j)[colidx],
+                        )
+                end
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
@@ -73,10 +85,12 @@ function edmfx_sgs_mass_flux_tendency!(
                     edmfx_sgsflux_upwinding,
                 )
             end
-            @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
-            @. ᶜa_scalar_colidx =
-                (ᶜq_tot⁰[colidx] - ᶜspecific.q_tot[colidx]) *
-                draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
+            @fused begin
+                @. ᶠu³_diff_colidx = ᶠu³⁰[colidx] - ᶠu³[colidx]
+                @. ᶜa_scalar_colidx =
+                    (ᶜq_tot⁰[colidx] - ᶜspecific.q_tot[colidx]) *
+                    draft_area(ᶜρa⁰[colidx], ᶜρ⁰[colidx])
+            end
             vertical_transport!(
                 Yₜ.c.ρq_tot[colidx],
                 ᶜJ[colidx],
@@ -253,8 +267,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
             @. ᶜρχₜ_diffusion[colidx] =
                 ᶜdivᵥ_ρq_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜq_tot⁰[colidx])))
-            @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
-            @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+            @fused begin
+                @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
+                @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+            end
         end
 
         # momentum
