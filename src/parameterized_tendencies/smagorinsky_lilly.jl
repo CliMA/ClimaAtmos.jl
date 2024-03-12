@@ -72,22 +72,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     ### ASR START
     ᶜu = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-    ∇u  = @. Geometry.project(Geometry.UVWAxis(), ᶠgradᵥ(Geometry.UVWVector(ᶜu))) 
-    ∇uᵀ = @. adjoint(Geometry.project(Geometry.UVWAxis(), ᶠgradᵥ(Geometry.UVWVector(ᶜu))))
-    
-    ∇u₁ = @. Geometry.project(Geometry.UAxis(), ∇u)
-    ∇u₂ = @. Geometry.project(Geometry.VAxis(), ∇u)
-    ∇u₃ = @. Geometry.project(Geometry.WAxis(), ∇u)
-
-    @. ᶜ∇²u =
-        C123(wgradₕ(divₕ(p.precomputed.ᶜu))) -
-        C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜu))))
-    
-    # Adjoint projections are not permissible.
-    ∇uᵀ₁ = @. Geometry.project(Geometry.UAxis(), ∇uᵀ)
-    ∇uᵀ₂ = @. Geometry.project(Geometry.VAxis(), ∇uᵀ)
-    ∇uᵀ₃ = @. Geometry.project(Geometry.WAxis(), ∇uᵀ)
-    
     # Compute local viscosity (kinematic) at cell centers
     ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(ᶜϵ))
     # Compute local viscosity (kinematic) at cell faces
