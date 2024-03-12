@@ -844,7 +844,6 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_deepatmos},
     Val{:longrun_aquaplanet_dyamond},
-    Val{:longrun_aquaplanet_amip},
 }
 
 function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})

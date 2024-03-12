@@ -16,4 +16,5 @@ cloud_model: "grid_scale"
 surface_temperature: "ZonallyAsymmetric"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"
 moist: "equil"
+albedo_model: "RegressionFunctionAlbedo"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
