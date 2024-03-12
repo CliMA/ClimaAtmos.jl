@@ -314,9 +314,9 @@ version = "0.5.7"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "844afbd6a7c4f112f974e0031ebf4fb13d0b4157"
+git-tree-sha1 = "bc6a0154e3bcc1657d3a75f697e216fb70121969"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.13.1"
+version = "0.13.2"
 weakdeps = ["Krylov"]
 
     [deps.ClimaCore.extensions]
@@ -354,9 +354,9 @@ version = "0.7.5"
 
 [[deps.ClimaParams]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "323dd6c5423caf31f0da81bb9c288683cbdafb01"
+git-tree-sha1 = "ec67949db856e01df4cbf7d6ddafefeda02f93ee"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.2"
+version = "0.10.3"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
