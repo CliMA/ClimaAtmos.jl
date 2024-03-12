@@ -256,6 +256,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         )
     end
 
+    # TODO add the 1-moment microphysics option here
     @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
         precip_model,
         thermo_params,
