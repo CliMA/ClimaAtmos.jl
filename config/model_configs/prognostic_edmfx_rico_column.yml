@@ -13,7 +13,7 @@ edmfx_nh_pressure: true
 edmfx_velocity_relaxation: true
 prognostic_tke: true
 moist: "equil"
-precip_model: "0M"
+precip_model: "1M"
 config: "column"
 z_max: 4e3
 x_elem: 2
@@ -33,4 +33,6 @@ diagnostics:
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
     period: 10mins
   - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins
+  - short_name: [husra, hussn]
     period: 10mins

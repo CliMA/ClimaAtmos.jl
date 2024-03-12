@@ -573,7 +573,7 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_stretched_column/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMFX Bomex in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
@@ -590,7 +590,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Rico in a column"
+      - label: ":umbrella: Prognostic EDMFX Rico in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_rico_column.yml
@@ -598,11 +598,19 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX TRMM in a column"
+      - label: ":umbrella: Prognostic EDMFX TRMM in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
         artifact_paths: "prognostic_edmfx_trmm_column/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMFX TRMM in a column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_0M.yml
+        artifact_paths: "prognostic_edmfx_trmm_column_0M/*"
         agents:
           slurm_mem: 20GB
 

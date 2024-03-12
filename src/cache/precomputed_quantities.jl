@@ -56,6 +56,23 @@ function precomputed_quantities(Y, atmos)
         sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
     cloud_diagnostics = (; ᶜcloud_fraction = similar(Y.c, FT),)
+    precipitation_sgs_quantities =
+        atmos.precip_model isa Microphysics0Moment ?
+        (;
+            ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜS_q_tot⁰ = similar(Y.c, FT),
+        ) :
+        atmos.precip_model isa Microphysics1Moment ?
+        (;
+            ᶜSeₜᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqᵣᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSqₛᵖʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜSeₜᵖ⁰ = similar(Y.c, FT),
+            ᶜSqₜᵖ⁰ = similar(Y.c, FT),
+            ᶜSqᵣᵖ⁰ = similar(Y.c, FT),
+            ᶜSqₛᵖ⁰ = similar(Y.c, FT),
+        ) : (;)
     advective_sgs_quantities =
         atmos.turbconv_model isa PrognosticEDMFX ?
         (;
@@ -83,8 +100,7 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
-            ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜS_q_tot⁰ = similar(Y.c, FT),
+            precipitation_sgs_quantities...,
         ) : (;)
     sgs_quantities = (;
         ᶜgradᵥ_θ_virt = Fields.Field(C3{FT}, cspace),
@@ -130,7 +146,12 @@ function precomputed_quantities(Y, atmos)
     end
     precipitation_quantities =
         atmos.precip_model isa Microphysics1Moment ?
-        (; ᶜwᵣ = similar(Y.c, FT), ᶜwₛ = similar(Y.c, FT)) : (;)
+        (;
+            ᶜwᵣ = similar(Y.c, FT),
+            ᶜwₛ = similar(Y.c, FT),
+            ᶜqᵣ = similar(Y.c, FT),
+            ᶜqₛ = similar(Y.c, FT),
+        ) : (;)
     return (;
         gs_quantities...,
         sgs_quantities...,
@@ -483,6 +504,11 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+        set_prognostic_edmf_precomputed_quantities_precipitation!(
+            Y,
+            p,
+            p.atmos.precip_model,
+        )
     end
 
     if turbconv_model isa DiagnosticEDMFX
