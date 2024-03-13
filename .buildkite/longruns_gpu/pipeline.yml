@@ -173,6 +173,16 @@ steps:
           slurm_time: 12:00:00
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth"
+      
+      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + earth topography (SLEVE)"
+        command:
+          - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
+        artifact_paths: "$$JOB_NAME/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 6:00:00
+        env:
+          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve"
 
   - group: "DYAMOND"
 
