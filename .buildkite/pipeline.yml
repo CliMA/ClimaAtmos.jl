@@ -855,6 +855,7 @@ steps:
         agents:
           slurm_mem: 48GB
           slurm_gpus: 1
+          gres: "gpu:p100:1"
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"
