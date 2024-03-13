@@ -27,7 +27,7 @@
 #             vars,
 #             y = 0.0,
 #             time = LAST_SNAP,
-#             more_kwargs = YLOGSCALE,
+#             more_kwargs = YLINEARSCALE,
 #         )
 #     end
 # ```
@@ -93,26 +93,14 @@ const LAST_SNAP = LARGE_NUM
 const FIRST_SNAP = -LARGE_NUM
 const BOTTOM_LVL = -LARGE_NUM
 const TOP_LVL = LARGE_NUM
-const H_EARTH = 7000
-# Shorthand for logscale on y axis and to move the dimension to the y axis on line plots
-# (because they are columns)
-Plvl(y) = -H_EARTH * log(y)
-Makie.inverse_transform(::typeof(Plvl)) = (y) -> exp(-y / H_EARTH)
-Makie.defaultlimits(::typeof(Plvl)) = (0.0000001, 1)
-Makie.defined_interval(::typeof(Plvl)) = Makie.OpenInterval(0.0, Inf)
-function Makie.get_tickvalues(yticks::Int, yscale::typeof(Plvl), ymin, ymax)
-    exp_func = Makie.inverse_transform(yscale)
-    exp_z_min, exp_z_max = exp_func(ymin), exp_func(ymax)
-    return Plvl.(range(exp_z_min, exp_z_max, yticks))
+
+function Makie.get_tickvalues(yticks::Int, ymin, ymax)
+    return range(max(ymin, 0), ymax, yticks)
 end
 
-YLOGSCALE = Dict(
-    :axis => ca_kwargs(
-        dim_on_y = true,
-        yscale = Plvl,
-        yticks = 7,
-        ytickformat = "{:.3e}",
-    ),
+YLINEARSCALE = Dict(
+    :axis =>
+        ca_kwargs(dim_on_y = true, yticks = 10, ytickformat = "{:.3e}"),
 )
 
 long_name(var) = var.attributes["long_name"]
@@ -391,7 +379,7 @@ make_plots_generic(
     time = LAST_SNAP,
     x = 0.0, # Our columns are still 3D objects...
     y = 0.0,
-    more_kwargs = YLOGSCALE,
+    more_kwargs = YLINEARSCALE,
 )
 ```
 If we want to be more daring, we can mix in some information about `reductions` and `periods`
@@ -407,7 +395,7 @@ make_plots_generic(
     time = LAST_SNAP,
     x = 0.0, # Our columns are still 3D objects...
     y = 0.0,
-    more_kwargs = YLOGSCALE,
+    more_kwargs = YLINEARSCALE,
 )
 ```
 """
@@ -435,7 +423,7 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         x = 0.0, # Our columns are still 3D objects...
         y = 0.0,
         MAX_NUM_COLS = length(simdirs),
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -453,7 +441,7 @@ function make_plots(
         vars,
         y = 0.0,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -541,7 +529,7 @@ function make_plots(::MountainPlots, output_paths::Vector{<:AbstractString})
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -556,7 +544,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -573,7 +561,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -637,7 +625,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -680,7 +668,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -708,7 +696,7 @@ function make_plots(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -761,7 +749,7 @@ function make_plots(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -823,7 +811,7 @@ function make_plots(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -874,7 +862,7 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -931,7 +919,7 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
