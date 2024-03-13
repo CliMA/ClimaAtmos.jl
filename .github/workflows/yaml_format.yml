@@ -1,0 +1,18 @@
+name: YAML Lint
+on: [push]  # yamllint disable-line rule:truthy
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: yaml-lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: config
+          strict: true
+          # Ignore warning 
+          config_data: |
+            extends: default
+            rules:
+              document-start: disable
+              line-length: disable
