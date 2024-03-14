@@ -24,6 +24,7 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :mixing_length_smin_ub => :smin_ub,
         :EDMF_min_area => :min_area,
         :detr_vertdiv_coeff => :detr_vertdiv_coeff,
+        :detr_massflux_vertdiv_coeff => :detr_massflux_vertdiv_coeff,
         :max_area_limiter_power => :max_area_limiter_power,
         :min_area_limiter_power => :min_area_limiter_power,
         :pressure_normalmode_drag_coeff => :pressure_normalmode_drag_coeff,

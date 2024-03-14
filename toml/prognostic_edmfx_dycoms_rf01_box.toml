@@ -29,6 +29,9 @@ value = 1e-3
 value = 0.3
 
 [detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
 value = 0.5
 
 [max_area_limiter_scale]
