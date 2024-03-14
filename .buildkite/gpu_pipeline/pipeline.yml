@@ -103,102 +103,6 @@ steps:
           slurm_ntasks: 4
           slurm_exclusive:
 
-  - group: "CHAP GPU strong scaling"
-    steps:
-
-      - label: "gpu_aquaplanet_chap - strong scaling - 1 GPU"
-        command:
-          - mkdir -p gpu_aquaplanet_chap
-          - >
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap.yml
-        artifact_paths: "gpu_aquaplanet_chap/*"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 1
-          slurm_mem: 32G
-          slurm_exclusive:
-
-      - label: "gpu_aquaplanet_chap - strong scaling - 2 GPUs"
-        command:
-          - mkdir -p gpu_aquaplanet_chap_2process
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap_2process.yml
-        artifact_paths: "gpu_aquaplanet_chap_2process/*"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 2
-          slurm_mem: 32G
-          slurm_exclusive:
-
-      - label: "gpu_aquaplanet_chap - strong scaling - 4 GPUs"
-        command:
-          - mkdir -p gpu_aquaplanet_chap_4process
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap_4process.yml
-        artifact_paths: "gpu_aquaplanet_chap_4process/*"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 4
-          slurm_mem: 32G
-          slurm_exclusive:
-
-  - group: "CHAP GPU weak scaling"
-    steps:
-
-      - label: "gpu_aquaplanet_chap - weak scaling - 1 GPU"
-        command:
-          - mkdir -p gpu_aquaplanet_chap_ws_1process
-          - >
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap_ws_1process.yml
-        artifact_paths: "gpu_aquaplanet_chap_ws_1process/*"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 1
-          slurm_mem: 32G
-          slurm_exclusive:
-
-      - label: "gpu_aquaplanet_chap - weak scaling - 2 GPUs"
-        command:
-          - mkdir -p gpu_aquaplanet_chap_ws_2process
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap_ws_2process.yml
-        artifact_paths: "gpu_aquaplanet_chap_ws_2process/*"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 2
-          slurm_mem: 32G
-          slurm_time: 8:00:00
-          slurm_exclusive:
-
-      - label: "gpu_aquaplanet_chap - weak scaling - 4 GPUs"
-        command:
-          - mkdir -p gpu_aquaplanet_chap_ws_4process
-          - >
-            srun --cpu-bind=threads --cpus-per-task=4
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_chap_ws_4process.yml
-        artifact_paths: "gpu_aquaplanet_chap_ws_4process/*"
-        agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
-          slurm_ntasks: 4
-          slurm_mem: 32G
-          slurm_time: 8:00:00
-          slurm_exclusive:
-
   - group: "DYAMOND GPU strong scaling"
     steps:
 
@@ -245,4 +149,70 @@ steps:
           slurm_ntasks: 4
           slurm_mem: 32G
           slurm_time: 8:00:00
+          slurm_exclusive:
+
+  - group: "DYAMOND GPU weak scaling"
+    steps:
+
+      - label: "gpu_aquaplanet_dyamond - weak scaling - 1 GPU"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ws_1process
+          - >
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 1
+          slurm_mem: 32G
+          slurm_exclusive:
+
+      - label: "gpu_aquaplanet_dyamond - weak scaling - 2 GPUs"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ws_2process
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 2
+          slurm_mem: 32G
+          slurm_time: 8:00:00
+          slurm_exclusive:
+
+      - label: "gpu_aquaplanet_dyamond - weak scaling - 4 GPUs"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ws_4process
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 4
+          slurm_mem: 32G
+          slurm_time: 8:00:00
+          slurm_exclusive:
+
+  - group: "Diagnostic EDMF GPU"
+    steps:
+
+      - label: "gpu_aquaplanet_chap - 1 GPU"
+        command:
+          - mkdir -p gpu_aquaplanet_chap
+          - >
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_diagedmf.yml
+        artifact_paths: "gpu_aquaplanet_diagedmf/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 1
+          slurm_mem: 32G
           slurm_exclusive:
