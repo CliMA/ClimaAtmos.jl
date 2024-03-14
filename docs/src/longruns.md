@@ -1,7 +1,7 @@
 # Buildkite longrun jobs
 
 Here is a brief description of the buildkite longrun jobs.
-## GPU longruns
+
 ```
 longrun_bw_rhoe_highres
 
@@ -40,8 +40,6 @@ longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M
 Aquaplanet with idealized insolation, all-sky radiation, diagnostic edmf
 and 0-moment microphysics.
 ```
-
-## CPU longruns
 ```
 longrun_sphere_hydrostatic_balance_rhoe
 
@@ -106,7 +104,7 @@ Aquaplanet setup for DYAMOND (global high-resolution simulation). This job inclu
 all the atmosphere components required for DYAMOND.
 ```
 ```
-longrun_aquaplanet_amip
+amip_target_diagedmf
 
 Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
 working atmosphere components required for AMIP. It can be unstable as some of them

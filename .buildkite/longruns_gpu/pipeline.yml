@@ -39,7 +39,7 @@ steps:
 
   - wait
 
-  - group: "Targeted resolution AMIP long runs"
+  - group: "Targeted resolution long runs"
     steps:
       
       - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + deep-atmosphere eqns"

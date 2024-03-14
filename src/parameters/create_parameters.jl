@@ -1,4 +1,4 @@
-import CLIMAParameters as CP
+import ClimaParams as CP
 import RRTMGP.Parameters.RRTMGPParameters
 import SurfaceFluxes.Parameters.SurfaceFluxesParameters
 import SurfaceFluxes.UniversalFunctions as UF
