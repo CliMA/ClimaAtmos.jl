@@ -830,7 +830,7 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_deepatmos},
+    Val{:longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos},
     Val{:longrun_aquaplanet_dyamond},
 }
 
