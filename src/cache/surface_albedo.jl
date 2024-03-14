@@ -80,29 +80,24 @@ function set_surface_albedo!(
     λ = FT(0) # spectral wavelength (not used for now)
     μ = cos_zenith
 
-    ArrayType = ClimaComms.array_type(Y)
+    surface_albedo = p.scratch.temp_field_level
+    f_direct = surface_albedo_direct(α_model)
+    surface_albedo .=
+        f_direct.(
+            λ,
+            RRTMGPI.array2field(μ, axes(surface_albedo)),
+            norm.(Fields.level(Y.c.uₕ, 1)),
+        )
+    direct_sw_surface_albedo .= RRTMGPI.field2array(surface_albedo)'
 
-    # set the direct and diffuse surface albedos
-    direct_sw_surface_albedo .=
-        ArrayType(ones(axes(direct_sw_surface_albedo))) .* ArrayType(
-            reshape(
-                surface_albedo_direct(
-                    α_model,
-                ).(λ, μ, RRTMGPI.field2array(norm.(Fields.level(Y.c.uₕ, 1)))),
-                1,
-                :,
-            ),
+    f_diffuse = surface_albedo_diffuse(α_model)
+    surface_albedo .=
+        f_diffuse.(
+            λ,
+            RRTMGPI.array2field(μ, axes(surface_albedo)),
+            norm.(Fields.level(Y.c.uₕ, 1)),
         )
-    diffuse_sw_surface_albedo .=
-        ArrayType(ones(axes(direct_sw_surface_albedo))) .* ArrayType(
-            reshape(
-                surface_albedo_diffuse(
-                    α_model,
-                ).(λ, μ, RRTMGPI.field2array(norm.(Fields.level(Y.c.uₕ, 1)))),
-                1,
-                :,
-            ),
-        )
+    diffuse_sw_surface_albedo .= RRTMGPI.field2array(surface_albedo)'
 end
 
 """
