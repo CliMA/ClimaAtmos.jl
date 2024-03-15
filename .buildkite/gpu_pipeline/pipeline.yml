@@ -106,27 +106,30 @@ steps:
   - group: "DYAMOND GPU strong scaling"
     steps:
 
-      - label: "gpu_aquaplanet_dyamond - 1 GPU"
+      - label: "gpu_aquaplanet_dyamond - strong scaling - 1 GPU"
         command:
-          - mkdir -p gpu_aquaplanet_dyamond
-          - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_dyamond/report
-            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
-        artifact_paths: "gpu_aquaplanet_dyamond/*"
-        agents:
-          slurm_gpus: 1
-          slurm_cpus_per_task: 4
-          slurm_exclusive:
-
-      - label: "gpu_aquaplanet_dyamond - 2 GPUs"
-        command:
-          - mkdir -p gpu_aquaplanet_dyamond_2process
+          - mkdir -p gpu_aquaplanet_dyamond_ss_1process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_2process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_2process/*"
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_1process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 1
+          slurm_mem: 32G
+          slurm_time: 8:00:00
+          slurm_exclusive:
+
+      - label: "gpu_aquaplanet_dyamond - strong scaling - 2 GPUs"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ss_2process
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_2process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
@@ -135,20 +138,33 @@ steps:
           slurm_time: 8:00:00
           slurm_exclusive:
 
-      - label: "gpu_aquaplanet_dyamond - 4 GPUs"
+      - label: "gpu_aquaplanet_dyamond - strong scaling - 4 GPUs"
         command:
-          - mkdir -p gpu_aquaplanet_dyamond_4process
+          - mkdir -p gpu_aquaplanet_dyamond_ss_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
-            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_4process.yml
-        artifact_paths: "gpu_aquaplanet_dyamond_4process/*"
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_4process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/*"
         agents:
           slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_mem: 32G
           slurm_time: 8:00:00
+          slurm_exclusive:
+
+      - wait
+
+      - label: "gpu_aquaplanet_dyamond - strong scaling plots"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ss
+          - >
+            julia --color=yes --project=examples post_processing/plot_gpu_strong_scaling.jl gpu_aquaplanet_dyamond_ss
+        artifact_paths: "gpu_aquaplanet_dyamond_ss/*"
+        agents:
+          slurm_cpus_per_task: 1
+          slurm_ntasks: 1
           slurm_exclusive:
 
   - group: "DYAMOND GPU weak scaling"
@@ -158,6 +174,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_1process
           - >
+            srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/*"
@@ -166,6 +183,7 @@ steps:
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
           slurm_mem: 32G
+          slurm_time: 8:00:00
           slurm_exclusive:
 
       - label: "gpu_aquaplanet_dyamond - weak scaling - 2 GPUs"
@@ -199,6 +217,21 @@ steps:
           slurm_mem: 32G
           slurm_time: 8:00:00
           slurm_exclusive:
+
+      - wait
+
+      - label: "gpu_aquaplanet_dyamond - weak scaling plots"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ws
+          - >
+            julia --color=yes --project=examples post_processing/plot_gpu_weak_scaling.jl gpu_aquaplanet_dyamond_ws
+        artifact_paths: "gpu_aquaplanet_dyamond_ws/*"
+        agents:
+          slurm_cpus_per_task: 1
+          slurm_ntasks: 1
+          slurm_exclusive:
+
+
 
   - group: "Diagnostic EDMF GPU"
     steps:
