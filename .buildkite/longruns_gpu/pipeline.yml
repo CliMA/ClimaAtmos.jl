@@ -123,13 +123,13 @@ steps:
         env:
           JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_slabocean"
 
-      - label: ":computer: aquaplanet equilmoist clearsky radiation + 0M microphysics + deep-atmosphere eqns"
+      - label: ":computer: held-suarez equilmoist + deep-atmosphere eqns"
         command:
           - srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml
         artifact_paths: "$$JOB_NAME/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
-          JOB_NAME: "longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_deepatmos"
+          JOB_NAME: "longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos"
         agents:
           slurm_gpus: 1
           slurm_time: 12:00:00
