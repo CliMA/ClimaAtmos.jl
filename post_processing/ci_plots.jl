@@ -856,7 +856,7 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        get(simdir; short_name, reduction)
     end
     make_plots_generic(
         output_paths,
@@ -913,7 +913,7 @@ function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        get(simdir; short_name, reduction)
     end
     make_plots_generic(
         output_paths,
