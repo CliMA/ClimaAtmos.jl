@@ -190,7 +190,7 @@ function qₚ(ρqₚ::FT, ρ::FT) where {FT}
 end
 
 function limit(q::FT, dt::FT) where {FT}
-    return q / dt
+    return q / dt / 5
 end
 
 function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
