@@ -82,7 +82,9 @@ function make_hybrid_spaces(
     surface_warp = nothing,
     topo_smoothing = false,
     deep = false,
+    parsed_args = nothing,
 )
+    FT = eltype(z_max)
     # TODO: change this to make_hybrid_grid
     h_grid = Spaces.grid(h_space)
     z_domain = Domains.IntervalDomain(
@@ -101,11 +103,23 @@ function make_hybrid_spaces(
     if isnothing(surface_warp)
         hypsography = Hypsography.Flat()
     else
+        topo_smoothing = parsed_args["topo_smoothing"]
         z_surface = surface_warp(Fields.coordinate_field(h_space))
         if topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
         end
-        hypsography = Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+        if parsed_args["mesh_warp_type"] == "SLEVE"
+            @info "SLEVE mesh warp"
+            hypsography = Hypsography.SLEVEAdaption(
+                z_surface,
+                parsed_args["sleve_eta"],
+                parsed_args["sleve_s"],
+            )
+        elseif parsed_args["mesh_warp_type"] == "Linear"
+            @info "Linear mesh warp"
+            hypsography =
+                Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+        end
     end
     grid = Grids.ExtrudedFiniteDifferenceGrid(h_grid, z_grid, hypsography; deep)
     # TODO: return the grid

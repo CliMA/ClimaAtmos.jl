@@ -189,8 +189,8 @@ function get_spaces(parsed_args, params, comms_ctx)
                 z_max,
                 z_elem,
                 z_stretch;
+                parsed_args = parsed_args,
                 surface_warp = warp_function,
-                topo_smoothing = parsed_args["topo_smoothing"],
                 deep,
             )
         end
@@ -216,7 +216,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -243,6 +243,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            parsed_args,
             surface_warp = warp_function,
             deep,
         )
@@ -266,6 +267,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            parsed_args,
             surface_warp = warp_function,
             deep,
         )
