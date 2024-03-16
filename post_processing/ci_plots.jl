@@ -676,6 +676,7 @@ MoistHeldSuarezPlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
     Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
+    Val{:longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos},
 }
 
 function make_plots(
@@ -830,7 +831,6 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
-    Val{:longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos},
     Val{:longrun_aquaplanet_dyamond},
 }
 
