@@ -1,5 +1,5 @@
 dt_save_state_to_disk: "10days"
-dt: "150secs"
+dt: "120secs"
 rad: "clearsky"
 dt_rad: "6hours"
 t_end: "500days"
