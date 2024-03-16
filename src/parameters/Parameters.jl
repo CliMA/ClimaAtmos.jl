@@ -74,6 +74,9 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP} <:
     zd_viscous::FT
     zd_rayleigh::FT
     kappa_2_sponge::FT
+    # Radiation
+    idealized_ocean_albedo::FT
+    water_refractive_index::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

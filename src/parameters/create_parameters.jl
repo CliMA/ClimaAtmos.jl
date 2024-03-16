@@ -111,6 +111,8 @@ function create_parameter_set(config::AtmosConfig)
         :drag_layer_vertical_extent => :σ_b,
         :kappa_2_sponge => :kappa_2_sponge,
         :held_suarez_minimum_temperature => :T_min_hs,
+        :ocean_surface_albedo => :idealized_ocean_albedo,
+        :water_refractive_index => :water_refractive_index,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;

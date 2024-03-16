@@ -354,9 +354,9 @@ version = "0.7.5"
 
 [[deps.ClimaParams]]
 deps = ["DocStringExtensions", "TOML", "Test"]
-git-tree-sha1 = "ec67949db856e01df4cbf7d6ddafefeda02f93ee"
+git-tree-sha1 = "1a3d2455fff201bcf130bbd5a71ac16fc3c21fd1"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "0.10.3"
+version = "0.10.4"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Colors", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "KernelAbstractions", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "SciMLBase", "StaticArrays"]
