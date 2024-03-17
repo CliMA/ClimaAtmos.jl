@@ -17,4 +17,5 @@ surface_temperature: "ZonallyAsymmetric"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric"
 moist: "equil"
 albedo_model: "RegressionFunctionAlbedo"
+regression_test: true
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
