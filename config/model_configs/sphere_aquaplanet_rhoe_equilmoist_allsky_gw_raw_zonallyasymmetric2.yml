@@ -15,4 +15,3 @@ surface_temperature: "ZonallyAsymmetric"
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric2"
 moist: "equil"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.toml]
-netcdf_interpolate_z_over_msl: true
