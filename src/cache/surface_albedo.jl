@@ -9,7 +9,7 @@ struct CouplerAlbedo <: SurfaceAlbedoModel end
 A constant surface albedo model. The default value is 0.38. It is used purely for idealized experiments.
 """
 Base.@kwdef struct ConstantAlbedo{FT} <: SurfaceAlbedoModel
-    α::FT = 0.38
+    α::FT
 end
 
 """
