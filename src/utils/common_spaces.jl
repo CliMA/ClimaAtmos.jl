@@ -111,9 +111,9 @@ function make_hybrid_spaces(
         if parsed_args["mesh_warp_type"] == "SLEVE"
             @info "SLEVE mesh warp"
             hypsography = Hypsography.SLEVEAdaption(
-                z_surface,
-                parsed_args["sleve_eta"],
-                parsed_args["sleve_s"],
+                Geometry.ZPoint.(z_surface),
+                FT(parsed_args["sleve_eta"]),
+                FT(parsed_args["sleve_s"]),
             )
         elseif parsed_args["mesh_warp_type"] == "Linear"
             @info "Linear mesh warp"
