@@ -385,9 +385,9 @@ It is assummed that some fraction ``\alpha`` of snow is melted during the proces
 ### Stability and positivity
 
 All source terms are individually limited such that they don't exceed the
-  available tracer specific humidity.
+  available tracer specific humidity divided by a coefficient ``a``.
 ```math
-\mathcal{S}_{x \rightarrow y} = min(\mathcal{S}_{x \rightarrow y}, \frac{q_{x}}{dt})
+\mathcal{S}_{x \rightarrow y} = min(\mathcal{S}_{x \rightarrow y}, \frac{q_{x}}{a \; dt})
 ```
 This will not ensure positivity because the sum of all source terms,
   combined with the advection tendency,
@@ -395,3 +395,5 @@ This will not ensure positivity because the sum of all source terms,
 It should however help mitigate some of the problems.
 The source terms functions treat negative specific humidities as zeros,
   so the simulations should be stable even with small negative numbers.
+
+We do not apply hyperdiffusion for precipitation tracers.

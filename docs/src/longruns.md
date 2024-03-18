@@ -81,7 +81,7 @@ Aquaplanet with idealized insolation, clear-sky radiation, 0-moment microphysics
 Earth topography. Use this job to test topography related features.
 ```
 ```
-longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_1M
+longrun_aquaplanet_clearsky_1M
 
 Aquaplanet with idealized insolation, clear-sky radiation, 1-moment microphysics.
 Use this job to test 1-moment microphysics related features.
@@ -89,8 +89,8 @@ Use this job to test 1-moment microphysics related features.
 ```
 longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos
 
-Held-Suarez equil-moist. Test with deep-atmosphere equations. 
-Use this job to test deep-atmosphere related features. 
+Held-Suarez equil-moist. Test with deep-atmosphere equations.
+Use this job to test deep-atmosphere related features.
 ```
 ```
 longrun_bw_rhoe_equil_highres_topography_earth
