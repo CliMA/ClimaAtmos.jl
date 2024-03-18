@@ -40,14 +40,14 @@ scalar_hyperdiffusion_coefficient:
 topography:
   help: "Define the surface elevation profile [`NoWarp`,`Earth`,`DCMIP200`,`Agnesi`]"
   value: "NoWarp"
-mesh_warp_type: 
+mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"
   value: "Linear"
-sleve_eta: 
-  help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)" 
+sleve_eta:
+  help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7
-sleve_s: 
-  help: "If SLEVE coordinates are chosen, sets `s`, the warping decay scale parameter" 
+sleve_s:
+  help: "If SLEVE coordinates are chosen, sets `s`, the warping decay scale parameter"
   value: 10.0
 topo_smoothing:
   help: "Choose whether to order-2 smoothing on the LGL mesh"
@@ -155,7 +155,7 @@ dt_save_to_sol:
   help: "Time between saving solution. Examples: [`10days`, `1hours`, `Inf` (do not save)]"
   value: "1days"
 moist:
-  help: "Moisture model [`dry` (default), `equil`, `non_equil`]"
+  help: "Moisture model [`dry` (default), `equil`, `nonequil`]"
   value: "dry"
 divergence_damping_factor:
   help: "Divergence damping factor"
