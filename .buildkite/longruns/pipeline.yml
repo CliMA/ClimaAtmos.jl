@@ -1,7 +1,7 @@
 agents:
   queue: new-central
   slurm_mem_per_cpu: 8G
-  modules: climacommon/2024_03_07
+  modules: climacommon/2024_03_18
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
