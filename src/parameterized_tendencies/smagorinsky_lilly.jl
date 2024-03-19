@@ -54,58 +54,17 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     (; ᶜu, ᶠu³) = p.precomputed 
 
     # Operators
+    FT = eltype(νₜ)
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
 
-    # Velocity composition onto cell faces #
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-
-    # Set up scratch space for strain rates
-    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
-    ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
-    # Compute strain rates
-    compute_strain_rate_center!(ᶜϵ, ᶠu)
-    #compute_strain_rate_face!(ᶠϵ, ᶜu)
-    @. ᶠϵ = ᶠinterp(ᶜϵ)
+    ∇u = @. hgrad(ᶜu)
+    ∇uᵀ = similar(∇u)
+    @. ∇u= CC.Geometry.AxisTensor(CC.Geometry.axes(∇u), transpose(CC.Geometry.components(∇u)))
+    S = @. FT(1/2) * (∇u + ∇uᵀ)
+    S₃ = @. CC.Geometry.project(CC.Geometry.UVWAxis(), S)
     
-    ### ASR START
-    ᶜu = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
-    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-    # Compute local viscosity (kinematic) at cell centers
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(ᶜϵ))
-    # Compute local viscosity (kinematic) at cell faces
-    ᶠνₜ = @. ᶠinterp(ᶜνₜ)
-    @. ᶜD = 3 * ᶜνₜ
-
-    # Smagorinsky Operators #
-
-    ρτ = @. -2 * ᶠinterp(Y.c.ρ) * ᶠνₜ * ᶠϵ
-    ρτc = @. -2 * Y.c.ρ * ᶜνₜ * ᶜϵ
-
-    ρτ11 = ρτ.components.data.:1
-    ρτ12 = ρτ.components.data.:4
-    ρτ13 = ρτ.components.data.:7
-    ρτ22 = ρτ.components.data.:5
-    ρτ23 = ρτ.components.data.:8
-    ρτ33 = ρτ.components.data.:9
-
-    # Assert stress tensor symmetry. 
-    ρτc11 = ρτc.components.data.:1
-    ρτc12 = ρτc.components.data.:4
-    ρτc13 = ρτc.components.data.:7
-    ρτc22 = ρτc.components.data.:5
-    ρτc23 = ρτc.components.data.:8
-    ρτc33 = ρτc.components.data.:9
-
-    @. Yₜ.c.uₕ.components.data.:1 -= hgrad(ρτc11).components.data.:1 / Y.c.ρ
-    @. Yₜ.c.uₕ.components.data.:1 -= hgrad(ρτc12).components.data.:2 / Y.c.ρ
-    
-    @. Yₜ.c.uₕ.components.data.:2 -= hgrad(ρτc12).components.data.:1 / Y.c.ρ
-    @. Yₜ.c.uₕ.components.data.:2 -= hgrad(ρτc22).components.data.:2 / Y.c.ρ
-    
-    @. Yₜ.f.u₃.components.data.:1 -= hgrad(ρτ13).components.data.:1 / ᶠinterp(Y.c.ρ)
-    @. Yₜ.f.u₃.components.data.:1 -= hgrad(ρτ23).components.data.:2 / ᶠinterp(Y.c.ρ)
+    @. Yₜ.c.uₕ -= @. wdivₕ(S₃)
     
     # energy adjustment
     (; ᶜspecific) = p.precomputed
