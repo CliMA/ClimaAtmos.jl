@@ -12,8 +12,19 @@ if !(@isdefined config)
     config = CA.AtmosConfig()
 end
 simulation = CA.get_simulation(config)
+
+using CUDA
+import ClimaComms
+if config.comms_ctx.device isa ClimaComms.CUDADevice
+    @info "Memory usage: $(CUDA.memory_status())"
+end
+
 (; integrator) = simulation
 sol_res = CA.solve_atmos!(simulation)
+if config.comms_ctx.device isa ClimaComms.CUDADevice
+    @info "Memory usage: $(CUDA.memory_status())"
+end
+
 
 (; atmos, params) = integrator.p
 (; p) = integrator
@@ -24,7 +35,6 @@ import ClimaAtmos.InitialConditions as ICs
 using Statistics: mean
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
-import ClimaComms
 using SciMLBase
 using PrettyTables
 import DiffEqCallbacks as DECB
@@ -287,4 +297,8 @@ if ClimaComms.iamroot(config.comms_ctx)
         endswith(f, r"nc|hdf5|h5") && rm(joinpath(simulation.output_dir, f))
     end
     @info "Tarballs created"
+end
+
+if config.comms_ctx.device isa ClimaComms.CUDADevice
+    @info "Memory usage: $(CUDA.memory_status())"
 end
