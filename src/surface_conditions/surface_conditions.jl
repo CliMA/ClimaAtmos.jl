@@ -27,14 +27,9 @@ function update_surface_conditions!(Y, p, t)
     wrapped_sfc_setup = sfc_setup_wrapper(sfc_setup)
     sfc_temp_var =
         p.atmos.surface_model isa PrognosticSurfaceTemperature ?
-        (; sfc_prognostic_temp = Fields.field_values(Y.sfc.T)) : (;)
+        Fields.field_values(Y.sfc.T) : nothing
     @. sfc_conditions_values = surface_state_to_conditions(
-        surface_state(
-            wrapped_sfc_setup,
-            sfc_local_geometry_values,
-            int_z_values,
-            t,
-        ),
+        wrapped_sfc_setup,
         sfc_local_geometry_values,
         int_ts_values,
         projected_vector_data(CT1, int_u_values, int_local_geometry_values),
@@ -43,7 +38,8 @@ function update_surface_conditions!(Y, p, t)
         thermo_params,
         surface_params,
         atmos,
-        sfc_temp_var...,
+        sfc_temp_var,
+        t,
     )
     return nothing
 end
@@ -133,7 +129,7 @@ ifelsenothing(x::Nothing, default) = default
 
 """
     surface_state_to_conditions(
-        surface_state,
+        wrapped_sfc_setup,
         surface_local_geometry,
         interior_ts,
         interior_u,
@@ -142,14 +138,15 @@ ifelsenothing(x::Nothing, default) = default
         thermo_params,
         surface_params,
         atmos,
-        sfc_prognostic_temp, (default = nothing)
+        sfc_prognostic_temp,
+        t,
     )
 
 Computes the surface conditions, given information about the surface and the
 first interior point. Implements the assumptions listed for `SurfaceState`.
 """
 function surface_state_to_conditions(
-    surface_state,
+    wrapped_sfc_setup,
     surface_local_geometry,
     interior_ts,
     interior_u,
@@ -158,34 +155,37 @@ function surface_state_to_conditions(
     thermo_params,
     surface_params,
     atmos,
-    sfc_prognostic_temp = nothing,
+    sfc_prognostic_temp,
+    t,
 )
-    (; parameterization, p, q_vap) = surface_state
+    surf_state =
+        surface_state(wrapped_sfc_setup, surface_local_geometry, interior_z, t)
+    parameterization = surf_state.parameterization
     (; coordinates) = surface_local_geometry
     FT = eltype(thermo_params)
 
-    (!isnothing(q_vap) && atmos.moisture_model isa DryModel) &&
+    (!isnothing(surf_state.q_vap) && atmos.moisture_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
     T = if isnothing(sfc_prognostic_temp)
-        if isnothing(surface_state.T) && (
+        if isnothing(surf_state.T) && (
             coordinates isa Geometry.LatLongZPoint ||
             coordinates isa Geometry.LatLongPoint
         )
             surface_temperature(atmos.sfc_temperature, coordinates)
-        elseif isnothing(surface_state.T)
+        elseif isnothing(surf_state.T)
             # Assume that the latitude is 0.
             FT(300)
         else
-            surface_state.T
+            surf_state.T
         end
     else
         sfc_prognostic_temp
     end
-    u = ifelsenothing(surface_state.u, FT(0))
-    v = ifelsenothing(surface_state.v, FT(0))
+    u = ifelsenothing(surf_state.u, FT(0))
+    v = ifelsenothing(surf_state.v, FT(0))
 
-    if isnothing(p)
+    if isnothing(surf_state.p)
         # Assume an adiabatic profile with constant cv and R above the surface.
         cv = TD.cv_m(thermo_params, interior_ts)
         R = TD.gas_constant_air(thermo_params, interior_ts)
@@ -195,28 +195,31 @@ function surface_state_to_conditions(
         if atmos.moisture_model isa DryModel
             ts = TD.PhaseDry_ρT(thermo_params, ρ, T)
         else
-            if isnothing(q_vap)
-                # Assume that the surface is water with saturated air directly
-                # above it.
-                phase = TD.Liquid()
-                q_vap = TD.q_vap_saturation_generic(thermo_params, T, ρ, phase)
-            end
+            # Assume that the surface is water with saturated air directly
+            # above it.
+            q_vap_sat =
+                TD.q_vap_saturation_generic(thermo_params, T, ρ, TD.Liquid())
+            q_vap = ifelsenothing(surf_state.q_vap, q_vap_sat)
             q = TD.PhasePartition(q_vap)
             ts = TD.PhaseNonEquil_ρTq(thermo_params, ρ, T, q)
         end
     else
+        p = surf_state.p
         if atmos.moisture_model isa DryModel
             ts = TD.PhaseDry_pT(thermo_params, p, T)
         else
-            if isnothing(q_vap)
+            q_vap = if isnothing(surf_state.q_vap)
                 # Assume that the surface is water with saturated air directly
                 # above it.
                 phase = TD.Liquid()
-                p_sat = TD.saturation_vapor_pressure(thermo_params, T, phase)
+                p_sat =
+                    TD.saturation_vapor_pressure(thermo_params, T, phase)
                 ϵ_v =
                     TD.Parameters.R_d(thermo_params) /
                     TD.Parameters.R_v(thermo_params)
-                q_vap = ϵ_v * p_sat / (p - p_sat * (1 - ϵ_v))
+                ϵ_v * p_sat / (p - p_sat * (1 - ϵ_v))
+            else
+                surf_state.q_vap
             end
             q = TD.PhasePartition(q_vap)
             ts = TD.PhaseNonEquil_pTq(thermo_params, p, T, q)
@@ -231,8 +234,8 @@ function surface_state_to_conditions(
     )
 
     if parameterization isa ExchangeCoefficients
-        gustiness = ifelsenothing(surface_state.gustiness, FT(1))
-        beta = ifelsenothing(surface_state.beta, FT(1))
+        gustiness = ifelsenothing(surf_state.gustiness, FT(1))
+        beta = ifelsenothing(surf_state.beta, FT(1))
         inputs = SF.Coefficients(
             interior_values,
             surface_values,
@@ -243,8 +246,8 @@ function surface_state_to_conditions(
         )
     elseif parameterization isa MoninObukhov
         if isnothing(parameterization.fluxes)
-            gustiness = ifelsenothing(surface_state.gustiness, FT(1))
-            beta = ifelsenothing(surface_state.beta, FT(1))
+            gustiness = ifelsenothing(surf_state.gustiness, FT(1))
+            beta = ifelsenothing(surf_state.beta, FT(1))
             isnothing(parameterization.ustar) || error(
                 "ustar cannot be specified when surface fluxes are prescribed",
             )
@@ -278,7 +281,7 @@ function surface_state_to_conditions(
                 shf = θ_flux * ρ * TD.cp_m(thermo_params, ts)
                 lhf = q_flux * ρ * TD.latent_heat_vapor(thermo_params, ts)
             end
-            if isnothing(surface_state.gustiness)
+            if isnothing(surf_state.gustiness)
                 buoyancy_flux = SF.compute_buoyancy_flux(
                     surface_params,
                     shf,
@@ -292,9 +295,9 @@ function surface_state_to_conditions(
                 # always 1000 meters. This needs to be adjusted for deep
                 # convective cases like TRMM.
             else
-                gustiness = surface_state.gustiness
+                gustiness = surf_state.gustiness
             end
-            isnothing(surface_state.beta) || error(
+            isnothing(surf_state.beta) || error(
                 "beta cannot be specified when surface fluxes are prescribed",
             )
             if isnothing(parameterization.ustar)
