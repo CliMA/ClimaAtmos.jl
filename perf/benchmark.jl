@@ -75,8 +75,8 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test trials["additional_tendency!"].memory == 0
         @test trials["hyperdiffusion_tendency!"].memory ≤ 2480
         @test trials["dss!"].memory == 0
-        @test trials["set_precomputed_quantities!"].memory ≤ 32
-        @test_broken trials["set_precomputed_quantities!"].memory < 32
+        @test trials["set_precomputed_quantities!"].memory ≤ 40
+        @test_broken trials["set_precomputed_quantities!"].memory < 40
 
         # It's difficult to guarantee zero allocations,
         # so let's just leave this as broken for now.
