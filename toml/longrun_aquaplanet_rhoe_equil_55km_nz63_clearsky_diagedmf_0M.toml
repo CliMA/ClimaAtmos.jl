@@ -2,7 +2,6 @@
 value = 35000.0
 
 [alpha_rayleigh_uh]
-alias = "alpha_rayleigh_uh"
 value = 0.0
 
 [precipitation_timescale]
