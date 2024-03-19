@@ -7,7 +7,7 @@ z_elem: 63
 dz_bottom: 30.0
 dz_top: 3000.0
 moist: equil
-precip_model: 0M
+precip_model: 1M
 rad: allskywithclear
 idealized_insolation: false
 dt_rad: 1hours

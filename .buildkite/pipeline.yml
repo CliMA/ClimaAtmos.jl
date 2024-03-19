@@ -682,7 +682,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: "GPU: gpu_aquaplanet_dyamond"
+      - label: ":umbrella: GPU: gpu_aquaplanet_dyamond"
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
@@ -698,15 +698,6 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $GPU_CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
         artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/*"
-        agents:
-          slurm_gpus: 1
-          slurm_mem: 20G
-
-      - label: ":umbrella: GPU: Aquaplanet clearsky radiation and 1M microphysics"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_clearsky_1M.yml
-        artifact_paths: "gpu_aquaplanet_clearsky_1M/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
