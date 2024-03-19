@@ -1,11 +1,22 @@
 
-NVTX.@annotate function remaining_tendency!(Yₜ, Y, p, t)
-    fill_with_nans!(p)
-    Yₜ .= zero(eltype(Yₜ))
-    NVTX.@range "horizontal" color = colorant"orange" begin
-        horizontal_advection_tendency!(Yₜ, Y, p, t)
-        hyperdiffusion_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    if p.do_dss && !isnothing(p.atmos.hyperdiff)
+        pairs = dss_hyperdiffusion_tendency_pairs(p)
+        Spaces.weighted_dss!(pairs...)
     end
+    apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+end
+
+NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    Yₜ_lim .= zero(eltype(Yₜ_lim))
+    Yₜ .= zero(eltype(Yₜ))
+    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+    fill_with_nans!(p)
+    horizontal_advection_tendency!(Yₜ, Y, p, t)
+    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
     return Yₜ
@@ -63,6 +74,14 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
         )
         edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        edmfx_velocity_relaxation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.turbconv_model,
+        )
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_precipitation_tendency!(
             Yₜ,
@@ -81,6 +100,10 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         # NOTE: This will zero out all momentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
+
+        # NOTE: This will zero out all grid-scale tendencies in the simple edmfx test
+        # please DO NOT add additional grid-scale tendencies after this function
+        zero_gridscale_tendency!(Yₜ, Y, p, t, colidx)
     end
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(

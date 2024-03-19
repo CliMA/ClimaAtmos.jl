@@ -332,11 +332,13 @@ Base.@kwdef struct AtmosModel{
     LA,
     EC,
     AT,
+    GT,
     EEM,
     EDM,
     ESMF,
     ESDF,
     ENP,
+    EVR,
     TCM,
     NOGW,
     OGW,
@@ -348,6 +350,7 @@ Base.@kwdef struct AtmosModel{
     RS,
     ST,
     SM,
+    SA,
     NUM,
 }
     model_config::MC = nothing
@@ -361,11 +364,13 @@ Base.@kwdef struct AtmosModel{
     ls_adv::LA = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
+    gs_tendency::GT = nothing
     edmfx_entr_model::EEM = nothing
     edmfx_detr_model::EDM = nothing
     edmfx_sgs_mass_flux::ESMF = nothing
     edmfx_sgs_diffusive_flux::ESDF = nothing
     edmfx_nh_pressure::ENP = nothing
+    edmfx_velocity_relaxation::EVR = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
@@ -377,6 +382,7 @@ Base.@kwdef struct AtmosModel{
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing
+    surface_albedo::SA = nothing
     numerics::NUM = nothing
 end
 

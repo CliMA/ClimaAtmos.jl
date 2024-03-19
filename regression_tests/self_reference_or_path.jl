@@ -14,6 +14,9 @@ function sorted_dataset_folder(; dir = pwd())
 end
 
 function self_reference_or_path()
+    if get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
+        return :self_reference
+    end
 
     # Note: cluster_data_prefix is also defined in move_output.jl
     cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
@@ -86,7 +89,7 @@ function get_main_branch_buildkite_path()
     # TODO: Combine this method with `self_reference_or_path`, above.
     cluster_data_prefix = "/central/scratch/esm/slurm-buildkite/climaatmos-main"
     if !ispath(cluster_data_prefix)
-        if haskey(ENV, "BUILDKITE_COMMIT") || haskey(ENV, "BUILDKITE_BRANCH")
+        if get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) == "climaatmos-ci"
             error("No path found for comparison against main")
         else
             @warn "Buildkite reference data is not available locally; skipping \

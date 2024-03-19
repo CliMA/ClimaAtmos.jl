@@ -2,9 +2,10 @@ using NCDatasets
 using Dates
 using Interpolations
 using Statistics
-using Plots
 import ClimaAtmos
 import ClimaAtmos as CA
+
+include("../gw_plotutils.jl")
 
 const FT = Float64
 # single column test Figure 6 of the Alexander and Dunkerton (1999) paper:
@@ -147,13 +148,14 @@ Jan_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c0,
     params.gw_nk,
 )
-png(
-    plot(
-        Jan_uforcing[source_level:(end - 1)] * 86400,
-        center_z[source_level:(end - 1)],
-    ),
-    joinpath(output_dir, "fig6jan.png"),
+fig = generate_empty_figure();
+create_plot!(
+    fig;
+    X = Jan_uforcing[source_level:(end - 1)] * 86400,
+    Y = center_z[source_level:(end - 1)],
+    label = "Jan",
 )
+CairoMakie.save(joinpath(output_dir, "fig6jan.png"), fig)
 
 # April
 April_u = mean(center_u_mean[:, month .== 4], dims = 2)[:, 1]
@@ -176,13 +178,14 @@ April_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c0,
     params.gw_nk,
 )
-png(
-    plot(
-        April_uforcing[source_level:(end - 1)] * 86400,
-        center_z[source_level:(end - 1)],
-    ),
-    joinpath(output_dir, "fig6apr.png"),
+fig = generate_empty_figure();
+create_plot!(
+    fig;
+    X = April_uforcing[source_level:(end - 1)] * 86400,
+    Y = center_z[source_level:(end - 1)],
+    label = "Apr",
 )
+CairoMakie.save(joinpath(output_dir, "fig6apr.png"), fig)
 
 # July
 July_u = mean(center_u_mean[:, month .== 7], dims = 2)[:, 1]
@@ -205,13 +208,14 @@ July_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c0,
     params.gw_nk,
 )
-png(
-    plot(
-        July_uforcing[source_level:(end - 1)] * 86400,
-        center_z[source_level:(end - 1)],
-    ),
-    joinpath(output_dir, "fig6jul.png"),
+fig = generate_empty_figure();
+create_plot!(
+    fig;
+    X = July_uforcing[source_level:(end - 1)] * 86400,
+    Y = center_z[source_level:(end - 1)],
+    label = "Jul",
 )
+CairoMakie.save(joinpath(output_dir, "fig6jul.png"), fig)
 
 # Oct
 Oct_u = mean(center_u_mean[:, month .== 10], dims = 2)[:, 1]
@@ -234,10 +238,11 @@ Oct_uforcing = CA.non_orographic_gravity_wave_forcing(
     params.gw_c0,
     params.gw_nk,
 )
-png(
-    plot(
-        Oct_uforcing[source_level:(end - 1)] * 86400,
-        center_z[source_level:(end - 1)],
-    ),
-    joinpath(output_dir, "fig6oct.png"),
+fig = generate_empty_figure();
+create_plot!(
+    fig;
+    X = Oct_uforcing[source_level:(end - 1)] * 86400,
+    Y = center_z[source_level:(end - 1)],
+    label = "Oct",
 )
+CairoMakie.save(joinpath(output_dir, "fig6oct.png"), fig)

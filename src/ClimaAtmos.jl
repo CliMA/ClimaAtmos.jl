@@ -28,6 +28,7 @@ include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "precipitation_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "cloud_fraction.jl"))
+include(joinpath("cache", "surface_albedo.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(
@@ -42,6 +43,7 @@ include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
+include(joinpath("prognostic_equations", "zero_gridscale_tendency.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))

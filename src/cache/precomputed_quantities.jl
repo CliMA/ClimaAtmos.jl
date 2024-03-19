@@ -77,6 +77,7 @@ function precomputed_quantities(Y, atmos)
             ᶜuʲs = similar(Y.c, NTuple{n, C123{FT}}),
             ᶠu³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
             ᶜKʲs = similar(Y.c, NTuple{n, FT}),
+            ᶠKᵥʲs = similar(Y.f, NTuple{n, FT}),
             ᶜtsʲs = similar(Y.c, NTuple{n, TST}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),

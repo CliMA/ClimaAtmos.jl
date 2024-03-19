@@ -3,12 +3,12 @@ import ClimaAtmos
 import ClimaAtmos as CA
 using ClimaCore: Fields, Domains, Meshes, Topologies, Spaces, Geometry
 import ClimaComms, Logging
-using Plots
 using Interpolations
 using ClimaCoreTempestRemap
 const FT = Float64
 
-include("../../post_processing/remap/remap_helpers.jl")
+include("../gw_plotutils.jl")
+include("../../../post_processing/remap/remap_helpers.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
 
@@ -126,24 +126,28 @@ ENV["GKSwstype"] = "nul"
 output_dir = "orographic_gravity_wave_test_baseflux"
 mkpath(output_dir)
 
-c1 = contourf(
-    lon,
-    lat,
-    tau_x[:, :, 1]',
-    color = :balance,
-    clim = (-5, 5),
-    title = "ogwd clima (zonal)",
+fig = generate_empty_figure();
+title = "ogwd clima (zonal)"
+create_plot!(
+    fig;
+    X = lon,
+    Y = lat,
+    Z = tau_x[:, :, 1],
+    levels = range(-5, 5; length = 20),
+    title,
+    p_loc = (1, 1),
+    yreversed = false,
 )
-c2 = contourf(
-    lon,
-    lat,
-    tau_y[:, :, 1]',
-    color = :balance,
-    clim = (-1, 1),
-    title = "ogwd clima (meridional)",
+title = "ogwd clima (meridional)"
+create_plot!(
+    fig;
+    X = lon,
+    Y = lat,
+    Z = tau_y[:, :, 1],
+    levels = range(-1, 1; length = 20),
+    title,
+    p_loc = (2, 1),
+    yreversed = false,
 )
-
-p = plot(c1, c2, layout = (1, 2), size = (1500, 800))
-png(p, joinpath(output_dir, "baseflux.png"))
-
+CairoMakie.save(joinpath(output_dir, "baseflux.png"), fig)
 rm(TOPO_DIR; recursive = true)

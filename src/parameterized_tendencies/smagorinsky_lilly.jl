@@ -23,11 +23,11 @@ function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
     ᶜtemp_scalar_3 = similar(Y.c.ρ, FT)
     ᶠtemp_C123 = similar(Y.f, C123{FT})
     ᶜtemp_CT3 = similar(Y.c, CT3{FT})
-
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜshear² = ᶜtemp_scalar
     ᶠu = ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(Y.f.u₃)
+
     ct3_unit = ᶜtemp_CT3
     @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
     @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
@@ -36,7 +36,8 @@ function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
     ᶜD = ᶜtemp_scalar_2
     νₜ = ᶜtemp_scalar_3
     @. νₜ = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
-    return (; νₜ, ᶜD)
+    Δ_filter = @. cbrt(ᶜJ)
+    return (; νₜ, ᶜD, Δ_filter)
 end
 
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
@@ -49,11 +50,13 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     end
 
     (; Cs) = sl
-    (; νₜ, ᶜD) = p.smagorinsky_lilly
+    (; νₜ, ᶜD, Δ_filter) = p.smagorinsky_lilly
     (; ᶜu, ᶠu³) = p.precomputed 
 
-    # momentum balance adjustment
- 
+    # Operators
+    wdivₕ = Operators.WeakDivergence()
+    hgrad = Operators.Gradient()
+
     # Velocity composition onto cell faces #
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
@@ -63,25 +66,22 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     # Compute strain rates
     compute_strain_rate_center!(ᶜϵ, ᶠu)
-    compute_strain_rate_face!(ᶠϵ, ᶜu)
-    Δ = eltype(Cs)(300)
-    ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶜϵ))
-    ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶠϵ))
-    @. ᶜD = 3 * ᶜνₜ
+    #compute_strain_rate_face!(ᶠϵ, ᶜu)
+    @. ᶠϵ = ᶠinterp(ᶜϵ)
     
-    # Smagorinsky Operators #
-    wdivₕ = Operators.WeakDivergence()
-    hgrad = Operators.Gradient()
+    ### ASR START
+    ᶜu = @. C123(Y.c.uₕ) + ᶜinterp(C123(Y.f.u₃))
+    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
+    # Compute local viscosity (kinematic) at cell centers
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(ᶜϵ))
+    # Compute local viscosity (kinematic) at cell faces
+    ᶠνₜ = @. ᶠinterp(ᶜνₜ)
+    @. ᶜD = 3 * ᶜνₜ
 
-    # Compute the 3D Cartesian Components
-    #@. Yₜ.c.uₕ -= -2 * ᶜνₜ * (wgradₕ(divₕ(-Y.c.uₕ)) - C12(wcurlₕ(C3(curlₕ(-Y.c.uₕ)))))
-    #@. Yₜ.f.u₃ -= -2 * ᶠνₜ * (-C3(wcurlₕ(C12(curlₕ(-Y.f.u₃)))))
+    # Smagorinsky Operators #
 
     ρτ = @. -2 * ᶠinterp(Y.c.ρ) * ᶠνₜ * ᶠϵ
     ρτc = @. -2 * Y.c.ρ * ᶜνₜ * ᶜϵ
-
-    @show ᶜνₜ
-    @show ᶠνₜ
 
     ρτ11 = ρτ.components.data.:1
     ρτ12 = ρτ.components.data.:4
@@ -133,7 +133,7 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     end
 
     (; Cs) = sl
-    (; νₜ, ᶜD) = p.smagorinsky_lilly
+    (; νₜ, ᶜD, Δ_filter) = p.smagorinsky_lilly
     (; ᶜspecific, sfc_conditions) = p.precomputed
     (; ᶜu, ᶠu³) = p.precomputed 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
@@ -148,10 +148,9 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     compute_strain_rate_center!(ᶜϵ, ᶠu)
-    compute_strain_rate_face!(ᶠϵ, ᶜu)
-    Δ = eltype(Cs)(300)
-    ᶜνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶜϵ))
-    ᶠνₜ = @. (Cs * Δ)^2 * sqrt(norm_sqr(ᶠϵ))
+    @. ᶠϵ = ᶠinterp(ᶜϵ)
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(ᶜϵ))
+    ᶠνₜ = @. ᶠinterp(ᶜνₜ)
     @. ᶜD = 3 * ᶜνₜ
     
     # Smagorinsky Computations ####

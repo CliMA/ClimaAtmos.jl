@@ -1,5 +1,5 @@
 dt: "120secs"
-t_end: "10days"
+t_end: "36hours"
 h_elem: 16
 z_elem: 63
 dz_bottom: 30.0
@@ -14,9 +14,5 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
-job_id: "longrun_1M"
-toml: [toml/longrun_1M.toml]
-output_default_diagnostics: false
-diagnostics:
-  - short_name: [cl, cli, clw, husra, hussn, ta, hus, hur, lmix]
-    period: 2days
+job_id: "gpu_aquaplanet_clearsky_1M"
+toml: [toml/gpu_aquaplanet_clearsky_1M.toml]

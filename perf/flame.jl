@@ -41,11 +41,11 @@ allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 278360
 allocs_limit["flame_perf_target_tracers"] = 308336
 allocs_limit["flame_perf_target_edmfx"] = 7_005_552
-allocs_limit["flame_perf_diagnostics"] = 108880760
+allocs_limit["flame_perf_diagnostics"] = 10_872_056
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 412056
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
-allocs_limit["flame_perf_target_frierson"] = 4015547056
+allocs_limit["flame_perf_target_frierson"] = 4_015_547_056
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
 allocs_limit["flame_perf_target_callbacks"] = 398984
 allocs_limit["flame_perf_gw"] = 3_268_961_856
