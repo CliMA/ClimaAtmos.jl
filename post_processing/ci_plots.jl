@@ -874,7 +874,7 @@ end
 
 Aquaplanet1MPlots = Union{
     Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
-    Val{:gpu_aquaplanet_clearsky_1M},
+    Val{:gpu_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_clearsky_1M},
 }
 

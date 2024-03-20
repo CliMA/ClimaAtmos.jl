@@ -15,4 +15,4 @@ approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
 job_id: "longrun_aquaplanet_clearsky_1M"
-toml: [toml/gpu_aquaplanet_clearsky_1M.toml]
+toml: [toml/gpu_aquaplanet_dyamond.toml]
