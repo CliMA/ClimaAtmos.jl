@@ -3,7 +3,8 @@ set -euo pipefail
 
 FT="Float32"
 resolutions=("low" "mid" "high")
-process_counts=("1 2 4 8 16 32" "1 2 4 8 16 32 64" "1 2 4 8 16 32 64 128")
+# Process counts for icelake nodes
+process_counts=("1 2 4 7 14 28" "1 2 4 7 14 28 56" "1 2 4 7 14 28 56 112")
 max_procs_per_node=16 # limit this artificially for profiling
 profiling=disable
 exclusive=true
@@ -64,22 +65,18 @@ done
 # set up environment and agents
 cat << 'EOM'
 agents:
-  queue: central
-  modules: julia/1.10.0 cuda/12.2 ucx/1.14.1_cuda-12.2 openmpi/4.1.5_cuda-12.2 nsight-systems/2023.3.1
+  queue: new-central
+  modules: climacommon/2024_02_27
+  # This constraint is set for consistent architectures across nodes
+  slurm_constraint: icelake
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
   OPENBLAS_NUM_THREADS: 1
-  JULIA_NVTX_CALLBACKS: gc
-  OMPI_MCA_opal_warn_on_missing_libcuda: 0
-  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_CPU_TARGET: 'broadwell;skylake;icelake;cascadelake;epyc'
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
-  JULIA_CUDA_MEMORY_POOL: none
-  JULIA_MPI_HAS_CUDA: "true"
-  MPITRAMPOLINE_LIB: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/lib64/libmpiwrapper.so"
-  MPITRAMPOLINE_MPIEXEC: "/groups/esm/software/MPIwrapper/ompi4.1.5_cuda-12.2/bin/mpiwrapperexec"
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_CPU_TARGET: 'broadwell;skylake;icelake;cascadelake;epyc'
 
 steps:
   - label: "init :computer:"
