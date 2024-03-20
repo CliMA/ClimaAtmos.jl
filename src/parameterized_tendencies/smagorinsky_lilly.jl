@@ -58,20 +58,35 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
 
-    ∇u = @. hgrad(Geometry.UVWVector(ᶜu))
+    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
+    ∇u = similar(ᶜϵ)
+
+    @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:1).components.data.:1
+    @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:1).components.data.:2
+    @. ∇u.components.data.:7 = FT(0)
+   
+    @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:2).components.data.:1
+    @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:2).components.data.:2
+    @. ∇u.components.data.:7 = FT(0)
+    
+    @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:3).components.data.:1
+    @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:3).components.data.:2
+    @. ∇u.components.data.:7 = FT(0)
+
     ∇uᵀ = similar(∇u)
     @. ∇uᵀ = Geometry.AxisTensor(Geometry.axes(∇u), transpose(Geometry.components(∇u)))
     S = @. FT(1/2) * (∇u + ∇uᵀ)
     S₃ = @. Geometry.project(Geometry.UVWAxis(), S)
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     compute_strain_rate_center!(ᶜϵ, ᶠu)
     S_full = @. S₃ + ᶜϵ
     ᶠS_full = @. ᶠinterp(S_full)
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(S_full))
+    ᶠνₜ = @. ᶠinterp(ᶜνₜ)
     
-    @. Yₜ.c.uₕ -= @. C12(wdivₕ(S_full))
-    @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠS_full))
+    @. Yₜ.c.uₕ -= @. C12(wdivₕ(ᶜνₜ * S_full))
+    @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠνₜ * ᶠS_full))
 
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -104,18 +119,28 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     (; ᶜu, ᶠu³) = p.precomputed 
     ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
     
+    wdivₕ = Operators.WeakDivergence()
+    hgrad = Operators.Gradient()
+    
     ρ_flux_χ = p.scratch.ᶜtemp_scalar
 
     FT = eltype(Y)
     
     # Smagorinsky Computations ####
+    ∇u = @. hgrad(Geometry.UVWVector(ᶜu))
+    ∇uᵀ = similar(∇u)
+    @. ∇uᵀ = Geometry.AxisTensor(Geometry.axes(∇u), transpose(Geometry.components(∇u)))
+    S = @. FT(1/2) * (∇u + ∇uᵀ)
+    S₃ = @. Geometry.project(Geometry.UVWAxis(), S)
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     compute_strain_rate_center!(ᶜϵ, ᶠu)
     @. ᶠϵ = ᶠinterp(ᶜϵ)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(ᶜϵ))
+    S_full = @. S₃ + ᶜϵ
+    ᶠS_full = @. ᶠinterp(S_full)
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(norm_sqr(S_full))
     ᶠνₜ = @. ᶠinterp(ᶜνₜ)
     @. ᶜD = 3 * ᶜνₜ
     
