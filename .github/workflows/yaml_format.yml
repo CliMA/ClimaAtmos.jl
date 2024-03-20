@@ -27,7 +27,7 @@ jobs:
         git diff --exit-code  # Check for changes after formatting
       id: check_changes
     - name: Add formatting changes, push
-      if: steps.check_changes.outputs != 0  # Check exit code of previous step (0 means no changes)
+      if: steps.check_changes.outputs == 1
       run: |
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git config --global user.name "GitHub Actions"
