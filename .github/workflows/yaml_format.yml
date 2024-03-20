@@ -1,18 +1,36 @@
-name: YAML Lint
-on: [push]  # yamllint disable-line rule:truthy
+name: Format YAML
+
+on:
+  pull_request:
+  push:
+    branches:
+      - '!main'  # excludes main
+  merge_group:
+
 jobs:
-  config:
+  format:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
-      - name: yaml-lint
-        uses: ibiqlik/action-yamllint@v3
-        with:
-          file_or_dir: config
-          strict: true
-          # Ignore warning 
-          config_data: |
-            extends: default
-            rules:
-              document-start: disable
-              line-length: disable
+    - uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21.x'
+    - name: Install dependencies
+      run: |
+        go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+    - name: Format YAML files
+      run: yamlfmt config
+    - name: Check for changes after formatting
+      run: |
+        git diff --exit-code  # Check for changes after formatting
+      id: check_changes
+    - name: Add formatting changes, push
+      if: steps.check_changes.outputs == 0  # Check exit code of previous step (0 means no changes)
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "GitHub Actions"
+        git add .
+        git commit -m "Automatic YAML formatting"
+        git push origin ${{ github.head_ref }}
