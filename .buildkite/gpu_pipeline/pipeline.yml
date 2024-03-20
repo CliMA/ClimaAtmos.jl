@@ -236,9 +236,9 @@ steps:
   - group: "Diagnostic EDMF GPU"
     steps:
 
-      - label: "gpu_aquaplanet_chap - 1 GPU"
+      - label: "gpu_aquaplanet_diagedmf - 1 GPU"
         command:
-          - mkdir -p gpu_aquaplanet_chap
+          - mkdir -p gpu_aquaplanet_diagedmf
           - >
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_diagedmf.yml
