@@ -58,14 +58,21 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
 
-    ∇u = @. hgrad(ᶜu)
+    ∇u = @. hgrad(Geometry.UVWVector(ᶜu))
     ∇uᵀ = similar(∇u)
-    @. ∇u= CC.Geometry.AxisTensor(CC.Geometry.axes(∇u), transpose(CC.Geometry.components(∇u)))
+    @. ∇uᵀ = Geometry.AxisTensor(Geometry.axes(∇u), transpose(Geometry.components(∇u)))
     S = @. FT(1/2) * (∇u + ∇uᵀ)
-    S₃ = @. CC.Geometry.project(CC.Geometry.UVWAxis(), S)
+    S₃ = @. Geometry.project(Geometry.UVWAxis(), S)
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
+    compute_strain_rate_center!(ᶜϵ, ᶠu)
+    S_full = @. S₃ + ᶜϵ
+    ᶠS_full = @. ᶠinterp(S_full)
     
-    @. Yₜ.c.uₕ -= @. wdivₕ(S₃)
-    
+    @. Yₜ.c.uₕ -= @. C12(wdivₕ(S_full))
+    @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠS_full))
+
     # energy adjustment
     (; ᶜspecific) = p.precomputed
 

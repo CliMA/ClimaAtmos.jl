@@ -66,7 +66,7 @@ import Thermodynamics as TD
     # Then, if ᶜϵ is known, we can compute 
     # the S₃ complete strain-rate tensor, and then take its 
     # divergence such that we can add it to the tendency terms.
-    divS = @. wdiv(S)
+    divS = @. wdiv(S₃)
 
 
     ### Component test begins here
