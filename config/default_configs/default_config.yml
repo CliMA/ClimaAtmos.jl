@@ -274,3 +274,6 @@ log_progress:
 deep_atmosphere:
   help: "Do not assume that the atmosphere is shallow, where the vertical columns are cylindrical"
   value: false
+restart_file:
+  help: "Path to HDF5 file to use as simulation starting point"
+  value: ~

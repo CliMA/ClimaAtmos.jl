@@ -296,9 +296,11 @@ function get_spaces_restart(Y)
     return (; center_space, face_space)
 end
 
-function get_state_restart(comms_ctx)
-    @assert haskey(ENV, "RESTART_FILE")
-    reader = InputOutput.HDF5Reader(ENV["RESTART_FILE"], comms_ctx)
+function get_state_restart(config::AtmosConfig)
+    (; parsed_args, comms_ctx) = config
+    restart_file = parsed_args["restart_file"]
+    @assert !isnothing(restart_file)
+    reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
     return (Y, t_start)
@@ -472,7 +474,7 @@ function get_sim_info(config::AtmosConfig)
 
     sim = (;
         output_dir,
-        restart = haskey(ENV, "RESTART_FILE"),
+        restart = !isnothing(parsed_args["restart_file"]),
         job_id,
         dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
@@ -723,9 +725,8 @@ function get_simulation(config::AtmosConfig)
 
     if sim_info.restart
         s = @timed_str begin
-            (Y, t_start) = get_state_restart(config.comms_ctx)
+            (Y, t_start) = get_state_restart(config)
             spaces = get_spaces_restart(Y)
-            @warn "Progress estimates do not support restarted simulations"
         end
         @info "Allocating Y: $s"
     else
