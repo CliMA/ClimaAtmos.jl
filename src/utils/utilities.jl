@@ -326,6 +326,19 @@ macro timed_str(ex)
     end
 end
 
+"""
+    dump_string(x)
+
+Returns a string that contains the output of `dump(x)`.
+"""
+function dump_string(x)
+    buffer = IOBuffer()
+    dump(buffer, x)
+    result = String(take!(buffer))
+    close(buffer)
+    return result
+end
+
 struct AllNothing end
 const all_nothing = AllNothing()
 Base.getproperty(::AllNothing, ::Symbol) = nothing

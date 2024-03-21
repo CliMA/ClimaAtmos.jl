@@ -1,9 +1,7 @@
-vert_diff: "FriersonDiffusion"
-pproximate_linear_solve_iters: 2
-use_krylov_method: true
-use_dynamic_krylov_rtol: false
-krylov_rtol: 0.99
 precip_model: "0M"
+vert_diff: "FriersonDiffusion"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 z_elem: 20
 dz_bottom: 100
 dt_save_state_to_disk: "12hours"

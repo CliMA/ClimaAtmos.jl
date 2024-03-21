@@ -326,6 +326,24 @@ function gc_func(integrator)
     return nothing
 end
 
+function update_exact_jacobian!(integrator)
+    integrator.alg.name isa CTS.IMEXARKAlgorithmName || return
+    tableau_coefficients = LinearAlgebra.diag(integrator.alg.tableau.a_imp)
+    γs = unique(filter(!iszero, tableau_coefficients))
+    length(γs) == 1 ||
+        error("The exact Jacobian must be updated on every Newton iteration, \
+               rather than on every timestep (or every N steps), because the \
+               specified IMEX algorithm has implicit stages with distinct \
+               tableau coefficients (i.e., it is not an SDIRK algorithm).")
+    update_exact_jacobian!(
+        integrator.cache.newtons_method_cache.j,
+        integrator.u,
+        integrator.p,
+        integrator.dt * γs[1],
+        integrator.t,
+    )
+end
+
 """
     maybe_graceful_exit(integrator)
 

@@ -52,15 +52,9 @@ end
 
 Returns the total energy source term multiplier from precipitation formation
 """
-function e_tot_0M_precipitation_sources_helper(
-    t_prs,
-    ts,
-    Φ::FT,
-) where {FT <: Real}
-
-    λ::FT = TD.liquid_fraction(t_prs, ts)
-    I_l::FT = TD.internal_energy_liquid(t_prs, ts)
-    I_i::FT = TD.internal_energy_ice(t_prs, ts)
-
+function e_tot_0M_precipitation_sources_helper(t_prs, ts, Φ)
+    λ = TD.liquid_fraction(t_prs, ts)
+    I_l = TD.internal_energy_liquid(t_prs, ts)
+    I_i = TD.internal_energy_ice(t_prs, ts)
     return λ * I_l + (1 - λ) * I_i + Φ
 end

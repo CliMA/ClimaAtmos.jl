@@ -89,6 +89,15 @@ eisenstat_walker_forcing_alpha:
 jvp_step_adjustment:
   help: "Amount by which the step size of the forward difference approximation of the Jacobian-vector product in the Krylov method should be scaled (only used if `use_krylov_method` is `true`)"
   value: 1.0
+use_exact_jacobian:
+  help: "Whether to solve the linear system using the exact Jacobian, which is computed with forward-mode automatic differentiation (default is `false`)"
+  value: true
+n_steps_update_exact_jacobian:
+  help: "Number of timesteps between updates to the exact Jacobian (default is 0, which corresponds to updating the exact Jacobian on each Newton iteration)"
+  value: 0
+debug_approximate_jacobian:
+  help: "Whether to check the accuracy of the approximate Jacobian against the exact Jacobian every `n_steps_update_exact_jacobian` timesteps (default is `false`)"
+  value: false
 # Radiation
 rad:
   help: "Radiation model [`nothing` (default), `gray`, `clearsky`, `allsky`, `allskywithclear`]"

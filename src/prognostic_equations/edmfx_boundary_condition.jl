@@ -4,8 +4,8 @@
 
 function sgs_scalar_first_interior_bc(
     ᶜz_int::FT,
-    ᶜρ_int::FT,
-    ᶜscalar_int::FT,
+    ᶜρ_int,
+    ᶜscalar_int,
     sfc_buoyancy_flux,
     sfc_ρ_flux_scalar,
     ustar,
@@ -32,9 +32,9 @@ end
 
 function get_first_interior_variance(
     flux,
-    ustar::FT,
+    ustar,
     z::FT,
-    oblength::FT,
+    oblength,
     local_geometry,
 ) where {FT}
     c_star = -flux / ustar

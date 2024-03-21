@@ -64,6 +64,19 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
     callbacks =
         (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
 
+    if (
+        parsed_args["use_exact_jacobian"] ||
+        parsed_args["debug_approximate_jacobian"]
+    ) && parsed_args["n_steps_update_exact_jacobian"] != 0
+        callbacks = (
+            callbacks...,
+            call_every_n_steps(
+                update_exact_jacobian!,
+                parsed_args["n_steps_update_exact_jacobian"],
+            ),
+        )
+    end
+
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         # TODO: better if-else criteria?
         dt_rad = if parsed_args["config"] == "column"

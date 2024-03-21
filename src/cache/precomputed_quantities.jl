@@ -303,14 +303,14 @@ end
 function eddy_diffusivity_coefficient(
     z::FT,
     z₀,
-    f_b::FT,
-    h::FT,
+    f_b,
+    h,
     uₐ,
-    C_E::FT,
-    Ri::FT,
-    Ri_a::FT,
-    Ri_c::FT,
-    κ::FT,
+    C_E,
+    Ri,
+    Ri_a,
+    Ri_c,
+    κ,
 ) where {FT}
     # Equations (17), (18)
     if z < f_b * h
@@ -384,12 +384,12 @@ end
 
 function compute_surface_layer_diffusivity(
     z::FT,
-    z₀::FT,
-    κ::FT,
-    C_E::FT,
-    Ri::FT,
-    Ri_a::FT,
-    Ri_c::FT,
+    z₀,
+    κ,
+    C_E,
+    Ri,
+    Ri_a,
+    Ri_c,
     norm_uₐ,
 ) where {FT}
     # Equations (19), (20)
@@ -560,7 +560,9 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         )
 
         #### Detect 𝒽, boundary layer height per column
-        h_boundary_layer = f_b .* Fields.level(ᶜz, Spaces.nlevels(axes(Y.c)))
+        z_top = Fields.level(ᶜz, Spaces.nlevels(axes(Y.c)))
+        Fields.field_values(h_boundary_layer) .=
+            f_b .* Fields.field_values(z_top)
         compute_boundary_layer_height!(
             h_boundary_layer,
             f_b,
@@ -572,7 +574,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
 
         ## Exchange coefficients
         @. C_E =
-            compute_exchange_coefficient(Ri_a, Ri_c, ᶜΔz_surface ./ 2, z₀, κ)
+            compute_exchange_coefficient(Ri_a, Ri_c, ᶜΔz_surface / 2, z₀, κ)
         @. ᶜK_h = eddy_diffusivity_coefficient(
             dz_local,
             z₀,

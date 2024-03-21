@@ -10,6 +10,7 @@ import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DECB
+import DiffEqBase: KeywordArgSilent
 
 function get_atmos(config::AtmosConfig, params)
     (; turbconv_params) = params
@@ -354,55 +355,29 @@ function get_surface_setup(parsed_args)
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
-is_explicit_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.ERKAlgorithmName
-
-is_imex_CTS_algo_type(alg_or_tableau) =
-    alg_or_tableau <: CTS.IMEXARKAlgorithmName
-
-is_implicit_type(alg_or_tableau) = is_imex_CTS_algo_type(alg_or_tableau)
-
-is_imex_CTS_algo(::CTS.IMEXAlgorithm) = true
-is_imex_CTS_algo(::SciMLBase.AbstractODEAlgorithm) = false
-
-is_implicit(ode_algo) = is_imex_CTS_algo(ode_algo)
-
-is_rosenbrock(::SciMLBase.AbstractODEAlgorithm) = false
-use_transform(ode_algo) =
-    !(is_imex_CTS_algo(ode_algo) || is_rosenbrock(ode_algo))
-
-additional_integrator_kwargs(::SciMLBase.AbstractODEAlgorithm) = (;
-    adaptive = false,
-    progress = isinteractive(),
-    progress_steps = isinteractive() ? 1 : 1000,
-)
-import DiffEqBase
-additional_integrator_kwargs(::CTS.DistributedODEAlgorithm) = (;
-    kwargshandle = DiffEqBase.KeywordArgSilent, # allow custom kwargs
-    adjustfinal = true,
-    # TODO: enable progress bars in ClimaTimeSteppers
-)
-
-is_cts_algo(::SciMLBase.AbstractODEAlgorithm) = false
-is_cts_algo(::CTS.DistributedODEAlgorithm) = true
-
-function jac_kwargs(ode_algo, Y, atmos, parsed_args)
-    if is_implicit(ode_algo)
-        A = ImplicitEquationJacobian(
-            Y,
-            atmos;
-            approximate_solve_iters = parsed_args["approximate_linear_solve_iters"],
-            transform_flag = use_transform(ode_algo),
-        )
-        if use_transform(ode_algo)
-            return (; jac_prototype = A, Wfact_t = Wfact!)
+jac_kwargs(ode_algo, Y, p, parsed_args) =
+    if ode_algo isa CTS.IMEXAlgorithm
+        use_exact_jacobian = parsed_args["use_exact_jacobian"]
+        always_update_exact_jacobian =
+            parsed_args["n_steps_update_exact_jacobian"] == 0
+        approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
+        jacobian_algorithm = if parsed_args["debug_approximate_jacobian"]
+            DebugJacobian(
+                ApproxJacobian(; approximate_solve_iters);
+                use_exact_jacobian,
+                always_update_exact_jacobian,
+            )
         else
-            return (; jac_prototype = A, Wfact = Wfact!)
+            use_exact_jacobian ?
+            ExactJacobian(; always_update_exact_jacobian) :
+            ApproxJacobian(; approximate_solve_iters)
         end
+        A = ImplicitEquationJacobian(jacobian_algorithm, Y, p)
+        @info "Jacobian algorithm: $(dump_string(jacobian_algorithm))"
+        (; jac_prototype = A, Wfact = update_jacobian!)
     else
-        return NamedTuple()
+        (;)
     end
-end
 
 #=
     ode_configuration(Y, parsed_args)
@@ -411,14 +386,13 @@ Returns the ode algorithm
 =#
 function ode_configuration(::Type{FT}, parsed_args) where {FT}
     ode_name = parsed_args["ode_algo"]
-    alg_or_tableau = getproperty(CTS, Symbol(ode_name))
-    @info "Using ODE config: `$alg_or_tableau`"
+    ode_algo_name = getproperty(CTS, Symbol(ode_name))
+    @info "Using ODE config: `$ode_algo_name`"
 
-    if is_explicit_CTS_algo_type(alg_or_tableau)
-        return CTS.ExplicitAlgorithm(alg_or_tableau())
-    elseif !is_implicit_type(alg_or_tableau)
-        return alg_or_tableau()
-    elseif is_imex_CTS_algo_type(alg_or_tableau)
+    if ode_algo_name <: CTS.ERKAlgorithmName
+        return CTS.ExplicitAlgorithm(ode_algo_name())
+    else
+        @assert ode_algo_name <: CTS.IMEXARKAlgorithmName
         newtons_method = CTS.NewtonsMethod(;
             max_iters = parsed_args["max_newton_iters_ode"],
             krylov_method = if parsed_args["use_krylov_method"]
@@ -447,9 +421,7 @@ function ode_configuration(::Type{FT}, parsed_args) where {FT}
                 nothing
             end,
         )
-        return CTS.IMEXAlgorithm(alg_or_tableau(), newtons_method)
-    else
-        return alg_or_tableau(; linsolve = linsolve!)
+        return CTS.IMEXAlgorithm(ode_algo_name(), newtons_method)
     end
 end
 
@@ -629,29 +601,25 @@ function get_diagnostics(parsed_args, atmos_model, cspace)
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
-    (; atmos, dt) = p
+    (; dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
 
     s = @timed_str begin
         func = if parsed_args["split_ode"]
             implicit_func = SciMLBase.ODEFunction(
                 implicit_tendency!;
-                jac_kwargs(ode_algo, Y, atmos, parsed_args)...,
+                jac_kwargs(ode_algo, Y, p, parsed_args)...,
                 tgrad = (∂Y∂t, Y, p, t) -> (∂Y∂t .= 0),
             )
-            if is_cts_algo(ode_algo)
-                CTS.ClimaODEFunction(;
-                    T_exp_T_lim! = remaining_tendency!,
-                    T_imp! = implicit_func,
-                    # Can we just pass implicit_tendency! and jac_prototype etc.?
-                    lim! = limiters_func!,
-                    dss!,
-                    post_explicit! = set_precomputed_quantities!,
-                    post_implicit! = set_precomputed_quantities!,
-                )
-            else
-                SciMLBase.SplitFunction(implicit_func, remaining_tendency!)
-            end
+            CTS.ClimaODEFunction(;
+                T_exp_T_lim! = remaining_tendency!,
+                T_imp! = implicit_func,
+                # Can we just pass implicit_tendency! and jac_prototype etc.?
+                lim! = limiters_func!,
+                dss!,
+                post_explicit! = set_precomputed_quantities!,
+                post_implicit! = set_precomputed_quantities!,
+            )
         else
             remaining_tendency! # should be total_tendency!
         end
@@ -667,7 +635,13 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     end # ensure that tspan[2] is always saved
     @info "dt_save_to_sol: $dt_save_to_sol, length(saveat): $(length(saveat))"
     args = (problem, ode_algo)
-    kwargs = (; saveat, callback, dt, additional_integrator_kwargs(ode_algo)...)
+    kwargs = (;
+        saveat,
+        callback,
+        dt,
+        kwargshandle = KeywordArgSilent, # allow custom kwargs
+        adjustfinal = true,
+    )
     return (args, kwargs)
 end
 
