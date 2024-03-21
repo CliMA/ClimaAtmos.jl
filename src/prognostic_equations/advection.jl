@@ -217,15 +217,13 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶜa_scalar = p.scratch.ᶜtemp_scalar
     ᶜu₃ʲ = p.scratch.ᶜtemp_C3
     ᶜKᵥʲ = p.scratch.ᶜtemp_scalar_2
-    ᶜinterp_lb = Operators.LeftBiasedF2C()
-    ᶜinterp_rb = Operators.RightBiasedF2C()
     for j in 1:n
         # TODO: Add a biased GradientF2F operator in ClimaCore
         @. ᶜu₃ʲ[colidx] = ᶜinterp(Y.f.sgsʲs.:($$j).u₃[colidx])
         @. ᶜKᵥʲ[colidx] = ifelse(
             ᶜu₃ʲ[colidx].components.data.:1 > 0,
-            ᶜinterp_lb(ᶠKᵥʲs.:($$j)[colidx]),
-            ᶜinterp_rb(ᶠKᵥʲs.:($$j)[colidx]),
+            ᶜleft_bias(ᶠKᵥʲs.:($$j)[colidx]),
+            ᶜright_bias(ᶠKᵥʲs.:($$j)[colidx]),
         )
         # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
         # and calcuate the buoyancy term relative to the grid-mean density.

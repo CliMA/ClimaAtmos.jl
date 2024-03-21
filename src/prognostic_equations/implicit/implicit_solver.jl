@@ -125,12 +125,15 @@ function ImplicitEquationJacobian(
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
 
+    DiagonalRow = DiagonalMatrixRow{FT}
     TridiagonalRow = TridiagonalMatrixRow{FT}
     BidiagonalRow_C3 = BidiagonalMatrixRow{C3{FT}}
     TridiagonalRow_ACTh = TridiagonalMatrixRow{Adjoint{FT, CTh{FT}}}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}
     BidiagonalRow_C3xACTh =
         BidiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CTh{FT})')}
+    DiagonalRow_C3xACT3 =
+        DiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
     TridiagonalRow_C3xACT3 =
         TridiagonalMatrixRow{typeof(zero(C3{FT}) * zero(CT3{FT})')}
 
@@ -139,6 +142,7 @@ function ImplicitEquationJacobian(
     ρq_tot_if_available = is_in_Y(@name(c.ρq_tot)) ? (@name(c.ρq_tot),) : ()
     ρatke_if_available =
         is_in_Y(@name(c.sgs⁰.ρatke)) ? (@name(c.sgs⁰.ρatke),) : ()
+    sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
 
     tracer_names = (
         @name(c.ρq_tot),
@@ -148,14 +152,12 @@ function ImplicitEquationJacobian(
         @name(c.ρq_sno),
     )
     available_tracer_names = MatrixFields.unrolled_filter(is_in_Y, tracer_names)
-    other_names = (@name(c.sgsʲs), @name(f.sgsʲs), @name(sfc))
-    other_available_names = MatrixFields.unrolled_filter(is_in_Y, other_names)
 
     # Note: We have to use FT(-1) * I instead of -I because inv(-1) == -1.0,
     # which means that multiplying inv(-1) by a Float32 will yield a Float64.
     identity_blocks = MatrixFields.unrolled_map(
         name -> (name, name) => FT(-1) * I,
-        (@name(c.ρ), other_available_names...),
+        (@name(c.ρ), sfc_if_available...),
     )
 
     active_scalar_names = (@name(c.ρ), @name(c.ρe_tot), ρq_tot_if_available...)
@@ -212,24 +214,102 @@ function ImplicitEquationJacobian(
         )
     end
 
+    sgs_blocks = if atmos.turbconv_model isa PrognosticEDMFX
+        @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
+        sgs_scalar_names = (
+            @name(c.sgsʲs.:(1).q_tot),
+            @name(c.sgsʲs.:(1).mse),
+            @name(c.sgsʲs.:(1).ρa)
+        )
+        if use_derivative(diffusion_flag)
+            (
+                MatrixFields.unrolled_map(
+                    name -> (name, name) => similar(Y.c, TridiagonalRow),
+                    sgs_scalar_names,
+                )...,
+                (@name(c.sgsʲs.:(1).mse), @name(c.ρ)) =>
+                    similar(Y.c, DiagonalRow),
+                (@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)) =>
+                    similar(Y.c, DiagonalRow),
+                (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)) =>
+                    similar(Y.c, TridiagonalRow),
+                (@name(f.sgsʲs.:(1).u₃), @name(c.ρ)) =>
+                    similar(Y.f, BidiagonalRow_C3),
+                (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)) =>
+                    similar(Y.f, BidiagonalRow_C3),
+                (@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)) =>
+                    similar(Y.f, BidiagonalRow_C3),
+                (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
+                    similar(Y.f, TridiagonalRow_C3xACT3),
+            )
+        else
+            (
+                MatrixFields.unrolled_map(
+                    name -> (name, name) => FT(-1) * I,
+                    sgs_scalar_names,
+                )...,
+                (@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)) =>
+                    !isnothing(atmos.rayleigh_sponge) ?
+                    similar(Y.f, DiagonalRow_C3xACT3) : FT(-1) * I,
+            )
+        end
+    else
+        ()
+    end
+
     matrix = MatrixFields.FieldMatrix(
         identity_blocks...,
+        sgs_blocks...,
         advection_blocks...,
         diffusion_blocks...,
     )
 
-    names₁_group₁ = (@name(c.ρ), other_available_names...)
+    sgs_names_if_available = if atmos.turbconv_model isa PrognosticEDMFX
+        (
+            @name(c.sgsʲs.:(1).q_tot),
+            @name(c.sgsʲs.:(1).mse),
+            @name(c.sgsʲs.:(1).ρa),
+            @name(f.sgsʲs.:(1).u₃),
+        )
+    else
+        ()
+    end
+    names₁_group₁ = (@name(c.ρ), sfc_if_available...)
     names₁_group₂ = (available_tracer_names..., ρatke_if_available...)
     names₁_group₃ = (@name(c.ρe_tot),)
-    names₁ = (names₁_group₁..., names₁_group₂..., names₁_group₃...)
+    names₁ = (
+        names₁_group₁...,
+        sgs_names_if_available...,
+        names₁_group₂...,
+        names₁_group₃...,
+    )
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
     alg = if use_derivative(diffusion_flag)
-        alg₁_subalg₂ =
+        alg₁_subalg₂ = if atmos.turbconv_model isa PrognosticEDMFX
+            (;
+                alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                    @name(c.sgsʲs.:(1).q_tot);
+                    alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                        @name(c.sgsʲs.:(1).mse);
+                        alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                            @name(c.sgsʲs.:(1).ρa),
+                            @name(f.sgsʲs.:(1).u₃);
+                            alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                                names₁_group₂...,
+                            ),
+                        ),
+                    ),
+                )
+            )
+        else
             is_in_Y(@name(c.ρq_tot)) ?
             (;
                 alg₂ = MatrixFields.BlockLowerTriangularSolve(names₁_group₂...)
             ) : (;)
+        end
         alg₁ = MatrixFields.BlockLowerTriangularSolve(
             names₁_group₁...;
             alg₁_subalg₂...,
@@ -317,13 +397,20 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         (
             use_derivative(A.diffusion_flag) &&
             p.atmos.turbconv_model isa PrognosticEDMFX ?
-            (; p.precomputed.ᶜρa⁰) : (;)
+            (;
+                p.core.ᶜgradᵥ_ᶠΦ,
+                p.precomputed.ᶜρa⁰,
+                p.precomputed.ᶜρʲs,
+                p.precomputed.ᶠu³ʲs,
+                p.precomputed.ᶜtsʲs,
+            ) : (;)
         )...,
         p.core.ᶜΦ,
         p.core.ᶠgradᵥ_ᶜΦ,
         p.core.ᶜρ_ref,
         p.core.ᶜp_ref,
         p.scratch.ᶜtemp_scalar,
+        p.scratch.ᶜtemp_C3,
         p.scratch.ᶠtemp_CT3,
         p.scratch.∂ᶜK_∂ᶜuₕ,
         p.scratch.∂ᶜK_∂ᶠu₃,
@@ -355,6 +442,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p
     (; ᶜdiffusion_h_matrix, ᶜdiffusion_u_matrix, params) = p
+    (; edmfx_upwinding) = p.atmos.numerics
 
     FT = Spaces.undertype(axes(Y.c))
     CTh = CTh_vector_type(axes(Y.c))
@@ -593,4 +681,199 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
                 DiagonalMatrixRow(-(ᶜwₚ[colidx]) / ᶜρ[colidx])
         end
     end
+
+    if p.atmos.turbconv_model isa PrognosticEDMFX
+        if use_derivative(diffusion_flag)
+            (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
+            is_third_order = edmfx_upwinding == Val(:third_order)
+            ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1
+            ᶠset_upwind_bcs = Operators.SetBoundaryOperator(;
+                top = Operators.SetValue(zero(CT3{FT})),
+                bottom = Operators.SetValue(zero(CT3{FT})),
+            ) # Need to wrap ᶠupwind in this for well-defined boundaries.
+            UpwindMatrixRowType =
+                is_third_order ? QuaddiagonalMatrixRow : BidiagonalMatrixRow
+            ᶠupwind_matrix = is_third_order ? ᶠupwind3_matrix : ᶠupwind1_matrix
+            ᶠset_upwind_matrix_bcs = Operators.SetBoundaryOperator(;
+                top = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
+                bottom = Operators.SetValue(zero(UpwindMatrixRowType{CT3{FT}})),
+            ) # Need to wrap ᶠupwind_matrix in this for well-defined boundaries.
+            ᶜkappa_mʲ = p.ᶜtemp_scalar
+            @. ᶜkappa_mʲ[colidx] =
+                TD.gas_constant_air(thermo_params, ᶜtsʲs.:(1)[colidx]) /
+                TD.cv_m(thermo_params, ᶜtsʲs.:(1)[colidx])
+            ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
+                matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
+            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ[colidx] =
+                dtγ * (
+                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1)[colidx])) -
+                    ᶜadvdivᵥ_matrix() ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx]))
+                ) - (I,)
+
+            ∂ᶜmseʲ_err_∂ᶜq_totʲ =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).q_tot)]
+            @. ∂ᶜmseʲ_err_∂ᶜq_totʲ[colidx] =
+                dtγ * (
+                    -DiagonalMatrixRow(
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1)[colidx])) *
+                        ᶜgradᵥ_ᶠΦ[colidx] *
+                        Y.c.ρ[colidx] *
+                        ᶜkappa_mʲ[colidx] /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
+                    )
+                )
+            ∂ᶜmseʲ_err_∂ᶜρ = matrix[@name(c.sgsʲs.:(1).mse), @name(c.ρ)]
+            @. ∂ᶜmseʲ_err_∂ᶜρ[colidx] =
+                dtγ * (
+                    -DiagonalMatrixRow(
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1)[colidx])) *
+                        ᶜgradᵥ_ᶠΦ[colidx] / ᶜρʲs.:(1)[colidx],
+                    )
+                )
+            ∂ᶜmseʲ_err_∂ᶜmseʲ =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
+            @. ∂ᶜmseʲ_err_∂ᶜmseʲ[colidx] =
+                dtγ * (
+                    DiagonalMatrixRow(ᶜadvdivᵥ(ᶠu³ʲs.:(1)[colidx])) -
+                    ᶜadvdivᵥ_matrix() ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) -
+                    DiagonalMatrixRow(
+                        adjoint(ᶜinterp(ᶠu³ʲs.:(1)[colidx])) *
+                        ᶜgradᵥ_ᶠΦ[colidx] *
+                        Y.c.ρ[colidx] *
+                        ᶜkappa_mʲ[colidx] /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
+                    )
+                ) - (I,)
+
+            ∂ᶜρaʲ_err_∂ᶜq_totʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).q_tot)]
+            @. ∂ᶜρaʲ_err_∂ᶜq_totʲ[colidx] =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ (
+                    DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(
+                                ᶠu³ʲs.:(1)[colidx],
+                                draft_area(
+                                    Y.c.sgsʲs.:(1).ρa[colidx],
+                                    ᶜρʲs.:(1)[colidx],
+                                ),
+                            ),
+                        ),
+                    ) ⋅ ᶠwinterp_matrix(ᶜJ[colidx]) ⋅ DiagonalMatrixRow(
+                        ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
+                    ) -
+                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρʲs.:(1)[colidx])) ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) ⋅
+                    DiagonalMatrixRow(
+                        Y.c.sgsʲs.:(1).ρa[colidx] * ᶜkappa_mʲ[colidx] /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
+                    )
+                )
+            ∂ᶜρaʲ_err_∂ᶜmseʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).mse)]
+            @. ∂ᶜρaʲ_err_∂ᶜmseʲ[colidx] =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ (
+                    DiagonalMatrixRow(
+                        ᶠset_upwind_bcs(
+                            ᶠupwind(
+                                ᶠu³ʲs.:(1)[colidx],
+                                draft_area(
+                                    Y.c.sgsʲs.:(1).ρa[colidx],
+                                    ᶜρʲs.:(1)[colidx],
+                                ),
+                            ),
+                        ),
+                    ) ⋅ ᶠwinterp_matrix(ᶜJ[colidx]) ⋅ DiagonalMatrixRow(
+                        ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
+                    ) -
+                    DiagonalMatrixRow(ᶠwinterp(ᶜJ[colidx], ᶜρʲs.:(1)[colidx])) ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) ⋅
+                    DiagonalMatrixRow(
+                        Y.c.sgsʲs.:(1).ρa[colidx] * ᶜkappa_mʲ[colidx] /
+                        ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
+                    )
+                )
+            ∂ᶜρaʲ_err_∂ᶜρaʲ =
+                matrix[@name(c.sgsʲs.:(1).ρa), @name(c.sgsʲs.:(1).ρa)]
+            @. ∂ᶜρaʲ_err_∂ᶜρaʲ[colidx] =
+                dtγ * ᶜadvdivᵥ_matrix() ⋅ (
+                    -DiagonalMatrixRow(
+                        ᶠwinterp(ᶜJ[colidx], ᶜρʲs.:(1)[colidx]),
+                    ) ⋅
+                    ᶠset_upwind_matrix_bcs(ᶠupwind_matrix(ᶠu³ʲs.:(1)[colidx])) ⋅
+                    DiagonalMatrixRow(1 / ᶜρʲs.:(1)[colidx])
+                ) - (I,)
+
+            ∂ᶠu₃ʲ_err_∂ᶜρ = matrix[@name(f.sgsʲs.:(1).u₃), @name(c.ρ)]
+            @. ∂ᶠu₃ʲ_err_∂ᶜρ[colidx] =
+                dtγ * DiagonalMatrixRow(
+                    ᶠgradᵥ_ᶜΦ[colidx] / ᶠinterp(ᶜρʲs.:(1)[colidx]),
+                ) ⋅ ᶠinterp_matrix()
+            ∂ᶠu₃ʲ_err_∂ᶜq_totʲ =
+                matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).q_tot)]
+            @. ∂ᶠu₃ʲ_err_∂ᶜq_totʲ[colidx] =
+                dtγ * DiagonalMatrixRow(
+                    ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(Y.c.ρ[colidx]) /
+                    (ᶠinterp(ᶜρʲs.:(1)[colidx]))^2,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]) * e_int_v0,
+                )
+            ∂ᶠu₃ʲ_err_∂ᶜmseʲ =
+                matrix[@name(f.sgsʲs.:(1).u₃), @name(c.sgsʲs.:(1).mse)]
+            @. ∂ᶠu₃ʲ_err_∂ᶜmseʲ[colidx] =
+                dtγ * DiagonalMatrixRow(
+                    ᶠgradᵥ_ᶜΦ[colidx] * ᶠinterp(Y.c.ρ[colidx]) /
+                    (ᶠinterp(ᶜρʲs.:(1)[colidx]))^2,
+                ) ⋅ ᶠinterp_matrix() ⋅ DiagonalMatrixRow(
+                    ᶜkappa_mʲ[colidx] * (ᶜρʲs.:(1)[colidx])^2 /
+                    ((ᶜkappa_mʲ[colidx] + 1) * ᶜp[colidx]),
+                )
+            ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
+            ᶜu₃ʲ = p.ᶜtemp_C3
+            @. ᶜu₃ʲ[colidx] = ᶜinterp(Y.f.sgsʲs.:(1).u₃[colidx])
+            if p.atmos.rayleigh_sponge isa RayleighSponge
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
+                    dtγ * -(
+                        ᶠgradᵥ_matrix() ⋅ ifelse(
+                            ᶜu₃ʲ[colidx].components.data.:1 > 0,
+                            convert(
+                                BidiagonalMatrixRow{FT},
+                                ᶜleft_bias_matrix(),
+                            ),
+                            convert(
+                                BidiagonalMatrixRow{FT},
+                                ᶜright_bias_matrix(),
+                            ),
+                        ) ⋅ DiagonalMatrixRow(
+                            adjoint(CT3(Y.f.sgsʲs.:(1).u₃[colidx])),
+                        ) + DiagonalMatrixRow(
+                            p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,),
+                        )
+                    ) - (I_u₃,)
+            else
+                @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
+                    dtγ * -(ᶠgradᵥ_matrix()) ⋅ ifelse(
+                        ᶜu₃ʲ[colidx].components.data.:1 > 0,
+                        convert(BidiagonalMatrixRow{FT}, ᶜleft_bias_matrix()),
+                        convert(BidiagonalMatrixRow{FT}, ᶜright_bias_matrix()),
+                    ) ⋅
+                    DiagonalMatrixRow(adjoint(CT3(Y.f.sgsʲs.:(1).u₃[colidx]))) -
+                    (I_u₃,)
+            end
+        elseif p.atmos.rayleigh_sponge isa RayleighSponge
+            ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ =
+                matrix[@name(f.sgsʲs.:(1).u₃), @name(f.sgsʲs.:(1).u₃)]
+            @. ∂ᶠu₃ʲ_err_∂ᶠu₃ʲ[colidx] =
+                dtγ *
+                -DiagonalMatrixRow(p.ᶠβ_rayleigh_w[colidx] * (one_C3xACT3,)) -
+                (I_u₃,)
+        end
+    end
+
 end

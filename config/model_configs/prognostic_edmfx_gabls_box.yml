@@ -3,12 +3,16 @@ initial_condition: GABLS
 edmf_coriolis: GABLS
 surface_setup: GABLS
 turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
 edmfx_upwinding: "first_order"
 edmfx_entr_model: "Generalized"
-edmfx_detr_model: "ConstantArea"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+edmfx_velocity_relaxation: true
 prognostic_tke: true
 moist: "equil"
 config: "box"
@@ -20,7 +24,7 @@ x_elem: 2
 y_elem: 2
 z_elem: 8
 z_stretch: false
-dt: "100secs"
+dt: "60secs"
 t_end: "9hours"
 dt_save_state_to_disk: "30mins"
 perturb_initstate: false
