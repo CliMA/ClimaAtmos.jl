@@ -50,7 +50,7 @@ allocs_limit["flame_perf_target_threaded"] = 1_276_864
 allocs_limit["flame_perf_target_callbacks"] = 398_984
 allocs_limit["flame_perf_gw"] = 3_268_961_856
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 299_616
-allocs_limit["flame_gpu_implicit_barowave_moist"] = 2_127_136
+allocs_limit["flame_gpu_implicit_barowave_moist"] = 381_968
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of
