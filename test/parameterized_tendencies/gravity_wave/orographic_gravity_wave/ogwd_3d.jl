@@ -11,7 +11,9 @@ using ClimaCoreTempestRemap
 using Interpolations
 
 const FT = Float64
-include("../../../post_processing/remap/remap_helpers.jl")
+include(
+    joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
+)
 include("../gw_plotutils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()

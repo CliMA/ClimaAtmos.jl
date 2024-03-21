@@ -8,7 +8,9 @@ using ClimaCoreTempestRemap
 const FT = Float64
 
 include("../gw_plotutils.jl")
-include("../../../post_processing/remap/remap_helpers.jl")
+include(
+    joinpath(pkgdir(ClimaAtmos), "post_processing/remap", "remap_helpers.jl"),
+)
 
 comms_ctx = ClimaComms.SingletonCommsContext()
 
