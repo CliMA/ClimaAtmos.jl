@@ -63,15 +63,15 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
 
     @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:1).components.data.:1
     @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:1).components.data.:2
-    @. ∇u.components.data.:7 = FT(0)
+    @. ∇u.components.data.:7 *= FT(0) 
    
-    @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:2).components.data.:1
-    @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:2).components.data.:2
-    @. ∇u.components.data.:7 = FT(0)
+    @. ∇u.components.data.:2 = hgrad(ᶜu.components.data.:2).components.data.:1
+    @. ∇u.components.data.:5 = hgrad(ᶜu.components.data.:2).components.data.:2
+    @. ∇u.components.data.:6 *= FT(0)
     
-    @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:3).components.data.:1
-    @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:3).components.data.:2
-    @. ∇u.components.data.:7 = FT(0)
+    @. ∇u.components.data.:3 = hgrad(ᶜu.components.data.:3).components.data.:1
+    @. ∇u.components.data.:8 = hgrad(ᶜu.components.data.:3).components.data.:2
+    @. ∇u.components.data.:9 *= FT(0)
 
     ∇uᵀ = similar(∇u)
     @. ∇uᵀ = Geometry.AxisTensor(Geometry.axes(∇u), transpose(Geometry.components(∇u)))
@@ -126,15 +126,28 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
 
     FT = eltype(Y)
     
+    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
+    ∇u = similar(ᶜϵ)
+    
     # Smagorinsky Computations ####
-    ∇u = @. hgrad(Geometry.UVWVector(ᶜu))
+    @. ∇u.components.data.:1 = hgrad(ᶜu.components.data.:1).components.data.:1
+    @. ∇u.components.data.:4 = hgrad(ᶜu.components.data.:1).components.data.:2
+    @. ∇u.components.data.:7 *= FT(0) 
+   
+    @. ∇u.components.data.:2 = hgrad(ᶜu.components.data.:2).components.data.:1
+    @. ∇u.components.data.:5 = hgrad(ᶜu.components.data.:2).components.data.:2
+    @. ∇u.components.data.:6 *= FT(0)
+    
+    @. ∇u.components.data.:3 = hgrad(ᶜu.components.data.:3).components.data.:1
+    @. ∇u.components.data.:8 = hgrad(ᶜu.components.data.:3).components.data.:2
+    @. ∇u.components.data.:9 *= FT(0)
+
     ∇uᵀ = similar(∇u)
     @. ∇uᵀ = Geometry.AxisTensor(Geometry.axes(∇u), transpose(Geometry.components(∇u)))
     S = @. FT(1/2) * (∇u + ∇uᵀ)
     S₃ = @. Geometry.project(Geometry.UVWAxis(), S)
     ᶠu = p.scratch.ᶠtemp_C123
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     compute_strain_rate_center!(ᶜϵ, ᶠu)
     @. ᶠϵ = ᶠinterp(ᶜϵ)

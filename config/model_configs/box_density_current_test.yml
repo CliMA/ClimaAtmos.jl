@@ -2,7 +2,7 @@ dt_save_state_to_disk: "30secs"
 initial_condition: "DryDensityCurrentProfile"
 x_max: 51200.0
 z_elem: 45
-dt: "0.1secs"
+dt: "0.2secs"
 t_end: "900.0secs"
 y_max: 6400.0
 y_elem: 15
@@ -10,8 +10,8 @@ z_stretch: false
 x_elem: 45
 rayleigh_sponge: true
 config: "box"
-vorticity_hyperdiffusion_coefficient: 0.0
-scalar_hyperdiffusion_coefficient: 0.0
+vorticity_hyperdiffusion_coefficient: 0.05
+scalar_hyperdiffusion_coefficient: 0.05
 z_max: 6400.0
 job_id: "box_density_current_test"
 smagorinsky_lilly: true
