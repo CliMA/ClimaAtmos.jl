@@ -41,7 +41,7 @@ allocs_limit = Dict()
 allocs_limit["flame_perf_target"] = 278_360
 allocs_limit["flame_perf_target_tracers"] = 308_336
 allocs_limit["flame_perf_target_edmfx"] = 7_005_552
-allocs_limit["flame_perf_diagnostics"] = 20_596_072
+allocs_limit["flame_perf_diagnostics"] = 10_876_900
 allocs_limit["flame_perf_target_diagnostic_edmfx"] = 412_056
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
@@ -50,7 +50,7 @@ allocs_limit["flame_perf_target_threaded"] = 1_276_864
 allocs_limit["flame_perf_target_callbacks"] = 398_984
 allocs_limit["flame_perf_gw"] = 3_268_961_856
 allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 299_616
-allocs_limit["flame_gpu_implicit_barowave_moist"] = 658_664
+allocs_limit["flame_gpu_implicit_barowave_moist"] = 252_300
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of
@@ -104,7 +104,7 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    @test 0.25 * allocs_limit[job_id] * buffer <=
+    @test 0.5 * allocs_limit[job_id] * buffer <=
           allocs ≤
           allocs_limit[job_id] * buffer
 end
