@@ -6,10 +6,11 @@ surface_setup: "Rico"
 turbconv: "prognostic_edmfx"
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
-edmfx_detr_model: "ConstantArea"
+edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
+edmfx_velocity_relaxation: true
 prognostic_tke: true
 moist: "equil"
 precip_model: "0M"
