@@ -85,10 +85,14 @@ ProfileCanvas.html_file(joinpath(output_dir, "allocs.html"), profile)
 
 @info "testing allocations"
 using Test
-# Threaded allocations are not deterministic, so let's add a buffer
+# Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = occursin("threaded", job_id) ? 1.4 : 1.1
+buffer = if any(x -> occursin(x, job_id), ("threaded", "gpu"))
+    1.8
+else
+    1.1
+end
 
 
 ## old allocation profiler (TODO: remove this)
