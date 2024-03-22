@@ -64,7 +64,7 @@ function set_diagnostic_edmfx_env_quantities_level!(
 )
     @. u³⁰_halflevel = divide_by_ρa(
         ρ_level * u³_halflevel -
-        mapreduce_with_init(*, +, ρaʲs_level, u³ʲs_halflevel),
+        unrolled_dotproduct(ρaʲs_level, u³ʲs_halflevel),
         ρ_level,
         ρ_level * u³_halflevel,
         ρ_level,
