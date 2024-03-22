@@ -886,6 +886,7 @@ function get_simulation(config::AtmosConfig)
                         t_start,
                         output_dir,
                     )
+                    NCDatasets.sync(diag.output_writer.open_files[output_dir])
                 else
                     # Add to the accumulator
 
