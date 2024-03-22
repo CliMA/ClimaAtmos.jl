@@ -717,6 +717,15 @@ NVTX.@annotate function output_callback!(
     return nothing
 end
 
+function orchestrate_diagnostics(integrator, diagnostics_functions)
+    for d in diagnostics_functions
+        if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
+            d.f!(integrator)
+        end
+    end
+end
+
+
 """
     get_callbacks_from_diagnostics(diagnostics, storage, counters)
 
