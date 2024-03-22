@@ -66,6 +66,8 @@ for device in keys(timings)
         integrator.t,
         simulation.output_dir,
     )
+    output_path = CAD.outpath_name(simulation.output_dir, rhoa_diag)
+    NCDatasets.sync(netcdf_writer.open_files[output_path])
     # Now, profile
     @info "Profiling ($device_name)"
     prof = Profile.@profile CAD.save_diagnostic_to_disk!(
