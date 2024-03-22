@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.22.1
+-------
 - ![][badge-🚀performance] Reduced the number of allocations in the NetCDF
   writer. PRs [#2772](https://github.com/CliMA/ClimaAtmos.jl/pull/2772),
   [#2773](https://github.com/CliMA/ClimaAtmos.jl/pull/2773).
