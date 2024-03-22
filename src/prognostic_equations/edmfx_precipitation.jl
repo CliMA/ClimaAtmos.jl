@@ -28,20 +28,22 @@ function edmfx_precipitation_tendency!(
 
     for j in 1:n
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
-            Y.c.sgsʲs.:($$j).ρa[colidx] * ᶜS_q_totʲs.:($$j)[colidx]
+        @fused begin
+            @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
+                Y.c.sgsʲs.:($$j).ρa[colidx] * ᶜS_q_totʲs.:($$j)[colidx]
 
-        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
-            ᶜS_q_totʲs.:($$j)[colidx] * (
-                e_tot_0M_precipitation_sources_helper(
-                    thermo_params,
-                    ᶜtsʲs.:($$j)[colidx],
-                    ᶜΦ[colidx],
-                ) - TD.internal_energy(thermo_params, ᶜtsʲs.:($$j)[colidx])
-            )
+            @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
+                ᶜS_q_totʲs.:($$j)[colidx] * (
+                    e_tot_0M_precipitation_sources_helper(
+                        thermo_params,
+                        ᶜtsʲs.:($$j)[colidx],
+                        ᶜΦ[colidx],
+                    ) - TD.internal_energy(thermo_params, ᶜtsʲs.:($$j)[colidx])
+                )
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
-            ᶜS_q_totʲs.:($$j)[colidx] * (1 - Y.c.sgsʲs.:($$j).q_tot[colidx])
+            @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
+                ᶜS_q_totʲs.:($$j)[colidx] * (1 - Y.c.sgsʲs.:($$j).q_tot[colidx])
+        end
     end
     return nothing
 end

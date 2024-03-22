@@ -92,8 +92,10 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 C123(wgradₕ(divₕ(p.precomputed.ᶜuʲs.:($$j)))) -
                 C123(wcurlₕ(C123(curlₕ(p.precomputed.ᶜuʲs.:($$j)))))
             @. ᶜ∇²mseʲs.:($$j) = wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).mse))
-            @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
-            @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
+            @fused begin
+                @. ᶜ∇²uₕʲs.:($$j) = C12(ᶜ∇²uʲs.:($$j))
+                @. ᶜ∇²uᵥʲs.:($$j) = C3(ᶜ∇²uʲs.:($$j))
+            end
         end
     end
 end
