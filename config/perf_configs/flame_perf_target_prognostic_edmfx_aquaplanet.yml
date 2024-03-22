@@ -3,7 +3,6 @@ surface_setup: DefaultExchangeCoefficients
 rad: gray
 vert_diff: "false"
 turbconv: prognostic_edmfx 
-implicit_diffusion: false
 prognostic_tke: true
 edmfx_upwinding: first_order 
 edmfx_entr_model: "Generalized" 
