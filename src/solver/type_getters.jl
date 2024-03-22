@@ -553,7 +553,7 @@ function get_diagnostics(parsed_args, atmos_model, cspace)
             short_names = [short_names]
         end
 
-        ret_value = map(short_names) do short_name
+        map(short_names) do short_name
             # Return "nothing" if "reduction_time" is not in the YAML block
             #
             # We also normalize everything to lowercase, so that can accept "max" but
@@ -596,7 +596,7 @@ function get_diagnostics(parsed_args, atmos_model, cspace)
                 compute_every = :timestep
             end
 
-            return CAD.ScheduledDiagnosticTime(
+            CAD.ScheduledDiagnosticTime(
                 variable = CAD.get_diagnostic_variable(short_name),
                 output_every = period_seconds,
                 compute_every = compute_every,
@@ -606,26 +606,34 @@ function get_diagnostics(parsed_args, atmos_model, cspace)
                 output_short_name = output_short_name,
             )
         end
-        return ret_value
     end
 
     # Flatten the array of arrays of diagnostics
     diagnostics = vcat(diagnostics_ragged...)
 
     if parsed_args["output_default_diagnostics"]
-        t_end = time_to_seconds(parsed_args["t_end"])
-        return [
+        diagnostics = [
             CAD.default_diagnostics(
                 atmos_model,
-                t_end;
+                time_to_seconds(parsed_args["t_end"]);
                 output_writer = netcdf_writer,
             )...,
             diagnostics...,
-        ],
-        writers
-    else
-        return collect(diagnostics), writers
+        ]
     end
+    diagnostics = collect(diagnostics)
+
+    for writer in writers
+        writer_str = nameof(typeof(writer))
+        diags_with_writer =
+            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
+        diags_outputs = [
+            getproperty(diag, :output_short_name) for diag in diags_with_writer
+        ]
+        @info "$writer_str: $diags_outputs"
+    end
+
+    return diagnostics, writers
 end
 
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
@@ -777,16 +785,6 @@ function get_simulation(config::AtmosConfig)
     @info "initializing diagnostics: $s"
 
     length(diagnostics) > 0 && @info "Computing diagnostics:"
-
-    for writer in writers
-        writer_str = nameof(typeof(writer))
-        diags_with_writer =
-            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
-        diags_outputs = [
-            getproperty(diag, :output_short_name) for diag in diags_with_writer
-        ]
-        @info "$writer_str: $diags_outputs"
-    end
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
