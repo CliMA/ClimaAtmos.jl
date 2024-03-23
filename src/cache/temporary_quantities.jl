@@ -55,11 +55,14 @@ function temporary_quantities(Y, atmos)
         ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CTh{FT}}}),
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
+        ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
+        ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶜadvection_matrix = similar(
             Y.c,
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
         ),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
     )
 end
