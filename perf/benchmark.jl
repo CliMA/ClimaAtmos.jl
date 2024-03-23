@@ -21,26 +21,6 @@ SciMLBase.step!(integrator) # compile first
 
 (; sol, u, p, dt, t) = integrator
 
-get_W(i::CTS.DistributedODEIntegrator) = i.cache.newtons_method_cache.j
-get_W(i) = i.cache.W
-f_args(i, f::CTS.ForwardEulerODEFunction) = (copy(i.u), i.u, i.p, i.t, i.dt)
-f_args(i, f) = (similar(i.u), i.u, i.p, i.t)
-
-r_args(i, f::CTS.ForwardEulerODEFunction) =
-    (copy(i.u), copy(i.u), i.u, i.p, i.t, i.dt)
-r_args(i, f) = (similar(i.u), similar(i.u), i.u, i.p, i.t)
-
-implicit_args(i::CTS.DistributedODEIntegrator) = f_args(i, i.sol.prob.f.T_imp!)
-implicit_args(i) = f_args(i, i.f.f1)
-remaining_args(i::CTS.DistributedODEIntegrator) =
-    r_args(i, i.sol.prob.f.T_exp_T_lim!)
-remaining_args(i) = r_args(i, i.f.f2)
-wfact_fun(i) = implicit_fun(i).Wfact
-implicit_fun(i::CTS.DistributedODEIntegrator) = i.sol.prob.f.T_imp!
-implicit_fun(i) = i.sol.prob.f.f1
-remaining_fun(i::CTS.DistributedODEIntegrator) = i.sol.prob.f.T_exp_T_lim!
-remaining_fun(i) = i.sol.prob.f.f2
-
 W = get_W(integrator)
 X = similar(u)
 
