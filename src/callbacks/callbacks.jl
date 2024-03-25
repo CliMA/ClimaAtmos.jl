@@ -14,6 +14,8 @@ using Dates
 using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
 
+import ClimaUtilities.TimeVaryingInputs: evaluate!
+
 include("callback_helpers.jl")
 
 function flux_accumulation!(integrator)
@@ -60,6 +62,12 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
     (; ᶠradiation_flux, radiation_model) = p.radiation
+
+    # If we have prescribed aerosols, we need to update them
+    for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
+        field = getfield(p.tracers.prescribed_aerosol_fields, key)
+        evaluate!(field, tv, t)
+    end
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)

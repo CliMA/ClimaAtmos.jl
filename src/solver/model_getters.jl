@@ -423,3 +423,8 @@ function get_surface_thermo_state_type(parsed_args)
     dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
     return dict[parsed_args["surface_thermo_state_type"]]
 end
+
+function get_tracers(parsed_args)
+    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
+    return (; aerosol_names)
+end

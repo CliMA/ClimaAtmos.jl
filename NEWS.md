@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+- ![][badge-✨feature/enhancement]![][badge-💥breaking]. Use
+  [ClimaUtilities](https://github.com/CliMA/ClimaUtilities.jl) for
+  `TimeVaryingInputs` to read in prescribed aerosol mass concentrations. This PR
+  is considered breaking because it changes `AtmosCache` adding a new field,
+  `tracers`. PR [#2815](https://github.com/CliMA/ClimaAtmos.jl/pull/2815).
+
 v0.22.1
 -------
 - ![][badge-🚀performance] Reduced the number of allocations in the NetCDF

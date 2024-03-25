@@ -612,8 +612,17 @@ function get_simulation(config::AtmosConfig)
         @info "Allocating Y: $s"
     end
 
+    tracers = get_tracers(config.parsed_args)
+
     s = @timed_str begin
-        p = build_cache(Y, atmos, params, surface_setup, sim_info)
+        p = build_cache(
+            Y,
+            atmos,
+            params,
+            surface_setup,
+            sim_info,
+            tracers.aerosol_names,
+        )
     end
     @info "Allocating cache (p): $s"
 

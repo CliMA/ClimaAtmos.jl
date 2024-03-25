@@ -15,5 +15,6 @@ rayleigh_sponge: true
 non_orographic_gravity_wave: true
 orographic_gravity_wave: "gfdl_restart"
 surface_setup: "DefaultMoninObukhov"
+prescribed_aerosols: ["CB1", "CB2"]
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
