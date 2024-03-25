@@ -86,8 +86,8 @@ for device in keys(timings)
     @info "Flame saved in $flame_path"
 
     @info "Benchmarking our NetCDF writer (only IO) ($device_name)"
-    timings[device] = if ClimaComms.device() isa ClimaComms.CUDADevice
-        @benchmark CUDA.@sync CAD.save_diagnostic_to_disk!(
+    timings[device] =
+        @benchmark ClimaComms.@cuda_sync device CAD.save_diagnostic_to_disk!(
             $netcdf_writer,
             $field,
             $rhoa_diag,
@@ -96,17 +96,6 @@ for device in keys(timings)
             $(integrator.t),
             $(simulation.output_dir),
         )
-    else
-        @benchmark CAD.save_diagnostic_to_disk!(
-            $netcdf_writer,
-            $field,
-            $rhoa_diag,
-            $(integrator.u),
-            $(integrator.p),
-            $(integrator.t),
-            $(simulation.output_dir),
-        )
-    end
 
     @info "Benchmarking NCDatasets ($device_name)"
 
