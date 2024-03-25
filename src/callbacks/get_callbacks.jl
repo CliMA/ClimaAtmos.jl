@@ -1,3 +1,70 @@
+function init_diagnostics!(
+    diagnostics_iterations,
+    diagnostic_storage,
+    diagnostic_accumulators,
+    diagnostic_counters,
+    output_dir,
+    Y,
+    p,
+    t;
+    warn_allocations,
+)
+    for diag in diagnostics_iterations
+        variable = diag.variable
+        try
+            # The first time we call compute! we use its return value. All
+            # the subsequent times (in the callbacks), we will write the
+            # result in place
+            diagnostic_storage[diag] = variable.compute!(nothing, Y, p, t)
+            diagnostic_counters[diag] = 1
+            # If it is not a reduction, call the output writer as well
+            if isnothing(diag.reduction_time_func)
+                writer = diag.output_writer
+                CAD.write_field!(
+                    writer,
+                    diagnostic_storage[diag],
+                    diag,
+                    Y,
+                    p,
+                    t,
+                    output_dir,
+                )
+                if writer isa CAD.NetCDFWriter &&
+                   ClimaComms.iamroot(ClimaComms.context(Y.c))
+                    output_path = CAD.outpath_name(output_dir, diag)
+                    NCDatasets.sync(writer.open_files[output_path])
+                end
+            else
+                # Add to the accumulator
+
+                # We use similar + .= instead of copy because CUDA 5.2 does
+                # not supported nested wrappers with view(reshape(view))
+                # objects. See discussion in
+                # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
+                # https://github.com/JuliaGPU/Adapt.jl/issues/21
+                diagnostic_accumulators[diag] =
+                    similar(diagnostic_storage[diag])
+                diagnostic_accumulators[diag] .= diagnostic_storage[diag]
+            end
+        catch e
+            error("Could not compute diagnostic $(variable.long_name): $e")
+        end
+    end
+    if warn_allocations
+        for diag in diagnostics_iterations
+            # We need to hoist these variables/functions to avoid measuring
+            # allocations due to these variables/functions not being type-stable.
+            dstorage = diagnostic_storage[diag]
+            compute! = diag.variable.compute!
+            # We write over the storage space we have already prepared (and filled) before
+            allocs = @allocated compute!(dstorage, Y, p, t)
+            if allocs > 10 * 1024
+                @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"
+            end
+        end
+    end
+end
+
 function get_diagnostics(parsed_args, atmos_model, cspace)
 
     # We either get the diagnostics section in the YAML file, or we return an empty list
