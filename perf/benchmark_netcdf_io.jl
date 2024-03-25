@@ -5,6 +5,7 @@ import Profile, ProfileCanvas
 import NCDatasets
 import Base: rm
 using BenchmarkTools
+import CUDA
 
 # This script runs our NetCDF writer and compares its performance with
 # NCDatasets. It also produces a flamegraph for IO.
@@ -85,15 +86,16 @@ for device in keys(timings)
     @info "Flame saved in $flame_path"
 
     @info "Benchmarking our NetCDF writer (only IO) ($device_name)"
-    timings[device] = @benchmark CAD.save_diagnostic_to_disk!(
-        $netcdf_writer,
-        $field,
-        $rhoa_diag,
-        $(integrator.u),
-        $(integrator.p),
-        $(integrator.t),
-        $(simulation.output_dir),
-    )
+    timings[device] =
+        @benchmark ClimaComms.@cuda_sync device CAD.save_diagnostic_to_disk!(
+            $netcdf_writer,
+            $field,
+            $rhoa_diag,
+            $(integrator.u),
+            $(integrator.p),
+            $(integrator.t),
+            $(simulation.output_dir),
+        )
 
     @info "Benchmarking NCDatasets ($device_name)"
 
