@@ -664,6 +664,10 @@ function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
     return nothing
 end
 
+function outpath_name(output_dir, diagnostic)
+    joinpath(output_dir, "$(diagnostic.output_short_name).nc")
+end
+
 function save_diagnostic_to_disk!(
     writer::NetCDFWriter,
     field,
@@ -681,7 +685,7 @@ function save_diagnostic_to_disk!(
     space = axes(field)
     FT = Spaces.undertype(space)
 
-    output_path = joinpath(output_dir, "$(diagnostic.output_short_name).nc")
+    output_path = outpath_name(output_dir, diagnostic)
 
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
@@ -738,9 +742,6 @@ function save_diagnostic_to_disk!(
     elseif length(dim_names) == 1
         v[time_index, :] = interpolated_field
     end
-
-    # Write data to disk
-    NCDatasets.sync(writer.open_files[output_path])
     return nothing
 end
 

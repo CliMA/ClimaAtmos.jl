@@ -661,6 +661,38 @@ function accumulate!(diag_accumulator, diag_storage, reduction_time_func)
     return nothing
 end
 
+any_sync_needed(step, diagnostics) =
+    any(diag -> sync_needed(step, diag), diagnostics)
+
+# sync_needed(step, diag) = diag.cbf.n > 0 && step % diag.cbf.n == 0
+sync_needed(step, diag) = diag.output_every > 0 && step % diag.output_every == 0
+
+import NVTX
+NVTX.@annotate function sync_nc_datasets(diagnostics, output_dir, step, context)
+    any(diag -> diag.output_writer isa NetCDFWriter, diagnostics) || return
+    any_sync_needed(step, diagnostics) || return
+    ClimaComms.iamroot(context) || return
+    tasks = map(diagnostics) do diag
+        writer = diag.output_writer
+        if writer isa NetCDFWriter && sync_needed(step, diag)
+            output_path = outpath_name(output_dir, diag)
+            # TODO: find out why Threads.@spawn segfaults in multithreaded IO test
+            # Threads.@spawn NCDatasets.sync(writer.open_files[output_path])
+            NCDatasets.sync(writer.open_files[output_path])
+        else
+            nothing
+        end
+    end
+    isempty(tasks) && return nothing
+    # I don't think this is needed, but
+    # leaving here in case:
+    # for t in tasks
+    #     isnothing(t) && continue
+    #     Threads.wait(t)
+    # end
+    return nothing
+end
+
 import NVTX
 NVTX.@annotate function compute_callback!(
     integrator,
@@ -719,7 +751,8 @@ end
 
 function orchestrate_diagnostics(integrator, diagnostics_functions)
     for d in diagnostics_functions
-        if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
+        n = d.cbf.n
+        if n > 0 && integrator.step % n == 0
             d.f!(integrator)
         end
     end
@@ -791,7 +824,13 @@ function get_callbacks_from_diagnostics(
             AtmosCallback(output_callback, EveryNSteps(diag.output_every)),
         ]
     end
+    nc_sync(integrator) = sync_nc_datasets(
+        diagnostics,
+        output_dir,
+        integrator.step,
+        ClimaComms.context(axes(integrator.u.c)),
+    )
 
     # We need to flatten to tuples
-    return vcat(callback_arrays...)
+    return vcat(callback_arrays..., AtmosCallback(nc_sync, EveryNSteps(1)))
 end

@@ -870,8 +870,9 @@ function get_simulation(config::AtmosConfig)
                 diagnostic_counters[diag] = 1
                 # If it is not a reduction, call the output writer as well
                 if isnothing(diag.reduction_time_func)
+                    writer = diag.output_writer
                     CAD.write_field!(
-                        diag.output_writer,
+                        writer,
                         diagnostic_storage[diag],
                         diag,
                         Y,
@@ -879,6 +880,11 @@ function get_simulation(config::AtmosConfig)
                         t_start,
                         output_dir,
                     )
+                    if writer isa CAD.NetCDFWriter &&
+                       ClimaComms.iamroot(ClimaComms.context(Y.c))
+                        output_path = CAD.outpath_name(output_dir, diag)
+                        NCDatasets.sync(writer.open_files[output_path])
+                    end
                 else
                     # Add to the accumulator
 
