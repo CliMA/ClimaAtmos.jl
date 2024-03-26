@@ -37,6 +37,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     detr_coeff::FT
     detr_buoy_coeff::FT
     detr_vertdiv_coeff::FT
+    detr_massflux_vertdiv_coeff::FT
     min_area_limiter_scale::FT
     min_area_limiter_power::FT
     max_area_limiter_scale::FT
@@ -73,6 +74,9 @@ Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP} <:
     zd_viscous::FT
     zd_rayleigh::FT
     kappa_2_sponge::FT
+    # Radiation
+    idealized_ocean_albedo::FT
+    water_refractive_index::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

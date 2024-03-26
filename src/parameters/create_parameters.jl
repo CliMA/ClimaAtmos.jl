@@ -1,4 +1,4 @@
-import CLIMAParameters as CP
+import ClimaParams as CP
 import RRTMGP.Parameters.RRTMGPParameters
 import SurfaceFluxes.Parameters.SurfaceFluxesParameters
 import SurfaceFluxes.UniversalFunctions as UF
@@ -24,6 +24,7 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :mixing_length_smin_ub => :smin_ub,
         :EDMF_min_area => :min_area,
         :detr_vertdiv_coeff => :detr_vertdiv_coeff,
+        :detr_massflux_vertdiv_coeff => :detr_massflux_vertdiv_coeff,
         :max_area_limiter_power => :max_area_limiter_power,
         :min_area_limiter_power => :min_area_limiter_power,
         :pressure_normalmode_drag_coeff => :pressure_normalmode_drag_coeff,
@@ -110,6 +111,8 @@ function create_parameter_set(config::AtmosConfig)
         :drag_layer_vertical_extent => :σ_b,
         :kappa_2_sponge => :kappa_2_sponge,
         :held_suarez_minimum_temperature => :T_min_hs,
+        :ocean_surface_albedo => :idealized_ocean_albedo,
+        :water_refractive_index => :water_refractive_index,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;

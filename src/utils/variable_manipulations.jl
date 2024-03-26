@@ -185,7 +185,7 @@ end
 Computes the total mass-flux subdomain area-weighted density, assuming that the
 mass-flux subdomain states are stored in `gs.sgsʲs`.
 """
-ρa⁺(gs) = mapreduce(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
+ρa⁺(gs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
 
 """
     ρah_tot⁺(sgsʲs)
@@ -193,7 +193,7 @@ mass-flux subdomain states are stored in `gs.sgsʲs`.
 Computes the total mass-flux subdomain area-weighted ρh_tot, assuming that the
 mass-flux subdomain states are stored in `sgsʲs`.
 """
-ρah_tot⁺(sgsʲs) = mapreduce(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, +, sgsʲs)
+ρah_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.h_tot, +, sgsʲs)
 
 """
     ρamse⁺(sgsʲs)
@@ -201,7 +201,7 @@ mass-flux subdomain states are stored in `sgsʲs`.
 Computes the total mass-flux subdomain area-weighted ρmse, assuming that the
 mass-flux subdomain states are stored in `sgsʲs`.
 """
-ρamse⁺(sgsʲs) = mapreduce(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, +, sgsʲs)
+ρamse⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.mse, +, sgsʲs)
 
 """
     ρaq_tot⁺(sgsʲs)
@@ -209,7 +209,7 @@ mass-flux subdomain states are stored in `sgsʲs`.
 Computes the total mass-flux subdomain area-weighted ρq_tot, assuming that the
 mass-flux subdomain states are stored in `sgsʲs`.
 """
-ρaq_tot⁺(sgsʲs) = mapreduce(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, +, sgsʲs)
+ρaq_tot⁺(sgsʲs) = mapreduce_with_init(sgsʲ -> sgsʲ.ρa * sgsʲ.q_tot, +, sgsʲs)
 
 """
     ρa⁰(gs)
@@ -217,7 +217,7 @@ mass-flux subdomain states are stored in `sgsʲs`.
 Computes the environment area-weighted density, assuming that the mass-flux
 subdomain states are stored in `gs.sgsʲs`.
 """
-ρa⁰(gs) = gs.ρ - mapreduce(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
+ρa⁰(gs) = gs.ρ - mapreduce_with_init(sgsʲ -> sgsʲ.ρa, +, gs.sgsʲs)
 
 """
     u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) 
@@ -229,7 +229,7 @@ are computed from the tuples of subdomain densities and velocities `ρaʲs` and
 is small.
 """
 u₃⁺(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
-    mapreduce(*, +, ρaʲs, u₃ʲs),
+    unrolled_dotproduct(ρaʲs, u₃ʲs),
     reduce(+, ρaʲs),
     ρ * u₃,
     ρ,
@@ -247,7 +247,7 @@ environment quantities. The division is computed using `divide_by_ρa` to avoid
 issues when `a⁰` is small.
 """
 u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = divide_by_ρa(
-    ρ * u₃ - mapreduce(*, +, ρaʲs, u₃ʲs),
+    ρ * u₃ - unrolled_dotproduct(ρaʲs, u₃ʲs),
     ρ - reduce(+, ρaʲs),
     ρ * u₃,
     ρ,
@@ -265,3 +265,25 @@ remove_energy_var(specific_state::NamedTuple) =
     Base.structdiff(specific_state, NamedTuple{(:e_tot,)})
 remove_energy_var(specific_state::Tuple) =
     map(remove_energy_var, specific_state)
+
+
+import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
+function mapreduce_with_init(f, op, iter...)
+    r₀ = rzero(rpromote_type(typeof(f(map(first, iter)...))))
+    mapreduce(f, op, iter...; init = r₀)
+end
+
+# Inference fails for certain mapreduce calls inside cuda
+# kernels, so let's define a recursive unrolled dot product:
+promote_type_mul(n::Number, x::Geometry.AxisTensor) = typeof(x)
+promote_type_mul(x::Geometry.AxisTensor, n::Number) = typeof(x)
+@inline function unrolled_dotproduct(a::Tuple, b::Tuple)
+    r = rzero(promote_type_mul(first(a), first(b)))
+    unrolled_dotproduct(r, a, b)
+end
+@inline unrolled_dotproduct(s, ::Tuple{}, ::Tuple{}) = s
+@inline unrolled_dotproduct(s, a::Tuple, b::Tuple) =
+    s ⊞ (first(a) ⊠ first(b)) ⊞
+    unrolled_dotproduct(s, Base.tail(a), Base.tail(b))
+@inline unrolled_dotproduct(s, a::Tuple{<:Any}, b::Tuple{<:Any}) =
+    s ⊞ (first(a) ⊠ first(b))

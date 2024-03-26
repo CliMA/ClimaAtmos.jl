@@ -1,11 +1,12 @@
 agents:
   queue: new-central
   slurm_mem: 8G
-  modules: climacommon/2024_03_07
+  modules: climacommon/2024_03_18
 
 env:
   JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
   OPENBLAS_NUM_THREADS: 1
+  SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
@@ -14,8 +15,6 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs/"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
-  SLURM_KILL_BAD_EXIT: 1
-  JULIA_NVTX_CALLBACKS: gc
 
 steps:
   - label: "init :computer:"
@@ -292,6 +291,10 @@ steps:
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric.yml
+
+          julia --color=yes --project=examples regression_tests/test_mse.jl
+          --job_id sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
+          --out_dir sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric
         artifact_paths: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric/*"
         agents:
           slurm_mem: 20GB
@@ -304,7 +307,6 @@ steps:
         artifact_paths: "aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean/*"
         agents:
           slurm_mem: 20GB
-          slurm_constraint: icelake|cascadelake|skylake|epyc
 
   - group: "Sphere Examples (Topography)"
     steps:
@@ -367,7 +369,6 @@ steps:
         artifact_paths: "restart_mpi_baroclinic_wave_rhoe/*"
         env:
           CLIMACORE_DISTRIBUTED: "MPI"
-          RESTART_FILE: "mpi_make_restart/day5.0.hdf5"
         agents:
           slurm_ntasks: 2
           slurm_mem: 16G
@@ -654,8 +655,8 @@ steps:
       - label: "GPU: GPU dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
-          - mkdir -p target_gpu_implicit_baroclinic_wave_4process
             # nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/report-%q{PMI_RANK}
+          - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
@@ -679,7 +680,7 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: "GPU: gpu_aquaplanet_dyamond"
+      - label: ":umbrella: GPU: gpu_aquaplanet_dyamond"
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
@@ -699,11 +700,11 @@ steps:
           slurm_gpus: 1
           slurm_mem: 20G
 
-      - label: ":umbrella: GPU: Aquaplanet clearsky radiation and 1M microphysics"
+      - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_clearsky_1M.yml
-        artifact_paths: "gpu_aquaplanet_clearsky_1M/*"
+          --config_file $GPU_CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
+        artifact_paths: "gpu_prognostic_edmfx_aquaplanet/*"
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
@@ -766,6 +767,13 @@ steps:
           slurm_cpus_per_task: 8
 
       # Flame graphs
+      - label: ":fire: Flame graph: perf target (IO)"
+        command: >
+          julia --color=yes --project=perf perf/benchmark_netcdf_io.jl
+        artifact_paths: "flame_perf_io/*.html"
+        agents:
+          slurm_gpus: 1
+
       - label: ":fire: Flame graph: perf target (default)"
         command: >
           julia --color=yes --project=perf perf/flame.jl
@@ -796,7 +804,7 @@ steps:
           $PERF_CONFIG_PATH/flame_perf_target_prognostic_edmfx_aquaplanet.yml
         artifact_paths: "flame_perf_target_prognostic_edmfx_aquaplanet/*"
         agents:
-          slurm_mem: 32GB
+          slurm_mem: 48GB
 
       - label: ":fire: Flame graph: perf target (barowave jfnk)"
         command: >
@@ -855,6 +863,7 @@ steps:
         agents:
           slurm_mem: 48GB
           slurm_gpus: 1
+          gres: "gpu:p100:1"
 
       # Inference
       - label: ":rocket: JET n-failures (inference)"

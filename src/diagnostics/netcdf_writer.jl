@@ -459,7 +459,7 @@ and `domain` (e.g., `ClimaCore.Geometry.LatLongPoint`s).
 """
 function hcoords_from_horizontal_space(space, domain, hpts) end
 
-struct NetCDFWriter{T, TS}
+struct NetCDFWriter{T, TS, DI}
 
     # TODO: At the moment, each variable gets its remapper. This is a little bit of a waste
     # because we probably only need a handful of remappers since the same remapper can be
@@ -488,6 +488,10 @@ struct NetCDFWriter{T, TS}
     # When disable_vertical_interpolation is true, the num_points on the vertical direction
     # is ignored.
     disable_vertical_interpolation::Bool
+
+    # Areas of memory preallocated where the interpolation output is saved. Only the root
+    # process uses this
+    preallocated_output_arrays::DI
 end
 
 """
@@ -565,30 +569,30 @@ function NetCDFWriter(;
     interpolated_physical_z =
         interpolate(remapper, Fields.coordinate_field(space).z)
 
-    return NetCDFWriter{typeof(num_points), typeof(interpolated_physical_z)}(
+    preallocated_arrays =
+        ClimaComms.iamroot(ClimaComms.context(space)) ? Dict{String, Array}() :
+        Dict{String, Nothing}()
+
+    return NetCDFWriter{
+        typeof(num_points),
+        typeof(interpolated_physical_z),
+        typeof(preallocated_arrays),
+    }(
         Dict{String, Remapper}(),
         num_points,
         compression_level,
         interpolated_physical_z,
         Dict{String, NCDatasets.NCDataset}(),
         disable_vertical_interpolation,
+        preallocated_arrays,
     )
 end
 
-function write_field!(
-    writer::NetCDFWriter,
-    field,
-    diagnostic,
-    u,
-    p,
-    t,
-    output_dir,
-)
+function interpolate_field!(writer::NetCDFWriter, field, diagnostic, u, p, t)
 
     var = diagnostic.variable
 
     space = axes(field)
-    FT = Spaces.undertype(space)
 
     horizontal_space = Spaces.horizontal_space(space)
 
@@ -644,12 +648,44 @@ function write_field!(
 
     # Now we can interpolate onto the target points
     # There's an MPI call in here (to aggregate the results)
-    interpolated_field = interpolate(remapper, field)
+    #
+    # The first time we call this, we call interpolate and allocate a new array.
+    # Future calls are in-place
+    if haskey(writer.preallocated_output_arrays, var.short_name)
+        interpolate!(
+            writer.preallocated_output_arrays[var.short_name],
+            remapper,
+            field,
+        )
+    else
+        writer.preallocated_output_arrays[var.short_name] =
+            interpolate(remapper, field)
+    end
+    return nothing
+end
 
+function outpath_name(output_dir, diagnostic)
+    joinpath(output_dir, "$(diagnostic.output_short_name).nc")
+end
+
+function save_diagnostic_to_disk!(
+    writer::NetCDFWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    output_dir,
+)
     # Only the root process has to write
-    ClimaComms.iamroot(ClimaComms.context(field)) || return
+    ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
-    output_path = joinpath(output_dir, "$(diagnostic.output_short_name).nc")
+    var = diagnostic.variable
+    interpolated_field = writer.preallocated_output_arrays[var.short_name]
+    space = axes(field)
+    FT = Spaces.undertype(space)
+
+    output_path = outpath_name(output_dir, diagnostic)
 
     if !haskey(writer.open_files, output_path)
         # Append or write a new file
@@ -706,7 +742,19 @@ function write_field!(
     elseif length(dim_names) == 1
         v[time_index, :] = interpolated_field
     end
+    return nothing
+end
 
-    # Write data to disk
-    NCDatasets.sync(writer.open_files[output_path])
+function write_field!(
+    writer::NetCDFWriter,
+    field,
+    diagnostic,
+    u,
+    p,
+    t,
+    output_dir,
+)
+    interpolate_field!(writer, field, diagnostic, u, p, t)
+    save_diagnostic_to_disk!(writer, field, diagnostic, u, p, t, output_dir)
+    return nothing
 end

@@ -4,7 +4,7 @@ using NCDatasets
 import ClimaAtmos
 import ClimaAtmos as CA
 import Thermodynamics as TD
-import CLIMAParameters as CP
+import ClimaParams as CP
 import ClimaComms
 using ClimaCoreTempestRemap
 
@@ -15,6 +15,9 @@ include("../../../post_processing/remap/remap_helpers.jl")
 include("../gw_plotutils.jl")
 
 comms_ctx = ClimaComms.SingletonCommsContext()
+test_args = ClimaAtmos.cli_defaults(CA.argparse_settings())
+config_dict = Dict("topo_smoothing" => false, "mesh_warp_type" => "Linear")
+parsed_args = CA.AtmosConfig(config_dict).parsed_args
 
 # load gfdl data
 include(joinpath(pkgdir(ClimaAtmos), "artifacts", "artifact_funcs.jl"))
@@ -100,12 +103,14 @@ quad = Quadratures.GLL{nh_poly + 1}()
 horizontal_mesh = CA.cubed_sphere_mesh(; radius, h_elem)
 h_space = CA.make_horizontal_space(horizontal_mesh, quad, comms_ctx, false)
 
+
 z_stretch = Meshes.GeneralizedExponentialStretching(dz_bottom, dz_top)
 center_space, face_space = CA.make_hybrid_spaces(
     h_space,
     z_max,
     z_elem,
     z_stretch;
+    parsed_args,
     surface_warp = warp_function,
 )
 

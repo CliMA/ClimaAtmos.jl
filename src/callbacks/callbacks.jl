@@ -231,6 +231,7 @@ end
 import Dates
 function print_walltime_estimate(integrator)
     (; walltime_estimate, dt, t_end) = integrator.p
+    t_start = integrator.sol.prob.tspan[1]
     wte = walltime_estimate
 
     # Notes on `ready_to_report`
@@ -258,11 +259,11 @@ function print_walltime_estimate(integrator)
 
     if wte.n_calls == wte.n_next && ready_to_report
         t = integrator.t
-        n_steps_total = ceil(Int, t_end / dt)
-        n_steps = ceil(Int, t / dt)
+        n_steps_total = ceil(Int, (t_end - t_start) / dt)
+        n_steps = ceil(Int, (t - t_start) / dt)
         wall_time_ave_per_step = wte.∑Δt_wall / n_steps
         wall_time_ave_per_step_str = time_and_units_str(wall_time_ave_per_step)
-        percent_complete = round(t / t_end * 100; digits = 1)
+        percent_complete = round((t - t_start) / t_end * 100; digits = 1)
         n_steps_remaining = n_steps_total - n_steps
         wall_time_remaining = wall_time_ave_per_step * n_steps_remaining
         wall_time_remaining_str = time_and_units_str(wall_time_remaining)
@@ -272,7 +273,7 @@ function print_walltime_estimate(integrator)
         simulation_time = time_and_units_str(Float64(t))
         sypd = round(
             simulated_years_per_day(
-                EfficiencyStats((zero(t), t), wte.∑Δt_wall),
+                EfficiencyStats((t_start, t), wte.∑Δt_wall),
             );
             digits = 3,
         )

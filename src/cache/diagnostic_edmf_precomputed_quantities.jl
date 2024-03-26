@@ -63,7 +63,8 @@ function set_diagnostic_edmfx_env_quantities_level!(
     turbconv_model,
 )
     @. u³⁰_halflevel = divide_by_ρa(
-        ρ_level * u³_halflevel - mapreduce(*, +, ρaʲs_level, u³ʲs_halflevel),
+        ρ_level * u³_halflevel -
+        unrolled_dotproduct(ρaʲs_level, u³ʲs_halflevel),
         ρ_level,
         ρ_level * u³_halflevel,
         ρ_level,
@@ -483,6 +484,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 p_prev_level,
                 ρ_prev_level,
                 buoyancy_flux_sfc_halflevel,
+                ρaʲ_prev_level,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
                 get_physical_w(
                     u³ʲ_prev_halflevel,
@@ -498,6 +500,7 @@ function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
                 FT(0),
                 entrʲ_prev_level,
                 vert_div_level,
+                FT(0), # mass flux divergence is not implemented for diagnostic edmf
                 p.atmos.edmfx_detr_model,
             )
 
