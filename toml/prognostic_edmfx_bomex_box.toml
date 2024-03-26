@@ -36,3 +36,6 @@ value = 1
 
 [max_area_limiter_scale]
 value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 40.0
