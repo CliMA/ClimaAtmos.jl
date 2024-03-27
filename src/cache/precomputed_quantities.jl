@@ -443,7 +443,7 @@ function instead of recomputing the value yourself. Otherwise, it will be
 difficult to ensure that the duplicated computations are consistent.
 """
 NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
-    (; moisture_model, turbconv_model, vert_diff, precip_model) = p.atmos
+    (; moisture_model, turbconv_model, vert_diff, precip_model, cloud_model) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_args = (thermo_params, moisture_model)
@@ -618,7 +618,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     # TODO
-    set_cloud_fraction!(Y, p, atmos.moisture_model, atmos.cloud_model)
+    set_cloud_fraction!(Y, p, moisture_model, cloud_model)
 
     return nothing
 end
