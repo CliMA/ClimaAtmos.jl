@@ -141,7 +141,7 @@ bubble:
   value: true
 start_date:
   help: "Start date of the simulation"
-  value: "19790101"
+  value: "20050117"  # Where the current aerosol data begins
 forcing:
   help: "Forcing [`nothing` (default), `held_suarez`]"
   value: ~
@@ -277,3 +277,6 @@ deep_atmosphere:
 restart_file:
   help: "Path to HDF5 file to use as simulation starting point"
   value: ~
+prescribed_aerosols:
+  help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
+  value: []

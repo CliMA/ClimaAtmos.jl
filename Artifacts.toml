@@ -1,0 +1,6 @@
+[aerosol2005]
+git-tree-sha1 = "9da4af348af2606764e5e2c94d9439714221dff1"
+
+    [[aerosol2005.download]]
+    sha256 = "952d723b8462439c266dc0df79d0d4e71f774559edb941e03b7979e8ad743f56"
+    url = "https://caltech.box.com/shared/static/chmel1vdthfvfac0yl61ayw2jqnjzr2c.gz"

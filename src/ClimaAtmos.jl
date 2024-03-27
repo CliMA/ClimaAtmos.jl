@@ -105,6 +105,7 @@ include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(joinpath("prognostic_equations", "advection.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
+include(joinpath("cache", "tracer_cache.jl"))
 include(joinpath("cache", "cache.jl"))
 include(joinpath("prognostic_equations", "dss.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
