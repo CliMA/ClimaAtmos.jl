@@ -11,7 +11,7 @@ precip_model: "1M"
 rad: "allskywithclear"
 idealized_insolation: false
 dt_rad: "1hours"
-dt_cloud_fraction: "1hours"
+dt_cloud_fraction: "100secs"
 vert_diff: "FriersonDiffusion"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
