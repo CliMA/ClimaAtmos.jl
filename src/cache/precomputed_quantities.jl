@@ -618,7 +618,7 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     end
 
     # TODO
-    #set_cloud_fraction!(Y, p, moisture_model)
+    set_cloud_fraction!(Y, p, moisture_model)
 
     return nothing
 end

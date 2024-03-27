@@ -33,6 +33,14 @@ NVTX.@annotate function set_cloud_fraction!(
     (; ᶜts, ᶜmixing_length, ᶜcloud_fraction) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     if isnothing(turbconv_model)
+        (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+        thermo_params = CAP.thermodynamics_params(p.params)
+        @. ᶜgradᵥ_θ_virt =
+            ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_q_tot =
+            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_θ_liq_ice =
+            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
     @. ᶜcloud_fraction = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0)
@@ -50,6 +58,14 @@ NVTX.@annotate function set_cloud_fraction!(
     (; ᶜts, ᶜp, ᶜmixing_length, ᶜcloud_fraction) = p.precomputed
     (; turbconv_model) = p.atmos
     if isnothing(turbconv_model)
+        (; ᶜgradᵥ_θ_virt, ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+        thermo_params = CAP.thermodynamics_params(p.params)
+        @. ᶜgradᵥ_θ_virt =
+            ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_q_tot =
+            ᶜgradᵥ(ᶠinterp(TD.total_specific_humidity(thermo_params, ᶜts)))
+        @. ᶜgradᵥ_θ_liq_ice =
+            ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts)))
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
 
