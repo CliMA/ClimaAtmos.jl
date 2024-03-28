@@ -3,6 +3,9 @@ initial_condition: TRMM_LBA
 rad: TRMM_LBA
 surface_setup: TRMM_LBA
 turbconv: prognostic_edmfx
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
 edmfx_detr_model: "Generalized"
@@ -20,7 +23,7 @@ x_elem: 2
 y_elem: 2
 z_elem: 82
 z_stretch: false
-dt: 5secs
+dt: 50secs
 t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"

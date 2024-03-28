@@ -15,3 +15,15 @@ function zero_gridscale_tendency!(Yₜ, Y, p, t, colidx)
     end
     return nothing
 end
+
+function zero_subgridscale_tendency!(Yₜ, Y, p, t, colidx)
+    # turn off all subgrid-scale tendencies
+    n = n_prognostic_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] = 0
+        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] = C3(0)
+        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] = 0
+        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] = 0
+    end
+    return nothing
+end
