@@ -397,7 +397,7 @@ function atmos_surface_conditions(
         obukhov_length = L_MO,
         buoyancy_flux = buoy_flux,
         # This drops the C3 component of ρ_flux_u, need to add ρ_flux_u₃
-        ρ_flux_uₕ = surface_momentum_flux(ρτxz, ρτyz, surface_local_geometry, n̂),
+        ρ_flux_uₕ = vector_flux(ρτxz, ρτyz, surface_local_geometry, n̂),
         energy_flux...,
         moisture_flux...,
     )
