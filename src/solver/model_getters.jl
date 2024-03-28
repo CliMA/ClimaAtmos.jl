@@ -16,7 +16,7 @@ function get_model_config(parsed_args)
     valid_configurations = ("sphere", "column", "box", "plane")
 
     if !(config ∈ valid_configurations)
-        error_message = string("config = $config is not one of the",
+        error_message = string("config = $config is not one of the ",
                                "valid configurations $valid_configurations")
         throw(ArgumentError(error_message))
     end
