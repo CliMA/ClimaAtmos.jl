@@ -22,7 +22,7 @@ z_max: 3e3
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
-dt: "60secs"
+dt: "50secs"
 t_end: "6hours"
 dt_save_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_bomex_box.toml]
