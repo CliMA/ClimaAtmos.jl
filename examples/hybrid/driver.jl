@@ -36,9 +36,6 @@ using Test
 import Tar
 import Base.Filesystem: rm
 import OrderedCollections
-using ClimaCoreTempestRemap
-using ClimaCorePlots
-using ClimaCoreMakie, CairoMakie
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
@@ -260,7 +257,7 @@ if ClimaComms.iamroot(config.comms_ctx)
         paths = if isempty(readdir(nc_dir))
             simulation.output_dir
         else
-            [nc_dir, simulation.output_dir]
+            [simulation.output_dir, nc_dir]
         end
         make_plots(Val(Symbol(reference_job_id)), paths)
     end
