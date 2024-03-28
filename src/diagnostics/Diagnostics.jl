@@ -29,6 +29,10 @@ import ..Microphysics1Moment
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 
+# vert_diff
+import ..VerticalDiffusion
+import ..FriersonDiffusion
+
 # turbconv_model
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
