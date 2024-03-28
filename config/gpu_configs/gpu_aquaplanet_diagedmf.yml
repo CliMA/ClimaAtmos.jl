@@ -25,5 +25,5 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 precip_model: 0M
 dt: 100secs 
-t_end: 12hours 
+t_end: 1days 
 toml: [toml/diagnostic_edmfx_box.toml]
