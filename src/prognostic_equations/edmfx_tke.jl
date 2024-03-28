@@ -55,7 +55,7 @@ function edmfx_tke_tendency!(
                 )
         end
         # pressure work
-        @. Yₜ.c.sgs⁰.ρatke[colidx] += ᶜtke_press[colidx]
+        #@. Yₜ.c.sgs⁰.ρatke[colidx] += ᶜtke_press[colidx]
     end
 
     return nothing
