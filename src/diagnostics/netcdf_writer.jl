@@ -527,7 +527,7 @@ function NetCDFWriter(;
     cspace,
     num_points = (180, 90, 50),
     disable_vertical_interpolation = false,
-    compression_level = 9,
+    compression_level = 0,
 )
     space = cspace
     horizontal_space = Spaces.horizontal_space(space)
