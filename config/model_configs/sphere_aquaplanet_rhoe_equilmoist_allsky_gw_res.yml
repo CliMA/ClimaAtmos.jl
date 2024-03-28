@@ -18,3 +18,7 @@ surface_setup: "DefaultMoninObukhov"
 prescribed_aerosols: ["CB1", "CB2"]
 job_id: "sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res"
 toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+diagnostics:
+  - short_name: [edt, evu]
+    reduction_time: average
+    period: "1days"
