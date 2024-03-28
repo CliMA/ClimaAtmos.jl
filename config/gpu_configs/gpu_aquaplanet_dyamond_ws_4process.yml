@@ -18,6 +18,6 @@ approximate_linear_solve_iters: 2
 surface_setup: "DefaultMoninObukhov"
 rayleigh_sponge: true
 dt: "100secs"
-t_end: "12hours"
+t_end: "1days"
 job_id: "gpu_aquaplanet_dyamond_ws_4process"
 toml: [toml/longrun_aquaplanet_dyamond.toml]

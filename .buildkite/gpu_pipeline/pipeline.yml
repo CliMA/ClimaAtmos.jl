@@ -105,6 +105,22 @@ steps:
   - group: "DYAMOND GPU strong scaling"
     steps:
 
+      - label: "gpu_aquaplanet_dyamond with diagnostics - strong scaling - 1 GPU"
+        command:
+          - mkdir -p gpu_aquaplanet_dyamond_ss_diag_1process
+          - >
+            srun --cpu-bind=threads --cpus-per-task=4
+            julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_diag_1process.yml
+        artifact_paths: "gpu_aquaplanet_dyamond_ss_diag_1process/*"
+        agents:
+          slurm_gpus_per_task: 1
+          slurm_cpus_per_task: 4
+          slurm_ntasks: 1
+          slurm_mem: 32G
+          slurm_time: 8:00:00
+          slurm_exclusive:
+
       - label: "gpu_aquaplanet_dyamond - strong scaling - 1 GPU"
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_1process
