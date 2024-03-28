@@ -36,9 +36,6 @@ using Test
 import Tar
 import Base.Filesystem: rm
 import OrderedCollections
-using ClimaCoreTempestRemap
-using ClimaCorePlots
-using ClimaCoreMakie, CairoMakie
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
