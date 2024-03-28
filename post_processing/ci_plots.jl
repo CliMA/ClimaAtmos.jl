@@ -1037,6 +1037,7 @@ function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
         "haup",
         "waup",
         "tke",
+        "lmix",
         "arup",
         "hus",
         "husup",
