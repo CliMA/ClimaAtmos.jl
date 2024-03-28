@@ -12,7 +12,17 @@ end
 
 function get_model_config(parsed_args)
     config = parsed_args["config"]
-    @assert config in ("sphere", "column", "box", "plane")
+
+    valid_configurations = ("sphere", "column", "box", "plane")
+
+    if !(config ∈ valid_configurations)
+        error_message = string(
+            "config = $config is not one of the ",
+            "valid configurations $valid_configurations",
+        )
+        throw(ArgumentError(error_message))
+    end
+
     return if config == "sphere"
         SphericalModel()
     elseif config == "column"
