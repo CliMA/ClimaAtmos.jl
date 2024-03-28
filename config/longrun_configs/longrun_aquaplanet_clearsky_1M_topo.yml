@@ -21,4 +21,4 @@ approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
 job_id: "longrun_aquaplanet_clearsky_1M_topo"
-toml: ["toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth.toml"]
+toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth.toml]

@@ -9,10 +9,10 @@ rayleigh_sponge: true
 moist: "equil"
 precip_model: "1M"
 vorticity_hyperdiffusion_coefficient: 2.0
-divergence_damping_factor: 2.0
-scalar_hyperdiffusion_coefficient: 4.0
+divergence_damping_factor: 1.0
+scalar_hyperdiffusion_coefficient: 2.0
 topo_smoothing: true
-smoothing_order: 2
+smoothing_order: 3
 topography: "Earth"
 mesh_warp_type: "SLEVE"
 surface_setup: "DefaultMoninObukhov"
@@ -22,4 +22,4 @@ approximate_linear_solve_iters: 2
 rad: "clearsky"
 dt_rad: "6hours"
 job_id: "longrun_aquaplanet_clearsky_1M_topo_sleve"
-toml: ["toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve.toml"]
+toml: [toml/longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth_sleve.toml]
