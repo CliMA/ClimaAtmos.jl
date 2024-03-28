@@ -880,6 +880,13 @@ steps:
         agents:
           slurm_mem: 24GB
 
+      - label: "Import time"
+        command:
+          - "julia --color=yes --project -e '@show time = @elapsed using ClimaAtmos; @assert 5.0 < time < 20.0'"
+          - "julia --color=yes --project -e 'using InteractiveUtils; @time_imports using ClimaAtmos'"
+        agents:
+          slurm_constraint: icelake
+
   - wait: ~
     continue_on_failure: true
 
