@@ -385,7 +385,7 @@ function atmos_surface_conditions(
     # surface normal
     n̂ = surface_normal(surface_local_geometry)
 
-    energy_flux = (; ρ_flux_h_tot = scalar_flux(shf + lhf, * n̂))
+    energy_flux = (; ρ_flux_h_tot = scalar_flux(shf + lhf, n̂))
 
     moisture_flux =
         atmos.moisture_model isa DryModel ? (;) :
