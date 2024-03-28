@@ -8,9 +8,9 @@ z_max: 55000.0
 rayleigh_sponge: true
 moist: "equil"
 precip_model: "1M"
-vorticity_hyperdiffusion_coefficient: 2.0
+vorticity_hyperdiffusion_coefficient: 3.0
 divergence_damping_factor: 1.0
-scalar_hyperdiffusion_coefficient: 2.0
+scalar_hyperdiffusion_coefficient: 3.0
 topo_smoothing: true
 smoothing_order: 3
 topography: "Earth"
