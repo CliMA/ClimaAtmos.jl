@@ -1,0 +1,14 @@
+[zd_rayleigh]
+value = 35000.0
+
+[alpha_rayleigh_uh]
+value = 0.0
+
+[zd_viscous]
+value = 35000.0
+
+[kappa_2_sponge]
+value = 4e6
+
+[precipitation_timescale]
+value = 600

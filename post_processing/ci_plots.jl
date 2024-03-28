@@ -1135,8 +1135,6 @@ function make_plots(
         "cl",
         "clw",
         "clwup",
-        "cli",
-        "cliup",
         precip_names...,
     ]
     reduction = "inst"
@@ -1168,6 +1166,13 @@ function make_plots(
         ([slice(v, time = LAST_SNAP) for v in group]...,) for
         group in var_groups_zt
     ]
+    # var_groups_z = [
+    #     (
+    #         [
+    #             ClimaAnalysis.window(v, "time", left = 14400, right = 21600) |> ClimaAnalysis.average_time for v in group
+    #         ]...,
+    #     ) for group in var_groups_zt
+    # ]
 
     tmp_file = make_plots_generic(
         output_paths,

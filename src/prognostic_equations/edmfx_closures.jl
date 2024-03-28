@@ -242,9 +242,15 @@ function mixing_length(
         l_TKE > l_z ? l_z : l_TKE,
         l_W > l_z ? l_z : l_W,
     )
+    # l = SA.SVector(
+    #     (l_N < eps(FT) || l_N > l_z) ? l_z : l_N,
+    #     (l_TKE < eps(FT) || l_TKE > l_z) ? l_z : l_TKE,
+    #     (l_W < eps(FT) || l_W > l_z) ? l_z : l_W,
+    # )
     # get soft minimum
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
+    #l_limited = min(200, l_z)
 
     return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
 end
@@ -298,6 +304,8 @@ function edmfx_filter_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
+    (; ᶜK, ᶜh_tot, ᶜspecific, ᶜρa⁰, ᶜtke⁰) = p.precomputed
+    ᶜu₃ʲ = p.scratch.ᶜtemp_C3
 
     if p.atmos.edmfx_filter
         for j in 1:n

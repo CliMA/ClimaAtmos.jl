@@ -13,12 +13,16 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
+    turbconv_params = CAP.turbconv_params(p.params)
+    a_max = CAP.max_area(turbconv_params)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    FT = eltype(Y)
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy

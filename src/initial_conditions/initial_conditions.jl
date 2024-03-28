@@ -881,6 +881,13 @@ end
 The `InitialCondition` described in [Brown2002](@cite), but with a
 hydrostatically balanced pressure profile.
 """
+
+bomex_tke(::Type{FT}) where {FT} = z -> if (z <= 2500.0)
+    FT(1) - z / 3000
+else
+    FT(0)
+end
+
 Base.@kwdef struct ARM_SGP <: InitialCondition
     prognostic_tke::Bool = false
 end
@@ -918,7 +925,7 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
                 ),
                 velocity = Geometry.UVector(u(z)),
                 turbconv_state = EDMFState(;
-                    tke = prognostic_tke ? FT(0) : tke(z),
+                    tke = prognostic_tke ? bomex_tke(FT)(z) : tke(z),
                 ),
             )
         end

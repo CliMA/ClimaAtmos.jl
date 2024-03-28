@@ -1,0 +1,24 @@
+h_elem: 12
+z_max: 55000.0
+z_elem: 30
+dz_bottom: 100.0
+dz_top: 3000.0
+moist: "equil"
+precip_model: "0M"
+override_τ_precip: false
+rad: "clearsky"
+dt_rad: "6hours"
+surface_setup: "DefaultMoninObukhov"
+vert_diff: "FriersonDiffusion"
+rayleigh_sponge: true
+viscous_sponge: true
+dt_save_state_to_disk: "10days"
+dt: "200secs"
+t_end: "100days"
+toml: [toml/longrun_aquaplanet_equil_helem12_clearsky_0M_viscous.toml]
+netcdf_output_at_levels: true
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 10days
+  - short_name: [lmix, bgrad, strain, edt, evu]
+    period: 10days
