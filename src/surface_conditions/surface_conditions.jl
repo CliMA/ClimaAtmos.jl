@@ -403,16 +403,19 @@ function atmos_surface_conditions(
     )
 end
 
-@inline surface_normal(𝒢::Geometry.LocalGeometry) = C3(unit_basis_vector_data(C3, 𝒢))
+@inline surface_normal(𝒢::Geometry.LocalGeometry) =
+    C3(unit_basis_vector_data(C3, 𝒢))
 
 @inline scalar_flux(flux, n̂) = flux * n̂
-@inline scalar_flux(flux, 𝒢::Geometry.LocalGeometry) = scalar_flux(flux, surface_normal(𝒢))
+@inline scalar_flux(flux, 𝒢::Geometry.LocalGeometry) =
+    scalar_flux(flux, surface_normal(𝒢))
 
-@inline function vector_flux(σxz, σyz, 𝒢, n̂=surface_normal(𝒢))
+@inline function vector_flux(σxz, σyz, 𝒢, n̂ = surface_normal(𝒢))
     return n̂ ⊗ C12(
-            σxz * CT12(CT1(unit_basis_vector_data(CT1, 𝒢)), 𝒢) + 
-            σyz * CT12(CT2(unit_basis_vector_data(CT2, 𝒢)), 𝒢), 
-            𝒢)
+        σxz * CT12(CT1(unit_basis_vector_data(CT1, 𝒢)), 𝒢) +
+        σyz * CT12(CT2(unit_basis_vector_data(CT2, 𝒢)), 𝒢),
+        𝒢,
+    )
 end
 
 """
