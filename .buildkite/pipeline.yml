@@ -579,6 +579,14 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_stretched_box/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMFX Bomex in a column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
+        artifact_paths: "prognostic_edmfx_bomex_column/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMFX Dycoms RF01 in a box"
         command: >
