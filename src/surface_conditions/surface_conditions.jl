@@ -409,9 +409,10 @@ end
 @inline scalar_flux(flux, 𝒢::Geometry.LocalGeometry) = scalar_flux(flux, surface_normal(𝒢))
 
 @inline function vector_flux(σxz, σyz, 𝒢, n̂=surface_normal(𝒢))
-    x̂ẑ = CT12(CT1(unit_basis_vector_data(CT1, 𝒢)), 𝒢)
-    ŷẑ = CT12(CT2(unit_basis_vector_data(CT2, 𝒢)), 𝒢)
-    σ = C12(σxz * x̂ẑ + σyz * ŷẑ, 𝒢)
+    σ = C12(
+            σxz * CT12(CT1(unit_basis_vector_data(CT1, 𝒢)), 𝒢) + 
+            σyz * CT12(CT2(unit_basis_vector_data(CT2, 𝒢)), 𝒢), 
+            𝒢)
     return n̂ ⊗ σ
 end
 
