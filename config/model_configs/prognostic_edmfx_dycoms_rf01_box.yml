@@ -6,6 +6,7 @@ rad: DYCOMS_RF01
 surface_setup: DYCOMS_RF01
 turbconv: prognostic_edmfx
 implicit_diffusion: true
+implicit_sgs_advection: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
 edmfx_upwinding: first_order
