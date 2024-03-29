@@ -19,7 +19,7 @@ percent_reduction_mse = Dict()
 computed_mse = OrderedCollections.OrderedDict()
 files_skipped = OrderedCollections.OrderedDict()
 for job_id in job_ids
-    filename = joinpath(job_id, "computed_mse.json")
+    filename = joinpath(job_id, "output_active/computed_mse.json")
     if !isfile(filename)
         @warn "File $filename skipped"
         files_skipped[job_id] = true
