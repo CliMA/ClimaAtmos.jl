@@ -34,7 +34,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
 
-        if p.atmos.diff_mode == Explicit()
+        if p.atmos.sgs_adv_mode == Explicit()
             edmfx_sgs_vertical_advection_tendency!(
                 Yₜ,
                 Y,
@@ -43,6 +43,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 colidx,
                 p.atmos.turbconv_model,
             )
+        end
+
+        if p.atmos.diff_mode == Explicit()
             vertical_diffusion_boundary_layer_tendency!(
                 Yₜ,
                 Y,
