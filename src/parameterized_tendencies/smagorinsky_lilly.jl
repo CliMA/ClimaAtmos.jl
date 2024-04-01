@@ -177,7 +177,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
         ) / Y.c.ρ[colidx],
     )
 
-    # TODO: is the code below doing what you think it does?
     divᵥ_u3 = Operators.DivergenceC2F(
         top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
         bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))), 
@@ -207,12 +206,11 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
 				  )
     end
 
+    ρ_flux_χ = p.scratch.sfc_temp_C3
     for (ᶜρχₜ, ᶜχ, χ_name) in matching_subfields(Yₜ.c, ᶜspecific)
         χ_name == :e_tot && continue
         if χ_name == :q_tot
             @. ρ_flux_χ[colidx] = sfc_conditions.ρ_flux_q_tot[colidx]
-        elseif χ_name == :θ
-            @. ρ_flux_χ[colidx] = sfc_conditions.ρ_flux_θ[colidx]
         else
             @. ρ_flux_χ[colidx] = C3(FT(0))
         end
