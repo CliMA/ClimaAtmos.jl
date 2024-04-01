@@ -438,3 +438,15 @@ function get_tracers(parsed_args)
     aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
     return (; aerosol_names)
 end
+
+function get_tendency_model(parsed_args)
+    zero_tendency_name = parsed_args["zero_tendency"]
+    @assert zero_tendency_name in (nothing, "grid_scale", "subgrid_scale")
+    return if zero_tendency_name == "grid_scale"
+        NoGridScaleTendency()
+    elseif zero_tendency_name == "subgrid_scale"
+        NoSubgridScaleTendency()
+    elseif isnothing(zero_tendency_name)
+        UseAllTendency()
+    end
+end
