@@ -1,3 +1,4 @@
+device: "CPUSingleThreaded"
 job_id: "les_bomex_box"
 initial_condition: "Bomex" 
 subsidence: "Bomex" 
@@ -6,11 +7,12 @@ surface_setup: "Bomex"
 moist: "equil"
 config: "box" 
 hyperdiff: "true" 
-vert_diff: "true"
-implicit_diffusion: true
+implicit_diffusion: false
 approximate_linear_solve_iters: 2
 vorticity_hyperdiffusion_coefficient: 0.1
 scalar_hyperdiffusion_coefficient: 0.1
+smagorinsky_lilly: true
+c_smag: 0.20
 x_max: 1e3
 y_max: 1e3 
 z_max: 2e3 
@@ -18,11 +20,10 @@ x_elem: 10
 y_elem: 10
 z_elem: 40 
 z_stretch: false
-dt: "5secs" 
-t_end: "6hours" 
+dt: "0.5secs" 
+t_end: "0.5secs" 
 dt_save_state_to_disk: "10mins"
-#netcdf_output_at_levels: true
-#netcdf_interpolation_num_points: [20, 20, 80]
-#diagnostics:
-#  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
-#    period: 10mins
+netcdf_interpolation_num_points: [40, 40, 80]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 10mins
