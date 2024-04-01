@@ -11,31 +11,19 @@ smagorinsky_lilly_cache(Y, atmos::AtmosModel) =
     smagorinsky_lilly_cache(Y, atmos.smagorinsky_lilly)
 
 smagorinsky_lilly_cache(Y, ::Nothing) = (;)
+
 function smagorinsky_lilly_cache(Y, sl::SmagorinskyLilly)
     # D = v/Pr, where v = (Cs * cbrt(J))^2 * sqrt(2*Sij*Sij). The cube root of the
     # volume is the average length of the sides of the cell.
     (; Cs) = sl
-    
     FT = eltype(Y)
-
-    ᶜtemp_scalar = similar(Y.c.ρ, FT)
     ᶜtemp_scalar_2 = similar(Y.c.ρ, FT)
     ᶜtemp_scalar_3 = similar(Y.c.ρ, FT)
-    ᶠtemp_C123 = similar(Y.f, C123{FT})
-    ᶜtemp_CT3 = similar(Y.c, CT3{FT})
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜshear² = ᶜtemp_scalar
-    ᶠu = ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(Y.f.u₃)
-
-    ct3_unit = ᶜtemp_CT3
-    @. ct3_unit = CT3(Geometry.WVector(FT(1)), ᶜlg)
-    @. ᶜshear² = norm_sqr(adjoint(CA.ᶜgradᵥ(ᶠu)) * ct3_unit)
-
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶜD = ᶜtemp_scalar_2
     νₜ = ᶜtemp_scalar_3
-    @. νₜ = ((Cs * cbrt(ᶜJ))^2)*sqrt(2 * (ᶜshear²))
+    @. νₜ *= FT(0)
+    @. ᶜD *= FT(0)
     Δ_filter = @. cbrt(ᶜJ)
     return (; νₜ, ᶜD, Δ_filter)
 end
