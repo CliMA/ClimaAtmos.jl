@@ -12,7 +12,17 @@ end
 
 function get_model_config(parsed_args)
     config = parsed_args["config"]
-    @assert config in ("sphere", "column", "box", "plane")
+
+    valid_configurations = ("sphere", "column", "box", "plane")
+
+    if !(config ∈ valid_configurations)
+        error_message = string(
+            "config = $config is not one of the ",
+            "valid configurations $valid_configurations",
+        )
+        throw(ArgumentError(error_message))
+    end
+
     return if config == "sphere"
         SphericalModel()
     elseif config == "column"
@@ -433,4 +443,9 @@ function get_surface_thermo_state_type(parsed_args)
     dict = Dict()
     dict["GCMSurfaceThermoState"] = GCMSurfaceThermoState()
     return dict[parsed_args["surface_thermo_state_type"]]
+end
+
+function get_tracers(parsed_args)
+    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
+    return (; aerosol_names)
 end

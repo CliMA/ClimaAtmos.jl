@@ -104,7 +104,7 @@ for device in keys(timings)
     NCDatasets.defDim(nc, "x", NUM)
     NCDatasets.defDim(nc, "y", NUM)
     NCDatasets.defDim(nc, "z", NUM)
-    v = NCDatasets.defVar(nc, "rhoa", Float32, ("time", "x", "y", "z"))
+    v = NCDatasets.defVar(nc, "rhoa", Float64, ("time", "x", "y", "z"))
     outarray = Array(netcdf_writer.remappers["rhoa"]._interpolated_values)
     v[1, :, :, :] = outarray
 

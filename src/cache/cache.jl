@@ -25,6 +25,7 @@ struct AtmosCache{
     NONGW,
     ORGW,
     RAD,
+    TRAC,
     NETFLUXTOA,
     NETFLUXSFC,
     CONSCHECK,
@@ -39,7 +40,7 @@ struct AtmosCache{
     """Walltime estimate"""
     walltime_estimate::WTE
 
-    """Start date (used for insolation)."""
+    """Start date (used for insolation and for data files)."""
     start_date::SD
 
     """AtmosModel"""
@@ -87,6 +88,7 @@ struct AtmosCache{
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
+    tracers::TRAC
 
     """Net energy flux coming through top of atmosphere and surface"""
     net_energy_flux_toa::NETFLUXTOA
@@ -111,7 +113,7 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, sim_info)
+function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
@@ -231,6 +233,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
+    tracers = tracer_cache(Y, atmos, aerosol_names, start_date)
 
     args = (
         dt,
@@ -259,6 +262,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,
+        tracers,
         net_energy_flux_toa,
         net_energy_flux_sfc,
         conservation_check,

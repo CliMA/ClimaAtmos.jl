@@ -9,7 +9,10 @@ use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ImplicitEquationJacobian(Y, atmos; approximate_solve_iters, diffusion_flag, topography_flag, transform_flag)
+    ImplicitEquationJacobian(
+        Y, atmos; 
+        approximate_solve_iters, diffusion_flag, topography_flag, sgs_advection_flag, transform_flag
+    )
 
 A wrapper for the matrix ``∂E/∂Y``, where ``E(Y)`` is the "error" of the
 implicit step with the state ``Y``.
@@ -76,9 +79,13 @@ is reached.
 - `diffusion_flag::DerivativeFlag`: whether the derivative of the
   diffusion tendency with respect to the quantities being diffused should be
   computed or approximated as 0; must be either `UseDerivative()` or
-  `Ignoreerivative()` instead of a `Bool` to ensure type-stability
+  `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
 - `topography_flag::DerivativeFlag`: whether the derivative of vertical
   contravariant velocity with respect to horizontal covariant velocity should be
+  computed or approximated as 0; must be either `UseDerivative()` or
+  `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
+- `sgs_advection_flag::DerivativeFlag`: whether the derivative of the
+  subgrid-scale advection tendency with respect to the updraft quantities should be
   computed or approximated as 0; must be either `UseDerivative()` or
   `IgnoreDerivative()` instead of a `Bool` to ensure type-stability
 - `transform_flag::Bool`: whether the error should be transformed from ``E(Y)``
@@ -90,6 +97,7 @@ struct ImplicitEquationJacobian{
     S <: MatrixFields.FieldMatrixSolver,
     F1 <: DerivativeFlag,
     F2 <: DerivativeFlag,
+    F3 <: DerivativeFlag,
     T <: Fields.FieldVector,
     R <: Base.RefValue,
 }
@@ -102,6 +110,7 @@ struct ImplicitEquationJacobian{
     # flags that determine how E'(Y) is approximated
     diffusion_flag::F1
     topography_flag::F2
+    sgs_advection_flag::F3
 
     # required by Krylov.jl to evaluate ldiv! with AbstractVector inputs
     temp_b::T
@@ -120,6 +129,8 @@ function ImplicitEquationJacobian(
                      IgnoreDerivative(),
     topography_flag = has_topography(axes(Y.c)) ? UseDerivative() :
                       IgnoreDerivative(),
+    sgs_advection_flag = atmos.sgs_adv_mode == Implicit() ? UseDerivative() :
+                         IgnoreDerivative(),
     transform_flag = false,
 )
     FT = Spaces.undertype(axes(Y.c))
@@ -214,14 +225,14 @@ function ImplicitEquationJacobian(
         )
     end
 
-    sgs_blocks = if atmos.turbconv_model isa PrognosticEDMFX
+    sgs_advection_blocks = if atmos.turbconv_model isa PrognosticEDMFX
         @assert n_prognostic_mass_flux_subdomains(atmos.turbconv_model) == 1
         sgs_scalar_names = (
             @name(c.sgsʲs.:(1).q_tot),
             @name(c.sgsʲs.:(1).mse),
             @name(c.sgsʲs.:(1).ρa)
         )
-        if use_derivative(diffusion_flag)
+        if use_derivative(sgs_advection_flag)
             (
                 MatrixFields.unrolled_map(
                     name -> (name, name) => similar(Y.c, TridiagonalRow),
@@ -261,7 +272,7 @@ function ImplicitEquationJacobian(
 
     matrix = MatrixFields.FieldMatrix(
         identity_blocks...,
-        sgs_blocks...,
+        sgs_advection_blocks...,
         advection_blocks...,
         diffusion_blocks...,
     )
@@ -287,49 +298,60 @@ function ImplicitEquationJacobian(
     )
 
     alg₂ = MatrixFields.BlockLowerTriangularSolve(@name(c.uₕ))
-    alg = if use_derivative(diffusion_flag)
-        alg₁_subalg₂ = if atmos.turbconv_model isa PrognosticEDMFX
-            (;
-                alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                    @name(c.sgsʲs.:(1).q_tot);
-                    alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                        @name(c.sgsʲs.:(1).mse);
-                        alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                            @name(c.sgsʲs.:(1).ρa),
-                            @name(f.sgsʲs.:(1).u₃);
+    alg =
+        if use_derivative(diffusion_flag) || use_derivative(sgs_advection_flag)
+            alg₁_subalg₂ =
+                if atmos.turbconv_model isa PrognosticEDMFX &&
+                   use_derivative(sgs_advection_flag)
+                    diff_subalg =
+                        use_derivative(diffusion_flag) ?
+                        (;
                             alg₂ = MatrixFields.BlockLowerTriangularSolve(
                                 names₁_group₂...,
+                            )
+                        ) : (;)
+                    (;
+                        alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                            @name(c.sgsʲs.:(1).q_tot);
+                            alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                                @name(c.sgsʲs.:(1).mse);
+                                alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                                    @name(c.sgsʲs.:(1).ρa),
+                                    @name(f.sgsʲs.:(1).u₃);
+                                    diff_subalg...,
+                                ),
                             ),
-                        ),
-                    ),
-                )
+                        )
+                    )
+                else
+                    is_in_Y(@name(c.ρq_tot)) ?
+                    (;
+                        alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                            names₁_group₂...,
+                        )
+                    ) : (;)
+                end
+            alg₁ = MatrixFields.BlockLowerTriangularSolve(
+                names₁_group₁...;
+                alg₁_subalg₂...,
+            )
+            MatrixFields.ApproximateBlockArrowheadIterativeSolve(
+                names₁...;
+                alg₁,
+                alg₂,
+                P_alg₁ = MatrixFields.MainDiagonalPreconditioner(),
+                n_iters = approximate_solve_iters,
             )
         else
-            is_in_Y(@name(c.ρq_tot)) ?
-            (;
-                alg₂ = MatrixFields.BlockLowerTriangularSolve(names₁_group₂...)
-            ) : (;)
+            MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
         end
-        alg₁ = MatrixFields.BlockLowerTriangularSolve(
-            names₁_group₁...;
-            alg₁_subalg₂...,
-        )
-        MatrixFields.ApproximateBlockArrowheadIterativeSolve(
-            names₁...;
-            alg₁,
-            alg₂,
-            P_alg₁ = MatrixFields.MainDiagonalPreconditioner(),
-            n_iters = approximate_solve_iters,
-        )
-    else
-        MatrixFields.BlockArrowheadSolve(names₁...; alg₂)
-    end
 
     return ImplicitEquationJacobian(
         matrix,
         MatrixFields.FieldMatrixSolver(alg, matrix, Y),
         diffusion_flag,
         topography_flag,
+        sgs_advection_flag,
         similar(Y),
         similar(Y),
         transform_flag,
@@ -397,9 +419,13 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
         (
             use_derivative(A.diffusion_flag) &&
             p.atmos.turbconv_model isa PrognosticEDMFX ?
+            (; p.precomputed.ᶜρa⁰) : (;)
+        )...,
+        (
+            use_derivative(A.sgs_advection_flag) &&
+            p.atmos.turbconv_model isa PrognosticEDMFX ?
             (;
                 p.core.ᶜgradᵥ_ᶠΦ,
-                p.precomputed.ᶜρa⁰,
                 p.precomputed.ᶜρʲs,
                 p.precomputed.ᶠu³ʲs,
                 p.precomputed.ᶜtsʲs,
@@ -441,7 +467,7 @@ NVTX.@annotate function Wfact!(A, Y, p, dtγ, t)
 end
 
 function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
-    (; matrix, diffusion_flag, topography_flag) = A
+    (; matrix, diffusion_flag, sgs_advection_flag, topography_flag) = A
     (; ᶜspecific, ᶜK, ᶜts, ᶜp, ᶜΦ, ᶠgradᵥ_ᶜΦ, ᶜρ_ref, ᶜp_ref) = p
     (;
         ᶜtemp_C3,
@@ -695,7 +721,7 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        if use_derivative(diffusion_flag)
+        if use_derivative(sgs_advection_flag)
             (; ᶜgradᵥ_ᶠΦ, ᶜρʲs, ᶠu³ʲs, ᶜtsʲs) = p
             is_third_order = edmfx_upwinding == Val(:third_order)
             ᶠupwind = is_third_order ? ᶠupwind3 : ᶠupwind1

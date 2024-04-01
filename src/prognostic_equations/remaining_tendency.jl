@@ -36,7 +36,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
         vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
 
-        if p.atmos.diff_mode == Explicit()
+        if p.atmos.sgs_adv_mode == Explicit()
             edmfx_sgs_vertical_advection_tendency!(
                 Yₜ,
                 Y,
@@ -45,6 +45,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
                 colidx,
                 p.atmos.turbconv_model,
             )
+        end
+
+        if p.atmos.diff_mode == Explicit()
             vertical_diffusion_boundary_layer_tendency!(
                 Yₜ,
                 Y,
@@ -83,6 +86,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
         )
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        # TODO - add the 1-moment precipitation microphysics here
         edmfx_precipitation_tendency!(
             Yₜ,
             Y,

@@ -47,6 +47,9 @@ function get_atmos(config::AtmosConfig, params)
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
 
+    implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
+    @assert implicit_sgs_advection in (true, false)
+
     model_config = get_model_config(parsed_args)
     vert_diff =
         get_vertical_diffusion_model(diffuse_momentum, parsed_args, params, FT)
@@ -82,6 +85,7 @@ function get_atmos(config::AtmosConfig, params)
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
+        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         smagorinsky_lilly = get_smagorinsky_lilly_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
@@ -613,8 +617,17 @@ function get_simulation(config::AtmosConfig)
         @info "Allocating Y: $s"
     end
 
+    tracers = get_tracers(config.parsed_args)
+
     s = @timed_str begin
-        p = build_cache(Y, atmos, params, surface_setup, sim_info)
+        p = build_cache(
+            Y,
+            atmos,
+            params,
+            surface_setup,
+            sim_info,
+            tracers.aerosol_names,
+        )
     end
     @info "Allocating cache (p): $s"
 

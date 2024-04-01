@@ -579,6 +579,14 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_stretched_box/*"
         agents:
           slurm_mem: 20GB
+      
+      - label: ":genie: Prognostic EDMFX Bomex in a column"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_column.yml
+        artifact_paths: "prognostic_edmfx_bomex_column/*"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":genie: Prognostic EDMFX Dycoms RF01 in a box"
         command: >
@@ -684,7 +692,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
-            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
         artifact_paths: "gpu_aquaplanet_dyamond/*"
