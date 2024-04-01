@@ -72,7 +72,8 @@ function column_indefinite_integral(
         boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain; nelems)
-    context = ClimaComms.SingletonCommsContext()
+    device = ClimaComms.CPUSingleThreaded()
+    context = ClimaComms.SingletonCommsContext(device)
     z_topology = Topologies.IntervalTopology(context, z_mesh)
     cspace = Spaces.CenterFiniteDifferenceSpace(z_topology)
     fspace = Spaces.FaceFiniteDifferenceSpace(z_topology)
