@@ -53,14 +53,7 @@ function q_tot_precipitation_sources(
     qₜ::FT,
     ts,
 ) where {FT <: Real}
-    return -min(
-        max(qₜ, 0) / dt,
-        -CM0.remove_precipitation(
-            cmp,
-            PP(thp, ts),
-            TD.q_vap_saturation(thp, ts),
-        ),
-    )
+    return -min(max(qₜ, 0) / dt, -CM0.remove_precipitation(cmp, PP(thp, ts)))
 end
 
 """
