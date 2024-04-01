@@ -11,10 +11,12 @@ z_stretch: false
 x_elem: 45
 ode_algo: "SSP33ShuOsher"
 config: "box"
-vorticity_hyperdiffusion_coefficient: 0.1
-scalar_hyperdiffusion_coefficient: 0.1
+vorticity_hyperdiffusion_coefficient: 0.05
+scalar_hyperdiffusion_coefficient: 0.05
 z_max: 6400.0
 job_id: "box_density_current_test"
+smagorinsky_lilly: true
+c_smag: 0.25
 diagnostics:
-  - short_name: thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha
+  - short_name: [thetaa, wa, ua, ta, va, hfes, rhoa, rv, ha]
     period: 30secs
