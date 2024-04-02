@@ -1,5 +1,6 @@
 job_id: "les_bomex_box"
 initial_condition: "Bomex" 
+edmf_coriolis: "Bomex"
 subsidence: "Bomex" 
 ls_adv: "Bomex" 
 surface_setup: "Bomex"
@@ -8,9 +9,8 @@ config: "box"
 hyperdiff: "true" 
 implicit_diffusion: false
 precip_model: "0M"
-approximate_linear_solve_iters: 2
-vorticity_hyperdiffusion_coefficient: 0.1
-scalar_hyperdiffusion_coefficient: 0.1
+vorticity_hyperdiffusion_coefficient: 1.0
+scalar_hyperdiffusion_coefficient: 1.0
 smagorinsky_lilly: true
 c_smag: 0.0
 x_max: 2e3
@@ -20,10 +20,10 @@ x_elem: 10
 y_elem: 10
 z_elem: 20 
 z_stretch: false
-dt: "0.005secs" 
+dt: "0.001secs" 
 t_end: "100secs" 
 dt_save_state_to_disk: "10mins"
-restart_file: "restart/day0.0.hdf5"
+restart_file: "restart/bomex/day0.0.hdf5"
 netcdf_interpolation_num_points: [40, 40, 80]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
