@@ -9,6 +9,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     Fields.bycolumn(axes(Y.c)) do colidx
         implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
+        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, p.atmos.smagorinsky_lilly)
         if p.atmos.sgs_adv_mode == Implicit()
             edmfx_sgs_vertical_advection_tendency!(
                 Yₜ,
