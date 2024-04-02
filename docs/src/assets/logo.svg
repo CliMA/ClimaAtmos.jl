@@ -3,8 +3,8 @@
 
 <svg
    width="139.95503mm"
-   height="140.3766mm"
-   viewBox="0 0 139.95503 140.3766"
+   height="149.57846mm"
+   viewBox="0 0 139.95503 149.57846"
    version="1.1"
    id="svg5"
    inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
@@ -25,8 +25,8 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:zoom="0.64693624"
-     inkscape:cx="119.02255"
-     inkscape:cy="404.98581"
+     inkscape:cx="-38.643685"
+     inkscape:cy="18.548969"
      inkscape:window-width="2560"
      inkscape:window-height="1373"
      inkscape:window-x="0"
@@ -41,8 +41,8 @@
      id="layer1"
      transform="translate(-59.520218,-69.41305)">
     <path
-       style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       d="m 101.62292,181.12064 c 0,0 -28.00579,29.80382 -20.196066,28.49413 23.784026,-3.98858 59.017416,-23.26498 59.017416,-23.26498 z"
+       style="fill:#000000;fill-opacity:1;stroke:#ffffff;stroke-width:6.33099;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="m 100.25767,175.00569 c 0,0 -31.384873,42.63857 -22.632854,40.76488 26.653724,-5.70623 66.138254,-33.28384 66.138254,-33.28384 z"
        id="path1382"
        sodipodi:nodetypes="cscc" />
     <ellipse
