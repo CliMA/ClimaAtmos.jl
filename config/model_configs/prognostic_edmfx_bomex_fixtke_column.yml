@@ -1,4 +1,4 @@
-job_id: "prognostic_edmfx_bomex_fixtke_box"
+job_id: "prognostic_edmfx_bomex_fixtke_column"
 initial_condition: "Bomex"
 subsidence: "Bomex"
 edmf_coriolis: "Bomex"
@@ -14,10 +14,7 @@ edmfx_nh_pressure: true
 edmfx_velocity_relaxation: true
 prognostic_tke: false
 moist: "equil"
-config: "box"
-hyperdiff: "true"
-x_max: 1e8
-y_max: 1e8
+config: "column"
 z_max: 3e3
 x_elem: 2
 y_elem: 2
@@ -27,9 +24,9 @@ perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_bomex_box.toml]
+toml: [toml/prognostic_edmfx_bomex.toml]
 netcdf_output_at_levels: true
-netcdf_interpolation_num_points: [8, 8, 60]
+netcdf_interpolation_num_points: [2, 2, 60]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins

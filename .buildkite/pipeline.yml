@@ -532,11 +532,11 @@ steps:
   - group: "Prognostic EDMFX"
     steps:
 
-      - label: ":genie: Prognostic EDMFX advection test in a box"
+      - label: ":genie: Prognostic EDMFX advection test in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_box.yml
-        artifact_paths: "prognostic_edmfx_adv_test_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_adv_test_column.yml
+        artifact_paths: "prognostic_edmfx_adv_test_column/*"
         agents:
           slurm_mem: 20GB
 
@@ -548,35 +548,27 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX GABLS in a box"
+      - label: ":genie: Prognostic EDMFX GABLS in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_box.yml
-        artifact_paths: "prognostic_edmfx_gabls_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_gabls_column.yml
+        artifact_paths: "prognostic_edmfx_gabls_column/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a box"
+      - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_box.yml
-        artifact_paths: "prognostic_edmfx_bomex_fixtke_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_fixtke_column.yml
+        artifact_paths: "prognostic_edmfx_bomex_fixtke_column/*"
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Bomex in a box"
+      - label: ":genie: Prognostic EDMFX Bomex stretched grid in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
-        artifact_paths: "prognostic_edmfx_bomex_box/*"
-        agents:
-          slurm_mem: 20GB
-
-      - label: ":genie: Prognostic EDMFX Bomex stretched grid in a box"
-        command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_box.yml
-        artifact_paths: "prognostic_edmfx_bomex_stretched_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_stretched_column.yml
+        artifact_paths: "prognostic_edmfx_bomex_stretched_column/*"
         agents:
           slurm_mem: 20GB
       
@@ -588,11 +580,11 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Prognostic EDMFX Dycoms RF01 in a box"
+      - label: ":genie: Prognostic EDMFX Dycoms RF01 in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
-          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_box.yml
-        artifact_paths: "prognostic_edmfx_dycoms_rf01_box/*"
+          --config_file $CONFIG_PATH/prognostic_edmfx_dycoms_rf01_column.yml
+        artifact_paths: "prognostic_edmfx_dycoms_rf01_column/*"
         agents:
           slurm_mem: 20GB
 
@@ -609,6 +601,14 @@ steps:
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column.yml
         artifact_paths: "prognostic_edmfx_trmm_column/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Prognostic EDMFX Bomex in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_box.yml
+        artifact_paths: "prognostic_edmfx_bomex_box/*"
         agents:
           slurm_mem: 20GB
 
