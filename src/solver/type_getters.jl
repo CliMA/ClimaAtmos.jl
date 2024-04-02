@@ -26,9 +26,6 @@ function get_atmos(config::AtmosConfig, params)
     advection_test = parsed_args["advection_test"]
     @assert advection_test in (false, true)
 
-    gs_tendency = parsed_args["gs_tendency"]
-    @assert gs_tendency in (false, true)
-
     edmfx_entr_model = get_entrainment_model(parsed_args)
     edmfx_detr_model = get_detrainment_model(parsed_args)
 
@@ -62,7 +59,7 @@ function get_atmos(config::AtmosConfig, params)
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
-        gs_tendency,
+        tendency_model = get_tendency_model(parsed_args),
         edmfx_entr_model,
         edmfx_detr_model,
         edmfx_sgs_mass_flux,

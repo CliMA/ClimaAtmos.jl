@@ -5,9 +5,9 @@ turbconv:
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
-gs_tendency:
-  help: "Turns on all grid-scale tendencies [`true` (default), `false`]"
-  value: true
+zero_tendency:
+  help: "Turns off tendencies [`nothing` (default), `grid_scale`, `subgrid_scale`]"
+  value: ~
 implicit_sgs_advection:
   help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
   value: false
