@@ -364,12 +364,12 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
     (; params, dt) = p
     thp = CAP.thermodynamics_params(params)
     cmp = CAP.microphysics_params(params)
-    (; ᶜts⁰, ᶜq_tot⁰, ᶜtsʲs, ᶜS_q_totʲs, ᶜS_q_tot⁰) = p.precomputed
+    (; ᶜts⁰, ᶜq_tot⁰, ᶜtsʲs, ᶜSqₜᵖʲs, ᶜSqₜᵖ⁰) = p.precomputed
 
     # Sources from the updrafts
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
-        @. ᶜS_q_totʲs.:($$j) = q_tot_precipitation_sources(
+        @. ᶜSqₜᵖʲs.:($$j) = q_tot_precipitation_sources(
             Microphysics0Moment(),
             thp,
             cmp,
@@ -379,7 +379,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation
         )
     end
     # sources from the environment
-    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
+    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
         Microphysics0Moment(),
         thp,
         cmp,

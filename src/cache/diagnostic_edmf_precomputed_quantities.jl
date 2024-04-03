@@ -240,10 +240,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶜentrʲs,
         ᶜdetrʲs,
         ᶠnh_pressure³ʲs,
-        ᶜS_q_totʲs,
-        ᶜS_e_totʲs_helper,
     ) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰) = p.precomputed
+
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
 
@@ -314,8 +313,9 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶜentrʲ = ᶜentrʲs.:($j)
             ᶜdetrʲ = ᶜdetrʲs.:($j)
             ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
-            ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
-            ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
+            ᶜS_q_totʲ =
+                precip_model isa Microphysics0Moment ?
+                p.precomputed.ᶜSqₜᵖʲs.:($j) : p.scratch.ᶜtemp_scalar
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
             u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i - half))
@@ -342,8 +342,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
             S_q_totʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
-            S_e_totʲ_helper_prev_level =
-                Fields.field_values(Fields.level(ᶜS_e_totʲ_helper, i - 1))
             @. entrʲ_prev_level = entrainment(
                 params,
                 z_prev_level,
@@ -367,7 +365,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 p.atmos.edmfx_entr_model,
             )
 
-            # We don't have an upper limit to entrainment for the first level 
+            # We don't have an upper limit to entrainment for the first level
             # (calculated at i=2), as the vertical velocity at the first level is zero
             if i > 2
                 @. entrʲ_prev_level = limit_entrainment(
@@ -560,12 +558,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 ρaʲu³ʲ_data / sqrt(max(0, u³ʲ_datau³ʲ_data)),
             )
 
-            @. S_e_totʲ_helper_prev_level =
-                e_tot_0M_precipitation_sources_helper(
-                    thermo_params,
-                    tsʲ_prev_level,
-                    Φ_prev_level,
-                )
             @. ρaʲu³ʲ_datamse =
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_halflevel.J *
@@ -588,7 +580,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     (
                         entrʲ_prev_level * (h_tot_prev_level - K_prev_level) -
                         detrʲ_prev_level * mseʲ_prev_level +
-                        S_q_totʲ_prev_level * S_e_totʲ_helper_prev_level
+                        S_q_totʲ_prev_level *
+                        e_tot_0M_precipitation_sources_helper(
+                            thermo_params,
+                            tsʲ_prev_level,
+                            Φ_prev_level,
+                        )
                     )
                 )
             @. mseʲ_level = ifelse(
@@ -708,7 +705,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
     t,
 )
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
-    (; ᶜentrʲs, ᶜdetrʲs, ᶜS_q_totʲs, ᶜS_e_totʲs_helper) = p.precomputed
+    (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³ʲs) = p.precomputed
 
     # set values for the top level
@@ -722,8 +719,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
         ᶜentrʲ = ᶜentrʲs.:($j)
         ᶜdetrʲ = ᶜdetrʲs.:($j)
-        ᶜS_q_totʲ = ᶜS_q_totʲs.:($j)
-        ᶜS_e_totʲ_helper = ᶜS_e_totʲs_helper.:($j)
 
         u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i_top + half))
         @. u³ʲ_halflevel = CT3(0)
@@ -740,11 +735,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         fill!(detrʲ_level, RecursiveApply.rzero(eltype(detrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
+        ᶜS_q_totʲ =
+            p.atmos.precip_model isa Microphysics0Moment ?
+            p.precomputed.ᶜSqₜᵖʲs.:($j) : p.scratch.ᶜtemp_scalar
         S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
-        S_e_totʲ_helper_level =
-            Fields.field_values(Fields.level(ᶜS_e_totʲ_helper, i_top))
         @. S_q_totʲ_level = 0
-        @. S_e_totʲ_helper_level = 0
     end
     return nothing
 end
@@ -769,11 +764,10 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; q_tot) = p.precomputed.ᶜspecific
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜtke⁰, ᶠu³⁰, ᶜS_q_tot⁰, ᶜu⁰) = p.precomputed
+    (; ᶜtke⁰, ᶠu³⁰, ᶜu⁰) = p.precomputed
     (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p.precomputed
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     @. ᶜu⁰ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³⁰))
@@ -858,9 +852,36 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         int_local_geometry_values,
         sfc_local_geometry_values,
     )
+    return nothing
+end
+
+"""
+    set_diagnostic_edmf_precomputed_quantities_env_precip!(Y, p, t)
+
+Updates the precipitation sources in precomputed quantities stored in `p` for diagnostic edmfx.
+"""
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
+    Y,
+    p,
+    t,
+    ::NoPrecipitation,
+)
+    return nothing
+end
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
+    Y,
+    p,
+    t,
+    precip_model::Microphysics0Moment,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    microphys_params = CAP.microphysics_params(p.params)
+    (; dt) = p
+    (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
 
     # Environment precipitation sources (to be applied to grid mean)
-    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
+    @. ᶜSqₜᵖ⁰ = q_tot_precipitation_sources(
         precip_model,
         thermo_params,
         microphys_params,
