@@ -44,22 +44,25 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     FT = eltype(νₜ)
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-
-    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
-    ∇u = similar(ᶜϵ)
-
-    localu = @. Geometry.UVWVector(ᶜu)
-    
     uvw_boundary = Geometry.UVWVector(0, 0, 0)
-    ᶠgradᵥ = Operators.GradientC2F(
+    ᶠ∇ᵥ = Operators.GradientC2F(
         bottom = Operators.SetValue(uvw_boundary),
         top = Operators.SetValue(uvw_boundary),
     )
+    ᶜ∇ᵥ = Operators.GradientF2C()
+
+    ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
+    ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
+    
+    localu = @. Geometry.UVWVector(ᶜu)
+    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
 
     t1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
     t2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
     t3 = @. Geometry.UVWVector(hgrad(localu.components.data.:3))
-    tᵥ₁ = @. Geometry.project(Geometry.UVWAxis(), ᶠgradᵥ(UVW(localu)))
+    tᵥ₁ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:3
+    tᵥ₂ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:6
+    tᵥ₃ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:9
 
     @. ᶜϵ.components.data.:1 = t1.components.data.:1
     @. ᶜϵ.components.data.:2 = t2.components.data.:1
@@ -67,29 +70,24 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     @. ᶜϵ.components.data.:4 = t1.components.data.:2
     @. ᶜϵ.components.data.:5 = t2.components.data.:2
     @. ᶜϵ.components.data.:6 = t3.components.data.:2
-    @. ᶜϵ.components.data.:7 = t1.components.data.:3 + tᵥ₁.components.data.:1
-    @. ᶜϵ.components.data.:8 = t2.components.data.:3 + tᵥ₂.components.data.:2
-    @. ᶜϵ.components.data.:9 = t3.components.data.:3 + tᵥ₃.components.data.:3
+    @. ᶜϵ.components.data.:7 = tᵥ₁
+    @. ᶜϵ.components.data.:8 = tᵥ₂
+    @. ᶜϵ.components.data.:9 = tᵥ₃
 
-    @. ᶜϵ = (ᶜϵ + adjoint(ᶜϵ))
-    S = @. ᶜϵ
+    S = @. (ᶜϵ + adjoint(ᶜϵ))/2
 
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    compute_strain_rate_center!(ᶜϵ, ᶠu)
-    S_full = @. S + FT(2) * ᶜϵ 
-    ᶠS_full = @. ᶠinterp(S_full)
-    Spaces.weighted_dss!(S_full)
-    Spaces.weighted_dss!(ᶠS_full)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(S_full / 2))
+    ᶠS = @. ᶠinterp(S)
+    Spaces.weighted_dss!(S)
+    Spaces.weighted_dss!(ᶠS)
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(S / 2))
     ᶠνₜ = @. ᶠinterp(ᶜνₜ)
-    ᶜD = @. ᶜνₜ * FT(3) 
+    ᶜD = @. FT(3) * ᶜνₜ
     
 
     ᶠρ = @. ᶠinterp(Y.c.ρ)
     
-    @. Yₜ.c.uₕ -= @. C12(wdivₕ(Y.c.ρ * ᶜνₜ * S_full)) / Y.c.ρ
-    @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠρ * ᶠνₜ * ᶠS_full)) / ᶠρ
+    @. Yₜ.c.uₕ -= @. C12(wdivₕ(Y.c.ρ * ᶜνₜ * S)) / Y.c.ρ
+    @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠρ * ᶠνₜ * ᶠS)) / ᶠρ
 
     # energy adjustment
     (; ᶜspecific) = p.precomputed
@@ -129,7 +127,6 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     FT = eltype(Y)
     
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
-    ∇u = similar(ᶜϵ)
     
     (; Cs) = sl
     (; νₜ, ᶜD, Δ_filter) = p.smagorinsky_lilly
@@ -139,15 +136,27 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     FT = eltype(νₜ)
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
+    # No-Slip Wall
+    uvw_boundary = Geometry.UVWVector(0, 0, 0)
+    ᶠ∇ᵥ = Operators.GradientC2F(
+        bottom = Operators.SetValue(uvw_boundary),
+        top = Operators.SetValue(uvw_boundary),
+    )
+    
+    ᶜ∇ᵥ = Operators.GradientF2C()
 
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
-    ∇u = similar(ᶜϵ)
+    ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     
     localu = @. Geometry.UVWVector(ᶜu)
+    ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
 
     t1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
     t2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
     t3 = @. Geometry.UVWVector(hgrad(localu.components.data.:3))
+    tᵥ₁ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:3
+    tᵥ₂ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:6
+    tᵥ₃ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:9
 
     @. ᶜϵ.components.data.:1 = t1.components.data.:1
     @. ᶜϵ.components.data.:2 = t2.components.data.:1
@@ -155,23 +164,16 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     @. ᶜϵ.components.data.:4 = t1.components.data.:2
     @. ᶜϵ.components.data.:5 = t2.components.data.:2
     @. ᶜϵ.components.data.:6 = t3.components.data.:2
-    @. ᶜϵ.components.data.:7 = t1.components.data.:3
-    @. ᶜϵ.components.data.:8 = t2.components.data.:3
-    @. ᶜϵ.components.data.:9 = t3.components.data.:3
+    @. ᶜϵ.components.data.:7 = tᵥ₁
+    @. ᶜϵ.components.data.:8 = tᵥ₂
+    @. ᶜϵ.components.data.:9 = tᵥ₃
 
-    @. ᶜϵ = (ᶜϵ + adjoint(ᶜϵ))
-    S = @. ᶜϵ
+    S = @. (ᶜϵ + adjoint(ᶜϵ))/2
 
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    compute_strain_rate_center!(ᶜϵ, ᶠu)
-    S_full = @. S + FT(2) * ᶜϵ 
-    ᶠS_full = @. ᶠinterp(S_full)
-    ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
-    @. ᶠϵ = ᶠS_full
+    @. ᶠϵ = ᶠinterp(ᶜϵ)
     Spaces.weighted_dss!(ᶜϵ)
     Spaces.weighted_dss!(ᶠϵ)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(S_full / 2))
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(S / 2))
     ᶠνₜ = @. ᶠinterp(ᶜνₜ)
     ᶜD = @. FT(3) * ᶜνₜ
 
