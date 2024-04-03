@@ -1,3 +1,4 @@
+import NVTX
 import StaticArrays as SA
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
@@ -13,7 +14,7 @@ end
 """
    Compute the grid scale cloud fraction based on sub-grid scale properties
 """
-function set_cloud_fraction!(Y, p, ::DryModel, _)
+NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     (; ᶜmixing_length) = p.precomputed
     (; turbconv_model) = p.atmos
     if isnothing(turbconv_model)
@@ -21,7 +22,7 @@ function set_cloud_fraction!(Y, p, ::DryModel, _)
     end
     @. p.precomputed.ᶜcloud_fraction = 0
 end
-function set_cloud_fraction!(
+NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},
@@ -36,7 +37,7 @@ function set_cloud_fraction!(
     end
     @. ᶜcloud_fraction = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0)
 end
-function set_cloud_fraction!(
+NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
     ::Union{EquilMoistModel, NonEquilMoistModel},

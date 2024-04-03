@@ -1,10 +1,11 @@
 #####
 ##### Precomputed quantities
 #####
+import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields, RecursiveApply
 
-function kinetic_energy!(
+NVTX.@annotate function kinetic_energy!(
     K_level,
     uₕ_level,
     u³_halflevel,
@@ -28,7 +29,7 @@ function kinetic_energy!(
         ) / 2
 end
 
-function set_diagnostic_edmfx_draft_quantities_level!(
+NVTX.@annotate function set_diagnostic_edmfx_draft_quantities_level!(
     thermo_params,
     ts_level,
     ρ_level,
@@ -50,7 +51,7 @@ function set_diagnostic_edmfx_draft_quantities_level!(
     return nothing
 end
 
-function set_diagnostic_edmfx_env_quantities_level!(
+NVTX.@annotate function set_diagnostic_edmfx_env_quantities_level!(
     ρ_level,
     ρaʲs_level,
     u³_halflevel,
@@ -86,7 +87,11 @@ end
 Updates the bottom boundary conditions in precomputed quantities
 stored in `p` for diagnostic edmfx.
 """
-function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
+    Y,
+    p,
+    t,
+)
     (; turbconv_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -207,7 +212,11 @@ function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(Y, p, t)
     return nothing
 end
 
-function set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
+    Y,
+    p,
+    t,
+)
     (; turbconv_model, precip_model) = p.atmos
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -693,7 +702,11 @@ end
 
 Updates the top boundary condition of precomputed quantities stored in `p` for diagnostic edmfx.
 """
-function set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
+    Y,
+    p,
+    t,
+)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs, ᶜS_q_totʲs, ᶜS_e_totʲs_helper) = p.precomputed
     (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³ʲs) = p.precomputed
@@ -741,7 +754,11 @@ end
 
 Updates the environment closures in precomputed quantities stored in `p` for diagnostic edmfx.
 """
-function set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!(
+    Y,
+    p,
+    t,
+)
     (; moisture_model, turbconv_model, precip_model) = p.atmos
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜz = Fields.coordinate_field(Y.c).z

@@ -2,6 +2,7 @@
 ##### Grid-mean SGS closures (mixing length)
 #####
 
+import NVTX
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
@@ -22,7 +23,7 @@ function smagorinsky_lilly_length(c_smag, N_eff, dz, Pr, ϵ_st)
            c_smag * dz
 end
 
-function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
 
