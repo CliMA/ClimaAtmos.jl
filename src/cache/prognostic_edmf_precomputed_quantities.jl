@@ -1,6 +1,7 @@
 #####
 ##### Precomputed quantities
 #####
+import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
@@ -9,7 +10,12 @@ import ClimaCore: Spaces, Fields
 
 Updates the edmf environment precomputed quantities stored in `p` for edmfx.
 """
-function set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
+    Y,
+    p,
+    ᶠuₕ³,
+    t,
+)
     @assert !(p.atmos.moisture_model isa DryModel)
 
     thermo_params = CAP.thermodynamics_params(p.params)
@@ -49,7 +55,12 @@ end
 Updates the draft thermo state and boundary conditions
 precomputed quantities stored in `p` for edmfx.
 """
-function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!(
+    Y,
+    p,
+    ᶠuₕ³,
+    t,
+)
     (; moisture_model, turbconv_model) = p.atmos
     #EDMFX BCs only support total energy as state variable
     @assert !(moisture_model isa DryModel)
@@ -161,7 +172,11 @@ end
 
 Updates the precomputed quantities stored in `p` for edmfx closures.
 """
-function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
+    Y,
+    p,
+    t,
+)
 
     (; moisture_model, turbconv_model) = p.atmos
     @assert !(moisture_model isa DryModel)
@@ -339,7 +354,7 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
 )
     return nothing
 end
-function set_prognostic_edmf_precomputed_quantities_precipitation!(
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
     ::Microphysics0Moment,
@@ -374,7 +389,7 @@ function set_prognostic_edmf_precomputed_quantities_precipitation!(
     )
     return nothing
 end
-function set_prognostic_edmf_precomputed_quantities_precipitation!(
+NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_precipitation!(
     Y,
     p,
     ::Microphysics1Moment,
