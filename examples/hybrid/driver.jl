@@ -183,6 +183,7 @@ if config.parsed_args["check_precipitation"]
             sol.t[end],
             colidx,
             sol.prob.p.atmos.precip_model,
+            sol.prob.p.atmos.turbconv_model,
         )
 
         @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]

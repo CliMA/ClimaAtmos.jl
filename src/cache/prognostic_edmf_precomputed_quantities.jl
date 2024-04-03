@@ -163,13 +163,12 @@ Updates the precomputed quantities stored in `p` for edmfx closures.
 """
 function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
 
-    (; moisture_model, turbconv_model, precip_model) = p.atmos
+    (; moisture_model, turbconv_model) = p.atmos
     @assert !(moisture_model isa DryModel)
 
     (; params) = p
     (; dt) = p
     thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_params(params)
 
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
@@ -184,7 +183,6 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         ρatke_flux,
     ) = p.precomputed
     (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ᶜS_q_totʲs, ᶜS_q_tot⁰) = p.precomputed
     (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
@@ -245,26 +243,7 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
         )
-        # precipitation
-        @. ᶜS_q_totʲs.:($$j) = q_tot_precipitation_sources(
-            precip_model,
-            thermo_params,
-            microphys_params,
-            dt,
-            Y.c.sgsʲs.:($$j).q_tot,
-            ᶜtsʲs.:($$j),
-        )
     end
-
-    # TODO add the 1-moment microphysics option here
-    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
-        precip_model,
-        thermo_params,
-        microphys_params,
-        dt,
-        ᶜq_tot⁰,
-        ᶜts⁰,
-    )
 
     # First order approximation: Use environmental mean fields.
     @. ᶜlinear_buoygrad = buoyancy_gradients(
@@ -345,5 +324,116 @@ function set_prognostic_edmf_precomputed_quantities_closures!(Y, p, t)
         sfc_local_geometry_values,
     )
 
+    return nothing
+end
+
+"""
+    set_prognostic_edmf_precomputed_quantities_precipitation!(Y, p, precip_model)
+
+Updates the precomputed quantities stored in `p` for edmfx precipitation sources.
+"""
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
+    Y,
+    p,
+    ::NoPrecipitation,
+)
+    return nothing
+end
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
+    Y,
+    p,
+    ::Microphysics0Moment,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
+
+    (; params, dt) = p
+    thp = CAP.thermodynamics_params(params)
+    cmp = CAP.microphysics_params(params)
+    (; ᶜts⁰, ᶜq_tot⁰, ᶜtsʲs, ᶜS_q_totʲs, ᶜS_q_tot⁰) = p.precomputed
+
+    # Sources from the updrafts
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. ᶜS_q_totʲs.:($$j) = q_tot_precipitation_sources(
+            Microphysics0Moment(),
+            thp,
+            cmp,
+            dt,
+            Y.c.sgsʲs.:($$j).q_tot,
+            ᶜtsʲs.:($$j),
+        )
+    end
+    # sources from the environment
+    @. ᶜS_q_tot⁰ = q_tot_precipitation_sources(
+        Microphysics0Moment(),
+        thp,
+        cmp,
+        dt,
+        ᶜq_tot⁰,
+        ᶜts⁰,
+    )
+    return nothing
+end
+function set_prognostic_edmf_precomputed_quantities_precipitation!(
+    Y,
+    p,
+    ::Microphysics1Moment,
+)
+    @assert !(p.atmos.moisture_model isa DryModel)
+
+    (; params, dt) = p
+    (; ᶜΦ,) = p.core
+    thp = CAP.thermodynamics_params(params)
+    cmp = CAP.microphysics_params(params)
+
+    (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs, ᶜρʲs, ᶜtsʲs) = p.precomputed
+    (; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰, ᶜρ⁰, ᶜts⁰) = p.precomputed
+    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+
+    # TODO - can I re-use them between js and env?
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+
+    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+        # Sources from the updrafts
+        for j in 1:n
+            compute_precipitation_sources!(
+                ᶜSᵖ[colidx],
+                ᶜSᵖ_snow[colidx],
+                ᶜSqₜᵖʲs.:($j)[colidx],
+                ᶜSqᵣᵖʲs.:($j)[colidx],
+                ᶜSqₛᵖʲs.:($j)[colidx],
+                ᶜSeₜᵖʲs.:($j)[colidx],
+                ᶜρʲs.:($j)[colidx],
+                ᶜqᵣ[colidx],
+                ᶜqₛ[colidx],
+                ᶜtsʲs.:($j)[colidx],
+                ᶜΦ[colidx],
+                dt,
+                cmp,
+                thp,
+            )
+        end
+
+        # Sources from the environment
+        compute_precipitation_sources!(
+            ᶜSᵖ[colidx],
+            ᶜSᵖ_snow[colidx],
+            ᶜSqₜᵖ⁰[colidx],
+            ᶜSqᵣᵖ⁰[colidx],
+            ᶜSqₛᵖ⁰[colidx],
+            ᶜSeₜᵖ⁰[colidx],
+            ᶜρ⁰[colidx],
+            ᶜqᵣ[colidx],
+            ᶜqₛ[colidx],
+            ᶜts⁰[colidx],
+            ᶜΦ[colidx],
+            dt,
+            cmp,
+            thp,
+        )
+    end
     return nothing
 end

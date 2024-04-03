@@ -946,11 +946,16 @@ EDMFBoxPlots = Union{
     Val{:prognostic_edmfx_bomex_column},
     Val{:prognostic_edmfx_bomex_stretched_column},
     Val{:prognostic_edmfx_dycoms_rf01_column},
-    Val{:prognostic_edmfx_rico_column},
-    Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_trmm_column_0M},
     Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_bomex_box},
 }
+
+EDMFBoxPlotsWithPrecip = Union{
+    Val{:prognostic_edmfx_rico_column},
+    Val{:prognostic_edmfx_trmm_column},
+}
+
 
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
@@ -1025,8 +1030,13 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
-function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    sim_type::Union{EDMFBoxPlots, EDMFBoxPlotsWithPrecip},
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
+
+    precip_names = sim_type isa EDMFBoxPlotsWithPrecip ? ("husra", "hussn") : ()
 
     short_names = [
         "ua",
@@ -1050,6 +1060,7 @@ function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
         "clwup",
         "cli",
         "cliup",
+        precip_names...,
     ]
     reduction = "inst"
     period = "30m"
