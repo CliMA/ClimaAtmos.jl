@@ -3,6 +3,7 @@ using Dates: DateTime, @dateformat_str
 using Dierckx
 using Interpolations
 import NCDatasets
+import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -470,8 +471,12 @@ function get_sim_info(config::AtmosConfig)
     end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
-    output_dir = isnothing(out_dir) ? default_output : out_dir
-    mkpath(output_dir)
+    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+
+    output_dir = OutputPathGenerator.generate_output_path(
+        base_output_dir;
+        context = config.comms_ctx,
+    )
 
     sim = (;
         output_dir,

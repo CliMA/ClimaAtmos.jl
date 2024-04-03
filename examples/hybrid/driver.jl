@@ -264,6 +264,10 @@ if ClimaComms.iamroot(config.comms_ctx)
     end
     @info "Plotting done"
 
+    function symlink_to_fullpath(path)
+        return joinpath(dirname(path), readlink(path))
+    end
+
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,
     # and need to be found later when comparing against the
@@ -272,12 +276,12 @@ if ClimaComms.iamroot(config.comms_ctx)
     # reproducibility test folder.
     Tar.create(
         f -> endswith(f, ".nc"),
-        simulation.output_dir,
+        symlink_to_fullpath(simulation.output_dir),
         joinpath(simulation.output_dir, "nc_files.tar"),
     )
     Tar.create(
         f -> endswith(f, r"hdf5|h5"),
-        simulation.output_dir,
+        symlink_to_fullpath(simulation.output_dir),
         joinpath(simulation.output_dir, "hdf5_files.tar"),
     )
 
