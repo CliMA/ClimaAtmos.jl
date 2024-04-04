@@ -289,6 +289,17 @@ function get_forcing_type(parsed_args)
     end
 end
 
+struct CallCloudDiagnosticsPerStage end
+function get_call_cloud_diagnostics_per_stage(parsed_args)
+    ccdps = parsed_args["call_cloud_diagnostics_per_stage"]
+    @assert ccdps in (nothing, true, false)
+    return if ccdps in (nothing, false)
+        nothing
+    elseif ccdps == true
+        CallCloudDiagnosticsPerStage()
+    end
+end
+
 function get_subsidence_model(parsed_args, radiation_mode, FT)
     subsidence = parsed_args["subsidence"]
     subsidence == nothing && return nothing

@@ -280,3 +280,7 @@ restart_file:
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
   value: []
+# TODO: remove once https://github.com/CliMA/ClimaAtmos.jl/issues/2873 is closed
+call_cloud_diagnostics_per_stage:
+  help: "A temporary Bool for calling cloud diagnostics every stage"
+  value: false

@@ -699,6 +699,16 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
+      - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
+        command:
+          - >
+            julia --color=yes --project=examples examples/hybrid/driver.jl
+            --config_file $GPU_CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
+        artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
       - label: ":umbrella: GPU: gpu_aquaplanet_dyamond"
         command:
           - mkdir -p gpu_aquaplanet_dyamond

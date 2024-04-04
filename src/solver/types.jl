@@ -327,6 +327,7 @@ Base.@kwdef struct AtmosModel{
     MM,
     PM,
     CM,
+    CCDPS,
     F,
     S,
     RM,
@@ -359,6 +360,7 @@ Base.@kwdef struct AtmosModel{
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
+    call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
     subsidence::S = nothing
     radiation_mode::RM = nothing

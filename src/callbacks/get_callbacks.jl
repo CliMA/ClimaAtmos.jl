@@ -272,9 +272,11 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
         )
     end
 
-    dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
-    callbacks =
-        (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+    if !parsed_args["call_cloud_diagnostics_per_stage"]
+        dt_cf = FT(time_to_seconds(parsed_args["dt_cloud_fraction"]))
+        callbacks =
+            (callbacks..., call_every_dt(cloud_fraction_model_callback!, dt_cf))
+    end
 
     if atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode
         # TODO: better if-else criteria?
