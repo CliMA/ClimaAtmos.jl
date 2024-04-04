@@ -637,7 +637,7 @@ steps:
       - label: "GPU: baroclinic wave"
         key: "gpu_baroclinic_wave_rhoe"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $PERF_CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
         artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
         agents:
@@ -664,7 +664,7 @@ steps:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
             nsys profile --trace=nvtx,cuda --output=target_gpu_implicit_baroclinic_wave/output_active/report
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
         agents:
@@ -703,7 +703,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
-            julia --color=yes --project=examples examples/hybrid/driver.jl
+            julia --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
         agents:
@@ -711,7 +711,7 @@ steps:
 
       - label: "GPU: Diagnostic EDMFX aquaplanet"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $GPU_CONFIG_PATH/gpu_diagnostic_edmfx_aquaplanet.yml
         artifact_paths: "gpu_diagnostic_edmfx_aquaplanet/output_active/*"
         agents:
@@ -720,7 +720,7 @@ steps:
 
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $GPU_CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
         artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
         agents:
