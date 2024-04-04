@@ -21,6 +21,8 @@ function get_atmos(config::AtmosConfig, params)
     cloud_model = get_cloud_model(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
+    call_cloud_diagnostics_per_stage =
+        get_call_cloud_diagnostics_per_stage(parsed_args)
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
@@ -70,6 +72,7 @@ function get_atmos(config::AtmosConfig, params)
         precip_model,
         cloud_model,
         forcing_type,
+        call_cloud_diagnostics_per_stage,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
