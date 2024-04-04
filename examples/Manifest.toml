@@ -319,8 +319,10 @@ uuid = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 version = "0.5.8"
 
 [[deps.ClimaCore]]
-deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "Unrolled"]
-git-tree-sha1 = "3c8ba2a248d30aaa7f0e72a3516b142521447377"
+deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "TuplesOfNTuples", "Unrolled"]
+git-tree-sha1 = "74790b120213b177860c65dd16ae7cfa41ea639e"
+repo-rev = "ck/fused_single_field_solve"
+repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.13.3"
 weakdeps = ["Krylov"]
@@ -2492,6 +2494,12 @@ version = "1.4.0"
 git-tree-sha1 = "41d61b1c545b06279871ef1a4b5fcb2cac2191cd"
 uuid = "9d95972d-f1c8-5527-a6e0-b4b365fa01f6"
 version = "1.5.0"
+
+[[deps.TuplesOfNTuples]]
+deps = ["Adapt"]
+git-tree-sha1 = "f64a5b74ffd061eb744a3fdba71e0fba3c2f4dff"
+uuid = "48ce63ed-6f34-4d1b-af9f-4e5ab636a982"
+version = "0.2.2"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
