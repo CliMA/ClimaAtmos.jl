@@ -4,8 +4,8 @@ set -euo pipefail
 FT="Float32"
 resolutions=("low" "mid" "high")
 # Process counts for icelake nodes
-process_counts=("1 2 4 7 14 28" "1 2 4 7 14 28 56" "1 2 4 7 14 28 56 112 224 448")
-max_procs_per_node=112 # limit this artificially for profiling
+process_counts=("1 2 4 8 16 32" "1 2 4 8 16 32 64" "1 2 4 8 16 32 64 128 256 512")
+max_procs_per_node=16 # limit this artificially for profiling
 profiling=disable
 exclusive=true
 mpi_impl="openmpi"
