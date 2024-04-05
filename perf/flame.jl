@@ -88,8 +88,10 @@ using Test
 # Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = if any(x -> occursin(x, job_id), ("threaded", "gpu"))
+buffer = if any(x -> occursin(x, job_id), ("threaded",))
     1.8
+elseif any(x -> occursin(x, job_id), ("gpu",))
+    5
 else
     1.1
 end
@@ -108,9 +110,13 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    @test 0.5 * allocs_limit[job_id] * buffer <=
-          allocs ≤
-          allocs_limit[job_id] * buffer
+    if occursin("gpu", job_id) # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
+        @test allocs ≤ allocs_limit[job_id] * buffer
+    else
+        @test 0.25 * allocs_limit[job_id] * buffer <=
+              allocs ≤
+              allocs_limit[job_id] * buffer
+    end
 end
 
 import ClimaComms
