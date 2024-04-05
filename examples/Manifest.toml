@@ -320,7 +320,7 @@ version = "0.5.8"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "CUDA", "ClimaComms", "CubedSphere", "DataStructures", "DocStringExtensions", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LinearAlgebra", "PkgVersion", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "Static", "StaticArrays", "Statistics", "TuplesOfNTuples", "Unrolled"]
-git-tree-sha1 = "74790b120213b177860c65dd16ae7cfa41ea639e"
+git-tree-sha1 = "8540a16abd38f0e2f79c6b2bef3cce3684e9adcf"
 repo-rev = "ck/fused_single_field_solve"
 repo-url = "https://github.com/CliMA/ClimaCore.jl.git"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
