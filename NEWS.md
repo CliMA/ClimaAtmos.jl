@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 Main
 -------
 
+v0.23.0
+-------
 - ![][badge-✨feature/enhancement]![][badge-💥breaking]. Use
   [ClimaUtilities](https://github.com/CliMA/ClimaUtilities.jl) for
   `TimeVaryingInputs` to read in prescribed aerosol mass concentrations. This PR
