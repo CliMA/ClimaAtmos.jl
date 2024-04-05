@@ -1,6 +1,8 @@
 using CairoMakie
 using JLD2
 
+include("plot_gpu_scaling_utils.jl")
+
 job_id = "gpu_aquaplanet_dyamond_ss"
 output_dir = "./"
 
@@ -16,25 +18,8 @@ nlevels = z_elem + 1
 t_int = string(t_int_days) * " days"
 
 # read ClimaAtmos scaling data
-I, FT = Int, Float64
-nprocs_clima_atmos = I[]
-ncols_per_process = I[]
-walltime_clima_atmos = FT[]
-for foldername in readdir(output_dir)
-    if occursin(job_id, foldername) && occursin("_ss_", foldername)
-        nprocs_string = split(split(foldername, "_ss_")[end], "process")[1]
-        dict = load(
-            joinpath(
-                output_dir,
-                foldername,
-                "scaling_data_$(nprocs_string)_processes.jld2",
-            ),
-        )
-        push!(nprocs_clima_atmos, I(dict["nprocs"]))
-        push!(ncols_per_process, I(dict["ncols_per_process"]))
-        push!(walltime_clima_atmos, FT(dict["walltime"]))
-    end
-end
+(; nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos) =
+    get_jld2data(output_dir, job_id, "_ss_")
 
 order = sortperm(nprocs_clima_atmos)
 nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos =
