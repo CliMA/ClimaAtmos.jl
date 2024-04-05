@@ -58,10 +58,7 @@ function precomputed_quantities(Y, atmos)
     cloud_diagnostics = (; ᶜcloud_fraction = similar(Y.c, FT),)
     precipitation_sgs_quantities =
         atmos.precip_model isa Microphysics0Moment ?
-        (;
-            ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜS_q_tot⁰ = similar(Y.c, FT),
-        ) :
+        (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
         atmos.precip_model isa Microphysics1Moment ?
         (;
             ᶜSeₜᵖʲs = similar(Y.c, NTuple{n, FT}),
@@ -122,9 +119,6 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure³ʲs = similar(Y.f, NTuple{n, CT3{FT}}),
-            ᶜS_q_totʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜS_q_tot⁰ = similar(Y.c, FT),
-            ᶜS_e_totʲs_helper = similar(Y.c, NTuple{n, FT}),
             ᶠu³⁰ = similar(Y.f, CT3{FT}),
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
@@ -134,6 +128,7 @@ function precomputed_quantities(Y, atmos)
             ᶜK_u = similar(Y.c, FT),
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
+            precipitation_sgs_quantities...,
         ) : (;)
     vert_diff_quantities = if atmos.vert_diff isa VerticalDiffusion
         ᶜK_h = similar(Y.c, FT)
@@ -518,6 +513,12 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_do_integral!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_top_bc!(Y, p, t)
         set_diagnostic_edmf_precomputed_quantities_env_closures!(Y, p, t)
+        set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
+            Y,
+            p,
+            t,
+            p.atmos.precip_model,
+        )
     end
 
     if vert_diff isa VerticalDiffusion
