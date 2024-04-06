@@ -662,10 +662,11 @@ function update_implicit_equation_jacobian!(A, Y, p, dtγ, colidx)
             ᶜρa⁰ = p.atmos.turbconv_model isa PrognosticEDMFX ? p.ᶜρa⁰ : ᶜρ
             ᶜρatke⁰ = Y.c.sgs⁰.ρatke
 
-            dissipation_rate(tke⁰, mixing_length) =
+            @inline dissipation_rate(tke⁰, mixing_length) =
                 tke⁰ >= 0 ? c_d * sqrt(tke⁰) / max(mixing_length, 1) : 1 / dt
-            ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
-                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) : 0
+            @inline ∂dissipation_rate_∂tke⁰(tke⁰, mixing_length) =
+                tke⁰ > 0 ? c_d / (2 * max(mixing_length, 1) * sqrt(tke⁰)) :
+                typeof(tke⁰)(0)
 
             ᶜdissipation_matrix_diagonal = p.ᶜtemp_scalar
             @. ᶜdissipation_matrix_diagonal[colidx] =
