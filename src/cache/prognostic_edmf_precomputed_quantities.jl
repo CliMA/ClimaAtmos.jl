@@ -188,7 +188,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜρ⁰, ᶜq_tot⁰) = p.precomputed
+    (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
         ᶜmixing_length,
         ᶜlinear_buoygrad,
@@ -198,7 +198,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ρatke_flux,
     ) = p.precomputed
     (; ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs, ᶜentrʲs, ᶜdetrʲs) = p.precomputed
-    (; ustar, obukhov_length, buoyancy_flux) = p.precomputed.sfc_conditions
+    (; ustar, obukhov_length) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -215,7 +215,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             z_sfc,
             ᶜp,
             Y.c.ρ,
-            buoyancy_flux,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
@@ -223,6 +222,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             get_physical_w(ᶜu, ᶜlg),
             TD.relative_humidity(thermo_params, ᶜts⁰),
             FT(0),
+            max(ᶜtke⁰, 0),
             p.atmos.edmfx_entr_model,
         )
         @. ᶜentrʲs.:($$j) = limit_entrainment(
@@ -239,7 +239,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             z_sfc,
             ᶜp,
             Y.c.ρ,
-            buoyancy_flux,
             Y.c.sgsʲs.:($$j).ρa,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
@@ -251,6 +250,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             ᶜentrʲs.:($$j),
             ᶜvert_div,
             ᶜmassflux_vert_div,
+            ᶜtke⁰,
             p.atmos.edmfx_detr_model,
         )
         @. ᶜdetrʲs.:($$j) = limit_detrainment(

@@ -1,0 +1,62 @@
+[C_E]
+value = 0.0176
+
+[EDMF_surface_area]
+value = 0.1
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.5
+
+[entr_inv_tau]
+value = 0.0002
+
+[entr_coeff]
+value = 0.3
+
+[min_area_limiter_scale]
+value = 0
+
+[min_area_limiter_power]
+value = 10
+
+[detr_inv_tau]
+value = 0
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 0
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 1
+
+[max_area_limiter_scale]
+value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 20.0
+
+[pressure_normalmode_buoy_coeff1]
+value = 0.857
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.041
+
+[mixing_length_diss_coeff]
+value = 0.174
+
+[mixing_length_static_stab_coeff]
+value = 0.292
+
+[mixing_length_tke_surf_scale]
+value = 9.609
+
+[mixing_length_Prandtl_number_0]
+value = 0.515
