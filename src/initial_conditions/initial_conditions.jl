@@ -594,7 +594,10 @@ function (initial_condition::SimplePlume)(params)
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
-            turbconv_state = EDMFState(; tke = FT(0)),
+            turbconv_state = EDMFState(;
+                tke = FT(0),
+                draft_area = bomex_draft_area(FT)(z),
+            ),
         )
     end
     return local_state
@@ -778,6 +781,18 @@ Base.@kwdef struct ARM_SGP <: InitialCondition
     prognostic_tke::Bool = false
 end
 
+bomex_draft_area(::Type{FT}) where {FT} = z -> if (z <= 200.0)
+    FT(0.1)
+else
+    FT(0)
+end
+
+bomex_tke(::Type{FT}) where {FT} = z -> if (z <= 2500.0)
+    FT(1) - z / 3000
+else
+    FT(0)
+end
+
 for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
     θ_func_name = Symbol(IC, :_θ_liq_ice)
     q_tot_func_name = Symbol(IC, :_q_tot)
@@ -811,7 +826,8 @@ for IC in (:Soares, :Bomex, :LifeCycleTan2018, :ARM_SGP)
                 ),
                 velocity = Geometry.UVector(u(z)),
                 turbconv_state = EDMFState(;
-                    tke = prognostic_tke ? FT(0) : tke(z),
+                    tke = prognostic_tke ? bomex_tke(FT)(z) : tke(z),
+                    draft_area = bomex_draft_area(FT)(z),
                 ),
             )
         end
@@ -870,6 +886,7 @@ for IC in (:Dycoms_RF01, :Dycoms_RF02)
                 velocity = Geometry.UVVector(u(z), v(z)),
                 turbconv_state = EDMFState(;
                     tke = prognostic_tke ? FT(0) : tke(z),
+                    draft_area = bomex_draft_area(FT)(z),
                 ),
             )
         end
@@ -911,7 +928,10 @@ function (initial_condition::Rico)(params)
                 q_tot(z),
             ),
             velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
+            turbconv_state = EDMFState(;
+                tke = prognostic_tke ? FT(0) : tke(z),
+                draft_area = bomex_draft_area(FT)(z),
+            ),
         )
     end
     return local_state
@@ -969,7 +989,10 @@ function (initial_condition::TRMM_LBA)(params)
                 q_tot(z),
             ),
             velocity = Geometry.UVVector(u(z), v(z)),
-            turbconv_state = EDMFState(; tke = prognostic_tke ? FT(0) : tke(z)),
+            turbconv_state = EDMFState(;
+                tke = prognostic_tke ? FT(0) : tke(z),
+                draft_area = bomex_draft_area(FT)(z),
+            ),
         )
     end
     return local_state
