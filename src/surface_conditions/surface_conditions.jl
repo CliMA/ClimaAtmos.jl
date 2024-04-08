@@ -65,34 +65,6 @@ surface_state(
     t,
 ) = wrapped_sfc_setup(sfc_local_geometry_values.coordinates, int_z_values, t)
 
-# This is a hack for meeting the August 7th deadline. It is to ensure that the
-# coupler will be able to construct an integrator before overwriting its surface
-# conditions, but without throwing an error during the computation of
-# precomputed quantities for diagnostic EDMF due to uninitialized surface
-# conditions.
-# TODO: Refactor the surface conditions API to avoid needing to do this.
-function set_dummy_surface_conditions!(p)
-    (; params, atmos) = p
-    (; sfc_conditions) = p.precomputed
-    FT = eltype(params)
-    thermo_params = CAP.thermodynamics_params(params)
-    @. sfc_conditions.ustar = FT(0.2)
-    @. sfc_conditions.obukhov_length = FT(1e-4)
-    @. sfc_conditions.buoyancy_flux = FT(0)
-    if atmos.moisture_model isa DryModel
-        @. sfc_conditions.ts = TD.PhaseDry_ρT(thermo_params, FT(1), FT(300))
-    else
-        @. sfc_conditions.ts = TD.PhaseNonEquil_ρTq(
-            thermo_params,
-            FT(1),
-            FT(300),
-            TD.PhasePartition(FT(0)),
-        )
-        @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
-    end
-    @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
-end
-
 """
     set_surface_conditions!(p, surface_conditions, surface_ts)
 

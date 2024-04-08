@@ -209,10 +209,6 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     precomputing_arguments =
         (; atmos, core, params, sfc_setup, precomputed, scratch, dt, SG_quad)
 
-    # Coupler compatibility
-    isnothing(precomputing_arguments.sfc_setup) &&
-        SurfaceConditions.set_dummy_surface_conditions!(precomputing_arguments)
-
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 
     radiation_args =
