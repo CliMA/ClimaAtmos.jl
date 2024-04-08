@@ -558,6 +558,14 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":genie: Prognostic EDMFX Bomex in a column (explicit)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/prognostic_edmfx_bomex_explicit_column.yml
+        artifact_paths: "prognostic_edmfx_bomex_explicit_column/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":genie: Prognostic EDMFX Bomex with precribed TKE in a column"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl

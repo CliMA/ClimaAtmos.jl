@@ -228,7 +228,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; ᶜΦ) = p.core
     (; ᶜp, ᶠu³, ᶜts, ᶜh_tot, ᶜK) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific
-    (; buoyancy_flux) = p.precomputed.sfc_conditions
     (;
         ᶜρaʲs,
         ᶠu³ʲs,
@@ -241,7 +240,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         ᶜdetrʲs,
         ᶠnh_pressure³ʲs,
     ) = p.precomputed
-    (; ᶠu³⁰, ᶜK⁰) = p.precomputed
+    (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_params(params)
@@ -256,7 +255,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
 
     z_sfc_halflevel =
         Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
-    buoyancy_flux_sfc_halflevel = Fields.field_values(buoyancy_flux)
 
     # integral
     for i in 2:Spaces.nlevels(axes(Y.c))
@@ -342,13 +340,13 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
             S_q_totʲ_prev_level =
                 Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
+            tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
             @. entrʲ_prev_level = entrainment(
                 params,
                 z_prev_level,
                 z_sfc_halflevel,
                 p_prev_level,
                 ρ_prev_level,
-                buoyancy_flux_sfc_halflevel,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
                 get_physical_w(
                     u³ʲ_prev_halflevel,
@@ -362,6 +360,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 ),
                 TD.relative_humidity(thermo_params, ts_prev_level),
                 FT(0),
+                tke_prev_level,
                 p.atmos.edmfx_entr_model,
             )
 
@@ -490,7 +489,6 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 z_sfc_halflevel,
                 p_prev_level,
                 ρ_prev_level,
-                buoyancy_flux_sfc_halflevel,
                 ρaʲ_prev_level,
                 draft_area(ρaʲ_prev_level, ρʲ_prev_level),
                 get_physical_w(
@@ -508,6 +506,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 entrʲ_prev_level,
                 vert_div_level,
                 FT(0), # mass flux divergence is not implemented for diagnostic edmf
+                tke_prev_level,
                 p.atmos.edmfx_detr_model,
             )
 
