@@ -3,6 +3,10 @@ surface_setup: DefaultMoninObukhov
 rad: clearsky
 turbconv: prognostic_edmfx 
 prognostic_tke: true
+implicit_diffusion: true
+implicit_sgs_advection: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
 edmfx_upwinding: first_order 
 edmfx_entr_model: "Generalized" 
 edmfx_detr_model: "Generalized" 
