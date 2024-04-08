@@ -8,13 +8,14 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 prognostic_tke: true
 edmfx_upwinding: first_order
-edmfx_entr_model: "Generalized" 
-edmfx_detr_model: "Generalized" 
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
 edmfx_nh_pressure: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil
-precip_model: "0M"
+apply_limiter: false
+precip_model: "1M"
 config: box
 hyperdiff: "true"
 x_max: 1e8
@@ -33,4 +34,6 @@ diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
     period: 10mins
   - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, tke, lmix]
+    period: 10mins
+  - short_name: [husra, hussn]
     period: 10mins

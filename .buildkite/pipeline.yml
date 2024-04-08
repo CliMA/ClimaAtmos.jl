@@ -501,7 +501,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMFX Rico in a box"
+      - label: ":umbrella: Diagnostic EDMFX Rico in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_rico_box.yml
@@ -509,7 +509,7 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMFX TRMM in a box"
+      - label: ":umbrella: Diagnostic EDMFX TRMM in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box.yml
@@ -517,11 +517,19 @@ steps:
         agents:
           slurm_mem: 20GB
 
-      - label: ":genie: Diagnostic EDMFX TRMM stretched grid in a box"
+      - label: ":umbrella: Diagnostic EDMFX TRMM stretched grid in a box"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_stretched_box.yml
         artifact_paths: "diagnostic_edmfx_trmm_stretched_box/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":genie: Diagnostic EDMFX TRMM 0M in a box"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/diagnostic_edmfx_trmm_box_0M.yml
+        artifact_paths: "diagnostic_edmfx_trmm_box_0M/output_active/*"
         agents:
           slurm_mem: 20GB
 

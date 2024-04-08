@@ -63,7 +63,6 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics0Moment, _)
             ᶜΦ[colidx],
         )
 end
-
 function compute_precipitation_cache!(
     Y,
     p,
@@ -103,7 +102,6 @@ function compute_precipitation_cache!(
             )
     end
 end
-
 function compute_precipitation_cache!(
     Y,
     p,
@@ -254,13 +252,12 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
         thp,
     )
 end
-
 function compute_precipitation_cache!(
     Y,
     p,
     colidx,
     ::Microphysics1Moment,
-    ::PrognosticEDMFX,
+    ::Union{DiagnosticEDMFX, PrognosticEDMFX},
 )
     FT = Spaces.undertype(axes(Y.c))
     (; dt) = p
@@ -323,7 +320,44 @@ function precipitation_tendency!(
 
     return nothing
 end
+function precipitation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    precip_model::Microphysics1Moment,
+    turbconv_model::DiagnosticEDMFX,
+)
+    # Source terms from EDMFX environment
+    (; ᶜSeₜᵖ⁰, ᶜSqₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    # Source terms from EDMFX updrafts
+    (; ᶜSeₜᵖʲs, ᶜSqₜᵖʲs, ᶜSqᵣᵖʲs, ᶜSqₛᵖʲs) = p.precomputed
+    # Grid mean precipitation sinks
+    (; ᶜSqₜᵖ, ᶜSqᵣᵖ, ᶜSqₛᵖ, ᶜSeₜᵖ) = p.precipitation
 
+    (; ᶜρaʲs) = p.precomputed
+
+    compute_precipitation_cache!(Y, p, colidx, precip_model, turbconv_model)
+
+    # Update from environment precipitation sources
+    # and the grid mean precipitation sinks
+    @. Yₜ.c.ρ[colidx] += Y.c.ρ[colidx] * (ᶜSqₜᵖ⁰[colidx] + ᶜSqₜᵖ[colidx])
+    @. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * (ᶜSqₜᵖ⁰[colidx] + ᶜSqₜᵖ[colidx])
+    @. Yₜ.c.ρe_tot[colidx] += Y.c.ρ[colidx] * (ᶜSeₜᵖ⁰[colidx] + ᶜSeₜᵖ[colidx])
+    @. Yₜ.c.ρq_rai[colidx] += Y.c.ρ[colidx] * (ᶜSqᵣᵖ⁰[colidx] + ᶜSqᵣᵖ[colidx])
+    @. Yₜ.c.ρq_sno[colidx] += Y.c.ρ[colidx] * (ᶜSqₛᵖ⁰[colidx] + ᶜSqₛᵖ[colidx])
+
+    # Update from the updraft precipitation sources
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. Yₜ.c.ρ[colidx] += ᶜρaʲs.:($$j)[colidx] * ᶜSqₜᵖʲs.:($$j)[colidx]
+        @. Yₜ.c.ρq_tot[colidx] += ᶜρaʲs.:($$j)[colidx] * ᶜSqₜᵖʲs.:($$j)[colidx]
+        @. Yₜ.c.ρe_tot[colidx] += ᶜρaʲs.:($$j)[colidx] * ᶜSeₜᵖʲs.:($$j)[colidx]
+        @. Yₜ.c.ρq_rai[colidx] += ᶜρaʲs.:($$j)[colidx] * ᶜSqᵣᵖʲs.:($$j)[colidx]
+        @. Yₜ.c.ρq_sno[colidx] += ᶜρaʲs.:($$j)[colidx] * ᶜSqₛᵖʲs.:($$j)[colidx]
+    end
+end
 function precipitation_tendency!(
     Yₜ,
     Y,

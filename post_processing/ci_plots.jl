@@ -1012,9 +1012,7 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_bomex_box},
     Val{:diagnostic_edmfx_bomex_stretched_box},
     Val{:diagnostic_edmfx_dycoms_rf01_box},
-    Val{:diagnostic_edmfx_rico_box},
-    Val{:diagnostic_edmfx_trmm_box},
-    Val{:diagnostic_edmfx_trmm_stretched_box},
+    Val{:diagnostic_edmfx_trmm_box_0M},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
     Val{:prognostic_edmfx_adv_test_column},
     Val{:prognostic_edmfx_gabls_column},
@@ -1032,6 +1030,9 @@ EDMFBoxPlots = Union{
 EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:diagnostic_edmfx_rico_box},
+    Val{:diagnostic_edmfx_trmm_box},
+    Val{:diagnostic_edmfx_trmm_stretched_box},
 }
 
 

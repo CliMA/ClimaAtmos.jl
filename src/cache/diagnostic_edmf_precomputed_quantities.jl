@@ -244,6 +244,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     ) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
+    if precip_model isa Microphysics1Moment
+        q_rai = p.precomputed.ᶜqᵣ
+        q_sno = p.precomputed.ᶜqₛ
+    end
+
     thermo_params = CAP.thermodynamics_params(params)
     microphys_params = CAP.microphysics_precipitation_params(params)
 
@@ -296,6 +301,11 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
         z_prev_level = Fields.field_values(Fields.level(ᶜz, i - 1))
         dz_prev_level = Fields.field_values(Fields.level(ᶜdz, i - 1))
 
+        if precip_model isa Microphysics1Moment
+            q_rai_prev_level = Fields.field_values(Fields.level(q_rai, i - 1))
+            q_sno_prev_level = Fields.field_values(Fields.level(q_sno, i - 1))
+        end
+
         local_geometry_prev_level = Fields.field_values(
             Fields.level(Fields.local_geometry_field(Y.c), i - 1),
         )
@@ -313,9 +323,17 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             ᶜentrʲ = ᶜentrʲs.:($j)
             ᶜdetrʲ = ᶜdetrʲs.:($j)
             ᶠnh_pressure³ʲ = ᶠnh_pressure³ʲs.:($j)
-            ᶜS_q_totʲ =
-                precip_model isa Microphysics0Moment ?
-                p.precomputed.ᶜSqₜᵖʲs.:($j) : p.scratch.ᶜtemp_scalar
+
+            if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+                ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
+            end
+            if precip_model isa Microphysics1Moment
+                ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
+                ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
+                ᶜS_e_totʲ = p.precomputed.ᶜSeₜᵖʲs.:($j)
+                ᶜSᵖ = p.scratch.ᶜtemp_scalar
+                ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+            end
 
             ρaʲ_level = Fields.field_values(Fields.level(ᶜρaʲ, i))
             u³ʲ_halflevel = Fields.field_values(Fields.level(ᶠu³ʲ, i - half))
@@ -340,9 +358,25 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 Fields.field_values(Fields.level(ᶠnh_pressure³ʲ, i - 1 - half))
             scale_height =
                 CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
-            S_q_totʲ_prev_level =
-                Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
+
+            if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+                S_q_totʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_totʲ, i - 1))
+            end
+            if precip_model isa Microphysics1Moment
+                S_q_raiʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_raiʲ, i - 1))
+                S_q_snoʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_q_snoʲ, i - 1))
+                S_e_totʲ_prev_level =
+                    Fields.field_values(Fields.level(ᶜS_e_totʲ, i - 1))
+                Sᵖ_prev_level = Fields.field_values(Fields.level(ᶜSᵖ, i - 1))
+                Sᵖ_snow_prev_level =
+                    Fields.field_values(Fields.level(ᶜSᵖ_snow, i - 1))
+            end
+
             tke_prev_level = Fields.field_values(Fields.level(ᶜtke⁰, i - 1))
+
             @. entrʲ_prev_level = entrainment(
                 params,
                 z_prev_level,
@@ -403,14 +437,33 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
             # Updraft q_tot sources from precipitation formation
             # To be applied in updraft continuity, moisture and energy
             # for updrafts and grid mean
-            @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
-                precip_model,
-                thermo_params,
-                microphys_params,
-                dt,
-                q_totʲ_prev_level,
-                tsʲ_prev_level,
-            )
+            if precip_model isa Microphysics0Moment
+                @. S_q_totʲ_prev_level = q_tot_precipitation_sources(
+                    precip_model,
+                    thermo_params,
+                    microphys_params,
+                    dt,
+                    q_totʲ_prev_level,
+                    tsʲ_prev_level,
+                )
+            elseif precip_model isa Microphysics1Moment
+                compute_precipitation_sources!(
+                    Sᵖ_prev_level,
+                    Sᵖ_snow_prev_level,
+                    S_q_totʲ_prev_level,
+                    S_q_raiʲ_prev_level,
+                    S_q_snoʲ_prev_level,
+                    S_e_totʲ_prev_level,
+                    ρʲ_prev_level,
+                    q_rai_prev_level,
+                    q_sno_prev_level,
+                    tsʲ_prev_level,
+                    Φ_prev_level,
+                    dt,
+                    microphys_params,
+                    thermo_params,
+                )
+            end
 
             u³ʲ_datau³ʲ_data = p.scratch.temp_data_level
             # Using constant exponents in broadcasts allocate, so we use
@@ -541,8 +594,16 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                 (1 / local_geometry_halflevel.J) * (
                     local_geometry_prev_level.J *
                     ρaʲ_prev_level *
-                    (entrʲ_prev_level - detrʲ_prev_level + S_q_totʲ_prev_level)
+                    (entrʲ_prev_level - detrʲ_prev_level)
                 )
+            if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+                @. ρaʲu³ʲ_data +=
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_level.J *
+                        ρaʲ_prev_level *
+                        S_q_totʲ_prev_level
+                    )
+            end
 
             @. u³ʲ_halflevel = ifelse(
                 (
@@ -580,15 +641,32 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ρaʲ_prev_level *
                     (
                         entrʲ_prev_level * (h_tot_prev_level - K_prev_level) -
-                        detrʲ_prev_level * mseʲ_prev_level +
-                        S_q_totʲ_prev_level *
-                        e_tot_0M_precipitation_sources_helper(
-                            thermo_params,
-                            tsʲ_prev_level,
-                            Φ_prev_level,
-                        )
+                        detrʲ_prev_level * mseʲ_prev_level
                     )
                 )
+            if precip_model isa Microphysics0Moment
+                @. ρaʲu³ʲ_datamse +=
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_level.J *
+                        ρaʲ_prev_level *
+                        (
+                            S_q_totʲ_prev_level *
+                            e_tot_0M_precipitation_sources_helper(
+                                thermo_params,
+                                tsʲ_prev_level,
+                                Φ_prev_level,
+                            )
+                        )
+                    )
+            elseif precip_model isa Microphysics1Moment
+                @. ρaʲu³ʲ_datamse +=
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_level.J *
+                        ρaʲ_prev_level *
+                        S_e_totʲ_prev_level
+                    )
+            end
+
             @. mseʲ_level = ifelse(
                 (
                     (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
@@ -610,10 +688,18 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
                     ρaʲ_prev_level *
                     (
                         entrʲ_prev_level * q_tot_prev_level -
-                        detrʲ_prev_level * q_totʲ_prev_level +
-                        S_q_totʲ_prev_level
+                        detrʲ_prev_level * q_totʲ_prev_level
                     )
                 )
+            if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+                @. ρaʲu³ʲ_dataq_tot +=
+                    (1 / local_geometry_halflevel.J) * (
+                        local_geometry_prev_level.J *
+                        ρaʲ_prev_level *
+                        S_q_totʲ_prev_level
+                    )
+            end
+
             @. q_totʲ_level = ifelse(
                 (
                     (u³ʲ_datau³ʲ_data < 10 * ∇Φ³_data_prev_level * eps(FT)) | (ρaʲu³ʲ_data < (minimum_value / ∂x³∂ξ³_level))
@@ -708,6 +794,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜentrʲs, ᶜdetrʲs) = p.precomputed
     (; ᶠu³⁰, ᶠu³ʲs, ᶜuʲs, ᶠnh_pressure³ʲs) = p.precomputed
+    (; precip_model) = p.atmos
 
     # set values for the top level
     i_top = Spaces.nlevels(axes(Y.c))
@@ -736,11 +823,22 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_top_bc!(
         fill!(detrʲ_level, RecursiveApply.rzero(eltype(detrʲ_level)))
         @. ᶜuʲ = C123(Y.c.uₕ) + ᶜinterp(C123(ᶠu³ʲ))
 
-        ᶜS_q_totʲ =
-            p.atmos.precip_model isa Microphysics0Moment ?
-            p.precomputed.ᶜSqₜᵖʲs.:($j) : p.scratch.ᶜtemp_scalar
-        S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
-        @. S_q_totʲ_level = 0
+        if precip_model isa Union{Microphysics0Moment, Microphysics1Moment}
+            ᶜS_q_totʲ = p.precomputed.ᶜSqₜᵖʲs.:($j)
+            S_q_totʲ_level = Fields.field_values(Fields.level(ᶜS_q_totʲ, i_top))
+            @. S_q_totʲ_level = 0
+        end
+        if precip_model isa Microphysics1Moment
+            ᶜS_q_raiʲ = p.precomputed.ᶜSqᵣᵖʲs.:($j)
+            ᶜS_q_snoʲ = p.precomputed.ᶜSqₛᵖʲs.:($j)
+            ᶜS_e_totʲ = p.precomputed.ᶜSeₜᵖʲs.:($j)
+            S_q_raiʲ_level = Fields.field_values(Fields.level(ᶜS_q_raiʲ, i_top))
+            S_q_snoʲ_level = Fields.field_values(Fields.level(ᶜS_q_snoʲ, i_top))
+            S_e_totʲ_level = Fields.field_values(Fields.level(ᶜS_e_totʲ, i_top))
+            @. S_q_raiʲ_level = 0
+            @. S_q_snoʲ_level = 0
+            @. S_e_totʲ_level = 0
+        end
     end
     return nothing
 end
@@ -892,5 +990,42 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
         q_tot,
         ᶜts,
     )
+    return nothing
+end
+NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipitation!(
+    Y,
+    p,
+    t,
+    precip_model::Microphysics1Moment,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    microphys_params = CAP.microphysics_precipitation_params(p.params)
+
+    (; ᶜts, ᶜSqₜᵖ⁰, ᶜSeₜᵖ⁰, ᶜSqᵣᵖ⁰, ᶜSqₛᵖ⁰) = p.precomputed
+    (; q_tot) = p.precomputed.ᶜspecific
+    (; ᶜqᵣ, ᶜqₛ) = p.precomputed
+
+    ᶜSᵖ = p.scratch.ᶜtemp_scalar
+    ᶜSᵖ_snow = p.scratch.ᶜtemp_scalar_2
+
+    Fields.bycolumn(axes(Y.c.ρ)) do colidx
+        # Environment precipitation sources (to be applied to grid mean)
+        compute_precipitation_sources!(
+            ᶜSᵖ[colidx],
+            ᶜSᵖ_snow[colidx],
+            ᶜSqₜᵖ⁰[colidx],
+            ᶜSqᵣᵖ⁰[colidx],
+            ᶜSqₛᵖ⁰[colidx],
+            ᶜSeₜᵖ⁰[colidx],
+            Y.c.ρ[colidx],
+            ᶜqᵣ[colidx],
+            ᶜqₛ[colidx],
+            ᶜts[colidx],
+            p.core.ᶜΦ[colidx],
+            p.dt,
+            microphys_params,
+            thermo_params,
+        )
+    end
     return nothing
 end
