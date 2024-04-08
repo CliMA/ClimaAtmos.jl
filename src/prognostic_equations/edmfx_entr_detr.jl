@@ -59,7 +59,7 @@ function entrainment(
 
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
-        Π₂ = ᶜtke⁰ / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
+        Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
         Π₃ = sqrt(ᶜaʲ)
         Π₄ = ᶜRHʲ - ᶜRH⁰
         Π₅ = (ᶜz - z_sfc) / ref_H
@@ -177,7 +177,7 @@ function detrainment(
 
         # non-dimensional pi-groups
         Π₁ = (ᶜz - z_sfc) * (ᶜbuoyʲ - ᶜbuoy⁰) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 100
-        Π₂ = ᶜtke⁰ / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
+        Π₂ = max(ᶜtke⁰, 0) / ((ᶜwʲ - ᶜw⁰)^2 + eps(FT)) / 2
         Π₃ = sqrt(ᶜaʲ)
         Π₄ = ᶜRHʲ - ᶜRH⁰
         Π₅ = (ᶜz - z_sfc) / ref_H
