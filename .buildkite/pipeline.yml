@@ -39,6 +39,11 @@ steps:
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
 
+      - echo "--- Instantiate calibration/test"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.develop(;path=\".\"); Pkg.instantiate(;verbose=true)'"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.precompile()'"
+      - "julia --project=calibration/test -e 'using Pkg; Pkg.status()'"
+
       - echo "--- Download artifacts"
       - "julia --project=examples artifacts/download_artifacts.jl"
 
@@ -486,6 +491,14 @@ steps:
         artifact_paths: "checkbounds/output_active/*"
         agents:
           slurm_mem: 20GB
+
+  - group: "Calibration"
+    steps:
+      - label: "Calibration interface unit tests"
+        command: julia --project=calibration/test calibration/test/interface.jl
+      - label: "end to end test"
+        command: julia --project=calibration/test calibration/test/e2e_test.jl
+        artifact_paths: "calibration_end_to_end_test/*"
 
   - group: "Diagnostic EDMFX"
     steps:

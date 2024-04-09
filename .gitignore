@@ -28,6 +28,7 @@ docs/site/
 # environment.
 /Manifest.toml
 test/Manifest.toml
+calibration/test/Manifest.toml
 
 # ignore vscode artifacts
 *.vscode
@@ -43,6 +44,8 @@ test/Manifest.toml
 *.hdf5
 *.h5
 *.g
+*.lock
+*.loc
 
 # misc
 .DS_Store

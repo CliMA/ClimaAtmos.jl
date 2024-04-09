@@ -1,0 +1,4 @@
+["equator_pole_temperature_gradient_wet"]
+prior = "constrained_gaussian(\"equator_pole_temperature_gradient_wet\", 125, 40, 0, Inf)"
+constraint = "[bounded_below(0)]"
+type = "float"
