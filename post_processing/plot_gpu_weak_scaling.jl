@@ -6,10 +6,6 @@ include("plot_gpu_scaling_utils.jl")
 job_id = "gpu_aquaplanet_dyamond_ws"
 output_dir = "./"
 
-secs_per_hour = 60 * 60
-secs_per_day = 60 * 60 * 24
-days_per_year = 8760 / 24
-
 t_int_days = 12 / 24 # simulation integration time in days
 h_elem = [30, 42, 60]
 z_elem = 63
@@ -18,21 +14,14 @@ nlevels = z_elem + 1
 t_int = string(t_int_days) * " days"
 
 # read ClimaAtmos scaling data
-(; nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos) =
-    get_jld2data(output_dir, job_id, "_ws_")
+(;
+    nprocs_clima_atmos,
+    ncols_per_process,
+    walltime_clima_atmos,
+    sypd_clima_atmos,
+    gpu_hours_clima_atmos,
+) = get_jld2data(output_dir, job_id, t_int_days, "_ws_")
 
-order = sortperm(nprocs_clima_atmos)
-nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos =
-    nprocs_clima_atmos[order],
-    ncols_per_process[order],
-    walltime_clima_atmos[order]
-
-# simulated years per day
-sypd_clima_atmos =
-    (secs_per_day ./ walltime_clima_atmos) * t_int_days ./ days_per_year
-# GPU hours
-gpu_hours_clima_atmos =
-    nprocs_clima_atmos .* walltime_clima_atmos / secs_per_hour
 # weak scaling efficiency
 single_proc_time_clima_atmos = walltime_clima_atmos[1] * nprocs_clima_atmos[1]
 weak_scaling_efficiency_clima_atmos =
