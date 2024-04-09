@@ -36,11 +36,13 @@ function edmfx_tke_tendency!(
 
     if use_prognostic_tke(turbconv_model)
         # shear production
-        @. Yₜ.c.sgs⁰.ρatke[colidx] +=
-            2 * ᶜρa⁰[colidx] * ᶜK_u[colidx] * ᶜstrain_rate_norm[colidx]
-        # buoyancy production
-        @. Yₜ.c.sgs⁰.ρatke[colidx] -=
-            ᶜρa⁰[colidx] * ᶜK_h[colidx] * ᶜlinear_buoygrad[colidx]
+        @fused begin
+            @. Yₜ.c.sgs⁰.ρatke[colidx] +=
+                2 * ᶜρa⁰[colidx] * ᶜK_u[colidx] * ᶜstrain_rate_norm[colidx]
+            # buoyancy production
+            @. Yₜ.c.sgs⁰.ρatke[colidx] -=
+                ᶜρa⁰[colidx] * ᶜK_h[colidx] * ᶜlinear_buoygrad[colidx]
+        end
         # entrainment and detraiment
         # using ᶜu⁰ and local geometry results in allocation
         for j in 1:n

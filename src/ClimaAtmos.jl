@@ -2,6 +2,7 @@ module ClimaAtmos
 
 using NVTX, Colors
 import Thermodynamics as TD
+import ClimaCore.DataLayouts: @fused
 
 include(joinpath("parameters", "Parameters.jl"))
 import .Parameters as CAP
