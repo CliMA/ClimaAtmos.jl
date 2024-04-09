@@ -1,5 +1,10 @@
 using JLD2
-function get_jld2data(output_dir, job_id, s)
+import PrettyTables as PT
+
+function get_jld2data(output_dir, job_id, t_int_days, s)
+    secs_per_day = 60 * 60 * 24
+    secs_per_hour = 60 * 60
+    days_per_year = 8760 / 24
     FT = Float64
     nprocs_clima_atmos = Int[]
     ncols_per_process = Int[]
@@ -22,16 +27,46 @@ function get_jld2data(output_dir, job_id, s)
             push!(nprocs_clima_atmos, Int(dict["nprocs"]))
             push!(ncols_per_process, Int(dict["ncols_per_process"]))
             push!(walltime_clima_atmos, FT(dict["walltime"]))
-        else
-            @show occursin(job_id, foldername)
-            @show occursin(s, foldername)
+            found = true
         end
     end
     if !found
         @show readdir(output_dir)
+        for foldername in readdir(output_dir)
+            @show occursin(job_id, foldername)
+            @show occursin(s, foldername)
+        end
     end
-    @show nprocs_clima_atmos
-    @show ncols_per_process
-    @show walltime_clima_atmos
-    return (; nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos)
+    order = sortperm(nprocs_clima_atmos)
+    nprocs_clima_atmos, ncols_per_process, walltime_clima_atmos =
+        nprocs_clima_atmos[order],
+        ncols_per_process[order],
+        walltime_clima_atmos[order]
+
+    # simulated years per day
+    sypd_clima_atmos =
+        (secs_per_day ./ walltime_clima_atmos) * t_int_days ./ days_per_year
+
+    # GPU hours
+    gpu_hours_clima_atmos =
+        nprocs_clima_atmos .* walltime_clima_atmos / secs_per_hour
+
+    data = hcat(
+        nprocs_clima_atmos,
+        ncols_per_process,
+        walltime_clima_atmos,
+        sypd_clima_atmos,
+    )
+    PT.pretty_table(
+        data;
+        header = ["N procs", "Ncols per process", "walltime (seconds)", "SYPD"],
+        alignment = :l,
+    )
+    return (;
+        nprocs_clima_atmos,
+        ncols_per_process,
+        walltime_clima_atmos,
+        sypd_clima_atmos,
+        gpu_hours_clima_atmos,
+    )
 end

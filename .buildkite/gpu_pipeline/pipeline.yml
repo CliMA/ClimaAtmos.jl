@@ -161,7 +161,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ss
           - >
             julia --color=yes --project=examples post_processing/plot_gpu_strong_scaling.jl gpu_aquaplanet_dyamond_ss
-        artifact_paths: "gpu_aquaplanet_dyamond_ss/output_active/*"
+        artifact_paths: "gpu_aquaplanet_dyamond_ss/*"
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
@@ -225,7 +225,7 @@ steps:
           - mkdir -p gpu_aquaplanet_dyamond_ws
           - >
             julia --color=yes --project=examples post_processing/plot_gpu_weak_scaling.jl gpu_aquaplanet_dyamond_ws
-        artifact_paths: "gpu_aquaplanet_dyamond_ws/output_active/*"
+        artifact_paths: "gpu_aquaplanet_dyamond_ws/*"
         agents:
           slurm_cpus_per_task: 1
           slurm_ntasks: 1
