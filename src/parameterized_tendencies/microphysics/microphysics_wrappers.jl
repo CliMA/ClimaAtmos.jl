@@ -2,6 +2,9 @@
 
 import Thermodynamics as TD
 import CloudMicrophysics.Microphysics0M as CM0
+import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.MicrophysicsNonEq as CMNe
+import CloudMicrophysics.Parameters as CMP
 
 # define some aliases and functions to make the code more readable
 const Iₗ = TD.internal_energy_liquid
@@ -10,12 +13,64 @@ const Lf = TD.latent_heat_fusion
 const Tₐ = TD.air_temperature
 const PP = TD.PhasePartition
 const qᵥ = TD.vapor_specific_humidity
+qₜ(thp, ts) = TD.PhasePartition(thp, ts).tot
 qₗ(thp, ts) = TD.PhasePartition(thp, ts).liq
 qᵢ(thp, ts) = TD.PhasePartition(thp, ts).ice
 
 # helper function to limit the tendency
-function limit(q::FT, dt::FT) where {FT}
-    return q / dt / 5
+function limit(q::FT, dt::FT, n::Int) where {FT}
+    return q / dt / n
+end
+
+"""
+    cloud_sources(cm_params, thp, ts, dt)
+
+ - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
+ - thp - Thermodynamics parameters struct
+ - ts - thermodynamics state
+ - dt - model time step
+
+Returns the condensation/evaporation or deposition/sublimation rate for
+non-equilibrium cloud formation.
+"""
+function cloud_sources(cm_params::CMP.CloudLiquid{FT}, thp, ts, dt) where {FT}
+
+    λ = TD.liquid_fraction(thp, Tₐ(thp, ts), TD.PhaseEquil)
+    qᵥ_ex_liquid = λ * (qₜ(thp, ts) - TD.q_vap_saturation_liquid(thp, ts))
+
+    # Ideally the logic whether to apply this source term, and what relaxation
+    # timescale to use, should be based on the availability of CCNs and INPs.
+    # We need a 2-moment microphysics scheme for that.
+
+    # Additionally, to approximate the partitioning between the condensation/evaporation
+    # and deposition/sublimation, we are scaling down the excess q by the liquid fraction.
+    # This needs more thought.
+    S = CMNe.conv_q_vap_to_q_liq_ice(
+        cm_params,
+        PP(FT(0), qᵥ_ex_liquid, FT(0)),
+        PP(thp, ts),
+    )
+    return ifelse(
+        S > FT(0),
+        min(S, limit(qᵥ(thp, ts), dt, 2)),
+        -min(abs(S), limit(qₗ(thp, ts), dt, 2)),
+    )
+end
+function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, dt) where {FT}
+
+    λ = TD.liquid_fraction(thp, Tₐ(thp, ts), TD.PhaseEquil)
+    qᵥ_ex_ice = (1 - λ) * (qₜ(thp, ts) - TD.q_vap_saturation_ice(thp, ts))
+
+    S = CMNe.conv_q_vap_to_q_liq_ice(
+        cm_params,
+        PP(FT(0), FT(0), qᵥ_ex_ice),
+        PP(thp, ts),
+    )
+    return ifelse(
+        S > FT(0),
+        min(S, limit(qᵥ(thp, ts), dt, 2)),
+        -min(abs(S), limit(qᵢ(thp, ts), dt, 2)),
+    )
 end
 
 """
@@ -114,7 +169,7 @@ function compute_precipitation_sources!(
     #! format: off
     # rain autoconversion: q_liq -> q_rain
     @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt),
+        limit(qₗ(thp, ts), dt, 5),
         CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
     )
     @. Sqₜᵖ -= Sᵖ
@@ -123,7 +178,7 @@ function compute_precipitation_sources!(
 
     # snow autoconversion assuming no supersaturation: q_ice -> q_snow
     @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt),
+        limit(qᵢ(thp, ts), dt, 5),
         CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts), true),
     )
     @. Sqₜᵖ -= Sᵖ
@@ -132,7 +187,7 @@ function compute_precipitation_sources!(
 
     # accretion: q_liq + q_rain -> q_rain
     @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt),
+        limit(qₗ(thp, ts), dt, 5),
         CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts), qᵣ, ρ),
     )
     @. Sqₜᵖ -= Sᵖ
@@ -141,7 +196,7 @@ function compute_precipitation_sources!(
 
     # accretion: q_ice + q_snow -> q_snow
     @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt),
+        limit(qᵢ(thp, ts), dt, 5),
         CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts), qₛ, ρ),
     )
     @. Sqₜᵖ -= Sᵖ
@@ -151,7 +206,7 @@ function compute_precipitation_sources!(
     # accretion: q_liq + q_sno -> q_sno or q_rai
     # sink of cloud water via accretion cloud water + snow
     @. Sᵖ = min(
-        limit(qₗ(thp, ts), dt),
+        limit(qₗ(thp, ts), dt, 5),
         CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts), qₛ, ρ),
     )
     # if T < T_freeze cloud droplets freeze to become snow
@@ -160,7 +215,7 @@ function compute_precipitation_sources!(
     @. Sᵖ_snow = ifelse(
         Tₐ(thp, ts) < mp.ps.T_freeze,
         Sᵖ,
-        FT(-1) * min(Sᵖ * α(thp, ts), limit(qₛ, dt)),
+        FT(-1) * min(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
     )
     @. Sqₛᵖ += Sᵖ_snow
     @. Sqₜᵖ -= Sᵖ
@@ -173,7 +228,7 @@ function compute_precipitation_sources!(
 
     # accretion: q_ice + q_rai -> q_sno
     @. Sᵖ = min(
-        limit(qᵢ(thp, ts), dt),
+        limit(qᵢ(thp, ts), dt, 5),
         CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
     )
     @. Sqₜᵖ -= Sᵖ
@@ -181,7 +236,7 @@ function compute_precipitation_sources!(
     @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
     # sink of rain via accretion cloud ice - rain
     @. Sᵖ = min(
-        limit(qᵣ, dt),
+        limit(qᵣ, dt, 5),
         CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
     )
     @. Sqᵣᵖ -= Sᵖ
@@ -192,11 +247,11 @@ function compute_precipitation_sources!(
     @. Sᵖ = ifelse(
         Tₐ(thp, ts) < mp.ps.T_freeze,
         min(
-            limit(qᵣ, dt),
+            limit(qᵣ, dt, 5),
             CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
         ),
         -min(
-            limit(qₛ, dt),
+            limit(qₛ, dt, 5),
             CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
         ),
     )
@@ -245,7 +300,7 @@ function compute_precipitation_sinks!(
     #! format: off
     # evaporation: q_rai -> q_vap
     @. Sᵖ = -min(
-        limit(qᵣ, dt),
+        limit(qᵣ, dt, 5),
         -CM1.evaporation_sublimation(rps..., PP(thp, ts), qᵣ, ρ, Tₐ(thp, ts)),
     )
     @. Sqₜᵖ -= Sᵖ
@@ -254,7 +309,7 @@ function compute_precipitation_sinks!(
 
     # melting: q_sno -> q_rai
     @. Sᵖ = min(
-        limit(qₛ, dt),
+        limit(qₛ, dt, 5),
         CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
     )
     @. Sqᵣᵖ += Sᵖ
@@ -265,8 +320,8 @@ function compute_precipitation_sinks!(
     @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₛ, ρ, Tₐ(thp, ts))
     @. Sᵖ = ifelse(
         Sᵖ > FT(0),
-        min(limit(qᵥ(thp, ts), dt), Sᵖ),
-        -min(limit(qₛ, dt), FT(-1) * Sᵖ),
+        min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
+        -min(limit(qₛ, dt, 5), FT(-1) * Sᵖ),
     )
     @. Sqₜᵖ -= Sᵖ
     @. Sqₛᵖ += Sᵖ

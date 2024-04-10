@@ -19,7 +19,7 @@ function set_precipitation_precomputed_quantities!(Y, p, t)
 
     (; ᶜwᵣ, ᶜwₛ, ᶜqᵣ, ᶜqₛ) = p.precomputed
 
-    cmp = CAP.microphysics_params(p.params)
+    cmp = CAP.microphysics_precipitation_params(p.params)
 
     # compute the precipitation specific humidities
     @. ᶜqᵣ = qₚ(Y.c.ρq_rai, Y.c.ρ)

@@ -243,7 +243,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_do_integral!(
     (; ᶠu³⁰, ᶜK⁰, ᶜtke⁰) = p.precomputed
 
     thermo_params = CAP.thermodynamics_params(params)
-    microphys_params = CAP.microphysics_params(params)
+    microphys_params = CAP.microphysics_precipitation_params(params)
 
     ᶠΦ = p.scratch.ᶠtemp_scalar
     @. ᶠΦ = CAP.grav(params) * ᶠz
@@ -874,7 +874,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_precipita
     precip_model::Microphysics0Moment,
 )
     thermo_params = CAP.thermodynamics_params(p.params)
-    microphys_params = CAP.microphysics_params(p.params)
+    microphys_params = CAP.microphysics_precipitation_params(p.params)
     (; dt) = p
     (; ᶜts, ᶜSqₜᵖ⁰) = p.precomputed
     (; q_tot) = p.precomputed.ᶜspecific

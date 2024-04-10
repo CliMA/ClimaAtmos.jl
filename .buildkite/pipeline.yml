@@ -288,6 +288,14 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":computer: aquaplanet (ρe_tot) nonequilmoist allsky radiation monin_obukhov varying insolation gravity wave (gfdl_restart) high top with 1-moment micro"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res.yml
+        artifact_paths: "sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":computer: aquaplanet (ρe_tot) equilmoist allsky radiation monin_obukhov varying insolation gravity wave (raw_topo) high top zonally asymmetric"
         command: >
           julia --color=yes --project=examples examples/hybrid/driver.jl

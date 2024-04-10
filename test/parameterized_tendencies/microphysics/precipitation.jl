@@ -55,8 +55,8 @@ include("../../test_helpers.jl")
     @test maximum(abs.(p.precipitation.ᶜS_ρq_tot)) <= sqrt(eps(FT))
 
     # Test that tendencies result in correct water-mass budget,
-    # and that the tendency modification corresponds exactly to the 
-    # cached source term. 
+    # and that the tendency modification corresponds exactly to the
+    # cached source term.
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         CA.precipitation_tendency!(
             ᶜYₜ,
@@ -93,7 +93,7 @@ include("../../test_helpers.jl")
     end
     @test CA.qₚ(FT(10), FT(2)) == FT(5)
     @test CA.qₚ(FT(-10), FT(2)) == FT(0)
-    @test CA.limit(FT(10), FT(2)) == FT(1)
+    @test CA.limit(FT(10), FT(2), 5) == FT(1)
     CC.Fields.bycolumn(axes(Y.c)) do colidx
         CA.precipitation_tendency!(
             ᶜYₜ,
