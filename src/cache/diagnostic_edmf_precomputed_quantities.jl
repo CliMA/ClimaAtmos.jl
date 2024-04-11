@@ -155,6 +155,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         @. mseʲ_int_level = sgs_scalar_first_interior_bc(
             z_int_level - z_sfc_halflevel,
             ρ_int_level,
+            turbconv_model.a_int,
             h_tot_int_level - K_int_level,
             buoyancy_flux_sfc_halflevel,
             ρ_flux_h_tot_sfc_halflevel,
@@ -165,6 +166,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_bottom_bc!(
         @. q_totʲ_int_level = sgs_scalar_first_interior_bc(
             z_int_level - z_sfc_halflevel,
             ρ_int_level,
+            turbconv_model.a_int,
             q_tot_int_level,
             buoyancy_flux_sfc_halflevel,
             ρ_flux_q_tot_sfc_halflevel,
