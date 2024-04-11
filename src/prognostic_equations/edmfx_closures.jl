@@ -110,8 +110,37 @@ function edmfx_nh_pressure_tendency!(
     ᶠlg = Fields.local_geometry_field(Y.f)
 
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
+    FT = eltype(Y)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    z_sfc_data = Fields.field_values(z_sfc[colidx])
+    turbconv_params = CAP.turbconv_params(params)
+    a_min = CAP.min_area(turbconv_params)
+    ᶜupdraft_top = p.scratch.ᶜtemp_scalar
 
     for j in 1:n
+        # look for updraft top
+        ᶜupdraft_top_data = Fields.field_values(ᶜupdraft_top[colidx])
+        @. ᶜupdraft_top_data = FT(0)
+        for level in 1:Spaces.nlevels(axes(ᶜz))
+            ρaʲ_lev = Fields.field_values(
+                Spaces.level(Y.c.sgsʲs.:($j).ρa[colidx], level),
+            )
+            ρʲ_lev =
+                Fields.field_values(Spaces.level(ᶜρʲs.:($j)[colidx], level))
+            ᶜz_lev = Fields.field_values(Spaces.level(ᶜz[colidx], level))
+            @. ᶜupdraft_top_data = ifelse(
+                draft_area(ρaʲ_lev, ρʲ_lev) > a_min,
+                ᶜz_lev,
+                ᶜupdraft_top_data,
+            )
+        end
+        @. ᶜupdraft_top_data = ᶜupdraft_top_data - z_sfc_data
+
+        # There's only one updraft_top per column, so it's
+        # safe to use at cell centers and cell faces, correct?:
+        ᶠupdraft_top = Fields.Field(ᶜupdraft_top_data, axes(ᶠu₃⁰[colidx]))
+
         @. ᶠnh_pressure₃ʲs.:($$j)[colidx] = ᶠupdraft_nh_pressure(
             params,
             p.atmos.edmfx_nh_pressure,
@@ -123,7 +152,7 @@ function edmfx_nh_pressure_tendency!(
             ),
             Y.f.sgsʲs.:($$j).u₃[colidx],
             ᶠu₃⁰[colidx],
-            scale_height,
+            ᶠupdraft_top,
         )
 
         @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠnh_pressure₃ʲs.:($$j)[colidx]
@@ -242,10 +271,17 @@ function mixing_length(
     )
 
     # add limiters
+    # l = SA.SVector(
+    #     l_N > l_z ? l_z : l_N,
+    #     l_TKE > l_z ? l_z : l_TKE,
+    #     l_W > l_z ? l_z : l_W,
+    # )
+
+    l_z = 1000000
     l = SA.SVector(
-        l_N > l_z ? l_z : l_N,
-        l_TKE > l_z ? l_z : l_TKE,
-        l_W > l_z ? l_z : l_W,
+        (l_N < eps(FT) || l_N > l_z) ? l_z : l_N,
+        (l_TKE < eps(FT) || l_TKE > l_z) ? l_z : l_TKE,
+        (l_W < eps(FT) || l_W > l_z) ? l_z : l_W,
     )
     # get soft minimum
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)

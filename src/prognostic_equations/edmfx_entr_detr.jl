@@ -302,6 +302,18 @@ function edmfx_entr_detr_tendency!(
     return nothing
 end
 
+function min_area_limiter(params, entr::FT, detr, a) where {FT}
+    turbconv_params = CAP.turbconv_params(params)
+    min_area_limiter_scale = CAP.min_area_limiter_scale(turbconv_params)
+    min_area_limiter_power = CAP.min_area_limiter_power(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
+    min_area_limiter =
+        min_area_limiter_scale * exp(-min_area_limiter_power * (max(a, 0) - 0))
+
+    entr = entr + max(entr, detr) * min_area_limiter
+    return entr
+end
+
 limit_entrainment(entr::FT, a, dt) where {FT} =
     max(min(entr, FT(0.9) * (1 - a) / max(a, eps(FT)) / dt), 0)
 limit_entrainment(entr::FT, a, w, dz) where {FT} =

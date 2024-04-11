@@ -120,9 +120,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
+        ᶜaʲ_int_val = p.scratch.temp_data_level
+        ᶜaʲ_int_val .=
+            draft_area.(
+                Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1)),
+                Fields.field_values(Fields.level(ᶜρʲs.:($j), 1)),
+            )
         @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
+            ᶜaʲ_int_val,
             ᶜh_tot_int_val - ᶜK_int_val,
             buoyancy_flux_val,
             ρ_flux_h_tot_val,
@@ -137,6 +144,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
+            ᶜaʲ_int_val,
             ᶜq_tot_int_val,
             buoyancy_flux_val,
             ρ_flux_q_tot_val,
@@ -160,9 +168,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
         turbconv_params = CAP.turbconv_params(params)
         @. sgsʲs_ρ_int_val = TD.air_density(thermo_params, ᶜtsʲ_int_val)
-        @. sgsʲs_ρa_int_val =
-            $(FT(turbconv_params.surface_area)) *
-            TD.air_density(thermo_params, ᶜtsʲ_int_val)
+        # @. sgsʲs_ρa_int_val =
+        #     $(FT(turbconv_params.surface_area)) *
+        #     TD.air_density(thermo_params, ᶜtsʲ_int_val)
     end
     return nothing
 end
@@ -257,6 +265,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
             ᶜdetrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             dt,
+        )
+
+        @. ᶜentrʲs.:($$j) = min_area_limiter(
+            params,
+            ᶜentrʲs.:($$j),
+            ᶜdetrʲs.:($$j),
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
         )
     end
 
