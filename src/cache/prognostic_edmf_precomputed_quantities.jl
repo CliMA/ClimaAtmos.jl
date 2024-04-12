@@ -70,6 +70,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
+    turbconv_params = CAP.turbconv_params(params)
 
     (; ᶜΦ,) = p.core
     (; ᶜspecific, ᶜp, ᶜh_tot, ᶜK) = p.precomputed
@@ -96,7 +97,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
 
         # We need field_values everywhere because we are mixing
         # information from surface and first interior inside the
-        # sgs_h/q_tot_first_interior_bc call.
+        # sgs_scalar_first_interior_bc call.
         ᶜz_int_val =
             Fields.field_values(Fields.level(Fields.coordinate_field(Y.c).z, 1))
         z_sfc_val = Fields.field_values(
@@ -116,13 +117,18 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         )
 
         # Based on boundary conditions for updrafts we overwrite
-        # the first interior point for EDMFX ᶜh_totʲ...
+        # the first interior point for EDMFX ᶜmseʲ...
+        ᶜaʲ_int_val = p.scratch.temp_data_level
+        # TODO: replace this with the actual surface area fraction when 
+        # using prognostic surface area
+        @. ᶜaʲ_int_val = FT(turbconv_params.surface_area)
         ᶜh_tot_int_val = Fields.field_values(Fields.level(ᶜh_tot, 1))
         ᶜK_int_val = Fields.field_values(Fields.level(ᶜK, 1))
         ᶜmseʲ_int_val = Fields.field_values(Fields.level(ᶜmseʲ, 1))
         @. ᶜmseʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
+            ᶜaʲ_int_val,
             ᶜh_tot_int_val - ᶜK_int_val,
             buoyancy_flux_val,
             ρ_flux_h_tot_val,
@@ -137,6 +143,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         @. ᶜq_totʲ_int_val = sgs_scalar_first_interior_bc(
             ᶜz_int_val - z_sfc_val,
             ᶜρ_int_val,
+            ᶜaʲ_int_val,
             ᶜq_tot_int_val,
             buoyancy_flux_val,
             ρ_flux_q_tot_val,
@@ -158,7 +165,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft_and_bc!
         sgsʲs_ρa_int_val =
             Fields.field_values(Fields.level(Y.c.sgsʲs.:($j).ρa, 1))
 
-        turbconv_params = CAP.turbconv_params(params)
         @. sgsʲs_ρ_int_val = TD.air_density(thermo_params, ᶜtsʲ_int_val)
         @. sgsʲs_ρa_int_val =
             $(FT(turbconv_params.surface_area)) *

@@ -1,8 +1,13 @@
-158
+159
+
+# 159:
+# - Changed the boundary condition of edmf updraft properties
+#   to be dependent on the surface area
 
 # 158:
 #  - Switched back the precipitation threshold defintion in the
-#  0-moment scheme to specific humidity
+#    0-moment scheme to specific humidity
+
 # 157:
 #  - For the grid mean precipitation tendency in the 0-moment scheme:
 #     - added limiting by q_tot/dt
