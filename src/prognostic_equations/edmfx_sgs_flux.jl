@@ -253,8 +253,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
             @. ᶜρχₜ_diffusion[colidx] =
                 ᶜdivᵥ_ρq_tot(-(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜq_tot⁰[colidx])))
-            @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
-            @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+            @fused begin
+                @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
+                @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+            end
         end
 
         # momentum
@@ -339,8 +341,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             @. ᶜρχₜ_diffusion[colidx] = ᶜdivᵥ_ρq_tot(
                 -(ᶠρaK_h[colidx] * ᶠgradᵥ(ᶜspecific.q_tot[colidx])),
             )
-            @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
-            @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+            @fused begin
+                @. Yₜ.c.ρq_tot[colidx] -= ᶜρχₜ_diffusion[colidx]
+                @. Yₜ.c.ρ[colidx] -= ᶜρχₜ_diffusion[colidx]
+            end
         end
 
         # momentum

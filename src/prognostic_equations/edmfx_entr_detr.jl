@@ -283,17 +283,19 @@ function edmfx_entr_detr_tendency!(
 
     for j in 1:n
 
-        @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
-            Y.c.sgsʲs.:($$j).ρa[colidx] *
-            (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
+        @fused begin
+            @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] +=
+                Y.c.sgsʲs.:($$j).ρa[colidx] *
+                (ᶜentrʲs.:($$j)[colidx] - ᶜdetrʲs.:($$j)[colidx])
 
-        @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
-            ᶜentrʲs.:($$j)[colidx] *
-            (ᶜmse⁰[colidx] - Y.c.sgsʲs.:($$j).mse[colidx])
+            @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=
+                ᶜentrʲs.:($$j)[colidx] *
+                (ᶜmse⁰[colidx] - Y.c.sgsʲs.:($$j).mse[colidx])
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
-            ᶜentrʲs.:($$j)[colidx] *
-            (ᶜq_tot⁰[colidx] - Y.c.sgsʲs.:($$j).q_tot[colidx])
+            @. Yₜ.c.sgsʲs.:($$j).q_tot[colidx] +=
+                ᶜentrʲs.:($$j)[colidx] *
+                (ᶜq_tot⁰[colidx] - Y.c.sgsʲs.:($$j).q_tot[colidx])
+        end
 
         @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] +=
             ᶠinterp(ᶜentrʲs.:($$j)[colidx]) *
