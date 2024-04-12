@@ -301,6 +301,7 @@ function add_space_coordinates_maybe!(
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
     interpolated_physical_z = nothing,
+    disable_vertical_interpolation = false,
 )
 
     hdims_names = vdims_names = []
@@ -320,9 +321,21 @@ function add_space_coordinates_maybe!(
     )
 
     if Spaces.grid(space).hypsography isa Grids.Flat
+        if disable_vertical_interpolation
+            zpts = Array(
+                parent(
+                    space.grid.vertical_grid.center_local_geometry.coordinates,
+                ),
+            )
+            name = "z"
+            add_dimension!(nc, name, zpts, units = "m", axis = "Z")
+            vdims_names = ["name"]
+        else
         vdims_names =
             add_space_coordinates_maybe!(nc, vertical_space, num_points_vertic)
+        end
     else
+        disable_vertical_interpolation && error("Not implemented")
         vdims_names = add_space_coordinates_maybe!(
             nc,
             vertical_space,
@@ -704,6 +717,7 @@ function save_diagnostic_to_disk!(
         space,
         writer.num_points;
         writer.interpolated_physical_z,
+        writer.disable_vertical_interpolation,
     )
 
     if haskey(nc, "$(var.short_name)")
