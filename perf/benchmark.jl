@@ -43,6 +43,13 @@ trials["step!"] = get_trial(SciMLBase.step!, (integrator, ), "step!");
 
 using Test
 using ClimaComms
+
+table_summary = OrderedCollections.OrderedDict()
+for k in keys(trials)
+    table_summary[k] = get_summary(trials[k])
+end
+tabulate_summary(table_summary)
+
 are_boundschecks_forced = Base.JLOptions().check_bounds == 1
 # Benchmark allocation tests
 @testset "Benchmark allocation tests" begin
@@ -63,12 +70,6 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test_broken trials["step!"].memory == 0
     end
 end
-
-table_summary = OrderedCollections.OrderedDict()
-for k in keys(trials)
-    table_summary[k] = get_summary(trials[k])
-end
-tabulate_summary(table_summary)
 
 if get(ENV, "BUILDKITE", "") == "true"
     # Export table_summary
