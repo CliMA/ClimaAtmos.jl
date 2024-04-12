@@ -91,6 +91,9 @@ include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
 )
 include(
+    joinpath("parameterized_tendencies", "microphysics", "cloud_condensate.jl"),
+)
+include(
     joinpath(
         "parameterized_tendencies",
         "microphysics",

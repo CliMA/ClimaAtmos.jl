@@ -45,7 +45,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics0Moment, _)
     (; ᶜts) = p.precomputed
     (; ᶜS_ρq_tot, ᶜS_ρe_tot) = p.precipitation
     (; ᶜΦ) = p.core
-    cm_params = CAP.microphysics_params(params)
+    cm_params = CAP.microphysics_precipitation_params(params)
     thermo_params = CAP.thermodynamics_params(params)
     @. ᶜS_ρq_tot[colidx] =
         Y.c.ρ[colidx] * q_tot_precipitation_sources(
@@ -215,7 +215,7 @@ function compute_precipitation_cache!(Y, p, colidx, ::Microphysics1Moment, _)
 
     # get thermodynamics and 1-moment microphysics params
     (; params) = p
-    cmp = CAP.microphysics_params(params)
+    cmp = CAP.microphysics_precipitation_params(params)
     thp = CAP.thermodynamics_params(params)
 
     # compute precipitation source terms on the grid mean
@@ -273,7 +273,7 @@ function compute_precipitation_cache!(
 
     # get thermodynamics and 1-moment microphysics params
     (; params) = p
-    cmp = CAP.microphysics_params(params)
+    cmp = CAP.microphysics_precipitation_params(params)
     thp = CAP.thermodynamics_params(params)
 
     # zero out the helper source terms

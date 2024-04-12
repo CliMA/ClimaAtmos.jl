@@ -64,6 +64,17 @@ function create_parameter_set(config::AtmosConfig)
         SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
     SFP = typeof(surface_fluxes_params)
 
+    moisture_model = parsed_args["moist"]
+    microphysics_cloud_params = if moisture_model == "nonequil"
+        (;
+            liquid = CM.Parameters.CloudLiquid(toml_dict),
+            ice = CM.Parameters.CloudIce(toml_dict),
+        )
+    else
+        nothing
+    end
+    MPC = typeof(microphysics_cloud_params)
+
     # Microphysics scheme parameters (from CloudMicrophysics.jl)
     # TODO - repeating the logic from solver/model_getters.jl...
     if parsed_args["override_τ_precip"]
@@ -71,7 +82,7 @@ function create_parameter_set(config::AtmosConfig)
             FT(CA.time_to_seconds(parsed_args["dt"]))
     end
     precip_model = parsed_args["precip_model"]
-    microphysics_params =
+    microphysics_precipitation_params =
         if precip_model == nothing || precip_model == "nothing"
             nothing
         elseif precip_model == "0M"
@@ -89,7 +100,7 @@ function create_parameter_set(config::AtmosConfig)
         else
             error("Invalid precip_model $(precip_model)")
         end
-    MPP = typeof(microphysics_params)
+    MPP = typeof(microphysics_precipitation_params)
 
     name_map = (;
         :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
@@ -115,12 +126,13 @@ function create_parameter_set(config::AtmosConfig)
         :water_refractive_index => :water_refractive_index,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;
+    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP}(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
         insolation_params,
-        microphysics_params,
+        microphysics_cloud_params,
+        microphysics_precipitation_params,
         water_params,
         surface_fluxes_params,
         turbconv_params,
