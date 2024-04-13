@@ -33,6 +33,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
+        vertical_fluctuation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.vert_fluc)
+        nudging_tendency!(Yₜ, Y, p, t, colidx, p.atmos.nudging)
 
         if p.atmos.sgs_adv_mode == Explicit()
             edmfx_sgs_vertical_advection_tendency!(

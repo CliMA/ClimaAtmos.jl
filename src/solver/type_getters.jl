@@ -60,6 +60,8 @@ function get_atmos(config::AtmosConfig, params)
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        vert_fluc = get_vertical_fluctuation_model(parsed_args, FT),
+        nudging = get_nudging_model(parsed_args),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
         tendency_model = get_tendency_model(parsed_args),
