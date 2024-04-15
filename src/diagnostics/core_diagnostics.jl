@@ -247,6 +247,38 @@ add_diagnostic_variable!(
 )
 
 ###
+# Buoyancy gradient (3d)
+###
+add_diagnostic_variable!(
+    short_name = "bgrad",
+    long_name = "Linearized Buoyancy Gradient",
+    units = "s^-2",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜlinear_buoygrad)
+        else
+            out .= cache.precomputed.ᶜlinear_buoygrad
+        end
+    end,
+)
+
+###
+# Strain rate magnitude (3d)
+###
+add_diagnostic_variable!(
+    short_name = "strain",
+    long_name = "String Rate Magnitude",
+    units = "s^-2",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜstrain_rate_norm)
+        else
+            out .= cache.precomputed.ᶜstrain_rate_norm
+        end
+    end,
+)
+
+###
 # Relative humidity (3d)
 ###
 compute_hur!(out, state, cache, time) =

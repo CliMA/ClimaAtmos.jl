@@ -883,64 +883,6 @@ add_diagnostic_variable!(
 )
 
 ###
-# Buoyancy gradient (3d)
-###
-compute_bgrad!(out, state, cache, time) =
-    compute_bgrad!(out, state, cache, time, cache.atmos.turbconv_model)
-compute_bgrad!(_, _, _, _, turbconv_model::T) where {T} =
-    error_diagnostic_variable("bgrad", turbconv_model)
-
-function compute_bgrad!(
-    out,
-    state,
-    cache,
-    time,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
-)
-    if isnothing(out)
-        return copy(cache.precomputed.ᶜlinear_buoygrad)
-    else
-        out .= cache.precomputed.ᶜlinear_buoygrad
-    end
-end
-
-add_diagnostic_variable!(
-    short_name = "bgrad",
-    long_name = "Linearized Buoyancy Gradient",
-    units = "s^-2",
-    compute! = compute_bgrad!,
-)
-
-###
-# Strain rate magnitude (3d)
-###
-compute_strain!(out, state, cache, time) =
-    compute_strain!(out, state, cache, time, cache.atmos.turbconv_model)
-compute_strain!(_, _, _, _, turbconv_model::T) where {T} =
-    error_diagnostic_variable("strain", turbconv_model)
-
-function compute_strain!(
-    out,
-    state,
-    cache,
-    time,
-    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
-)
-    if isnothing(out)
-        return copy(cache.precomputed.ᶜstrain_rate_norm)
-    else
-        out .= cache.precomputed.ᶜstrain_rate_norm
-    end
-end
-
-add_diagnostic_variable!(
-    short_name = "strain",
-    long_name = "String Rate Magnitude",
-    units = "s^-2",
-    compute! = compute_strain!,
-)
-
-###
 # Diffusivity of heat (3d)
 ###
 compute_edt!(out, state, cache, time) = compute_edt!(

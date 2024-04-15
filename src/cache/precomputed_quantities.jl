@@ -53,6 +53,8 @@ function precomputed_quantities(Y, atmos)
         ᶜp = similar(Y.c, FT),
         ᶜh_tot = similar(Y.c, FT),
         ᶜmixing_length = similar(Y.c, FT),
+        ᶜlinear_buoygrad = similar(Y.c, FT),
+        ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
     cloud_diagnostics = (; ᶜcloud_fraction = similar(Y.c, FT),)
@@ -83,8 +85,6 @@ function precomputed_quantities(Y, atmos)
             ᶜq_tot⁰ = similar(Y.c, FT),
             ᶜts⁰ = similar(Y.c, TST),
             ᶜρ⁰ = similar(Y.c, FT),
-            ᶜlinear_buoygrad = similar(Y.c, FT),
-            ᶜstrain_rate_norm = similar(Y.c, FT),
             ᶜK_u = similar(Y.c, FT),
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
@@ -123,8 +123,6 @@ function precomputed_quantities(Y, atmos)
             ᶜu⁰ = similar(Y.c, C123{FT}),
             ᶜK⁰ = similar(Y.c, FT),
             ᶜtke⁰ = similar(Y.c, FT),
-            ᶜlinear_buoygrad = similar(Y.c, FT),
-            ᶜstrain_rate_norm = similar(Y.c, FT),
             ᶜK_u = similar(Y.c, FT),
             ᶜK_h = similar(Y.c, FT),
             ρatke_flux = similar(Fields.level(Y.f, half), C3{FT}),
