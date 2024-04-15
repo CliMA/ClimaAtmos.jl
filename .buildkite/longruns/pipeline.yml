@@ -19,11 +19,13 @@ steps:
     key: "init_cpu_env"
     command:
       - echo "--- Instantiate project"
+      - "julia --project -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/ClimaTimeSteppers.jl\", rev=\"dy/reformulation\")'"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate"
+      - "julia --project=examples -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/ClimaTimeSteppers.jl\", rev=\"dy/reformulation\")'"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
@@ -64,6 +66,17 @@ steps:
           slurm_time: 24:00:00
         env:
           JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres"
+
+      - label: ":computer: SSP baroclinic wave (ρe_tot) no lim equilmoist high resolution centered diff"
+        command:
+          - "srun julia --project=examples examples/hybrid/driver.jl --config_file $CONFIG_PATH/$$JOB_NAME.yml"
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_ntasks: 32
+          slurm_nodes: 2
+          slurm_time: 24:00:00
+        env:
+          JOB_NAME: "longrun_ssp_bw_rhoe_equil_highres_no_lim"
       
       - label: ":computer: aquaplanet equilmoist clearsky radiation + prognostic edmf diffusion only + 0M microphysics"
         command:

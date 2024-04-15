@@ -700,6 +700,7 @@ LongMoistBaroWavePlots = Union{
     Val{:longrun_bw_rhoe_equil_highres},
     Val{:longrun_zalesak_tracer_energy_bw_rhoe_equil_highres},
     Val{:longrun_ssp_bw_rhoe_equil_highres},
+    Val{:longrun_ssp_bw_rhoe_equil_highres_no_lim},
     Val{:longrun_bw_rhoe_equil_highres_topography_earth},
 }
 

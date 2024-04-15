@@ -24,17 +24,20 @@ steps:
       - "echo $$JULIA_DEPOT_PATH"
 
       - echo "--- Instantiate project"
+      - "julia --project -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/ClimaTimeSteppers.jl\", rev=\"dy/reformulation\")'"
       - "julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project -e 'using Pkg; Pkg.precompile()'"
       - "julia --project -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate examples"
+      - "julia --project=examples -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/ClimaTimeSteppers.jl\", rev=\"dy/reformulation\")'"
       - "julia --project=examples -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=examples -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=examples -e 'using CUDA; CUDA.precompile_runtime()'"
       - "julia --project=examples -e 'using Pkg; Pkg.status()'"
 
       - echo "--- Instantiate perf"
+      - "julia --project=perf -e 'using Pkg; Pkg.add(;url=\"https://github.com/CliMA/ClimaTimeSteppers.jl\", rev=\"dy/reformulation\")'"
       - "julia --project=perf -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=perf -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=perf -e 'using Pkg; Pkg.status()'"
