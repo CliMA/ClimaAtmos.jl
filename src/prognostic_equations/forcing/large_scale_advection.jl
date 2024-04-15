@@ -45,7 +45,7 @@ function large_scale_advection_tendency!(
     #     (hv = cv_v * (ᶜT - T_0) + Lv_0 - R_v * T_0)
     @. Yₜ.c.ρe_tot[colidx] +=
         Y.c.ρ[colidx] * (
-            TD.cp_m(thermo_params, ᶜts) * ᶜdTdt_hadv +
+            TD.cv_m(thermo_params, ᶜts) * ᶜdTdt_hadv +
             (
                 cv_v * (TD.air_temperature(thermo_params, ᶜts) - T_0) + Lv_0 -
                 R_v * T_0
