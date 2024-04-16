@@ -301,6 +301,7 @@ function add_space_coordinates_maybe!(
     space::Spaces.ExtrudedFiniteDifferenceSpace,
     num_points;
     interpolated_physical_z = nothing,
+    disable_vertical_interpolation = false,
 )
 
     hdims_names = vdims_names = []
@@ -319,18 +320,40 @@ function add_space_coordinates_maybe!(
         Spaces.staggering(space),
     )
 
-    if Spaces.grid(space).hypsography isa Grids.Flat
-        vdims_names =
-            add_space_coordinates_maybe!(nc, vertical_space, num_points_vertic)
-    else
-        vdims_names = add_space_coordinates_maybe!(
-            nc,
-            vertical_space,
-            num_points_vertic,
-            interpolated_physical_z;
-            names = ("z_reference",),
-            depending_on_dimensions = hdims_names,
+    no_topography = Spaces.grid(space).hypsography isa Grids.Flat
+
+    if disable_vertical_interpolation
+        zpts = Array(
+            parent(space.grid.vertical_grid.center_local_geometry.coordinates),
         )
+        name = no_topography ? "z" : "z_reference"
+        if !dimension_exists(nc, name, (num_points_vertic,))
+            zpts = Array(
+                parent(
+                    space.grid.vertical_grid.center_local_geometry.coordinates,
+                ),
+            )
+            add_dimension!(nc, name, zpts[:, 1], units = "m", axis = "Z")
+        end
+        vdims_names = [name]
+    else
+        if no_topography
+            vdims_names = add_space_coordinates_maybe!(
+                nc,
+                vertical_space,
+                num_points_vertic,
+            )
+        else
+            disable_vertical_interpolation && error("Not implemented")
+            vdims_names = add_space_coordinates_maybe!(
+                nc,
+                vertical_space,
+                num_points_vertic,
+                interpolated_physical_z;
+                names = ("z_reference",),
+                depending_on_dimensions = hdims_names,
+            )
+        end
     end
 
     return (hdims_names..., vdims_names...)
@@ -704,6 +727,7 @@ function save_diagnostic_to_disk!(
         space,
         writer.num_points;
         writer.interpolated_physical_z,
+        writer.disable_vertical_interpolation,
     )
 
     if haskey(nc, "$(var.short_name)")
