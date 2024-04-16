@@ -25,7 +25,6 @@ t_end: 6hours
 dt_save_state_to_disk: 10mins
 FLOAT_TYPE: "Float64"
 toml: [toml/prognostic_edmfx.toml]
-netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [8, 8, 82]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]

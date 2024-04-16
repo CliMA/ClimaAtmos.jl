@@ -30,7 +30,6 @@ dt: 40secs
 t_end: 4hours
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_dycoms_rf01.toml]
-netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [2, 2, 30]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
