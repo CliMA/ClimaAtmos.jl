@@ -37,6 +37,7 @@ for device in keys(timings)
         [Dict("short_name" => "rhoa", "period" => config.parsed_args["dt"])]
     config.parsed_args["netcdf_interpolation_num_points"] = [NUM, NUM, NUM]
     config.parsed_args["job_id"] = "flame_perf_io"
+    config.parsed_args["netcdf_output_at_levels"] = false
 
     simulation = CA.get_simulation(config)
 
