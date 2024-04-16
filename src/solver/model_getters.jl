@@ -356,6 +356,26 @@ function get_large_scale_advection_model(parsed_args, ::Type{FT}) where {FT}
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
+function get_vertical_fluctuation_model(parsed_args, ::Type{FT}) where {FT}
+    vert_fluc_name = parsed_args["vert_fluc"]
+    @assert vert_fluc_name in (nothing, "GCMDriven")
+    return if isnothing(vert_fluc_name)
+        nothing
+    elseif vert_fluc_name == "GCMDriven"
+        VerticalFluctuation()
+    end
+end
+
+function get_nudging_model(parsed_args)
+    nudging_name = parsed_args["nudging"]
+    @assert nudging_name in (nothing, "GCMDriven")
+    return if isnothing(nudging_name)
+        nothing
+    elseif nudging_name == "GCMDriven"
+        Nudging()
+    end
+end
+
 function get_edmf_coriolis(parsed_args, ::Type{FT}) where {FT}
     edmf_coriolis = parsed_args["edmf_coriolis"]
     edmf_coriolis == nothing && return nothing

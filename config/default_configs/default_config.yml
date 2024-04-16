@@ -229,6 +229,12 @@ check_precipitation:
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~
+vert_fluc:
+  help: "Vertical fluctuation [`nothing` (default), `GCMDriven`]"
+  value: ~
+nudging:
+  help: "Nudging to a mean profile [`nothing` (default), `GCMDriven`]"
+  value: ~
 fps:
   help: "Frames per second for animations"
   value: 5
