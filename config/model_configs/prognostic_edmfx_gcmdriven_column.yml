@@ -1,10 +1,6 @@
 job_id: "prognostic_edmfx_gcmdriven_column"
 initial_condition: "Bomex"
-subsidence: "Bomex"
-edmf_coriolis: "Bomex"
-ls_adv: "Bomex"
-vert_fluc: "GCMDriven"
-nudging: "GCMDriven"
+external_forcing: "GCM"
 surface_setup: "Bomex"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
