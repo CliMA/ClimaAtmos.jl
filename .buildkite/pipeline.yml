@@ -715,6 +715,7 @@ steps:
       - label: "GPU: GPU moist Held-Suarez"
         command:
           - >
+            nsys profile --trace=nvtx,cuda --output=central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/central_gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "central_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
@@ -725,6 +726,7 @@ steps:
       - label: "GPU: GPU moist Held-Suarez cloud diagnostics per stage"
         command:
           - >
+            nsys profile --trace=nvtx,cuda --output=central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
@@ -736,6 +738,7 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond
           - >
+            nsys profile --trace=nvtx,cuda --output=gpu_aquaplanet_dyamond/output_active/report
             julia --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond.yml
         artifact_paths: "gpu_aquaplanet_dyamond/output_active/*"
