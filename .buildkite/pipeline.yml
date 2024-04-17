@@ -660,7 +660,7 @@ steps:
       - label: "GPU: baroclinic wave"
         key: "gpu_baroclinic_wave_rhoe"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia -g2 --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $PERF_CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
         artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
         agents:
