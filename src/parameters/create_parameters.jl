@@ -1,4 +1,4 @@
-import CLIMAParameters as CP
+import ClimaParams as CP
 import RRTMGP.Parameters.RRTMGPParameters
 import SurfaceFluxes.Parameters.SurfaceFluxesParameters
 import SurfaceFluxes.UniversalFunctions as UF
@@ -24,6 +24,7 @@ function TurbulenceConvectionParameters(toml_dict::CP.AbstractTOMLDict)
         :mixing_length_smin_ub => :smin_ub,
         :EDMF_min_area => :min_area,
         :detr_vertdiv_coeff => :detr_vertdiv_coeff,
+        :detr_massflux_vertdiv_coeff => :detr_massflux_vertdiv_coeff,
         :max_area_limiter_power => :max_area_limiter_power,
         :min_area_limiter_power => :min_area_limiter_power,
         :pressure_normalmode_drag_coeff => :pressure_normalmode_drag_coeff,
@@ -63,6 +64,17 @@ function create_parameter_set(config::AtmosConfig)
         SF.Parameters.SurfaceFluxesParameters(toml_dict, UF.BusingerParams)
     SFP = typeof(surface_fluxes_params)
 
+    moisture_model = parsed_args["moist"]
+    microphysics_cloud_params = if moisture_model == "nonequil"
+        (;
+            liquid = CM.Parameters.CloudLiquid(toml_dict),
+            ice = CM.Parameters.CloudIce(toml_dict),
+        )
+    else
+        nothing
+    end
+    MPC = typeof(microphysics_cloud_params)
+
     # Microphysics scheme parameters (from CloudMicrophysics.jl)
     # TODO - repeating the logic from solver/model_getters.jl...
     if parsed_args["override_τ_precip"]
@@ -70,7 +82,7 @@ function create_parameter_set(config::AtmosConfig)
             FT(CA.time_to_seconds(parsed_args["dt"]))
     end
     precip_model = parsed_args["precip_model"]
-    microphysics_params =
+    microphysics_precipitation_params =
         if precip_model == nothing || precip_model == "nothing"
             nothing
         elseif precip_model == "0M"
@@ -82,13 +94,13 @@ function create_parameter_set(config::AtmosConfig)
                 pr = CM.Parameters.Rain(toml_dict),
                 ps = CM.Parameters.Snow(toml_dict),
                 ce = CM.Parameters.CollisionEff(toml_dict),
-                tv = CM.Parameters.Blk1MVelType(FT, toml_dict),
+                tv = CM.Parameters.Blk1MVelType(toml_dict),
                 aps = CM.Parameters.AirProperties(toml_dict),
             )
         else
             error("Invalid precip_model $(precip_model)")
         end
-    MPP = typeof(microphysics_params)
+    MPP = typeof(microphysics_precipitation_params)
 
     name_map = (;
         :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
@@ -110,14 +122,17 @@ function create_parameter_set(config::AtmosConfig)
         :drag_layer_vertical_extent => :σ_b,
         :kappa_2_sponge => :kappa_2_sponge,
         :held_suarez_minimum_temperature => :T_min_hs,
+        :ocean_surface_albedo => :idealized_ocean_albedo,
+        :water_refractive_index => :water_refractive_index,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPP, WP, SFP, TCP}(;
+    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP}(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
         insolation_params,
-        microphysics_params,
+        microphysics_cloud_params,
+        microphysics_precipitation_params,
         water_params,
         surface_fluxes_params,
         turbconv_params,

@@ -13,7 +13,6 @@ config: "box"
 job_id: "diagnostic_edmfx_test_box"
 moist: "equil"
 toml: [toml/diagnostic_edmfx_box.toml]
-netcdf_output_at_levels: true
 netcdf_interpolation_num_points: [8, 8, 45]
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]

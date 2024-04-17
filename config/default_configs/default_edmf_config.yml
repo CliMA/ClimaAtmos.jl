@@ -5,9 +5,18 @@ turbconv:
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
+zero_tendency:
+  help: "Turns off tendencies [`nothing` (default), `grid_scale`, `subgrid_scale`]"
+  value: ~
+implicit_sgs_advection:
+  help: "Whether to treat the subgrid-scale vertical advection tendency implicitly [`false` (default), `true`]"
+  value: false
 edmf_coriolis:
   help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
   value: ~
+edmfx_velocity_relaxation:
+  help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
+  value: false
 edmfx_nh_pressure:
   help: "If set to true, it switches on EDMFX pressure drag closure.  [`true`, `false` (default)]"
   value: false

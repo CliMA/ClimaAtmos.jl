@@ -3,7 +3,7 @@ import Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 import ClimaComms
-using Plots
+using CairoMakie
 using PrettyTables
 import YAML
 
@@ -34,12 +34,12 @@ for h_elem in 8:8:40
         end
     end
     @info "Ran step! $n_steps times in $s, ($(CA.prettytime(e/n_steps*1e9)) per step)"
-    steptime = CA.prettytime(e / n_steps * 1e9)
+    steptime = e / n_steps * 1e9
     push!(steptimes, (h_elem, steptime))
 end
 
 # Output a table with step times
-data = hcat(first.(steptimes), last.(steptimes))
+data = hcat(first.(steptimes), CA.prettytime.(last.(steptimes)))
 pretty_table(
     data;
     title = "Step times v/s horizontal elements",
@@ -49,15 +49,18 @@ pretty_table(
 )
 
 # Output a plot of step time scaling
-p = Plots.plot(
+fig = Figure(; size = (500, 500), fontsize = 40)
+generic_axis = fig[1, 1] = GridLayout()
+title = "Step Times v/s Horizontal Elements"
+xlabel = "h_elem"
+ylabel = "time (ms)"
+label = "step time"
+axis = Axis(generic_axis[1, 1]; title, xlabel, ylabel, yscale = identity)
+CairoMakie.lines!(
     first.(steptimes),
-    last.(steptimes);
-    title = "Step Times v/s Horizontal Elements",
-    xlabel = "h_elem",
-    ylabel = "time (ms)",
-    label = "step time",
-    linewidth = 3,
-    left_margin = 20Plots.mm,
-    bottom_margin = 10Plots.mm,
+    last.(steptimes) ./ 1e9 .* 1e3;
+    title,
+    label,
+    linestyle = :solid,
 )
-Plots.png(p, joinpath(output_dir, "scaling.png"))
+CairoMakie.save(joinpath(output_dir, "scaling.png"), fig)

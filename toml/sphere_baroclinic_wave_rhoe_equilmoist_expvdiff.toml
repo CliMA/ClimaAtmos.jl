@@ -1,8 +1,6 @@
 [C_H]
 value = 0.0
-type = "float"
 
 [C_E]
 value = 1
-type = "float"
 

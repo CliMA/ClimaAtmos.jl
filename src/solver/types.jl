@@ -114,6 +114,9 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dTdt::PT # Set large-scale cooling
     prof_dqtdt::PQ # Set large-scale drying
 end
+# maybe need to <: AbstractForcing
+struct VerticalFluctuation end
+struct Nudging end
 
 struct EDMFCoriolis{U, V, FT}
     prof_ug::U
@@ -227,6 +230,11 @@ quad_type(::SGSQuadrature{N}) where {N} = N #TODO - this seems wrong?
 abstract type AbstractSurfaceThermoState end
 struct GCMSurfaceThermoState <: AbstractSurfaceThermoState end
 
+abstract type AbstractTendencyModel end
+struct UseAllTendency <: AbstractTendencyModel end
+struct NoGridScaleTendency <: AbstractTendencyModel end
+struct NoSubgridScaleTendency <: AbstractTendencyModel end
+
 # Define broadcasting for types
 Base.broadcastable(x::AbstractSurfaceThermoState) = tuple(x)
 Base.broadcastable(x::AbstractMoistureModel) = tuple(x)
@@ -237,6 +245,7 @@ Base.broadcastable(x::DiagnosticEDMFX) = tuple(x)
 Base.broadcastable(x::AbstractEntrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractDetrainmentModel) = tuple(x)
 Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
+Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
 Base.@kwdef struct RadiationDYCOMS_RF01{FT}
     "Large-scale divergence"
@@ -321,27 +330,34 @@ Base.@kwdef struct AtmosModel{
     MM,
     PM,
     CM,
+    CCDPS,
     F,
     S,
     RM,
     LA,
+    VF,
+    NUDGING,
     EC,
     AT,
+    TM,
     EEM,
     EDM,
     ESMF,
     ESDF,
     ENP,
+    EVR,
     TCM,
     NOGW,
     OGW,
     HD,
     VD,
     DM,
+    SAM,
     VS,
     RS,
     ST,
     SM,
+    SA,
     NUM,
 }
     model_config::MC = nothing
@@ -349,27 +365,34 @@ Base.@kwdef struct AtmosModel{
     moisture_model::MM = nothing
     precip_model::PM = nothing
     cloud_model::CM = nothing
+    call_cloud_diagnostics_per_stage::CCDPS = nothing
     forcing_type::F = nothing
     subsidence::S = nothing
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
+    vert_fluc::VF = nothing
+    nudging::NUDGING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
+    tendency_model::TM = nothing
     edmfx_entr_model::EEM = nothing
     edmfx_detr_model::EDM = nothing
     edmfx_sgs_mass_flux::ESMF = nothing
     edmfx_sgs_diffusive_flux::ESDF = nothing
     edmfx_nh_pressure::ENP = nothing
+    edmfx_velocity_relaxation::EVR = nothing
     turbconv_model::TCM = nothing
     non_orographic_gravity_wave::NOGW = nothing
     orographic_gravity_wave::OGW = nothing
     hyperdiff::HD = nothing
     vert_diff::VD = nothing
     diff_mode::DM = nothing
+    sgs_adv_mode::SAM = nothing
     viscous_sponge::VS = nothing
     rayleigh_sponge::RS = nothing
     sfc_temperature::ST = nothing
     surface_model::SM = nothing
+    surface_albedo::SA = nothing
     numerics::NUM = nothing
 end
 

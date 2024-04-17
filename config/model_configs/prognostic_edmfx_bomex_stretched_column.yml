@@ -1,0 +1,41 @@
+job_id: "prognostic_edmfx_bomex_stretched_column"
+initial_condition: "Bomex"
+subsidence: "Bomex"
+edmf_coriolis: "Bomex"
+ls_adv: "Bomex"
+surface_setup: "Bomex"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+implicit_sgs_advection: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 3
+edmfx_upwinding: first_order
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_velocity_relaxation: true
+prognostic_tke: true
+moist: "equil"
+config: "column"
+hyperdiff: "true"
+z_max: 3e3
+x_elem: 2
+y_elem: 2
+z_elem: 30
+dz_bottom: 50.0
+dz_top: 200.0
+perturb_initstate: false
+dt: "50secs"
+t_end: "6hours"
+dt_save_state_to_disk: "10mins"
+toml: [toml/prognostic_edmfx_bomex.toml]
+netcdf_interpolation_num_points: [2, 2, 30]
+diagnostics:
+  - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, hussfc, evspsbl]
+    period: 10mins
+  - short_name: [arup, waup, taup, thetaaup, haup, husup, hurup, clwup, cliup, waen, taen, thetaaen, haen, husen, huren, clwen, clien, tke]
+    period: 10mins
+  - short_name: [entr, detr, lmix, bgrad, strain, edt, evu]
+    period: 10mins

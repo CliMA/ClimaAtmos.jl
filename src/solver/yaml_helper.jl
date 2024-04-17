@@ -72,7 +72,17 @@ function override_default_config(config_dict::AbstractDict;)
     for k in intersect(keys(config_dict), keys(default_config))
         default_type = typeof(default_config[k])
         v = config_dict[k]
-        config[k] = isnothing(default_config[k]) ? v : default_type(v)
+
+        # Attempt to convert user value `v` to the same type as
+        # the default. If that fails, throw an informative error.
+        config[k] = try
+            isnothing(default_config[k]) ? v : default_type(v)
+        catch err
+            user_entry_type = typeof(v)
+            msg = """Configuration entry "$(k)" = $v has type $(user_entry_type),
+                     but must have type $default_type."""
+            throw(ArgumentError(msg))
+        end
     end
 
     # The "diagnostics" entry is a more complex type that doesn't fit the schema described in

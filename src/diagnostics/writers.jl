@@ -3,7 +3,7 @@
 # This file defines generic writers for diagnostics with opinionated defaults.
 
 import ClimaCore: Hypsography
-import ClimaCore.Remapping: Remapper, interpolate, interpolate_array
+import ClimaCore.Remapping: Remapper, interpolate, interpolate!
 
 import NCDatasets
 

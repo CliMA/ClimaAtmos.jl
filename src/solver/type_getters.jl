@@ -1,7 +1,9 @@
+using Adapt
 using Dates: DateTime, @dateformat_str
 using Dierckx
 using Interpolations
 import NCDatasets
+import ClimaUtilities.OutputPathGenerator
 import ClimaCore: InputOutput, Meshes, Spaces, Quadratures
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
 import ClimaAtmos as CA
@@ -19,6 +21,8 @@ function get_atmos(config::AtmosConfig, params)
     cloud_model = get_cloud_model(parsed_args)
     radiation_mode = get_radiation_mode(parsed_args, FT)
     forcing_type = get_forcing_type(parsed_args)
+    call_cloud_diagnostics_per_stage =
+        get_call_cloud_diagnostics_per_stage(parsed_args)
 
     diffuse_momentum = !(forcing_type isa HeldSuarezForcing)
 
@@ -37,8 +41,14 @@ function get_atmos(config::AtmosConfig, params)
     edmfx_nh_pressure = parsed_args["edmfx_nh_pressure"]
     @assert edmfx_nh_pressure in (false, true)
 
+    edmfx_velocity_relaxation = parsed_args["edmfx_velocity_relaxation"]
+    @assert edmfx_velocity_relaxation in (false, true)
+
     implicit_diffusion = parsed_args["implicit_diffusion"]
     @assert implicit_diffusion in (true, false)
+
+    implicit_sgs_advection = parsed_args["implicit_sgs_advection"]
+    @assert implicit_sgs_advection in (true, false)
 
     model_config = get_model_config(parsed_args)
     vert_diff =
@@ -50,16 +60,21 @@ function get_atmos(config::AtmosConfig, params)
         radiation_mode,
         subsidence = get_subsidence_model(parsed_args, radiation_mode, FT),
         ls_adv = get_large_scale_advection_model(parsed_args, FT),
+        vert_fluc = get_vertical_fluctuation_model(parsed_args, FT),
+        nudging = get_nudging_model(parsed_args),
         edmf_coriolis = get_edmf_coriolis(parsed_args, FT),
         advection_test,
+        tendency_model = get_tendency_model(parsed_args),
         edmfx_entr_model,
         edmfx_detr_model,
         edmfx_sgs_mass_flux,
         edmfx_sgs_diffusive_flux,
         edmfx_nh_pressure,
+        edmfx_velocity_relaxation,
         precip_model,
         cloud_model,
         forcing_type,
+        call_cloud_diagnostics_per_stage,
         turbconv_model = get_turbconv_model(FT, parsed_args, turbconv_params),
         non_orographic_gravity_wave = get_non_orographic_gravity_wave_model(
             parsed_args,
@@ -73,10 +88,12 @@ function get_atmos(config::AtmosConfig, params)
         hyperdiff = get_hyperdiffusion_model(parsed_args, FT),
         vert_diff,
         diff_mode = implicit_diffusion ? Implicit() : Explicit(),
+        sgs_adv_mode = implicit_sgs_advection ? Implicit() : Explicit(),
         viscous_sponge = get_viscous_sponge_model(parsed_args, params, FT),
         rayleigh_sponge = get_rayleigh_sponge_model(parsed_args, params, FT),
         sfc_temperature = get_sfc_temperature_form(parsed_args),
         surface_model = get_surface_model(parsed_args),
+        surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),
     )
     @assert !@any_reltype(atmos, (UnionAll, DataType))
@@ -135,6 +152,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         warp_function = nothing
     elseif topography == "Earth"
         data_path = joinpath(topo_elev_dataset_path(), "ETOPO1_coarse.nc")
+        array_type = ClimaComms.array_type(comms_ctx.device)
         earth_spline = NCDatasets.NCDataset(data_path) do data
             zlevels = Array(data["elevation"])
             lon = Array(data["longitude"])
@@ -142,10 +160,13 @@ function get_spaces(parsed_args, params, comms_ctx)
             # Apply Smoothing
             smooth_degree = Int(parsed_args["smoothing_order"])
             esmth = CA.gaussian_smooth(zlevels, smooth_degree)
-            linear_interpolation(
-                (lon, lat),
-                esmth,
-                extrapolation_bc = (Periodic(), Flat()),
+            Adapt.adapt(
+                array_type,
+                linear_interpolation(
+                    (lon, lat),
+                    esmth,
+                    extrapolation_bc = (Periodic(), Flat()),
+                ),
             )
         end
         @info "Generated interpolation stencil"
@@ -175,8 +196,8 @@ function get_spaces(parsed_args, params, comms_ctx)
                 z_max,
                 z_elem,
                 z_stretch;
+                parsed_args = parsed_args,
                 surface_warp = warp_function,
-                topo_smoothing = parsed_args["topo_smoothing"],
                 deep,
             )
         end
@@ -202,7 +223,7 @@ function get_spaces(parsed_args, params, comms_ctx)
         else
             Meshes.Uniform()
         end
-        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch)
+        make_hybrid_spaces(h_space, z_max, z_elem, z_stretch; parsed_args)
     elseif parsed_args["config"] == "box"
         FT = eltype(params)
         nh_poly = parsed_args["nh_poly"]
@@ -229,6 +250,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            parsed_args,
             surface_warp = warp_function,
             deep,
         )
@@ -252,6 +274,7 @@ function get_spaces(parsed_args, params, comms_ctx)
             z_max,
             z_elem,
             z_stretch;
+            parsed_args,
             surface_warp = warp_function,
             deep,
         )
@@ -280,9 +303,11 @@ function get_spaces_restart(Y)
     return (; center_space, face_space)
 end
 
-function get_state_restart(comms_ctx)
-    @assert haskey(ENV, "RESTART_FILE")
-    reader = InputOutput.HDF5Reader(ENV["RESTART_FILE"], comms_ctx)
+function get_state_restart(config::AtmosConfig)
+    (; parsed_args, comms_ctx) = config
+    restart_file = parsed_args["restart_file"]
+    @assert !isnothing(restart_file)
+    reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     t_start = InputOutput.HDF5.read_attribute(reader.file, "time")
     return (Y, t_start)
@@ -311,6 +336,7 @@ function get_initial_condition(parsed_args)
         "DYCOMS_RF02",
         "Rico",
         "TRMM_LBA",
+        "SimplePlume",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["prognostic_tke"],
@@ -450,12 +476,16 @@ function get_sim_info(config::AtmosConfig)
     end
     default_output = haskey(ENV, "CI") ? job_id : joinpath("output", job_id)
     out_dir = parsed_args["output_dir"]
-    output_dir = isnothing(out_dir) ? default_output : out_dir
-    mkpath(output_dir)
+    base_output_dir = isnothing(out_dir) ? default_output : out_dir
+
+    output_dir = OutputPathGenerator.generate_output_path(
+        base_output_dir;
+        context = config.comms_ctx,
+    )
 
     sim = (;
         output_dir,
-        restart = haskey(ENV, "RESTART_FILE"),
+        restart = !isnothing(parsed_args["restart_file"]),
         job_id,
         dt = FT(time_to_seconds(parsed_args["dt"])),
         start_date = DateTime(parsed_args["start_date"], dateformat"yyyymmdd"),
@@ -472,144 +502,6 @@ function get_sim_info(config::AtmosConfig)
     return sim
 end
 
-function get_diagnostics(parsed_args, atmos_model, cspace)
-
-    # We either get the diagnostics section in the YAML file, or we return an empty list
-    # (which will result in an empty list being created by the map below)
-    yaml_diagnostics = get(parsed_args, "diagnostics", [])
-
-    # ALLOWED_REDUCTIONS is the collection of reductions we support. The keys are the
-    # strings that have to be provided in the YAML file. The values are tuples with the
-    # function that has to be passed to reduction_time_func and the one that has to passed
-    # to pre_output_hook!
-
-    # We make "nothing" a string so that we can accept also the word "nothing", in addition
-    # to the absence of the value
-    #
-    # NOTE: Everything has to be lowercase in ALLOWED_REDUCTIONS (so that we can match
-    # "max" and "Max")
-    ALLOWED_REDUCTIONS = Dict(
-        "nothing" => (nothing, nothing), # nothing is: just dump the variable
-        "max" => (max, nothing),
-        "min" => (min, nothing),
-        "average" => ((+), CAD.average_pre_output_hook!),
-    )
-
-    hdf5_writer = CAD.HDF5Writer()
-
-    if !isnothing(parsed_args["netcdf_interpolation_num_points"])
-        num_netcdf_points =
-            tuple(parsed_args["netcdf_interpolation_num_points"]...)
-    else
-        # TODO: Once https://github.com/CliMA/ClimaCore.jl/pull/1567 is merged,
-        # dispatch over the Grid type
-        num_netcdf_points = (180, 90, 50)
-    end
-
-    netcdf_writer = CAD.NetCDFWriter(;
-        cspace,
-        num_points = num_netcdf_points,
-        interpolate_z_over_msl = parsed_args["netcdf_interpolate_z_over_msl"],
-        disable_vertical_interpolation = parsed_args["netcdf_output_at_levels"],
-    )
-    writers = (hdf5_writer, netcdf_writer)
-
-    # The default writer is HDF5
-    ALLOWED_WRITERS = Dict(
-        "nothing" => netcdf_writer,
-        "h5" => hdf5_writer,
-        "hdf5" => hdf5_writer,
-        "nc" => netcdf_writer,
-        "netcdf" => netcdf_writer,
-    )
-
-    diagnostics_ragged = map(yaml_diagnostics) do yaml_diag
-        short_names = yaml_diag["short_name"]
-        output_name = get(yaml_diag, "output_name", nothing)
-
-        if short_names isa Vector
-            isnothing(output_name) || error(
-                "Diagnostics: cannot have multiple short_names while specifying output_name",
-            )
-        else
-            short_names = [short_names]
-        end
-
-        ret_value = map(short_names) do short_name
-            # Return "nothing" if "reduction_time" is not in the YAML block
-            #
-            # We also normalize everything to lowercase, so that can accept "max" but
-            # also "Max"
-            reduction_time_yaml =
-                lowercase(get(yaml_diag, "reduction_time", "nothing"))
-
-            if !haskey(ALLOWED_REDUCTIONS, reduction_time_yaml)
-                error("reduction $reduction_time_yaml not implemented")
-            else
-                reduction_time_func, pre_output_hook! =
-                    ALLOWED_REDUCTIONS[reduction_time_yaml]
-            end
-
-            writer_ext = lowercase(get(yaml_diag, "writer", "nothing"))
-
-            if !haskey(ALLOWED_WRITERS, writer_ext)
-                error("writer $writer_ext not implemented")
-            else
-                writer = ALLOWED_WRITERS[writer_ext]
-            end
-
-            haskey(yaml_diag, "period") ||
-                error("period keyword required for diagnostics")
-
-            period_seconds = time_to_seconds(yaml_diag["period"])
-
-            if isnothing(output_name)
-                output_short_name = CAD.descriptive_short_name(
-                    CAD.get_diagnostic_variable(short_name),
-                    period_seconds,
-                    reduction_time_func,
-                    pre_output_hook!,
-                )
-            end
-
-            if isnothing(reduction_time_func)
-                compute_every = period_seconds
-            else
-                compute_every = :timestep
-            end
-
-            return CAD.ScheduledDiagnosticTime(
-                variable = CAD.get_diagnostic_variable(short_name),
-                output_every = period_seconds,
-                compute_every = compute_every,
-                reduction_time_func = reduction_time_func,
-                pre_output_hook! = pre_output_hook!,
-                output_writer = writer,
-                output_short_name = output_short_name,
-            )
-        end
-        return ret_value
-    end
-
-    # Flatten the array of arrays of diagnostics
-    diagnostics = vcat(diagnostics_ragged...)
-
-    if parsed_args["output_default_diagnostics"]
-        t_end = time_to_seconds(parsed_args["t_end"])
-        return [
-            CAD.default_diagnostics(
-                atmos_model,
-                t_end;
-                output_writer = netcdf_writer,
-            )...,
-            diagnostics...,
-        ],
-        writers
-    else
-        return collect(diagnostics), writers
-    end
-end
-
 function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
     (; atmos, dt) = p
     dt_save_to_sol = time_to_seconds(parsed_args["dt_save_to_sol"])
@@ -623,8 +515,7 @@ function args_integrator(parsed_args, Y, p, tspan, ode_algo, callback)
             )
             if is_cts_algo(ode_algo)
                 CTS.ClimaODEFunction(;
-                    T_lim! = limited_tendency!,
-                    T_exp! = remaining_tendency!,
+                    T_exp_T_lim! = remaining_tendency!,
                     T_imp! = implicit_func,
                     # Can we just pass implicit_tendency! and jac_prototype etc.?
                     lim! = limiters_func!,
@@ -708,9 +599,8 @@ function get_simulation(config::AtmosConfig)
 
     if sim_info.restart
         s = @timed_str begin
-            (Y, t_start) = get_state_restart(config.comms_ctx)
+            (Y, t_start) = get_state_restart(config)
             spaces = get_spaces_restart(Y)
-            @warn "Progress estimates do not support restarted simulations"
         end
         @info "Allocating Y: $s"
     else
@@ -733,8 +623,17 @@ function get_simulation(config::AtmosConfig)
         @info "Allocating Y: $s"
     end
 
+    tracers = get_tracers(config.parsed_args)
+
     s = @timed_str begin
-        p = build_cache(Y, atmos, params, surface_setup, sim_info)
+        p = build_cache(
+            Y,
+            atmos,
+            params,
+            surface_setup,
+            sim_info,
+            tracers.aerosol_names,
+        )
     end
     @info "Allocating cache (p): $s"
 
@@ -761,16 +660,6 @@ function get_simulation(config::AtmosConfig)
     @info "initializing diagnostics: $s"
 
     length(diagnostics) > 0 && @info "Computing diagnostics:"
-
-    for writer in writers
-        writer_str = nameof(typeof(writer))
-        diags_with_writer =
-            filter((x) -> getproperty(x, :output_writer) == writer, diagnostics)
-        diags_outputs = [
-            getproperty(diag, :output_short_name) for diag in diags_with_writer
-        ]
-        @info "$writer_str: $diags_outputs"
-    end
 
     # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
     # ensuring that there is consistency in the timestep and the periods and translating
@@ -800,13 +689,8 @@ function get_simulation(config::AtmosConfig)
     # reason, we only add one callback to the integrator, and this function takes care of
     # executing the other callbacks. This single function is orchestrate_diagnostics
 
-    function orchestrate_diagnostics(integrator)
-        for d in diagnostics_functions
-            if d.cbf.n > 0 && integrator.step % d.cbf.n == 0
-                d.f!(integrator)
-            end
-        end
-    end
+    orchestrate_diagnostics(integrator) =
+        CAD.orchestrate_diagnostics(integrator, diagnostics_functions)
 
     diagnostic_callbacks =
         call_every_n_steps(orchestrate_diagnostics, skip_first = true)
@@ -849,61 +733,18 @@ function get_simulation(config::AtmosConfig)
     @info "init integrator: $s"
     reset_graceful_exit(output_dir)
 
-    s = @timed_str begin
-        for diag in diagnostics_iterations
-            variable = diag.variable
-            try
-                # The first time we call compute! we use its return value. All
-                # the subsequent times (in the callbacks), we will write the
-                # result in place
-                diagnostic_storage[diag] =
-                    variable.compute!(nothing, Y, p, t_start)
-                diagnostic_counters[diag] = 1
-                # If it is not a reduction, call the output writer as well
-                if isnothing(diag.reduction_time_func)
-                    CAD.write_field!(
-                        diag.output_writer,
-                        diagnostic_storage[diag],
-                        diag,
-                        Y,
-                        p,
-                        t_start,
-                        output_dir,
-                    )
-                else
-                    # Add to the accumulator
-
-                    # We use similar + .= instead of copy because CUDA 5.2 does
-                    # not supported nested wrappers with view(reshape(view))
-                    # objects. See discussion in
-                    # https://github.com/CliMA/ClimaAtmos.jl/pull/2579 and
-                    # https://github.com/JuliaGPU/Adapt.jl/issues/21
-                    diagnostic_accumulators[diag] =
-                        similar(diagnostic_storage[diag])
-                    diagnostic_accumulators[diag] .=
-                        diagnostic_storage[diag]
-                end
-            catch e
-                error("Could not compute diagnostic $(variable.long_name): $e")
-            end
-        end
-    end
+    s = @timed_str init_diagnostics!(
+        diagnostics_iterations,
+        diagnostic_storage,
+        diagnostic_accumulators,
+        diagnostic_counters,
+        output_dir,
+        Y,
+        p,
+        t_start;
+        warn_allocations = config.parsed_args["warn_allocations_diagnostics"],
+    )
     @info "Init diagnostics: $s"
-
-    if config.parsed_args["warn_allocations_diagnostics"]
-        for diag in diagnostics_iterations
-            # We write over the storage space we have already prepared (and filled) before
-            allocs = @allocated diag.variable.compute!(
-                diagnostic_storage[diag],
-                Y,
-                p,
-                t_start,
-            )
-            if allocs > 10 * 1024
-                @warn "Diagnostics $(diag.output_short_name) allocates $allocs bytes"
-            end
-        end
-    end
 
     return AtmosSimulation(
         job_id,

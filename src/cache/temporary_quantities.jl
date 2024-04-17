@@ -32,6 +32,7 @@ function temporary_quantities(Y, atmos)
         temp_data_level_3 = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),
         ), # ρaʲu³ʲ_datah_tot
+        ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³
@@ -55,11 +56,14 @@ function temporary_quantities(Y, atmos)
         ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{Adjoint{FT, CTh{FT}}}),
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{Adjoint{FT, CT3{FT}}}),
         ᶠp_grad_matrix = similar(Y.f, BidiagonalMatrixRow{C3{FT}}),
+        ᶠbidiagonal_matrix_ct3 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
+        ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),
         ᶜadvection_matrix = similar(
             Y.c,
             BidiagonalMatrixRow{Adjoint{FT, C3{FT}}},
         ),
         ᶜdiffusion_h_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
         ᶜdiffusion_u_matrix = similar(Y.c, TridiagonalMatrixRow{FT}),
+        ᶠtridiagonal_matrix_c3 = similar(Y.f, TridiagonalMatrixRow{C3{FT}}),
     )
 end

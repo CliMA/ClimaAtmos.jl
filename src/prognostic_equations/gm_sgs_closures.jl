@@ -2,6 +2,7 @@
 ##### Grid-mean SGS closures (mixing length)
 #####
 
+import NVTX
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 
@@ -22,16 +23,15 @@ function smagorinsky_lilly_length(c_smag, N_eff, dz, Pr, ϵ_st)
            c_smag * dz
 end
 
-function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
+NVTX.@annotate function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶜts, ᶜp, ᶠu³) = p.precomputed
+    (; ᶜts, ᶠu³, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
     (; obukhov_length) = p.precomputed.sfc_conditions
 
-    ᶜlinear_buoygrad = p.scratch.ᶜtemp_scalar
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
@@ -52,13 +52,14 @@ function compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
     ᶜstrain_rate = p.scratch.ᶜtemp_UVWxUVW
     compute_strain_rate_center!(ᶜstrain_rate, ᶠu)
+    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
     @. ᶜprandtl_nvec = turbulent_prandtl_number(
         params,
         obukhov_length,
         ᶜlinear_buoygrad,
-        norm_sqr(ᶜstrain_rate),
+        ᶜstrain_rate_norm,
     )
 
     @. ᶜmixing_length = smagorinsky_lilly_length(

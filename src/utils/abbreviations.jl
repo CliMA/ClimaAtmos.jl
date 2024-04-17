@@ -34,6 +34,8 @@ const ᶜadvdivᵥ = Operators.DivergenceF2C(
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
 
 const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
+const ᶜleft_bias = Operators.LeftBiasedF2C()
+const ᶜright_bias = Operators.RightBiasedF2C()
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
 # interior value at the surface.
@@ -78,6 +80,8 @@ const ᶠfct_zalesak = Operators.FCTZalesak(
 )
 
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
+const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
+const ᶜright_bias_matrix = MatrixFields.operator_matrix(ᶜright_bias)
 const ᶜdivᵥ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ)
 const ᶜadvdivᵥ_matrix = MatrixFields.operator_matrix(ᶜadvdivᵥ)
 const ᶜprecipdivᵥ_matrix = MatrixFields.operator_matrix(ᶜprecipdivᵥ)

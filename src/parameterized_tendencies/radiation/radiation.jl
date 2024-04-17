@@ -3,7 +3,7 @@
 #####
 
 import ClimaComms
-import ClimaCore: Device, DataLayouts, Geometry, Spaces, Fields, Operators
+import ClimaCore: DataLayouts, Geometry, Spaces, Fields, Operators
 import Insolation
 import Thermodynamics as TD
 import .Parameters as CAP
@@ -196,8 +196,6 @@ function radiation_model_cache(
         radiation_model = RRTMGPI.RRTMGPModel(
             rrtmgp_params,
             data_loader,
-            # TODO: pass FT through so that it can be controlled at the top-level
-            Float64,
             context;
             ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
             domain_nlay = Spaces.nlevels(axes(Y.c)),
@@ -209,8 +207,8 @@ function radiation_model_cache(
             center_temperature = NaN, # initialized in callback
             surface_temperature = NaN, # initialized in callback
             surface_emissivity = 1,
-            direct_sw_surface_albedo = 0.38,
-            diffuse_sw_surface_albedo = 0.38,
+            direct_sw_surface_albedo = NaN, # initialized in callback
+            diffuse_sw_surface_albedo = NaN, # initialized in callback
             cos_zenith,
             weighted_irradiance,
             kwargs...,

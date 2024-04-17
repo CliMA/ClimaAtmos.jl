@@ -1,0 +1,24 @@
+z_elem: 25
+z_max: 45000.0
+dz_bottom: 300.0
+dt: "400secs"
+t_end: "18hours"
+dt_save_state_to_disk: "18hours"
+vert_diff: "FriersonDiffusion"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+moist: "nonequil"
+precip_model: "nothing"
+rad: "allskywithclear"
+idealized_insolation: false
+rayleigh_sponge: true
+non_orographic_gravity_wave: true
+orographic_gravity_wave: "gfdl_restart"
+surface_setup: "DefaultMoninObukhov"
+prescribed_aerosols: ["CB1", "CB2"]
+job_id: "sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res"
+toml: [toml/sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res.toml]
+diagnostics:
+  - short_name: [edt, evu]
+    reduction_time: average
+    period: "18hours"

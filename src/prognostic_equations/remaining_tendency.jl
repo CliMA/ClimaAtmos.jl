@@ -1,11 +1,22 @@
 
-NVTX.@annotate function remaining_tendency!(Yₜ, Y, p, t)
-    fill_with_nans!(p)
-    Yₜ .= zero(eltype(Yₜ))
-    NVTX.@range "horizontal" color = colorant"orange" begin
-        horizontal_advection_tendency!(Yₜ, Y, p, t)
-        hyperdiffusion_tendency!(Yₜ, Y, p, t)
+NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+    if p.do_dss && !isnothing(p.atmos.hyperdiff)
+        pairs = dss_hyperdiffusion_tendency_pairs(p)
+        Spaces.weighted_dss!(pairs...)
     end
+    apply_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
+    apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+end
+
+NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+    Yₜ_lim .= zero(eltype(Yₜ_lim))
+    Yₜ .= zero(eltype(Yₜ))
+    horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
+    fill_with_nans!(p)
+    horizontal_advection_tendency!(Yₜ, Y, p, t)
+    hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     additional_tendency!(Yₜ, Y, p, t)
     return Yₜ
@@ -22,6 +33,19 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         subsidence_tendency!(Yₜ, Y, p, t, colidx, p.atmos.subsidence)
         edmf_coriolis_tendency!(Yₜ, Y, p, t, colidx, p.atmos.edmf_coriolis)
         large_scale_advection_tendency!(Yₜ, Y, p, t, colidx, p.atmos.ls_adv)
+        vertical_fluctuation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.vert_fluc)
+        nudging_tendency!(Yₜ, Y, p, t, colidx, p.atmos.nudging)
+
+        if p.atmos.sgs_adv_mode == Explicit()
+            edmfx_sgs_vertical_advection_tendency!(
+                Yₜ,
+                Y,
+                p,
+                t,
+                colidx,
+                p.atmos.turbconv_model,
+            )
+        end
 
         if p.atmos.diff_mode == Explicit()
             vertical_diffusion_boundary_layer_tendency!(
@@ -43,14 +67,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         end
 
         radiation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.radiation_mode)
-        edmfx_sgs_vertical_advection_tendency!(
-            Yₜ,
-            Y,
-            p,
-            t,
-            colidx,
-            p.atmos.turbconv_model,
-        )
         edmfx_entr_detr_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
         edmfx_sgs_mass_flux_tendency!(
             Yₜ,
@@ -61,7 +77,17 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
         )
         edmfx_nh_pressure_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        edmfx_velocity_relaxation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.turbconv_model,
+        )
         edmfx_tke_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
+        # Non-equilibrium cloud formation
+        cloud_condensate_tendency!(Yₜ, p, colidx, p.atmos.moisture_model)
         edmfx_precipitation_tendency!(
             Yₜ,
             Y,
@@ -71,7 +97,15 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             p.atmos.turbconv_model,
             p.atmos.precip_model,
         )
-        precipitation_tendency!(Yₜ, Y, p, t, colidx, p.atmos.precip_model)
+        precipitation_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            colidx,
+            p.atmos.precip_model,
+            p.atmos.turbconv_model,
+        )
 
         # NOTE: All ρa tendencies should be applied before calling this function
         pressure_work_tendency!(Yₜ, Y, p, t, colidx, p.atmos.turbconv_model)
@@ -79,6 +113,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         # NOTE: This will zero out all momentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
+
     end
     # TODO: make bycolumn-able
     non_orographic_gravity_wave_tendency!(
@@ -95,4 +130,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         t,
         p.atmos.orographic_gravity_wave,
     )
+    # NOTE: This will zero out all tendencies
+    # please DO NOT add additional tendencies after this function
+    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
 end

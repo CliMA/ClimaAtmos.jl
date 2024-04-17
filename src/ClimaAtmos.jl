@@ -28,6 +28,7 @@ include(joinpath("cache", "diagnostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "precipitation_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "cloud_fraction.jl"))
+include(joinpath("cache", "surface_albedo.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(
@@ -42,12 +43,15 @@ include(joinpath("utils", "discrete_hydrostatic_balance.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))
+include(joinpath("prognostic_equations", "zero_tendency.jl"))
 
 include(joinpath("prognostic_equations", "implicit", "implicit_tendency.jl"))
 include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
+include(joinpath("prognostic_equations", "forcing", "vertical_fluctuation.jl"))
+include(joinpath("prognostic_equations", "forcing", "nudging.jl"))
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
 
 include(joinpath("prognostic_equations", "surface_temp.jl"))
@@ -89,6 +93,9 @@ include(
     joinpath("parameterized_tendencies", "microphysics", "precipitation.jl"),
 )
 include(
+    joinpath("parameterized_tendencies", "microphysics", "cloud_condensate.jl"),
+)
+include(
     joinpath(
         "parameterized_tendencies",
         "microphysics",
@@ -103,15 +110,17 @@ include(joinpath("parameterized_tendencies", "sponge", "viscous_sponge.jl"))
 include(joinpath("prognostic_equations", "advection.jl"))
 
 include(joinpath("cache", "temporary_quantities.jl"))
+include(joinpath("cache", "tracer_cache.jl"))
 include(joinpath("cache", "cache.jl"))
 include(joinpath("prognostic_equations", "dss.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
 include(joinpath("callbacks", "callbacks.jl"))
-include(joinpath("callbacks", "get_callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))
 import .Diagnostics as CAD
+
+include(joinpath("callbacks", "get_callbacks.jl"))
 
 include(joinpath("simulation", "AtmosSimulations.jl"))
 

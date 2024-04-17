@@ -19,11 +19,14 @@ struct AtmosCache{
     PR,
     SUB,
     LSAD,
+    VERTFLUC,
+    NUDGING,
     EDMFCOR,
     FOR,
     NONGW,
     ORGW,
     RAD,
+    TRAC,
     NETFLUXTOA,
     NETFLUXSFC,
     CONSCHECK,
@@ -38,7 +41,7 @@ struct AtmosCache{
     """Walltime estimate"""
     walltime_estimate::WTE
 
-    """Start date (used for insolation)."""
+    """Start date (used for insolation and for data files)."""
     start_date::SD
 
     """AtmosModel"""
@@ -80,11 +83,14 @@ struct AtmosCache{
     precipitation::PR
     subsidence::SUB
     large_scale_advection::LSAD
+    vertical_fluctuation::VERTFLUC
+    nudging::NUDGING
     edmf_coriolis::EDMFCOR
     forcing::FOR
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
+    tracers::TRAC
 
     """Net energy flux coming through top of atmosphere and surface"""
     net_energy_flux_toa::NETFLUXTOA
@@ -109,7 +115,7 @@ end
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
-function build_cache(Y, atmos, params, surface_setup, sim_info)
+function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
     (; dt, t_end, start_date, output_dir) = sim_info
     FT = eltype(params)
 
@@ -117,6 +123,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
     grav = FT(CAP.grav(params))
     ᶜΦ = grav .* ᶜcoord.z
+    ᶠΦ = grav .* ᶠcoord.z
 
     if atmos.numerics.use_reference_state
         R_d = FT(CAP.R_d(params))
@@ -186,6 +193,7 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     core = (
         ᶜΦ,
         ᶠgradᵥ_ᶜΦ = ᶠgradᵥ.(ᶜΦ),
+        ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
         ᶜρ_ref,
         ᶜp_ref,
         ᶜT = similar(Y.c, FT),
@@ -221,11 +229,14 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
     precipitation = precipitation_cache(Y, atmos)
     subsidence = subsidence_cache(Y, atmos)
     large_scale_advection = large_scale_advection_cache(Y, atmos)
+    vertical_fluctuation = vertical_fluctuation_cache(Y, atmos)
+    nudging = nudging_cache(Y, atmos)
     edmf_coriolis = edmf_coriolis_cache(Y, atmos)
     forcing = forcing_cache(Y, atmos)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
+    tracers = tracer_cache(Y, atmos, aerosol_names, start_date)
 
     args = (
         dt,
@@ -248,11 +259,14 @@ function build_cache(Y, atmos, params, surface_setup, sim_info)
         precipitation,
         subsidence,
         large_scale_advection,
+        vertical_fluctuation,
+        nudging,
         edmf_coriolis,
         forcing,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,
+        tracers,
         net_energy_flux_toa,
         net_energy_flux_sfc,
         conservation_check,

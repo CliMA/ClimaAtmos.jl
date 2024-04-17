@@ -36,9 +36,6 @@ using Test
 import Tar
 import Base.Filesystem: rm
 import OrderedCollections
-using ClimaCoreTempestRemap
-using ClimaCorePlots, Plots
-using ClimaCoreMakie, CairoMakie
 include(joinpath(pkgdir(CA), "post_processing", "ci_plots.jl"))
 
 ref_job_id = config.parsed_args["reference_job_id"]
@@ -186,8 +183,8 @@ if config.parsed_args["check_precipitation"]
             sol.t[end],
             colidx,
             sol.prob.p.atmos.precip_model,
+            sol.prob.p.atmos.turbconv_model,
         )
-        #CA.remaining_tendency!(Yₜ, sol.u[end], sol.prob.p, sol.t[end])
 
         @. Yₜ_ρqₚ[colidx] = -Yₜ.c.ρq_rai[colidx] - Yₜ.c.ρq_sno[colidx]
         @. Yₜ_ρqₜ[colidx] = Yₜ.c.ρq_tot[colidx]
@@ -231,9 +228,45 @@ end
 
 # Visualize the solution
 if ClimaComms.iamroot(config.comms_ctx)
+    include(
+        joinpath(pkgdir(CA), "regression_tests", "self_reference_or_path.jl"),
+    )
     @info "Plotting"
-    make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
+    path = self_reference_or_path() # __build__ path (not job path)
+    if path == :self_reference
+        make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
+    else
+        main_job_path = joinpath(path, reference_job_id)
+        nc_dir = joinpath(main_job_path, "nc_files")
+        if ispath(nc_dir)
+            @info "nc_dir exists"
+        else
+            mkpath(nc_dir)
+            # Try to extract nc files from tarball:
+            @info "Comparing against $(readdir(nc_dir))"
+        end
+        if isempty(readdir(nc_dir))
+            if isfile(joinpath(main_job_path, "nc_files.tar"))
+                Tar.extract(joinpath(main_job_path, "nc_files.tar"), nc_dir)
+            else
+                @warn "No nc_files found"
+            end
+        else
+            @info "Files already extracted"
+        end
+
+        paths = if isempty(readdir(nc_dir))
+            simulation.output_dir
+        else
+            [simulation.output_dir, nc_dir]
+        end
+        make_plots(Val(Symbol(reference_job_id)), paths)
+    end
     @info "Plotting done"
+
+    function symlink_to_fullpath(path)
+        return joinpath(dirname(path), readlink(path))
+    end
 
     @info "Creating tarballs"
     # These NC files are used by our reproducibility tests,
@@ -243,12 +276,12 @@ if ClimaComms.iamroot(config.comms_ctx)
     # reproducibility test folder.
     Tar.create(
         f -> endswith(f, ".nc"),
-        simulation.output_dir,
+        symlink_to_fullpath(simulation.output_dir),
         joinpath(simulation.output_dir, "nc_files.tar"),
     )
     Tar.create(
         f -> endswith(f, r"hdf5|h5"),
-        simulation.output_dir,
+        symlink_to_fullpath(simulation.output_dir),
         joinpath(simulation.output_dir, "hdf5_files.tar"),
     )
 

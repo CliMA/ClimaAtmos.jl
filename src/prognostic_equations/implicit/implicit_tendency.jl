@@ -9,6 +9,17 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
     Fields.bycolumn(axes(Y.c)) do colidx
         implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
+        if p.atmos.sgs_adv_mode == Implicit()
+            edmfx_sgs_vertical_advection_tendency!(
+                Yₜ,
+                Y,
+                p,
+                t,
+                colidx,
+                p.atmos.turbconv_model,
+            )
+        end
+
         if p.atmos.diff_mode == Implicit()
             vertical_diffusion_boundary_layer_tendency!(
                 Yₜ,
@@ -33,7 +44,11 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
+
     end
+    # NOTE: This will zero out all tendencies
+    # please DO NOT add additional tendencies after this function
+    zero_tendency!(Yₜ, Y, p, t, p.atmos.tendency_model, p.atmos.turbconv_model)
     return nothing
 end
 

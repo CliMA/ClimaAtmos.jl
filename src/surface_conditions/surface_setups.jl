@@ -230,3 +230,18 @@ function (::TRMM_LBA)(params)
     end
     return surface_state
 end
+
+struct SimplePlume end
+function (::SimplePlume)(params)
+    FT = eltype(params)
+    T = FT(310)
+    p = FT(101500)
+    q_vap = FT(0.02245)
+    θ_flux = FT(8)
+    q_flux = FT(0)
+    z0 = FT(1e-4)
+    ustar = FT(0.28)
+    fluxes = θAndQFluxes(; θ_flux, q_flux)
+    parameterization = MoninObukhov(; z0, fluxes, ustar)
+    return SurfaceState(; parameterization, T, p, q_vap)
+end

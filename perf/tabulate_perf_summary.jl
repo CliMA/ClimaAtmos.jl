@@ -1,4 +1,3 @@
-import Plots
 import Dates
 import JSON
 import OrderedCollections
@@ -196,7 +195,6 @@ funcs = [
     "implicit_tendency!",
     "remaining_tendency!",
     "additional_tendency!",
-    "hyperdiffusion_tendency!",
     "step!",
 ]
 

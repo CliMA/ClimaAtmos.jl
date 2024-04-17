@@ -1,6 +1,7 @@
 module RRTMGPInterface
 
 using RRTMGP
+import RRTMGP.AtmosphericStates as AS
 using ClimaCore: DataLayouts, Spaces, Fields
 import ClimaComms
 using NVTX
@@ -285,9 +286,8 @@ function extrap!(::BestFit, p, T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺
     @. p = best_fit_p(T, z, p⁺, T⁺, z⁺, p⁺⁺, T⁺⁺, z⁺⁺)
 end
 function extrap!(::UseSurfaceTempAtBottom, p, T, p⁺, T⁺, p⁺⁺, T⁺⁺, Tₛ, params)
-    FT = eltype(p)
-    cₚ = FT(RRTMGP.Parameters.cp_d(params))
-    R = FT(RRTMGP.Parameters.R_d(params))
+    cₚ = RRTMGP.Parameters.cp_d(params)
+    R = RRTMGP.Parameters.R_d(params)
     @. T = Tₛ
     @. p = p⁺ * (T / T⁺)^(cₚ / R)
 end
@@ -482,7 +482,6 @@ array.
 function RRTMGPModel(
     params::RRTMGP.Parameters.ARP,
     data_loader::Function,
-    ::Type{FT},
     context;
     ncol::Int,
     domain_nlay::Int,
@@ -498,9 +497,10 @@ function RRTMGPModel(
     add_isothermal_boundary_layer::Bool = false,
     max_threads::Int = 256,
     kwargs...,
-) where {FT <: AbstractFloat}
+)
     device = ClimaComms.device(context)
     DA = ClimaComms.array_type(device)
+    FT = typeof(params.grav)
     # turn kwargs into a Dict, so that values can be dynamically popped from it
     dict = Dict(kwargs)
 
@@ -741,14 +741,8 @@ function RRTMGPModel(
         set_and_save!(lat, "latitude", t..., dict)
     end
 
-    p_lay = DA{FT}(undef, nlay, ncol)
     p_lev = DA{FT}(undef, nlay + 1, ncol)
-    t_lay = DA{FT}(undef, nlay, ncol)
     t_lev = DA{FT}(undef, nlay + 1, ncol)
-    if implied_values != :center
-        set_and_save!(p_lay, "center_pressure", t..., dict)
-        set_and_save!(t_lay, "center_temperature", t..., dict)
-    end
     if implied_values != :face
         set_and_save!(p_lev, "face_pressure", t..., dict)
         set_and_save!(t_lev, "face_temperature", t..., dict)
@@ -757,6 +751,13 @@ function RRTMGPModel(
     set_and_save!(t_sfc, "surface_temperature", t..., dict)
 
     if radiation_mode isa GrayRadiation
+        p_lay = DA{FT}(undef, nlay, ncol)
+        t_lay = DA{FT}(undef, nlay, ncol)
+        if implied_values != :center
+            set_and_save!(p_lay, "center_pressure", t..., dict)
+            set_and_save!(t_lay, "center_temperature", t..., dict)
+        end
+
         z_lev = DA{FT}(undef, nlay + 1, ncol) # TODO: z_lev required but unused
 
         # lapse_rate is a constant, so don't use set_and_save! to get it
@@ -780,10 +781,15 @@ function RRTMGPModel(
             z_lev,
             t_sfc,
             otp,
-            nlay,
-            ncol,
         )
     else
+        layerdata = DA{FT}(undef, 3, nlay, ncol)
+        p_lay = view(layerdata, 2, :, :)
+        t_lay = view(layerdata, 3, :, :)
+        if implied_values != :center
+            set_and_save!(p_lay, "center_pressure", t..., dict)
+            set_and_save!(t_lay, "center_temperature", t..., dict)
+        end
         vmr_str = "volume_mixing_ratio_"
         gas_names = filter(
             gas_name ->
@@ -815,10 +821,7 @@ function RRTMGPModel(
         end
 
         if radiation_mode isa ClearSkyRadiation
-            cld_r_eff_liq = cld_r_eff_ice = nothing
-            cld_path_liq = cld_path_ice = cld_frac = nothing
-            cld_mask_lw = cld_mask_sw = cld_overlap = nothing
-            ice_rgh = 1
+            cloud_state = nothing
         else
             cld_r_eff_liq = DA{FT}(undef, nlay, ncol)
             name = "center_cloud_liquid_effective_radius"
@@ -846,30 +849,30 @@ function RRTMGPModel(
             if !(ice_rgh in (1, 2, 3))
                 error("ice_roughness must be either 1, 2, or 3")
             end
+
+            cloud_state = RRTMGP.AtmosphericStates.CloudState(
+                cld_r_eff_liq,
+                cld_r_eff_ice,
+                cld_path_liq,
+                cld_path_ice,
+                cld_frac,
+                cld_mask_lw,
+                cld_mask_sw,
+                cld_overlap,
+                ice_rgh,
+            )
         end
 
         as = RRTMGP.AtmosphericStates.AtmosphericState(
             lon,
             lat,
-            p_lay,
+            # layerdata contains `col_dry`, `p_lay`, and `t_lay`
+            layerdata,
             p_lev,
-            t_lay,
             t_lev,
             t_sfc,
-            DA{FT}(undef, nlay, ncol), # col_dry array is for internal use only
             vmr,
-            cld_r_eff_liq,
-            cld_r_eff_ice,
-            cld_path_liq,
-            cld_path_ice,
-            cld_frac,
-            cld_mask_lw, # cld_mask_lw array is for internal use only
-            cld_mask_sw, # cld_mask_sw array is for internal use only
-            cld_overlap,
-            ice_rgh,
-            nlay,
-            ncol,
-            ngas,
+            cloud_state,
         )
     end
 
@@ -1046,7 +1049,9 @@ get_p_min(as::RRTMGP.AtmosphericStates.AtmosphericState, lookups) =
     lookups[1].p_ref_min
 
 function update_implied_values!(model)
-    (; p_lay, p_lev, t_lay, t_lev, t_sfc) = model.solver.as
+    (; p_lev, t_lev, t_sfc) = model.solver.as
+    p_lay = AS.getview_p_lay(model.solver.as)
+    t_lay = AS.getview_t_lay(model.solver.as)
     nlay = size(p_lay, 1) - Int(model.add_isothermal_boundary_layer)
     if requires_z(model.interpolation) || requires_z(model.bottom_extrapolation)
         z_lay = parent(model.center_z)
@@ -1072,6 +1077,7 @@ function update_implied_values!(model)
         update_views(extrap!, mode, outs, ins, others, 1, 1, 2)
     end
 end
+
 update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
     mode,
     map(out -> view(out, out_range, :), outs)...,
@@ -1083,9 +1089,10 @@ update_views(f, mode, outs, ins, others, out_range, in_range1, in_range2) = f(
 function update_boundary_layer!(model)
     as = model.solver.as
     p_min = get_p_min(model)
-    @views as.p_lay[end, :] .= (as.p_lev[end - 1, :] .+ p_min) ./ 2
+    @views AS.getview_p_lay(model.solver.as)[end, :] .=
+        (as.p_lev[end - 1, :] .+ p_min) ./ 2
     @views as.p_lev[end, :] .= p_min
-    @views as.t_lay[end, :] .= as.t_lev[end - 1, :]
+    @views AS.getview_t_lay(model.solver.as)[end, :] .= as.t_lev[end - 1, :]
     @views as.t_lev[end, :] .= as.t_lev[end - 1, :]
     update_boundary_layer_vmr!(model.radiation_mode, as)
     update_boundary_layer_cloud!(model.radiation_mode, as)
@@ -1100,23 +1107,28 @@ end
 update_boundary_layer_vmr!(vmr::RRTMGP.Vmrs.Vmr) =
     @views vmr.vmr[:, end, :] .= vmr.vmr[:, end - 1, :]
 
-update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, as) =
+update_boundary_layer_cloud!(::Union{GrayRadiation, ClearSkyRadiation}, _) =
     nothing
 update_boundary_layer_cloud!(
     ::Union{AllSkyRadiation, AllSkyRadiationWithClearSkyDiagnostics},
     as,
-) = update_boundary_layer_cloud!(as)
+) = update_boundary_layer_cloud!(as.cloud_state)
 
-function update_boundary_layer_cloud!(as)
-    @views as.cld_r_eff_liq[end, :] .= as.cld_r_eff_liq[end - 1, :]
-    @views as.cld_r_eff_ice[end, :] .= as.cld_r_eff_ice[end - 1, :]
-    @views as.cld_path_liq[end, :] .= as.cld_path_liq[end - 1, :]
-    @views as.cld_path_ice[end, :] .= as.cld_path_ice[end - 1, :]
-    @views as.cld_frac[end, :] .= as.cld_frac[end - 1, :]
+function update_boundary_layer_cloud!(cloud_state)
+    @views cloud_state.cld_r_eff_liq[end, :] .=
+        cloud_state.cld_r_eff_liq[end - 1, :]
+    @views cloud_state.cld_r_eff_ice[end, :] .=
+        cloud_state.cld_r_eff_ice[end - 1, :]
+    @views cloud_state.cld_path_liq[end, :] .=
+        cloud_state.cld_path_liq[end - 1, :]
+    @views cloud_state.cld_path_ice[end, :] .=
+        cloud_state.cld_path_ice[end - 1, :]
+    @views cloud_state.cld_frac[end, :] .= cloud_state.cld_frac[end - 1, :]
 end
 
 function clip_values!(model)
-    (; p_lay, p_lev) = model.solver.as
+    (; p_lev) = model.solver.as
+    p_lay = AS.getview_p_lay(model.solver.as)
     if !(model.radiation_mode isa GrayRadiation)
         (; vmr_h2o) = model.solver.as.vmr
         @. vmr_h2o = max(vmr_h2o, 0)
@@ -1126,10 +1138,11 @@ function clip_values!(model)
     @. p_lev = max(p_lev, p_min)
 end
 update_concentrations!(::GrayRadiation, model) = nothing
+
 update_concentrations!(radiation_mode, model) = RRTMGP.Optics.compute_col_gas!(
     model.solver.context,
     model.solver.as.p_lev,
-    model.solver.as.col_dry,
+    AS.getview_col_dry(model.solver.as),
     model.params,
     get_vmr_h2o(model.solver.as.vmr, model.lookups.idx_gases),
     model.solver.as.lat,
@@ -1211,20 +1224,30 @@ NVTX.@annotate function update_sw_fluxes!(
     )
 end
 
-# TODO: Change these methods back to using face_sw_flux/face_clear_sw_flux
-# instead of face_sw_flux_up - face_sw_flux_dn
-update_net_fluxes!(radiation_mode, model) =
-    parent(model.face_flux) .=
-        parent(model.face_lw_flux) .+ parent(model.face_sw_flux_up) .-
-        parent(model.face_sw_flux_dn)
+function update_net_fluxes!(_, model)
+    FT = eltype(model.face_flux)
+    model.face_flux .=
+        ifelse.(
+            model.cos_zenith' .<= sqrt(eps(FT)),
+            model.face_lw_flux,
+            model.face_lw_flux .+ model.face_sw_flux,
+        )
+
+end
 function update_net_fluxes!(::AllSkyRadiationWithClearSkyDiagnostics, model)
-    parent(model.face_clear_flux) .=
-        parent(model.face_clear_lw_flux) .+
-        parent(model.face_clear_sw_flux_up) .-
-        parent(model.face_clear_sw_flux_dn)
-    parent(model.face_flux) .=
-        parent(model.face_lw_flux) .+ parent(model.face_sw_flux_up) .-
-        parent(model.face_sw_flux_dn)
+    FT = eltype(model.face_flux)
+    model.face_clear_flux .=
+        ifelse.(
+            model.cos_zenith' .<= sqrt(eps(FT)),
+            model.face_clear_lw_flux,
+            model.face_clear_lw_flux .+ model.face_clear_sw_flux,
+        )
+    model.face_flux .=
+        ifelse.(
+            model.cos_zenith' .<= sqrt(eps(FT)),
+            model.face_lw_flux,
+            model.face_lw_flux .+ model.face_sw_flux,
+        )
 end
 
 end # end module

@@ -27,7 +27,7 @@
 #             vars,
 #             y = 0.0,
 #             time = LAST_SNAP,
-#             more_kwargs = YLOGSCALE,
+#             more_kwargs = YLINEARSCALE,
 #         )
 #     end
 # ```
@@ -93,26 +93,14 @@ const LAST_SNAP = LARGE_NUM
 const FIRST_SNAP = -LARGE_NUM
 const BOTTOM_LVL = -LARGE_NUM
 const TOP_LVL = LARGE_NUM
-const H_EARTH = 7000
-# Shorthand for logscale on y axis and to move the dimension to the y axis on line plots
-# (because they are columns)
-Plvl(y) = -H_EARTH * log(y)
-Makie.inverse_transform(::typeof(Plvl)) = (y) -> exp(-y / H_EARTH)
-Makie.defaultlimits(::typeof(Plvl)) = (0.0000001, 1)
-Makie.defined_interval(::typeof(Plvl)) = Makie.OpenInterval(0.0, Inf)
-function Makie.get_tickvalues(yticks::Int, yscale::typeof(Plvl), ymin, ymax)
-    exp_func = Makie.inverse_transform(yscale)
-    exp_z_min, exp_z_max = exp_func(ymin), exp_func(ymax)
-    return Plvl.(range(exp_z_min, exp_z_max, yticks))
+
+function Makie.get_tickvalues(yticks::Int, ymin, ymax)
+    return range(max(ymin, 0), ymax, yticks)
 end
 
-YLOGSCALE = Dict(
-    :axis => ca_kwargs(
-        dim_on_y = true,
-        yscale = Plvl,
-        yticks = 7,
-        ytickformat = "{:.3e}",
-    ),
+YLINEARSCALE = Dict(
+    :axis =>
+        ca_kwargs(dim_on_y = true, yticks = 10, ytickformat = "{:.3e}"),
 )
 
 long_name(var) = var.attributes["long_name"]
@@ -236,6 +224,12 @@ function make_plots_generic(
         fig = CairoMakie.Figure(; size = (900, 300 * MAX_NUM_ROWS))
         if is_comparison
             for (col, path) in enumerate(output_path)
+                # CairoMakie seems to use this Label to determine the width of the figure.
+                # Here we normalize the length so that all the columns have the same width.
+                LABEL_LENGTH = 40
+                normalized_path =
+                    lpad(path, LABEL_LENGTH + 1, " ")[(end - LABEL_LENGTH):end]
+
                 CairoMakie.Label(fig[0, col], path)
             end
         end
@@ -266,6 +260,7 @@ function make_plots_generic(
         # Flush current page
         if grid_pos > min(MAX_PLOTS_PER_PAGE, vars_left_to_plot)
             file_path = joinpath(save_path, "$(output_name)_$page.pdf")
+            CairoMakie.resize_to_layout!(fig)
             CairoMakie.save(file_path, fig)
             push!(summary_files, file_path)
             vars_left_to_plot -= MAX_PLOTS_PER_PAGE
@@ -384,7 +379,7 @@ make_plots_generic(
     time = LAST_SNAP,
     x = 0.0, # Our columns are still 3D objects...
     y = 0.0,
-    more_kwargs = YLOGSCALE,
+    more_kwargs = YLINEARSCALE,
 )
 ```
 If we want to be more daring, we can mix in some information about `reductions` and `periods`
@@ -400,7 +395,7 @@ make_plots_generic(
     time = LAST_SNAP,
     x = 0.0, # Our columns are still 3D objects...
     y = 0.0,
-    more_kwargs = YLOGSCALE,
+    more_kwargs = YLINEARSCALE,
 )
 ```
 """
@@ -428,7 +423,7 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         x = 0.0, # Our columns are still 3D objects...
         y = 0.0,
         MAX_NUM_COLS = length(simdirs),
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -446,7 +441,7 @@ function make_plots(
         vars,
         y = 0.0,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -534,7 +529,7 @@ function make_plots(::MountainPlots, output_paths::Vector{<:AbstractString})
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -549,7 +544,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -566,7 +561,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -598,7 +593,10 @@ function make_plots(
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
-    vars = map_comparison(simdirs, short_names)
+    short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
     make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
@@ -609,7 +607,7 @@ function make_plots(
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        return get(simdir; short_name, reduction)
     end
     make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
 end
@@ -627,7 +625,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -643,8 +641,10 @@ function make_plots(
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
-    short_names = ["pfull", "va", "wa", "rv", "hus"]
-    vars = map_comparison(simdirs, short_names)
+    short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction)
+    end
     make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
@@ -668,7 +668,7 @@ function make_plots(
         output_paths,
         vars,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
 end
 
@@ -676,6 +676,7 @@ MoistHeldSuarezPlots = Union{
     Val{:sphere_baroclinic_wave_rhoe_equilmoist_impvdiff},
     Val{:sphere_held_suarez_rhoe_equilmoist_hightop_sponge},
     Val{:longrun_hs_rhoe_equil_55km_nz63_0M},
+    Val{:longrun_hs_rhoe_equil_55km_nz63_0M_deepatmos},
 }
 
 function make_plots(
@@ -696,7 +697,7 @@ function make_plots(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -749,7 +750,7 @@ function make_plots(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -811,7 +812,7 @@ function make_plots(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -822,17 +823,17 @@ function make_plots(
 end
 
 AquaplanetPlots = Union{
-    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
     Val{:mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky},
+    Val{:sphere_aquaplanet_rhoe_nonequilmoist_allsky_gw_res},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_gray_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_diffonly_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_diagedmf_0M},
     Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_allsky_diagedmf_0M},
-    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_tvinsol_0M_earth},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_progedmf_diffonly_0M},
+    Val{:longrun_aquaplanet_rhoe_equil_55km_nz63_clearsky_0M_earth},
     Val{:longrun_aquaplanet_rhoe_equil_highres_allsky_ft32},
     Val{:longrun_aquaplanet_dyamond},
-    Val{:longrun_aquaplanet_amip},
 }
 
 function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
@@ -857,13 +858,13 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
         get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
     end
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        get(simdir; short_name, reduction)
     end
     make_plots_generic(
         output_paths,
         vars_3D,
         time = LAST_SNAP,
-        more_kwargs = YLOGSCALE,
+        more_kwargs = YLINEARSCALE,
     )
     make_plots_generic(
         output_paths,
@@ -873,6 +874,63 @@ function make_plots(::AquaplanetPlots, output_paths::Vector{<:AbstractString})
     )
 end
 
+Aquaplanet1MPlots = Union{
+    Val{:sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res},
+    Val{:gpu_aquaplanet_dyamond},
+    Val{:longrun_aquaplanet_clearsky_1M},
+}
+
+function make_plots(::Aquaplanet1MPlots, output_paths::Vector{<:AbstractString})
+    simdirs = SimDir.(output_paths)
+
+    reduction = "average"
+    short_names_3D = [
+        "ua",
+        "ta",
+        "hus",
+        "rsd",
+        "rsu",
+        "rld",
+        "rlu",
+        "husra",
+        "hussn",
+        "hur",
+        "cl",
+        "cli",
+        "clw",
+    ]
+    short_names_2D = ["hfes", "evspsbl"]
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names_3D[1],
+        reduction,
+    )
+    if "10d" in available_periods
+        period = "10d"
+    elseif "1d" in available_periods
+        period = "1d"
+    elseif "12h" in available_periods
+        period = "12h"
+    end
+    vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
+        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+    end
+    vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
+        get(simdir; short_name, reduction)
+    end
+    make_plots_generic(
+        output_paths,
+        vars_3D,
+        time = LAST_SNAP,
+        more_kwargs = YLINEARSCALE,
+    )
+    make_plots_generic(
+        output_paths,
+        vars_2D,
+        time = LAST_SNAP,
+        output_name = "summary_2D",
+    )
+end
 
 EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_gabls_box},
@@ -883,15 +941,24 @@ EDMFBoxPlots = Union{
     Val{:diagnostic_edmfx_trmm_box},
     Val{:diagnostic_edmfx_trmm_stretched_box},
     Val{:diagnostic_edmfx_dycoms_rf01_explicit_box},
-    Val{:prognostic_edmfx_adv_test_box},
-    Val{:prognostic_edmfx_gabls_box},
-    Val{:prognostic_edmfx_bomex_fixtke_box},
+    Val{:prognostic_edmfx_adv_test_column},
+    Val{:prognostic_edmfx_gabls_column},
+    Val{:prognostic_edmfx_bomex_fixtke_column},
+    Val{:prognostic_edmfx_bomex_column},
+    Val{:prognostic_edmfx_gcmdriven_column},
+    Val{:prognostic_edmfx_bomex_stretched_column},
+    Val{:prognostic_edmfx_bomex_explicit_column},
+    Val{:prognostic_edmfx_dycoms_rf01_column},
+    Val{:prognostic_edmfx_trmm_column_0M},
+    Val{:prognostic_edmfx_simpleplume_column},
     Val{:prognostic_edmfx_bomex_box},
-    Val{:prognostic_edmfx_bomex_stretched_box},
-    Val{:prognostic_edmfx_dycoms_rf01_box},
+}
+
+EDMFBoxPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_trmm_column},
 }
+
 
 """
     plot_edmf_vert_profile!(grid_loc, var_group)
@@ -966,8 +1033,13 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
-function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
+function make_plots(
+    sim_type::Union{EDMFBoxPlots, EDMFBoxPlotsWithPrecip},
+    output_paths::Vector{<:AbstractString},
+)
     simdirs = SimDir.(output_paths)
+
+    precip_names = sim_type isa EDMFBoxPlotsWithPrecip ? ("husra", "hussn") : ()
 
     short_names = [
         "ua",
@@ -980,6 +1052,7 @@ function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
         "haup",
         "waup",
         "tke",
+        "lmix",
         "arup",
         "hus",
         "husup",
@@ -990,6 +1063,7 @@ function make_plots(::EDMFBoxPlots, output_paths::Vector{<:AbstractString})
         "clwup",
         "cli",
         "cliup",
+        precip_names...,
     ]
     reduction = "inst"
     period = "30m"

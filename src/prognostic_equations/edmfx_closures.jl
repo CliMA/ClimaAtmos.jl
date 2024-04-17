@@ -71,9 +71,8 @@ function ᶠupdraft_nh_pressure(
     ᶠbuoyʲ,
     ᶠu3ʲ,
     ᶠu3⁰,
-    updraft_top,
+    plume_height,
 )
-
     if !nh_pressure_flag
         return zero(ᶠu3ʲ)
     else
@@ -86,12 +85,11 @@ function ᶠupdraft_nh_pressure(
         # Independence of aspect ratio hardcoded: α₂_asp_ratio² = FT(0)
 
         H_up_min = CAP.min_updraft_top(turbconv_params)
-        plume_scale_height = max(updraft_top, H_up_min)
 
         # We also used to have advection term here: α_a * w_up * div_w_up
         return α_b * ᶠbuoyʲ +
                α_d * (ᶠu3ʲ - ᶠu3⁰) * CC.Geometry._norm(ᶠu3ʲ - ᶠu3⁰, ᶠlg) /
-               plume_scale_height
+               max(plume_height, H_up_min)
     end
 end
 
@@ -109,28 +107,11 @@ function edmfx_nh_pressure_tendency!(
     (; params) = p
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶜρʲs, ᶠnh_pressure₃ʲs, ᶠu₃⁰) = p.precomputed
-    FT = eltype(Y)
-    ᶜz = Fields.coordinate_field(Y.c).z
-    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶠlg = Fields.local_geometry_field(Y.f)
 
-    turbconv_params = CAP.turbconv_params(params)
-    a_min = CAP.min_area(turbconv_params)
+    scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
     for j in 1:n
-
-        # look for updraft top
-        updraft_top = FT(0)
-        for level in 1:Spaces.nlevels(axes(ᶜz))
-            if draft_area(
-                Spaces.level(Y.c.sgsʲs.:($j).ρa[colidx], level)[],
-                Spaces.level(ᶜρʲs.:($j)[colidx], level)[],
-            ) > a_min
-                updraft_top = Spaces.level(ᶜz[colidx], level)[]
-            end
-        end
-        updraft_top = updraft_top - z_sfc[colidx][]
-
         @. ᶠnh_pressure₃ʲs.:($$j)[colidx] = ᶠupdraft_nh_pressure(
             params,
             p.atmos.edmfx_nh_pressure,
@@ -142,7 +123,7 @@ function edmfx_nh_pressure_tendency!(
             ),
             Y.f.sgsʲs.:($$j).u₃[colidx],
             ᶠu₃⁰[colidx],
-            updraft_top,
+            scale_height,
         )
 
         @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠnh_pressure₃ʲs.:($$j)[colidx]
@@ -309,4 +290,26 @@ function turbulent_prandtl_number(
         prandtl_nvec = Pr_n
     end
     return prandtl_nvec
+end
+
+edmfx_velocity_relaxation_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
+    nothing
+function edmfx_velocity_relaxation_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    colidx,
+    turbconv_model::PrognosticEDMFX,
+)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; dt) = p
+
+    if p.atmos.edmfx_velocity_relaxation
+        for j in 1:n
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
+        end
+    end
 end

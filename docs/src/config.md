@@ -40,7 +40,7 @@ perturb_initstate: false
 dt: "5secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_box.toml]
+toml: [toml/prognostic_edmfx.toml]
 ```
 
 To add a new configuration argument/key, open `.buildkite/default_config.yml`.

@@ -14,6 +14,8 @@ using Dates
 using Insolation: instantaneous_zenith_angle
 import ClimaCore.Fields: ColumnField
 
+import ClimaUtilities.TimeVaryingInputs: evaluate!
+
 include("callback_helpers.jl")
 
 function flux_accumulation!(integrator)
@@ -59,11 +61,16 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     (; ᶜts, ᶜcloud_fraction, sfc_conditions) = p.precomputed
     (; params) = p
     (; idealized_insolation, idealized_h2o, idealized_clouds) = p.radiation
-    (; insolation_tuple, ᶠradiation_flux, radiation_model) = p.radiation
+    (; ᶠradiation_flux, radiation_model) = p.radiation
+
+    # If we have prescribed aerosols, we need to update them
+    for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
+        field = getfield(p.tracers.prescribed_aerosol_fields, key)
+        evaluate!(field, tv, t)
+    end
 
     FT = Spaces.undertype(axes(Y.c))
     thermo_params = CAP.thermodynamics_params(params)
-    insolation_params = CAP.insolation_params(params)
 
     sfc_ts = sfc_conditions.ts
     sfc_T =
@@ -111,49 +118,8 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         end
     end
 
-    if !idealized_insolation
-        current_datetime = p.start_date + Dates.Second(round(Int, t)) # current time
-        max_zenith_angle = FT(π) / 2 - eps(FT)
-        irradiance = FT(CAP.tot_solar_irrad(params))
-        au = FT(CAP.astro_unit(params))
-        date0 = DateTime("2000-01-01T11:58:56.816")
-        d, δ, η_UTC =
-            FT.(
-                Insolation.helper_instantaneous_zenith_angle(
-                    current_datetime,
-                    date0,
-                    insolation_params,
-                )
-            )
-        bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-        if eltype(bottom_coords) <: Geometry.LatLongZPoint
-            cos_zenith = RRTMGPI.array2field(
-                radiation_model.cos_zenith,
-                axes(bottom_coords),
-            )
-            weighted_irradiance = RRTMGPI.array2field(
-                radiation_model.weighted_irradiance,
-                axes(bottom_coords),
-            )
-            @. insolation_tuple = instantaneous_zenith_angle(
-                d,
-                δ,
-                η_UTC,
-                bottom_coords.long,
-                bottom_coords.lat,
-            ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
-            @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
-            @. weighted_irradiance =
-                irradiance * (au / last(insolation_tuple))^2
-        else
-            # assume that the latitude and longitude are both 0 for flat space
-            insolation_tuple =
-                instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
-            radiation_model.cos_zenith .=
-                cos(min(first(insolation_tuple), max_zenith_angle))
-            radiation_model.weighted_irradiance .=
-                irradiance * (au / last(insolation_tuple))^2
-        end
+    if !idealized_insolation && !(p.atmos.surface_albedo isa CouplerAlbedo)
+        set_insolation_variables!(Y, p, t)
     end
 
     if !idealized_clouds && !(
@@ -188,9 +154,58 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
         @. ᶜfrac = ᶜcloud_fraction
     end
 
+    set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
+
     RRTMGPI.update_fluxes!(radiation_model)
     RRTMGPI.field2array(ᶠradiation_flux) .= radiation_model.face_flux
     return nothing
+end
+
+function set_insolation_variables!(Y, p, t)
+
+    FT = Spaces.undertype(axes(Y.c))
+    params = p.params
+    insolation_params = CAP.insolation_params(params)
+    (; insolation_tuple, radiation_model) = p.radiation
+
+    current_datetime = p.start_date + Dates.Second(round(Int, t)) # current time
+    max_zenith_angle = FT(π) / 2 - eps(FT)
+    irradiance = FT(CAP.tot_solar_irrad(params))
+    au = FT(CAP.astro_unit(params))
+    date0 = DateTime("2000-01-01T11:58:56.816")
+    d, δ, η_UTC =
+        FT.(
+            Insolation.helper_instantaneous_zenith_angle(
+                current_datetime,
+                date0,
+                insolation_params,
+            )
+        )
+    bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
+    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+        cos_zenith =
+            RRTMGPI.array2field(radiation_model.cos_zenith, axes(bottom_coords))
+        weighted_irradiance = RRTMGPI.array2field(
+            radiation_model.weighted_irradiance,
+            axes(bottom_coords),
+        )
+        @. insolation_tuple = instantaneous_zenith_angle(
+            d,
+            δ,
+            η_UTC,
+            bottom_coords.long,
+            bottom_coords.lat,
+        ) # the tuple is (zenith angle, azimuthal angle, earth-sun distance)
+        @. cos_zenith = cos(min(first(insolation_tuple), max_zenith_angle))
+        @. weighted_irradiance = irradiance * (au / last(insolation_tuple))^2
+    else
+        # assume that the latitude and longitude are both 0 for flat space
+        insolation_tuple = instantaneous_zenith_angle(d, δ, η_UTC, FT(0), FT(0))
+        radiation_model.cos_zenith .=
+            cos(min(first(insolation_tuple), max_zenith_angle))
+        radiation_model.weighted_irradiance .=
+            irradiance * (au / last(insolation_tuple))^2
+    end
 end
 
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
@@ -224,6 +239,7 @@ end
 import Dates
 function print_walltime_estimate(integrator)
     (; walltime_estimate, dt, t_end) = integrator.p
+    t_start = integrator.sol.prob.tspan[1]
     wte = walltime_estimate
 
     # Notes on `ready_to_report`
@@ -251,11 +267,11 @@ function print_walltime_estimate(integrator)
 
     if wte.n_calls == wte.n_next && ready_to_report
         t = integrator.t
-        n_steps_total = ceil(Int, t_end / dt)
-        n_steps = ceil(Int, t / dt)
+        n_steps_total = ceil(Int, (t_end - t_start) / dt)
+        n_steps = ceil(Int, (t - t_start) / dt)
         wall_time_ave_per_step = wte.∑Δt_wall / n_steps
         wall_time_ave_per_step_str = time_and_units_str(wall_time_ave_per_step)
-        percent_complete = round(t / t_end * 100; digits = 1)
+        percent_complete = round((t - t_start) / t_end * 100; digits = 1)
         n_steps_remaining = n_steps_total - n_steps
         wall_time_remaining = wall_time_ave_per_step * n_steps_remaining
         wall_time_remaining_str = time_and_units_str(wall_time_remaining)
@@ -265,7 +281,7 @@ function print_walltime_estimate(integrator)
         simulation_time = time_and_units_str(Float64(t))
         sypd = round(
             simulated_years_per_day(
-                EfficiencyStats((zero(t), t), wte.∑Δt_wall),
+                EfficiencyStats((t_start, t), wte.∑Δt_wall),
             );
             digits = 3,
         )

@@ -38,19 +38,19 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 278360
-allocs_limit["flame_perf_target_tracers"] = 308336
-allocs_limit["flame_perf_target_edmfx"] = 7_005_552
-allocs_limit["flame_perf_diagnostics"] = 108880760
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 412056
+allocs_limit["flame_perf_target"] = 51_600
+allocs_limit["flame_perf_target_tracers"] = 81_576
+allocs_limit["flame_perf_target_edmfx"] = 86_608
+allocs_limit["flame_perf_diagnostics"] = 10_876_900
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 86_608
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
-allocs_limit["flame_perf_target_frierson"] = 4015547056
+allocs_limit["flame_perf_target_frierson"] = 4_015_547_056
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
-allocs_limit["flame_perf_target_callbacks"] = 398984
+allocs_limit["flame_perf_target_callbacks"] = 184_448
 allocs_limit["flame_perf_gw"] = 3_268_961_856
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 299_616
-allocs_limit["flame_gpu_implicit_barowave_moist"] = 4300000
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 2_770_296
+allocs_limit["flame_gpu_implicit_barowave_moist"] = 336_378
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to
 # 1, but lower it to a smaller value when we expect the job to produce lots of
@@ -85,10 +85,16 @@ ProfileCanvas.html_file(joinpath(output_dir, "allocs.html"), profile)
 
 @info "testing allocations"
 using Test
-# Threaded allocations are not deterministic, so let's add a buffer
+# Threaded/gpu allocations are not deterministic, so let's add a buffer
 # TODO: remove buffer, and threaded tests, when
 #       threaded/unthreaded functions are unified
-buffer = occursin("threaded", job_id) ? 1.4 : 1.1
+buffer = if any(x -> occursin(x, job_id), ("threaded",))
+    1.8
+elseif any(x -> occursin(x, job_id), ("gpu",))
+    5
+else
+    1.1
+end
 
 
 ## old allocation profiler (TODO: remove this)
@@ -104,9 +110,13 @@ end
 
 # https://github.com/CliMA/ClimaAtmos.jl/issues/827
 @testset "Allocations limit" begin
-    @test 0.5 * allocs_limit[job_id] * buffer <=
-          allocs ≤
-          allocs_limit[job_id] * buffer
+    if occursin("gpu", job_id) # https://github.com/CliMA/ClimaAtmos.jl/issues/2831
+        @test allocs ≤ allocs_limit[job_id] * buffer
+    else
+        @test 0.25 * allocs_limit[job_id] * buffer <=
+              allocs ≤
+              allocs_limit[job_id] * buffer
+    end
 end
 
 import ClimaComms

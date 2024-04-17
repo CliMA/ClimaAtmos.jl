@@ -1,6 +1,7 @@
 <!-- Title -->
 <h1 align="center">
-  ClimaAtmos.jl
+  <img src="logo.svg" width="180px"> <br>
+ClimaAtmos.jl
 </h1>
 
 <!-- description -->

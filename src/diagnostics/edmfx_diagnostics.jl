@@ -413,6 +413,66 @@ add_diagnostic_variable!(
 )
 
 ###
+# Entrainment (3d)
+###
+compute_entr!(out, state, cache, time) =
+    compute_entr!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_entr!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("entr", turbconv_model)
+
+function compute_entr!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜentrʲs.:1)
+    else
+        out .= cache.precomputed.ᶜentrʲs.:1
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "entr",
+    long_name = "Entrainment rate",
+    units = "s^-1",
+    comments = "Entrainment rate of the first updraft",
+    compute! = compute_entr!,
+)
+
+###
+# Detrainment (3d)
+###
+compute_detr!(out, state, cache, time) =
+    compute_detr!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_detr!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("detr", turbconv_model)
+
+function compute_detr!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜdetrʲs.:1)
+    else
+        out .= cache.precomputed.ᶜdetrʲs.:1
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "detr",
+    long_name = "Detrainment rate",
+    units = "s^-1",
+    comments = "Detrainment rate of the first updraft",
+    compute! = compute_detr!,
+)
+
+###
 # Environment area fraction (3d)
 ###
 compute_aren!(out, state, cache, time) =
@@ -820,4 +880,114 @@ add_diagnostic_variable!(
     long_name = "Environment Turbulent Kinetic Energy",
     units = "m^2 s^-2",
     compute! = compute_tke!,
+)
+
+###
+# Diffusivity of heat (3d)
+###
+compute_edt!(out, state, cache, time) = compute_edt!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.vert_diff,
+    cache.atmos.turbconv_model,
+)
+compute_edt!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
+    error_diagnostic_variable(
+        "Can only compute heat diffusivity with vertical diffusion or EDMFX",
+    )
+
+function compute_edt!(
+    out,
+    state,
+    cache,
+    time,
+    vert_diff::Union{VerticalDiffusion, FriersonDiffusion},
+    turbconv_model::Nothing,
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜK_h)
+    else
+        out .= cache.precomputed.ᶜK_h
+    end
+end
+
+function compute_edt!(
+    out,
+    state,
+    cache,
+    time,
+    vert_diff::Nothing,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜK_h)
+    else
+        out .= cache.precomputed.ᶜK_h
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "edt",
+    long_name = "Eddy Diffusivity Coefficient for Temperature",
+    standard_name = "atmosphere_heat_diffusivity",
+    units = "m^2 s^-1",
+    comments = "Vertical diffusion coefficient for temperature due to parameterized eddies",
+    compute! = compute_edt!,
+)
+
+###
+# Diffusivity of momentum (3d)
+###
+compute_evu!(out, state, cache, time) = compute_evu!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.vert_diff,
+    cache.atmos.turbconv_model,
+)
+compute_evu!(_, _, _, _, vert_diff::T1, turbconv_model::T2) where {T1, T2} =
+    error_diagnostic_variable(
+        "Can only compute momentum diffusivity with vertical diffusion or EDMFX",
+    )
+
+function compute_evu!(
+    out,
+    state,
+    cache,
+    time,
+    vert_diff::Union{VerticalDiffusion, FriersonDiffusion},
+    turbconv_model::Nothing,
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜK_u)
+    else
+        out .= cache.precomputed.ᶜK_u
+    end
+end
+
+function compute_evu!(
+    out,
+    state,
+    cache,
+    time,
+    vert_diff::Nothing,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜK_u)
+    else
+        out .= cache.precomputed.ᶜK_u
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "evu",
+    long_name = "Eddy Viscosity Coefficient for Momentum",
+    standard_name = "atmosphere_momentum_diffusivity",
+    units = "m^2 s^-1",
+    comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
+    compute! = compute_evu!,
 )

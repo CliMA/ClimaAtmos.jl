@@ -2,65 +2,329 @@
 
 import Thermodynamics as TD
 import CloudMicrophysics.Microphysics0M as CM0
+import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.MicrophysicsNonEq as CMNe
+import CloudMicrophysics.Parameters as CMP
+
+# define some aliases and functions to make the code more readable
+const Iₗ = TD.internal_energy_liquid
+const Iᵢ = TD.internal_energy_ice
+const Lf = TD.latent_heat_fusion
+const Tₐ = TD.air_temperature
+const PP = TD.PhasePartition
+const qᵥ = TD.vapor_specific_humidity
+qₜ(thp, ts) = TD.PhasePartition(thp, ts).tot
+qₗ(thp, ts) = TD.PhasePartition(thp, ts).liq
+qᵢ(thp, ts) = TD.PhasePartition(thp, ts).ice
+
+# helper function to limit the tendency
+function limit(q::FT, dt::FT, n::Int) where {FT}
+    return q / dt / n
+end
 
 """
-    q_tot_precipitation_sources(precip_model, t_prs, m_prs, dt, q_tot, ts)
+    cloud_sources(cm_params, thp, ts, dt)
+
+ - cm_params - CloudMicrophysics parameters struct for cloud water or ice condensate
+ - thp - Thermodynamics parameters struct
+ - ts - thermodynamics state
+ - dt - model time step
+
+Returns the condensation/evaporation or deposition/sublimation rate for
+non-equilibrium cloud formation.
+"""
+function cloud_sources(cm_params::CMP.CloudLiquid{FT}, thp, ts, dt) where {FT}
+
+    λ = TD.liquid_fraction(thp, Tₐ(thp, ts), TD.PhaseEquil)
+    qᵥ_ex_liquid = λ * (qₜ(thp, ts) - TD.q_vap_saturation_liquid(thp, ts))
+
+    # Ideally the logic whether to apply this source term, and what relaxation
+    # timescale to use, should be based on the availability of CCNs and INPs.
+    # We need a 2-moment microphysics scheme for that.
+
+    # Additionally, to approximate the partitioning between the condensation/evaporation
+    # and deposition/sublimation, we are scaling down the excess q by the liquid fraction.
+    # This needs more thought.
+    S = CMNe.conv_q_vap_to_q_liq_ice(
+        cm_params,
+        PP(FT(0), qᵥ_ex_liquid, FT(0)),
+        PP(thp, ts),
+    )
+    return ifelse(
+        S > FT(0),
+        min(S, limit(qᵥ(thp, ts), dt, 2)),
+        -min(abs(S), limit(qₗ(thp, ts), dt, 2)),
+    )
+end
+function cloud_sources(cm_params::CMP.CloudIce{FT}, thp, ts, dt) where {FT}
+
+    λ = TD.liquid_fraction(thp, Tₐ(thp, ts), TD.PhaseEquil)
+    qᵥ_ex_ice = (1 - λ) * (qₜ(thp, ts) - TD.q_vap_saturation_ice(thp, ts))
+
+    S = CMNe.conv_q_vap_to_q_liq_ice(
+        cm_params,
+        PP(FT(0), FT(0), qᵥ_ex_ice),
+        PP(thp, ts),
+    )
+    return ifelse(
+        S > FT(0),
+        min(S, limit(qᵥ(thp, ts), dt, 2)),
+        -min(abs(S), limit(qᵢ(thp, ts), dt, 2)),
+    )
+end
+
+"""
+    q_tot_precipitation_sources(precip_model, thp, cmp, dt, qₜ, ts)
 
  - precip_model - a type for precipitation scheme choice
- - t_prs, m_prs - stricts with thermodynamic and microphysics parameters
+ - thp, cmp - structs with thermodynamic and microphysics parameters
  - dt - model time step
- - q_tot - total water specific humidity
- - ts - thermodynamic state (see td package for details)
+ - qₜ - total water specific humidity
+ - ts - thermodynamic state (see Thermodynamics.jl package for details)
 
-Returns the q_tot source term due to precipitation formation
+Returns the qₜ source term due to precipitation formation
 defined as Δm_tot / (m_dry + m_tot)
 """
 function q_tot_precipitation_sources(
     ::NoPrecipitation,
-    t_prs,
-    m_prs,
+    thp,
+    cmp,
     dt,
-    q_tot::FT,
+    qₜ::FT,
     ts,
 ) where {FT <: Real}
     return FT(0)
 end
 function q_tot_precipitation_sources(
     ::Microphysics0Moment,
-    t_prs,
-    m_prs,
+    thp,
+    cmp,
     dt,
-    q_tot::FT,
+    qₜ::FT,
     ts,
 ) where {FT <: Real}
-    return -min(
-        max(q_tot, 0) / dt,
-        -CM0.remove_precipitation(
-            m_prs,
-            TD.PhasePartition(t_prs, ts),
-            TD.q_vap_saturation(t_prs, ts),
-        ),
-    )
+    return -min(max(qₜ, 0) / dt, -CM0.remove_precipitation(cmp, PP(thp, ts)))
 end
 
 """
-    e_tot_0M_precipitation_sources_helper(t_prs, ts, Φ)
+    e_tot_0M_precipitation_sources_helper(thp, ts, Φ)
 
- - t_prs - set with thermodynamics parameters
+ - thp - set with thermodynamics parameters
  - ts - thermodynamic state (see td package for details)
  - Φ - geopotential
 
 Returns the total energy source term multiplier from precipitation formation
+for the 0-moment scheme
 """
 function e_tot_0M_precipitation_sources_helper(
-    t_prs,
+    thp,
     ts,
     Φ::FT,
 ) where {FT <: Real}
 
-    λ::FT = TD.liquid_fraction(t_prs, ts)
-    I_l::FT = TD.internal_energy_liquid(t_prs, ts)
-    I_i::FT = TD.internal_energy_ice(t_prs, ts)
+    λ::FT = TD.liquid_fraction(thp, ts)
 
-    return λ * I_l + (1 - λ) * I_i + Φ
+    return λ * Iₗ(thp, ts) + (1 - λ) * Iᵢ(thp, ts) + Φ
+end
+
+"""
+    compute_precipitation_sources!(Sᵖ, Sᵖ_snow, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, Φ, dt, mp, thp)
+
+ - Sᵖ, Sᵖ_snow - temporary containters to help compute precipitation source terms
+ - Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ - cached storage for precipitation source terms
+ - ρ - air density
+ - qᵣ, qₛ - precipitation (rain and snow) specific humidity
+ - ts - thermodynamic state (see td package for details)
+ - Φ - geopotential
+ - dt - model time step
+ - thp, cmp - structs with thermodynamic and microphysics parameters
+
+Returns the q source terms due to precipitation formation from the 1-moment scheme.
+The specific humidity source terms are defined as defined as Δmᵢ / (m_dry + m_tot)
+where i stands for total, rain or snow.
+Also returns the total energy source term due to the microphysics processes.
+"""
+function compute_precipitation_sources!(
+    Sᵖ,
+    Sᵖ_snow,
+    Sqₜᵖ,
+    Sqᵣᵖ,
+    Sqₛᵖ,
+    Seₜᵖ,
+    ρ,
+    qᵣ,
+    qₛ,
+    ts,
+    Φ,
+    dt,
+    mp,
+    thp,
+)
+    FT = eltype(Sqₜᵖ)
+    @. Sqₜᵖ = FT(0)
+    @. Sqᵣᵖ = FT(0)
+    @. Sqₛᵖ = FT(0)
+    @. Seₜᵖ = FT(0)
+
+    #! format: off
+    # rain autoconversion: q_liq -> q_rain
+    @. Sᵖ = min(
+        limit(qₗ(thp, ts), dt, 5),
+        CM1.conv_q_liq_to_q_rai(mp.pr.acnv1M, qₗ(thp, ts), true),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+
+    # snow autoconversion assuming no supersaturation: q_ice -> q_snow
+    @. Sᵖ = min(
+        limit(qᵢ(thp, ts), dt, 5),
+        CM1.conv_q_ice_to_q_sno_no_supersat(mp.ps.acnv1M, qᵢ(thp, ts), true),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqₛᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+
+    # accretion: q_liq + q_rain -> q_rain
+    @. Sᵖ = min(
+        limit(qₗ(thp, ts), dt, 5),
+        CM1.accretion(mp.cl, mp.pr, mp.tv.rain, mp.ce, qₗ(thp, ts), qᵣ, ρ),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+
+    # accretion: q_ice + q_snow -> q_snow
+    @. Sᵖ = min(
+        limit(qᵢ(thp, ts), dt, 5),
+        CM1.accretion(mp.ci, mp.ps, mp.tv.snow, mp.ce, qᵢ(thp, ts), qₛ, ρ),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqₛᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+
+    # accretion: q_liq + q_sno -> q_sno or q_rai
+    # sink of cloud water via accretion cloud water + snow
+    @. Sᵖ = min(
+        limit(qₗ(thp, ts), dt, 5),
+        CM1.accretion(mp.cl, mp.ps, mp.tv.snow, mp.ce, qₗ(thp, ts), qₛ, ρ),
+    )
+    # if T < T_freeze cloud droplets freeze to become snow
+    # else the snow melts and both cloud water and snow become rain
+    α(thp, ts) = TD.Parameters.cv_l(thp) / Lf(thp, ts) * (Tₐ(thp, ts) - mp.ps.T_freeze)
+    @. Sᵖ_snow = ifelse(
+        Tₐ(thp, ts) < mp.ps.T_freeze,
+        Sᵖ,
+        FT(-1) * min(Sᵖ * α(thp, ts), limit(qₛ, dt, 5)),
+    )
+    @. Sqₛᵖ += Sᵖ_snow
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += ifelse(Tₐ(thp, ts) < mp.ps.T_freeze, FT(0), Sᵖ - Sᵖ_snow)
+    @. Seₜᵖ -= ifelse(
+        Tₐ(thp, ts) < mp.ps.T_freeze,
+        Sᵖ * (Iᵢ(thp, ts) + Φ),
+        Sᵖ * (Iₗ(thp, ts) + Φ) - Sᵖ_snow * (Iₗ(thp, ts) - Iᵢ(thp, ts)),
+    )
+
+    # accretion: q_ice + q_rai -> q_sno
+    @. Sᵖ = min(
+        limit(qᵢ(thp, ts), dt, 5),
+        CM1.accretion(mp.ci, mp.pr, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqₛᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    # sink of rain via accretion cloud ice - rain
+    @. Sᵖ = min(
+        limit(qᵣ, dt, 5),
+        CM1.accretion_rain_sink(mp.pr, mp.ci, mp.tv.rain, mp.ce, qᵢ(thp, ts), qᵣ, ρ),
+    )
+    @. Sqᵣᵖ -= Sᵖ
+    @. Sqₛᵖ += Sᵖ
+    @. Seₜᵖ += Sᵖ * Lf(thp, ts)
+
+    # accretion: q_rai + q_sno -> q_rai or q_sno
+    @. Sᵖ = ifelse(
+        Tₐ(thp, ts) < mp.ps.T_freeze,
+        min(
+            limit(qᵣ, dt, 5),
+            CM1.accretion_snow_rain(mp.ps, mp.pr, mp.tv.rain, mp.tv.snow, mp.ce, qₛ, qᵣ, ρ),
+        ),
+        -min(
+            limit(qₛ, dt, 5),
+            CM1.accretion_snow_rain(mp.pr, mp.ps, mp.tv.snow, mp.tv.rain, mp.ce, qᵣ, qₛ, ρ),
+        ),
+    )
+    @. Sqₛᵖ += Sᵖ
+    @. Sqᵣᵖ -= Sᵖ
+    @. Seₜᵖ += Sᵖ * Lf(thp, ts)
+    #! format: on
+end
+
+"""
+    compute_precipitation_sinks!(Sᵖ, Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ, ρ, qᵣ, qₛ, ts, Φ, dt, mp, thp)
+
+ - Sᵖ - a temporary containter to help compute precipitation source terms
+ - Sqₜᵖ, Sqᵣᵖ, Sqₛᵖ, Seₜᵖ - cached storage for precipitation source terms
+ - ρ - air density
+ - qᵣ, qₛ - precipitation (rain and snow) specific humidities
+ - ts - thermodynamic state (see td package for details)
+ - Φ - geopotential
+ - dt - model time step
+ - thp, cmp - structs with thermodynamic and microphysics parameters
+
+Returns the q source terms due to precipitation sinks from the 1-moment scheme.
+The specific humidity source terms are defined as defined as Δmᵢ / (m_dry + m_tot)
+where i stands for total, rain or snow.
+Also returns the total energy source term due to the microphysics processes.
+"""
+function compute_precipitation_sinks!(
+    Sᵖ,
+    Sqₜᵖ,
+    Sqᵣᵖ,
+    Sqₛᵖ,
+    Seₜᵖ,
+    ρ,
+    qᵣ,
+    qₛ,
+    ts,
+    Φ,
+    dt,
+    mp,
+    thp,
+)
+    FT = eltype(Sqₜᵖ)
+    sps = (mp.ps, mp.tv.snow, mp.aps, thp)
+    rps = (mp.pr, mp.tv.rain, mp.aps, thp)
+
+    #! format: off
+    # evaporation: q_rai -> q_vap
+    @. Sᵖ = -min(
+        limit(qᵣ, dt, 5),
+        -CM1.evaporation_sublimation(rps..., PP(thp, ts), qᵣ, ρ, Tₐ(thp, ts)),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqᵣᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iₗ(thp, ts) + Φ)
+
+    # melting: q_sno -> q_rai
+    @. Sᵖ = min(
+        limit(qₛ, dt, 5),
+        CM1.snow_melt(sps..., qₛ, ρ, Tₐ(thp, ts)),
+    )
+    @. Sqᵣᵖ += Sᵖ
+    @. Sqₛᵖ -= Sᵖ
+    @. Seₜᵖ -= Sᵖ * Lf(thp, ts)
+
+    # deposition/sublimation: q_vap <-> q_sno
+    @. Sᵖ = CM1.evaporation_sublimation(sps..., PP(thp, ts), qₛ, ρ, Tₐ(thp, ts))
+    @. Sᵖ = ifelse(
+        Sᵖ > FT(0),
+        min(limit(qᵥ(thp, ts), dt, 5), Sᵖ),
+        -min(limit(qₛ, dt, 5), FT(-1) * Sᵖ),
+    )
+    @. Sqₜᵖ -= Sᵖ
+    @. Sqₛᵖ += Sᵖ
+    @. Seₜᵖ -= Sᵖ * (Iᵢ(thp, ts) + Φ)
+    #! format: on
 end

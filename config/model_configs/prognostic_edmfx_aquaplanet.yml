@@ -5,8 +5,9 @@ turbconv: prognostic_edmfx
 prognostic_tke: true
 edmfx_upwinding: first_order 
 edmfx_entr_model: "Generalized" 
-edmfx_detr_model: "ConstantArea" 
+edmfx_detr_model: "Generalized" 
 edmfx_nh_pressure: true 
+edmfx_velocity_relaxation: true
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 moist: equil 
@@ -14,7 +15,7 @@ precip_model: 0M
 dt: 10secs 
 t_end: 1hours 
 dt_save_state_to_disk: 600secs
-toml: [toml/prognostic_edmfx_box.toml]
+toml: [toml/prognostic_edmfx.toml]
 output_default_diagnostics: false
 diagnostics:
   - short_name: [ts, ta, thetaa, ha, pfull, rhoa, ua, va, wa, hfes, hur, hus, cl, clw, cli, evspsbl, rsd, rsu, rld, rlu]

@@ -1,31 +1,23 @@
 [precipitation_timescale]
 value = 600
-type = "float"
 
 [entr_inv_tau]
 value = 0.002
-type = "float"
 
 [entr_coeff]
 value = 0
-type = "float"
 
 [detr_inv_tau]
 value = 0
-type = "float"
 
 [detr_vertdiv_coeff]
 value = 0.6
-type = "float"
 
 [detr_buoy_coeff]
 value = 0.12
-type = "float"
 
 [min_area_limiter_scale]
 value = 0
-type = "float"
 
 [max_area_limiter_scale]
 value = 0
-type = "float"
