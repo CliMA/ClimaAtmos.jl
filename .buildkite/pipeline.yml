@@ -756,7 +756,7 @@ steps:
 
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
-          julia --color=yes --project=examples examples/hybrid/driver.jl
+          julia -g2 --check-bounds=yes --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $GPU_CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
         artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
         agents:
