@@ -50,9 +50,8 @@ include(joinpath("prognostic_equations", "implicit", "implicit_solver.jl"))
 
 include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
-include(joinpath("prognostic_equations", "forcing", "vertical_fluctuation.jl"))
-include(joinpath("prognostic_equations", "forcing", "nudging.jl"))
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
+include(joinpath("prognostic_equations", "forcing", "external_forcing.jl"))
 
 include(joinpath("prognostic_equations", "surface_temp.jl"))
 

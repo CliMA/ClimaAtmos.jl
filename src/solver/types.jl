@@ -115,8 +115,7 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dqtdt::PQ # Set large-scale drying
 end
 # maybe need to <: AbstractForcing
-struct VerticalFluctuation end
-struct Nudging end
+struct GCMForcing end
 
 struct EDMFCoriolis{U, V, FT}
     prof_ug::U
@@ -335,8 +334,7 @@ Base.@kwdef struct AtmosModel{
     S,
     RM,
     LA,
-    VF,
-    NUDGING,
+    EXTFORCING,
     EC,
     AT,
     TM,
@@ -370,8 +368,7 @@ Base.@kwdef struct AtmosModel{
     subsidence::S = nothing
     radiation_mode::RM = nothing
     ls_adv::LA = nothing
-    vert_fluc::VF = nothing
-    nudging::NUDGING = nothing
+    external_forcing::EXTFORCING = nothing
     edmf_coriolis::EC = nothing
     advection_test::AT = nothing
     tendency_model::TM = nothing
