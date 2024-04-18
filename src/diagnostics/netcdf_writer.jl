@@ -681,7 +681,7 @@ function save_diagnostic_to_disk!(
     ClimaComms.iamroot(ClimaComms.context(field)) || return nothing
 
     var = diagnostic.variable
-    interpolated_field = writer.preallocated_output_arrays[var.short_name]
+    interpolated_field = Array(writer.preallocated_output_arrays[var.short_name])
     space = axes(field)
     FT = Spaces.undertype(space)
 
