@@ -1,6 +1,5 @@
 dt_save_state_to_disk: Inf
 dt_save_to_sol: Inf
-output_default_diagnostics: false
 h_elem: 30
 z_max: 55000.0
 z_elem: 63
@@ -19,5 +18,5 @@ surface_setup: DefaultMoninObukhov
 rayleigh_sponge: true
 dt: 100secs
 t_end: 1days
-job_id: gpu_aquaplanet_dyamond_ss_1process
+job_id: gpu_aquaplanet_dyamond_ss_diag_1process
 toml: [toml/longrun_aquaplanet_dyamond.toml]
