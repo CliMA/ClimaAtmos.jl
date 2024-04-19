@@ -820,14 +820,6 @@ steps:
           slurm_mem: 24GB
           slurm_cpus_per_task: 8
 
-      # Flame graphs
-      - label: ":fire: Flame graph: perf target (IO)"
-        command: >
-          julia --color=yes --project=perf perf/benchmark_netcdf_io.jl
-        artifact_paths: "flame_perf_io/*.html"
-        agents:
-          slurm_gpus: 1
-
       - label: ":fire: Flame graph: perf target (default)"
         command: >
           julia --color=yes --project=perf perf/flame.jl

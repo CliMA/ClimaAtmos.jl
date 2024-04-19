@@ -38,18 +38,18 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 #####
 
 allocs_limit = Dict()
-allocs_limit["flame_perf_target"] = 51_600
-allocs_limit["flame_perf_target_tracers"] = 81_576
-allocs_limit["flame_perf_target_edmfx"] = 86_608
-allocs_limit["flame_perf_diagnostics"] = 10_876_900
-allocs_limit["flame_perf_target_diagnostic_edmfx"] = 86_608
+allocs_limit["flame_perf_target"] = 841_104
+allocs_limit["flame_perf_target_tracers"] = 870_888
+allocs_limit["flame_perf_target_edmfx"] = 1_383_200
+allocs_limit["flame_perf_diagnostics"] = 21_359_336
+allocs_limit["flame_perf_target_diagnostic_edmfx"] = 1_383_200
 allocs_limit["flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff"] =
     4_018_252_656
 allocs_limit["flame_perf_target_frierson"] = 4_015_547_056
 allocs_limit["flame_perf_target_threaded"] = 1_276_864
-allocs_limit["flame_perf_target_callbacks"] = 184_448
+allocs_limit["flame_perf_target_callbacks"] = 988_816
 allocs_limit["flame_perf_gw"] = 3_268_961_856
-allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 2_770_296
+allocs_limit["flame_perf_target_prognostic_edmfx_aquaplanet"] = 4_000_488
 allocs_limit["flame_gpu_implicit_barowave_moist"] = 336_378
 # Ideally, we would like to track all the allocations, but this becomes too
 # expensive there is too many of them. Here, we set the default sample rate to

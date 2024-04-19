@@ -42,7 +42,7 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice_time, slice
+import ClimaAnalysis: SimDir, slice
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -508,7 +508,11 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names = ["thetaa"]
-    vars = map_comparison(get, simdirs, short_names)
+    period = "10s"
+    reduction = "inst"
+    vars = map_comparison(simdirs, short_names) do simdir, short_name
+        return get(simdir; short_name, reduction, period)
+    end
     make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
 end
 
@@ -1066,7 +1070,17 @@ function make_plots(
         precip_names...,
     ]
     reduction = "inst"
-    period = "30m"
+
+    available_periods = ClimaAnalysis.available_periods(
+        simdirs[1];
+        short_name = short_names[1],
+        reduction,
+    )
+    if "10m" in available_periods
+        period = "10m"
+    elseif "30m" in available_periods
+        period = "30m"
+    end
 
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
