@@ -318,10 +318,14 @@ function get_initial_condition(parsed_args)
     if parsed_args["initial_condition"] in [
         "DryBaroclinicWave",
         "MoistBaroclinicWave",
-        "DecayingProfile",
         "MoistBaroclinicWaveWithEDMF",
-        "MoistAdiabaticProfileEDMFX",
     ]
+        return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
+            parsed_args["perturb_initstate"],
+            parsed_args["deep_atmosphere"],
+        )
+    elseif parsed_args["initial_condition"] in
+           ["DecayingProfile", "MoistAdiabaticProfileEDMFX"]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
             parsed_args["perturb_initstate"],
         )
