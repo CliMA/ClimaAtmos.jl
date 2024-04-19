@@ -762,7 +762,6 @@ steps:
         agents:
           slurm_gpus: 1
           slurm_mem: 20G
-        soft_fail: true
 
   - group: "GPU Performance"
     steps:
