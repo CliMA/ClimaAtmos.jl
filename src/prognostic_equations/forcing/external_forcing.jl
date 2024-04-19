@@ -5,12 +5,24 @@
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
+import NCDatasets as NC
+import StatsBase
+import Dierckx
+
+function interp_vertical_prof(x, xp, fp)
+    spl = Dierckx.Spline1D(xp, fp; k = 1)
+    return spl(vec(x))
+end
+
+mean_nc_data(data, group, var; imin = 100) =
+    StatsBase.mean(data.group[group][var][:, :][:, imin:end], dims = 2)[:]
+init_nc_data(data, group, var) = data.group[group][var][:, :][:, 1]
 
 external_forcing_cache(Y, atmos::AtmosModel) =
     external_forcing_cache(Y, atmos.external_forcing)
 
-external_forcing_cache(Y, ::Nothing) = (;)
-function external_forcing_cache(Y, ::GCMForcing)
+external_forcing_cache(Y, external_forcing::Nothing) = (;)
+function external_forcing_cache(Y, external_forcing::GCMForcing)
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -25,21 +37,49 @@ function external_forcing_cache(Y, ::GCMForcing)
     ᶜτ_scalar = similar(Y.c, FT)
     ᶜls_subsidence = similar(Y.c, FT)
 
-    # TODO: read profiles from LES files and add here
-    @. ᶜdTdt_fluc = 0
-    @. ᶜdqtdt_fluc = 0
-    @. ᶜdTdt_hadv = 0
-    @. ᶜdqtdt_hadv = 0
-    @. ᶜdTdt_rad = 0
-    @. ᶜT_nudge = 290
-    @. ᶜqt_nudge = FT(0.01)
-    @. ᶜu_nudge = -5
-    @. ᶜv_nudge = 0
-    @. ᶜls_subsidence = 0
-    # TODO: make it a function of z and add timescale to climaparams
-    hr = 3600
-    @. ᶜτ_wind = 6hr
-    @. ᶜτ_scalar = 24hr
+    external_forcing_file = external_forcing.external_forcing_file
+
+    NC.Dataset(external_forcing_file, "r") do ds
+        function setvar!(cc_field, varname, colidx, zc_gcm, zc_les)
+            parent(cc_field[colidx]) .= interp_vertical_prof(
+                zc_gcm,
+                zc_les,
+                mean_nc_data(ds, "profiles", varname),
+            )
+        end
+
+        function setnudgevar!(cc_field, varname, colidx, zc_gcm, zc_les)
+            parent(cc_field[colidx]) .= interp_vertical_prof(
+                zc_gcm,
+                zc_les,
+                init_nc_data(ds, "profiles", varname),
+            )
+        end
+
+        Fields.bycolumn(axes(Y.c)) do colidx
+
+            zc_les = Array(ds.group["profiles"]["z_half"])
+            zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
+
+            setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_les)
+            setvar!(ᶜdqtdt_fluc, "dqtdt_fluc", colidx, zc_gcm, zc_les)
+            setvar!(ᶜdTdt_hadv, "dtdt_hadv", colidx, zc_gcm, zc_les)
+            setvar!(ᶜdqtdt_hadv, "dqtdt_hadv", colidx, zc_gcm, zc_les)
+            setvar!(ᶜdTdt_rad, "dtdt_rad", colidx, zc_gcm, zc_les)
+            setvar!(ᶜls_subsidence, "ls_subsidence", colidx, zc_gcm, zc_les)
+
+            setnudgevar!(ᶜT_nudge, "temperature_mean", colidx, zc_gcm, zc_les)
+            setnudgevar!(ᶜqt_nudge, "qt_mean", colidx, zc_gcm, zc_les)
+            setnudgevar!(ᶜu_nudge, "u_mean", colidx, zc_gcm, zc_les)
+            setnudgevar!(ᶜv_nudge, "v_mean", colidx, zc_gcm, zc_les)
+
+            # TODO: make it a function of z for scalar (call function above)
+            hr = 3600
+            parent(ᶜτ_wind[colidx]) .= 6hr
+            parent(ᶜτ_scalar[colidx]) .= 24hr
+        end
+    end
+
     return (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
