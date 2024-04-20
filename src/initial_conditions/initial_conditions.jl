@@ -39,7 +39,7 @@ struct ColumnInterpolatableField{F, D}
     function ColumnInterpolatableField(f::Fields.ColumnField)
         zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
         fdata = vec(parent(f))
-        data = Dierckx.Spline1D(zdata, fdata; k = 1)
+        data = Interpolations.cubic_spline_interpolation(zdata, fdata)
         return new{typeof(f), typeof(data)}(f, data)
     end
 end
@@ -603,7 +603,7 @@ end
 ## EDMF Test Cases
 ##
 # TODO: Get rid of this
-const FunctionOrSpline = Union{Dierckx.Spline1D, Function}
+const FunctionOrSpline = Union{Interpolations.AbstractInterpolation, Function}
 
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
@@ -951,7 +951,10 @@ function (initial_condition::TRMM_LBA)(params)
         q_v_sat = p_v_sat * (1 / molmass_ratio) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
-    q_tot = Dierckx.Spline1D(measured_z_values, measured_q_tot_values; k = 1)
+    q_tot = Interpolations.cubic_spline_interpolation(
+        measured_z_values,
+        measured_q_tot_values,
+    )
 
     p = hydrostatic_pressure_profile(; thermo_params, p_0, T, q_tot)
     u = APL.TRMM_LBA_u(FT)

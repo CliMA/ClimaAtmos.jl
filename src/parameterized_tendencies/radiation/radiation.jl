@@ -10,7 +10,8 @@ import .Parameters as CAP
 import RRTMGP
 import .RRTMGPInterface as RRTMGPI
 
-using Dierckx: Spline1D
+import Interpolations
+
 using StatsBase: mean
 
 
@@ -83,7 +84,7 @@ function radiation_model_cache(
                 vec(mean(reshape(input_data["ozone"][:, :, 1], n, :); dims = 2))
 
             # interpolate the ozone concentrations to our initial pressures
-            pressure2ozone = Spline1D(
+            pressure2ozone = Interpolations.cubic_spline_interpolation(
                 input_center_pressure,
                 input_center_volume_mixing_ratio_o3,
             )

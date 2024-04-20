@@ -1,6 +1,5 @@
 using Adapt
 using Dates: DateTime, @dateformat_str
-using Dierckx
 using Interpolations
 import NCDatasets
 import ClimaUtilities.OutputPathGenerator
