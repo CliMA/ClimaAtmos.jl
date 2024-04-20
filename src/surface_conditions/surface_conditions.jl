@@ -335,14 +335,15 @@ function surface_state_to_conditions(
 end
 
 function surface_temperature(::ZonallySymmetricSST, coordinates)
-    FT = eltype(coordinates.lat)
-    T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2))
+    (; lat, z) = coordinates
+    FT = eltype(lat)
+    T = FT(271) + FT(29) * exp(-coordinates.lat^2 / (2 * 26^2)) - FT(6.5e-3) * z
     return T
 end
 
 function surface_temperature(::ZonallyAsymmetricSST, coordinates)
-    (; lat, long) = coordinates
-    FT = eltype(coordinates.lat)
+    (; lat, long, z) = coordinates
+    FT = eltype(lat)
     #Assume a surface temperature that varies with both longitude and latitude, Neale and Hoskins, 2021
     T =
         (
@@ -355,7 +356,7 @@ function surface_temperature(::ZonallyAsymmetricSST, coordinates)
                 FT(3) * cosd(long + FT(90)) * cospi(FT(0.5) * lat / FT(30))^2 +
                 FT(0)
             ) : FT(0)
-        )
+        ) - FT(6.5e-3) * z
     return T
 end
 
