@@ -8,7 +8,7 @@ using LinearAlgebra: norm
 
 function parse_commandline()
     s = ArgParse.ArgParseSettings()
-    ArgParse.@add_arg_table s begin
+    ArgParse.@add_arg_table! s begin
         "--output_folder_1"
         help = "Output file for job 1"
         arg_type = String

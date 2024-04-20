@@ -50,7 +50,7 @@ include(joinpath(@__DIR__, "remap_helpers.jl"))
 import ArgParse
 function parse_commandline()
     s = ArgParse.ArgParseSettings()
-    ArgParse.@add_arg_table s begin
+    ArgParse.@add_arg_table! s begin
         "--data_dir"
         help = "Data directory"
         arg_type = String
