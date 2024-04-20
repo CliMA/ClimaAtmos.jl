@@ -59,7 +59,7 @@ callback_from_affect(x::AtmosCallback) = x
 function callback_from_affect(affect!)
     for p in propertynames(affect!)
         x = getproperty(affect!, p)
-        if x isa AtmosCallback || x isa DECB.SavedValues
+        if x isa AtmosCallback
             return x
         end
     end

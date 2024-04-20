@@ -10,7 +10,6 @@ import ClimaAtmos as CA
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
-import DiffEqCallbacks as DECB
 
 import ClimaDiagnostics
 
