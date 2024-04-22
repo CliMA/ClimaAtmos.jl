@@ -12,6 +12,8 @@ import ClimaCore.Fields
 import ClimaTimeSteppers as CTS
 import DiffEqCallbacks as DECB
 
+import ClimaDiagnostics
+
 function get_atmos(config::AtmosConfig, params)
     (; turbconv_params) = params
     (; parsed_args) = config
@@ -653,53 +655,19 @@ function get_simulation(config::AtmosConfig)
 
     # Initialize diagnostics
     s = @timed_str begin
-        diagnostics, writers =
-            get_diagnostics(config.parsed_args, atmos, Spaces.axes(Y.c))
+        scheduled_diagnostics, writers = get_diagnostics(
+            config.parsed_args,
+            atmos,
+            Y,
+            p,
+            t_start,
+            sim_info.dt,
+        )
     end
     @info "initializing diagnostics: $s"
 
-    length(diagnostics) > 0 && @info "Computing diagnostics:"
-
-    # First, we convert all the ScheduledDiagnosticTime into ScheduledDiagnosticIteration,
-    # ensuring that there is consistency in the timestep and the periods and translating
-    # those periods that depended on the timestep
-    diagnostics_iterations =
-        [CAD.ScheduledDiagnosticIterations(d, sim_info.dt) for d in diagnostics]
-
-    # For diagnostics that perform reductions, the storage is used for the values computed
-    # at each call. Reductions also save the accumulated value in diagnostic_accumulators.
-    diagnostic_storage = Dict()
-    diagnostic_accumulators = Dict()
-    diagnostic_counters = Dict()
-
-    s = @timed_str begin
-        diagnostics_functions = CAD.get_callbacks_from_diagnostics(
-            diagnostics_iterations,
-            diagnostic_storage,
-            diagnostic_accumulators,
-            diagnostic_counters,
-            output_dir,
-        )
-    end
-    @info "Prepared diagnostic callbacks: $s"
-
-    # It would be nice to just pass the callbacks to the integrator. However, this leads to
-    # a significant increase in compile time for reasons that are not known. For this
-    # reason, we only add one callback to the integrator, and this function takes care of
-    # executing the other callbacks. This single function is orchestrate_diagnostics
-
-    orchestrate_diagnostics(integrator) =
-        CAD.orchestrate_diagnostics(integrator, diagnostics_functions)
-
-    diagnostic_callbacks =
-        call_every_n_steps(orchestrate_diagnostics, skip_first = true)
-
-    # The generic constructor for SciMLBase.CallbackSet has to split callbacks into discrete
-    # and continuous. This is not hard, but can introduce significant latency. However, all
-    # the callbacks in ClimaAtmos are discrete_callbacks, so we directly pass this
-    # information to the constructor
     continuous_callbacks = tuple()
-    discrete_callbacks = (callback..., diagnostic_callbacks)
+    discrete_callbacks = callback
 
     s = @timed_str begin
         all_callbacks =
@@ -707,11 +675,8 @@ function get_simulation(config::AtmosConfig)
     end
     @info "Prepared SciMLBase.CallbackSet callbacks: $s"
     steps_cycle_non_diag = n_steps_per_cycle_per_cb(all_callbacks, sim_info.dt)
-    steps_cycle_diag =
-        n_steps_per_cycle_per_cb_diagnostic(diagnostics_functions)
-    steps_cycle = lcm([steps_cycle_non_diag..., steps_cycle_diag...])
+    steps_cycle = lcm(steps_cycle_non_diag)
     @info "n_steps_per_cycle_per_cb (non diagnostics): $steps_cycle_non_diag"
-    @info "n_steps_per_cycle_per_cb_diagnostic: $steps_cycle_diag"
     @info "n_steps_per_cycle (non diagnostics): $steps_cycle"
 
     tspan = (t_start, sim_info.t_end)
@@ -730,20 +695,16 @@ function get_simulation(config::AtmosConfig)
         integrator = SciMLBase.init(integrator_args...; integrator_kwargs...)
     end
     @info "init integrator: $s"
-    reset_graceful_exit(output_dir)
 
-    s = @timed_str init_diagnostics!(
-        diagnostics_iterations,
-        diagnostic_storage,
-        diagnostic_accumulators,
-        diagnostic_counters,
-        output_dir,
-        Y,
-        p,
-        t_start;
-        warn_allocations = config.parsed_args["warn_allocations_diagnostics"],
-    )
-    @info "Init diagnostics: $s"
+    s = @timed_str begin
+        integrator = ClimaDiagnostics.IntegratorWithDiagnostics(
+            integrator,
+            scheduled_diagnostics,
+        )
+    end
+    @info "Added diagnostics: $s"
+
+    reset_graceful_exit(output_dir)
 
     return AtmosSimulation(
         job_id,

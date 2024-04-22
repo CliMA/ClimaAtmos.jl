@@ -59,18 +59,16 @@ callback_from_affect(x::AtmosCallback) = x
 function callback_from_affect(affect!)
     for p in propertynames(affect!)
         x = getproperty(affect!, p)
-        if x isa AtmosCallback
-            return x
-        elseif x isa DECB.SavedValues
+        if x isa AtmosCallback || x isa DECB.SavedValues
             return x
         end
     end
-    error("Callback not found in $(affect!)")
+    return nothing
 end
 function atmos_callbacks(cbs::SciMLBase.CallbackSet)
     all_cbs = [cbs.continuous_callbacks..., cbs.discrete_callbacks...]
     callback_objs = map(cb -> callback_from_affect(cb.affect!), all_cbs)
-    filter!(x -> !(x isa DECB.SavedValues), callback_objs)
+    filter!(x -> (x isa AtmosCallback), callback_objs)
     return callback_objs
 end
 

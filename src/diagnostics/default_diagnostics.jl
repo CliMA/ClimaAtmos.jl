@@ -5,7 +5,7 @@
 # level interfaces, add them here. Feel free to include extra files.
 
 """
-    default_diagnostics(model, t_end; output_writer)
+    default_diagnostics(model, t_start, t_end; output_writer)
 
 Return a list of `ScheduledDiagnostic`s associated with the given `model` that use
 `output_write` to write to disk. `t_end` is the expected simulation end time and it is used
@@ -20,23 +20,34 @@ If `t_end >= 120 year` take monthly means.
 
 One month is defined as 30 days.
 """
-function default_diagnostics(model::AtmosModel, t_end::Real; output_writer)
+function default_diagnostics(
+    model::AtmosModel,
+    t_start::Real,
+    t_end::Real;
+    output_writer,
+)
     # Unfortunately, [] is not treated nicely in a map (we would like it to be "excluded"),
     # so we need to manually filter out the submodels that don't have defaults associated
     # to
     non_empty_fields = filter(
         x ->
-            default_diagnostics(getfield(model, x), t_end; output_writer) != [],
+            default_diagnostics(
+                getfield(model, x),
+                t_start,
+                t_end;
+                output_writer,
+            ) != [],
         fieldnames(AtmosModel),
     )
 
     # We use a map because we want to ensure that diagnostics is a well defined type, not
     # Any. This reduces latency.
     return vcat(
-        core_default_diagnostics(output_writer, t_end),
+        core_default_diagnostics(output_writer, t_start, t_end),
         map(non_empty_fields) do field
             default_diagnostics(
                 getfield(model, field),
+                t_start,
                 t_end;
                 output_writer,
             )
@@ -49,7 +60,7 @@ end
 # that all the default_diagnostics return the same type). This is used by
 # default_diagnostics(model::AtmosModel; output_writer), so that we can ignore defaults for
 # submodels that have no given defaults.
-default_diagnostics(submodel, t_end; output_writer) = []
+default_diagnostics(submodel, t_start, t_end; output_writer) = []
 
 """
     produce_common_diagnostic_function(period, reduction)
@@ -60,14 +71,15 @@ function common_diagnostics(
     period,
     reduction,
     output_writer,
+    t_start,
     short_names...;
     pre_output_hook! = nothing,
 )
     return [
-        ScheduledDiagnosticTime(
+        ScheduledDiagnostic(
             variable = get_diagnostic_variable(short_name),
-            compute_every = :timestep,
-            output_every = period, # seconds
+            compute_schedule_func = EveryStepSchedule(),
+            output_schedule_func = EveryDtSchedule(period; t_start),
             reduction_time_func = reduction,
             output_writer = output_writer,
             pre_output_hook! = pre_output_hook!,
@@ -75,15 +87,10 @@ function common_diagnostics(
     ]
 end
 
-function average_pre_output_hook!(accum, counter)
-    @. accum = accum / counter
-    nothing
-end
-
 include("standard_diagnostic_frequencies.jl")
 
 """
-    frequency_averages(t_end::Real)
+    frequency_averages(t_start::Real, t_end::Real)
 
 Return the correct averaging function depending on the total simulation time.
 
@@ -94,7 +101,7 @@ If `t_end >= 120 year` take monthly means.
 
 One month is defined as 30 days.
 """
-function frequency_averages(t_end::Real)
+function frequency_averages(t_start::Real, t_end::Real)
     if t_end > 120 * 86400
         return monthly_averages
     elseif t_end >= 30 * 86400
@@ -111,11 +118,11 @@ end
 ########
 # Core #
 ########
-function core_default_diagnostics(output_writer, t_end)
+function core_default_diagnostics(output_writer, t_start, t_end)
     core_diagnostics =
         ["ts", "ta", "thetaa", "ha", "pfull", "rhoa", "ua", "va", "wa", "hfes"]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
     if t_end > 120 * 86400
         min_func = monthly_min
@@ -133,15 +140,18 @@ function core_default_diagnostics(output_writer, t_end)
 
     return [
         # We need to compute the topography at the beginning of the simulation (and only at
-        # the beginning), so we set output_every = 0 (it still called at the first timestep)
-        ScheduledDiagnosticIterations(;
+        # the beginning), so we set output/compute_schedule_func to false. It is still
+        # computed at the very beginning
+        ScheduledDiagnostic(;
             variable = get_diagnostic_variable("orog"),
-            output_every = 0,
+            output_schedule_func = (integrator) -> false,
+            compute_schedule_func = (integrator) -> false,
             output_writer,
+            output_short_name = "orog_inst",
         ),
-        average_func(core_diagnostics...; output_writer)...,
-        min_func("ts"; output_writer),
-        max_func("ts"; output_writer),
+        average_func(core_diagnostics...; output_writer, t_start)...,
+        min_func("ts"; output_writer, t_start),
+        max_func("ts"; output_writer, t_start),
     ]
 end
 
@@ -150,38 +160,54 @@ end
 ##################
 function default_diagnostics(
     ::T,
+    t_start,
     t_end;
     output_writer,
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     moist_diagnostics = ["hur", "hus", "cl", "clw", "cli", "hussfc", "evspsbl"]
 
-    average_func = frequency_averages(t_end)
-    return [average_func(moist_diagnostics...; output_writer)...]
+    average_func = frequency_averages(t_start, t_end)
+    return [average_func(moist_diagnostics...; output_writer, t_start)...]
 end
 
 #######################
 # Precipitation model #
 #######################
-function default_diagnostics(::Microphysics0Moment, t_end; output_writer)
+function default_diagnostics(
+    ::Microphysics0Moment,
+    t_start,
+    t_end;
+    output_writer,
+)
     precip_diagnostics = ["pr"]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
-    return [average_func(precip_diagnostics...; output_writer)...]
+    return [average_func(precip_diagnostics...; output_writer, t_start)...]
 end
 
-function default_diagnostics(::Microphysics1Moment, t_end; output_writer)
+function default_diagnostics(
+    ::Microphysics1Moment,
+    t_start,
+    t_end;
+    output_writer,
+)
     precip_diagnostics = ["husra", "hussn"]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
-    return [average_func(precip_diagnostics...; output_writer)...]
+    return [average_func(precip_diagnostics...; output_writer, t_start)...]
 end
 
 ##################
 # Radiation mode #
 ##################
-function default_diagnostics(::RRTMGPI.AbstractRRTMGPMode, t_end; output_writer)
+function default_diagnostics(
+    ::RRTMGPI.AbstractRRTMGPMode,
+    t_start,
+    t_end;
+    output_writer,
+)
     rad_diagnostics = [
         "rsd",
         "rsdt",
@@ -196,14 +222,15 @@ function default_diagnostics(::RRTMGPI.AbstractRRTMGPMode, t_end; output_writer)
         "rlus",
     ]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
-    return [average_func(rad_diagnostics...; output_writer)...]
+    return [average_func(rad_diagnostics...; output_writer, t_start)...]
 end
 
 
 function default_diagnostics(
     ::RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics,
+    t_start,
     t_end;
     output_writer,
 )
@@ -232,18 +259,18 @@ function default_diagnostics(
         "rlutcs",
     ]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
     return [
-        average_func(rad_diagnostics...; output_writer)...,
-        average_func(rad_clearsky_diagnostics...; output_writer)...,
+        average_func(rad_diagnostics...; output_writer, t_start)...,
+        average_func(rad_clearsky_diagnostics...; output_writer, t_start)...,
     ]
 end
 
 ##################
 # Turbconv model #
 ##################
-function default_diagnostics(::PrognosticEDMFX, t_end; output_writer)
+function default_diagnostics(::PrognosticEDMFX, t_start, t_end; output_writer)
     edmfx_draft_diagnostics = [
         "arup",
         "rhoaup",
@@ -271,16 +298,16 @@ function default_diagnostics(::PrognosticEDMFX, t_end; output_writer)
         "lmix",
     ]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
     return [
-        average_func(edmfx_draft_diagnostics...; output_writer)...,
-        average_func(edmfx_env_diagnostics...; output_writer)...,
+        average_func(edmfx_draft_diagnostics...; output_writer, t_start)...,
+        average_func(edmfx_env_diagnostics...; output_writer, t_start)...,
     ]
 end
 
 
-function default_diagnostics(::DiagnosticEDMFX, t_end; output_writer)
+function default_diagnostics(::DiagnosticEDMFX, t_start, t_end; output_writer)
     diagnostic_edmfx_draft_diagnostics = [
         "arup",
         "rhoaup",
@@ -295,10 +322,18 @@ function default_diagnostics(::DiagnosticEDMFX, t_end; output_writer)
     ]
     diagnostic_edmfx_env_diagnostics = ["waen", "tke", "lmix"]
 
-    average_func = frequency_averages(t_end)
+    average_func = frequency_averages(t_start, t_end)
 
     return [
-        average_func(diagnostic_edmfx_draft_diagnostics...; output_writer)...,
-        average_func(diagnostic_edmfx_env_diagnostics...; output_writer)...,
+        average_func(
+            diagnostic_edmfx_draft_diagnostics...;
+            output_writer,
+            t_start,
+        )...,
+        average_func(
+            diagnostic_edmfx_env_diagnostics...;
+            output_writer,
+            t_start,
+        )...,
     ]
 end
