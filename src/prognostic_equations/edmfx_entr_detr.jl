@@ -229,7 +229,7 @@ function detrainment(
         exp(-max_area_limiter_power * (a_max - min(ᶜaʲ, 1)))
 
     if ᶜρaʲ <= 0
-        detr = 0
+        detr = FT(0)
     else
         detr =
             detr_inv_tau +

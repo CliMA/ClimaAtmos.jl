@@ -215,9 +215,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
     for j in 1:n
         # entrainment/detrainment
-        if p.atmos.edmfx_entr_model isa StochasticEntrainmentExponentialSolver
-            nothing
-        else
+        if !(p.atmos.edmfx_entr_model isa StochasticEntrainmentExponentialSolver)  # stoch entrainment is set differently.
             @. ᶜentrʲs.:($$j) = entrainment(  # create entrainment(..., ::SDEntrModel) = [...] ᶜentrʲs.:($$j) (use if/else to pass entrjs...)
                 params,
                 ᶜz,
@@ -243,9 +241,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
-        if p.atmos.edmfx_detr_model isa StochasticDetrainmentExponentialSolver
-            nothing
-        else
+        if !(p.atmos.edmfx_detr_model isa StochasticDetrainmentExponentialSolver)  # stoch detrainment is set differently
             @. ᶜdetrʲs.:($$j) = detrainment(
                 params,
                 ᶜz,
