@@ -196,6 +196,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
 
     (; ᶜtke⁰, ᶜu, ᶜp, ᶜρa⁰, ᶠu³⁰, ᶜts⁰, ᶜq_tot⁰) = p.precomputed
     (;
+        ᶜmixing_length_tuple,
         ᶜmixing_length,
         ᶜlinear_buoygrad,
         ᶜstrain_rate_norm,
@@ -307,7 +308,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     end
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
-    @. ᶜmixing_length = mixing_length(
+    @. ᶜmixing_length_tuple = mixing_length(
         p.params,
         ustar,
         ᶜz,
@@ -321,6 +322,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+
+    @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)

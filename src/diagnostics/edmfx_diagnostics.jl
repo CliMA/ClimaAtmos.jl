@@ -883,6 +883,93 @@ add_diagnostic_variable!(
 )
 
 ###
+# Environment Wall Constrained Mixing Length (3d)
+###
+compute_lmixw!(out, state, cache, time) =
+    compute_lmixw!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_lmixw!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("lmixw", turbconv_model)
+
+function compute_lmixw!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜmixing_length_tuple.wall)
+    else
+        out .= cache.precomputed.ᶜmixing_length_tuple.wall
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lmixw",
+    long_name = "Environment Wall Constrained Mixing Length",
+    units = "m",
+    compute! = compute_lmixw!,
+)
+
+###
+# Environment TKE Balanced Mixing Length (3d)
+###
+compute_lmixtke!(out, state, cache, time) =
+    compute_lmixtke!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_lmixtke!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("lmixtke", turbconv_model)
+
+function compute_lmixtke!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜmixing_length_tuple.tke)
+    else
+        out .= cache.precomputed.ᶜmixing_length_tuple.tke
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lmixtke",
+    long_name = "Environment TKE Balanced Mixing Length",
+    units = "m",
+    compute! = compute_lmixtke!,
+)
+
+###
+# Environment Stability Mixing Length (3d)
+###
+compute_lmixb!(out, state, cache, time) =
+    compute_lmixb!(out, state, cache, time, cache.atmos.turbconv_model)
+compute_lmixb!(_, _, _, _, turbconv_model::T) where {T} =
+    error_diagnostic_variable("lmixb", turbconv_model)
+
+function compute_lmixb!(
+    out,
+    state,
+    cache,
+    time,
+    turbconv_model::Union{PrognosticEDMFX, DiagnosticEDMFX},
+)
+    if isnothing(out)
+        return copy(cache.precomputed.ᶜmixing_length_tuple.buoy)
+    else
+        out .= cache.precomputed.ᶜmixing_length_tuple.buoy
+    end
+end
+
+add_diagnostic_variable!(
+    short_name = "lmixb",
+    long_name = "Environment Static Stability Mixing Length",
+    units = "m",
+    compute! = compute_lmixb!,
+)
+
+###
 # Diffusivity of heat (3d)
 ###
 compute_edt!(out, state, cache, time) = compute_edt!(
