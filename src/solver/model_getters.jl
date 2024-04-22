@@ -427,6 +427,8 @@ function get_entrainment_model(parsed_args)
         GeneralizedEntrainment()
     elseif entr_model == "GeneralizedHarmonics"
         GeneralizedHarmonicsEntrainment()
+    elseif entr_model == "StochasticEntrainmentExponentialSolver"
+        StochasticEntrainmentExponentialSolver()
     else
         error("Invalid entr_model $(entr_model)")
     end
@@ -444,6 +446,8 @@ function get_detrainment_model(parsed_args)
         GeneralizedHarmonicsDetrainment()
     elseif detr_model == "ConstantArea"
         ConstantAreaDetrainment()
+    elseif detr_model == "StochasticDetrainmentExponentialSolver"
+        StochasticDetrainmentExponentialSolver()
     else
         error("Invalid detr_model $(detr_model)")
     end

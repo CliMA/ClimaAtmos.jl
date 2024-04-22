@@ -183,6 +183,7 @@ struct NoEntrainment <: AbstractEntrainmentModel end
 struct PiGroupsEntrainment <: AbstractEntrainmentModel end
 struct GeneralizedEntrainment <: AbstractEntrainmentModel end
 struct GeneralizedHarmonicsEntrainment <: AbstractEntrainmentModel end
+struct StochasticEntrainmentExponentialSolver <: AbstractEntrainmentModel end
 
 abstract type AbstractDetrainmentModel end
 
@@ -191,6 +192,7 @@ struct PiGroupsDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedDetrainment <: AbstractDetrainmentModel end
 struct GeneralizedHarmonicsDetrainment <: AbstractDetrainmentModel end
 struct ConstantAreaDetrainment <: AbstractDetrainmentModel end
+struct StochasticDetrainmentExponentialSolver <: AbstractDetrainmentModel end
 
 abstract type AbstractQuadratureType end
 struct LogNormalQuad <: AbstractQuadratureType end

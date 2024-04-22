@@ -44,17 +44,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT} <: ATCP
     max_area_limiter_power::FT
 end
 
-Base.@kwdef struct ClimaAtmosParameters{
-    FT,
-    TP,
-    RP,
-    IP,
-    MPC,
-    MPP,
-    WP,
-    SFP,
-    TCP,
-} <: ACAP
+Base.@kwdef struct ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP, SP} <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
     insolation_params::IP
@@ -63,6 +53,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     water_params::WP
     surface_fluxes_params::SFP
     turbconv_params::TCP
+    stochastic_params::SP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT
@@ -126,4 +117,28 @@ for var in fieldnames(ClimaAtmosParameters)
     @eval $var(ps::ACAP) = ps.$var
 end
 
+## Stochastic OU parameters
+Base.@kwdef struct StochasticParameters{SE,SD}
+    # entr_τ::FT
+    # entr_μ::FT
+    # entr_σ::FT
+    # detr_τ::FT
+    # detr_μ::FT
+    # detr_σ::FT
+    entr::SE
+    detr::SD
 end
+
+Base.@kwdef struct StochasticEntrainment{FT}
+    τ::FT
+    σ::FT
+    μ::FT
+end
+
+Base.@kwdef struct StochasticDetrainment{FT}
+    τ::FT
+    σ::FT
+    μ::FT
+end
+
+end # module

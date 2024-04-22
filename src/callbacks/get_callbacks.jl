@@ -289,5 +289,13 @@ function get_callbacks(config, sim_info, atmos, params, Y, p, t_start)
             (callbacks..., call_every_dt(rrtmgp_model_callback!, dt_rad))
     end
 
+    # stochastic 
+    if  parsed_args["edmfx_entr_model"] == "StochasticEntrainmentExponentialSolver"
+        callbacks = (callbacks..., call_every_n_steps(set_stochastic_entrainment_with_exponential_solver!))
+    end
+    if parsed_args["edmfx_detr_model"] == "StochasticDetrainmentExponentialSolver"
+        callbacks = (callbacks..., call_every_n_steps(set_stochastic_detrainment_with_exponential_solver!))
+    end
+
     return callbacks
 end

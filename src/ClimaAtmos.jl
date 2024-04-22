@@ -29,6 +29,7 @@ include(joinpath("cache", "precipitation_precomputed_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "cloud_fraction.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
+include(joinpath("cache", "stochastic_entr_detr.jl"))
 
 include(joinpath("initial_conditions", "InitialConditions.jl"))
 include(

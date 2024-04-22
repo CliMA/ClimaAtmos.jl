@@ -126,7 +126,26 @@ function create_parameter_set(config::AtmosConfig)
         :water_refractive_index => :water_refractive_index,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP}(;
+
+    # Stochastic parameters
+    name_map = (;  # entrainment
+        :sde_entr_tau => :τ,
+        :sde_entr_sigma => :σ,
+        :sde_entr_mu => :μ,
+    )
+    stoch_entr = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    stoch_entr = CAP.StochasticEntrainment(;stoch_entr...)
+    name_map = (;  # detrainment
+        :sde_detr_tau => :τ,
+        :sde_detr_sigma => :σ,
+        :sde_detr_mu => :μ,
+    )
+    stoch_detr = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    stoch_detr = CAP.StochasticDetrainment(; stoch_detr...)
+    stochastic_params = CAP.StochasticParameters(entr=stoch_entr, detr=stoch_detr)
+    SP = typeof(stochastic_params)
+
+    return CAP.ClimaAtmosParameters{FT, TP, RP, IP, MPC, MPP, WP, SFP, TCP, SP}(;
         parameters...,
         thermodynamics_params,
         rrtmgp_params,
@@ -136,5 +155,6 @@ function create_parameter_set(config::AtmosConfig)
         water_params,
         surface_fluxes_params,
         turbconv_params,
+        stochastic_params,
     )
 end

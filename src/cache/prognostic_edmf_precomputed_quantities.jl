@@ -215,22 +215,26 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
     ᶜmassflux_vert_div = p.scratch.ᶜtemp_scalar_2
     for j in 1:n
         # entrainment/detrainment
-        @. ᶜentrʲs.:($$j) = entrainment(
-            params,
-            ᶜz,
-            z_sfc,
-            ᶜp,
-            Y.c.ρ,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
-            TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜu, ᶜlg),
-            TD.relative_humidity(thermo_params, ᶜts⁰),
-            FT(0),
-            max(ᶜtke⁰, 0),
-            p.atmos.edmfx_entr_model,
-        )
+        if p.atmos.edmfx_entr_model isa StochasticEntrainmentExponentialSolver
+            nothing
+        else
+            @. ᶜentrʲs.:($$j) = entrainment(  # create entrainment(..., ::SDEntrModel) = [...] ᶜentrʲs.:($$j) (use if/else to pass entrjs...)
+                params,
+                ᶜz,
+                z_sfc,
+                ᶜp,
+                Y.c.ρ,
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+                TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
+                ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
+                get_physical_w(ᶜu, ᶜlg),
+                TD.relative_humidity(thermo_params, ᶜts⁰),
+                FT(0),
+                max(ᶜtke⁰, 0),
+                p.atmos.edmfx_entr_model,
+            )
+        end
         @. ᶜentrʲs.:($$j) = limit_entrainment(
             ᶜentrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
@@ -239,26 +243,30 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         @. ᶜvert_div = ᶜdivᵥ(ᶠinterp(ᶜρʲs.:($$j)) * ᶠu³ʲs.:($$j)) / ᶜρʲs.:($$j)
         @. ᶜmassflux_vert_div =
             ᶜdivᵥ(ᶠinterp(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j))
-        @. ᶜdetrʲs.:($$j) = detrainment(
-            params,
-            ᶜz,
-            z_sfc,
-            ᶜp,
-            Y.c.ρ,
-            Y.c.sgsʲs.:($$j).ρa,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
-            TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
-            ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜu, ᶜlg),
-            TD.relative_humidity(thermo_params, ᶜts⁰),
-            FT(0),
-            ᶜentrʲs.:($$j),
-            ᶜvert_div,
-            ᶜmassflux_vert_div,
-            ᶜtke⁰,
-            p.atmos.edmfx_detr_model,
-        )
+        if p.atmos.edmfx_detr_model isa StochasticDetrainmentExponentialSolver
+            nothing
+        else
+            @. ᶜdetrʲs.:($$j) = detrainment(
+                params,
+                ᶜz,
+                z_sfc,
+                ᶜp,
+                Y.c.ρ,
+                Y.c.sgsʲs.:($$j).ρa,
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+                TD.relative_humidity(thermo_params, ᶜtsʲs.:($$j)),
+                ᶜphysical_buoyancy(params, Y.c.ρ, ᶜρʲs.:($$j)),
+                get_physical_w(ᶜu, ᶜlg),
+                TD.relative_humidity(thermo_params, ᶜts⁰),
+                FT(0),
+                ᶜentrʲs.:($$j),
+                ᶜvert_div,
+                ᶜmassflux_vert_div,
+                ᶜtke⁰,
+                p.atmos.edmfx_detr_model,
+            )
+        end
         @. ᶜdetrʲs.:($$j) = limit_detrainment(
             ᶜdetrʲs.:($$j),
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
