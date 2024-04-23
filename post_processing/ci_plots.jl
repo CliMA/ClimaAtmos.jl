@@ -648,6 +648,7 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return get(simdir; short_name, reduction)
     end
@@ -704,6 +705,7 @@ function make_plots(
 )
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return get(simdir; short_name, reduction)
     end
