@@ -61,7 +61,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, colidx, ::GCMForcing)
     # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜspecific, ᶜts) = p.precomputed
+    (; ᶜspecific, ᶜts, ᶜh_tot) = p.precomputed
     (;
         ᶜdTdt_fluc,
         ᶜdqtdt_fluc,
@@ -105,6 +105,7 @@ function external_forcing_tendency!(Yₜ, Y, p, t, colidx, ::GCMForcing)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
     cv_v = TD.Parameters.cv_v(thermo_params)
     R_v = TD.Parameters.R_v(thermo_params)
+    # total energy
     @. Yₜ.c.ρe_tot[colidx] +=
         Y.c.ρ[colidx] * (
             TD.cv_m(thermo_params, ᶜts[colidx]) * ᶜdTdt_sum[colidx] +
@@ -113,7 +114,27 @@ function external_forcing_tendency!(Yₜ, Y, p, t, colidx, ::GCMForcing)
                 Lv_0 - R_v * T_0
             ) * ᶜdqtdt_sum[colidx]
         )
+    # total specific humidity
     @. Yₜ.c.ρq_tot[colidx] += Y.c.ρ[colidx] * ᶜdqtdt_sum[colidx]
+
+    ## subsidence -->
+    tom(f) = Spaces.level(f, Spaces.nlevels(axes(f)))  # get value at top of the model
+    wvec = Geometry.WVector
+    RBh = Operators.RightBiasedC2F(;
+        top = Operators.SetValue(tom(ᶜh_tot[colidx])),
+    )
+    RBq = Operators.RightBiasedC2F(;
+        top = Operators.SetValue(tom(ᶜspecific.q_tot[colidx])),
+    )
+    @. Yₜ.c.ρe_tot[colidx] -=
+        Y.c.ρ[colidx] *
+        ᶜls_subsidence[colidx] *
+        ᶜdivᵥ(wvec(RBh(ᶜh_tot[colidx])))  # ρ⋅w⋅∇h_tot
+    @. Yₜ.c.ρq_tot[colidx] -=
+        Y.c.ρ[colidx] *
+        ᶜls_subsidence[colidx] *
+        ᶜdivᵥ(wvec(RBq(ᶜspecific.q_tot[colidx])))  # ρ⋅w⋅∇q_tot
+    # <-- subsidence
 
     return nothing
 end
