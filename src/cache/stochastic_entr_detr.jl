@@ -75,7 +75,6 @@ function get_deterministic_entrainment(integrator, colⱼ)
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜtke⁰, ᶜu, ᶜp, ᶜts⁰, ᶜuʲs, ᶜtsʲs, ᶜρʲs) = p.precomputed
     FT = eltype(Y)
-    FT = Float32
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -107,8 +106,7 @@ function get_deterministic_detrainment(integrator, colⱼ)
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜtke⁰, ᶜu, ᶜp, ᶜts⁰, ᶜuʲs, ᶜtsʲs, ᶠu³ʲs, ᶜρʲs) = p.precomputed
-    # FT = eltype(Y)
-    FT = Float32
+    FT = eltype(Y)
 
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
