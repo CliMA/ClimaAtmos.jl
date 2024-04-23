@@ -227,6 +227,24 @@ add_diagnostic_variable!(
 )
 
 ###
+# Total kinetic energy
+###
+add_diagnostic_variable!(
+    short_name = "ke",
+    long_name = "Total Kinetic Energy",
+    standard_name = "total_kinetic_energy",
+    units = "m^2 s^-2",
+    comments = "The kinetic energy on cell centers",
+    compute! = (out, state, cache, time) -> begin
+        if isnothing(out)
+            return copy(cache.precomputed.ᶜK)
+        else
+            out .= cache.precomputed.ᶜK
+        end
+    end,
+)
+
+###
 # Mixing length (3d)
 ###
 add_diagnostic_variable!(

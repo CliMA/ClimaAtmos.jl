@@ -280,13 +280,57 @@ function make_plots_generic(
 end
 
 """
-    make_spectra_generic
+    compute_spectrum(var)
 
-Use ClimaCoreSpectra to compute and plot spectra for the given `vars`.
-
-Extra arguments are passed to `ClimaAnalysis.slice`
-
+Compute the spectrum associated to the given variable. Returns a ClimaAnalysis.OutputVar.
 """
+function compute_spectrum(var; mass_weight = nothing)
+    # power_spectrum_2d seems to work only when the two dimensions have precisely one
+    # twice as many points as the other
+    dim1, dim2, dim3 = var.index2dim[1:3]
+
+    len1 = length(var.dims[dim1])
+    len2 = length(var.dims[dim2])
+
+    len1 == 2len2 || error("Cannot take this spectrum ($len1 != 2 $len2)")
+
+    (dim1 == "lon" || dim1 == "long") ||
+        error("First dimension has to be longitude (found $dim1)")
+    dim2 == "lat" || error("Second dimension has to be latitude (found $dim2)")
+    dim3 == "z" || error("Third dimension has to be altitude (found $dim3)")
+
+    FT = eltype(var.data)
+    mass_weight =
+        isnothing(mass_weight) ? ones(FT, length(var.dims[dim3])) : mass_weight
+    spectrum_data, wave_numbers, _spherical, mesh_info =
+        power_spectrum_2d(FT, var.data, mass_weight)
+
+    power_spectrum =
+        dropdims(sum(spectrum_data, dims = 1), dims = 1)[begin:(end - 1), :]
+
+    w_numbers = collect(0:1:(mesh_info.num_spherical - 1))
+
+    dims = Dict("Spherical Wavenumber" => w_numbers, dim3 => var.dims[dim3])
+
+    dim_attributes = Dict(
+        "Spherical Wavenumber" => Dict("units" => ""),
+        dim3 => var.dim_attributes[dim3],
+    )
+
+    attributes = Dict(
+        "short_name" => "log_spectrum_" * var.attributes["short_name"],
+        "long_name" => "Spectrum of " * var.attributes["long_name"],
+        "units" => "",
+    )
+
+    return ClimaAnalysis.OutputVar(
+        attributes,
+        dims,
+        dim_attributes,
+        log.(power_spectrum),
+    )
+end
+
 function make_spectra_generic(
     output_path,
     vars,
@@ -307,7 +351,7 @@ function make_spectra_generic(
             dim1, dim2 = var.index2dim[1:2]
 
             length(var.dims[dim1]) == 2 * length(var.dims[dim2]) ||
-                error("Cannot take a this spectrum")
+                error("Cannot take this spectrum")
 
             FT = eltype(var.data)
             mass_weight = ones(FT, 1)
@@ -315,30 +359,27 @@ function make_spectra_generic(
                 power_spectrum_2d(FT, var.data, mass_weight)
 
             # From ClimaCoreSpectra/examples
-            X = collect(0:1:(mesh_info.num_fourier))
             Y = collect(0:1:(mesh_info.num_spherical))
             Z = spectrum_data[:, :, 1]
 
-            dims = Dict("num_fourier" => X, "num_spherical" => Y)
-            dim_attributes = Dict(
-                "num_fourier" => Dict("units" => ""),
-                "num_spherical" => Dict("units" => ""),
-            )
+            dims = Dict("Spherical Wavenumber" => Y)
+            dim_attributes =
+                Dict("Spherical Wavenumber" => Dict("units" => ""))
 
             attributes = Dict(
-                "short_name" => "log fft_" * var.attributes["short_name"],
+                "short_name" =>
+                    "log_spectrum_" * var.attributes["short_name"],
                 "long_name" => "Spectrum of " * var.attributes["long_name"],
                 "units" => "",
             )
-            path = nothing
 
             return ClimaAnalysis.OutputVar(
                 attributes,
                 dims,
                 dim_attributes,
                 log.(Z),
-                path,
             )
+
         end |> collect
 
     make_plots_generic(output_path, spectra, args...; output_name, kwargs...)
@@ -574,10 +615,19 @@ DryBaroWavePlots = Union{Val{:sphere_baroclinic_wave_rhoe}}
 function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
+    short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = LAST_SNAP)
     end
-    make_plots_generic(output_paths, vars, z = 1500, time = LAST_SNAP)
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = LAST_SNAP),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
+
+    make_plots_generic(output_paths, vars, z = 1500)
 end
 
 function make_plots(
@@ -601,6 +651,14 @@ function make_plots(
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return get(simdir; short_name, reduction)
     end
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = 10days),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
+
     make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
@@ -649,6 +707,13 @@ function make_plots(
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         return get(simdir; short_name, reduction)
     end
+    vars_spectra =
+        map_comparison(simdirs, short_names_spectra) do simdir, short_name
+            compute_spectrum(
+                slice(get(simdir; short_name, reduction), time = 10days),
+            )
+        end
+    vars = vcat(vars..., vars_spectra...)
     make_plots_generic(output_paths, vars, z = 1500, time = 10days)
 end
 
@@ -1126,6 +1191,7 @@ function make_plots(::EDMFSpherePlots, output_paths::Vector{<:AbstractString})
 
     short_names =
         ["ua", "wa", "waup", "thetaa", "ta", "taup", "haup", "tke", "arup"]
+
     reduction = "average"
     period = "1h"
     latitudes = [0.0, 30.0, 60.0, 90.0]
