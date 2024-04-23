@@ -76,7 +76,7 @@ steps:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --trace=osrt,nvtx,cuda,mpi,ucx --output=gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/report-%q{PMI_RANK}
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"

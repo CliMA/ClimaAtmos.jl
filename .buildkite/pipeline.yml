@@ -660,9 +660,10 @@ steps:
       - label: "GPU: baroclinic wave"
         key: "gpu_baroclinic_wave_rhoe"
         command: >
+          nsys profile --trace=nvtx,cuda --output=gpu_baroclinic_wave_rhoe/output_active/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $PERF_CONFIG_PATH/gpu_baroclinic_wave_rhoe.yml
-        artifact_paths: "gpu_implicit_barowave_ref/output_active/*"
+        artifact_paths: "gpu_baroclinic_wave_rhoe/output_active/*"
         agents:
           slurm_mem: 16G
           slurm_gpus: 1
@@ -697,7 +698,7 @@ steps:
       - label: "GPU: GPU dry baroclinic wave - 4 gpus"
         key: "target_gpu_implicit_baroclinic_wave_4process"
         command:
-            # nsys profile --trace=nvtx,cuda,mpi --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
+            nsys profile --trace=nvtx,mpi,cuda,osrt --output=target_gpu_implicit_baroclinic_wave_4process/output_active/report-%q{PMI_RANK}
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
             srun --cpu-bind=threads --cpus-per-task=4
@@ -756,6 +757,7 @@ steps:
 
       - label: "GPU: Prognostic EDMFX aquaplanet"
         command: >
+          nsys profile --trace=nvtx,cuda --output=gpu_prognostic_edmfx_aquaplanet/output_active/report
           julia --color=yes --project=examples examples/hybrid/driver.jl
           --config_file $GPU_CONFIG_PATH/gpu_prognostic_edmfx_aquaplanet.yml
         artifact_paths: "gpu_prognostic_edmfx_aquaplanet/output_active/*"
