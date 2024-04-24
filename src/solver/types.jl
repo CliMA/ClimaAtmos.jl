@@ -153,6 +153,12 @@ end
 Base.eltype(::EnvBuoyGradVars{FT}) where {FT} = FT
 Base.broadcastable(x::EnvBuoyGradVars) = tuple(x)
 
+struct MixingLength{FT}
+    master::FT
+    wall::FT
+    tke::FT
+    buoy::FT
+end
 
 abstract type AbstractEDMF end
 

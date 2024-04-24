@@ -766,7 +766,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; ᶜρaʲs, ᶠu³ʲs, ᶜdetrʲs) = p.precomputed
     (; ᶜtke⁰, ᶠu³⁰, ᶜu⁰) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm, ᶜmixing_length) = p.precomputed
+    (;
+        ᶜlinear_buoygrad,
+        ᶜstrain_rate_norm,
+        ᶜmixing_length_tuple,
+        ᶜmixing_length,
+    ) = p.precomputed
     (; ᶜK_h, ᶜK_u, ρatke_flux) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -816,7 +821,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
 
     sfc_tke = Fields.level(ᶜtke⁰, 1)
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
-    @. ᶜmixing_length = mixing_length(
+    @. ᶜmixing_length_tuple = mixing_length(
         params,
         ustar,
         ᶜz,
@@ -830,6 +835,7 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         ᶜprandtl_nvec,
         ᶜtke_exch,
     )
+    @. ᶜmixing_length = ᶜmixing_length_tuple.master
 
     turbconv_params = CAP.turbconv_params(params)
     c_m = CAP.tke_ed_coeff(turbconv_params)

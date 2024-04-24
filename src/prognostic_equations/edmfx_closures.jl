@@ -251,7 +251,7 @@ function mixing_length(
     l_smin = lamb_smooth_minimum(l, smin_ub, smin_rm)
     l_limited = max(l_smag, min(l_smin, l_z))
 
-    return l_limited
+    return MixingLength{FT}(l_limited, l_W, l_TKE, l_N)
 end
 
 """
