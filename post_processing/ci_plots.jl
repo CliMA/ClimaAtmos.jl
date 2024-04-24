@@ -610,7 +610,10 @@ function make_plots(
     )
 end
 
-DryBaroWavePlots = Union{Val{:sphere_baroclinic_wave_rhoe}}
+DryBaroWavePlots = Union{
+    Val{:sphere_baroclinic_wave_rhoe},
+    Val{:sphere_baroclinic_wave_rhoe_deepatmos},
+}
 
 function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
@@ -665,6 +668,7 @@ end
 
 function make_plots(
     ::Val{:sphere_baroclinic_wave_rhoe_equilmoist},
+    ::Val{:sphere_baroclinic_wave_rhoe_equilmoist_deepatmos},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
