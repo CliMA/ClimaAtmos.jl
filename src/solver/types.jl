@@ -115,7 +115,9 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dqtdt::PQ # Set large-scale drying
 end
 # maybe need to <: AbstractForcing
-struct GCMForcing end
+struct GCMForcing{S}
+    external_forcing_file::S
+end
 
 struct EDMFCoriolis{U, V, FT}
     prof_ug::U

@@ -362,7 +362,7 @@ function get_external_forcing_model(parsed_args)
     return if isnothing(external_forcing)
         nothing
     elseif external_forcing == "GCM"
-        GCMForcing()
+        GCMForcing(parsed_args["external_forcing_file"])
     end
 end
 
