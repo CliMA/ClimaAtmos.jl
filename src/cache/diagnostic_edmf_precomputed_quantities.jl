@@ -782,16 +782,12 @@ NVTX.@annotate function set_diagnostic_edmf_precomputed_quantities_env_closures!
         BuoyGradMean(),
         thermo_params,
         moisture_model,
-        EnvBuoyGradVars(
-            ᶜts,
-            projected_vector_buoy_grad_vars(
-                C3,
-                p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
-                p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
-                p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
-                ᶜlg,
-            ),
-        ),
+        ᶜts,
+        C3,
+        p.precomputed.ᶜgradᵥ_θ_virt,    # ∂θv∂z_unsat
+        p.precomputed.ᶜgradᵥ_q_tot,     # ∂qt∂z_sat
+        p.precomputed.ᶜgradᵥ_θ_liq_ice, # ∂θl∂z_sat
+        ᶜlg,
     )
 
     # TODO: Currently the shear production only includes vertical gradients
