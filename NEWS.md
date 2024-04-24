@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 Main
 -------
+- Move config files for gpu jobs on ci to config/model_configs/. 
+  PR [#2948](https://github.com/CliMA/ClimaAtmos.jl/pull/2948).
 
 v0.23.0
 -------
