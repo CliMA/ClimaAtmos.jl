@@ -73,6 +73,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶜf³, ᶠf¹², ᶜΦ) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
@@ -116,6 +117,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                     coeff,
                     Yₜ.c.ρe_tot[colidx],
                     ᶜJ[colidx],
+                    ᶠJ[colidx],
                     Y.c.ρ[colidx],
                     ᶠu³[colidx],
                     ᶜh_tot[colidx],
@@ -132,6 +134,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                     coeff,
                     ᶜρχₜ[colidx],
                     ᶜJ[colidx],
+                    ᶠJ[colidx],
                     Y.c.ρ[colidx],
                     ᶠu³[colidx],
                     ᶜχ[colidx],
@@ -184,6 +187,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             vertical_transport!(
                 Yₜ.c.sgs⁰.ρatke[colidx],
                 ᶜJ[colidx],
+                ᶠJ[colidx],
                 ᶜρ⁰[colidx],
                 ᶠu³⁰[colidx],
                 ᶜa_scalar[colidx],
@@ -209,6 +213,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; edmfx_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶠKᵥʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
@@ -244,6 +249,7 @@ function edmfx_sgs_vertical_advection_tendency!(
         vertical_transport!(
             Yₜ.c.sgsʲs.:($j).ρa[colidx],
             ᶜJ[colidx],
+            ᶠJ[colidx],
             ᶜρʲs.:($j)[colidx],
             ᶠu³ʲs.:($j)[colidx],
             ᶜa_scalar[colidx],

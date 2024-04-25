@@ -20,6 +20,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
@@ -35,6 +36,7 @@ function edmfx_sgs_mass_flux_tendency!(
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
+                ᶠJ[colidx],
                 ᶜρʲs.:($j)[colidx],
                 ᶠu³_diff_colidx,
                 ᶜa_scalar_colidx,
@@ -49,6 +51,7 @@ function edmfx_sgs_mass_flux_tendency!(
         vertical_transport!(
             Yₜ.c.ρe_tot[colidx],
             ᶜJ[colidx],
+            ᶠJ[colidx],
             ᶜρ⁰[colidx],
             ᶠu³_diff_colidx,
             ᶜa_scalar_colidx,
@@ -66,6 +69,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
+                    ᶠJ[colidx],
                     ᶜρʲs.:($j)[colidx],
                     ᶠu³_diff_colidx,
                     ᶜa_scalar_colidx,
@@ -80,6 +84,7 @@ function edmfx_sgs_mass_flux_tendency!(
             vertical_transport!(
                 Yₜ.c.ρq_tot[colidx],
                 ᶜJ[colidx],
+                ᶠJ[colidx],
                 ᶜρ⁰[colidx],
                 ᶠu³_diff_colidx,
                 ᶜa_scalar_colidx,
@@ -111,6 +116,7 @@ function edmfx_sgs_mass_flux_tendency!(
     (; ᶜρaʲs, ᶜρʲs, ᶠu³ʲs, ᶜKʲs, ᶜmseʲs, ᶜq_totʲs) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     FT = eltype(Y)
 
     if p.atmos.edmfx_sgs_mass_flux
@@ -140,6 +146,7 @@ function edmfx_sgs_mass_flux_tendency!(
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
+                ᶠJ[colidx],
                 ᶜρʲs.:($j)[colidx],
                 ᶠu³_diff_colidx,
                 ᶜa_scalar_colidx,
@@ -175,6 +182,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
+                    ᶠJ[colidx],
                     ᶜρʲs.:($j)[colidx],
                     ᶠu³_diff_colidx,
                     ᶜa_scalar_colidx,

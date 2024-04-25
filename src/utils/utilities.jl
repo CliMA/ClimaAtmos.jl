@@ -61,11 +61,11 @@ function compute_kinetic!(κ::Fields.Field, uₕ::Fields.Field, uᵥ::Fields.Fie
     @assert eltype(uₕ) <: Union{C1, C2, C12}
     @assert eltype(uᵥ) <: C3
     @. κ =
-        1 / 2 * (
-            dot(C123(uₕ), CT123(uₕ)) +
-            ᶜinterp(dot(C123(uᵥ), CT123(uᵥ))) +
-            2 * dot(CT123(uₕ), ᶜinterp(C123(uᵥ)))
-        )
+        (
+            dot(uₕ, CT12(uₕ) + CT12(ᶜinterp(uᵥ))) +
+            dot(ᶜinterp(uᵥ), CT3(uₕ)) +
+            ᶜinterp(dot(uᵥ, CT3(uᵥ)))
+        ) / 2
 end
 
 """
