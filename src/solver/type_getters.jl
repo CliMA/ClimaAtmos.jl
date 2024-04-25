@@ -355,6 +355,9 @@ function get_initial_condition(parsed_args)
         "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+    elseif parsed_args["initial_condition"] == "GCM"
+        @assert parsed_args["prognostic_tke"] == true
+        return ICs.GCMDriven(parsed_args["external_forcing_file"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",

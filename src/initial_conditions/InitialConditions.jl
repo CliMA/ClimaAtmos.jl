@@ -16,6 +16,8 @@ import ..C12
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
+import ..read_gcm_driven_initial_profile
+import ..read_gcm_driven_reference_profile
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile
@@ -27,6 +29,7 @@ import Thermodynamics as TD
 import AtmosphericProfilesLibrary as APL
 import SciMLBase
 import Dierckx
+import NCDatasets as NC
 
 include("local_state.jl")
 include("atmos_state.jl")

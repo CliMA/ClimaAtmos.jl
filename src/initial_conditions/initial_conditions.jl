@@ -1124,3 +1124,66 @@ function (initial_condition::PrecipitatingColumn)(params)
     end
     return local_state
 end
+
+"""
+    GCMDriven
+
+The `InitialCondition` from a provided GCM forcing file.
+"""
+Base.@kwdef struct GCMDriven <: InitialCondition
+    external_forcing_file::String = error("No forcing file provided")
+end
+
+function (initial_condition::GCMDriven)(params)
+    (; external_forcing_file) = initial_condition
+    thermo_params = CAP.thermodynamics_params(params)
+
+    # Read forcing file
+    z_gcm = read_gcm_z(external_forcing_file)
+    θ, u, v, q_tot, ρ₀ =
+        map(read_gcm_initial_conditions(external_forcing_file)) do value
+            Dierckx.Spline1D(z_gcm, value; k = 1)
+        end
+
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        FT = typeof(z)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts = TD.PhaseEquil_ρθq(
+                thermo_params,
+                FT(ρ₀(z)),
+                FT(θ(z)),
+                FT(q_tot(z)),
+            ),
+            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
+            turbconv_state = EDMFState(; tke = FT(0)),
+        )
+    end
+    return local_state
+end
+
+function read_gcm_z(external_forcing_file)
+    NC.NCDataset(external_forcing_file) do ds
+        read_gcm_driven_reference_profile(Float64, ds, "reference", "z")
+    end
+end
+
+function read_gcm_initial_conditions(external_forcing_file)
+    NC.NCDataset(external_forcing_file) do ds
+        (
+            # Note: `Float64` is type of the read GCM data, different from `FT` used elsewhere
+            read_gcm_driven_initial_profile(
+                Float64,
+                ds,
+                "profiles",
+                "thetali_mean",
+            ),
+            read_gcm_driven_initial_profile(Float64, ds, "profiles", "u_mean"),
+            read_gcm_driven_initial_profile(Float64, ds, "profiles", "v_mean"),
+            read_gcm_driven_initial_profile(Float64, ds, "profiles", "qt_mean"),
+            read_gcm_driven_reference_profile(Float64, ds, "reference", "rho0"),
+        )
+    end
+end

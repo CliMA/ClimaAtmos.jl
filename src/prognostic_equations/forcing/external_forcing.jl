@@ -6,17 +6,12 @@ import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 import NCDatasets as NC
-import StatsBase
 import Dierckx
 
 function interp_vertical_prof(x, xp, fp)
     spl = Dierckx.Spline1D(xp, fp; k = 1)
     return spl(vec(x))
 end
-
-mean_nc_data(data, group, var; imin = 100) =
-    StatsBase.mean(data.group[group][var][:, :][:, imin:end], dims = 2)[:]
-init_nc_data(data, group, var) = data.group[group][var][:, :][:, 1]
 
 external_forcing_cache(Y, atmos::AtmosModel) =
     external_forcing_cache(Y, atmos.external_forcing)
@@ -44,7 +39,12 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                mean_nc_data(ds, "profiles", varname),
+                read_gcm_driven_initial_profile_mean(
+                    Float64,  # note: `Float64` is type from dataset
+                    ds,
+                    "profiles",
+                    varname,
+                ),
             )
         end
 
@@ -52,7 +52,12 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                init_nc_data(ds, "profiles", varname),
+                read_gcm_driven_initial_profile(
+                    Float64,
+                    ds,
+                    "profiles",
+                    varname,
+                ),
             )
         end
 
