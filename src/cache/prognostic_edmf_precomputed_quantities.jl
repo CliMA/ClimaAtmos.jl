@@ -267,21 +267,22 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_closures!(
         )
     end
 
+    (; ᶜgradᵥ_θ_virt⁰, ᶜgradᵥ_q_tot⁰, ᶜgradᵥ_θ_liq_ice⁰) = p.precomputed
     # First order approximation: Use environmental mean fields.
+    @. ᶜgradᵥ_θ_virt⁰ = ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰)))       # ∂θv∂z_unsat
+    @. ᶜgradᵥ_q_tot⁰ = ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰))                                        # ∂qt∂z_sat
+    @. ᶜgradᵥ_θ_liq_ice⁰ =
+        ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰)))                    # ∂θl∂z_sat
     @. ᶜlinear_buoygrad = buoyancy_gradients(
         BuoyGradMean(),
         thermo_params,
         moisture_model,
-        EnvBuoyGradVars(
-            ᶜts⁰,
-            projected_vector_buoy_grad_vars(
-                C3,
-                ᶜgradᵥ(ᶠinterp(TD.virtual_pottemp(thermo_params, ᶜts⁰))),    # ∂θv∂z_unsat
-                ᶜgradᵥ(ᶠinterp(ᶜq_tot⁰)),                                    # ∂qt∂z_sat
-                ᶜgradᵥ(ᶠinterp(TD.liquid_ice_pottemp(thermo_params, ᶜts⁰))), # ∂θl∂z_sat
-                ᶜlg,
-            ),
-        ),
+        ᶜts⁰,
+        C3,
+        ᶜgradᵥ_θ_virt⁰,
+        ᶜgradᵥ_q_tot⁰,
+        ᶜgradᵥ_θ_liq_ice⁰,
+        ᶜlg,
     )
 
     # TODO: Currently the shear production only includes vertical gradients
