@@ -2,10 +2,11 @@ job_id: "prognostic_edmfx_simpleplume_column"
 initial_condition: "SimplePlume"
 surface_setup: "SimplePlume"
 turbconv: "prognostic_edmfx"
-implicit_diffusion: true
+implicit_diffusion: false
 implicit_sgs_advection: true
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 3
+advection_test: true
 zero_tendency: "grid_scale"
 edmfx_upwinding: first_order
 edmfx_entr_model: "Generalized"
@@ -21,8 +22,8 @@ z_max: 4e3
 z_elem: 80
 z_stretch: false
 perturb_initstate: false
-dt: 20secs"
-t_end: "12hours"
+dt: 200secs"
+t_end: "6hours"
 dt_save_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_simpleplume.toml]
 netcdf_interpolation_num_points: [2, 2, 80]

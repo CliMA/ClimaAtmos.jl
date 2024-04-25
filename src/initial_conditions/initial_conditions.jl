@@ -594,7 +594,7 @@ function (initial_condition::SimplePlume)(params)
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
-            turbconv_state = EDMFState(; tke = FT(0)),
+            turbconv_state = EDMFState(; tke = FT(0), velocity = Geometry.WVector(FT(10.0))),
         )
     end
     return local_state
