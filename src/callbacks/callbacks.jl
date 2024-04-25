@@ -8,7 +8,6 @@ import ClimaCore as CC
 import ClimaCore.Spaces
 import SciMLBase
 import .Parameters as CAP
-import DiffEqCallbacks as DECB
 import ClimaCore: InputOutput
 using Dates
 using Insolation: instantaneous_zenith_angle

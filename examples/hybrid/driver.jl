@@ -27,7 +27,6 @@ import Thermodynamics as TD
 import ClimaComms
 using SciMLBase
 using PrettyTables
-import DiffEqCallbacks as DECB
 using JLD2
 using NCDatasets
 using ClimaTimeSteppers
