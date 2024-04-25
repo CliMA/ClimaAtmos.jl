@@ -504,6 +504,7 @@ end
 
 function make_plots(
     ::Val{:box_density_current_test},
+    ::Val{:box_rising_thermal_test},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)

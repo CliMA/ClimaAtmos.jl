@@ -44,57 +44,59 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
     FT = eltype(νₜ)
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    uvw_boundary = Geometry.UVWVector(0, 0, 0)
-    ᶠ∇ᵥ = Operators.GradientC2F(
-        bottom = Operators.SetValue(uvw_boundary),
-        top = Operators.SetValue(uvw_boundary),
-    )
-    ᶜ∇ᵥ = Operators.GradientF2C()
 
+    ᶜS  = p.scratch.ᶜtemp_strain
+    ᶠS  = p.scratch.ᶠtemp_strain
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     
     localu = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
+    co_ᶠu = @. Geometry.Covariant123Vector(ᶠinterp(Y.c.uₕ)) + Geometry.Covariant123Vector(ᶠu³)
 
-    t1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
-    t2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
-    t3 = @. Geometry.UVWVector(hgrad(localu.components.data.:3))
-    tᵥ₁ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:3
-    tᵥ₂ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:6
-    tᵥ₃ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:9
+    c1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
+    c2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
+    c3 = @. Geometry.UVWVector(hgrad(localu.components.data.:3))
+    @. ᶜS.components.data.:1 = c1.components.data.:1
+    @. ᶜS.components.data.:2 = c2.components.data.:1
+    @. ᶜS.components.data.:3 = c3.components.data.:1
+    @. ᶜS.components.data.:4 = c1.components.data.:2
+    @. ᶜS.components.data.:5 = c2.components.data.:2
+    @. ᶜS.components.data.:6 = c3.components.data.:2
+    CA.compute_strain_rate_center!(ᶜϵ, co_ᶠu)
+    @. ᶜS = 1/2 * (ᶜS + adjoint(ᶜS)) + ᶜϵ
 
-    @. ᶜϵ.components.data.:1 = t1.components.data.:1
-    @. ᶜϵ.components.data.:2 = t2.components.data.:1
-    @. ᶜϵ.components.data.:3 = t3.components.data.:1
-    @. ᶜϵ.components.data.:4 = t1.components.data.:2
-    @. ᶜϵ.components.data.:5 = t2.components.data.:2
-    @. ᶜϵ.components.data.:6 = t3.components.data.:2
-    @. ᶜϵ.components.data.:7 = tᵥ₁
-    @. ᶜϵ.components.data.:8 = tᵥ₂
-    @. ᶜϵ.components.data.:9 = tᵥ₃
+    t1 = @. Geometry.UVWVector(hgrad(ᶠu.components.data.:1))
+    t2 = @. Geometry.UVWVector(hgrad(ᶠu.components.data.:2))
+    t3 = @. Geometry.UVWVector(hgrad(ᶠu.components.data.:3))
+    @. ᶠS.components.data.:1 = t1.components.data.:1
+    @. ᶠS.components.data.:2 = t2.components.data.:1
+    @. ᶠS.components.data.:3 = t3.components.data.:1
+    @. ᶠS.components.data.:4 = t1.components.data.:2
+    @. ᶠS.components.data.:5 = t2.components.data.:2
+    @. ᶠS.components.data.:6 = t3.components.data.:2
+    CA.compute_strain_rate_face!(ᶠϵ, ᶜu)
+    @. ᶠS = 1/2 * (ᶠS + adjoint(ᶠS)) + ᶠϵ
 
-    S = @. (ᶜϵ + adjoint(ᶜϵ))/2
-
-    ᶠS = @. ᶠinterp(S)
-    Spaces.weighted_dss!(S)
+    Spaces.weighted_dss!(ᶜS)
     Spaces.weighted_dss!(ᶠS)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(S / 2))
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
     ᶠνₜ = @. ᶠinterp(ᶜνₜ)
     ᶜD = @. FT(3) * ᶜνₜ
-    
+
+    @. νₜ = ᶜνₜ
 
     ᶠρ = @. ᶠinterp(Y.c.ρ)
     
-    @. Yₜ.c.uₕ -= @. C12(wdivₕ(Y.c.ρ * ᶜνₜ * S)) / Y.c.ρ
+    @. Yₜ.c.uₕ -= @. C12(wdivₕ(Y.c.ρ * ᶜνₜ * ᶜS)) / Y.c.ρ
     @. Yₜ.f.u₃ -= @. C3(wdivₕ(ᶠρ * ᶠνₜ * ᶠS)) / ᶠρ
 
     # energy adjustment
     (; ᶜspecific) = p.precomputed
 
     if :ρe_tot in propertynames(Yₜ.c)
-        (; ᶜh_tot) = p.precomputed
-        @. Yₜ.c.ρe_tot += divₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot)) 
+       (; ᶜh_tot) = p.precomputed
+        @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜh_tot)) 
     end
 
     # q_tot and other tracer adjustment
@@ -104,7 +106,7 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl::SmagorinskyLi
         # The code below adjusts the tendency by -div(\rho * d_qtot), where
         # d_qtot = -(D * grad(qtot)). The two negatives cancel out, so we have a +=
 
-        @. ᶜρχₜ += divₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
+        @. ᶜρχₜ += wdivₕ(Y.c.ρ * ᶜD * gradₕ(ᶜχ)) 
     end
 end
 
@@ -136,54 +138,52 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
     FT = eltype(νₜ)
     wdivₕ = Operators.WeakDivergence()
     hgrad = Operators.Gradient()
-    # No-Slip Wall
-    uvw_boundary = Geometry.UVWVector(0, 0, 0)
-    ᶠ∇ᵥ = Operators.GradientC2F(
-        bottom = Operators.SetValue(uvw_boundary),
-        top = Operators.SetValue(uvw_boundary),
-    )
     
-    ᶜ∇ᵥ = Operators.GradientF2C()
-
+    ᶜS  = p.scratch.ᶜtemp_strain
+    ᶠS  = p.scratch.ᶠtemp_strain
     ᶜϵ = p.scratch.ᶜtemp_UVWxUVW
     ᶠϵ = p.scratch.ᶠtemp_UVWxUVW
     
     localu = @. Geometry.UVWVector(ᶜu)
     ᶠu = @. Geometry.UVWVector(ᶠinterp(Y.c.uₕ)) + Geometry.UVWVector(ᶠu³)
+    co_ᶠu = @. Geometry.Covariant123Vector(ᶠinterp(Y.c.uₕ)) + Geometry.Covariant123Vector(ᶠu³)
 
-    t1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
-    t2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
-    t3 = @. Geometry.UVWVector(hgrad(localu.components.data.:3))
-    tᵥ₁ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:3
-    tᵥ₂ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:6
-    tᵥ₃ = @. Geometry.project(Geometry.UVWAxis(), ᶜ∇ᵥ(ᶠu)).components.data.:9
+    c1 = @. Geometry.UVWVector(hgrad(localu.components.data.:1))
+    c2 = @. Geometry.UVWVector(hgrad(localu.components.data.:2))
+    c3 = @. Geometry.UVWVector(hgrad(localu.components.data.:3))
+    @. ᶜS.components.data.:1 = c1.components.data.:1
+    @. ᶜS.components.data.:2 = c2.components.data.:1
+    @. ᶜS.components.data.:3 = c3.components.data.:1
+    @. ᶜS.components.data.:4 = c1.components.data.:2
+    @. ᶜS.components.data.:5 = c2.components.data.:2
+    @. ᶜS.components.data.:6 = c3.components.data.:2
+    CA.compute_strain_rate_center!(ᶜϵ, co_ᶠu)
+    @. ᶜS = 1/2 * (ᶜS + adjoint(ᶜS)) + ᶜϵ
 
-    @. ᶜϵ.components.data.:1 = t1.components.data.:1
-    @. ᶜϵ.components.data.:2 = t2.components.data.:1
-    @. ᶜϵ.components.data.:3 = t3.components.data.:1
-    @. ᶜϵ.components.data.:4 = t1.components.data.:2
-    @. ᶜϵ.components.data.:5 = t2.components.data.:2
-    @. ᶜϵ.components.data.:6 = t3.components.data.:2
-    @. ᶜϵ.components.data.:7 = tᵥ₁
-    @. ᶜϵ.components.data.:8 = tᵥ₂
-    @. ᶜϵ.components.data.:9 = tᵥ₃
+    t1 = @. Geometry.UVWVector(hgrad(ᶠu.components.data.:1))
+    t2 = @. Geometry.UVWVector(hgrad(ᶠu.components.data.:2))
+    t3 = @. Geometry.UVWVector(hgrad(ᶠu.components.data.:3))
+    @. ᶠS.components.data.:1 = t1.components.data.:1
+    @. ᶠS.components.data.:2 = t2.components.data.:1
+    @. ᶠS.components.data.:3 = t3.components.data.:1
+    @. ᶠS.components.data.:4 = t1.components.data.:2
+    @. ᶠS.components.data.:5 = t2.components.data.:2
+    @. ᶠS.components.data.:6 = t3.components.data.:2
+    CA.compute_strain_rate_face!(ᶠϵ, ᶜu)
+    @. ᶠS = 1/2 * (ᶠS + adjoint(ᶠS)) + ᶠϵ
 
-    S = @. (ᶜϵ + adjoint(ᶜϵ))/2
-
-    @. ᶠϵ = ᶠinterp(ᶜϵ)
-    Spaces.weighted_dss!(ᶜϵ)
-    Spaces.weighted_dss!(ᶠϵ)
-    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(S / 2))
+    Spaces.weighted_dss!(ᶜS)
+    Spaces.weighted_dss!(ᶠS)
+    ᶜνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶜS))
+    #ᶠνₜ = @. (Cs * Δ_filter)^2 * sqrt(2 * CA.norm_sqr(ᶠS))
     ᶠνₜ = @. ᶠinterp(ᶜνₜ)
     ᶜD = @. FT(3) * ᶜνₜ
-
     
     # Smagorinsky Computations ####
     ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
         top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         bottom = Operators.SetValue(sfc_conditions.ρ_flux_uₕ[colidx]),
     )
-
     @. Yₜ.c.uₕ[colidx] -= C12(
         ᶜdivᵥ(
             -2 *
@@ -192,12 +192,13 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, colidx, sl::Smagori
             ᶠϵ[colidx],
         ) / Y.c.ρ[colidx],
     )
+    @. Yₜ.c.uₕ[colidx] -=
+        ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ[colidx]))) / Y.c.ρ[colidx]
 
-    divᵥ_u3 = Operators.DivergenceC2F(
+    ᶜdivᵥ_u3 = Operators.DivergenceC2F(
         top = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))),
         bottom = Operators.SetValue(C3(FT(0)) ⊗ C3(FT(0))), 
     )
-
     @. Yₜ.f.u₃[colidx] -= C3(
         ᶠinterp(ᶜdivᵥ(
             -2 *
