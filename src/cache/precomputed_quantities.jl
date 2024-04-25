@@ -101,6 +101,9 @@ function precomputed_quantities(Y, atmos)
             ᶜentrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜdetrʲs = similar(Y.c, NTuple{n, FT}),
             ᶠnh_pressure₃ʲs = similar(Y.f, NTuple{n, C3{FT}}),
+            ᶜgradᵥ_θ_virt⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_q_tot⁰ = Fields.Field(C3{FT}, cspace),
+            ᶜgradᵥ_θ_liq_ice⁰ = Fields.Field(C3{FT}, cspace),
             precipitation_sgs_quantities...,
         ) : (;)
     sgs_quantities = (;
