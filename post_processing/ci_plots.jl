@@ -620,12 +620,12 @@ function make_plots(::DryBaroWavePlots, output_paths::Vector{<:AbstractString})
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
     short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return slice(get(simdir; short_name, reduction), time = LAST_SNAP)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
             compute_spectrum(
-                slice(get(simdir; short_name, reduction), time = LAST_SNAP),
+                slice(get(simdir; short_name, reduction), time = 10days),
             )
         end
     vars = vcat(vars..., vars_spectra...)
@@ -653,7 +653,7 @@ function make_plots(
     short_names, reduction = ["pfull", "va", "wa", "rv"], "inst"
     short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
@@ -663,7 +663,7 @@ function make_plots(
         end
     vars = vcat(vars..., vars_spectra...)
 
-    make_plots_generic(output_paths, vars, z = 1500, time = 10days)
+    make_plots_generic(output_paths, vars, z = 1500)
 end
 
 function make_plots(
@@ -711,7 +711,7 @@ function make_plots(
     short_names, reduction = ["pfull", "va", "wa", "rv", "hus"], "inst"
     short_names_spectra = ["ke"]
     vars = map_comparison(simdirs, short_names) do simdir, short_name
-        return get(simdir; short_name, reduction)
+        return slice(get(simdir; short_name, reduction), time = 10days)
     end
     vars_spectra =
         map_comparison(simdirs, short_names_spectra) do simdir, short_name
@@ -720,7 +720,7 @@ function make_plots(
             )
         end
     vars = vcat(vars..., vars_spectra...)
-    make_plots_generic(output_paths, vars, z = 1500, time = 10days)
+    make_plots_generic(output_paths, vars, z = 1500)
 end
 
 DryHeldSuarezPlots = Union{
