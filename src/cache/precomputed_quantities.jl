@@ -503,6 +503,10 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
     #     compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     # end
 
+    if precip_model isa Microphysics1Moment
+        set_precipitation_precomputed_quantities!(Y, p, t)
+    end
+
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft_and_bc!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
@@ -620,10 +624,6 @@ NVTX.@annotate function set_precomputed_quantities!(Y, p, t)
             Ri_c,
             κ,
         )
-    end
-
-    if precip_model isa Microphysics1Moment
-        set_precipitation_precomputed_quantities!(Y, p, t)
     end
 
     # TODO
