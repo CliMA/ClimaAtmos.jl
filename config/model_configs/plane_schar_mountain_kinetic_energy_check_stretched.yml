@@ -1,0 +1,21 @@
+check_kinetic_energy: true
+dt_save_state_to_disk: "3600secs"
+initial_condition: "ModifiedScharProfile"
+x_max: 120000.0
+z_elem: 45
+dt: "0.5secs"
+t_end: "120secs"
+dz_top: 1000.0
+x_elem: 100
+dz_bottom: 200.0
+use_reference_state: false
+ode_algo: "SSP33ShuOsher"
+config: "plane"
+hyperdiff: "false"
+z_max: 25000.0
+topography: "Schar"
+job_id: "plane_schar_mountain_kinetic_energy_check_stretched"
+toml: [toml/plane_schar_mountain_test_stretched.toml]
+diagnostics:
+  - short_name: wa
+    period: 4hours

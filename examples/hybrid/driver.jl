@@ -162,6 +162,16 @@ if config.parsed_args["check_conservation"]
     end
 end
 
+# Kinetic energy conservation check
+if config.parsed_args["check_kinetic_energy"]
+    Y_0 = sol.u[1]
+    Y_1 = sol.u[end]
+    ρK_0 = sum(Y_0.c.ρ .* CA.compute_kinetic!(similar(Y_0.c.ρ), Y_0))
+    ρK_1 = sum(Y_1.c.ρ .* CA.compute_kinetic!(similar(Y_1.c.ρ), Y_1))
+    @info "    Relative kinetic energy change: $((ρK_1 - ρK_0) / ρK_0)"
+    @test abs(ρK_1 - ρK_0) <= 2 * eps(ρK_0)
+end
+
 # Precipitation characteristic checks
 if config.parsed_args["check_precipitation"]
     # run some simple tests based on the output
