@@ -226,6 +226,9 @@ check_conservation:
 check_precipitation:
   help: "Sanity checks for 1-moment precipitation [`false` (default), `true`]"
   value: false
+check_kinetic_energy:
+  help: "Whether to disable the effects of pressure, gravity, and the Coriolis force on velocity, and also check that kinetic energy is conserved at the end of the simulation"
+  value: false
 ls_adv:
   help: "Large-scale advection [`nothing` (default), `Bomex`, `LifeCycleTan2018`, `Rico`, `ARM_SGP`, `GATE_III`]"
   value: ~

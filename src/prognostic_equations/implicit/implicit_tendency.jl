@@ -160,6 +160,7 @@ vertical_advection!(ᶜρχₜ, ᶠu³, ᶜχ, ::Val{:third_order}) =
 
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
     (; moisture_model, turbconv_model, rayleigh_sponge, precip_model) = p.atmos
+    (; check_kinetic_energy) = p.atmos
     (; dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -213,11 +214,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t, colidx)
         )
     end
 
-    @. Yₜ.f.u₃[colidx] +=
-        -(
-            ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
-            ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
-        ) / ᶠinterp(Y.c.ρ[colidx])
+    if !check_kinetic_energy
+        @. Yₜ.f.u₃[colidx] +=
+            -(
+                ᶠgradᵥ(ᶜp[colidx] - ᶜp_ref[colidx]) +
+                ᶠinterp(Y.c.ρ[colidx] - ᶜρ_ref[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]
+            ) / ᶠinterp(Y.c.ρ[colidx])
+    end
 
     if rayleigh_sponge isa RayleighSponge
         (; ᶠβ_rayleigh_w) = p.rayleigh_sponge

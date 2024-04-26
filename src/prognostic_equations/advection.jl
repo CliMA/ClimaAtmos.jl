@@ -39,8 +39,11 @@ NVTX.@annotate function horizontal_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.sgs⁰.ρatke -= wdivₕ(Y.c.sgs⁰.ρatke * ᶜu⁰)
     end
 
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp - ᶜp_ref) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
-    # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+    if p.atmos.check_kinetic_energy
+        @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK))
+    else
+        @. Yₜ.c.uₕ -= C12(gradₕ(ᶜp - ᶜp_ref) / Y.c.ρ + gradₕ(ᶜK + ᶜΦ))
+    end # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
     return nothing
 end
 
@@ -230,11 +233,18 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶜleft_bias(ᶠKᵥʲs.:($$j)[colidx]),
             ᶜright_bias(ᶠKᵥʲs.:($$j)[colidx]),
         )
-        # For the updraft u_3 equation, we assume the grid-mean to be hydrostatic
-        # and calcuate the buoyancy term relative to the grid-mean density.
-        @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
-            (ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) * ᶠgradᵥ_ᶜΦ[colidx]) /
-            ᶠinterp(ᶜρʲs.:($$j)[colidx]) + ᶠgradᵥ(ᶜKᵥʲ[colidx])
+
+        if p.atmos.check_kinetic_energy
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -= ᶠgradᵥ(ᶜKᵥʲ[colidx])
+        else
+            # Assume the grid-mean to be hydrostatic and calcuate the buoyancy
+            # term relative to the grid-mean density.
+            @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
+                (
+                    ᶠinterp(ᶜρʲs.:($$j)[colidx] - Y.c.ρ[colidx]) *
+                    ᶠgradᵥ_ᶜΦ[colidx]
+                ) / ᶠinterp(ᶜρʲs.:($$j)[colidx]) + ᶠgradᵥ(ᶜKᵥʲ[colidx])
+        end
 
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse[colidx] +=

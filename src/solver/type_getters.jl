@@ -95,8 +95,14 @@ function get_atmos(config::AtmosConfig, params)
         surface_model = get_surface_model(parsed_args),
         surface_albedo = get_surface_albedo_model(parsed_args, params, FT),
         numerics = get_numerics(parsed_args),
+        check_kinetic_energy = parsed_args["check_kinetic_energy"],
     )
     @assert !@any_reltype(atmos, (UnionAll, DataType))
+
+    if atmos.check_kinetic_energy
+        @assert isnothing(atmos.hyperdiff)
+        @assert isnothing(atmos.rayleigh_sponge)
+    end
 
     @info "AtmosModel: \n$(summary(atmos))"
     return atmos
@@ -141,7 +147,8 @@ function get_spaces(parsed_args, params, comms_ctx)
     bubble = parsed_args["bubble"]
     deep = parsed_args["deep_atmosphere"]
 
-    @assert topography in ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Schar")
+    @assert topography in
+            ("NoWarp", "DCMIP200", "Earth", "Agnesi", "Tall Schar", "Schar")
     if topography == "DCMIP200"
         warp_function = topography_dcmip200
     elseif topography == "Agnesi"
@@ -354,6 +361,8 @@ function get_initial_condition(parsed_args)
         "PrecipitatingColumn",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
+    elseif parsed_args["initial_condition"] == "ModifiedScharProfile"
+        return ICs.ScharProfile(; constant_velocity = false)
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",

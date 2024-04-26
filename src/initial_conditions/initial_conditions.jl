@@ -197,9 +197,12 @@ end
 
 An `InitialCondition` with a prescribed Brunt-Vaisala Frequency
 """
-Base.@kwdef struct ScharProfile <: InitialCondition end
+Base.@kwdef struct ScharProfile <: InitialCondition
+    constant_velocity::Bool = true
+end
 
 function (initial_condition::ScharProfile)(params)
+    (; constant_velocity) = initial_condition
     function local_state(local_geometry)
         FT = eltype(params)
 
@@ -219,13 +222,14 @@ function (initial_condition::ScharProfile)(params)
         T = π_exner * θ # temperature
         ρ = p₀ / (R_d * T) * (π_exner)^(cp_d / R_d)
         p = ρ * R_d * T
-        velocity = Geometry.UVVector(FT(10), FT(0))
+        u = constant_velocity ? FT(10) : FT(0.5) * sin(z)
+        v = constant_velocity ? FT(0) : FT(500) * sin(x / 1000)
 
         return LocalState(;
             params,
             geometry = local_geometry,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T),
-            velocity = velocity,
+            velocity = Geometry.UVVector(u, v),
         )
     end
     return local_state

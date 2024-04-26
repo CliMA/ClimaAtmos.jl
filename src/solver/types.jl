@@ -399,6 +399,7 @@ Base.@kwdef struct AtmosModel{
     surface_model::SM = nothing
     surface_albedo::SA = nothing
     numerics::NUM = nothing
+    check_kinetic_energy::Bool
 end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
