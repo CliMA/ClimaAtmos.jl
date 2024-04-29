@@ -11,10 +11,7 @@ env:
   OMPI_MCA_opal_warn_on_missing_libcuda: 0
   SLURM_KILL_BAD_EXIT: 1
   SLURM_GRES_FLAGS: "allow-task-sharing"
-  CONFIG_PATH: "config/model_configs"
   GPU_CONFIG_PATH: "config/gpu_configs/"
-  PERF_CONFIG_PATH: "config/perf_configs"
-  MPI_CONFIG_PATH: "config/mpi_configs"
   CLIMAATMOS_GC_NSTEPS: 10
 
 steps:
