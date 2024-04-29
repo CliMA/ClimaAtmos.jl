@@ -405,6 +405,8 @@ function atmos_surface_conditions(
             ),
             surface_local_geometry,
         ),
+        z0m = FT(0.1),
+        z0b = FT(0.1),
         energy_flux...,
         moisture_flux...,
     )
@@ -425,6 +427,8 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
         :obukhov_length,
         :buoyancy_flux,
         :ρ_flux_uₕ,
+        :z0m,
+        :z0b,
         energy_flux_names...,
         moisture_flux_names...,
     )
@@ -435,6 +439,8 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
         FT,
         FT,
         typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
+        FT, 
+        FT,
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,
     }
