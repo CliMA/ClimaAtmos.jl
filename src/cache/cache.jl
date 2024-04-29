@@ -159,6 +159,11 @@ function build_cache(Y, atmos, params, surface_setup, sim_info, aerosol_names)
         ᶠf¹² = nothing
     end
 
+    if atmos.check_kinetic_energy
+        @. ᶜf³ *= 0
+        isnothing(ᶠf¹²) || @. ᶠf¹² *= 0
+    end
+
     quadrature_style =
         Spaces.quadrature_style(Spaces.horizontal_space(axes(Y.c)))
     do_dss = quadrature_style isa Quadratures.GLL

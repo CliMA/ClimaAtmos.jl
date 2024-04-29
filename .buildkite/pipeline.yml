@@ -181,6 +181,12 @@ steps:
           --config_file $CONFIG_PATH/plane_density_current_test.yml
         artifact_paths: "plane_density_current_test/output_active/*"
 
+      - label: ":computer: Kinetic energy conservation check for Schar mountain experiment (stretched grid)"
+        command: >
+          julia --color=yes --project=examples examples/hybrid/driver.jl
+          --config_file $CONFIG_PATH/plane_schar_mountain_kinetic_energy_check_stretched.yml
+        artifact_paths: "plane_schar_mountain_kinetic_energy_check_stretched/output_active/*"
+
 
   - group: "Sphere Examples (Dycore)"
     steps:
