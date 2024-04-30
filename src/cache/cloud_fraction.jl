@@ -17,10 +17,12 @@ end
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     (; ᶜmixing_length) = p.precomputed
     (; turbconv_model) = p.atmos
+    FT = eltype(p.params)
     if isnothing(turbconv_model)
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
-    @. p.precomputed.ᶜcloud_fraction = 0
+    p.precomputed.cloud_diagnostics_tuple .=
+        ((; cf = FT(0), q_liq = FT(0), q_ice = FT(0)),)
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -30,7 +32,7 @@ NVTX.@annotate function set_cloud_fraction!(
 )
     (; params) = p
     (; turbconv_model) = p.atmos
-    (; ᶜts, ᶜmixing_length, ᶜcloud_fraction) = p.precomputed
+    (; ᶜts, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
@@ -46,7 +48,13 @@ NVTX.@annotate function set_cloud_fraction!(
         end
         compute_gm_mixing_length!(ᶜmixing_length, Y, p)
     end
-    @. ᶜcloud_fraction = ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0)
+    @. cloud_diagnostics_tuple = NamedTuple{(:cf, :q_liq, :q_ice)}(
+        tuple(
+            ifelse(TD.has_condensate(thermo_params, ᶜts), 1, 0),
+            TD.PhasePartition(thermo_params, ᶜts).liq,
+            TD.PhasePartition(thermo_params, ᶜts).ice,
+        ),
+    )
 end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
@@ -58,7 +66,7 @@ NVTX.@annotate function set_cloud_fraction!(
 
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜts, ᶜp, ᶜmixing_length, ᶜcloud_fraction) = p.precomputed
+    (; ᶜts, ᶜp, ᶜmixing_length, cloud_diagnostics_tuple) = p.precomputed
     (; turbconv_model) = p.atmos
     if isnothing(turbconv_model)
         if p.atmos.call_cloud_diagnostics_per_stage isa
@@ -76,7 +84,7 @@ NVTX.@annotate function set_cloud_fraction!(
     end
 
     coeff = FT(2.1) # TODO - move to parameters
-    @. ᶜcloud_fraction = quad_loop(
+    @. cloud_diagnostics_tuple = quad_loop(
         SG_quad,
         ᶜts,
         Geometry.WVector(p.precomputed.ᶜgradᵥ_q_tot),
@@ -101,7 +109,8 @@ where:
   - thermo params - thermodynamics parameters
 
 The function imposes additional limits on the quadrature points and
-returns cloud fraction computed as a sum over quadrature points.
+returns a tuple with cloud fraction, cloud liquid and cloud ice
+computed as a sum over quadrature points.
 """
 function quad_loop(
     SG_quad::SGSQuadrature,
@@ -158,13 +167,16 @@ function quad_loop(
         @assert(x2_hat >= FT(0))
         _ts = thermo_state(thermo_params; p = p_c, θ = x1_hat, q_tot = x2_hat)
         hc = TD.has_condensate(thermo_params, _ts)
-        return (;
-            cf = hc ? FT(1) : FT(0), # cloud fraction
-            q_tot_sat = hc ? x2_hat : FT(0), # cloudy/dry for buoyancy in TKE
-        )
+
+        cf = hc ? FT(1) : FT(0) # cloud fraction
+        q_tot_sat = hc ? x2_hat : FT(0) # cloudy/dry for buoyancy in TKE
+        q_liq = TD.PhasePartition(thermo_params, _ts).liq # cloud liquid for radiation
+        q_ice = TD.PhasePartition(thermo_params, _ts).ice # cloud ice for radiation
+
+        return (; cf, q_liq, q_ice)
     end
 
-    return quad(f, get_x_hat, SG_quad).cf
+    return quad(f, get_x_hat, SG_quad)
 end
 
 """

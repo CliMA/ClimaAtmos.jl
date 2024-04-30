@@ -219,9 +219,16 @@ if config.parsed_args["check_precipitation"]
         )
 
         # cloud fraction diagnostics
-        @assert !any(isnan, sol.prob.p.precomputed.ᶜcloud_fraction[colidx])
-        @test minimum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) >= FT(0)
-        @test maximum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) <= FT(1)
+        @assert !any(
+            isnan,
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        )
+        @test minimum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) >= FT(0)
+        @test maximum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) <= FT(1)
     end
 end
 

@@ -219,9 +219,9 @@ add_diagnostic_variable!(
     units = "%",
     compute! = (out, state, cache, time) -> begin
         if isnothing(out)
-            return copy(cache.precomputed.ᶜcloud_fraction) .* 100
+            return copy(cache.precomputed.cloud_diagnostics_tuple.cf) .* 100
         else
-            out .= cache.precomputed.ᶜcloud_fraction .* 100
+            out .= cache.precomputed.cloud_diagnostics_tuple.cf .* 100
         end
     end,
 )
@@ -376,13 +376,9 @@ function compute_clw!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.liquid_specific_humidity.(
-            thermo_params,
-            cache.precomputed.ᶜts,
-        )
+        return copy(cache.precomputed.cloud_diagnostics_tuple.q_liq)
     else
-        out .=
-            TD.liquid_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+        out .= cache.precomputed.cloud_diagnostics_tuple.q_liq
     end
 end
 
@@ -416,9 +412,9 @@ function compute_cli!(
 ) where {T <: Union{EquilMoistModel, NonEquilMoistModel}}
     thermo_params = CAP.thermodynamics_params(cache.params)
     if isnothing(out)
-        return TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+        return copy(cache.precomputed.cloud_diagnostics_tuple.q_ice)
     else
-        out .= TD.ice_specific_humidity.(thermo_params, cache.precomputed.ᶜts)
+        out .= cache.precomputed.cloud_diagnostics_tuple.q_ice
     end
 end
 
