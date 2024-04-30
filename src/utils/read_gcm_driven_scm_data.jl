@@ -2,29 +2,85 @@
 import NCDatasets as NC
 import StatsBase: mean
 
-read_gcm_driven_initial_profile_mean(FT, ds, group, varname; imin = 100) = vec(
-    mean(
-        _gcm_driven_variable_zt(FT, ds, group, varname)[:, imin:end],
-        dims = 2,
-    ),
-)
+"""
+    gcm_driven_profile(FT, ds, varname; imin = 100)
 
-# TODO: Cast to CuVector for GPU compatibility
-read_gcm_driven_initial_profile(FT, ds, group, varname) =
-    _gcm_driven_variable_zt(FT, ds, group, varname)[:, 1]  # 1 is initial time index
+Extract time-averaged data (`imin:end`) for `varname` from the "profile" group in the GCM-driven dataset `ds`
 
-read_gcm_driven_reference_profile(FT, ds, group, varname) =
-    _gcm_driven_variable_z(FT, ds, group, varname)[:]
+Returns a `Vector{FT}` of the time-averaged data.
 
-_gcm_driven_nz(ds) = ds.group["reference"].dim["z"]
+!!! note
 
-_gcm_driven_variable_zt(FT, ds, group, varname) =
-    _gcm_driven_variable(FT, ds, group, varname, ("z", "t"))
+    It is critical to provide the `FT` (e.g. `Float64`) associated with the variable in the dataset.
+    Otherwise, "garbage" data is returned with no warning.
+"""
+function gcm_driven_profile_tmean(FT, ds, varname; imin = 100)
+    vec(mean(gcm_driven_profile(FT, ds, varname)[:, imin:end]; dims = 2))
+end
 
-_gcm_driven_variable_z(FT, ds, group, varname) =
-    _gcm_driven_variable(FT, ds, group, varname, ("z",))
+"""
+    gcm_driven_profile(FT, ds, varname)
 
+Extract `varname` from the "profile" group in the GCM-driven dataset `ds`
 
+Returns an `NCDatasets.Variable` object.
+
+!!! note
+
+    It is critical to provide the `FT` (e.g. `Float64`) associated with the variable in the dataset.
+    Otherwise, "garbage" data is returned with no warning.
+"""
+function gcm_driven_profile(FT, ds, varname)
+    varname ∈ ("z", "z_half", "t") &&
+        throw(ArgumentError("This method does not support access to $varname"))
+    _gcm_driven_variable(FT, ds.group["profiles"], varname, ("z", "t"))
+end
+
+"""
+    gcm_driven_reference(FT, ds, varname)
+
+Extract `varname` from the "reference" group in the GCM-driven dataset `ds`
+
+Returns an `NCDatasets.Variable` object.
+
+!!! note
+
+    It is critical to provide the `FT` (e.g. `Float64`) associated with the variable in the dataset.
+    Otherwise, "garbage" data is returned with no warning.
+"""
+function gcm_driven_reference(FT, ds, varname)
+    dimnames = endswith(varname, "_full") ? ("z_full",) : ("z",)
+    _gcm_driven_variable(FT, ds.group["reference"], varname, dimnames)
+end
+
+"""
+    gcm_driven_timeseries(FT, ds, varname)
+
+Extract `varname` from the "timeseries" group in the GCM-driven dataset `ds`
+
+Returns an `NCDatasets.Variable` object.
+
+!!! note
+
+    It is critical to provide the `FT` (e.g. `Float64`) associated with the variable in the dataset.
+    Otherwise, "garbage" data is returned with no warning.
+"""
+gcm_driven_timeseries(FT, ds, varname) =
+    _gcm_driven_variable(FT, ds.group["timeseries"], varname, ("t",))
+
+"""
+    _gcm_driven_variable(FT, ds, varname, dimnames)
+
+Fetch a variable (`varname`) from a GCM-driven SCM NetCDF dataset (or subgroup) `ds`.
+
+Returns an `NCDatasets.Variable` object.
+
+!!! note
+
+    It is critical to provide _correct_ data type `FT` (e.g. `Float64`) and dimension names `dimnames`
+    associated with the variable in the dataset,
+    otherwise "garbage" data is returned with no warning (wrong `FT`), or an error is thrown (wrong `dimnames`).
+"""
 function _gcm_driven_variable(
     FT,
     ds,
@@ -34,15 +90,4 @@ function _gcm_driven_variable(
     dimids = NC.nc_inq_dimid.(ds.ncid, dimnames)
     varid = NC.nc_inq_varid(ds.ncid, varname)
     NC.Variable{FT, N, typeof(ds)}(ds, varid, dimids)
-end
-
-function _gcm_driven_variable(
-    FT,
-    ds,
-    group,
-    varname,
-    dimnames::NTuple{N, String},
-) where {N}
-    grp = ds.group[group]
-    _gcm_driven_variable(FT, grp, varname, dimnames)
 end

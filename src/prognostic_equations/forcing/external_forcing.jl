@@ -17,7 +17,10 @@ external_forcing_cache(Y, atmos::AtmosModel) =
     external_forcing_cache(Y, atmos.external_forcing)
 
 external_forcing_cache(Y, external_forcing::Nothing) = (;)
-function external_forcing_cache(Y, external_forcing::GCMForcing)
+function external_forcing_cache(
+    Y,
+    external_forcing::GCMForcing{DType},
+) where {DType}
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -33,18 +36,14 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
     ᶜls_subsidence = similar(Y.c, FT)
 
     external_forcing_file = external_forcing.external_forcing_file
+    imin = 100  # TODO: move into `GCMForcing` (and `parsed_args`)
 
     NC.Dataset(external_forcing_file, "r") do ds
         function setvar!(cc_field, varname, colidx, zc_gcm, zc_les)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                read_gcm_driven_initial_profile_mean(
-                    Float64,  # note: `Float64` is type from dataset
-                    ds,
-                    "profiles",
-                    varname,
-                ),
+                gcm_driven_profile_tmean(DType, ds, varname; imin),  # TODO: time-varying tendencies
             )
         end
 
@@ -52,18 +51,13 @@ function external_forcing_cache(Y, external_forcing::GCMForcing)
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                read_gcm_driven_initial_profile(
-                    Float64,
-                    ds,
-                    "profiles",
-                    varname,
-                ),
+                gcm_driven_profile(DType, ds, varname)[:, 1],
             )
         end
 
+        zc_les = gcm_driven_reference(DType, ds, "z")[:]
         Fields.bycolumn(axes(Y.c)) do colidx
 
-            zc_les = Array(ds.group["profiles"]["z_half"])
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]
 
             setvar!(ᶜdTdt_fluc, "dtdt_fluc", colidx, zc_gcm, zc_les)

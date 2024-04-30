@@ -16,8 +16,8 @@ import ..C12
 import ..PrognosticEDMFX
 import ..DiagnosticEDMFX
 import ..n_mass_flux_subdomains
-import ..read_gcm_driven_initial_profile
-import ..read_gcm_driven_reference_profile
+import ..gcm_driven_profile
+import ..gcm_driven_reference
 
 import Thermodynamics.TemperatureProfiles:
     DecayingTemperatureProfile, DryAdiabaticProfile
