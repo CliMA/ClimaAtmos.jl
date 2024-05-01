@@ -418,6 +418,103 @@ function shallow_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     return (; T_v, p, u, v)
 end
 
+function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmosphere)
+    FT = eltype(params)
+    R_d = CAP.R_d(params)
+    MSLP = CAP.MSLP(params)
+    grav = CAP.grav(params)
+    Ω = CAP.Omega(params)
+    R = CAP.planet_radius(params)
+
+    # Constants from paper (See Table 1. in Ullrich et al (2014)) 
+    k = 3         # Power for temperature field
+    T_e = FT(310) # Surface temperature at the equator
+    T_p = FT(240) # Surface temperature at the pole
+    T_0 = FT(0.5) * (T_e + T_p)
+    Γ = FT(0.005) # Lapse rate
+    A = 1 / Γ  # (Eq 16)
+    B = (T_0 - T_p) / T_0 / T_p # (Eq 17)
+    C = FT(0.5) * (k + 2) * (T_e - T_p) / T_e / T_p # (Eq 17)
+    b = 2 # half-width parameter
+    H = R_d * T_0 / grav
+    z_t = FT(15e3) # Top of perturbation domain
+    λ_c = FT(20) # Geographical location (λ dim) of perturbation center
+    ϕ_c = FT(40) # Geographical location (ϕ dim) of perturbation center
+    d_0 = R / 6
+    V_p = FT(1)
+
+    # Virtual temperature and pressure
+    τ̃₁ =
+        A * Γ / T_0 * exp(Γ * z / T_0) +
+        B * (1 - 2 * (z / b / H)^2) * exp(-(z / b / H)^2)# (Eq 14)
+    τ̃₂ = C * (1 - 2 * (z / b / H)^2) * exp(-(z / b / H)^2) # (Eq 15)
+    ∫τ̃₁ = (A * (exp(Γ * z / T_0) - 1)) + B * z * exp(-(z / b / H)^2) # (Eq A1)
+    ∫τ̃₂ = C * z * exp(-(z / b / H)^2) # (Eq A2)
+    I_T =
+        ((z + R) / R * cosd(ϕ))^k -
+        (k / (k + 2)) * ((z + R) / R * cosd(ϕ))^(k + 2)
+    T_v = FT((R / (z + R))^2 * (τ̃₁ - τ̃₂ * I_T)^(-1)) # (Eq A3)
+    p = FT(MSLP * exp(-grav / R_d * (∫τ̃₁ - ∫τ̃₂ * I_T))) # (Eq A6)
+    # Horizontal velocity
+    U =
+        grav / R *
+        k *
+        T_v *
+        ∫τ̃₂ *
+        (((z + R) * cosd(ϕ) / R)^(k - 1) - ((R + z) * cosd(ϕ) / R)^(k + 1)) # wind-proxy (Eq A4)
+    u = FT(
+        -Ω * (R + z) * cosd(ϕ) +
+        sqrt((Ω * (R + z) * cosd(ϕ))^2 + (R + z) * cosd(ϕ) * U),
+    )
+    v = FT(0)
+    if perturb
+        F_z = (1 - 3 * (z / z_t)^2 + 2 * (z / z_t)^3) * (z ≤ z_t)
+        r = R * acos(sind(ϕ_c) * sind(ϕ) + cosd(ϕ_c) * cosd(ϕ) * cosd(λ - λ_c))
+        c3 = cos(π * r / 2 / d_0)^3
+        s1 = sin(π * r / 2 / d_0)
+        cond = (0 < r < d_0) * (r != R * pi)
+        u +=
+            -16 * V_p / 3 / sqrt(FT(3)) *
+            F_z *
+            c3 *
+            s1 *
+            (-sind(ϕ_c) * cosd(ϕ) + cosd(ϕ_c) * sind(ϕ) * cosd(λ - λ_c)) /
+            sin(r / R) * cond
+        v +=
+            16 * V_p / 3 / sqrt(FT(3)) *
+            F_z *
+            c3 *
+            s1 *
+            cosd(ϕ_c) *
+            sind(λ - λ_c) / sin(r / R) * cond
+    end
+
+    # Adjust initial vertical velocity due to orography
+    h₀ = FT(2e3)
+    # Angles in degrees
+    ϕ₁ = FT(45)
+    ϕ₂ = FT(45)
+    λ_min = minimum(λ)
+    λ₁ = FT(72)
+    λ₂ = FT(140)
+    λₘ = FT(7)
+    ϕₘ = FT(40)
+    d = ϕₘ / 2 * (-log(0.1))^(-1 / 6)
+    c = λₘ / 2 * (-log(0.1))^(-1 / 2)
+    d₁ = (λ - λ_min) - λ₁
+    d₂ = (λ - λ_min) - λ₂
+    l₁ = λ - λ₁
+    l₂ = λ - λ₂
+
+    ∂l₁λ∂λ = d₁ < FT(π) ? FT(1) : FT(-1)
+    ∂l₂λ∂λ = d₂ < FT(π) ? FT(-1) : FT(-1)
+    zₛ₁ = @. exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2))
+    zₛ₂ = @. exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
+    w = -u/(R+z)/cosd(ϕ) * (2*h₀) * (1-(z/z_top)) * ((∂l₁λ∂λ) * (l₁/c^2) * zₛ₁
+                                                    +(∂l₂λ∂λ) * (l₂/c^2) * zₛ₂)
+    return (; T_v, p, u, v, w)
+end
+
 function deep_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     FT = eltype(params)
     R_d = CAP.R_d(params)
@@ -555,6 +652,40 @@ function (initial_condition::DryBaroclinicWave)(params)
             geometry = local_geometry,
             thermo_state = TD.PhaseDry_pT(thermo_params, p, T_v),
             velocity = Geometry.UVVector(u, v),
+        )
+    end
+    return local_state
+end
+
+"""
+    MoistHughes2023BaroclinicWave(; perturb = true, deep_atmosphere = false)
+
+An `InitialCondition` with a moist baroclinic wave, and with an optional
+perturbation to the horizontal velocity.
+"""
+Base.@kwdef struct MoistHughes2023BaroclinicWave <: InitialCondition
+    perturb::Bool = true
+    deep_atmosphere::Bool = false
+end
+
+function (initial_condition::MoistHughes2023BaroclinicWave)(params)
+    (; perturb, deep_atmosphere) = initial_condition
+    function local_state(local_geometry)
+        thermo_params = CAP.thermodynamics_params(params)
+        (; z, lat, long) = local_geometry.coordinates
+        (; p, T, q_tot, u, v, w) = hughes2023_baroclinic_wave_values(
+            z,
+            lat,
+            long,
+            params,
+            perturb,
+            deep_atmosphere,
+        )
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = TD.PhaseEquil_pTq(thermo_params, p, T, q_tot),
+            velocity = Geometry.UVWVector(u, v, w),
         )
     end
     return local_state
