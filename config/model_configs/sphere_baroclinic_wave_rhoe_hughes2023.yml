@@ -1,5 +1,5 @@
 dt_save_state_to_disk: "2days"
-initial_condition: "DryBaroclinicWave"
+initial_condition: "MoistHughes2023BaroclinicWave"
 topography: "Hughes2023"
 topo_smoothing: false
 dt: "400secs"

@@ -320,7 +320,7 @@ function get_initial_condition(parsed_args)
     if parsed_args["initial_condition"] in [
         "DryBaroclinicWave",
         "MoistBaroclinicWave",
-        ""
+        "MoistHughes2023BaroclinicWave",
         "MoistBaroclinicWaveWithEDMF",
     ]
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))(
