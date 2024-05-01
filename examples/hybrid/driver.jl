@@ -139,10 +139,14 @@ if config.parsed_args["check_conservation"]
             energy_radiation_input,
         ) / energy_total
     @info "    Net energy change: $energy_net"
-    @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
+    if CA.has_no_source_or_sink(config.parsed_args)
+        @test (energy_net / energy_total) ≈ 0 atol = 50 * eps(FT)
+    else
+        @test (energy_net / energy_total) ≈ 0 atol = sqrt(eps(FT))
+    end
 
-    if p.atmos.moisture_model isa CA.DryModel
-        # density
+    if CA.has_no_source_or_sink(config.parsed_args)
+        # mass
         @test sum(sol.u[1].c.ρ) ≈ sum(sol.u[end].c.ρ) rtol = 50 * eps(FT)
     else
         if sfc isa CA.PrognosticSurfaceTemperature
@@ -219,9 +223,16 @@ if config.parsed_args["check_precipitation"]
         )
 
         # cloud fraction diagnostics
-        @assert !any(isnan, sol.prob.p.precomputed.ᶜcloud_fraction[colidx])
-        @test minimum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) >= FT(0)
-        @test maximum(sol.prob.p.precomputed.ᶜcloud_fraction[colidx]) <= FT(1)
+        @assert !any(
+            isnan,
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        )
+        @test minimum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) >= FT(0)
+        @test maximum(
+            sol.prob.p.precomputed.cloud_diagnostics_tuple.cf[colidx],
+        ) <= FT(1)
     end
 end
 

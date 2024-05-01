@@ -57,7 +57,8 @@ function precomputed_quantities(Y, atmos)
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = Fields.Field(SCT, Spaces.level(axes(Y.f), half)),
     )
-    cloud_diagnostics = (; ᶜcloud_fraction = similar(Y.c, FT),)
+    cloud_diagnostics_tuple =
+        similar(Y.c, @NamedTuple{cf::FT, q_liq::FT, q_ice::FT})
     precipitation_sgs_quantities =
         atmos.precip_model isa Microphysics0Moment ?
         (; ᶜSqₜᵖʲs = similar(Y.c, NTuple{n, FT}), ᶜSqₜᵖ⁰ = similar(Y.c, FT)) :
@@ -160,7 +161,7 @@ function precomputed_quantities(Y, atmos)
         diagnostic_sgs_quantities...,
         vert_diff_quantities...,
         precipitation_quantities...,
-        cloud_diagnostics...,
+        cloud_diagnostics_tuple,
     )
 end
 
