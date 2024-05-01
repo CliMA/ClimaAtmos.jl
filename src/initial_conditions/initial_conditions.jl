@@ -1124,3 +1124,61 @@ function (initial_condition::PrecipitatingColumn)(params)
     end
     return local_state
 end
+
+"""
+    GCMDriven <: InitialCondition
+
+The `InitialCondition` from a provided GCM forcing file, with data type `DType`.
+"""
+struct GCMDriven{DType} <: InitialCondition
+    external_forcing_file::String
+end
+
+function (initial_condition::GCMDriven)(params)
+    thermo_params = CAP.thermodynamics_params(params)
+
+    # Read forcing file
+    z_gcm = gcm_z(initial_condition)
+    vars = gcm_initial_conditions(initial_condition)
+    θ, u, v, q_tot, ρ₀ = map(vars) do value
+        Dierckx.Spline1D(z_gcm, value; k = 1)
+    end
+
+    function local_state(local_geometry)
+        (; z) = local_geometry.coordinates
+        FT = typeof(z)
+        return LocalState(;
+            params,
+            geometry = local_geometry,
+            thermo_state = ts = TD.PhaseEquil_ρθq(
+                thermo_params,
+                FT(ρ₀(z)),
+                FT(θ(z)),
+                FT(q_tot(z)),
+            ),
+            velocity = Geometry.UVVector(FT(u(z)), FT(v(z))),
+            turbconv_state = EDMFState(; tke = FT(0)),
+        )
+    end
+    return local_state
+end
+
+# function gcm_z(external_forcing_file, FT::DataType)
+function gcm_z(ic::GCMDriven{FT}) where {FT}
+    NC.NCDataset(ic.external_forcing_file) do ds
+        gcm_driven_reference(FT, ds, "z")[:]
+    end
+end
+
+# function gcm_initial_conditions(external_forcing_file, FT)
+function gcm_initial_conditions(ic::GCMDriven{FT}) where {FT}
+    NC.NCDataset(ic.external_forcing_file) do ds
+        (  # TODO: Cast to CuVector for GPU compatibility
+            gcm_driven_profile(FT, ds, "thetali_mean")[:, 1],  # 1 is initial time index
+            gcm_driven_profile(FT, ds, "u_mean")[:, 1],
+            gcm_driven_profile(FT, ds, "v_mean")[:, 1],
+            gcm_driven_profile(FT, ds, "qt_mean")[:, 1],
+            gcm_driven_reference(FT, ds, "rho0")[:],
+        )
+    end
+end
