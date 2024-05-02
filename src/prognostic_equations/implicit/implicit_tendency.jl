@@ -44,6 +44,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         # NOTE: This will zero out all monmentum tendencies in the edmfx advection test
         # please DO NOT add additional velocity tendencies after this function
         zero_velocity_tendency!(Yₜ, Y, p, t, colidx)
+        Spaces.weighted_dss!(Yₜ.c => p.ghost_buffer.c, Yₜ.f => p.ghost_buffer.f)
 
     end
     # NOTE: This will zero out all tendencies
