@@ -418,7 +418,7 @@ function shallow_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     return (; T_v, p, u, v)
 end
 
-function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmosphere)
+function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb)
     FT = eltype(params)
     R_d = CAP.R_d(params)
     MSLP = CAP.MSLP(params)
@@ -506,13 +506,19 @@ function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmo
     l₁ = λ - λ₁
     l₂ = λ - λ₂
 
-    ∂l₁λ∂λ = d₁ < FT(180) ? FT(1) : FT(-1)
-    ∂l₂λ∂λ = d₂ < FT(180) ? FT(1) : FT(-1)
+    ∂l₁∂λ = d₁ < FT(180) ? FT(1) : FT(-1)
+    ∂l₂∂λ = d₂ < FT(180) ? FT(1) : FT(-1)
     zₛ₁ = @. exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2))
     zₛ₂ = @. exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
     z_top = maximum(z)
-    w = FT(-u/(R+z)/cosd(ϕ) * (2*h₀) * (1-(z/z_top)) * ((∂l₁λ∂λ) * (l₁/c^2) * zₛ₁
-                                                        +(∂l₂λ∂λ) * (l₂/c^2) * zₛ₂))
+    # Exact form here assumes Gal-Chen ∂z∂λ as in Hughes2023 paper.
+    # This assumption results in a closed form solution for `w`
+    # Hughes and Jablonowski also suggest that "initialization of the nonzero w profile can likely be omit
+    # ted in most models for moderately steep mountain profiles
+    # with initial vertical velocities of the order of 10−1 m s−1 or
+    # smaller"
+    w = FT(-u/(R+z)/cosd(ϕ) * (2*h₀) * (1-(z/z_top)) * ((∂l₁∂λ) * (l₁/c^2) * zₛ₁
+                                                        +(∂l₂∂λ) * (l₂/c^2) * zₛ₂))
 
     # Moisture
     p_w = FT(3.4e4)
@@ -693,7 +699,6 @@ function (initial_condition::MoistHughes2023BaroclinicWave)(params)
             long,
             params,
             perturb,
-            deep_atmosphere,
         )
         return LocalState(;
             params,
