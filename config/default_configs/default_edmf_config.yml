@@ -14,7 +14,7 @@ implicit_sgs_advection:
 edmf_coriolis:
   help: "EDMF coriolis [`nothing` (default), `Bomex`,`LifeCycleTan2018`,`Rico`,`ARM_SGP`,`DYCOMS_RF01`,`DYCOMS_RF02`,`GABLS`]"
   value: ~
-edmfx_velocity_relaxation:
+edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:

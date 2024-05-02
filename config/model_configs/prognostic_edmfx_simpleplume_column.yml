@@ -13,7 +13,7 @@ edmfx_detr_model: "Generalized"
 edmfx_sgs_mass_flux: false
 edmfx_sgs_diffusive_flux: false
 edmfx_nh_pressure: true
-edmfx_velocity_relaxation: true
+edmfx_filter: true
 prognostic_tke: false
 moist: "equil"
 config: "column"

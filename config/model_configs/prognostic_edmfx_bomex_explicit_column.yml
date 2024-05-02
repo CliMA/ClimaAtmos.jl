@@ -15,7 +15,7 @@ edmfx_detr_model: "PiGroups"
 edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 edmfx_nh_pressure: true
-edmfx_velocity_relaxation: true
+edmfx_filter: true
 prognostic_tke: true
 cloud_model: "grid_scale"
 moist: "equil"
