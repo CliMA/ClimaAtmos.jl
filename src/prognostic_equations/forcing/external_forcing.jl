@@ -17,10 +17,7 @@ external_forcing_cache(Y, atmos::AtmosModel) =
     external_forcing_cache(Y, atmos.external_forcing)
 
 external_forcing_cache(Y, external_forcing::Nothing) = (;)
-function external_forcing_cache(
-    Y,
-    external_forcing::GCMForcing{DType},
-) where {DType}
+function external_forcing_cache(Y, external_forcing::GCMForcing)
     FT = Spaces.undertype(axes(Y.c))
     ᶜdTdt_fluc = similar(Y.c, FT)
     ᶜdqtdt_fluc = similar(Y.c, FT)
@@ -35,7 +32,7 @@ function external_forcing_cache(
     ᶜτ_scalar = similar(Y.c, FT)
     ᶜls_subsidence = similar(Y.c, FT)
 
-    external_forcing_file = external_forcing.external_forcing_file
+    (; external_forcing_file) = external_forcing
     imin = 100  # TODO: move into `GCMForcing` (and `parsed_args`)
 
     NC.Dataset(external_forcing_file, "r") do ds
@@ -43,7 +40,7 @@ function external_forcing_cache(
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                gcm_driven_profile_tmean(DType, ds, varname; imin),  # TODO: time-varying tendencies
+                gcm_driven_profile_tmean(ds, varname; imin),  # TODO: time-varying tendencies
             )
         end
 
@@ -51,11 +48,11 @@ function external_forcing_cache(
             parent(cc_field[colidx]) .= interp_vertical_prof(
                 zc_gcm,
                 zc_les,
-                gcm_driven_profile(DType, ds, varname)[:, 1],
+                gcm_driven_profile(ds, varname)[:, 1],
             )
         end
 
-        zc_les = gcm_driven_reference(DType, ds, "z")[:]
+        zc_les = gcm_driven_reference(ds, "z")[:]
         Fields.bycolumn(axes(Y.c)) do colidx
 
             zc_gcm = Fields.coordinate_field(Y.c).z[colidx]

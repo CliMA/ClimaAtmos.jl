@@ -356,8 +356,7 @@ function get_initial_condition(parsed_args)
         return getproperty(ICs, Symbol(parsed_args["initial_condition"]))()
     elseif parsed_args["initial_condition"] == "GCM"
         @assert parsed_args["prognostic_tke"] == true
-        DType = Float64  # TODO: Read from `parsed_args`
-        return ICs.GCMDriven{DType}(parsed_args["external_forcing_file"])
+        return ICs.GCMDriven(parsed_args["external_forcing_file"])
     else
         error(
             "Unknown `initial_condition`: $(parsed_args["initial_condition"])",
@@ -366,6 +365,9 @@ function get_initial_condition(parsed_args)
 end
 
 function get_surface_setup(parsed_args)
+    parsed_args["surface_setup"] == "GCM" &&
+        return SurfaceConditions.GCMDriven(parsed_args["external_forcing_file"])
+
     return getproperty(SurfaceConditions, Symbol(parsed_args["surface_setup"]))()
 end
 
