@@ -14,15 +14,12 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    turbconv_params = CAP.turbconv_params(p.params)
-    a_max = CAP.max_area(turbconv_params)
     (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶠu³, ᶜh_tot, ᶜspecific) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶜρa⁰, ᶜρ⁰, ᶠu³⁰, ᶜK⁰, ᶜmse⁰, ᶜq_tot⁰) = p.precomputed
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    FT = eltype(Y)
 
     if p.atmos.edmfx_sgs_mass_flux
         # energy
@@ -30,31 +27,11 @@ function edmfx_sgs_mass_flux_tendency!(
         ᶜa_scalar_colidx = p.scratch.ᶜtemp_scalar[colidx]
         for j in 1:n
             @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-            # @. ᶜa_scalar_colidx =
-            #     (
-            #         Y.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx] -
-            #         ᶜh_tot[colidx]
-            #     ) * draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
-            # TODO: remove this filter when mass flux is treated implicitly
             @. ᶜa_scalar_colidx =
                 (
                     Y.c.sgsʲs.:($$j).mse[colidx] + ᶜKʲs.:($$j)[colidx] -
                     ᶜh_tot[colidx]
-                ) * min(
-                    min(
-                        draft_area(
-                            Y.c.sgsʲs.:($$j).ρa[colidx],
-                            ᶜρʲs.:($$j)[colidx],
-                        ),
-                        a_max,
-                    ),
-                    FT(0.02) / max(
-                        Geometry.WVector(
-                            ᶜinterp(ᶠu³_diff_colidx),
-                        ).components.data.:1,
-                        eps(FT),
-                    ),
-                )
+                ) * draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
             vertical_transport!(
                 Yₜ.c.ρe_tot[colidx],
                 ᶜJ[colidx],
@@ -83,27 +60,9 @@ function edmfx_sgs_mass_flux_tendency!(
             # specific humidity
             for j in 1:n
                 @. ᶠu³_diff_colidx = ᶠu³ʲs.:($$j)[colidx] - ᶠu³[colidx]
-                # @. ᶜa_scalar_colidx =
-                #     (Y.c.sgsʲs.:($$j).q_tot[colidx] - ᶜspecific.q_tot[colidx]) *
-                #     draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
-                # TODO: remove this filter when mass flux is treated implicitly
                 @. ᶜa_scalar_colidx =
                     (Y.c.sgsʲs.:($$j).q_tot[colidx] - ᶜspecific.q_tot[colidx]) *
-                    min(
-                        min(
-                            draft_area(
-                                Y.c.sgsʲs.:($$j).ρa[colidx],
-                                ᶜρʲs.:($$j)[colidx],
-                            ),
-                            a_max,
-                        ),
-                        FT(0.02) / max(
-                            Geometry.WVector(
-                                ᶜinterp(ᶠu³_diff_colidx),
-                            ).components.data.:1,
-                            eps(FT),
-                        ),
-                    )
+                    draft_area(Y.c.sgsʲs.:($$j).ρa[colidx], ᶜρʲs.:($$j)[colidx])
                 vertical_transport!(
                     Yₜ.c.ρq_tot[colidx],
                     ᶜJ[colidx],
