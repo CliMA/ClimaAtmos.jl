@@ -1,9 +1,15 @@
-dt_save_state_to_disk: "2days"
-initial_condition: "MoistHughes2023BaroclinicWave"
 topography: "Hughes2023"
-topo_smoothing: false
-dt: "400secs"
+deep_atmosphere: true
+dt_save_state_to_disk: "2days"
+rayleigh_sponge: true
+topo_smoothing: true
+initial_condition: "MoistHughes2023BaroclinicWave"
 t_end: "10days"
+vert_diff: "true"
+use_reference_state: true
+moist: "equil"
+precip_model: "0M"
+dt: "100secs"
 job_id: "sphere_baroclinic_wave_rhoe_hughes2023"
 diagnostics:
   - short_name: [pfull, wa, va, rv, ke]
@@ -11,3 +17,5 @@ diagnostics:
   - short_name: [pfull, wa, va, rv, ke]
     period: 1days
     writer: h5
+  - short_name: [cl, cli, clw, ta, hus, hur, lmix]
+    period: 3hours

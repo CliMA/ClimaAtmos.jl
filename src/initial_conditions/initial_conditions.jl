@@ -506,13 +506,27 @@ function hughes2023_baroclinic_wave_values(z, ϕ, λ, params, perturb, deep_atmo
     l₁ = λ - λ₁
     l₂ = λ - λ₂
 
-    ∂l₁λ∂λ = d₁ < FT(π) ? FT(1) : FT(-1)
-    ∂l₂λ∂λ = d₂ < FT(π) ? FT(-1) : FT(-1)
+    ∂l₁λ∂λ = d₁ < FT(180) ? FT(1) : FT(-1)
+    ∂l₂λ∂λ = d₂ < FT(180) ? FT(1) : FT(-1)
     zₛ₁ = @. exp(-(((ϕ - ϕ₁) / d)^6 + (l₁ / c)^2))
     zₛ₂ = @. exp(-(((ϕ - ϕ₂) / d)^6 + (l₂ / c)^2))
-    w = -u/(R+z)/cosd(ϕ) * (2*h₀) * (1-(z/z_top)) * ((∂l₁λ∂λ) * (l₁/c^2) * zₛ₁
-                                                    +(∂l₂λ∂λ) * (l₂/c^2) * zₛ₂)
-    return (; T_v, p, u, v, w)
+    z_top = maximum(z)
+    w = FT(-u/(R+z)/cosd(ϕ) * (2*h₀) * (1-(z/z_top)) * ((∂l₁λ∂λ) * (l₁/c^2) * zₛ₁
+                                                        +(∂l₂λ∂λ) * (l₂/c^2) * zₛ₂))
+
+    # Moisture
+    p_w = FT(3.4e4)
+    p_t = FT(1e4)
+    q_t = FT(1e-12) # Exact zero in Hughes and Jablonowski paper
+    q_0 = FT(0.018)
+    ϕ_w = FT(40)
+    ε = FT(0.608)
+    
+    q_tot =
+        (p <= p_t) ? FT(q_t) : FT(q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2))
+    T = FT(T_v / (1 + ε * q_tot))# This is the formula used in the paper.
+
+    return (; T, p, q_tot, u, v, w)
 end
 
 function deep_atmos_baroclinic_wave_values(z, ϕ, λ, params, perturb)
