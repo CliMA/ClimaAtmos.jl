@@ -50,7 +50,7 @@ steps:
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_cpus_per_task: 4
+          slurm_cpus_per_task: 1
           slurm_exclusive:
 
       - label: "moist Held-Suarez"
@@ -64,7 +64,7 @@ steps:
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         agents:
           slurm_gpus: 1
-          slurm_cpus_per_task: 4
+          slurm_cpus_per_task: 1
           slurm_exclusive:
 
       - label: "moist Held-Suarez - 4 gpus"
@@ -78,8 +78,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 4
+          slurm_cpus_per_task: 1
           slurm_ntasks: 4
           slurm_exclusive:
 
@@ -94,8 +94,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 4
+          slurm_cpus_per_task: 1
           slurm_ntasks: 4
           slurm_exclusive:
 
@@ -112,8 +112,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_1process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 1
+          slurm_cpus_per_task: 1
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_time: 8:00:00
@@ -128,8 +128,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_2process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 2
+          slurm_cpus_per_task: 1
           slurm_ntasks: 2
           slurm_mem: 32G
           slurm_time: 8:00:00
@@ -144,8 +144,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ss_4process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 4
+          slurm_cpus_per_task: 1
           slurm_ntasks: 4
           slurm_mem: 32G
           slurm_time: 8:00:00
@@ -176,8 +176,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_1process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 1
+          slurm_cpus_per_task: 1
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_time: 8:00:00
@@ -192,8 +192,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_2process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 2
+          slurm_cpus_per_task: 1
           slurm_ntasks: 2
           slurm_mem: 32G
           slurm_time: 8:00:00
@@ -208,8 +208,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_dyamond_ws_4process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 4
+          slurm_cpus_per_task: 1
           slurm_ntasks: 4
           slurm_mem: 32G
           slurm_time: 8:00:00
@@ -242,8 +242,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_diagedmf.yml
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 1
+          slurm_cpus_per_task: 1
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_exclusive:
@@ -260,8 +260,8 @@ steps:
             --config_file ${GPU_CONFIG_PATH}gpu_aquaplanet_progedmf.yml
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
         agents:
-          slurm_gpus_per_task: 1
-          slurm_cpus_per_task: 4
+          slurm_gpus: 1
+          slurm_cpus_per_task: 1
           slurm_ntasks: 1
           slurm_mem: 32G
           slurm_exclusive:
