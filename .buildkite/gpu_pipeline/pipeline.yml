@@ -28,7 +28,7 @@ steps:
       - julia --project=examples artifacts/download_artifacts.jl
 
     agents:
-      slurm_gpus: 1
+      slurm_gpus_per_task: 1
       slurm_cpus_per_task: 8
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
@@ -44,12 +44,13 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/target_gpu_implicit_baroclinic_wave.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave/output_active/*"
         agents:
-          slurm_gpus: 1
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_exclusive:
 
@@ -58,12 +59,13 @@ steps:
         command:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_hs_rhoe_equil_55km_nz63_0M.yml
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M/output_active/*"
         agents:
-          slurm_gpus: 1
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_exclusive:
 
@@ -72,12 +74,13 @@ steps:
         command:
           - mkdir -p gpu_hs_rhoe_equil_55km_nz63_0M_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_hs_rhoe_equil_55km_nz63_0M_4process.yml
         artifact_paths: "gpu_hs_rhoe_equil_55km_nz63_0M_4process/output_active/*"
         agents:
-          slurm_gpus: 4
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_exclusive:
@@ -87,12 +90,13 @@ steps:
         command:
           - mkdir -p target_gpu_implicit_baroclinic_wave_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/target_gpu_implicit_baroclinic_wave_4process.yml
         artifact_paths: "target_gpu_implicit_baroclinic_wave_4process/output_active/*"
         agents:
-          slurm_gpus: 4
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_exclusive:
@@ -104,12 +108,13 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_1process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_ss_1process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ss_1process/output_active/*"
         agents:
-          slurm_gpus: 1
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
           slurm_mem: 32G
@@ -120,12 +125,13 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_2process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_ss_2process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ss_2process/output_active/*"
         agents:
-          slurm_gpus: 2
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 32G
@@ -136,12 +142,13 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ss_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_ss_4process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ss_4process/output_active/*"
         agents:
-          slurm_gpus: 4
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_mem: 32G
@@ -168,12 +175,13 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_1process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_ws_1process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_1process/output_active/*"
         agents:
-          slurm_gpus: 1
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
           slurm_mem: 32G
@@ -184,12 +192,13 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_2process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_ws_2process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_2process/output_active/*"
         agents:
-          slurm_gpus: 2
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 2
           slurm_mem: 32G
@@ -200,12 +209,13 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_dyamond_ws_4process
           - >
-            srun --cpu-bind=threads --cpus-per-task=4
+            srun --cpu-bind=threads --gpu-bind=none --cpus-per-task=4 
+            printenv CUDA_VISIBLE_DEVICES &&
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_dyamond_ws_4process.yml
         artifact_paths: "gpu_aquaplanet_dyamond_ws_4process/output_active/*"
         agents:
-          slurm_gpus: 4
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 4
           slurm_mem: 32G
@@ -239,7 +249,7 @@ steps:
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_diagedmf.yml
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
         agents:
-          slurm_gpus: 1
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
           slurm_mem: 32G
@@ -257,7 +267,7 @@ steps:
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_progedmf.yml
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
         agents:
-          slurm_gpus: 1
+          slurm_gpus_per_task: 1
           slurm_cpus_per_task: 4
           slurm_ntasks: 1
           slurm_mem: 32G
