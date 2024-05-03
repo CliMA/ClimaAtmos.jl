@@ -292,9 +292,14 @@ function turbulent_prandtl_number(
     return prandtl_nvec
 end
 
-edmfx_velocity_relaxation_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) =
-    nothing
-function edmfx_velocity_relaxation_tendency!(
+edmfx_filter_tendency!(Yₜ, Y, p, t, colidx, turbconv_model) = nothing
+
+"""
+   Apply EDMF filters:
+   - Relax u_3 to zero when it is negative
+   - Relax ρa to zero when it is negative
+"""
+function edmfx_filter_tendency!(
     Yₜ,
     Y,
     p,
@@ -306,10 +311,12 @@ function edmfx_velocity_relaxation_tendency!(
     n = n_mass_flux_subdomains(turbconv_model)
     (; dt) = p
 
-    if p.atmos.edmfx_velocity_relaxation
+    if p.atmos.edmfx_filter
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃[colidx] -=
                 C3(min(Y.f.sgsʲs.:($$j).u₃[colidx].components.data.:1, 0)) / dt
+            @. Yₜ.c.sgsʲs.:($$j).ρa[colidx] -=
+                min(Y.c.sgsʲs.:($$j).ρa[colidx], 0) / dt
         end
     end
 end
