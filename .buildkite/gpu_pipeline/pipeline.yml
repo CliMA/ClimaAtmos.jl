@@ -244,7 +244,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_diagedmf
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_diagedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_diagedmf.yml
         artifact_paths: "gpu_aquaplanet_diagedmf/output_active/*"
@@ -262,7 +261,6 @@ steps:
         command:
           - mkdir -p gpu_aquaplanet_progedmf
           - >
-            nsys profile --trace=nvtx,mpi,cuda,osrt --output=gpu_aquaplanet_progedmf/output_active/report
             julia --threads=3 --color=yes --project=examples examples/hybrid/driver.jl
             --config_file $GPU_CONFIG_PATH/gpu_aquaplanet_progedmf.yml
         artifact_paths: "gpu_aquaplanet_progedmf/output_active/*"
