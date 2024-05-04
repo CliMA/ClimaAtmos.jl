@@ -820,6 +820,14 @@ steps:
         agents:
           slurm_mem: 24GB
 
+      - label: ":computer: Benchmark: perf target (gpu)"
+        command: >
+          julia --color=yes --project=perf perf/benchmark.jl
+          $PERF_CONFIG_PATH/bm_perf_target.yml
+        agents:
+          slurm_mem: 24GB
+          slurm_gpus: 1
+
       - label: ":computer: Benchmark: perf target (Threaded)"
         command: >
           julia --color=yes --threads 8 --project=perf perf/benchmark.jl
