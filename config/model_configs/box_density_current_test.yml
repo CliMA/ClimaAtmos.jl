@@ -11,8 +11,10 @@ z_stretch: false
 x_elem: 45
 ode_algo: "SSP33ShuOsher"
 config: "box"
-vorticity_hyperdiffusion_coefficient: 0.6
-scalar_hyperdiffusion_coefficient: 0.6
+vorticity_hyperdiffusion_coefficient: 0.0
+scalar_hyperdiffusion_coefficient: 0.0
+smagorinsky_lilly: true
+c_smag: 0.2
 z_max: 6400.0
 job_id: "box_density_current_test"
 diagnostics:

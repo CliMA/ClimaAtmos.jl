@@ -392,7 +392,6 @@ function argparse_settings()
         arg_type = String
         "--toml"
         help = "A toml file used to override model parameters and configurations. In the case of conflicts, CLI arguments take priority over the toml"
->>>>>>> origin/llubecke_smag
         arg_type = String
     end
     return s
